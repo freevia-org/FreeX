@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hello World</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 3rem 1rem;
+      background: #0f0f1a;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .container { text-align: center; width: 100%; max-width: 520px; }
+
+    h1 { font-size: 4rem; color: #fff; letter-spacing: 0.05em; }
+    h1 span {
+      background: linear-gradient(135deg, #6ee7f7, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p { margin-top: 1rem; color: #888; font-size: 1.1rem; }
+
+    .controls { margin-top: 2rem; display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
+
+    select {
+      padding: 0.7rem 1rem;
+      font-size: 1rem;
+      font-family: inherit;
+      background: #1e1e30;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button {
+      padding: 0.75rem 1.75rem;
+      font-size: 1rem;
+      font-family: inherit;
+      color: #fff;
+      background: linear-gradient(135deg, #6ee7f7, #a78bfa);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #info { margin-top: 1.5rem; }
+    #info .label { color: #888; font-size: 0.85rem; margin-bottom: 0.2rem; }
+    #info .value { font-size: 1.3rem; font-weight: 600; color: #fff; }
+    #info .row { margin: 0.4rem 0; }
+
+    #history { margin-top: 2rem; }
+    #history h2 { color: #aaa; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th { color: #666; font-weight: 500; padding: 0.4rem 0.75rem; border-bottom: 1px solid #222; text-align: left; }
+    td { color: #ccc; padding: 0.45rem 0.75rem; border-bottom: 1px solid #1a1a2a; }
+    tr:last-child td { border-bottom: none; }
+
+    .error { color: #f87171; margin-top: 1rem; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Hello, <span>World</span>!</h1>
+    <p>Welcome to my web app.</p>
+
+    <div class="controls">
+      <select id="locationSelect"></select>
+      <button id="btn" onclick="fetchAndSave()">Fetch &amp; Save Temp</button>
+    </div>
+
+    <div id="info"></div>
+    <div id="history"></div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:5030';
+
+    async function loadLocations() {
+      try {
+        const res = await fetch(`${API}/api/locations`);
+        const locations = await res.json();
+        const sel = document.getElementById('locationSelect');
+        locations.forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l.locationId;
+          opt.textContent = `${l.name}${l.country ? ', ' + l.country : ''}`;
+          if (l.name === 'Bali') opt.selected = true;
+          sel.appendChild(opt);
+        });
+        await loadHistory();
+      } catch {
+        document.getElementById('info').innerHTML =
+          `<p class="error">Cannot reach API at ${API} — is the server running?</p>`;
+      }
+    }
+
+    async function fetchAndSave() {
+      const btn = document.getElementById('btn');
+      const info = document.getElementById('info');
+      const locationId = document.getElementById('locationSelect').value;
+
+      btn.disabled = true;
+      btn.textContent = 'Loading…';
+      info.innerHTML = '';
+
+      try {
+        const res = await fetch(`${API}/api/readings?locationId=${locationId}`, { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        const d = await res.json();
+
+        const baliTime = new Intl.DateTimeFormat('en-GB', {
+          timeZone: getTimezone(),
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        }).format(new Date());
+
+        info.innerHTML = `
+          <div class="row"><div class="label">Local Time</div><div class="value">${baliTime}</div></div>
+          <div class="row"><div class="label">Temperature</div><div class="value">${d.temperatureCelsius} °C</div></div>
+          <div class="row"><div class="label">Saved as reading #${d.readingId}</div></div>
+        `;
+        btn.textContent = 'Refresh';
+        await loadHistory();
+      } catch (e) {
+        info.innerHTML = `<p class="error">${e.message || 'Could not load data. Check your connection.'}</p>`;
+        btn.textContent = 'Retry';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function getTimezone() {
+      const sel = document.getElementById('locationSelect');
+      return sel.selectedOptions[0]?.dataset?.timezone || 'UTC';
+    }
+
+    async function loadHistory() {
+      const locationId = document.getElementById('locationSelect').value;
+      const historyEl = document.getElementById('history');
+      try {
+        const res = await fetch(`${API}/api/readings?locationId=${locationId}&limit=10`);
+        const rows = await res.json();
+        if (!rows.length) { historyEl.innerHTML = ''; return; }
+
+        historyEl.innerHTML = `
+          <h2>Recent Readings — ${rows[0].locationName}</h2>
+          <table>
+            <thead><tr><th>#</th><th>Temp (°C)</th><th>Recorded (UTC)</th></tr></thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td>${r.readingId}</td>
+                  <td>${r.temperatureCelsius}</td>
+                  <td>${new Date(r.recordedAt + 'Z').toLocaleString()}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch { historyEl.innerHTML = ''; }
+    }
+
+    document.getElementById('locationSelect').addEventListener('change', loadHistory);
+
+    loadLocations();
+  </script>
+</body>
+</html>

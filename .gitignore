@@ -1,0 +1,12 @@
+# .NET build output
+WeatherApi/bin/
+WeatherApi/obj/
+
+# User-specific files
+*.user
+*.suo
+.vs/
+
+# OS
+.DS_Store
+Thumbs.db
