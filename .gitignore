@@ -1,6 +1,7 @@
 # .NET build output
 WeatherApi/bin/
 WeatherApi/obj/
+WeatherDB/obj/
 
 # User-specific files
 *.user
