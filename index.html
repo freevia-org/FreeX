@@ -97,6 +97,7 @@
           const opt = document.createElement('option');
           opt.value = l.locationId;
           opt.textContent = `${l.name}${l.country ? ', ' + l.country : ''}`;
+          opt.dataset.timezone = l.timezone;
           if (l.name === 'Bali') opt.selected = true;
           sel.appendChild(opt);
         });
