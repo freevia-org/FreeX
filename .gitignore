@@ -17,3 +17,4 @@ Thumbs.db
 
 # Secrets
 WeatherApi/appsettings.Development.json
+WeatherApi/appsettings.Production.json
