@@ -14,8 +14,8 @@ public readonly record struct CellColor(byte R, byte G, byte B)
     /// <summary>Create a color from RGB components.</summary>
     public static CellColor FromArgb(byte r, byte g, byte b) => new(r, g, b);
 
-    /// <summary>True when this color equals Black (the default).</summary>
-    public bool IsDefault => this == Black;
+    /// <summary>True when this color is black (R=0, G=0, B=0).</summary>
+    public bool IsBlack => this == Black;
 }
 
 /// <summary>
@@ -35,14 +35,7 @@ public enum BorderStyle
 /// <summary>
 /// A single border edge on a cell.
 /// </summary>
-public sealed class CellBorder
-{
-    /// <summary>Line style. Default is <see cref="BorderStyle.None"/>.</summary>
-    public BorderStyle Style { get; set; } = BorderStyle.None;
-
-    /// <summary>Border color. Default is black.</summary>
-    public CellColor Color { get; set; } = CellColor.Black;
-}
+public readonly record struct CellBorder(BorderStyle Style = BorderStyle.None, CellColor Color = default);
 
 /// <summary>
 /// Horizontal alignment within a cell.
@@ -68,10 +61,8 @@ public enum VerticalAlignment
 /// <summary>
 /// Complete style definition for a cell, covering font, fill, borders, and alignment.
 /// </summary>
-public sealed class CellStyle
+public sealed class CellStyle : IEquatable<CellStyle>
 {
-    // ── Font ──────────────────────────────────────────────────────────────────
-
     /// <summary>Font family name.</summary>
     public string FontName { get; set; } = "Calibri";
 
@@ -90,26 +81,20 @@ public sealed class CellStyle
     /// <summary>Font color.</summary>
     public CellColor FontColor { get; set; } = CellColor.Black;
 
-    // ── Fill ──────────────────────────────────────────────────────────────────
-
     /// <summary>Background fill color. Null means transparent / no fill.</summary>
     public CellColor? FillColor { get; set; }
 
-    // ── Borders ───────────────────────────────────────────────────────────────
-
     /// <summary>Top border.</summary>
-    public CellBorder BorderTop { get; set; } = new();
+    public CellBorder BorderTop { get; set; }
 
     /// <summary>Right border.</summary>
-    public CellBorder BorderRight { get; set; } = new();
+    public CellBorder BorderRight { get; set; }
 
     /// <summary>Bottom border.</summary>
-    public CellBorder BorderBottom { get; set; } = new();
+    public CellBorder BorderBottom { get; set; }
 
     /// <summary>Left border.</summary>
-    public CellBorder BorderLeft { get; set; } = new();
-
-    // ── Alignment ─────────────────────────────────────────────────────────────
+    public CellBorder BorderLeft { get; set; }
 
     /// <summary>Number format string (e.g. "General", "0.00", "#,##0").</summary>
     public string NumberFormat { get; set; } = "General";
@@ -123,10 +108,8 @@ public sealed class CellStyle
     /// <summary>Whether text wraps within the cell.</summary>
     public bool WrapText { get; set; }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
     /// <summary>Returns a fresh default-valued instance.</summary>
-    public static CellStyle Default => new();
+    public static readonly CellStyle Default = new();
 
     /// <summary>Deep-copies all fields into a new <see cref="CellStyle"/> instance.</summary>
     public CellStyle Clone() => new()
@@ -138,10 +121,10 @@ public sealed class CellStyle
         Underline = Underline,
         FontColor = FontColor,
         FillColor = FillColor,
-        BorderTop = new CellBorder { Style = BorderTop.Style, Color = BorderTop.Color },
-        BorderRight = new CellBorder { Style = BorderRight.Style, Color = BorderRight.Color },
-        BorderBottom = new CellBorder { Style = BorderBottom.Style, Color = BorderBottom.Color },
-        BorderLeft = new CellBorder { Style = BorderLeft.Style, Color = BorderLeft.Color },
+        BorderTop = BorderTop,
+        BorderRight = BorderRight,
+        BorderBottom = BorderBottom,
+        BorderLeft = BorderLeft,
         NumberFormat = NumberFormat,
         HorizontalAlignment = HorizontalAlignment,
         VerticalAlignment = VerticalAlignment,
@@ -163,10 +146,10 @@ public sealed class CellStyle
             && Underline == other.Underline
             && FontColor == other.FontColor
             && FillColor == other.FillColor
-            && BorderTop.Style == other.BorderTop.Style && BorderTop.Color == other.BorderTop.Color
-            && BorderRight.Style == other.BorderRight.Style && BorderRight.Color == other.BorderRight.Color
-            && BorderBottom.Style == other.BorderBottom.Style && BorderBottom.Color == other.BorderBottom.Color
-            && BorderLeft.Style == other.BorderLeft.Style && BorderLeft.Color == other.BorderLeft.Color
+            && BorderTop == other.BorderTop
+            && BorderRight == other.BorderRight
+            && BorderBottom == other.BorderBottom
+            && BorderLeft == other.BorderLeft
             && NumberFormat == other.NumberFormat
             && HorizontalAlignment == other.HorizontalAlignment
             && VerticalAlignment == other.VerticalAlignment
@@ -184,10 +167,10 @@ public sealed class CellStyle
         h.Add(Underline);
         h.Add(FontColor);
         h.Add(FillColor);
-        h.Add(BorderTop.Style); h.Add(BorderTop.Color);
-        h.Add(BorderRight.Style); h.Add(BorderRight.Color);
-        h.Add(BorderBottom.Style); h.Add(BorderBottom.Color);
-        h.Add(BorderLeft.Style); h.Add(BorderLeft.Color);
+        h.Add(BorderTop);
+        h.Add(BorderRight);
+        h.Add(BorderBottom);
+        h.Add(BorderLeft);
         h.Add(NumberFormat);
         h.Add(HorizontalAlignment);
         h.Add(VerticalAlignment);
