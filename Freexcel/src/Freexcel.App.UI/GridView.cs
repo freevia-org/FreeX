@@ -25,10 +25,18 @@ public class GridView : FrameworkElement
     private static readonly Pen SelectionPen = new(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 2);
     private static readonly Pen GridPen = new(GridLineBrush, 1);
     private static readonly Pen ResizeLinePen = CreateResizeLinePen();
+    private static readonly Pen FreezePen = CreateFreezePen();
 
     private static Pen CreateResizeLinePen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 100)), 1);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen CreateFreezePen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 200)), 2);
         pen.Freeze();
         return pen;
     }
@@ -76,6 +84,7 @@ public class GridView : FrameworkElement
         RenderGridLines(dc);
         RenderCells(dc);
         RenderSelection(dc);
+        RenderFreezeDivider(dc);
         RenderResizeLine(dc);
 
         dc.Pop();
@@ -210,6 +219,32 @@ public class GridView : FrameworkElement
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
+
+    private void RenderFreezeDivider(DrawingContext dc)
+    {
+        if (Viewport?.FrozenPanes == null) return;
+        var fp = Viewport.FrozenPanes;
+
+        if (fp.Rows > 0)
+        {
+            var lastFrozenRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == fp.Rows);
+            if (lastFrozenRow != null)
+            {
+                double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + HeaderSize;
+                dc.DrawLine(FreezePen, new Point(0, y), new Point(ActualWidth, y));
+            }
+        }
+
+        if (fp.Cols > 0)
+        {
+            var lastFrozenCol = Viewport.ColMetrics.FirstOrDefault(c => c.Col == fp.Cols);
+            if (lastFrozenCol != null)
+            {
+                double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + HeaderSize;
+                dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, ActualHeight));
+            }
+        }
+    }
 
     private void RenderResizeLine(DrawingContext dc)
     {

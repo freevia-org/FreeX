@@ -253,10 +253,14 @@ public partial class MainWindow : Window
     {
         if (SheetGrid == null || _viewportService == null) return;
 
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        uint topRow  = Math.Max((sheet?.FrozenRows  ?? 0) + 1, (uint)VerticalScroll.Value);
+        uint leftCol = Math.Max((sheet?.FrozenCols  ?? 0) + 1, (uint)HorizontalScroll.Value);
+
         const double headerSize = 30;
         var request = new ViewportRequest(
-            TopRow: (uint)VerticalScroll.Value,
-            LeftCol: (uint)HorizontalScroll.Value,
+            TopRow: topRow,
+            LeftCol: leftCol,
             AvailableHeight: SheetGrid.ActualHeight - headerSize,
             AvailableWidth: SheetGrid.ActualWidth - headerSize
         );
