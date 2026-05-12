@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Freexcel.Core.Model\Freexcel.Core.Model.csproj" />
+    <ProjectReference Include="..\Freexcel.Core.Formula\Freexcel.Core.Formula.csproj" />
+    <ProjectReference Include="..\Freexcel.Core.Calc\Freexcel.Core.Calc.csproj" />
+    <ProjectReference Include="..\Freexcel.Core.Commands\Freexcel.Core.Commands.csproj" />
+    <ProjectReference Include="..\Freexcel.Core.IO\Freexcel.Core.IO.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

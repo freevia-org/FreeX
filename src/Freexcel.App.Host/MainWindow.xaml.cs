@@ -267,6 +267,7 @@ public partial class MainWindow : Window
 
         var viewport = _viewportService.GetViewport(_workbook, _currentSheetId, request);
         SheetGrid.Viewport = viewport;
+        SheetGrid.Charts = sheet?.Charts;
     }
 
     private void OpenButton_Click(object sender, RoutedEventArgs e)
@@ -353,6 +354,23 @@ public partial class MainWindow : Window
         _currentSheetId = addr.Sheet;
         SetActiveCell(addr);
         EnsureCellVisible(addr);
+        UpdateViewport();
+    }
+
+    private void InsertChartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet == null) return;
+
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            Title = "Chart",
+            Left = 20, Top = 20, Width = 400, Height = 300
+        };
+        sheet.Charts.Add(chart);
         UpdateViewport();
     }
 
