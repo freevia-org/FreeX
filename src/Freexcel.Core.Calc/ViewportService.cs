@@ -21,8 +21,9 @@ public sealed class ViewportService : IViewportService
         var colMetrics = new List<ColMetric>();
 
         // Calculate Row Metrics — iterate until we've filled the available height, skipping filter-hidden rows
+        const uint MaxRows = 1_048_576;
         double topOffset = 0;
-        for (uint r = request.TopRow; ; r++)
+        for (uint r = request.TopRow; r <= request.TopRow + MaxRows; r++)
         {
             if (sheet.HiddenRows.Contains(r)) continue;
             double height = sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
@@ -32,8 +33,9 @@ public sealed class ViewportService : IViewportService
         }
 
         // Calculate Column Metrics — iterate until we've filled the available width
+        const uint MaxCols = 16_384;
         double leftOffset = 0;
-        for (uint c = request.LeftCol; ; c++)
+        for (uint c = request.LeftCol; c <= request.LeftCol + MaxCols; c++)
         {
             double width = sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth) * 8;
             colMetrics.Add(new ColMetric(c, width, leftOffset));
