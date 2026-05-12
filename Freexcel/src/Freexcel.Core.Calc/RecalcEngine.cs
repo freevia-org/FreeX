@@ -11,6 +11,7 @@ public sealed class RecalcEngine
 {
     private readonly DependencyGraph _graph;
     private readonly FormulaEvaluator _evaluator;
+    // Single-threaded only. If multi-threaded recalc is added (Phase 4), protect with a lock.
     private readonly HashSet<CellAddress> _volatileCells = [];
 
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
@@ -25,7 +26,8 @@ public sealed class RecalcEngine
     /// </summary>
     public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
     {
-        var allChanged = changedCells.Concat(_volatileCells).Distinct().ToList();
+        // Include volatile cells in the dependency traversal so their dependents appear in the plan
+        var allChanged = changedCells.Concat(_volatileCells).ToList();
         var plan = _graph.GetRecalcOrder(allChanged);
         var recalculated = new List<CellAddress>();
         var errors = new List<(CellAddress Cell, string Error)>();
@@ -44,10 +46,9 @@ public sealed class RecalcEngine
             }
         }
 
-        // Volatile cells always recalculate first, then their dependents in topological order
+        // Volatile cells must evaluate first; then non-volatile dependents in topological order
         var toEvaluate = _volatileCells
-            .Concat(plan.OrderedCells)
-            .Distinct()
+            .Concat(plan.OrderedCells.Where(c => !_volatileCells.Contains(c)))
             .ToList();
 
         foreach (var addr in toEvaluate)

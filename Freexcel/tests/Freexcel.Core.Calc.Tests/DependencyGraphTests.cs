@@ -180,4 +180,35 @@ public class VolatileFunctionTests
         report.RecalculatedCells.Should().NotContain(b1);
         sheet.GetCell(b1)!.Value.Should().Be(before);
     }
+
+    [Fact]
+    public void VolatileCell_EvaluatesBeforeItsDependents()
+    {
+        // A1 = =NOW() (volatile)
+        // B1 = =A1 (depends on A1)
+        // After recalc, B1 should have the same value as A1 (i.e. A1 was evaluated first)
+        var wb = new Workbook("Test");
+        var sheet = wb.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var evaluator = new FormulaEvaluator();
+        var engine = new RecalcEngine(graph, evaluator);
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetFormula(a1, "NOW()");
+        var lexerA = new Lexer("=NOW()");
+        engine.RegisterFormulaDependencies(a1, new Parser(lexerA.Tokenize()).Parse(), sheet.Id);
+
+        sheet.SetFormula(b1, "A1");
+        var lexerB = new Lexer("=A1");
+        engine.RegisterFormulaDependencies(b1, new Parser(lexerB.Tokenize()).Parse(), sheet.Id);
+
+        engine.Recalculate(wb, []);
+
+        sheet.GetValue(a1).Should().BeOfType<DateTimeValue>();
+        sheet.GetValue(b1).Should().BeOfType<DateTimeValue>();
+        // B1 should equal A1 (meaning A1 was evaluated before B1 read it)
+        sheet.GetValue(b1).Should().Be(sheet.GetValue(a1));
+    }
 }
