@@ -49,11 +49,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             foreach (var row in xlSheet.RowsUsed())
                 if (row.Height > 0)
-                    sheet.RowHeights[(uint)row.RowNumber()] = row.Height;
+                    sheet.RowHeights[(uint)row.RowNumber()] = row.Height * (96.0 / 72.0);
 
             foreach (var col in xlSheet.ColumnsUsed())
                 if (col.Width > 0)
                     sheet.ColumnWidths[(uint)col.ColumnNumber()] = col.Width;
+
+            if (xlSheet.SheetView.SplitRow > 0)
+                sheet.FrozenRows = (uint)xlSheet.SheetView.SplitRow;
+            if (xlSheet.SheetView.SplitColumn > 0)
+                sheet.FrozenCols = (uint)xlSheet.SheetView.SplitColumn;
         }
 
         return workbook;
@@ -91,10 +96,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
             }
 
             foreach (var (rowNum, height) in sheet.RowHeights)
-                xlSheet.Row((int)rowNum).Height = height;
+                xlSheet.Row((int)rowNum).Height = height * (72.0 / 96.0);
 
             foreach (var (colNum, width) in sheet.ColumnWidths)
                 xlSheet.Column((int)colNum).Width = width;
+
+            if (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
+                xlSheet.SheetView.Freeze((int)sheet.FrozenRows, (int)sheet.FrozenCols);
         }
 
         xlWorkbook.SaveAs(stream);
