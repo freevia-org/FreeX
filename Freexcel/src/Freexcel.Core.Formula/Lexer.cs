@@ -161,6 +161,8 @@ public sealed class Lexer
         var value = sb.ToString();
         var upper = value.ToUpperInvariant();
 
+        // Phase 2: quoted sheet names ('My Sheet'!A1) are not supported.
+        // A leading '\'' triggers FormulaParseException, which surfaces as #VALUE!.
         if (_pos < _text.Length && _text[_pos] == '!')
         {
             _pos++;

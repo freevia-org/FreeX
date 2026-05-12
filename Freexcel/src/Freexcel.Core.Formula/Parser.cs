@@ -215,7 +215,12 @@ public sealed class Parser
                 {
                     Advance();
                     if (Current.Type == TokenType.SheetQualifier)
-                        Advance();
+                    {
+                        var endSheetToken = Advance();
+                        if (!string.Equals(endSheetToken.Value, sheetName, StringComparison.OrdinalIgnoreCase))
+                            throw new FormulaParseException(
+                                $"Range start and end must be on the same sheet; got '{sheetName}' and '{endSheetToken.Value}'");
+                    }
                     if (Current.Type != TokenType.CellRef)
                         throw new FormulaParseException(
                             $"Expected cell reference after ':' at position {Current.Position}");
