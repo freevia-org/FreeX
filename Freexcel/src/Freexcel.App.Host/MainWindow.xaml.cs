@@ -7,6 +7,8 @@ using Freexcel.Core.Formula;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Freexcel.App.Host;
 
@@ -49,6 +51,8 @@ public partial class MainWindow : Window
         
         // Wire up grid interactions
         SheetGrid.MouseDown += SheetGrid_MouseDown;
+        SheetGrid.ColumnResized += OnColumnResized;
+        SheetGrid.RowResized += OnRowResized;
         this.KeyDown += MainWindow_KeyDown;
         
         // Initial data for testing
@@ -91,11 +95,26 @@ public partial class MainWindow : Window
     private void SheetGrid_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         var pos = e.GetPosition(SheetGrid);
-        var addr = _viewportService.HitTest(_workbook, _currentSheetId, pos.X, pos.Y, 1.0);
-        if (addr != null)
+        const double headerSize = 30;
+        if (pos.X < headerSize || pos.Y < headerSize) return;
+
+        var viewport = SheetGrid.Viewport;
+        if (viewport == null) return;
+
+        uint? hitRow = null, hitCol = null;
+        foreach (var rm in viewport.RowMetrics)
         {
-            SetActiveCell(addr.Value);
+            double top = rm.TopOffset + headerSize;
+            if (pos.Y >= top && pos.Y < top + rm.Height) { hitRow = rm.Row; break; }
         }
+        foreach (var cm in viewport.ColMetrics)
+        {
+            double left = cm.LeftOffset + headerSize;
+            if (pos.X >= left && pos.X < left + cm.Width) { hitCol = cm.Col; break; }
+        }
+
+        if (hitRow.HasValue && hitCol.HasValue)
+            SetActiveCell(new CellAddress(_currentSheetId, hitRow.Value, hitCol.Value));
     }
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -109,6 +128,25 @@ public partial class MainWindow : Window
         if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
         {
             ReplaceButton_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            ExecuteCopy();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.X && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            ExecuteCopy();
+            ExecuteClearSelection();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            ExecutePaste();
             e.Handled = true;
             return;
         }
@@ -139,10 +177,21 @@ public partial class MainWindow : Window
     {
         SheetGrid.SelectedRange = new GridRange(addr, addr);
         CellAddressBox.Text = addr.ToA1();
-        
+
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
-        FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : cell?.Value?.ToString() ?? "";
+        FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
     }
+
+    private static string FormatCellValue(ScalarValue? value) => value switch
+    {
+        null or BlankValue => "",
+        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        TextValue t => t.Value,
+        BoolValue b => b.Value ? "TRUE" : "FALSE",
+        DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd"),
+        ErrorValue err => err.Code,
+        _ => ""
+    };
 
     private void EnsureCellVisible(CellAddress addr)
     {
@@ -201,16 +250,12 @@ public partial class MainWindow : Window
     {
         if (SheetGrid == null || _viewportService == null) return;
 
-        // Estimate how many rows/cols fit in the current size
-        // This is a simplification; in a real app we'd use the actual row heights
-        uint rowCount = (uint)(SheetGrid.ActualHeight / 20) + 2; 
-        uint colCount = (uint)(SheetGrid.ActualWidth / 64) + 2;
-
+        const double headerSize = 30;
         var request = new ViewportRequest(
             TopRow: (uint)VerticalScroll.Value,
             LeftCol: (uint)HorizontalScroll.Value,
-            RowCount: rowCount,
-            ColCount: colCount
+            AvailableHeight: SheetGrid.ActualHeight - headerSize,
+            AvailableWidth: SheetGrid.ActualWidth - headerSize
         );
 
         var viewport = _viewportService.GetViewport(_workbook, _currentSheetId, request);
@@ -262,7 +307,8 @@ public partial class MainWindow : Window
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = filter,
-            FileName = _workbook.Name
+            FileName = _workbook.Name,
+            DefaultExt = ".xlsx"
         };
 
         if (dialog.ShowDialog() == true)
@@ -299,6 +345,83 @@ public partial class MainWindow : Window
         _currentSheetId = addr.Sheet;
         SetActiveCell(addr);
         EnsureCellVisible(addr);
+        UpdateViewport();
+    }
+
+    private void OnColumnResized(uint col, double newWidthPx)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet == null) return;
+        sheet.ColumnWidths[col] = newWidthPx / 8.0;  // px → character units
+        UpdateViewport();
+    }
+
+    private void OnRowResized(uint row, double newHeightPx)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet == null) return;
+        sheet.RowHeights[row] = newHeightPx;  // already px
+        UpdateViewport();
+    }
+
+    private void ExecuteCopy()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var viewport = SheetGrid.Viewport;
+        if (viewport == null) return;
+
+        var text = ClipboardSerializer.Serialize(viewport, range);
+        try { System.Windows.Clipboard.SetText(text); }
+        catch { /* clipboard may be locked */ }
+    }
+
+    private void ExecutePaste()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        string text;
+        try { text = System.Windows.Clipboard.GetText(); }
+        catch { return; }
+        if (string.IsNullOrEmpty(text)) return;
+
+        var rows = ClipboardSerializer.Deserialize(text);
+        var edits = new List<(CellAddress, Cell)>();
+
+        for (int ri = 0; ri < rows.Length; ri++)
+        {
+            for (int ci = 0; ci < rows[ri].Length; ci++)
+            {
+                var addr = new CellAddress(_currentSheetId,
+                    range.Start.Row + (uint)ri,
+                    range.Start.Col + (uint)ci);
+                ScalarValue val = double.TryParse(rows[ri][ci],
+                    System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.CurrentCulture, out var d)
+                    ? new NumberValue(d)
+                    : new TextValue(rows[ri][ci]);
+                edits.Add((addr, Cell.FromValue(val)));
+            }
+        }
+
+        if (edits.Count == 0) return;
+
+        var command = new EditCellsCommand(_currentSheetId, edits);
+        _commandBus.Execute(_workbook.Id, command);
+        _recalcEngine.Recalculate(_workbook, edits.Select(e => e.Item1).ToList());
+        UpdateViewport();
+    }
+
+    private void ExecuteClearSelection()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        var edits = new List<(CellAddress, Cell)>();
+        for (uint r = range.Start.Row; r <= range.End.Row; r++)
+            for (uint c = range.Start.Col; c <= range.End.Col; c++)
+                edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(BlankValue.Instance)));
+
+        var command = new EditCellsCommand(_currentSheetId, edits);
+        _commandBus.Execute(_workbook.Id, command);
         UpdateViewport();
     }
 }
