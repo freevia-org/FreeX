@@ -3,7 +3,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Globalization;
 using Freexcel.Core.Model;
-using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
+using CellHAlign  = Freexcel.Core.Model.HorizontalAlignment;
+using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
 
 namespace Freexcel.App.UI;
 
@@ -13,6 +14,8 @@ namespace Freexcel.App.UI;
 /// </summary>
 public class GridView : FrameworkElement
 {
+    public GridView() { Focusable = true; FocusVisualStyle = null; }
+
     private const double HeaderSize = 30;
     private const double ResizeHitZone = 4;
     private const double MinCellSize = 5;
@@ -416,6 +419,12 @@ public class GridView : FrameworkElement
         var rowLookup = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookup = Viewport.ColMetrics.ToDictionary(c => c.Col);
 
+        // Cells with content block overflow from their left neighbour
+        var occupied = new HashSet<(uint, uint)>(
+            Viewport.Cells
+                .Where(c => !string.IsNullOrEmpty(c.DisplayText))
+                .Select(c => (c.Row, c.Col)));
+
         foreach (var cell in Viewport.Cells)
         {
             if (!rowLookup.TryGetValue(cell.Row, out var rowMetric)) continue;
@@ -426,6 +435,28 @@ public class GridView : FrameworkElement
             var rect = new Rect(
                 colMetric.LeftOffset + HeaderSize, rowMetric.TopOffset + HeaderSize,
                 colMetric.Width, rowMetric.Height);
+
+            var hAlign  = style?.HorizontalAlignment ?? CellHAlign.General;
+            bool isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+            bool wrapText  = style?.WrapText == true;
+
+            // ── Determine how wide the text is allowed to render ──────────────
+            // Numbers and explicit right/center alignment always stay within the cell.
+            // Left-aligned / General text overflows into consecutive empty cells.
+            double renderWidth = colMetric.Width;
+            bool canOverflow = !wrapText && !isNumeric
+                && (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
+
+            if (canOverflow)
+            {
+                uint nextCol = colMetric.Col + 1;
+                while (colLookup.TryGetValue(nextCol, out var nextMetric)
+                       && !occupied.Contains((cell.Row, nextCol)))
+                {
+                    renderWidth += nextMetric.Width;
+                    nextCol++;
+                }
+            }
 
             var typeface = (style?.Bold == true, style?.Italic == true) switch
             {
@@ -448,21 +479,46 @@ public class GridView : FrameworkElement
                 typeface, fontSize, textBrush,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-            text.MaxTextWidth = Math.Max(0, colMetric.Width - 4);
+            if (wrapText)
+            {
+                // Wrap mode: constrain width so FormattedText breaks lines at word boundaries
+                text.MaxTextWidth  = Math.Max(1, colMetric.Width - 4);
+                text.TextAlignment = hAlign switch
+                {
+                    CellHAlign.Center => System.Windows.TextAlignment.Center,
+                    CellHAlign.Right  => System.Windows.TextAlignment.Right,
+                    _                 => System.Windows.TextAlignment.Left
+                };
+            }
+            // Overflow / clip mode: no MaxTextWidth — text stays on one line;
+            // the PushClip below is the hard boundary.
 
-            var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
-            bool isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-
+            // ── Horizontal position ───────────────────────────────────────────
             double textX = hAlign switch
             {
                 CellHAlign.Right  => rect.Right - Math.Min(text.Width, colMetric.Width - 2) - 2,
-                CellHAlign.Center => rect.Left + (rect.Width - text.Width) / 2,
+                CellHAlign.Center => rect.Left  + (colMetric.Width - text.Width) / 2,
                 CellHAlign.General when isNumeric
                                   => rect.Right - Math.Min(text.Width, colMetric.Width - 2) - 2,
-                _                 => rect.Left + 2
+                _                 => rect.Left + 2   // Left / General-text: start at cell left
             };
 
-            dc.DrawText(text, new Point(textX, rect.Top + (rect.Height - text.Height) / 2));
+            // ── Vertical position ─────────────────────────────────────────────
+            double textY = style?.VerticalAlignment switch
+            {
+                CellVAlign.Top    => rect.Top + 1,
+                CellVAlign.Center => rect.Top + (rect.Height - text.Height) / 2,
+                CellVAlign.Bottom => rect.Bottom - text.Height - 1,
+                _                 => rect.Top  + (rect.Height - text.Height) / 2
+            };
+            textY = Math.Max(rect.Top, textY);
+
+            // Hard clip: overflow text stops at the first occupied neighbour;
+            // wrap text is clipped to the cell height.
+            var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
+            dc.PushClip(new RectangleGeometry(clipRect));
+            dc.DrawText(text, new Point(textX, textY));
+            dc.Pop();
         }
     }
 

@@ -117,7 +117,11 @@ public partial class MainWindow : Window
         }
 
         if (hitRow.HasValue && hitCol.HasValue)
+        {
             SetActiveCell(new CellAddress(_currentSheetId, hitRow.Value, hitCol.Value));
+            if (e.ClickCount == 2)
+                EnterEditMode();
+        }
     }
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -154,6 +158,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == Key.F2)
+        {
+            EnterEditMode();
+            e.Handled = true;
+            return;
+        }
+
         if (SheetGrid.SelectedRange == null) return;
         var current = SheetGrid.SelectedRange.Value.Start;
         uint newRow = current.Row;
@@ -183,6 +194,12 @@ public partial class MainWindow : Window
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
+    }
+
+    private void EnterEditMode()
+    {
+        FormulaBar.Focus();
+        FormulaBar.CaretIndex = FormulaBar.Text.Length;
     }
 
     private static string FormatCellValue(ScalarValue? value) => value switch

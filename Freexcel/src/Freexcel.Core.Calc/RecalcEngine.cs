@@ -46,9 +46,20 @@ public sealed class RecalcEngine
             }
         }
 
-        // Volatile cells must evaluate first; then non-volatile dependents in topological order
-        var toEvaluate = _volatileCells
-            .Concat(plan.OrderedCells.Where(c => !_volatileCells.Contains(c)))
+        // Directly-changed formula cells must evaluate first (they are NOT included in
+        // plan.OrderedCells, which only contains downstream dependents). Then volatile cells,
+        // then the topological dependent order.
+        var directFormulaChanges = changedCells
+            .Where(addr => {
+                var s = workbook.GetSheet(addr.Sheet);
+                var c = s?.GetCell(addr);
+                return c?.HasFormula == true;
+            });
+
+        var toEvaluate = directFormulaChanges
+            .Concat(_volatileCells)
+            .Concat(plan.OrderedCells)
+            .Distinct()
             .ToList();
 
         foreach (var addr in toEvaluate)
