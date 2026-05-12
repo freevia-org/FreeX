@@ -1,0 +1,253 @@
+using ClosedXML.Excel;
+using Freexcel.Core.Model;
+
+namespace Freexcel.Core.IO;
+
+/// <summary>
+/// XLSX file adapter using ClosedXML.
+/// Supports standard Excel .xlsx files.
+/// </summary>
+public sealed class XlsxFileAdapter : IFileAdapter
+{
+    public string Extension => ".xlsx";
+    public string FormatName => "Excel Workbook";
+
+    public Workbook Load(Stream stream)
+    {
+        using var xlWorkbook = new XLWorkbook(stream);
+        var workbook = new Workbook(Path.GetRandomFileName());
+
+        foreach (var xlSheet in xlWorkbook.Worksheets)
+        {
+            var sheet = workbook.AddSheet(xlSheet.Name);
+
+            foreach (var xlCell in xlSheet.CellsUsed())
+            {
+                var addr = new CellAddress(sheet.Id, (uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber);
+
+                Cell cell;
+                if (xlCell.HasFormula)
+                {
+                    cell = Cell.FromFormula(xlCell.FormulaA1);
+                }
+                else
+                {
+                    cell = Cell.FromValue(MapValue(xlCell.Value));
+                }
+
+                var style = MapStyle(xlCell.Style);
+                if (!style.Equals(CellStyle.Default))
+                    cell.StyleId = workbook.RegisterStyle(style);
+
+                sheet.SetCell(addr, cell);
+            }
+
+            foreach (var row in xlSheet.RowsUsed())
+                if (row.Height > 0)
+                    sheet.RowHeights[(uint)row.RowNumber()] = row.Height;
+
+            foreach (var col in xlSheet.ColumnsUsed())
+                if (col.Width > 0)
+                    sheet.ColumnWidths[(uint)col.ColumnNumber()] = col.Width;
+        }
+
+        return workbook;
+    }
+
+    public void Save(Workbook workbook, Stream stream)
+    {
+        using var xlWorkbook = new XLWorkbook();
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            var xlSheet = xlWorkbook.Worksheets.Add(sheet.Name);
+
+            foreach (var pair in sheet.GetUsedCells())
+            {
+                var cell = pair.Value;
+
+                // Skip blank cells that carry no style
+                if (cell.Value is BlankValue && !cell.HasFormula && cell.StyleId == StyleId.Default)
+                    continue;
+
+                var xlCell = xlSheet.Cell((int)pair.Key.Row, (int)pair.Key.Col);
+
+                if (cell.HasFormula)
+                {
+                    xlCell.FormulaA1 = cell.FormulaText;
+                }
+                else if (cell.Value is not BlankValue)
+                {
+                    xlCell.Value = MapValueInverse(cell.Value);
+                }
+
+                var style = workbook.GetStyle(cell.StyleId);
+                ApplyStyle(xlCell, style);
+            }
+
+            foreach (var (rowNum, height) in sheet.RowHeights)
+                xlSheet.Row((int)rowNum).Height = height;
+
+            foreach (var (colNum, width) in sheet.ColumnWidths)
+                xlSheet.Column((int)colNum).Width = width;
+        }
+
+        xlWorkbook.SaveAs(stream);
+    }
+
+    private static ScalarValue MapValue(XLCellValue xlValue)
+    {
+        if (xlValue.IsBlank) return BlankValue.Instance;
+        if (xlValue.IsNumber) return new NumberValue(xlValue.GetNumber());
+        if (xlValue.IsText) return new TextValue(xlValue.GetText());
+        if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
+        if (xlValue.IsDateTime) return DateTimeValue.FromDateTime(xlValue.GetDateTime());
+        if (xlValue.IsError) return new ErrorValue(xlValue.GetError().ToString());
+        return new TextValue(xlValue.ToString());
+    }
+
+    private static XLCellValue MapValueInverse(ScalarValue value) => value switch
+    {
+        NumberValue n => n.Value,
+        TextValue t => t.Value,
+        BoolValue b => b.Value,
+        DateTimeValue dt => DateTime.FromOADate(dt.Value),
+        ErrorValue => XLError.NoValueAvailable,
+        _ => Blank.Value
+    };
+
+    private static CellStyle MapStyle(IXLStyle xlStyle)
+    {
+        return new CellStyle
+        {
+            FontName = xlStyle.Font.FontName,
+            FontSize = xlStyle.Font.FontSize,
+            Bold = xlStyle.Font.Bold,
+            Italic = xlStyle.Font.Italic,
+            Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
+            FontColor = MapColor(xlStyle.Font.FontColor),
+            FillColor = xlStyle.Fill.PatternType == XLFillPatternValues.Solid
+                ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor)
+                : null,
+            BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor),
+            BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor),
+            BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor),
+            BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor),
+            NumberFormat = string.IsNullOrEmpty(xlStyle.NumberFormat.Format) ? "General" : xlStyle.NumberFormat.Format,
+            HorizontalAlignment = xlStyle.Alignment.Horizontal switch
+            {
+                XLAlignmentHorizontalValues.General => HorizontalAlignment.General,
+                XLAlignmentHorizontalValues.Left => HorizontalAlignment.Left,
+                XLAlignmentHorizontalValues.Center => HorizontalAlignment.Center,
+                XLAlignmentHorizontalValues.Right => HorizontalAlignment.Right,
+                _ => HorizontalAlignment.General,
+            },
+            VerticalAlignment = xlStyle.Alignment.Vertical switch
+            {
+                XLAlignmentVerticalValues.Top => VerticalAlignment.Top,
+                XLAlignmentVerticalValues.Center => VerticalAlignment.Center,
+                XLAlignmentVerticalValues.Bottom => VerticalAlignment.Bottom,
+                _ => VerticalAlignment.Bottom,
+            },
+            WrapText = xlStyle.Alignment.WrapText,
+        };
+    }
+
+    private static CellColor MapColor(XLColor xlColor)
+    {
+        if (xlColor.ColorType == XLColorType.Color)
+            return new CellColor(xlColor.Color.R, xlColor.Color.G, xlColor.Color.B);
+        return CellColor.Black;
+    }
+
+    private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color)
+    {
+        var mapped = style switch
+        {
+            XLBorderStyleValues.None => BorderStyle.None,
+            XLBorderStyleValues.Thin => BorderStyle.Thin,
+            XLBorderStyleValues.Medium => BorderStyle.Medium,
+            XLBorderStyleValues.Thick => BorderStyle.Thick,
+            XLBorderStyleValues.Dashed => BorderStyle.Dashed,
+            XLBorderStyleValues.Dotted => BorderStyle.Dotted,
+            XLBorderStyleValues.Double => BorderStyle.Double,
+            _ => BorderStyle.None,
+        };
+        return new CellBorder(mapped, MapColor(color));
+    }
+
+    private static void ApplyStyle(IXLCell xlCell, CellStyle style)
+    {
+        var def = CellStyle.Default;
+
+        if (style.Bold != def.Bold) xlCell.Style.Font.Bold = style.Bold;
+        if (style.Italic != def.Italic) xlCell.Style.Font.Italic = style.Italic;
+        if (style.Underline != def.Underline)
+            xlCell.Style.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
+        if (style.FontSize != def.FontSize) xlCell.Style.Font.FontSize = style.FontSize;
+        if (style.FontName != def.FontName) xlCell.Style.Font.FontName = style.FontName;
+        if (style.FontColor != def.FontColor)
+            xlCell.Style.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
+
+        if (style.FillColor.HasValue)
+        {
+            xlCell.Style.Fill.PatternType = XLFillPatternValues.Solid;
+            xlCell.Style.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
+        }
+
+        if (style.BorderTop.Style != BorderStyle.None)
+        {
+            xlCell.Style.Border.TopBorder = MapBorderStyleInverse(style.BorderTop.Style);
+            xlCell.Style.Border.TopBorderColor = XLColor.FromArgb(255, style.BorderTop.Color.R, style.BorderTop.Color.G, style.BorderTop.Color.B);
+        }
+        if (style.BorderRight.Style != BorderStyle.None)
+        {
+            xlCell.Style.Border.RightBorder = MapBorderStyleInverse(style.BorderRight.Style);
+            xlCell.Style.Border.RightBorderColor = XLColor.FromArgb(255, style.BorderRight.Color.R, style.BorderRight.Color.G, style.BorderRight.Color.B);
+        }
+        if (style.BorderBottom.Style != BorderStyle.None)
+        {
+            xlCell.Style.Border.BottomBorder = MapBorderStyleInverse(style.BorderBottom.Style);
+            xlCell.Style.Border.BottomBorderColor = XLColor.FromArgb(255, style.BorderBottom.Color.R, style.BorderBottom.Color.G, style.BorderBottom.Color.B);
+        }
+        if (style.BorderLeft.Style != BorderStyle.None)
+        {
+            xlCell.Style.Border.LeftBorder = MapBorderStyleInverse(style.BorderLeft.Style);
+            xlCell.Style.Border.LeftBorderColor = XLColor.FromArgb(255, style.BorderLeft.Color.R, style.BorderLeft.Color.G, style.BorderLeft.Color.B);
+        }
+
+        if (style.HorizontalAlignment != def.HorizontalAlignment)
+            xlCell.Style.Alignment.Horizontal = style.HorizontalAlignment switch
+            {
+                HorizontalAlignment.Left => XLAlignmentHorizontalValues.Left,
+                HorizontalAlignment.Center => XLAlignmentHorizontalValues.Center,
+                HorizontalAlignment.Right => XLAlignmentHorizontalValues.Right,
+                _ => XLAlignmentHorizontalValues.General,
+            };
+
+        if (style.VerticalAlignment != def.VerticalAlignment)
+            xlCell.Style.Alignment.Vertical = style.VerticalAlignment switch
+            {
+                VerticalAlignment.Top => XLAlignmentVerticalValues.Top,
+                VerticalAlignment.Center => XLAlignmentVerticalValues.Center,
+                _ => XLAlignmentVerticalValues.Bottom,
+            };
+
+        if (style.WrapText != def.WrapText)
+            xlCell.Style.Alignment.WrapText = style.WrapText;
+
+        if (style.NumberFormat != def.NumberFormat)
+            xlCell.Style.NumberFormat.Format = style.NumberFormat;
+    }
+
+    private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch
+    {
+        BorderStyle.Thin => XLBorderStyleValues.Thin,
+        BorderStyle.Medium => XLBorderStyleValues.Medium,
+        BorderStyle.Thick => XLBorderStyleValues.Thick,
+        BorderStyle.Dashed => XLBorderStyleValues.Dashed,
+        BorderStyle.Dotted => XLBorderStyleValues.Dotted,
+        BorderStyle.Double => XLBorderStyleValues.Double,
+        _ => XLBorderStyleValues.None,
+    };
+}
