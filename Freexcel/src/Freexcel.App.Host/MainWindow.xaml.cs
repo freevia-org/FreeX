@@ -462,6 +462,43 @@ public partial class MainWindow : Window
         return result;
     }
 
+    private void SortAscButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var cmd = new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending: true);
+        _commandBus.Execute(_workbook.Id, cmd);
+        UpdateViewport();
+    }
+
+    private void SortDescButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var cmd = new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending: false);
+        _commandBus.Execute(_workbook.Id, cmd);
+        UpdateViewport();
+    }
+
+    private void FilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var value = PromptForInput("Filter: enter value to keep", "");
+        if (value is null) return;  // user cancelled
+        var allowedValues = string.IsNullOrWhiteSpace(value)
+            ? (IReadOnlyList<string>)[]
+            : [value.Trim()];
+        var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: allowedValues);
+        _commandBus.Execute(_workbook.Id, cmd);
+        UpdateViewport();
+    }
+
+    private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: []);
+        _commandBus.Execute(_workbook.Id, cmd);
+        UpdateViewport();
+    }
+
     private void OnColumnResized(uint col, double newWidthPx)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);

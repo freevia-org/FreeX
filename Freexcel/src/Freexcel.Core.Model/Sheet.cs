@@ -35,6 +35,9 @@ public sealed class Sheet
     /// <summary>Charts embedded in this sheet.</summary>
     public List<ChartModel> Charts { get; } = [];
 
+    /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
+    public HashSet<uint> HiddenRows { get; } = [];
+
     public Sheet(SheetId id, string name)
     {
         Id = id;
