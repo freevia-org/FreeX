@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private Workbook _workbook;
     private SheetId _currentSheetId;
+    private readonly System.Collections.ObjectModel.ObservableCollection<SheetTabViewModel> _sheetTabs = [];
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -44,6 +45,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _currentSheetId = _workbook.Sheets[0].Id;
+        SheetTabsControl.ItemsSource = _sheetTabs;
         
         // Wire up scrollbars
         VerticalScroll.ValueChanged += Scroll_ValueChanged;
@@ -80,6 +82,7 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateViewport();
+        RefreshSheetTabs();
     }
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -298,6 +301,7 @@ public partial class MainWindow : Window
 
             _recalcEngine.Recalculate(_workbook, []);
             UpdateViewport();
+            RefreshSheetTabs();
         }
     }
 
@@ -346,6 +350,77 @@ public partial class MainWindow : Window
         SetActiveCell(addr);
         EnsureCellVisible(addr);
         UpdateViewport();
+    }
+
+    private void RefreshSheetTabs()
+    {
+        _sheetTabs.Clear();
+        foreach (var sheet in _workbook.Sheets)
+            _sheetTabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name));
+
+        // Highlight active tab after layout
+        SheetTabsControl.UpdateLayout();
+        foreach (var tab in _sheetTabs)
+        {
+            var container = SheetTabsControl.ItemContainerGenerator
+                .ContainerFromItem(tab) as System.Windows.FrameworkElement;
+            if (container?.FindName("TabBorder") is System.Windows.Controls.Border border)
+                border.Background = tab.Id == _currentSheetId ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Transparent;
+        }
+    }
+
+    private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
+        _currentSheetId = tab.Id;
+        UpdateViewport();
+        RefreshSheetTabs();
+    }
+
+    private void SheetTab_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
+        var name = PromptForInput("Rename Sheet", tab.Name);
+        if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
+        {
+            _commandBus.Execute(_workbook.Id, new RenameSheetCommand(_currentSheetId, name));
+            RefreshSheetTabs();
+        }
+        e.Handled = true;
+    }
+
+    private void SheetTab_LabelMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2) SheetTab_MouseRightButtonDown(sender, e);
+    }
+
+    private void AddSheetButton_Click(object sender, RoutedEventArgs e)
+    {
+        var name = $"Sheet{_workbook.Sheets.Count + 1}";
+        _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
+        _currentSheetId = _workbook.Sheets[^1].Id;
+        UpdateViewport();
+        RefreshSheetTabs();
+    }
+
+    private static string? PromptForInput(string prompt, string defaultValue)
+    {
+        var win = new Window
+        {
+            Title = prompt, Width = 300, Height = 120,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize
+        };
+        var tb = new System.Windows.Controls.TextBox { Text = defaultValue, Margin = new Thickness(10) };
+        var btn = new System.Windows.Controls.Button { Content = "OK", Margin = new Thickness(10, 0, 10, 10) };
+        var sp = new System.Windows.Controls.StackPanel();
+        sp.Children.Add(tb);
+        sp.Children.Add(btn);
+        win.Content = sp;
+        string? result = null;
+        btn.Click += (_, _) => { result = tb.Text; win.Close(); };
+        win.ShowDialog();
+        return result;
     }
 
     private void OnColumnResized(uint col, double newWidthPx)
@@ -424,4 +499,18 @@ public partial class MainWindow : Window
         _commandBus.Execute(_workbook.Id, command);
         UpdateViewport();
     }
+}
+
+internal sealed class SheetTabViewModel(SheetId id, string name) : System.ComponentModel.INotifyPropertyChanged
+{
+    public SheetId Id { get; } = id;
+
+    private string _name = name;
+    public string Name
+    {
+        get => _name;
+        set { _name = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Name))); }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }
