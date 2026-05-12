@@ -62,6 +62,16 @@ public class GridView : FrameworkElement
         set => SetValue(SelectedRangeProperty, value);
     }
 
+    public static readonly DependencyProperty ChartsProperty =
+        DependencyProperty.Register(nameof(Charts), typeof(IReadOnlyList<ChartModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public IReadOnlyList<ChartModel>? Charts
+    {
+        get => (IReadOnlyList<ChartModel>?)GetValue(ChartsProperty);
+        set => SetValue(ChartsProperty, value);
+    }
+
     // Resize drag state
     private enum ResizeTarget { None, Row, Column }
     private ResizeTarget _resizeTarget = ResizeTarget.None;
@@ -86,6 +96,7 @@ public class GridView : FrameworkElement
         RenderSelection(dc);
         RenderFreezeDivider(dc);
         RenderResizeLine(dc);
+        RenderCharts(dc);
 
         dc.Pop();
     }
@@ -243,6 +254,20 @@ public class GridView : FrameworkElement
                 double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + HeaderSize;
                 dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, ActualHeight));
             }
+        }
+    }
+
+    private void RenderCharts(DrawingContext dc)
+    {
+        if (Charts == null || Viewport == null) return;
+        foreach (var chart in Charts)
+        {
+            var img = ChartRenderer.Render(chart, Viewport);
+            if (img == null) continue;
+            var rect = new Rect(
+                chart.Left + HeaderSize, chart.Top + HeaderSize,
+                chart.Width, chart.Height);
+            dc.DrawImage(img, rect);
         }
     }
 

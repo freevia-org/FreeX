@@ -32,6 +32,9 @@ public sealed class Sheet
     /// <summary>Number of columns frozen at the left (0 = none).</summary>
     public uint FrozenCols { get; set; } = 0;
 
+    /// <summary>Charts embedded in this sheet.</summary>
+    public List<ChartModel> Charts { get; } = [];
+
     public Sheet(SheetId id, string name)
     {
         Id = id;

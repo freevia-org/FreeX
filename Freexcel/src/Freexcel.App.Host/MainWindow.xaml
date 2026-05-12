@@ -41,6 +41,8 @@
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
                 <Button Content="Replace" Click="ReplaceButton_Click" Width="60" Height="24" Margin="4,0"
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Button Content="Chart" Click="InsertChartButton_Click" Width="50" Height="24" Margin="4,0"
+                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
             </StackPanel>
         </Border>
 
