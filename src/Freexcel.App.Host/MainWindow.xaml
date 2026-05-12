@@ -43,6 +43,14 @@
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
                 <Button Content="Chart" Click="InsertChartButton_Click" Width="50" Height="24" Margin="4,0"
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Button Content="Sort A→Z" Click="SortAscButton_Click" Width="60" Height="24" Margin="4,0"
+                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Button Content="Sort Z→A" Click="SortDescButton_Click" Width="60" Height="24" Margin="4,0"
+                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Button Content="Filter" Click="FilterButton_Click" Width="44" Height="24" Margin="4,0"
+                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Button Content="Clear Filter" Click="ClearFilterButton_Click" Width="70" Height="24" Margin="4,0"
+                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
             </StackPanel>
         </Border>
 

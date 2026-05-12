@@ -20,10 +20,11 @@ public sealed class ViewportService : IViewportService
         var rowMetrics = new List<RowMetric>();
         var colMetrics = new List<ColMetric>();
 
-        // Calculate Row Metrics — iterate until we've filled the available height
+        // Calculate Row Metrics — iterate until we've filled the available height, skipping filter-hidden rows
         double topOffset = 0;
         for (uint r = request.TopRow; ; r++)
         {
+            if (sheet.HiddenRows.Contains(r)) continue;
             double height = sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
             rowMetrics.Add(new RowMetric(r, height, topOffset));
             topOffset += height;
