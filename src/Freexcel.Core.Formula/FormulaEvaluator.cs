@@ -193,20 +193,32 @@ public sealed class FormulaEvaluator
 
         var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
 
-        // Expand range arguments into individual values for aggregate functions
+        bool isStructured = IsStructuredRangeFunction(node.FunctionName);
+
+        // Expand range arguments into individual values for aggregate functions,
+        // or wrap as RangeValue for structured functions that need 2-D access.
         var expandedArgs = new List<ScalarValue>();
         foreach (var arg in node.Arguments)
         {
             if (arg is RangeRefNode range)
             {
-                IReadOnlyList<ScalarValue> values = range.SheetName is not null
-                    ? context.GetRangeValues(range.SheetName,
-                        range.Start.Row, range.Start.ColumnNumber,
-                        range.End.Row, range.End.ColumnNumber)
-                    : context.GetRangeValues(
-                        range.Start.Row, range.Start.ColumnNumber,
-                        range.End.Row, range.End.ColumnNumber);
-                expandedArgs.AddRange(values);
+                if (isStructured)
+                {
+                    // Build a 2-D RangeValue for structured functions
+                    var rv = BuildRangeValue(range, context);
+                    expandedArgs.Add(rv);
+                }
+                else
+                {
+                    IReadOnlyList<ScalarValue> values = range.SheetName is not null
+                        ? context.GetRangeValues(range.SheetName,
+                            range.Start.Row, range.Start.ColumnNumber,
+                            range.End.Row, range.End.ColumnNumber)
+                        : context.GetRangeValues(
+                            range.Start.Row, range.Start.ColumnNumber,
+                            range.End.Row, range.End.ColumnNumber);
+                    expandedArgs.AddRange(values);
+                }
             }
             else
             {
@@ -226,8 +238,31 @@ public sealed class FormulaEvaluator
         return func(expandedArgs, context);
     }
 
+    private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)
+    {
+        uint r0 = range.Start.Row, c0 = range.Start.ColumnNumber;
+        uint r1 = range.End.Row,   c1 = range.End.ColumnNumber;
+        int rows = (int)(r1 - r0 + 1);
+        int cols = (int)(c1 - c0 + 1);
+        var cells = new ScalarValue[rows, cols];
+        for (int ri = 0; ri < rows; ri++)
+            for (int ci = 0; ci < cols; ci++)
+            {
+                cells[ri, ci] = range.SheetName is not null
+                    ? context.GetCellValue(range.SheetName, r0 + (uint)ri, c0 + (uint)ci)
+                    : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
+            }
+        return new RangeValue(cells);
+    }
+
     private static bool IsAggregateFunction(string name) =>
-        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTA" or "AND" or "OR" or "CONCAT";
+        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTA" or "AND" or "OR" or "CONCAT"
+             or "STDEV" or "MEDIAN";
+
+    private static bool IsStructuredRangeFunction(string name) =>
+        name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH"
+             or "SUMIF" or "COUNTIF" or "AVERAGEIF"
+             or "LARGE" or "SMALL" or "RANK";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
