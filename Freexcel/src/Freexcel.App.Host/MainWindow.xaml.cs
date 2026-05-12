@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 using Freexcel.Core.Model;
 using Freexcel.Core.Formula;
@@ -99,6 +100,19 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            FindButton_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            ReplaceButton_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+
         if (SheetGrid.SelectedRange == null) return;
         var current = SheetGrid.SelectedRange.Value.Start;
         uint newRow = current.Row;
@@ -245,8 +259,8 @@ public partial class MainWindow : Window
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         var filter = string.Join("|", _fileAdapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
-        var dialog = new Microsoft.Win32.SaveFileDialog 
-        { 
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
             Filter = filter,
             FileName = _workbook.Name
         };
@@ -260,5 +274,31 @@ public partial class MainWindow : Window
             using var stream = dialog.OpenFile();
             adapter.Save(_workbook, stream);
         }
+    }
+
+    private void FindButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new FindReplaceDialog(_workbook, _commandBus, NavigateToCell, replaceMode: false)
+        {
+            Owner = this
+        };
+        dlg.Show();
+    }
+
+    private void ReplaceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new FindReplaceDialog(_workbook, _commandBus, NavigateToCell, replaceMode: true)
+        {
+            Owner = this
+        };
+        dlg.Show();
+    }
+
+    private void NavigateToCell(CellAddress addr)
+    {
+        _currentSheetId = addr.Sheet;
+        SetActiveCell(addr);
+        EnsureCellVisible(addr);
+        UpdateViewport();
     }
 }
