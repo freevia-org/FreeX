@@ -30,6 +30,10 @@ public sealed class SortCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
 
+        // Guard against inverted ranges — uint subtraction would wrap to ~4B
+        if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
+            return new CommandOutcome(true); // nothing to sort
+
         uint startRow = _range.Start.Row;
         uint endRow   = _range.End.Row;
         uint startCol = _range.Start.Col;

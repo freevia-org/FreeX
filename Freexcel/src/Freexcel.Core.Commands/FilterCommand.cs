@@ -38,18 +38,20 @@ public sealed class FilterCommand : IWorkbookCommand
         // Snapshot existing hidden-row state for undo
         _previousHiddenRows = [.. sheet.HiddenRows];
 
-        // Clear existing filter state
-        sheet.HiddenRows.Clear();
-
-        if (_allowedValues.Count == 0)
-        {
-            // No allowed values = clear filter — all rows visible
-            return new CommandOutcome(true);
-        }
-
         uint filterCol  = _range.Start.Col + _filterColOffset;
         uint startRow   = _range.Start.Row;
         uint endRow     = _range.End.Row;
+
+        // Remove only the rows that are within this filter's range, preserving
+        // rows hidden for other reasons (e.g. imported from XLSX, freeze panes, etc.)
+        for (uint r = startRow + 1; r <= endRow; r++)
+            sheet.HiddenRows.Remove(r);
+
+        if (_allowedValues.Count == 0)
+        {
+            // No allowed values = clear filter — rows in range are now all visible
+            return new CommandOutcome(true);
+        }
 
         // Build a case-insensitive lookup of allowed values
         var allowed = new HashSet<string>(_allowedValues, StringComparer.OrdinalIgnoreCase);
