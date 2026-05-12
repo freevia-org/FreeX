@@ -69,7 +69,11 @@ public class FileAdapterSmokeTests
         var ls = loaded.GetSheetAt(0);
         ((NumberValue)ls.GetValue(1, 1)).Value.Should().BeApproximately(3.14, 1e-9);
         ((TextValue)ls.GetValue(1, 2)).Value.Should().Be("world");
+        var formulaAddr = new CellAddress(ls.Id, 2, 1);
         ls.GetCell(2, 1)!.FormulaText.Should().NotBeNullOrEmpty();
+        // ClosedXML preserves cached formula values on round-trip
+        var reloadedFormulaCell = loaded.GetSheet(sheet.Name)!.GetCell(formulaAddr);
+        reloadedFormulaCell!.Value.Should().NotBeOfType<BlankValue>();
     }
 
     [Fact]
@@ -100,7 +104,7 @@ public class FileAdapterSmokeTests
         loadedCell.Should().NotBeNull();
         var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
         loadedStyle.Bold.Should().BeTrue();
-        loadedStyle.FontColor.R.Should().BeGreaterThan(0);
+        loadedStyle.FontColor.R.Should().Be(200);
     }
 
     [Fact]

@@ -15,7 +15,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
     public Workbook Load(Stream stream)
     {
         using var xlWorkbook = new XLWorkbook(stream);
-        var workbook = new Workbook(Path.GetRandomFileName());
+        var workbook = new Workbook("Untitled");
 
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
@@ -29,6 +29,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (xlCell.HasFormula)
                 {
                     cell = Cell.FromFormula(xlCell.FormulaA1);
+                    // Preserve the cached formula result so callers see the last-calculated value
+                    // without needing to recalculate immediately.
+                    var cached = MapValue(xlCell.Value);
+                    if (cached is not BlankValue)
+                        cell.Value = cached;
                 }
                 else
                 {
@@ -133,6 +138,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor),
             BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor),
             BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor),
+            // ClosedXML returns empty string for built-in format ID 0 (General) and some
+            // other built-in IDs. Phase 2 limitation: built-in IDs without an explicit
+            // format string are treated as General.
             NumberFormat = string.IsNullOrEmpty(xlStyle.NumberFormat.Format) ? "General" : xlStyle.NumberFormat.Format,
             HorizontalAlignment = xlStyle.Alignment.Horizontal switch
             {
@@ -157,6 +165,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         if (xlColor.ColorType == XLColorType.Color)
             return new CellColor(xlColor.Color.R, xlColor.Color.G, xlColor.Color.B);
+        // Theme and indexed colors require workbook theme context to resolve to RGB.
+        // Phase 2 limitation: flattened to black. Track as a known gap.
         return CellColor.Black;
     }
 

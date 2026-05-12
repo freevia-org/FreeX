@@ -5,8 +5,9 @@ using Freexcel.Core.Model;
 namespace Freexcel.Core.IO;
 
 /// <summary>
-/// CSV file adapter.
-/// Phase 2: no quoted-field handling; auto-detects numbers by invariant-culture double parse.
+/// CSV file adapter. Phase 2 limitations: no quoted-field handling on read or write
+/// (values containing commas will be split on load; values containing commas will
+/// produce structurally invalid CSV on save). Full RFC 4180 quoting deferred to Phase 4.
 /// </summary>
 public sealed class CsvFileAdapter : IFileAdapter
 {
@@ -18,7 +19,7 @@ public sealed class CsvFileAdapter : IFileAdapter
         var workbook = new Workbook("Untitled");
         var sheet = workbook.AddSheet("Sheet1");
 
-        using var reader = new StreamReader(stream, Encoding.UTF8);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         uint row = 1;
         string? line;
         while ((line = reader.ReadLine()) != null)
@@ -44,6 +45,7 @@ public sealed class CsvFileAdapter : IFileAdapter
 
     public void Save(Workbook workbook, Stream stream)
     {
+        if (workbook.Sheets.Count == 0) return;
         var sheet = workbook.Sheets[0];
         var range = sheet.GetUsedRange();
         if (range is null) return;
