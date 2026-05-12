@@ -260,9 +260,8 @@ public static class BuiltInFunctions
 /// </summary>
 public interface IEvalContext
 {
-    /// <summary>Resolve a cell reference to its current value.</summary>
     ScalarValue GetCellValue(uint row, uint col);
-
-    /// <summary>Expand a range into individual values.</summary>
+    ScalarValue GetCellValue(string sheetName, uint row, uint col);
     IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol);
+    IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol);
 }

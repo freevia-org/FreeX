@@ -61,7 +61,7 @@ public sealed class RecalcEngine
 
             try
             {
-                var result = _evaluator.Evaluate("=" + cell.FormulaText, sheet);
+                var result = _evaluator.Evaluate("=" + cell.FormulaText, sheet, workbook);
                 cell.Value = result;
                 recalculated.Add(addr);
             }
@@ -84,10 +84,10 @@ public sealed class RecalcEngine
     /// Extract cell references from a formula AST and register them in the dependency graph.
     /// Call this whenever a formula is set on a cell.
     /// </summary>
-    public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId)
+    public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId, Freexcel.Core.Model.Workbook? workbook = null)
     {
         var refs = new HashSet<CellAddress>();
-        CollectReferences(ast, sheetId, refs);
+        CollectReferences(ast, sheetId, workbook, refs);
         _graph.SetDependencies(formulaCell, refs);
 
         if (ContainsVolatileFunction(ast))
@@ -115,36 +115,48 @@ public sealed class RecalcEngine
         };
     }
 
-    private static void CollectReferences(FormulaNode node, SheetId sheetId, HashSet<CellAddress> refs)
+    private static void CollectReferences(FormulaNode node, SheetId defaultSheetId, Freexcel.Core.Model.Workbook? workbook, HashSet<CellAddress> refs)
     {
         switch (node)
         {
+            case CellRefNode cellRef when cellRef.SheetName is not null:
+            {
+                var targetSheet = workbook?.GetSheet(cellRef.SheetName);
+                if (targetSheet is not null)
+                    refs.Add(new CellAddress(targetSheet.Id, cellRef.Row, cellRef.ColumnNumber));
+                break;
+            }
             case CellRefNode cellRef:
-                refs.Add(new CellAddress(sheetId, cellRef.Row, cellRef.ColumnNumber));
+                refs.Add(new CellAddress(defaultSheetId, cellRef.Row, cellRef.ColumnNumber));
                 break;
 
+            case RangeRefNode range when range.SheetName is not null:
+            {
+                var targetSheet = workbook?.GetSheet(range.SheetName);
+                if (targetSheet is not null)
+                    for (var r = range.Start.Row; r <= range.End.Row; r++)
+                        for (var c = range.Start.ColumnNumber; c <= range.End.ColumnNumber; c++)
+                            refs.Add(new CellAddress(targetSheet.Id, r, c));
+                break;
+            }
             case RangeRefNode range:
                 for (var r = range.Start.Row; r <= range.End.Row; r++)
-                {
                     for (var c = range.Start.ColumnNumber; c <= range.End.ColumnNumber; c++)
-                    {
-                        refs.Add(new CellAddress(sheetId, r, c));
-                    }
-                }
+                        refs.Add(new CellAddress(defaultSheetId, r, c));
                 break;
 
             case BinaryOpNode binary:
-                CollectReferences(binary.Left, sheetId, refs);
-                CollectReferences(binary.Right, sheetId, refs);
+                CollectReferences(binary.Left, defaultSheetId, workbook, refs);
+                CollectReferences(binary.Right, defaultSheetId, workbook, refs);
                 break;
 
             case UnaryOpNode unary:
-                CollectReferences(unary.Operand, sheetId, refs);
+                CollectReferences(unary.Operand, defaultSheetId, workbook, refs);
                 break;
 
             case FunctionCallNode func:
                 foreach (var arg in func.Arguments)
-                    CollectReferences(arg, sheetId, refs);
+                    CollectReferences(arg, defaultSheetId, workbook, refs);
                 break;
         }
     }
