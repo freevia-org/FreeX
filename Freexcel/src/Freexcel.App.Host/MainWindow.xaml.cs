@@ -278,7 +278,7 @@ public partial class MainWindow : Window
 
     private void FindButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(_workbook, _commandBus, NavigateToCell, replaceMode: false)
+        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: false)
         {
             Owner = this
         };
@@ -287,7 +287,7 @@ public partial class MainWindow : Window
 
     private void ReplaceButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new FindReplaceDialog(_workbook, _commandBus, NavigateToCell, replaceMode: true)
+        var dlg = new FindReplaceDialog(() => _workbook, _commandBus, NavigateToCell, replaceMode: true)
         {
             Owner = this
         };

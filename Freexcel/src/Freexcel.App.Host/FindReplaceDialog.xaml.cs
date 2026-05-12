@@ -6,15 +6,16 @@ namespace Freexcel.App.Host;
 
 public sealed partial class FindReplaceDialog : Window
 {
-    private readonly Workbook _workbook;
+    private readonly Func<Workbook> _getWorkbook;
     private readonly ICommandBus _commandBus;
     private readonly Action<CellAddress> _navigateTo;
     private IReadOnlyList<FindResult> _results = [];
     private int _currentIndex = -1;
+    private string _lastSearch = string.Empty;
 
-    public FindReplaceDialog(Workbook workbook, ICommandBus commandBus, Action<CellAddress> navigateTo, bool replaceMode = false)
+    public FindReplaceDialog(Func<Workbook> getWorkbook, ICommandBus commandBus, Action<CellAddress> navigateTo, bool replaceMode = false)
     {
-        _workbook = workbook;
+        _getWorkbook = getWorkbook;
         _commandBus = commandBus;
         _navigateTo = navigateTo;
         InitializeComponent();
@@ -40,8 +41,14 @@ public sealed partial class FindReplaceDialog : Window
         var search = FindBox.Text;
         if (string.IsNullOrEmpty(search)) return;
 
+        if (search != _lastSearch)
+        {
+            _currentIndex = -1;
+            _lastSearch = search;
+        }
+
         _results = FindReplaceService.Find(
-            _workbook, search,
+            _getWorkbook(), search,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true,
             searchFormulas: SearchFormulasBox.IsChecked == true);
@@ -65,7 +72,7 @@ public sealed partial class FindReplaceDialog : Window
         if (string.IsNullOrEmpty(search)) return;
 
         var count = FindReplaceService.ReplaceAll(
-            _workbook, _commandBus, search, ReplaceBox.Text,
+            _getWorkbook(), _commandBus, search, ReplaceBox.Text,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true);
 

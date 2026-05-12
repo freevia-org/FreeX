@@ -90,6 +90,19 @@ public class FindReplaceTests
         count.Should().Be(0);
         sheet.GetCell(a1)!.FormulaText.Should().Be("SUM(B1:B5)");
     }
+
+    [Fact]
+    public void ReplaceAll_ReplacesSubstring_InValueCells()
+    {
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("foobar"));
+
+        var count = FindReplaceService.ReplaceAll(wb, commandBus, "foo", "baz");
+
+        count.Should().Be(1);
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("bazbar"));
+    }
 }
 
 /// <summary>Minimal ICommandContext for tests.</summary>

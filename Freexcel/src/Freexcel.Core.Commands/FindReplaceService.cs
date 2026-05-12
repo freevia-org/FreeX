@@ -116,7 +116,7 @@ public static class FindReplaceService
             commandBus.Execute(workbook.Id, command);
         }
 
-        return matches.Count;
+        return editsBySheet.Values.Sum(list => list.Count);
     }
 
     private static string? GetDisplayText(ScalarValue value) => value switch
@@ -125,7 +125,7 @@ public static class FindReplaceService
         NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
         TextValue t => t.Value,
         BoolValue b => b.Value ? "TRUE" : "FALSE",
-        DateTimeValue dt => dt.ToDateTime().ToString(),
+        DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         ErrorValue err => err.Code,
         _ => null
     };
