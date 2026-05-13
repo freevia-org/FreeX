@@ -67,6 +67,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             // Load data validation rules (best-effort)
             try { LoadDataValidations(xlSheet, sheet); }
             catch { /* ignore DV load failures */ }
+
+            // Load merged regions (best-effort)
+            try { LoadMergedRegions(xlSheet, sheet); }
+            catch { /* ignore merge load failures */ }
         }
 
         // Load named ranges (best-effort; skip any we cannot map)
@@ -156,6 +160,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
             // Save data validation rules back to XLSX
             try { SaveDataValidations(sheet, xlSheet); }
             catch { /* ignore DV save failures */ }
+
+            // Save merged regions
+            foreach (var region in sheet.MergedRegions)
+            {
+                try
+                {
+                    var rangeStr = $"{CellAddress.NumberToColumnName(region.Start.Col)}{region.Start.Row}" +
+                                   $":{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
+                    xlSheet.Range(rangeStr).Merge();
+                }
+                catch { /* ignore individual merge failures */ }
+            }
         }
 
         // Save named ranges
@@ -634,4 +650,21 @@ public sealed class XlsxFileAdapter : IFileAdapter
         BorderStyle.Double => XLBorderStyleValues.Double,
         _ => XLBorderStyleValues.None,
     };
+
+    // ── Merged regions load ────────────────────────────────────────────────────
+
+    private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
+    {
+        foreach (var xlMerge in xlSheet.MergedRanges)
+        {
+            var sheetId = sheet.Id;
+            var start = new CellAddress(sheetId,
+                (uint)xlMerge.RangeAddress.FirstAddress.RowNumber,
+                (uint)xlMerge.RangeAddress.FirstAddress.ColumnNumber);
+            var end = new CellAddress(sheetId,
+                (uint)xlMerge.RangeAddress.LastAddress.RowNumber,
+                (uint)xlMerge.RangeAddress.LastAddress.ColumnNumber);
+            sheet.MergedRegions.Add(new GridRange(start, end));
+        }
+    }
 }
