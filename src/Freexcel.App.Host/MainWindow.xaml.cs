@@ -27,10 +27,18 @@ public partial class MainWindow : Window
     private readonly ICommandBus _commandBus;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
+    private readonly WorkbookRef _workbookRef;
     private Workbook _workbook;
     private SheetId _currentSheetId;
     private readonly System.Collections.ObjectModel.ObservableCollection<SheetTabViewModel> _sheetTabs = [];
     private bool _suppressToolbarSync;
+    private CellAddress? _selectionAnchor;
+    private CellAddress? _selectionCursor;
+    private bool _dragSelectActive;
+    private readonly RecentFilesStore _recentFiles;
+    private List<RecentFileViewModel> _allRecentItems = [];
+    private FreexcelOptions _options = FreexcelOptions.Load();
+    private string? _currentFilePath;
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -38,6 +46,7 @@ public partial class MainWindow : Window
         ICommandBus commandBus,
         RecalcEngine recalcEngine,
         IEnumerable<IFileAdapter> fileAdapters,
+        WorkbookRef workbookRef,
         Workbook workbook)
     {
         _logger = logger;
@@ -45,8 +54,10 @@ public partial class MainWindow : Window
         _commandBus = commandBus;
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
+        _workbookRef = workbookRef;
         _workbook = workbook;
-        
+        _recentFiles = RecentFilesStore.Load();
+
         InitializeComponent();
 
         _currentSheetId = _workbook.Sheets[0].Id;
@@ -62,28 +73,16 @@ public partial class MainWindow : Window
         SheetGrid.RowResized += OnRowResized;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
+        SheetGrid.MouseMove  += SheetGrid_MouseMove;
+        SheetGrid.MouseUp    += SheetGrid_MouseUp;
+        SheetGrid.MouseWheel += SheetGrid_MouseWheel;
         this.KeyDown += MainWindow_KeyDown;
-        
-        // Initial data for testing
-        SeedSampleData();
+        this.TextInput += MainWindow_TextInput;
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;
 
         _logger.LogInformation("MainWindow initialized with Workbook {WorkbookId}", _workbook.Id);
-    }
-
-    private void SeedSampleData()
-    {
-        var sheet = _workbook.Sheets[0];
-        for (uint r = 1; r <= 100; r++)
-        {
-            for (uint c = 1; c <= 10; c++)
-            {
-                sheet.SetCell(new CellAddress(sheet.Id, r, c), new NumberValue(r * c));
-            }
-        }
-        sheet.SetCell(new CellAddress(sheet.Id, 1, 11), new TextValue("Hello Freexcel!"));
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -102,6 +101,8 @@ public partial class MainWindow : Window
 
         UpdateViewport();
         RefreshSheetTabs();
+        UpdateTitleBar();
+        ShowStartScreen();
     }
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -114,14 +115,127 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    // ── Header / select-all helpers ───────────────────────────────────────────
+
+    private void SelectRow(uint row)
+    {
+        const uint maxCol = 16_384;
+        _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
+        _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
+        SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
+        CellAddressBox.Text = $"{row}:{row}";
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
+        SheetGrid.Focus();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void SelectColumn(uint col)
+    {
+        const uint maxRow = 1_048_576;
+        _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
+        _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
+        SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
+        var colName = CellAddress.NumberToColumnName(col);
+        CellAddressBox.Text = $"{colName}:{colName}";
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
+        SheetGrid.Focus();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void SelectAll()
+    {
+        const uint maxRow = 1_048_576;
+        const uint maxCol = 16_384;
+        _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
+        _selectionCursor = new CellAddress(_currentSheetId, maxRow, maxCol);
+        SheetGrid.SelectedRange = new GridRange(_selectionAnchor.Value, _selectionCursor.Value);
+        CellAddressBox.Text = "A1";
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
+        SheetGrid.Focus();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
     private void SheetGrid_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         var pos = e.GetPosition(SheetGrid);
         const double headerSize = 30;
-        if (pos.X < headerSize || pos.Y < headerSize) return;
 
         var viewport = SheetGrid.Viewport;
         if (viewport == null) return;
+
+        // ── Header area ───────────────────────────────────────────────────────
+        if (pos.X < headerSize || pos.Y < headerSize)
+        {
+            // Top-left corner: select all
+            if (pos.X < headerSize && pos.Y < headerSize)
+            {
+                SelectAll();
+                return;
+            }
+            // Column header: select entire column
+            if (pos.Y < headerSize)
+            {
+                foreach (var cm in viewport.ColMetrics)
+                {
+                    double left = cm.LeftOffset + headerSize;
+                    if (pos.X >= left && pos.X < left + cm.Width)
+                    {
+                        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
+                        {
+                            // Extend column selection from anchor column to this column
+                            uint anchorCol = _selectionAnchor.Value.Col;
+                            _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
+                            SheetGrid.SelectedRange = new GridRange(
+                                new CellAddress(_currentSheetId, 1, Math.Min(anchorCol, cm.Col)),
+                                new CellAddress(_currentSheetId, 1_048_576, Math.Max(anchorCol, cm.Col)));
+                            var c1 = CellAddress.NumberToColumnName(Math.Min(anchorCol, cm.Col));
+                            var c2 = CellAddress.NumberToColumnName(Math.Max(anchorCol, cm.Col));
+                            CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
+                        }
+                        else
+                        {
+                            SelectColumn(cm.Col);
+                        }
+                        return;
+                    }
+                }
+                return;
+            }
+            // Row header: select entire row
+            foreach (var rm in viewport.RowMetrics)
+            {
+                double top = rm.TopOffset + headerSize;
+                if (pos.Y >= top && pos.Y < top + rm.Height)
+                {
+                    if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
+                    {
+                        // Extend row selection from anchor row to this row
+                        uint anchorRow = _selectionAnchor.Value.Row;
+                        _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
+                        SheetGrid.SelectedRange = new GridRange(
+                            new CellAddress(_currentSheetId, Math.Min(anchorRow, rm.Row), 1),
+                            new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), 16_384));
+                        var r1 = Math.Min(anchorRow, rm.Row);
+                        var r2 = Math.Max(anchorRow, rm.Row);
+                        CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
+                    }
+                    else
+                    {
+                        SelectRow(rm.Row);
+                    }
+                    return;
+                }
+            }
+            return;
+        }
+
+        // ── Cell area ─────────────────────────────────────────────────────────
 
         uint? hitRow = null, hitCol = null;
         foreach (var rm in viewport.RowMetrics)
@@ -138,23 +252,37 @@ public partial class MainWindow : Window
         if (hitRow.HasValue && hitCol.HasValue)
         {
             var newAddr = new CellAddress(_currentSheetId, hitRow.Value, hitCol.Value);
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && SheetGrid.SelectedRange.HasValue)
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
             {
-                var anchor = SheetGrid.SelectedRange.Value.Start;
-                SheetGrid.SelectedRange = new GridRange(
-                    new CellAddress(_currentSheetId,
-                        Math.Min(anchor.Row, newAddr.Row), Math.Min(anchor.Col, newAddr.Col)),
-                    new CellAddress(_currentSheetId,
-                        Math.Max(anchor.Row, newAddr.Row), Math.Max(anchor.Col, newAddr.Col)));
-                CellAddressBox.Text = $"{anchor.ToA1()}:{newAddr.ToA1()}";
+                ExtendSelection(_selectionAnchor.Value, newAddr);
             }
             else
             {
                 SetActiveCell(newAddr);
                 if (e.ClickCount == 2)
                     EnterEditMode();
+                else
+                {
+                    // Start drag-select
+                    _dragSelectActive = true;
+                    SheetGrid.CaptureMouse();
+                }
             }
         }
+    }
+
+    private void MainWindow_TextInput(object sender, System.Windows.Input.TextCompositionEventArgs e)
+    {
+        // Don't steal input from text boxes or combo boxes (formula bar, toolbar dropdowns)
+        if (Keyboard.FocusedElement is TextBox or ComboBox) return;
+        if (SheetGrid.SelectedRange == null) return;
+        if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
+        if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0) return;
+
+        FormulaBar.Text = e.Text;
+        FormulaBar.Focus();
+        FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        e.Handled = true;
     }
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -212,6 +340,12 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        if (e.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            SelectAll();
+            e.Handled = true;
+            return;
+        }
 
         if (e.Key == Key.F2)
         {
@@ -221,36 +355,130 @@ public partial class MainWindow : Window
         }
 
         if (SheetGrid.SelectedRange == null) return;
-        var current = SheetGrid.SelectedRange.Value.Start;
-        uint newRow = current.Row;
-        uint newCol = current.Col;
 
-        switch (e.Key)
+        bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        bool ctrlHeld  = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+
+        // When Shift is held the moving end is _selectionCursor; otherwise it's the active cell.
+        var current = shiftHeld && _selectionCursor.HasValue
+            ? _selectionCursor.Value
+            : SheetGrid.SelectedRange.Value.Start;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+
+        CellAddress? target = e.Key switch
         {
-            case System.Windows.Input.Key.Up: if (newRow > 1) newRow--; break;
-            case System.Windows.Input.Key.Down: newRow++; break;
-            case System.Windows.Input.Key.Left: if (newCol > 1) newCol--; break;
-            case System.Windows.Input.Key.Right: newCol++; break;
-            case System.Windows.Input.Key.Enter: newRow++; break;
-            case System.Windows.Input.Key.Tab: newCol++; break;
-            default: return;
-        }
+            Key.Up    => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
+                                  : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+            Key.Down  => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
+                                  : new CellAddress(_currentSheetId, current.Row + 1, current.Col),
+            Key.Left  => ctrlHeld ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
+                                  : new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+            Key.Right => ctrlHeld ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
+                                  : new CellAddress(_currentSheetId, current.Row, current.Col + 1),
 
-        var newAddr = new CellAddress(_currentSheetId, newRow, newCol);
-        SetActiveCell(newAddr);
-        EnsureCellVisible(newAddr);
+            Key.Home     => new CellAddress(_currentSheetId, ctrlHeld ? 1u : current.Row, 1u),
+            Key.End      => ctrlHeld ? (CellAddress?)CtrlEndCell(sheet) : null,
+            Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
+            Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Row + (uint)pageSize), current.Col),
+
+            Key.Enter => new CellAddress(_currentSheetId, current.Row + 1, current.Col),
+            Key.Tab   => new CellAddress(_currentSheetId, current.Row, current.Col + 1),
+            _         => null
+        };
+
+        if (target == null) return;
+
+        bool moveOnly = e.Key is Key.Enter or Key.Tab;
+        if (shiftHeld && !moveOnly && _selectionAnchor.HasValue)
+            ExtendSelection(_selectionAnchor.Value, target.Value);
+        else
+            SetActiveCell(target.Value);
+
+        EnsureCellVisible(target.Value);
         e.Handled = true;
     }
 
     private void SetActiveCell(CellAddress addr)
     {
+        _selectionAnchor = addr;
+        _selectionCursor = addr;
         SheetGrid.SelectedRange = new GridRange(addr, addr);
         CellAddressBox.Text = addr.ToA1();
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
+        SheetGrid.Focus();
         RefreshToolbar();
         RefreshStatusBar();
+    }
+
+    private void ExtendSelection(CellAddress anchor, CellAddress to)
+    {
+        _selectionCursor = to;
+        SheetGrid.SelectedRange = new GridRange(
+            new CellAddress(_currentSheetId,
+                Math.Min(anchor.Row, to.Row), Math.Min(anchor.Col, to.Col)),
+            new CellAddress(_currentSheetId,
+                Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
+        CellAddressBox.Text = anchor == to ? anchor.ToA1() : $"{anchor.ToA1()}:{to.ToA1()}";
+        RefreshStatusBar();
+    }
+
+    private CellAddress? HitTestCell(System.Windows.Point pos)
+    {
+        var viewport = SheetGrid.Viewport;
+        if (viewport == null) return null;
+        const double headerSize = 30;
+        if (pos.X < headerSize || pos.Y < headerSize) return null;
+        uint? row = null, col = null;
+        foreach (var rm in viewport.RowMetrics)
+        {
+            double top = rm.TopOffset + headerSize;
+            if (pos.Y >= top && pos.Y < top + rm.Height) { row = rm.Row; break; }
+        }
+        foreach (var cm in viewport.ColMetrics)
+        {
+            double left = cm.LeftOffset + headerSize;
+            if (pos.X >= left && pos.X < left + cm.Width) { col = cm.Col; break; }
+        }
+        return row.HasValue && col.HasValue
+            ? new CellAddress(_currentSheetId, row.Value, col.Value)
+            : null;
+    }
+
+    private void SheetGrid_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed) return;
+        if (_selectionAnchor is not { } anchor) return;
+        var hitAddr = HitTestCell(e.GetPosition(SheetGrid));
+        if (hitAddr.HasValue)
+            ExtendSelection(anchor, hitAddr.Value);
+    }
+
+    private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_dragSelectActive) return;
+        _dragSelectActive = false;
+        SheetGrid.ReleaseMouseCapture();
+    }
+
+    private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        // e.Delta: +120 per notch scrolled toward user (up), -120 away (down)
+        int notches = e.Delta / 120;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+        {
+            HorizontalScroll.Value = Math.Max(HorizontalScroll.Minimum,
+                Math.Min(HorizontalScroll.Maximum, HorizontalScroll.Value - notches * 3));
+        }
+        else
+        {
+            VerticalScroll.Value = Math.Max(VerticalScroll.Minimum,
+                Math.Min(VerticalScroll.Maximum, VerticalScroll.Value - notches * 3));
+        }
+        e.Handled = true;
     }
 
     private void RefreshToolbar()
@@ -304,16 +532,114 @@ public partial class MainWindow : Window
 
     private void EnsureCellVisible(CellAddress addr)
     {
-        // Simple logic: if off-screen, move scrollbars
-        if (addr.Row < VerticalScroll.Value) VerticalScroll.Value = addr.Row;
-        if (addr.Col < HorizontalScroll.Value) HorizontalScroll.Value = addr.Col;
+        var vp = SheetGrid.Viewport;
+        if (vp == null) return;
+
+        var rows = vp.RowMetrics;
+        if (rows.Count > 0 && !rows.Any(r => r.Row == addr.Row))
+        {
+            uint firstRow = rows[0].Row;
+            uint lastRow  = rows[^1].Row;
+            if (addr.Row < firstRow)
+                VerticalScroll.Value = Math.Max(1, addr.Row);
+            else
+                VerticalScroll.Value = Math.Max(1, addr.Row - (lastRow - firstRow));
+        }
+
+        var cols = vp.ColMetrics;
+        if (cols.Count > 0 && !cols.Any(c => c.Col == addr.Col))
+        {
+            uint firstCol = cols[0].Col;
+            uint lastCol  = cols[^1].Col;
+            if (addr.Col < firstCol)
+                HorizontalScroll.Value = Math.Max(1, addr.Col);
+            else
+                HorizontalScroll.Value = Math.Max(1, addr.Col - (lastCol - firstCol));
+        }
+    }
+
+    // ── Navigation helpers ────────────────────────────────────────────────────
+
+    private bool CellHasData(Sheet? sheet, uint row, uint col)
+    {
+        if (sheet == null) return false;
+        var v = sheet.GetValue(new CellAddress(_currentSheetId, row, col));
+        return v != null && v is not BlankValue;
+    }
+
+    private CellAddress FindDataBoundaryCol(Sheet? sheet, uint row, uint col, int dir)
+    {
+        const uint maxRow = 1_048_576;
+        bool startFull = CellHasData(sheet, row, col);
+        uint r = row;
+        while (true)
+        {
+            long next = (long)r + dir;
+            if (next < 1 || next > maxRow) break;
+            uint nr = (uint)next;
+            bool nextFull = CellHasData(sheet, nr, col);
+            if (startFull && !nextFull) break;   // stop before gap
+            r = nr;
+            if (!startFull && nextFull) break;   // landed on first data cell
+        }
+        return new CellAddress(_currentSheetId, r, col);
+    }
+
+    private CellAddress FindDataBoundaryRow(Sheet? sheet, uint row, uint col, int dir)
+    {
+        const uint maxCol = 16_384;
+        bool startFull = CellHasData(sheet, row, col);
+        uint c = col;
+        while (true)
+        {
+            long next = (long)c + dir;
+            if (next < 1 || next > maxCol) break;
+            uint nc = (uint)next;
+            bool nextFull = CellHasData(sheet, row, nc);
+            if (startFull && !nextFull) break;
+            c = nc;
+            if (!startFull && nextFull) break;
+        }
+        return new CellAddress(_currentSheetId, row, c);
+    }
+
+    private CellAddress CtrlEndCell(Sheet? sheet)
+    {
+        uint maxRow = 1, maxCol = 1;
+        if (sheet != null)
+            foreach (var (addr, _) in sheet.GetUsedCells())
+            {
+                if (addr.Row > maxRow) maxRow = addr.Row;
+                if (addr.Col > maxCol) maxCol = addr.Col;
+            }
+        return new CellAddress(_currentSheetId, maxRow, maxCol);
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == System.Windows.Input.Key.Enter)
         {
+            var current = SheetGrid.SelectedRange?.Start;
             CommitEdit();
+            if (current.HasValue)
+            {
+                var next = new CellAddress(_currentSheetId, current.Value.Row + 1, current.Value.Col);
+                SetActiveCell(next);
+                EnsureCellVisible(next);
+            }
+            e.Handled = true;
+        }
+        else if (e.Key == System.Windows.Input.Key.Escape)
+        {
+            // Restore the original cell value and return focus to grid
+            var addr = SheetGrid.SelectedRange?.Start;
+            if (addr.HasValue)
+            {
+                var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
+                FormulaBar.Text = cell?.HasFormula == true
+                    ? "=" + cell.FormulaText
+                    : FormatCellValue(cell?.Value);
+            }
             SheetGrid.Focus();
             e.Handled = true;
         }
@@ -400,44 +726,187 @@ public partial class MainWindow : Window
         SheetGrid.MergedRegions = sheet?.MergedRegions;
     }
 
+    private void UpdateTitleBar()
+    {
+        var displayName = $"{_workbook.Name} - Freexcel";
+        WorkbookNameText.Text = displayName;
+        this.Title = displayName;
+    }
+
+    // ── Start screen ─────────────────────────────────────────────────────────
+
+    private void ShowStartScreen()
+    {
+        UpdateSsGreeting();
+        UpdateSsRecentList();
+        ShowHomeView();
+        StartScreenOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void HideStartScreen()
+    {
+        StartScreenOverlay.Visibility = Visibility.Collapsed;
+        SheetGrid.Focus();
+    }
+
+    private void ShowHomeView()
+    {
+        SsHomeView.Visibility = Visibility.Visible;
+        SsInfoView.Visibility = Visibility.Collapsed;
+        SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
+    }
+
+    private void ShowInfoView()
+    {
+        SsHomeView.Visibility = Visibility.Collapsed;
+        SsInfoView.Visibility = Visibility.Visible;
+        SsInfoNavBtn.Style = (Style)FindResource("SsNavBtnActive");
+        UpdateInfoView();
+    }
+
+    private void UpdateInfoView()
+    {
+        InfoWorkbookName.Text = _workbook.Name;
+        InfoFilePath.Text = _currentFilePath ?? "Not saved yet";
+        InfoSheetCount.Text = _workbook.Sheets.Count.ToString();
+        InfoFormat.Text = _currentFilePath is not null
+            ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
+            : ".xlsx";
+    }
+
+    private void UpdateSsGreeting()
+    {
+        var hour = DateTime.Now.Hour;
+        SsGreeting.Text = hour switch
+        {
+            < 12 => "Good morning",
+            < 17 => "Good afternoon",
+            _    => "Good evening"
+        };
+    }
+
+    private void UpdateSsRecentList(string filter = "")
+    {
+        _allRecentItems = _recentFiles.Entries
+            .Where(e => System.IO.File.Exists(e.Path))
+            .Select(e => new RecentFileViewModel(e))
+            .ToList();
+
+        SsRecentList.ItemsSource = string.IsNullOrEmpty(filter)
+            ? _allRecentItems
+            : _allRecentItems
+                .Where(vm => vm.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+    }
+
+    private void CreateNewWorkbook()
+    {
+        var wb = new Workbook("Book1");
+        wb.AddSheet("Sheet1");
+        _workbook = wb;
+        _workbookRef.Current = wb;
+        _currentSheetId = wb.Sheets[0].Id;
+        _currentFilePath = null;
+        UpdateTitleBar();
+        _recalcEngine.Recalculate(wb, []);
+        SheetGrid.SelectedRange = null;
+        _selectionAnchor = null;
+        _selectionCursor = null;
+        CellAddressBox.Text = "A1";
+        FormulaBar.Text = "";
+        RefreshSheetTabs();
+        UpdateViewport();
+    }
+
+    private void OpenFile(string path)
+    {
+        var ext = System.IO.Path.GetExtension(path).ToLower();
+        var adapter = _fileAdapters.FirstOrDefault(a => a.Extension == ext);
+        if (adapter == null) return;
+
+        try
+        {
+            using var stream = System.IO.File.OpenRead(path);
+            _workbook = adapter.Load(stream);
+            _workbookRef.Current = _workbook;
+            _workbook.Name = System.IO.Path.GetFileNameWithoutExtension(path);
+            _currentSheetId = _workbook.Sheets[0].Id;
+            _currentFilePath = path;
+            UpdateTitleBar();
+
+            foreach (var sheet in _workbook.Sheets)
+            {
+                _recalcEngine.Recalculate(_workbook, []);
+                foreach (var (addr, cell) in sheet.GetUsedCells())
+                {
+                    if (cell.HasFormula)
+                    {
+                        try
+                        {
+                            var lexer = new Lexer("=" + cell.FormulaText);
+                            var parser = new Parser(lexer.Tokenize());
+                            _recalcEngine.RegisterFormulaDependencies(addr, parser.Parse(), sheet.Id, _workbook);
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            _recalcEngine.Recalculate(_workbook, []);
+            _recentFiles.AddOrUpdate(path);
+            UpdateViewport();
+            RefreshSheetTabs();
+            HideStartScreen();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to open file:\n{ex.Message}", "Open Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    // Start screen button handlers
+    private void SsBackBtn_Click(object sender, RoutedEventArgs e)       => HideStartScreen();
+    private void SsNewBtn_Click(object sender, RoutedEventArgs e)        { CreateNewWorkbook(); HideStartScreen(); }
+    private void SsBlankWorkbook_Click(object sender, RoutedEventArgs e) { CreateNewWorkbook(); HideStartScreen(); }
+    private void SsOpenBtn_Click(object sender, RoutedEventArgs e)       => OpenButton_Click(sender, e);
+    private void SsCloseBtn_Click(object sender, RoutedEventArgs e)      => Application.Current.Shutdown();
+    private void SsHomeRibbonBtn_Click(object sender, RoutedEventArgs e) => ShowStartScreen();
+    private void SsShareBtn_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Share is not yet implemented.", "Share",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void SsInfoBtn_Click(object sender, RoutedEventArgs e)       => ShowInfoView();
+
+    private void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new OptionsDialog(_options) { Owner = this };
+        if (dlg.ShowDialog() == true)
+            _options = dlg.Result;
+    }
+
+    private void SsRecentItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as System.Windows.FrameworkElement)?.DataContext is RecentFileViewModel vm)
+            OpenFile(vm.Path);
+    }
+
+    private void SsSearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        UpdateSsRecentList(SsSearchBox.Text);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     private void OpenButton_Click(object sender, RoutedEventArgs e)
     {
         var filter = string.Join("|", _fileAdapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
         var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
 
         if (dialog.ShowDialog() == true)
-        {
-            var ext = System.IO.Path.GetExtension(dialog.FileName).ToLower();
-            var adapter = _fileAdapters.FirstOrDefault(a => a.Extension == ext);
-            if (adapter == null) return;
-
-            using var stream = dialog.OpenFile();
-            _workbook = adapter.Load(stream);
-            _workbook.Name = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
-            _currentSheetId = _workbook.Sheets[0].Id;
-            WorkbookNameText.Text = _workbook.Name;
-            
-            // Re-register dependencies
-            foreach (var sheet in _workbook.Sheets)
-            {
-                _recalcEngine.Recalculate(_workbook, []); // Clear first
-                foreach (var (addr, cell) in sheet.GetUsedCells())
-                {
-                    if (cell.HasFormula)
-                    {
-                        try {
-                            var lexer = new Lexer("=" + cell.FormulaText);
-                            var parser = new Parser(lexer.Tokenize());
-                            _recalcEngine.RegisterFormulaDependencies(addr, parser.Parse(), sheet.Id, _workbook);
-                        } catch { }
-                    }
-                }
-            }
-
-            _recalcEngine.Recalculate(_workbook, []);
-            UpdateViewport();
-            RefreshSheetTabs();
-        }
+            OpenFile(dialog.FileName);
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -774,6 +1243,30 @@ public partial class MainWindow : Window
             ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
     }
 
+    // ── Ribbon clipboard ─────────────────────────────────────────────────────
+
+    private void CutBtn_Click(object sender, RoutedEventArgs e)   { ExecuteCopy(); ExecuteClearSelection(); }
+    private void CopyBtn_Click(object sender, RoutedEventArgs e)  { ExecuteCopy(); }
+    private void PasteBtn_Click(object sender, RoutedEventArgs e) { ExecutePaste(); }
+
+    // ── Ribbon cells (insert / delete rows & columns) ────────────────────────
+
+    private void InsertRowBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        InsertRows(range.Start.Row);
+    }
+
+    private void DeleteRowBtn_Click(object sender, RoutedEventArgs e) => DeleteSelectedRows();
+
+    private void InsertColBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        InsertColumns(range.Start.Col);
+    }
+
+    private void DeleteColBtn_Click(object sender, RoutedEventArgs e) => DeleteSelectedColumns();
+
     // ── Context menu + Insert/Delete ─────────────────────────────────────────
 
     private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point screenPos)
@@ -969,11 +1462,17 @@ public partial class MainWindow : Window
 
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new System.Windows.Controls.PrintDialog();
-        if (dlg.ShowDialog() != true) return;
-
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
-        dlg.PrintDocument(doc.DocumentPaginator, $"Freexcel — {_workbook.Name}");
+        var viewer = new System.Windows.Controls.DocumentViewer { Document = doc };
+        var previewWin = new Window
+        {
+            Title = $"Print Preview — {_workbook.Name}",
+            Width = 900, Height = 700,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this,
+            Content = viewer
+        };
+        previewWin.ShowDialog();
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
@@ -1090,6 +1589,32 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+}
+
+internal sealed class RecentFileViewModel
+{
+    public string Path { get; }
+    public string FileName { get; }
+    public string Directory { get; }
+    public string LastOpenedText { get; }
+
+    public RecentFileViewModel(RecentFileEntry entry)
+    {
+        Path = entry.Path;
+        FileName = System.IO.Path.GetFileName(entry.Path);
+        Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
+        LastOpenedText = FormatDate(entry.LastOpened);
+    }
+
+    private static string FormatDate(DateTime dt)
+    {
+        var diff = DateTime.Now - dt;
+        if (diff.TotalHours < 1) return "Just now";
+        if (diff.TotalDays < 1) return "Today at " + dt.ToString("h:mm tt");
+        if (diff.TotalDays < 2) return "Yesterday at " + dt.ToString("h:mm tt");
+        if (diff.TotalDays < 7) return dt.DayOfWeek + " at " + dt.ToString("h:mm tt");
+        return dt.Year == DateTime.Now.Year ? dt.ToString("MMM d") : dt.ToString("MMM d, yyyy");
     }
 }
 

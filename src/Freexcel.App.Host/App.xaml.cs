@@ -63,16 +63,20 @@ public partial class App : Application
         // Workbook (single workbook for now, will expand later)
         services.AddSingleton(sp =>
         {
-            var workbook = new Workbook("Untitled");
+            var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             return workbook;
         });
 
-        // Command bus
+        // Mutable reference wrapper — updated whenever a new file is loaded.
+        services.AddSingleton(sp =>
+            new WorkbookRef { Current = sp.GetRequiredService<Workbook>() });
+
+        // Command bus always resolves through WorkbookRef so it sees the current workbook.
         services.AddSingleton<ICommandBus>(sp =>
         {
-            var workbook = sp.GetRequiredService<Workbook>();
-            return new CommandBus(wbId => new WorkbookCommandContext(workbook));
+            var wbRef = sp.GetRequiredService<WorkbookRef>();
+            return new CommandBus(_ => new WorkbookCommandContext(wbRef.Current));
         });
 
         // UI
@@ -86,6 +90,12 @@ public partial class App : Application
         Services.Dispose();
         base.OnExit(e);
     }
+}
+
+/// <summary>Mutable holder for the active workbook, updated on file open.</summary>
+public sealed class WorkbookRef
+{
+    public Workbook Current { get; set; } = null!;
 }
 
 /// <summary>Simple command context that provides access to the workbook.</summary>
