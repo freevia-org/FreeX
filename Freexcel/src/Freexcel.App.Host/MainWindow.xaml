@@ -607,7 +607,7 @@
              START SCREEN — full-window overlay shown at launch / via ← Home
              ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="StartScreenOverlay"
-              Grid.Row="1" Grid.RowSpan="5"
+              Grid.Row="0" Grid.RowSpan="6"
               Panel.ZIndex="200">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="190"/>
@@ -624,6 +624,12 @@
                         Padding="18,11" FontSize="18"
                         Click="SsBackBtn_Click"
                         ToolTip="Back to workbook"/>
+
+                <!-- Home (active/selected when showing home view) -->
+                <Button x:Name="SsHomeNavBtn" DockPanel.Dock="Top"
+                        Content="Home" HorizontalAlignment="Stretch"
+                        Style="{StaticResource SsNavBtnActive}"
+                        Click="SsHomeNavBtn_Click"/>
 
                 <!-- Account / Options pinned to bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
@@ -695,7 +701,8 @@
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
                             <TextBlock DockPanel.Dock="Right" Text="More templates &#x2192;"
                                        FontSize="12" Foreground="#217346"
-                                       VerticalAlignment="Center" Cursor="Hand"/>
+                                       VerticalAlignment="Center" Cursor="Hand"
+                                       MouseDown="SsMoreTemplates_MouseDown"/>
                         </DockPanel>
 
                         <StackPanel Orientation="Horizontal">

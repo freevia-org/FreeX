@@ -774,6 +774,7 @@ public partial class MainWindow : Window
     {
         SsHomeView.Visibility = Visibility.Visible;
         SsInfoView.Visibility = Visibility.Collapsed;
+        SsHomeNavBtn.Style = (Style)FindResource("SsNavBtnActive");
         SsInfoNavBtn.Style = (Style)FindResource("SsNavBtn");
     }
 
@@ -781,6 +782,7 @@ public partial class MainWindow : Window
     {
         SsHomeView.Visibility = Visibility.Collapsed;
         SsInfoView.Visibility = Visibility.Visible;
+        SsHomeNavBtn.Style = (Style)FindResource("SsNavBtn");
         SsInfoNavBtn.Style = (Style)FindResource("SsNavBtnActive");
         UpdateInfoView();
     }
@@ -899,7 +901,17 @@ public partial class MainWindow : Window
             MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    private void SsHomeNavBtn_Click(object sender, RoutedEventArgs e)    => ShowHomeView();
     private void SsInfoBtn_Click(object sender, RoutedEventArgs e)       => ShowInfoView();
+
+    private void SsMoreTemplates_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "https://create.microsoft.com/en-us/excel",
+            UseShellExecute = true
+        });
+    }
 
     private void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
