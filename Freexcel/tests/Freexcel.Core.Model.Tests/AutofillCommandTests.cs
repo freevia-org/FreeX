@@ -1,0 +1,94 @@
+using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
+using FluentAssertions;
+
+namespace Freexcel.Core.Model.Tests;
+
+public class AutofillCommandTests
+{
+    private static (Workbook wb, Sheet sheet, ICommandContext ctx) Setup()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        return (wb, sheet, new SimpleCtx(wb));
+    }
+
+    [Fact]
+    public void FillValue_Down_RepeatsSourceValue()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, new NumberValue(42));
+
+        var sourceRange = new GridRange(source, source);
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 4, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(42));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(42));
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
+    public void FillFormula_Down_IncrementsRowReferences()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, Cell.FromFormula("A1+B1"));
+
+        var sourceRange = new GridRange(source, source);
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 3, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetCell(2, 1)!.FormulaText.Should().Be("A2+B2");
+        sheet.GetCell(3, 1)!.FormulaText.Should().Be("A3+B3");
+    }
+
+    [Fact]
+    public void FillFormula_PreservesAbsoluteRefs()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, Cell.FromFormula("$A$1+B1"));
+
+        var sourceRange = new GridRange(source, source);
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 2, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetCell(2, 1)!.FormulaText.Should().Be("$A$1+B2");
+    }
+
+    [Fact]
+    public void FillRevert_RestoresOriginalCells()
+    {
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(source, new NumberValue(10));
+        sheet.SetCell(target, new NumberValue(99));
+
+        var cmd = new AutofillCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new GridRange(target, target));
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(99));
+    }
+
+    private sealed class SimpleCtx(Workbook wb) : ICommandContext
+    {
+        public Workbook Workbook { get; } = wb;
+        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+    }
+}
