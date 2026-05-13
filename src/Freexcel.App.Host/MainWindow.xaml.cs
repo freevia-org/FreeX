@@ -250,6 +250,7 @@ public partial class MainWindow : Window
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
         RefreshToolbar();
+        RefreshStatusBar();
     }
 
     private void RefreshToolbar()
@@ -374,6 +375,7 @@ public partial class MainWindow : Window
         _commandBus.Execute(_workbook.Id, command);
         _recalcEngine.Recalculate(_workbook, [addr]);
         UpdateViewport();
+        RefreshStatusBar();
     }
 
     private void UpdateViewport()
@@ -856,7 +858,35 @@ public partial class MainWindow : Window
         RefreshStatusBar();
     }
 
-    private void RefreshStatusBar() { /* implemented in Task 12 */ }
+    private void RefreshStatusBar()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+            StatusReadyText.Visibility  = Visibility.Visible;
+            return;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var stats = StatusBarCalculator.Calculate(sheet, range);
+
+        if (stats.Count == 0)
+        {
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+            StatusReadyText.Visibility  = Visibility.Visible;
+            return;
+        }
+
+        StatusReadyText.Visibility  = Visibility.Collapsed;
+        StatusStatsPanel.Visibility = Visibility.Visible;
+        StatusSumText.Text   = $"Sum: {stats.Sum:N2}";
+        StatusCountText.Text = $"Count: {stats.Count}";
+        StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {stats.Average.Value:N2}" : "";
+        StatusMinText.Text   = stats.Min.HasValue ? $"Min: {stats.Min.Value:N2}" : "";
+        StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {stats.Max.Value:N2}" : "";
+    }
 
     private void OnColumnResized(uint col, double newWidthPx)
     {
