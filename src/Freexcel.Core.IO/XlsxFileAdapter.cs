@@ -211,6 +211,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             Bold = xlStyle.Font.Bold,
             Italic = xlStyle.Font.Italic,
             Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
+            Strikethrough = xlStyle.Font.Strikethrough,
             FontColor = MapColor(xlStyle.Font.FontColor),
             FillColor = xlStyle.Fill.PatternType == XLFillPatternValues.Solid
                 ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor)
@@ -275,6 +276,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (style.Italic != def.Italic) xlCell.Style.Font.Italic = style.Italic;
         if (style.Underline != def.Underline)
             xlCell.Style.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
+        if (style.Strikethrough != def.Strikethrough)
+            xlCell.Style.Font.Strikethrough = style.Strikethrough;
         if (style.FontSize != def.FontSize) xlCell.Style.Font.FontSize = style.FontSize;
         if (style.FontName != def.FontName) xlCell.Style.Font.FontName = style.FontName;
         if (style.FontColor != def.FontColor)
