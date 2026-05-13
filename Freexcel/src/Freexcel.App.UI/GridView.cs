@@ -415,47 +415,54 @@ public class GridView : FrameworkElement
         if (Viewport == null || SelectedRange == null) return;
 
         var range = SelectedRange.Value;
+        var rows = Viewport.RowMetrics;
+        var cols = Viewport.ColMetrics;
+        if (rows.Count == 0 || cols.Count == 0) return;
+
+        // Skip rendering if the selection doesn't intersect the visible rows or visible columns.
+        // Without this, a cell scrolled off in one axis but visible in the other gets its
+        // fallback edge clamped to the viewport boundary, painting an entire row/column strip.
+        if (range.End.Row < rows[0].Row || range.Start.Row > rows[^1].Row) return;
+        if (range.End.Col < cols[0].Col || range.Start.Col > cols[^1].Col) return;
+
         double? top = null, left = null, bottom = null, right = null;
 
-        foreach (var row in Viewport.RowMetrics)
+        foreach (var row in rows)
         {
             if (row.Row == range.Start.Row) top    = row.TopOffset + HeaderSize;
             if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + HeaderSize;
         }
 
-        foreach (var col in Viewport.ColMetrics)
+        foreach (var col in cols)
         {
             if (col.Col == range.Start.Col) left  = col.LeftOffset + HeaderSize;
             if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + HeaderSize;
         }
 
-        if (top.HasValue || bottom.HasValue || left.HasValue || right.HasValue)
+        double drawTop    = top    ?? HeaderSize;
+        double drawBottom = bottom ?? ActualHeight;
+        double drawLeft   = left   ?? HeaderSize;
+        double drawRight  = right  ?? ActualWidth;
+
+        var rect = new Rect(new Point(drawLeft, drawTop), new Point(drawRight, drawBottom));
+        dc.DrawRectangle(SelectionBrush, null, rect);
+
+        if (top.HasValue)    dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawRight, drawTop));
+        if (bottom.HasValue) dc.DrawLine(SelectionPen, new Point(drawLeft,  drawBottom), new Point(drawRight, drawBottom));
+        if (left.HasValue)   dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawLeft,  drawBottom));
+        if (right.HasValue)  dc.DrawLine(SelectionPen, new Point(drawRight, drawTop),    new Point(drawRight, drawBottom));
+
+        // Autofill handle: 6×6 square at bottom-right of selection
+        if (right.HasValue && bottom.HasValue)
         {
-            double drawTop    = top    ?? HeaderSize;
-            double drawBottom = bottom ?? ActualHeight;
-            double drawLeft   = left   ?? HeaderSize;
-            double drawRight  = right  ?? ActualWidth;
-
-            var rect = new Rect(new Point(drawLeft, drawTop), new Point(drawRight, drawBottom));
-            dc.DrawRectangle(SelectionBrush, null, rect);
-
-            if (top.HasValue)    dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawRight, drawTop));
-            if (bottom.HasValue) dc.DrawLine(SelectionPen, new Point(drawLeft,  drawBottom), new Point(drawRight, drawBottom));
-            if (left.HasValue)   dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawLeft,  drawBottom));
-            if (right.HasValue)  dc.DrawLine(SelectionPen, new Point(drawRight, drawTop),    new Point(drawRight, drawBottom));
-
-            // Autofill handle: 6×6 square at bottom-right of selection
-            if (right.HasValue && bottom.HasValue)
-            {
-                const double handleSize = 6;
-                double hx = drawRight - handleSize / 2;
-                double hy = drawBottom - handleSize / 2;
-                dc.DrawRectangle(Brushes.White, SelectionPen,
-                    new Rect(hx, hy, handleSize, handleSize));
-                dc.DrawRectangle(
-                    new SolidColorBrush(Color.FromRgb(33, 115, 70)), null,
-                    new Rect(hx + 1, hy + 1, handleSize - 2, handleSize - 2));
-            }
+            const double handleSize = 6;
+            double hx = drawRight - handleSize / 2;
+            double hy = drawBottom - handleSize / 2;
+            dc.DrawRectangle(Brushes.White, SelectionPen,
+                new Rect(hx, hy, handleSize, handleSize));
+            dc.DrawRectangle(
+                new SolidColorBrush(Color.FromRgb(33, 115, 70)), null,
+                new Rect(hx + 1, hy + 1, handleSize - 2, handleSize - 2));
         }
     }
 

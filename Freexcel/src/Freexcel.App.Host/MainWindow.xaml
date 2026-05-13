@@ -5,20 +5,145 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ui="clr-namespace:Freexcel.App.UI;assembly=Freexcel.App.UI"
         mc:Ignorable="d"
-        Title="Freexcel" 
+        Title="Freexcel"
         Height="720" Width="1280"
         WindowState="Maximized"
         Background="#F0F0F0">
-    
+
+    <Window.Resources>
+
+        <!-- ── Ribbon button styles ─────────────────────────────────────── -->
+
+        <Style x:Key="RibbonBtn" TargetType="Button">
+            <Setter Property="Padding" Value="5,2"/>
+            <Setter Property="Margin" Value="1,1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E8F0FE"/>
+                    <Setter Property="BorderBrush" Value="#B8CFF0"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#C0D4F0"/>
+                    <Setter Property="BorderBrush" Value="#6090C8"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RibbonToggleBtn" TargetType="ToggleButton">
+            <Setter Property="Padding" Value="3,2"/>
+            <Setter Property="Margin" Value="1,1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E8F0FE"/>
+                    <Setter Property="BorderBrush" Value="#B8CFF0"/>
+                </Trigger>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#CCDEf8"/>
+                    <Setter Property="BorderBrush" Value="#4080CC"/>
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsChecked" Value="True"/>
+                        <Condition Property="IsMouseOver" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="#BBCEF5"/>
+                    <Setter Property="BorderBrush" Value="#3070BB"/>
+                </MultiTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Group label text style -->
+        <Style x:Key="GroupLbl" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="Foreground" Value="#555555"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Ribbon tab item style — flat, green underline when selected -->
+        <Style TargetType="TabItem">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBorder" Background="Transparent"
+                                BorderThickness="0,0,0,3" BorderBrush="Transparent"
+                                Padding="{TemplateBinding Padding}" Margin="0,0,1,0"
+                                Cursor="Hand">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#217346"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#EEF4EE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Start-screen sidebar buttons ─────────────────────────────── -->
+        <Style x:Key="SsNavBtn" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="24,9"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bg" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#265C40"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SsNavBtnActive" BasedOn="{StaticResource SsNavBtn}" TargetType="Button">
+            <Setter Property="Background" Value="#2D7254"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
-            <!-- Ribbon area -->
+            <!-- Title / quick-access bar -->
             <RowDefinition Height="Auto"/>
-            <!-- Formatting toolbar -->
+            <!-- Ribbon (tab strip + tab content) -->
             <RowDefinition Height="Auto"/>
             <!-- Formula bar -->
             <RowDefinition Height="Auto"/>
-            <!-- Grid area (main content) -->
+            <!-- Spreadsheet grid -->
             <RowDefinition Height="*"/>
             <!-- Sheet tabs -->
             <RowDefinition Height="Auto"/>
@@ -26,90 +151,360 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Ribbon placeholder -->
-        <Border Grid.Row="0" Background="#217346" Padding="10,8">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Freexcel" FontSize="16" FontWeight="SemiBold" 
-                           Foreground="White" VerticalAlignment="Center"/>
-                <TextBlock Text="  —  " Foreground="#80FFFFFF" VerticalAlignment="Center"/>
-                <TextBlock x:Name="WorkbookNameText" Text="Untitled" FontSize="14" 
-                           Foreground="#CCFFFFFF" VerticalAlignment="Center" Margin="0,0,20,0"/>
-                
-                <Button Content="Open" Click="OpenButton_Click" Width="60" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Save" Click="SaveButton_Click" Width="60" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Find" Click="FindButton_Click" Width="50" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Replace" Click="ReplaceButton_Click" Width="60" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Chart" Click="InsertChartButton_Click" Width="50" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Sort A→Z" Click="SortAscButton_Click" Width="60" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Sort Z→A" Click="SortDescButton_Click" Width="60" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Filter" Click="FilterButton_Click" Width="44" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Clear Filter" Click="ClearFilterButton_Click" Width="70" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="CF Rule" Click="CfRuleButton_Click" Width="50" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Validation" Click="ValidationButton_Click" Width="64" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Button Content="Names" Click="NamedRangesButton_Click" Width="46" Height="24" Margin="4,0"
-                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
-                <Separator Background="#80FFFFFF" Width="1" Margin="8,4"/>
-                <Button Content="Print" Click="PrintButton_Click" Width="40" Height="24" Margin="4,0"
-                        Background="#1A6B3A" Foreground="White" BorderThickness="0"/>
-                <Button Content="PDF" Click="ExportPdfButton_Click" Width="36" Height="24" Margin="4,0"
-                        Background="#1A6B3A" Foreground="White" BorderThickness="0"/>
-            </StackPanel>
+        <!-- ═══════════════════════════════════════════════════════════════
+             ROW 0  Title bar
+             ═══════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="#217346" Padding="10,5">
+            <TextBlock x:Name="WorkbookNameText" Text="Book1 - Freexcel"
+                       FontSize="13" FontWeight="SemiBold" Foreground="White"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- Formatting toolbar -->
-        <Border Grid.Row="1" Background="White" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="4,3">
-            <StackPanel Orientation="Horizontal">
-                <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="2,0"
-                          SelectionChanged="FontNameBox_SelectionChanged"/>
-                <ComboBox x:Name="FontSizeBox" Width="46" Height="22" Margin="2,0" IsEditable="True"
-                          SelectionChanged="FontSizeBox_SelectionChanged"/>
-                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
-                <ToggleButton x:Name="BoldButton" Width="24" Height="22" Margin="1,0"
-                              FontWeight="Bold" Click="BoldButton_Click">B</ToggleButton>
-                <ToggleButton x:Name="ItalicButton" Width="24" Height="22" Margin="1,0"
-                              FontStyle="Italic" Click="ItalicButton_Click">I</ToggleButton>
-                <ToggleButton x:Name="UnderlineButton" Width="24" Height="22" Margin="1,0"
-                              Click="UnderlineButton_Click">
-                    <TextBlock Text="U" TextDecorations="Underline"/>
-                </ToggleButton>
-                <ToggleButton x:Name="StrikeButton" Width="24" Height="22" Margin="1,0"
-                              Click="StrikeButton_Click">
-                    <TextBlock Text="S" TextDecorations="Strikethrough"/>
-                </ToggleButton>
-                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
-                <Button x:Name="FontColorBtn" Content="A" Width="24" Height="22" Margin="1,0"
-                        Click="FontColorBtn_Click" ToolTip="Font Color"/>
-                <Button x:Name="FillColorBtn" Content="H" Width="24" Height="22" Margin="1,0"
-                        Click="FillColorBtn_Click" ToolTip="Fill Color"/>
-                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
-                <ToggleButton x:Name="AlignLeftBtn" Width="28" Height="22" Margin="1,0"
-                              Click="AlignLeftBtn_Click">L</ToggleButton>
-                <ToggleButton x:Name="AlignCenterBtn" Width="28" Height="22" Margin="1,0"
-                              Click="AlignCenterBtn_Click">C</ToggleButton>
-                <ToggleButton x:Name="AlignRightBtn" Width="28" Height="22" Margin="1,0"
-                              Click="AlignRightBtn_Click">R</ToggleButton>
-                <ToggleButton x:Name="WrapTextBtn" Width="24" Height="22" Margin="1,0"
-                              Click="WrapTextBtn_Click" ToolTip="Wrap Text">W</ToggleButton>
-                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
-                <Button Content="Merge" Width="44" Height="22" Margin="1,0" Click="MergeCenterBtn_Click"/>
-                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
-                <ComboBox x:Name="NumberFormatBox" Width="90" Height="22" Margin="2,0"
-                          SelectionChanged="NumberFormatBox_SelectionChanged"/>
-            </StackPanel>
-        </Border>
+        <!-- ═══════════════════════════════════════════════════════════════
+             ROW 1  Ribbon  (tabbed, groups with labels)
+             ═══════════════════════════════════════════════════════════════ -->
+        <TabControl Grid.Row="1" Background="White"
+                    BorderThickness="0,0,0,1" BorderBrush="#D0D0D0"
+                    Padding="0" TabStripPlacement="Top">
 
-        <!-- Formula bar -->
+            <!-- ── FILE ──────────────────────────────────────────────── -->
+            <TabItem Header="File">
+                <Border Background="White" Padding="4,3,4,0">
+                    <StackPanel Orientation="Horizontal">
+
+                        <!-- ▌Home ▌ -->
+                        <Button Content="&#x2190; Home" Click="SsHomeRibbonBtn_Click"
+                                Width="74" Height="22" Margin="1,6,1,0"
+                                Style="{StaticResource RibbonBtn}"
+                                VerticalAlignment="Center"
+                                ToolTip="Go to Freexcel Home"/>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Workbook ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Open" Click="OpenButton_Click"
+                                        Width="80" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}"/>
+                                <Button Content="Save" Click="SaveButton_Click"
+                                        Width="80" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Workbook" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Print ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Print" Click="PrintButton_Click"
+                                        Width="80" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}"/>
+                                <Button Content="Export PDF" Click="ExportPdfButton_Click"
+                                        Width="80" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Print" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- ── HOME ──────────────────────────────────────────────── -->
+            <TabItem Header="Home">
+                <Border Background="White" Padding="4,3,4,0">
+                    <StackPanel Orientation="Horizontal">
+
+                        <!-- ▌Clipboard ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="2,2,2,0">
+                                <Button Content="Paste" Click="PasteBtn_Click"
+                                        Width="54" Height="30" Margin="1"
+                                        Style="{StaticResource RibbonBtn}" FontSize="12"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="✂ Cut"  Click="CutBtn_Click"
+                                            Width="54" Height="20" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" FontSize="10"/>
+                                    <Button Content="⧉ Copy" Click="CopyBtn_Click"
+                                            Width="56" Height="20" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" FontSize="10"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Clipboard" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Font ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <ComboBox x:Name="FontNameBox" Width="116" Height="22" Margin="1,1,2,1"
+                                              SelectionChanged="FontNameBox_SelectionChanged"/>
+                                    <ComboBox x:Name="FontSizeBox" Width="48" Height="22" Margin="1" IsEditable="True"
+                                              SelectionChanged="FontSizeBox_SelectionChanged"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <ToggleButton x:Name="BoldButton"      Width="24" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}" FontWeight="Bold"
+                                                  Click="BoldButton_Click">B</ToggleButton>
+                                    <ToggleButton x:Name="ItalicButton"    Width="24" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}" FontStyle="Italic"
+                                                  Click="ItalicButton_Click">I</ToggleButton>
+                                    <ToggleButton x:Name="UnderlineButton" Width="24" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="UnderlineButton_Click">
+                                        <TextBlock Text="U" TextDecorations="Underline"/>
+                                    </ToggleButton>
+                                    <ToggleButton x:Name="StrikeButton"    Width="24" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="StrikeButton_Click">
+                                        <TextBlock Text="S" TextDecorations="Strikethrough"/>
+                                    </ToggleButton>
+                                    <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
+                                    <Button x:Name="FontColorBtn" Width="28" Height="22"
+                                            Style="{StaticResource RibbonBtn}"
+                                            Click="FontColorBtn_Click" ToolTip="Font Color">A</Button>
+                                    <Button x:Name="FillColorBtn" Width="28" Height="22"
+                                            Style="{StaticResource RibbonBtn}"
+                                            Click="FillColorBtn_Click" ToolTip="Fill Color">H</Button>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Font" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Alignment ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton x:Name="AlignLeftBtn"   Width="28" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="AlignLeftBtn_Click">L</ToggleButton>
+                                    <ToggleButton x:Name="AlignCenterBtn" Width="28" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="AlignCenterBtn_Click">C</ToggleButton>
+                                    <ToggleButton x:Name="AlignRightBtn"  Width="28" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="AlignRightBtn_Click">R</ToggleButton>
+                                    <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
+                                    <ToggleButton x:Name="WrapTextBtn" Width="46" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="WrapTextBtn_Click" ToolTip="Wrap Text">Wrap</ToggleButton>
+                                </StackPanel>
+                                <Button Content="Merge &amp; Center" Width="117" Height="22" Margin="1,2"
+                                        Style="{StaticResource RibbonBtn}"
+                                        Click="MergeCenterBtn_Click"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Alignment" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Number ▌ -->
+                        <Grid Width="112">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <ComboBox x:Name="NumberFormatBox" Grid.Row="0" Height="22"
+                                      VerticalAlignment="Top" Margin="1,6,1,0"
+                                      SelectionChanged="NumberFormatBox_SelectionChanged"/>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Number" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Styles ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="CF Rule"    Width="72" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}" Click="CfRuleButton_Click"/>
+                                <Button Content="Validation" Width="72" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Styles" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Cells ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Button Grid.Row="0" Grid.Column="0" Content="+ Row" Width="52" Height="22" Margin="1"
+                                        Style="{StaticResource RibbonBtn}" FontSize="10"
+                                        Click="InsertRowBtn_Click" ToolTip="Insert Row Above"/>
+                                <Button Grid.Row="0" Grid.Column="1" Content="− Row" Width="52" Height="22" Margin="1"
+                                        Style="{StaticResource RibbonBtn}" FontSize="10"
+                                        Click="DeleteRowBtn_Click" ToolTip="Delete Row(s)"/>
+                                <Button Grid.Row="1" Grid.Column="0" Content="+ Col" Width="52" Height="22" Margin="1"
+                                        Style="{StaticResource RibbonBtn}" FontSize="10"
+                                        Click="InsertColBtn_Click" ToolTip="Insert Column Left"/>
+                                <Button Grid.Row="1" Grid.Column="1" Content="− Col" Width="52" Height="22" Margin="1"
+                                        Style="{StaticResource RibbonBtn}" FontSize="10"
+                                        Click="DeleteColBtn_Click" ToolTip="Delete Column(s)"/>
+                            </Grid>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Cells" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Editing ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Find"    Width="66" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}" Click="FindButton_Click"/>
+                                <Button Content="Replace" Width="66" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}" Click="ReplaceButton_Click"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Editing" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- ── INSERT ────────────────────────────────────────────── -->
+            <TabItem Header="Insert">
+                <Border Background="White" Padding="4,3,4,0">
+                    <StackPanel Orientation="Horizontal">
+
+                        <!-- ▌Charts ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <Button Grid.Row="0" Content="Chart" Width="56" Height="46"
+                                    Style="{StaticResource RibbonBtn}" FontSize="12"
+                                    VerticalAlignment="Center" Margin="1,2,1,0"
+                                    Click="InsertChartButton_Click"/>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Charts" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- ── DATA ──────────────────────────────────────────────── -->
+            <TabItem Header="Data">
+                <Border Background="White" Padding="4,3,4,0">
+                    <StackPanel Orientation="Horizontal">
+
+                        <!-- ▌Sort &amp; Filter ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Sort A→Z" Width="70" Height="22" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"/>
+                                    <Button Content="Sort Z→A" Width="70" Height="22" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Filter"       Width="70" Height="22" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"/>
+                                    <Button Content="Clear Filter" Width="70" Height="22" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Sort &amp; Filter" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Named Ranges ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="16"/>
+                            </Grid.RowDefinitions>
+                            <Button Grid.Row="0" Content="Names" Width="60" Height="46"
+                                    Style="{StaticResource RibbonBtn}" FontSize="12"
+                                    VerticalAlignment="Center" Margin="1,2,1,0"
+                                    Click="NamedRangesButton_Click"/>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="Named Ranges" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             ROW 2  Formula bar
+             ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -117,21 +512,23 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                
-                <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1" 
+
+                <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
                          FontFamily="Consolas" FontSize="13" VerticalContentAlignment="Center"
                          BorderBrush="#C0C0C0" Padding="4,2"/>
-                
+
                 <TextBlock Grid.Column="1" Text=" fx " FontWeight="Bold" Foreground="#666"
                            VerticalAlignment="Center" Margin="4,0"/>
-                
+
                 <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Consolas" FontSize="13"
                          VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
                          KeyDown="FormulaBar_KeyDown"/>
             </Grid>
         </Border>
 
-        <!-- Grid area -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             ROW 3  Spreadsheet grid
+             ═══════════════════════════════════════════════════════════════ -->
         <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -143,16 +540,18 @@
             </Grid.RowDefinitions>
 
             <ui:GridView x:Name="SheetGrid" Grid.Row="0" Grid.Column="0"/>
-            
-            <ScrollBar x:Name="VerticalScroll" Grid.Row="0" Grid.Column="1" 
-                       Orientation="Vertical" Minimum="1" Maximum="1000000" Value="1"/>
-            <ScrollBar x:Name="HorizontalScroll" Grid.Row="1" Grid.Column="0" 
-                       Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"/>
-            
+
+            <ScrollBar x:Name="VerticalScroll"   Grid.Row="0" Grid.Column="1"
+                       Orientation="Vertical"   Minimum="1" Maximum="1000000" Value="1"/>
+            <ScrollBar x:Name="HorizontalScroll" Grid.Row="1" Grid.Column="0"
+                       Orientation="Horizontal" Minimum="1" Maximum="16384"   Value="1"/>
+
             <Border Grid.Row="1" Grid.Column="1" Background="#E8E8E8"/>
         </Grid>
 
-        <!-- Sheet tabs -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             ROW 4  Sheet tabs
+             ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="4" Background="#E8E8E8" BorderBrush="#D0D0D0"
                 BorderThickness="0,1,0,0" Padding="4,2">
             <StackPanel Orientation="Horizontal">
@@ -183,12 +582,16 @@
             </StackPanel>
         </Border>
 
-        <!-- Status bar -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             ROW 5  Status bar
+             ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="5" Background="#217346" Padding="8,4">
             <Grid>
-                <TextBlock x:Name="StatusReadyText" Text="Ready" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusReadyText" Text="Ready" Foreground="White"
+                           FontSize="12" VerticalAlignment="Center"/>
                 <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
-                            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="Collapsed">
                     <TextBlock x:Name="StatusSumText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
                     <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12" Margin="0,0,16,0"/>
                     <TextBlock x:Name="StatusAvgText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
@@ -199,5 +602,344 @@
                            HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>
         </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             START SCREEN — full-window overlay shown at launch / via ← Home
+             ═══════════════════════════════════════════════════════════════ -->
+        <Grid x:Name="StartScreenOverlay"
+              Grid.Row="1" Grid.RowSpan="5"
+              Panel.ZIndex="200">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="190"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Left sidebar ─────────────────────────────────────────── -->
+            <DockPanel Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
+
+                <!-- Back arrow -->
+                <Button DockPanel.Dock="Top"
+                        Content="&#x2190;" HorizontalAlignment="Left"
+                        Style="{StaticResource SsNavBtn}"
+                        Padding="18,11" FontSize="18"
+                        Click="SsBackBtn_Click"
+                        ToolTip="Back to workbook"/>
+
+                <!-- Account / Options pinned to bottom -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
+                    <Rectangle Height="1" Fill="#2C5C40" Margin="0,0,0,6"/>
+                    <Button Content="Account" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"/>
+                    <Button Content="Options" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsOptionsBtn_Click"/>
+                </StackPanel>
+
+                <!-- Navigation items -->
+                <StackPanel>
+                    <Button Content="New" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsNewBtn_Click"/>
+                    <Button Content="Open" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsOpenBtn_Click"/>
+                    <Button Content="Share" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsShareBtn_Click"/>
+
+                    <Rectangle Height="1" Fill="#2C5C40" Margin="0,6"/>
+
+                    <Button x:Name="SsInfoNavBtn" Content="Info"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsInfoBtn_Click"/>
+                    <Button Content="Save" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SaveButton_Click"/>
+                    <Button Content="Save As" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SaveButton_Click"/>
+                    <Button Content="Print" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="PrintButton_Click"/>
+                    <Button Content="Export" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="ExportPdfButton_Click"/>
+                    <Button Content="Close" HorizontalAlignment="Stretch"
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsCloseBtn_Click"/>
+                </StackPanel>
+            </DockPanel>
+
+            <!-- ── Right content area ───────────────────────────────────── -->
+            <Grid Grid.Column="1" Background="White">
+
+                <!-- ══ HOME VIEW ════════════════════════════════════════════ -->
+                <Grid x:Name="SsHomeView">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>  <!-- Greeting -->
+                    <RowDefinition Height="Auto"/>  <!-- New section -->
+                    <RowDefinition Height="*"/>     <!-- Recent files -->
+                </Grid.RowDefinitions>
+
+                <!-- Greeting -->
+                <TextBlock x:Name="SsGreeting" Grid.Row="0"
+                           FontSize="28" FontWeight="Light" Foreground="#1F1F1F"
+                           Margin="40,36,40,0"/>
+
+                <!-- New section -->
+                <Border Grid.Row="1" Padding="40,18,40,6">
+                    <StackPanel>
+                        <DockPanel LastChildFill="False" Margin="0,0,0,10">
+                            <TextBlock DockPanel.Dock="Left" Text="New"
+                                       FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
+                            <TextBlock DockPanel.Dock="Right" Text="More templates &#x2192;"
+                                       FontSize="12" Foreground="#217346"
+                                       VerticalAlignment="Center" Cursor="Hand"/>
+                        </DockPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Blank workbook card -->
+                            <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,16,0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="cardBg" Background="Transparent" Padding="4">
+                                            <StackPanel Width="108">
+                                                <!-- Mini spreadsheet thumbnail -->
+                                                <Border Width="108" Height="80"
+                                                        BorderBrush="#C8C8C8" BorderThickness="1"
+                                                        Background="White" ClipToBounds="True">
+                                                    <Canvas Width="108" Height="80">
+                                                        <!-- Row-header strip -->
+                                                        <Rectangle Canvas.Left="0" Canvas.Top="0"
+                                                                   Width="18" Height="80" Fill="#F0F0F0"/>
+                                                        <!-- Column-header strip -->
+                                                        <Rectangle Canvas.Left="0" Canvas.Top="0"
+                                                                   Width="108" Height="14" Fill="#F0F0F0"/>
+                                                        <!-- Horizontal grid lines -->
+                                                        <Line X1="0" Y1="27" X2="108" Y2="27"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <Line X1="0" Y1="40" X2="108" Y2="40"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <Line X1="0" Y1="53" X2="108" Y2="53"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <Line X1="0" Y1="66" X2="108" Y2="66"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <!-- Vertical grid lines -->
+                                                        <Line X1="42" Y1="14" X2="42" Y2="80"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <Line X1="66" Y1="14" X2="66" Y2="80"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <Line X1="90" Y1="14" X2="90" Y2="80"
+                                                              Stroke="#DCDCDC" StrokeThickness="0.5"/>
+                                                        <!-- Selected cell A1 -->
+                                                        <Rectangle Canvas.Left="18" Canvas.Top="14"
+                                                                   Width="24" Height="13"
+                                                                   Fill="#E8F5EC"/>
+                                                        <Rectangle Canvas.Left="18" Canvas.Top="14"
+                                                                   Width="24" Height="13"
+                                                                   Stroke="#217346" StrokeThickness="1.5"
+                                                                   Fill="Transparent"/>
+                                                    </Canvas>
+                                                </Border>
+                                                <TextBlock Text="Blank workbook"
+                                                           FontSize="12" Margin="0,6,0,2"
+                                                           TextAlignment="Center"
+                                                           Foreground="#1F1F1F"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="cardBg" Property="Background"
+                                                        Value="#F0F6F2"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Recent files -->
+                <Grid Grid.Row="2" Margin="40,0,40,16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/> <!-- Tabs + search -->
+                        <RowDefinition Height="Auto"/> <!-- Column headers -->
+                        <RowDefinition Height="*"/>    <!-- File list -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Tabs row + search box -->
+                    <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,0">
+                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                            <Border Padding="0,8,22,8"
+                                    BorderThickness="0,0,0,2" BorderBrush="#217346">
+                                <TextBlock Text="Recent" FontSize="13"
+                                           FontWeight="SemiBold" Foreground="#217346"/>
+                            </Border>
+                            <Border Padding="0,8,22,8">
+                                <TextBlock Text="Pinned" FontSize="13"
+                                           Foreground="#888" Cursor="Hand"/>
+                            </Border>
+                        </StackPanel>
+                        <Border DockPanel.Dock="Right"
+                                Background="#F5F5F5" BorderBrush="#D8D8D8" BorderThickness="1"
+                                CornerRadius="2" Padding="8,4" VerticalAlignment="Center">
+                            <TextBox x:Name="SsSearchBox" Width="180" FontSize="12"
+                                     BorderThickness="0" Background="Transparent"
+                                     VerticalContentAlignment="Center"
+                                     TextChanged="SsSearchBox_TextChanged"/>
+                        </Border>
+                    </DockPanel>
+
+                    <!-- Column headers -->
+                    <Border Grid.Row="1" BorderThickness="0,1,0,1" BorderBrush="#E4E4E4"
+                            Padding="0,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="150"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Name" FontSize="11" Foreground="#888"/>
+                            <TextBlock Grid.Column="1" Text="Date modified" FontSize="11" Foreground="#888"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- File list -->
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="SsRecentList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button HorizontalContentAlignment="Stretch"
+                                            BorderThickness="0" Padding="0,7"
+                                            Click="SsRecentItem_Click"
+                                            Cursor="Hand">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="rowBg" Background="Transparent"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="rowBg" Property="Background"
+                                                                Value="#F3F6F9"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="150"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                <!-- Green Excel-style file icon -->
+                                                <Border Width="26" Height="30" Background="#217346"
+                                                        CornerRadius="2" Margin="0,0,10,0"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="X" Foreground="White"
+                                                               FontSize="11" FontWeight="Bold"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+                                                </Border>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding FileName}"
+                                                               FontSize="13" Foreground="#1F1F1F"/>
+                                                    <TextBlock Text="{Binding Directory}"
+                                                               FontSize="11" Foreground="#888"
+                                                               Margin="0,1,0,0"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding LastOpenedText}"
+                                                       FontSize="12" Foreground="#666"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+                </Grid><!-- end SsHomeView -->
+
+                <!-- ══ INFO VIEW ════════════════════════════════════════════ -->
+                <Grid x:Name="SsInfoView" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Info"
+                               FontSize="28" FontWeight="Light" Foreground="#1F1F1F"
+                               Margin="40,36,40,0"/>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <Grid Margin="40,24,40,24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="280"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Workbook actions (left) -->
+                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                <TextBlock Text="Protect Workbook"
+                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Control what types of changes others can make."
+                                           FontSize="12" Foreground="#555" TextWrapping="Wrap"
+                                           Margin="0,0,0,20"/>
+                                <TextBlock Text="Inspect Workbook"
+                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Check for hidden properties or personal information."
+                                           FontSize="12" Foreground="#555" TextWrapping="Wrap"
+                                           Margin="0,0,0,20"/>
+                                <TextBlock Text="Manage Workbook"
+                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="Check in, check out, or discard unsaved changes."
+                                           FontSize="12" Foreground="#555" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <!-- Properties (right) -->
+                            <Border Grid.Column="1"
+                                    BorderBrush="#E0E0E0" BorderThickness="1,0,0,0"
+                                    Padding="24,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="Properties"
+                                               FontSize="13" FontWeight="SemiBold" Foreground="#555"
+                                               Margin="0,0,0,14"/>
+
+                                    <TextBlock Text="Workbook name" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoWorkbookName" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="File path" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoFilePath" FontSize="12" Foreground="#555"
+                                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="Sheets" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoSheetCount" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="Format" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoFormat" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+
+                                    <Rectangle Height="1" Fill="#E0E0E0" Margin="0,0,0,20"/>
+
+                                    <TextBlock Text="About Freexcel"
+                                               FontSize="13" FontWeight="SemiBold" Foreground="#555"
+                                               Margin="0,0,0,10"/>
+                                    <TextBlock FontSize="12" Foreground="#555"
+                                               TextWrapping="Wrap" LineHeight="20"
+                                               Margin="0,0,0,6">Freexcel is a lightweight, open-format spreadsheet built on .NET 10 and WPF. Supports XLSX, formula calculation, cell styling, charts, and freeze panes.</TextBlock>
+                                    <TextBlock Text="Version 0.1 · Phase 3"
+                                               FontSize="11" Foreground="#888"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid><!-- end SsInfoView -->
+
+            </Grid>
+        </Grid>
+
     </Grid>
 </Window>

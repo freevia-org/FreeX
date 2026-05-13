@@ -1,0 +1,48 @@
+using System.IO;
+using System.Text.Json;
+
+namespace Freexcel.App.Host;
+
+public sealed class FreexcelOptions
+{
+    // General — new workbooks
+    public string DefaultFontName  { get; set; } = "Calibri";
+    public int    DefaultFontSize  { get; set; } = 11;
+    public int    DefaultSheetCount{ get; set; } = 1;
+    public string UserName         { get; set; } = Environment.UserName;
+
+    // Formulas
+    public bool AutoCalculate { get; set; } = true;
+
+    // Save
+    public string DefaultFormat { get; set; } = ".xlsx";
+
+    private static readonly string StorePath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "Freexcel", "options.json");
+
+    public static FreexcelOptions Load()
+    {
+        try
+        {
+            if (File.Exists(StorePath))
+            {
+                var json = File.ReadAllText(StorePath);
+                return JsonSerializer.Deserialize<FreexcelOptions>(json) ?? new();
+            }
+        }
+        catch { }
+        return new FreexcelOptions();
+    }
+
+    public void Save()
+    {
+        try
+        {
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(StorePath)!);
+            File.WriteAllText(StorePath, JsonSerializer.Serialize(this,
+                new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch { }
+    }
+}

@@ -1,3 +1,4 @@
+using System.Linq;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -13,9 +14,21 @@ public static class StatusBarCalculator
         int count = 0;
         double? min = null, max = null;
 
-        foreach (var addr in range.AllCells())
+        // For large ranges (full rows/cols/sheet) iterate only used cells to avoid
+        // enumerating billions of empty addresses.
+        long totalCells = (long)(range.End.Row - range.Start.Row + 1)
+                        * (long)(range.End.Col - range.Start.Col + 1);
+
+        IEnumerable<ScalarValue?> source = totalCells > 10_000
+            ? sheet.GetUsedCells()
+                   .Where(kvp => kvp.Key.Row >= range.Start.Row && kvp.Key.Row <= range.End.Row
+                              && kvp.Key.Col >= range.Start.Col && kvp.Key.Col <= range.End.Col)
+                   .Select(kvp => kvp.Value.Value)
+            : range.AllCells().Select(a => sheet.GetValue(a));
+
+        foreach (var value in source)
         {
-            if (sheet.GetValue(addr) is NumberValue nv)
+            if (value is NumberValue nv)
             {
                 sum += nv.Value;
                 count++;
