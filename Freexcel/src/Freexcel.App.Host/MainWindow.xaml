@@ -186,8 +186,16 @@
         <!-- Status bar -->
         <Border Grid.Row="5" Background="#217346" Padding="8,4">
             <Grid>
-                <TextBlock Text="Ready" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
-                <TextBlock Text="100%" Foreground="White" FontSize="12" 
+                <TextBlock x:Name="StatusReadyText" Text="Ready" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
+                <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                    <TextBlock x:Name="StatusSumText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
+                    <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12" Margin="0,0,16,0"/>
+                    <TextBlock x:Name="StatusAvgText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
+                    <TextBlock x:Name="StatusMinText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
+                    <TextBlock x:Name="StatusMaxText"   Foreground="White" FontSize="12"/>
+                </StackPanel>
+                <TextBlock Text="100%" Foreground="White" FontSize="12"
                            HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>
         </Border>
