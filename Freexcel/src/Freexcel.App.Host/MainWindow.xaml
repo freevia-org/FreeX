@@ -14,6 +14,8 @@
         <Grid.RowDefinitions>
             <!-- Ribbon area -->
             <RowDefinition Height="Auto"/>
+            <!-- Formatting toolbar -->
+            <RowDefinition Height="Auto"/>
             <!-- Formula bar -->
             <RowDefinition Height="Auto"/>
             <!-- Grid area (main content) -->
@@ -65,8 +67,50 @@
             </StackPanel>
         </Border>
 
+        <!-- Formatting toolbar -->
+        <Border Grid.Row="1" Background="White" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Padding="4,3">
+            <StackPanel Orientation="Horizontal">
+                <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="2,0"
+                          SelectionChanged="FontNameBox_SelectionChanged"/>
+                <ComboBox x:Name="FontSizeBox" Width="46" Height="22" Margin="2,0" IsEditable="True"
+                          SelectionChanged="FontSizeBox_SelectionChanged"/>
+                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
+                <ToggleButton x:Name="BoldButton" Width="24" Height="22" Margin="1,0"
+                              FontWeight="Bold" Click="BoldButton_Click">B</ToggleButton>
+                <ToggleButton x:Name="ItalicButton" Width="24" Height="22" Margin="1,0"
+                              FontStyle="Italic" Click="ItalicButton_Click">I</ToggleButton>
+                <ToggleButton x:Name="UnderlineButton" Width="24" Height="22" Margin="1,0"
+                              Click="UnderlineButton_Click">
+                    <TextBlock Text="U" TextDecorations="Underline"/>
+                </ToggleButton>
+                <ToggleButton x:Name="StrikeButton" Width="24" Height="22" Margin="1,0"
+                              Click="StrikeButton_Click">
+                    <TextBlock Text="S" TextDecorations="Strikethrough"/>
+                </ToggleButton>
+                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
+                <Button x:Name="FontColorBtn" Content="A" Width="24" Height="22" Margin="1,0"
+                        Click="FontColorBtn_Click" ToolTip="Font Color"/>
+                <Button x:Name="FillColorBtn" Content="H" Width="24" Height="22" Margin="1,0"
+                        Click="FillColorBtn_Click" ToolTip="Fill Color"/>
+                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
+                <ToggleButton x:Name="AlignLeftBtn" Width="28" Height="22" Margin="1,0"
+                              Click="AlignLeftBtn_Click">L</ToggleButton>
+                <ToggleButton x:Name="AlignCenterBtn" Width="28" Height="22" Margin="1,0"
+                              Click="AlignCenterBtn_Click">C</ToggleButton>
+                <ToggleButton x:Name="AlignRightBtn" Width="28" Height="22" Margin="1,0"
+                              Click="AlignRightBtn_Click">R</ToggleButton>
+                <ToggleButton x:Name="WrapTextBtn" Width="24" Height="22" Margin="1,0"
+                              Click="WrapTextBtn_Click" ToolTip="Wrap Text">W</ToggleButton>
+                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
+                <Button Content="Merge" Width="44" Height="22" Margin="1,0" Click="MergeCenterBtn_Click"/>
+                <Separator Width="1" Background="#D0D0D0" Margin="4,2"/>
+                <ComboBox x:Name="NumberFormatBox" Width="90" Height="22" Margin="2,0"
+                          SelectionChanged="NumberFormatBox_SelectionChanged"/>
+            </StackPanel>
+        </Border>
+
         <!-- Formula bar -->
-        <Border Grid.Row="1" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4">
+        <Border Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="80"/>
@@ -88,7 +132,7 @@
         </Border>
 
         <!-- Grid area -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -109,7 +153,7 @@
         </Grid>
 
         <!-- Sheet tabs -->
-        <Border Grid.Row="3" Background="#E8E8E8" BorderBrush="#D0D0D0"
+        <Border Grid.Row="4" Background="#E8E8E8" BorderBrush="#D0D0D0"
                 BorderThickness="0,1,0,0" Padding="4,2">
             <StackPanel Orientation="Horizontal">
                 <Button x:Name="AddSheetButton" Content="+" Width="24" Height="22"
@@ -140,7 +184,7 @@
         </Border>
 
         <!-- Status bar -->
-        <Border Grid.Row="4" Background="#217346" Padding="8,4">
+        <Border Grid.Row="5" Background="#217346" Padding="8,4">
             <Grid>
                 <TextBlock Text="Ready" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
                 <TextBlock Text="100%" Foreground="White" FontSize="12" 

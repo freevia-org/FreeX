@@ -1,6 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
 using Microsoft.Extensions.Logging;
 using Freexcel.Core.Model;
 using Freexcel.Core.Formula;
@@ -28,6 +30,7 @@ public partial class MainWindow : Window
     private Workbook _workbook;
     private SheetId _currentSheetId;
     private readonly System.Collections.ObjectModel.ObservableCollection<SheetTabViewModel> _sheetTabs = [];
+    private bool _suppressToolbarSync;
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -84,6 +87,18 @@ public partial class MainWindow : Window
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        var fonts = new[] { "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia" };
+        FontNameBox.ItemsSource = fonts;
+        FontNameBox.SelectedItem = "Calibri";
+
+        var sizes = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72" };
+        FontSizeBox.ItemsSource = sizes;
+        FontSizeBox.SelectedItem = "11";
+
+        var formats = new[] { "General", "Number (0.00)", "Currency ($#,##0.00)", "Percentage (0%)", "Date (yyyy-MM-dd)", "Time (HH:mm:ss)", "Text (@)" };
+        NumberFormatBox.ItemsSource = formats;
+        NumberFormatBox.SelectedIndex = 0;
+
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -143,6 +158,28 @@ public partial class MainWindow : Window
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.B && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            BoldButton.IsChecked = !(BoldButton.IsChecked == true);
+            ApplyStyleDiff(new StyleDiff(Bold: BoldButton.IsChecked == true));
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.I && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            ItalicButton.IsChecked = !(ItalicButton.IsChecked == true);
+            ApplyStyleDiff(new StyleDiff(Italic: ItalicButton.IsChecked == true));
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.U && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            UnderlineButton.IsChecked = !(UnderlineButton.IsChecked == true);
+            ApplyStyleDiff(new StyleDiff(Underline: UnderlineButton.IsChecked == true));
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
         {
             FindButton_Click(sender, e);
@@ -211,6 +248,39 @@ public partial class MainWindow : Window
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         FormulaBar.Text = cell?.HasFormula == true ? "=" + cell.FormulaText : FormatCellValue(cell?.Value);
+        RefreshToolbar();
+    }
+
+    private void RefreshToolbar()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+        var style = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
+
+        _suppressToolbarSync = true;
+        BoldButton.IsChecked      = style.Bold;
+        ItalicButton.IsChecked    = style.Italic;
+        UnderlineButton.IsChecked = style.Underline;
+        StrikeButton.IsChecked    = style.Strikethrough;
+        AlignLeftBtn.IsChecked    = style.HorizontalAlignment == CellHAlign.Left;
+        AlignCenterBtn.IsChecked  = style.HorizontalAlignment == CellHAlign.Center;
+        AlignRightBtn.IsChecked   = style.HorizontalAlignment == CellHAlign.Right;
+        WrapTextBtn.IsChecked     = style.WrapText;
+        if (FontNameBox.Items.Contains(style.FontName))
+            FontNameBox.SelectedItem = style.FontName;
+        var sizeStr = style.FontSize.ToString("0.#");
+        if (FontSizeBox.Items.Contains(sizeStr))
+            FontSizeBox.SelectedItem = sizeStr;
+        _suppressToolbarSync = false;
+    }
+
+    private void ApplyStyleDiff(StyleDiff diff)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        _commandBus.Execute(_workbook.Id, new ApplyStyleCommand(_currentSheetId, range, diff));
+        UpdateViewport();
+        RefreshStatusBar();
     }
 
     private void EnterEditMode()
@@ -591,6 +661,114 @@ public partial class MainWindow : Window
         };
         dlg.ShowDialog();
         UpdateViewport();
+    }
+
+    // ── Formatting toolbar handlers ───────────────────────────────────────────
+
+    private void BoldButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(Bold: BoldButton.IsChecked == true));
+    }
+
+    private void ItalicButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(Italic: ItalicButton.IsChecked == true));
+    }
+
+    private void UnderlineButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(Underline: UnderlineButton.IsChecked == true));
+    }
+
+    private void StrikeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(Strikethrough: StrikeButton.IsChecked == true));
+    }
+
+    private void AlignLeftBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Left));
+    }
+
+    private void AlignCenterBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Center));
+    }
+
+    private void AlignRightBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Right));
+    }
+
+    private void WrapTextBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        ApplyStyleDiff(new StyleDiff(WrapText: WrapTextBtn.IsChecked == true));
+    }
+
+    private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var outcome = _commandBus.Execute(_workbook.Id, new MergeCellsCommand(_currentSheetId, range));
+        if (!outcome.Success)
+        {
+            MessageBox.Show(outcome.ErrorMessage ?? "Cannot merge.", "Merge Cells",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Center));
+        UpdateViewport();
+    }
+
+    private void FontNameBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        if (FontNameBox.SelectedItem is string name)
+            ApplyStyleDiff(new StyleDiff(FontName: name));
+    }
+
+    private void FontSizeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        var text = FontSizeBox.Text;
+        if (double.TryParse(text, out var size) && size > 0)
+            ApplyStyleDiff(new StyleDiff(FontSize: size));
+    }
+
+    private void FontColorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var input = PromptForInput("Font color (R,G,B e.g. 255,0,0):", "0,0,0");
+        if (input is null) return;
+        var parts = input.Split(',');
+        if (parts.Length == 3 && byte.TryParse(parts[0].Trim(), out var r)
+            && byte.TryParse(parts[1].Trim(), out var g) && byte.TryParse(parts[2].Trim(), out var b))
+            ApplyStyleDiff(new StyleDiff(FontColor: new CellColor(r, g, b)));
+    }
+
+    private void FillColorBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var input = PromptForInput("Fill color (R,G,B e.g. 255,255,0):", "255,255,255");
+        if (input is null) return;
+        var parts = input.Split(',');
+        if (parts.Length == 3 && byte.TryParse(parts[0].Trim(), out var r)
+            && byte.TryParse(parts[1].Trim(), out var g) && byte.TryParse(parts[2].Trim(), out var b))
+            ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(r, g, b)));
+    }
+
+    private void NumberFormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressToolbarSync) return;
+        if (NumberFormatBox.SelectedIndex < 0) return;
+        var codes = new[] { "General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@" };
+        if (NumberFormatBox.SelectedIndex < codes.Length)
+            ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
     }
 
     private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
