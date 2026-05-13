@@ -100,6 +100,50 @@ public static class BuiltInFunctions
         ["STDEV"]       = (Stdev, 1, 255),
         ["STDEV.S"]     = (Stdev, 1, 255),
         ["MEDIAN"]      = (Median, 1, 255),
+
+        // ── Phase 5: Additional commonly-used functions ──────────────────────
+
+        // Multi-criteria aggregation
+        ["SUMIFS"]      = (Sumifs, 3, 255),
+        ["COUNTIFS"]    = (Countifs, 2, 255),
+        ["AVERAGEIFS"]  = (Averageifs2, 3, 255),
+
+        // Modern lookup
+        ["XLOOKUP"]     = (Xlookup, 3, 6),
+
+        // Multi-condition logic
+        ["IFS"]         = (Ifs, 2, 255),
+        ["SWITCH"]      = (Switch, 3, 255),
+
+        // IS functions
+        ["ISBLANK"]     = (Isblank, 1, 1),
+        ["ISNUMBER"]    = (Isnumber, 1, 1),
+        ["ISTEXT"]      = (Istext, 1, 1),
+        ["ISERROR"]     = (Iserror, 1, 1),
+        ["ISNA"]        = (Isna, 1, 1),
+        ["ISLOGICAL"]   = (Islogical, 1, 1),
+
+        // Reference helpers
+        ["ROW"]         = (Row, 0, 1),
+        ["COLUMN"]      = (Column, 0, 1),
+        ["ROWS"]        = (Rows, 1, 1),
+        ["COLUMNS"]     = (Columns, 1, 1),
+
+        // Text
+        ["TEXTJOIN"]    = (Textjoin, 3, 255),
+
+        // Count
+        ["COUNTBLANK"]  = (Countblank, 1, 1),
+
+        // Misc
+        ["CHOOSE"]      = (Choose, 2, 255),
+        ["SUMPRODUCT"]  = (Sumproduct, 1, 255),
+        ["ROUNDDOWN"]   = (Rounddown, 2, 2),
+        ["ROUNDUP"]     = (Roundup, 2, 2),
+        ["TRUNC"]       = (Trunc, 1, 2),
+        ["EXACT"]       = (Exact, 2, 2),
+        ["CODE"]        = (Code, 1, 1),
+        ["CHAR"]        = (Char, 1, 1),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -1115,6 +1159,340 @@ public static class BuiltInFunctions
         if (nums.Count % 2 == 1)
             return new NumberValue(nums[mid]);
         return new NumberValue((nums[mid - 1] + nums[mid]) / 2.0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Multi-criteria aggregation
+    // ═══════════════════════════════════════════════════════════════════
+
+    // SUMIFS(sum_range, criteria_range1, criteria1, [criteria_range2, criteria2, ...])
+    private static ScalarValue Sumifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue sumRange) return ErrorValue.Value;
+        if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
+        var sumFlat = sumRange.Flatten();
+        int len = sumFlat.Count;
+        double total = 0;
+        for (int i = 0; i < len; i++)
+        {
+            bool include = true;
+            for (int p = 1; p < args.Count - 1; p += 2)
+            {
+                if (args[p] is not RangeValue cr) { include = false; break; }
+                var cf = cr.Flatten();
+                var cv = i < cf.Count ? cf[i] : BlankValue.Instance;
+                if (!MatchesCriteria(cv, args[p + 1])) { include = false; break; }
+            }
+            if (include && sumFlat[i] is NumberValue nv)
+                total += nv.Value;
+        }
+        return new NumberValue(total);
+    }
+
+    // COUNTIFS(criteria_range1, criteria1, ...)
+    private static ScalarValue Countifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count < 2 || args.Count % 2 != 0) return ErrorValue.Value;
+        if (args[0] is not RangeValue firstRange) return ErrorValue.Value;
+        int len = firstRange.Flatten().Count;
+        int count = 0;
+        for (int i = 0; i < len; i++)
+        {
+            bool include = true;
+            for (int p = 0; p < args.Count - 1; p += 2)
+            {
+                if (args[p] is not RangeValue cr) { include = false; break; }
+                var cf = cr.Flatten();
+                var cv = i < cf.Count ? cf[i] : BlankValue.Instance;
+                if (!MatchesCriteria(cv, args[p + 1])) { include = false; break; }
+            }
+            if (include) count++;
+        }
+        return new NumberValue(count);
+    }
+
+    // AVERAGEIFS(avg_range, criteria_range1, criteria1, ...)
+    private static ScalarValue Averageifs2(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue avgRange) return ErrorValue.Value;
+        if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
+        var avgFlat = avgRange.Flatten();
+        int len = avgFlat.Count;
+        double total = 0;
+        int count = 0;
+        for (int i = 0; i < len; i++)
+        {
+            bool include = true;
+            for (int p = 1; p < args.Count - 1; p += 2)
+            {
+                if (args[p] is not RangeValue cr) { include = false; break; }
+                var cf = cr.Flatten();
+                var cv = i < cf.Count ? cf[i] : BlankValue.Instance;
+                if (!MatchesCriteria(cv, args[p + 1])) { include = false; break; }
+            }
+            if (include && avgFlat[i] is NumberValue nv) { total += nv.Value; count++; }
+        }
+        if (count == 0) return ErrorValue.DivByZero;
+        return new NumberValue(total / count);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Modern lookup: XLOOKUP
+    // ═══════════════════════════════════════════════════════════════════
+
+    // XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])
+    private static ScalarValue Xlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        if (args[2] is not RangeValue returnArr) return ErrorValue.Value;
+
+        var lookupValue = args[0];
+        var lookupFlat = lookupArr.Flatten();
+        var returnFlat = returnArr.Flatten();
+
+        ScalarValue ifNotFound = args.Count > 3 ? args[3] : ErrorValue.NA;
+        int matchMode = args.Count > 4 ? (int)ToNumber(args[4]) : 0; // 0=exact
+        int searchMode = args.Count > 5 ? (int)ToNumber(args[5]) : 1; // 1=first-to-last
+
+        var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
+        if (searchMode == -1) indices.Reverse();
+
+        if (matchMode == 0)
+        {
+            // Exact match
+            foreach (int i in indices)
+                if (ScalarEquals(lookupFlat[i], lookupValue))
+                    return i < returnFlat.Count ? returnFlat[i] : ErrorValue.NA;
+            return ifNotFound;
+        }
+        else if (matchMode == -1)
+        {
+            // Exact or next smaller
+            int best = -1;
+            foreach (int i in indices)
+                if (CompareScalar(lookupFlat[i], lookupValue) <= 0)
+                    best = i;
+            return best >= 0 && best < returnFlat.Count ? returnFlat[best] : ifNotFound;
+        }
+        else
+        {
+            // Exact or next larger
+            int best = -1;
+            foreach (int i in indices)
+                if (CompareScalar(lookupFlat[i], lookupValue) >= 0)
+                    best = i;
+            return best >= 0 && best < returnFlat.Count ? returnFlat[best] : ifNotFound;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Multi-condition logic: IFS, SWITCH
+    // ═══════════════════════════════════════════════════════════════════
+
+    // IFS(condition1, value1, [condition2, value2, ...])
+    private static ScalarValue Ifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count % 2 != 0) return ErrorValue.Value;
+        for (int i = 0; i < args.Count - 1; i += 2)
+        {
+            if (args[i] is ErrorValue e) return e;
+            if (ToBool(args[i])) return args[i + 1];
+        }
+        return ErrorValue.NA;
+    }
+
+    // SWITCH(expr, val1, result1, [val2, result2, ...], [default])
+    private static ScalarValue Switch(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var expr = args[0];
+        // args: expr, val1, result1, val2, result2, ..., [default]
+        bool hasDefault = (args.Count - 1) % 2 == 1;
+        int pairCount = (args.Count - 1) / 2;
+        for (int i = 0; i < pairCount; i++)
+        {
+            if (ScalarEquals(expr, args[1 + i * 2]))
+                return args[1 + i * 2 + 1];
+        }
+        return hasDefault ? args[^1] : ErrorValue.NA;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – IS functions
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is BlankValue);
+
+    private static ScalarValue Isnumber(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is NumberValue or DateTimeValue);
+
+    private static ScalarValue Istext(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is TextValue);
+
+    private static ScalarValue Iserror(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is ErrorValue);
+
+    private static ScalarValue Isna(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is ErrorValue e2 && e2.Code == "#N/A");
+
+    private static ScalarValue Islogical(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(args[0] is BoolValue);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Reference helpers: ROW, COLUMN, ROWS, COLUMNS
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count == 0) return ErrorValue.Value; // no cell reference available without context
+        if (args[0] is RangeValue rv) return new NumberValue(rv.StartRow);
+        return ErrorValue.Value;
+    }
+
+    private static ScalarValue Column(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count == 0) return ErrorValue.Value;
+        if (args[0] is RangeValue rv) return new NumberValue(rv.StartCol);
+        return ErrorValue.Value;
+    }
+
+    private static ScalarValue Rows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue rv) return new NumberValue(rv.RowCount);
+        return new NumberValue(1);
+    }
+
+    private static ScalarValue Columns(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is RangeValue rv) return new NumberValue(rv.ColCount);
+        return new NumberValue(1);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Text: TEXTJOIN, EXACT, CODE, CHAR
+    // ═══════════════════════════════════════════════════════════════════
+
+    // TEXTJOIN(delimiter, ignore_empty, text1, [text2, ...])
+    private static ScalarValue Textjoin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count < 3) return ErrorValue.Value;
+        var delimiter = ToText(args[0]);
+        bool ignoreEmpty = ToBool(args[1]);
+        var parts = new List<string>();
+        for (int i = 2; i < args.Count; i++)
+        {
+            var t = ToText(args[i]);
+            if (ignoreEmpty && t.Length == 0) continue;
+            parts.Add(t);
+        }
+        return new TextValue(string.Join(delimiter, parts));
+    }
+
+    private static ScalarValue Exact(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return new BoolValue(string.Equals(ToText(args[0]), ToText(args[1]), StringComparison.Ordinal));
+    }
+
+    private static ScalarValue Code(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var text = ToText(args[0]);
+        if (text.Length == 0) return ErrorValue.Value;
+        return new NumberValue(text[0]);
+    }
+
+    private static ScalarValue Char(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        int code = (int)ToNumber(args[0]);
+        if (code < 1 || code > 255) return ErrorValue.Value;
+        return new TextValue(((char)code).ToString());
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Count: COUNTBLANK
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Countblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue range) return ErrorValue.Value;
+        int count = range.Flatten().Count(v => v is BlankValue);
+        return new NumberValue(count);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 5 – Misc: CHOOSE, SUMPRODUCT, ROUNDDOWN, ROUNDUP, TRUNC
+    // ═══════════════════════════════════════════════════════════════════
+
+    // CHOOSE(index, val1, val2, ...)
+    private static ScalarValue Choose(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        int idx = (int)ToNumber(args[0]);
+        if (idx < 1 || idx >= args.Count) return ErrorValue.Value;
+        return args[idx];
+    }
+
+    // SUMPRODUCT(array1, [array2, ...])
+    private static ScalarValue Sumproduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var arrays = new List<IReadOnlyList<ScalarValue>>();
+        foreach (var a in args)
+        {
+            if (a is RangeValue rv) arrays.Add(rv.Flatten());
+            else if (a is NumberValue nv) arrays.Add([nv]);
+            else return ErrorValue.Value;
+        }
+        if (arrays.Count == 0) return new NumberValue(0);
+        int len = arrays[0].Count;
+        for (int k = 1; k < arrays.Count; k++)
+            if (arrays[k].Count != len) return ErrorValue.Value;
+        double total = 0;
+        for (int i = 0; i < len; i++)
+        {
+            double product = 1;
+            for (int k = 0; k < arrays.Count; k++)
+            {
+                var v = arrays[k][i];
+                if (v is ErrorValue ev) return ev;
+                product *= v is BlankValue ? 0 : ToNumber(v);
+            }
+            total += product;
+        }
+        return new NumberValue(total);
+    }
+
+    private static ScalarValue Rounddown(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var n = ToNumber(args[0]);
+        int digits = (int)ToNumber(args[1]);
+        double factor = Math.Pow(10, digits);
+        return new NumberValue((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
+    }
+
+    private static ScalarValue Roundup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var n = ToNumber(args[0]);
+        int digits = (int)ToNumber(args[1]);
+        double factor = Math.Pow(10, digits);
+        return new NumberValue((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
+    }
+
+    private static ScalarValue Trunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var n = ToNumber(args[0]);
+        int digits = args.Count > 1 ? (int)ToNumber(args[1]) : 0;
+        double factor = Math.Pow(10, digits);
+        return new NumberValue(Math.Truncate(n * factor) / factor);
     }
 
     // ═══════════════════════════════════════════════════════════════════
