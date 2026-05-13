@@ -61,6 +61,7 @@ public partial class MainWindow : Window
         SheetGrid.ColumnResized += OnColumnResized;
         SheetGrid.RowResized += OnRowResized;
         SheetGrid.AutofillRequested += OnAutofillRequested;
+        SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
         this.KeyDown += MainWindow_KeyDown;
         
         // Initial data for testing
@@ -769,6 +770,81 @@ public partial class MainWindow : Window
         var codes = new[] { "General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@" };
         if (NumberFormatBox.SelectedIndex < codes.Length)
             ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
+    }
+
+    // ── Context menu + Insert/Delete ─────────────────────────────────────────
+
+    private void OnGridContextMenuRequested(CellAddress clickedCell, System.Windows.Point screenPos)
+    {
+        var actualAddr = new CellAddress(_currentSheetId, clickedCell.Row, clickedCell.Col);
+        if (SheetGrid.SelectedRange is null)
+            SetActiveCell(actualAddr);
+
+        var menu = new ContextMenu();
+        void AddItem(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        AddItem("Cut",   () => { ExecuteCopy(); ExecuteClearSelection(); });
+        AddItem("Copy",  ExecuteCopy);
+        AddItem("Paste", ExecutePaste);
+        menu.Items.Add(new Separator());
+        AddItem("Insert Row Above",    () => InsertRows(actualAddr.Row));
+        AddItem("Insert Row Below",    () => InsertRows(actualAddr.Row + 1));
+        AddItem("Insert Column Left",  () => InsertColumns(actualAddr.Col));
+        AddItem("Insert Column Right", () => InsertColumns(actualAddr.Col + 1));
+        menu.Items.Add(new Separator());
+        AddItem("Delete Row(s)",    DeleteSelectedRows);
+        AddItem("Delete Column(s)", DeleteSelectedColumns);
+        menu.Items.Add(new Separator());
+        AddItem("Format Cells...",  OpenFormatCellsDialog);
+        menu.Items.Add(new Separator());
+        AddItem("Clear Contents",   ExecuteClearSelection);
+
+        menu.PlacementTarget = SheetGrid;
+        menu.IsOpen = true;
+    }
+
+    private void InsertRows(uint beforeRow)
+    {
+        _commandBus.Execute(_workbook.Id, new InsertRowsCommand(_currentSheetId, beforeRow));
+        UpdateViewport();
+    }
+
+    private void InsertColumns(uint beforeCol)
+    {
+        _commandBus.Execute(_workbook.Id, new InsertColumnsCommand(_currentSheetId, beforeCol));
+        UpdateViewport();
+    }
+
+    private void DeleteSelectedRows()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        uint count = range.End.Row - range.Start.Row + 1;
+        _commandBus.Execute(_workbook.Id, new DeleteRowsCommand(_currentSheetId, range.Start.Row, count));
+        UpdateViewport();
+    }
+
+    private void DeleteSelectedColumns()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        uint count = range.End.Col - range.Start.Col + 1;
+        _commandBus.Execute(_workbook.Id, new DeleteColumnsCommand(_currentSheetId, range.Start.Col, count));
+        UpdateViewport();
+    }
+
+    private void OpenFormatCellsDialog()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+        var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
+        var dlg = new FormatCellsDialog(currentStyle) { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
+        ApplyStyleDiff(dlg.ResultDiff);
     }
 
     private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
