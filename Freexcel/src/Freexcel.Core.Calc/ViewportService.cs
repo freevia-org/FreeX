@@ -4,7 +4,7 @@ namespace Freexcel.Core.Calc;
 
 /// <summary>
 /// Implementation of IViewportService that prepares data for the UI.
-/// Handles coordinate mapping and sparse data retrieval.
+/// Handles coordinate mapping, sparse data retrieval, and conditional formatting.
 /// </summary>
 public sealed class ViewportService : IViewportService
 {
@@ -52,6 +52,13 @@ public sealed class ViewportService : IViewportService
                 if (cell != null)
                 {
                     var style = workbook.GetStyle(cell.StyleId);
+
+                    // Evaluate conditional formats and merge any triggered CF style on top
+                    var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
+                    var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook);
+                    if (cfStyle != null)
+                        style = MergeStyles(style, cfStyle);
+
                     cells.Add(new DisplayCell(
                         rowMetric.Row, colMetric.Col,
                         cell.Value,
@@ -82,11 +89,209 @@ public sealed class ViewportService : IViewportService
         double targetY = y / zoom;
 
         // Very simple hit testing (assuming fixed sizes for now to keep it fast)
-        // In a real app we'd binary search the accumulated metrics
         uint col = 1 + (uint)(targetX / (sheet.DefaultColumnWidth * 8));
         uint row = 1 + (uint)(targetY / sheet.DefaultRowHeight);
 
         return new CellAddress(sheetId, row, col);
     }
 
+    // ── Conditional format evaluation ─────────────────────────────────────────
+
+    /// <summary>
+    /// Evaluates all conditional format rules that cover <paramref name="addr"/> (ordered by
+    /// Priority ascending = highest precedence first). Returns the first matching rule's style,
+    /// or null when no rule fires.
+    /// </summary>
+    private static CellStyle? EvaluateConditionalFormats(
+        Sheet sheet, CellAddress addr, ScalarValue value, Workbook workbook)
+    {
+        if (sheet.ConditionalFormats.Count == 0)
+            return null;
+
+        // Work through rules in priority order
+        var rules = sheet.ConditionalFormats
+            .Where(cf => cf.AppliesTo.Contains(addr))
+            .OrderBy(cf => cf.Priority);
+
+        foreach (var cf in rules)
+        {
+            switch (cf.RuleType)
+            {
+                case CfRuleType.CellValue:
+                {
+                    if (MatchesCellValue(cf, value))
+                        return cf.FormatIfTrue;
+                    break;
+                }
+
+                case CfRuleType.AboveAverage:
+                {
+                    if (MatchesAboveAverage(cf, sheet, addr, value))
+                        return cf.FormatIfTrue;
+                    break;
+                }
+
+                case CfRuleType.ColorScale:
+                    return ComputeColorScaleStyle(cf, sheet, addr, value);
+
+                case CfRuleType.DataBar:
+                    return new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
+            }
+        }
+
+        return null;
+    }
+
+    // ── CellValue matching ────────────────────────────────────────────────────
+
+    private static bool MatchesCellValue(ConditionalFormat cf, ScalarValue value)
+    {
+        // Attempt numeric comparison first, fall back to string
+        if (TryGetDouble(value, out double d))
+        {
+            if (!TryParseDouble(cf.Value1, out double v1)) return false;
+
+            return cf.Operator switch
+            {
+                CfOperator.Equal              => d == v1,
+                CfOperator.NotEqual           => d != v1,
+                CfOperator.GreaterThan        => d > v1,
+                CfOperator.GreaterThanOrEqual => d >= v1,
+                CfOperator.LessThan           => d < v1,
+                CfOperator.LessThanOrEqual    => d <= v1,
+                CfOperator.Between            => TryParseDouble(cf.Value2, out double v2) && d >= v1 && d <= v2,
+                CfOperator.NotBetween         => TryParseDouble(cf.Value2, out double v2b) && !(d >= v1 && d <= v2b),
+                _                             => false
+            };
+        }
+        else
+        {
+            // String fallback — only Equal / NotEqual make sense
+            var s = GetString(value);
+            return cf.Operator switch
+            {
+                CfOperator.Equal    => string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
+                CfOperator.NotEqual => !string.Equals(s, cf.Value1, StringComparison.OrdinalIgnoreCase),
+                _                  => false
+            };
+        }
+    }
+
+    // ── AboveAverage matching ─────────────────────────────────────────────────
+
+    private static bool MatchesAboveAverage(
+        ConditionalFormat cf, Sheet sheet, CellAddress addr, ScalarValue value)
+    {
+        if (!TryGetDouble(value, out double cellVal)) return false;
+
+        // Collect all numeric values in the CF range
+        double sum = 0;
+        int count = 0;
+        foreach (var a in cf.AppliesTo.AllCells())
+        {
+            var v = sheet.GetValue(a);
+            if (TryGetDouble(v, out double x)) { sum += x; count++; }
+        }
+        if (count == 0) return false;
+        double avg = sum / count;
+
+        return cf.AboveAverage ? cellVal > avg : cellVal < avg;
+    }
+
+    // ── ColorScale ────────────────────────────────────────────────────────────
+
+    private static CellStyle? ComputeColorScaleStyle(
+        ConditionalFormat cf, Sheet sheet, CellAddress addr, ScalarValue value)
+    {
+        if (!TryGetDouble(value, out double cellVal)) return null;
+
+        // Gather all numeric values in the range
+        var nums = cf.AppliesTo.AllCells()
+            .Select(a => sheet.GetValue(a))
+            .Where(v => TryGetDouble(v, out _))
+            .Select(v => { TryGetDouble(v, out double x); return x; })
+            .ToList();
+
+        if (nums.Count == 0) return null;
+
+        double min = nums.Min();
+        double max = nums.Max();
+        if (max == min) return new CellStyle { FillColor = cf.MinColor.ToCellColor() };
+
+        double t = (cellVal - min) / (max - min); // 0..1
+
+        CellColor interpolated;
+        if (cf.UseThreeColorScale)
+        {
+            // Two-segment interpolation through MidColor at t = 0.5
+            interpolated = t <= 0.5
+                ? Lerp(cf.MinColor, cf.MidColor, t * 2)
+                : Lerp(cf.MidColor, cf.MaxColor, (t - 0.5) * 2);
+        }
+        else
+        {
+            interpolated = Lerp(cf.MinColor, cf.MaxColor, t);
+        }
+
+        return new CellStyle { FillColor = interpolated };
+    }
+
+    private static CellColor Lerp(RgbColor a, RgbColor b, double t)
+    {
+        byte r = (byte)Math.Round(a.R + (b.R - a.R) * t);
+        byte g = (byte)Math.Round(a.G + (b.G - a.G) * t);
+        byte bl = (byte)Math.Round(a.B + (b.B - a.B) * t);
+        return new CellColor(r, g, bl);
+    }
+
+    // ── Style merging ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Merges a CF override style on top of a base style.
+    /// CF properties override base only when they represent an actual override
+    /// (non-null fill, non-default font properties set by the CF author).
+    /// </summary>
+    private static CellStyle MergeStyles(CellStyle? baseStyle, CellStyle cfStyle)
+    {
+        var result = (baseStyle ?? CellStyle.Default).Clone();
+
+        if (cfStyle.FillColor.HasValue)
+            result.FillColor = cfStyle.FillColor;
+
+        // For font properties we treat any non-default CF value as an explicit override
+        if (cfStyle.Bold)
+            result.Bold = true;
+        if (cfStyle.Italic)
+            result.Italic = true;
+        if (cfStyle.Underline)
+            result.Underline = true;
+        if (cfStyle.FontColor != CellColor.Black)
+            result.FontColor = cfStyle.FontColor;
+
+        return result;
+    }
+
+    // ── Value helpers ─────────────────────────────────────────────────────────
+
+    private static bool TryGetDouble(ScalarValue value, out double result)
+    {
+        if (value is NumberValue nv) { result = nv.Value; return true; }
+        result = 0;
+        return false;
+    }
+
+    private static bool TryParseDouble(string? text, out double result)
+    {
+        if (text is null) { result = 0; return false; }
+        return double.TryParse(text, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out result);
+    }
+
+    private static string GetString(ScalarValue value) => value switch
+    {
+        TextValue t => t.Value,
+        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        BoolValue b => b.Value ? "TRUE" : "FALSE",
+        _ => ""
+    };
 }
