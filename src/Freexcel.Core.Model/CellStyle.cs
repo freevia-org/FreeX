@@ -78,6 +78,9 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Underlined text.</summary>
     public bool Underline { get; set; }
 
+    /// <summary>Strikethrough text.</summary>
+    public bool Strikethrough { get; set; }
+
     /// <summary>Font color.</summary>
     public CellColor FontColor { get; set; } = CellColor.Black;
 
@@ -119,6 +122,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         Bold = Bold,
         Italic = Italic,
         Underline = Underline,
+        Strikethrough = Strikethrough,
         FontColor = FontColor,
         FillColor = FillColor,
         BorderTop = BorderTop,
@@ -144,6 +148,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && Bold == other.Bold
             && Italic == other.Italic
             && Underline == other.Underline
+            && Strikethrough == other.Strikethrough
             && FontColor == other.FontColor
             && FillColor == other.FillColor
             && BorderTop == other.BorderTop
@@ -165,6 +170,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(Bold);
         h.Add(Italic);
         h.Add(Underline);
+        h.Add(Strikethrough);
         h.Add(FontColor);
         h.Add(FillColor);
         h.Add(BorderTop);
@@ -176,5 +182,44 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(VerticalAlignment);
         h.Add(WrapText);
         return h.ToHashCode();
+    }
+}
+
+/// <summary>
+/// A partial style override. Null fields mean "leave unchanged".
+/// Apply via ApplyStyleCommand to avoid resetting unrelated properties.
+/// </summary>
+public record StyleDiff(
+    bool? Bold           = null,
+    bool? Italic         = null,
+    bool? Underline      = null,
+    bool? Strikethrough  = null,
+    string? FontName     = null,
+    double? FontSize     = null,
+    CellColor? FontColor = null,
+    CellColor? FillColor = null,
+    HorizontalAlignment? HAlign = null,
+    VerticalAlignment? VAlign   = null,
+    bool? WrapText       = null,
+    string? NumberFormat = null
+)
+{
+    /// <summary>Apply this diff to a base style, returning a new style with only non-null fields overridden.</summary>
+    public CellStyle ApplyTo(CellStyle base_)
+    {
+        var s = base_.Clone();
+        if (Bold          is not null) s.Bold          = Bold.Value;
+        if (Italic        is not null) s.Italic        = Italic.Value;
+        if (Underline     is not null) s.Underline     = Underline.Value;
+        if (Strikethrough is not null) s.Strikethrough = Strikethrough.Value;
+        if (FontName      is not null) s.FontName      = FontName;
+        if (FontSize      is not null) s.FontSize      = FontSize.Value;
+        if (FontColor     is not null) s.FontColor     = FontColor.Value;
+        if (FillColor     is not null) s.FillColor     = FillColor.Value;
+        if (HAlign        is not null) s.HorizontalAlignment = HAlign.Value;
+        if (VAlign        is not null) s.VerticalAlignment   = VAlign.Value;
+        if (WrapText      is not null) s.WrapText      = WrapText.Value;
+        if (NumberFormat  is not null) s.NumberFormat  = NumberFormat;
+        return s;
     }
 }

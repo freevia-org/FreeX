@@ -44,6 +44,20 @@ public sealed class Sheet
     /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
     public HashSet<uint> HiddenRows { get; } = [];
 
+    /// <summary>Merged cell regions on this sheet. Each region's top-left cell holds the display value.</summary>
+    public List<GridRange> MergedRegions { get; } = [];
+
+    /// <summary>Returns the merged region that contains <paramref name="addr"/>, or null if not merged.</summary>
+    public GridRange? GetMergeRegion(CellAddress addr)
+    {
+        foreach (var r in MergedRegions)
+            if (r.Contains(addr)) return r;
+        return null;
+    }
+
+    /// <summary>True if <paramref name="addr"/> is inside any merged region.</summary>
+    public bool IsMerged(CellAddress addr) => GetMergeRegion(addr) is not null;
+
     public Sheet(SheetId id, string name)
     {
         Id = id;
