@@ -31,6 +31,11 @@ public sealed record UnaryOpNode(UnaryOperator Operator, FormulaNode Operand) : 
 /// <summary>A function call (e.g. SUM(A1:A3)).</summary>
 public sealed record FunctionCallNode(string FunctionName, IReadOnlyList<FormulaNode> Arguments) : FormulaNode;
 
+/// <summary>
+/// A named range reference (e.g. MyData). Resolved to a GridRange at evaluation time.
+/// </summary>
+public sealed record NamedRangeNode(string Name) : FormulaNode;
+
 /// <summary>Binary operators.</summary>
 public enum BinaryOperator
 {

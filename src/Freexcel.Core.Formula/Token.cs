@@ -15,6 +15,7 @@ public enum TokenType
 
     // Identifiers
     FunctionName,  // e.g. SUM, IF
+    NamedRange,    // e.g. MyData (identifier that is not a cell reference)
 
     // Operators
     Plus,
