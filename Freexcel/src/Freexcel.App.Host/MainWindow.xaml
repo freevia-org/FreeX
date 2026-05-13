@@ -57,6 +57,11 @@
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
                 <Button Content="Names" Click="NamedRangesButton_Click" Width="46" Height="24" Margin="4,0"
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Separator Background="#80FFFFFF" Width="1" Margin="8,4"/>
+                <Button Content="Print" Click="PrintButton_Click" Width="40" Height="24" Margin="4,0"
+                        Background="#1A6B3A" Foreground="White" BorderThickness="0"/>
+                <Button Content="PDF" Click="ExportPdfButton_Click" Width="36" Height="24" Margin="4,0"
+                        Background="#1A6B3A" Foreground="White" BorderThickness="0"/>
             </StackPanel>
         </Border>
 
