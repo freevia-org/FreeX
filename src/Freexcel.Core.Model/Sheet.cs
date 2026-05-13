@@ -38,6 +38,9 @@ public sealed class Sheet
     /// <summary>Conditional formatting rules applied to this sheet, ordered by priority.</summary>
     public List<ConditionalFormat> ConditionalFormats { get; } = [];
 
+    /// <summary>Data validation rules applied to this sheet.</summary>
+    public List<DataValidation> DataValidations { get; } = [];
+
     /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
     public HashSet<uint> HiddenRows { get; } = [];
 

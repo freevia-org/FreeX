@@ -63,6 +63,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             // Load CellIs conditional format rules (best-effort; skip anything we can't map)
             try { LoadConditionalFormats(xlSheet, sheet, workbook); }
             catch { /* ignore CF load failures */ }
+
+            // Load data validation rules (best-effort)
+            try { LoadDataValidations(xlSheet, sheet); }
+            catch { /* ignore DV load failures */ }
         }
 
         return workbook;
@@ -110,6 +114,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             // Save CellValue conditional format rules back to XLSX
             SaveConditionalFormats(sheet, xlSheet);
+
+            // Save data validation rules back to XLSX
+            try { SaveDataValidations(sheet, xlSheet); }
+            catch { /* ignore DV save failures */ }
         }
 
         xlWorkbook.SaveAs(stream);
@@ -381,6 +389,171 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 style.FillColor.Value.R,
                 style.FillColor.Value.G,
                 style.FillColor.Value.B);
+        }
+    }
+
+    // ── Data validation load ───────────────────────────────────────────────────
+
+    private static void LoadDataValidations(IXLWorksheet xlSheet, Sheet sheet)
+    {
+        foreach (var xlDv in xlSheet.DataValidations)
+        {
+            try
+            {
+                var rangeAddr = xlDv.Ranges.FirstOrDefault()?.RangeAddress;
+                if (rangeAddr == null) continue;
+
+                var sheetId = sheet.Id;
+                var start = new CellAddress(sheetId,
+                    (uint)rangeAddr.FirstAddress.RowNumber,
+                    (uint)rangeAddr.FirstAddress.ColumnNumber);
+                var end = new CellAddress(sheetId,
+                    (uint)rangeAddr.LastAddress.RowNumber,
+                    (uint)rangeAddr.LastAddress.ColumnNumber);
+                var appliesTo = new GridRange(start, end);
+
+                var dv = new DataValidation
+                {
+                    AppliesTo    = appliesTo,
+                    AllowBlank   = xlDv.IgnoreBlanks,
+                    ShowDropdown = !xlDv.InCellDropdown.Equals(false),
+                    ErrorTitle   = xlDv.ErrorTitle,
+                    ErrorMessage = xlDv.ErrorMessage,
+                    PromptTitle  = xlDv.InputTitle,
+                    PromptMessage = xlDv.InputMessage,
+                };
+
+                // Map type
+                dv.Type = xlDv.AllowedValues switch
+                {
+                    XLAllowedValues.WholeNumber => DvType.WholeNumber,
+                    XLAllowedValues.Decimal     => DvType.Decimal,
+                    XLAllowedValues.List        => DvType.List,
+                    XLAllowedValues.Date        => DvType.Date,
+                    XLAllowedValues.Time        => DvType.Time,
+                    XLAllowedValues.TextLength  => DvType.TextLength,
+                    XLAllowedValues.Custom      => DvType.Custom,
+                    _                           => DvType.Any
+                };
+
+                // Map operator
+                dv.Operator = xlDv.Operator switch
+                {
+                    XLOperator.Between            => DvOperator.Between,
+                    XLOperator.NotBetween         => DvOperator.NotBetween,
+                    XLOperator.EqualTo            => DvOperator.Equal,
+                    XLOperator.NotEqualTo         => DvOperator.NotEqual,
+                    XLOperator.GreaterThan        => DvOperator.GreaterThan,
+                    XLOperator.LessThan           => DvOperator.LessThan,
+                    XLOperator.EqualOrGreaterThan => DvOperator.GreaterThanOrEqual,
+                    XLOperator.EqualOrLessThan    => DvOperator.LessThanOrEqual,
+                    _                             => DvOperator.Between
+                };
+
+                // Map formula values
+                if (dv.Type == DvType.List)
+                {
+                    // ClosedXML stores list items in MinValue as a quoted formula like "\"A,B,C\""
+                    var raw = xlDv.MinValue ?? "";
+                    // Strip surrounding quotes if present
+                    if (raw.StartsWith('"') && raw.EndsWith('"') && raw.Length > 1)
+                        raw = raw.Substring(1, raw.Length - 2);
+                    dv.Formula1 = raw.Replace("\"\"", "\"");
+                }
+                else
+                {
+                    dv.Formula1 = xlDv.MinValue;
+                    dv.Formula2 = xlDv.MaxValue;
+                }
+
+                sheet.DataValidations.Add(dv);
+            }
+            catch
+            {
+                // Skip any individual validation we can't map
+            }
+        }
+    }
+
+    // ── Data validation save ───────────────────────────────────────────────────
+
+    private static void SaveDataValidations(Sheet sheet, IXLWorksheet xlSheet)
+    {
+        foreach (var dv in sheet.DataValidations)
+        {
+            try
+            {
+                var rangeStr = $"{CellAddress.NumberToColumnName(dv.AppliesTo.Start.Col)}{dv.AppliesTo.Start.Row}" +
+                               $":{CellAddress.NumberToColumnName(dv.AppliesTo.End.Col)}{dv.AppliesTo.End.Row}";
+
+                var xlRange = xlSheet.Range(rangeStr);
+#pragma warning disable CS0618 // SetDataValidation is obsolete in newer ClosedXML but CreateDataValidation may not exist in 0.105
+                var xlDv    = xlRange.CreateDataValidation();
+#pragma warning restore CS0618
+
+                xlDv.IgnoreBlanks  = dv.AllowBlank;
+                xlDv.InCellDropdown = dv.ShowDropdown;
+
+                if (!string.IsNullOrEmpty(dv.ErrorTitle))   xlDv.ErrorTitle   = dv.ErrorTitle;
+                if (!string.IsNullOrEmpty(dv.ErrorMessage)) xlDv.ErrorMessage = dv.ErrorMessage;
+                if (!string.IsNullOrEmpty(dv.PromptTitle))  xlDv.InputTitle   = dv.PromptTitle;
+                if (!string.IsNullOrEmpty(dv.PromptMessage)) xlDv.InputMessage = dv.PromptMessage;
+
+                var f1 = dv.Formula1 ?? "";
+                var f2 = dv.Formula2 ?? "";
+
+                switch (dv.Type)
+                {
+                    case DvType.List:
+                        xlDv.List(f1, dv.ShowDropdown);
+                        break;
+
+                    case DvType.WholeNumber:
+                        ApplyNumericDv(xlDv.WholeNumber, dv.Operator, f1, f2);
+                        break;
+
+                    case DvType.Decimal:
+                        ApplyNumericDv(xlDv.Decimal, dv.Operator, f1, f2);
+                        break;
+
+                    case DvType.Date:
+                        ApplyNumericDv(xlDv.Date, dv.Operator, f1, f2);
+                        break;
+
+                    case DvType.Time:
+                        ApplyNumericDv(xlDv.Time, dv.Operator, f1, f2);
+                        break;
+
+                    case DvType.TextLength:
+                        ApplyNumericDv(xlDv.TextLength, dv.Operator, f1, f2);
+                        break;
+
+                    case DvType.Custom:
+                        xlDv.Custom(f1);
+                        break;
+
+                    // DvType.Any — leave as-is (ClosedXML default = no restriction)
+                }
+            }
+            catch
+            {
+                // Skip rules that can't be serialized
+            }
+        }
+    }
+
+    private static void ApplyNumericDv(IXLValidationCriteria rule, DvOperator op, string f1, string f2)
+    {
+        switch (op)
+        {
+            case DvOperator.Between:            rule.Between(f1, f2); break;
+            case DvOperator.NotBetween:         rule.NotBetween(f1, f2); break;
+            case DvOperator.Equal:              rule.EqualTo(f1); break;
+            case DvOperator.NotEqual:           rule.NotEqualTo(f1); break;
+            case DvOperator.GreaterThan:        rule.GreaterThan(f1); break;
+            case DvOperator.LessThan:           rule.LessThan(f1); break;
+            case DvOperator.GreaterThanOrEqual: rule.EqualOrGreaterThan(f1); break;
+            case DvOperator.LessThanOrEqual:    rule.EqualOrLessThan(f1); break;
         }
     }
 

@@ -257,6 +257,28 @@ public partial class MainWindow : Window
             else if (bool.TryParse(text, out var b)) value = new BoolValue(b);
             else value = new TextValue(text);
 
+            // Soft validation: check data validation rules and warn but still apply
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            if (sheet != null)
+            {
+                var violationMsg = DataValidationService
+                    .GetApplicable(sheet, addr)
+                    .Select(dv => DataValidationService.Validate(dv, value))
+                    .FirstOrDefault(msg => msg != null);
+
+                if (violationMsg != null)
+                {
+                    var dvRule = DataValidationService.GetApplicable(sheet, addr).First();
+                    if (dvRule.Type == DvType.List && dvRule.ShowDropdown && !string.IsNullOrEmpty(text))
+                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                    else if (dvRule.Type != DvType.List)
+                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                    // Still apply the value (soft validation like Excel default warning mode)
+                }
+            }
+
             command = new EditCellsCommand(_currentSheetId, addr, value);
             _recalcEngine.ClearFormulaDependencies(addr);
         }
@@ -513,6 +535,24 @@ public partial class MainWindow : Window
         };
 
         _commandBus.Execute(_workbook.Id, new ApplyConditionalFormatCommand(_currentSheetId, cf));
+        UpdateViewport();
+    }
+
+    private void ValidationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            MessageBox.Show("Select a range first.", "Data Validation");
+            return;
+        }
+
+        var dlg = new DataValidationDialog { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.Result == null) return;
+
+        var dv = dlg.Result;
+        dv.AppliesTo = range;
+
+        _commandBus.Execute(_workbook.Id, new SetDataValidationCommand(_currentSheetId, dv));
         UpdateViewport();
     }
 
