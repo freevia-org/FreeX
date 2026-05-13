@@ -191,6 +191,27 @@ public class FileAdapterSmokeTests
         rule.Type.Should().Be(DvType.List);
     }
 
+    [Fact]
+    public void XlsxAdapter_RoundTrip_MergedRegions_Survive()
+    {
+        var workbook = new Workbook("MergeTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("merged"));
+        sheet.MergedRegions.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)));
+
+        var ms = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.MergedRegions.Should().HaveCount(1);
+        loadedSheet.MergedRegions[0].Start.Row.Should().Be(1);
+        loadedSheet.MergedRegions[0].End.Row.Should().Be(2);
+        loadedSheet.MergedRegions[0].End.Col.Should().Be(3);
+    }
+
     // ── CSV ───────────────────────────────────────────────────────────────────
 
     [Fact]
