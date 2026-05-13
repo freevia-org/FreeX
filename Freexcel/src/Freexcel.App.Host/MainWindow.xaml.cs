@@ -57,6 +57,7 @@ public partial class MainWindow : Window
         SheetGrid.MouseDown += SheetGrid_MouseDown;
         SheetGrid.ColumnResized += OnColumnResized;
         SheetGrid.RowResized += OnRowResized;
+        SheetGrid.AutofillRequested += OnAutofillRequested;
         this.KeyDown += MainWindow_KeyDown;
         
         // Initial data for testing
@@ -120,9 +121,23 @@ public partial class MainWindow : Window
 
         if (hitRow.HasValue && hitCol.HasValue)
         {
-            SetActiveCell(new CellAddress(_currentSheetId, hitRow.Value, hitCol.Value));
-            if (e.ClickCount == 2)
-                EnterEditMode();
+            var newAddr = new CellAddress(_currentSheetId, hitRow.Value, hitCol.Value);
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && SheetGrid.SelectedRange.HasValue)
+            {
+                var anchor = SheetGrid.SelectedRange.Value.Start;
+                SheetGrid.SelectedRange = new GridRange(
+                    new CellAddress(_currentSheetId,
+                        Math.Min(anchor.Row, newAddr.Row), Math.Min(anchor.Col, newAddr.Col)),
+                    new CellAddress(_currentSheetId,
+                        Math.Max(anchor.Row, newAddr.Row), Math.Max(anchor.Col, newAddr.Col)));
+                CellAddressBox.Text = $"{anchor.ToA1()}:{newAddr.ToA1()}";
+            }
+            else
+            {
+                SetActiveCell(newAddr);
+                if (e.ClickCount == 2)
+                    EnterEditMode();
+            }
         }
     }
 
@@ -309,6 +324,7 @@ public partial class MainWindow : Window
         var viewport = _viewportService.GetViewport(_workbook, _currentSheetId, request);
         SheetGrid.Viewport = viewport;
         SheetGrid.Charts = sheet?.Charts;
+        SheetGrid.MergedRegions = sheet?.MergedRegions;
     }
 
     private void OpenButton_Click(object sender, RoutedEventArgs e)
@@ -576,6 +592,17 @@ public partial class MainWindow : Window
         dlg.ShowDialog();
         UpdateViewport();
     }
+
+    private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
+    {
+        var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange);
+        _commandBus.Execute(_workbook.Id, cmd);
+        _recalcEngine.Recalculate(_workbook, fillRange.AllCells().ToList());
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void RefreshStatusBar() { /* implemented in Task 12 */ }
 
     private void OnColumnResized(uint col, double newWidthPx)
     {
