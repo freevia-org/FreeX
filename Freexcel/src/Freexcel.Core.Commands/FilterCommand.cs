@@ -74,14 +74,15 @@ public sealed class FilterCommand : IWorkbookCommand
         if (_previousHiddenRows is null) return;
         var sheet = ctx.GetSheet(_sheetId);
         sheet.HiddenRows.Clear();
-        foreach (var r in _previousHiddenRows)
-            sheet.HiddenRows.Add(r);
+        sheet.HiddenRows.UnionWith(_previousHiddenRows);
     }
 
     private static string ScalarToString(ScalarValue value) => value switch
     {
         TextValue t      => t.Value,
-        NumberValue n    => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        // Use CurrentCulture to match what NumberFormatter.Format produces, so filter
+        // comparisons work correctly regardless of the user's locale decimal separator.
+        NumberValue n    => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
         BoolValue b      => b.Value ? "TRUE" : "FALSE",
         DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd"),
         BlankValue       => "",

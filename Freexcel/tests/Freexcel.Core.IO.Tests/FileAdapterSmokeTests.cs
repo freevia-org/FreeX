@@ -1,5 +1,6 @@
 using System.Text;
 using FluentAssertions;
+using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO.Tests;
@@ -126,6 +127,68 @@ public class FileAdapterSmokeTests
 
         loaded.GetSheetAt(0).ColumnWidths.Should().ContainKey(2u);
         loaded.GetSheetAt(0).ColumnWidths[2u].Should().BeApproximately(25.0, 1.0);
+    }
+
+    // ── XLSX — conditional formatting round-trip ──────────────────────────────
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_ConditionalFormat_CellValueRule_Survives()
+    {
+        var workbook = new Workbook("CfTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType    = CfRuleType.CellValue,
+            Operator    = CfOperator.GreaterThan,
+            Value1      = "5",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.ConditionalFormats.Should().NotBeEmpty("CF rule must survive XLSX round-trip");
+        var rule = loadedSheet.ConditionalFormats[0];
+        rule.RuleType.Should().Be(CfRuleType.CellValue);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_DataValidation_ListRule_Survives()
+    {
+        var workbook = new Workbook("DvTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Apple"));
+
+        var dv = new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 10, 1)),
+            Type     = DvType.List,
+            Formula1 = "Apple,Banana,Cherry"
+        };
+        sheet.DataValidations.Add(dv);
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DataValidations.Should().NotBeEmpty("DV rule must survive XLSX round-trip");
+        var rule = loadedSheet.DataValidations[0];
+        rule.Type.Should().Be(DvType.List);
     }
 
     // ── CSV ───────────────────────────────────────────────────────────────────

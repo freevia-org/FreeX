@@ -28,6 +28,9 @@ public sealed class SortCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (_snapshot is not null)
+            throw new InvalidOperationException("SortCommand.Apply may not be called twice on the same instance.");
+
         var sheet = ctx.GetSheet(_sheetId);
 
         // Guard against inverted ranges — uint subtraction would wrap to ~4B
@@ -61,6 +64,8 @@ public sealed class SortCommand : IWorkbookCommand
                 uint col  = startCol + (uint)ci;
                 var addr  = new CellAddress(_sheetId, row, col);
                 var cell  = sheet.GetCell(addr);
+                // Two independent clones are required: rowCells is sorted then written back;
+                // snapRow is the undo snapshot. They must be independent copies.
                 rowCells[ci] = cell?.Clone();
                 snapRow.Add((addr, cell?.Clone()));
             }

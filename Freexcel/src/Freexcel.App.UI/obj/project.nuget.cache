@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "dgSpecHash": "+biVi8FLcII=",
+  "success": true,
+  "projectFilePath": "E:\\Users\\quinn\\Documents\\Claude\\Freexcel\\src\\Freexcel.App.UI\\Freexcel.App.UI.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\quinn\\.nuget\\packages\\closedxml\\0.105.0\\closedxml.0.105.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\closedxml.parser\\2.0.0\\closedxml.parser.2.0.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\documentformat.openxml\\3.1.1\\documentformat.openxml.3.1.1.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\documentformat.openxml.framework\\3.1.1\\documentformat.openxml.framework.3.1.1.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\excelnumberformat\\1.1.0\\excelnumberformat.1.1.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\oxyplot.core\\2.2.0\\oxyplot.core.2.2.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\oxyplot.wpf\\2.2.0\\oxyplot.wpf.2.2.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\oxyplot.wpf.shared\\2.2.0\\oxyplot.wpf.shared.2.2.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\rbush.signed\\4.0.0\\rbush.signed.4.0.0.nupkg.sha512",
+    "C:\\Users\\quinn\\.nuget\\packages\\sixlabors.fonts\\1.0.0\\sixlabors.fonts.1.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}

@@ -1,0 +1,16 @@
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\bin\Debug\net10.0\Freexcel.Core.Formula.deps.json
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\bin\Debug\net10.0\Freexcel.Core.Formula.dll
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\bin\Debug\net10.0\Freexcel.Core.Formula.pdb
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\bin\Debug\net10.0\Freexcel.Core.Model.dll
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\bin\Debug\net10.0\Freexcel.Core.Model.pdb
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.csproj.AssemblyReference.cache
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.GeneratedMSBuildEditorConfig.editorconfig
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.AssemblyInfoInputs.cache
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.AssemblyInfo.cs
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.csproj.CoreCompileInputs.cache
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.sourcelink.json
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.CFE1708C.Up2Date
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.dll
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\refint\Freexcel.Core.Formula.dll
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\Freexcel.Core.Formula.pdb
+E:\Users\quinn\Documents\Claude\Freexcel\src\Freexcel.Core.Formula\obj\Debug\net10.0\ref\Freexcel.Core.Formula.dll
