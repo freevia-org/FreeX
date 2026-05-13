@@ -491,6 +491,31 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void CfRuleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            MessageBox.Show("Select a range first.", "CF Rule");
+            return;
+        }
+
+        var thresholdText = PromptForInput("Conditional Format: highlight cells greater than", "0");
+        if (string.IsNullOrWhiteSpace(thresholdText)) return;
+
+        var cf = new ConditionalFormat
+        {
+            AppliesTo    = range,
+            Priority     = 1,
+            RuleType     = CfRuleType.CellValue,
+            Operator     = CfOperator.GreaterThan,
+            Value1       = thresholdText.Trim(),
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
+        };
+
+        _commandBus.Execute(_workbook.Id, new ApplyConditionalFormatCommand(_currentSheetId, cf));
+        UpdateViewport();
+    }
+
     private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
