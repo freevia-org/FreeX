@@ -347,6 +347,27 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            ExecuteUndo();
+            e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            ExecuteRedo();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Delete && (Keyboard.Modifiers & ModifierKeys.Control) == 0
+            && Keyboard.FocusedElement is not TextBox)
+        {
+            ExecuteClearSelection();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.F2)
         {
             EnterEditMode();
@@ -1241,6 +1262,26 @@ public partial class MainWindow : Window
         var codes = new[] { "General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@" };
         if (NumberFormatBox.SelectedIndex < codes.Length)
             ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
+    }
+
+    private void ExecuteUndo()
+    {
+        var outcome = _commandBus.Undo(_workbook.Id);
+        if (!outcome.Success) return;
+        _recalcEngine.Recalculate(_workbook, []);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void ExecuteRedo()
+    {
+        var outcome = _commandBus.Redo(_workbook.Id);
+        if (!outcome.Success) return;
+        _recalcEngine.Recalculate(_workbook, []);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
     }
 
     // ── Ribbon clipboard ─────────────────────────────────────────────────────
