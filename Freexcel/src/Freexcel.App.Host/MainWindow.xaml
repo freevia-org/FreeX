@@ -53,6 +53,8 @@
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
                 <Button Content="CF Rule" Click="CfRuleButton_Click" Width="50" Height="24" Margin="4,0"
                         Background="#2D8C57" Foreground="White" BorderThickness="0"/>
+                <Button Content="Validation" Click="ValidationButton_Click" Width="64" Height="24" Margin="4,0"
+                        Background="#2D8C57" Foreground="White" BorderThickness="0"/>
             </StackPanel>
         </Border>
 
