@@ -42,23 +42,21 @@ public static class DataValidationService
         if (string.IsNullOrEmpty(dv.Formula1))
             return null;
 
-        var items = dv.Formula1.Split(',');
+        // Split once; build case-insensitive set for O(1) lookup.
+        var trimmed = dv.Formula1.Split(',').Select(i => i.Trim()).ToArray();
+        var allowed = new HashSet<string>(trimmed, StringComparer.OrdinalIgnoreCase);
+
         var textValue = value switch
         {
-            TextValue t => t.Value,
-            NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            BoolValue b => b.Value ? "TRUE" : "FALSE",
-            _ => value.ToString() ?? ""
+            TextValue t   => t.Value,
+            NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
+            BoolValue b   => b.Value ? "TRUE" : "FALSE",
+            _             => value.ToString() ?? ""
         };
 
-        foreach (var item in items)
-        {
-            if (string.Equals(item.Trim(), textValue, StringComparison.OrdinalIgnoreCase))
-                return null;
-        }
-
-        var allowed = string.Join(", ", items.Select(i => i.Trim()));
-        return dv.ErrorMessage ?? $"Invalid entry. Allowed values: {allowed}";
+        return allowed.Contains(textValue)
+            ? null
+            : dv.ErrorMessage ?? $"Invalid entry. Allowed values: {string.Join(", ", trimmed)}";
     }
 
     private static string? ValidateNumeric(DataValidation dv, ScalarValue value)

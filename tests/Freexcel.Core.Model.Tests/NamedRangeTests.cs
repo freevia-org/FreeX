@@ -161,6 +161,30 @@ public class NamedRangeTests
         restored.Should().Be(original);
     }
 
+    [Fact]
+    public void NamedRange_OnSheet2_ResolvedFromSheet1_Formula()
+    {
+        // Arrange: two sheets; named range defined on Sheet2; formula on Sheet1 references it
+        var wb     = new Workbook("multi");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(7));
+        sheet2.SetCell(new CellAddress(sheet2.Id, 2, 1), new NumberValue(8));
+        sheet2.SetCell(new CellAddress(sheet2.Id, 3, 1), new NumberValue(9));
+
+        wb.DefineNamedRange("CrossData", new GridRange(
+            new CellAddress(sheet2.Id, 1, 1),
+            new CellAddress(sheet2.Id, 3, 1)));
+
+        // Act: evaluate =SUM(CrossData) on Sheet1 context
+        var eval   = new FormulaEvaluator();
+        var result = eval.Evaluate("=SUM(CrossData)", sheet1, wb);
+
+        // Assert
+        result.Should().Be(new NumberValue(24));
+    }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private sealed class SimpleCommandContext(Workbook wb) : ICommandContext

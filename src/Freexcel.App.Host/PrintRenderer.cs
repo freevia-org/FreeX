@@ -17,6 +17,8 @@ public static class PrintRenderer
     /// Renders the used range of <paramref name="sheetId"/> onto FixedDocument pages (A4 portrait).
     /// Returns an empty document if the sheet has no data.
     /// </summary>
+    private const double PrintFontSize = 9.0;   // pt — intentionally small to fit more columns
+
     public static FixedDocument RenderWorksheet(
         Workbook workbook,
         SheetId sheetId,
@@ -102,7 +104,7 @@ public static class PrintRenderer
                                 CultureInfo.CurrentCulture,
                                 FlowDirection.LeftToRight,
                                 typeface,
-                                9.0,
+                                PrintFontSize,
                                 Brushes.Black,
                                 1.0);  // pixelsPerDip — safe default; no Window reference needed here
                             ft.MaxTextWidth  = Math.Max(1, colWidth  - 4);

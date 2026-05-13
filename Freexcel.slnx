@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Freexcel.App.Host/Freexcel.App.Host.csproj" />
+    <Project Path="src/Freexcel.App.UI/Freexcel.App.UI.csproj" />
+    <Project Path="src/Freexcel.Core.Calc/Freexcel.Core.Calc.csproj" />
+    <Project Path="src/Freexcel.Core.Commands/Freexcel.Core.Commands.csproj" />
+    <Project Path="src/Freexcel.Core.Formula/Freexcel.Core.Formula.csproj" />
+    <Project Path="src/Freexcel.Core.IO/Freexcel.Core.IO.csproj" />
+    <Project Path="src/Freexcel.Core.Model/Freexcel.Core.Model.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Freexcel.Core.Calc.Tests/Freexcel.Core.Calc.Tests.csproj" />
+    <Project Path="tests/Freexcel.Core.Formula.Tests/Freexcel.Core.Formula.Tests.csproj" />
+    <Project Path="tests/Freexcel.Core.IO.Tests/Freexcel.Core.IO.Tests.csproj" />
+    <Project Path="tests/Freexcel.Core.Model.Tests/Freexcel.Core.Model.Tests.csproj" />
+    <Project Path="tests/Freexcel.Fixtures/Freexcel.Fixtures.csproj" />
+    <Project Path="tests/Freexcel.Integration.Tests/Freexcel.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

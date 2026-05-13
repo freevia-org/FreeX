@@ -58,7 +58,9 @@ public sealed class FormulaEvaluator
         if (range is null)
             return ErrorValue.Name;
 
-        // Bare named range reference outside a function: return top-left cell value
+        // Bare named range reference outside a function: return top-left cell value.
+        // For 2D named ranges this is intentionally lossy — full implicit-intersection
+        // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
         var r = range.Value;
         return context.GetCellValue(r.Start.Row, r.Start.Col);
     }
@@ -256,9 +258,15 @@ public sealed class FormulaEvaluator
                     }
                     else
                     {
-                        var values = context.GetRangeValues(
-                            r.Start.Row, r.Start.Col,
-                            r.End.Row, r.End.Col);
+                        // Resolve the sheet name when the named range lives on a different sheet
+                        var sheetName = context.TryGetSheetName(r.Start.Sheet);
+                        IReadOnlyList<ScalarValue> values = sheetName is not null
+                            ? context.GetRangeValues(sheetName,
+                                r.Start.Row, r.Start.Col,
+                                r.End.Row, r.End.Col)
+                            : context.GetRangeValues(
+                                r.Start.Row, r.Start.Col,
+                                r.End.Row, r.End.Col);
                         expandedArgs.AddRange(values);
                     }
                 }
@@ -376,5 +384,8 @@ public sealed class FormulaEvaluator
                 return range;
             return null;
         }
+
+        public string? TryGetSheetName(Freexcel.Core.Model.SheetId sheetId)
+            => _workbook?.GetSheet(sheetId)?.Name;
     }
 }

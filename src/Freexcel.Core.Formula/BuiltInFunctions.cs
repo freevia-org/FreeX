@@ -1158,4 +1158,10 @@ public interface IEvalContext
     /// Returns null if the name is not defined.
     /// </summary>
     Model.GridRange? TryResolveNamedRange(string name);
+
+    /// <summary>
+    /// Returns the sheet name for the given SheetId, or null if not found.
+    /// Used by the evaluator to expand cross-sheet named ranges.
+    /// </summary>
+    string? TryGetSheetName(Model.SheetId sheetId);
 }
