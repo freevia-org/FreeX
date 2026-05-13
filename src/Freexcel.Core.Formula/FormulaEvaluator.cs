@@ -303,7 +303,7 @@ public sealed class FormulaEvaluator
                     ? context.GetCellValue(range.SheetName, r0 + (uint)ri, c0 + (uint)ci)
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
-        return new RangeValue(cells);
+        return new RangeValue(cells, r0, c0);
     }
 
     private static bool IsAggregateFunction(string name) =>

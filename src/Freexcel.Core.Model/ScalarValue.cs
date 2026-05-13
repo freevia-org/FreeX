@@ -48,7 +48,7 @@ public sealed record ErrorValue(string Code) : ScalarValue
 /// such as VLOOKUP, INDEX, MATCH, SUMIF, etc.
 /// Rows and columns are 0-based internally; exposed as 1-based via At().
 /// </summary>
-public sealed record RangeValue(ScalarValue[,] Cells) : ScalarValue
+public sealed record RangeValue(ScalarValue[,] Cells, uint StartRow = 1, uint StartCol = 1) : ScalarValue
 {
     public int RowCount => Cells.GetLength(0);
     public int ColCount => Cells.GetLength(1);
