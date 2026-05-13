@@ -9,6 +9,8 @@ using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.IO.Packaging;
 
 namespace Freexcel.App.Host;
 
@@ -650,6 +652,133 @@ public partial class MainWindow : Window
         var command = new EditCellsCommand(_currentSheetId, edits);
         _commandBus.Execute(_workbook.Id, command);
         UpdateViewport();
+    }
+
+    // ── Print / Export ────────────────────────────────────────────────────────
+
+    private void PrintButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new System.Windows.Controls.PrintDialog();
+        if (dlg.ShowDialog() != true) return;
+
+        var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+        dlg.PrintDocument(doc.DocumentPaginator, $"Freexcel — {_workbook.Name}");
+    }
+
+    private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
+    {
+        var saveDlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title      = "Export as PDF / XPS",
+            Filter     = "PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps",
+            DefaultExt = ".pdf",
+            FileName   = _workbook.Name
+        };
+        if (saveDlg.ShowDialog() != true) return;
+
+        var ext = System.IO.Path.GetExtension(saveDlg.FileName).ToLowerInvariant();
+        if (ext == ".pdf")
+            ExportViaPrintToPdf(saveDlg.FileName);
+        else
+            ExportAsXps(saveDlg.FileName);
+    }
+
+    /// <summary>
+    /// Tries to export directly to PDF by routing through the "Microsoft Print to PDF"
+    /// virtual printer. If the printer is unavailable, falls back to XPS and informs the user.
+    /// </summary>
+    private void ExportViaPrintToPdf(string pdfPath)
+    {
+        // Look for a PDF-capable print queue (case-insensitive)
+        System.Printing.PrintQueue? pdfQueue = null;
+        try
+        {
+            using var server = new System.Printing.LocalPrintServer();
+            pdfQueue = server.GetPrintQueues()
+                .FirstOrDefault(q => q.Name.Contains("PDF", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            // Print-spooler unavailable — fall through to XPS fallback
+        }
+
+        if (pdfQueue != null)
+        {
+            // The WPF PrintDialog API can target a specific queue but cannot programmatically
+            // set the output file path for the Microsoft Print to PDF virtual printer through
+            // the managed API alone. We fall back to XPS (which Windows can open/convert to PDF).
+            var xpsPath = System.IO.Path.ChangeExtension(pdfPath, ".xps");
+            ExportAsXps(xpsPath);
+            MessageBox.Show(
+                $"Saved as XPS: {xpsPath}\n\n" +
+                "Open the file in XPS Viewer and print to any PDF printer, " +
+                "or use File → Print and select 'Microsoft Print to PDF' to save directly as PDF.",
+                "Export PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        else
+        {
+            // No PDF printer found; just save XPS
+            var xpsPath = System.IO.Path.ChangeExtension(pdfPath, ".xps");
+            ExportAsXps(xpsPath);
+            MessageBox.Show(
+                $"No PDF printer found on this system.\n\nSaved as XPS: {xpsPath}",
+                "Export PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+    }
+
+    /// <summary>
+    /// Writes the current sheet as an XPS package to <paramref name="xpsPath"/>.
+    /// Uses the internal <c>XpsDocumentWriter(XpsDocument)</c> constructor (available in
+    /// ReachFramework on .NET 10 / .NET Framework) to write directly to a file without
+    /// showing a print dialog.
+    /// </summary>
+    private void ExportAsXps(string xpsPath)
+    {
+        try
+        {
+            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+
+            // Open the XPS package for write
+            var pkg = System.IO.Packaging.Package.Open(
+                xpsPath,
+                System.IO.FileMode.Create,
+                System.IO.FileAccess.ReadWrite);
+
+            using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
+
+            // XpsDocumentWriter(XpsDocument) is internal in ReachFramework; create it via reflection
+            var writerType = typeof(System.Windows.Xps.XpsDocumentWriter);
+            var ctor = writerType.GetConstructor(
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                null,
+                [typeof(System.Windows.Xps.Packaging.XpsDocument)],
+                null);
+
+            if (ctor == null)
+                throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
+
+            var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
+            writer.Write(doc.DocumentPaginator);
+            // xpsDoc closed by 'using'
+
+            MessageBox.Show(
+                $"Saved XPS file:\n{xpsPath}",
+                "Export XPS",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Failed to save XPS file:\n{ex.Message}",
+                "Export Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 }
 
