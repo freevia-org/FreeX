@@ -249,6 +249,12 @@ public sealed class Parser
                 return cellRef;
             }
 
+            case TokenType.NamedRange:
+            {
+                var token = Advance();
+                return new NamedRangeNode(token.Value);
+            }
+
             case TokenType.OpenParen:
             {
                 Advance();

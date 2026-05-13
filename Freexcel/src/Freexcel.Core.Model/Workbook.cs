@@ -18,8 +18,19 @@ public sealed class Workbook
     /// <summary>All sheets in order.</summary>
     public IReadOnlyList<Sheet> Sheets => _sheets;
 
-    /// <summary>Named ranges defined in this workbook.</summary>
-    public Dictionary<string, GridRange> NamedRanges { get; } = [];
+    /// <summary>Named ranges defined in this workbook (case-insensitive keys).</summary>
+    public Dictionary<string, GridRange> NamedRanges { get; } =
+        new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Define or replace a named range.</summary>
+    public void DefineNamedRange(string name, GridRange range) => NamedRanges[name] = range;
+
+    /// <summary>Remove a named range. Returns true if found and removed.</summary>
+    public bool RemoveNamedRange(string name) => NamedRanges.Remove(name);
+
+    /// <summary>Try to get a named range. Returns false if not found.</summary>
+    public bool TryGetNamedRange(string name, out GridRange range) =>
+        NamedRanges.TryGetValue(name, out range);
 
     public Workbook(string name = "Untitled")
     {

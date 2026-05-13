@@ -564,6 +564,17 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var initialRange = SheetGrid.SelectedRange;
+        var dlg = new NamedRangeDialog(_workbook, _commandBus, initialRange)
+        {
+            Owner = this
+        };
+        dlg.ShowDialog();
+        UpdateViewport();
+    }
+
     private void OnColumnResized(uint col, double newWidthPx)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);

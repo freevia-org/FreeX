@@ -1152,4 +1152,10 @@ public interface IEvalContext
     ScalarValue GetCellValue(string sheetName, uint row, uint col);
     IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol);
     IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol);
+
+    /// <summary>
+    /// Try to resolve a named range to a GridRange.
+    /// Returns null if the name is not defined.
+    /// </summary>
+    Model.GridRange? TryResolveNamedRange(string name);
 }
