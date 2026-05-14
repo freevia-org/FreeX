@@ -35,6 +35,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count), cell.Clone());
 
+        // Shift hidden columns
+        var hiddenToShift = sheet.HiddenCols.Where(c => c >= _beforeCol).ToList();
+        foreach (var c in hiddenToShift) sheet.HiddenCols.Remove(c);
+        foreach (var c in hiddenToShift) sheet.HiddenCols.Add(c + _count);
+
         _mergeSnapshot = sheet.MergedRegions.ToList();
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
         {
@@ -60,6 +65,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
 
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(addr, cell.Clone());
+
+        // Undo hidden column shift
+        var shifted = sheet.HiddenCols.Where(c => c >= _beforeCol + _count).ToList();
+        foreach (var c in shifted) sheet.HiddenCols.Remove(c);
+        foreach (var c in shifted) sheet.HiddenCols.Add(c - _count);
 
         if (_mergeSnapshot is not null)
         {
@@ -109,8 +119,15 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count), cell.Clone());
 
+        // Shift hidden columns — remove in-range, shift above
+        var inRangeHidden = sheet.HiddenCols.Where(c => c >= _startCol && c <= endCol).ToList();
+        var aboveHidden   = sheet.HiddenCols.Where(c => c > endCol).ToList();
+        foreach (var c in inRangeHidden) sheet.HiddenCols.Remove(c);
+        foreach (var c in aboveHidden) { sheet.HiddenCols.Remove(c); sheet.HiddenCols.Add(c - _count); }
+
+        // Snapshot and remove any merged region overlapping the deleted columns
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        sheet.MergedRegions.RemoveAll(m => m.Start.Col >= _startCol && m.End.Col <= endCol);
+        sheet.MergedRegions.RemoveAll(m => m.Start.Col <= endCol && m.End.Col >= _startCol);
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
         {
             var m = sheet.MergedRegions[i];

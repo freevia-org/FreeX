@@ -120,16 +120,16 @@ public sealed class Parser
         return left;
     }
 
-    // Power → Unary ( '^' Unary )*
+    // Power → Unary ( '^' Power )?   — right-associative: 2^3^2 = 2^(3^2) = 512
     private FormulaNode ParsePower()
     {
         var left = ParseUnary();
 
-        while (Current.Type == TokenType.Power)
+        if (Current.Type == TokenType.Power)
         {
             Advance();
-            var right = ParseUnary();
-            left = new BinaryOpNode(left, BinaryOperator.Power, right);
+            var right = ParsePower(); // recurse for right-associativity
+            return new BinaryOpNode(left, BinaryOperator.Power, right);
         }
 
         return left;

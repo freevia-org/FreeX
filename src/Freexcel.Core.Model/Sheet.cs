@@ -44,6 +44,9 @@ public sealed class Sheet
     /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
     public HashSet<uint> HiddenRows { get; } = [];
 
+    /// <summary>Set of column numbers that are hidden (1-based).</summary>
+    public HashSet<uint> HiddenCols { get; } = [];
+
     /// <summary>Merged cell regions on this sheet. Each region's top-left cell holds the display value.</summary>
     public List<GridRange> MergedRegions { get; } = [];
 

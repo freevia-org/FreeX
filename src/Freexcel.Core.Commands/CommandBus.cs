@@ -56,6 +56,8 @@ public sealed class CommandBus : ICommandBus
 
         if (outcome.Success)
             stack.PushWithoutClearingRedo(command);
+        else
+            stack.PushRedo(command); // restore so the user can retry
 
         return outcome;
     }
@@ -113,8 +115,12 @@ public sealed class CommandBus : ICommandBus
 
         public IWorkbookCommand PopRedo()
         {
-            var command = _redoStack.Pop();
-            return command;
+            return _redoStack.Pop();
+        }
+
+        public void PushRedo(IWorkbookCommand command)
+        {
+            _redoStack.Push(command);
         }
     }
 }

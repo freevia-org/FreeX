@@ -128,9 +128,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         foreach (var r in inRangeHidden) sheet.HiddenRows.Remove(r);
         foreach (var r in belowHidden) { sheet.HiddenRows.Remove(r); sheet.HiddenRows.Add(r - _count); }
 
-        // Snapshot and shift merged regions
+        // Snapshot and shift merged regions — remove any that overlap the deleted rows
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        sheet.MergedRegions.RemoveAll(m => m.Start.Row >= _startRow && m.End.Row <= endRow);
+        sheet.MergedRegions.RemoveAll(m => m.Start.Row <= endRow && m.End.Row >= _startRow);
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
         {
             var m = sheet.MergedRegions[i];
