@@ -1,3 +1,4 @@
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
@@ -10,6 +11,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private readonly uint _count;
     private List<(CellAddress Addr, Cell Cell)>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Column(s)";
 
@@ -35,7 +37,6 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count), cell.Clone());
 
-        // Shift hidden columns
         var hiddenToShift = sheet.HiddenCols.Where(c => c >= _beforeCol).ToList();
         foreach (var c in hiddenToShift) sheet.HiddenCols.Remove(c);
         foreach (var c in hiddenToShift) sheet.HiddenCols.Add(c + _count);
@@ -52,6 +53,10 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
             }
         }
 
+        _formulaSnapshot.Clear();
+        InsertRowsCommand.RewriteAllFormulas(
+            ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _formulaSnapshot);
+
         return new CommandOutcome(true);
     }
 
@@ -60,13 +65,14 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
+        InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+
         foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count));
 
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(addr, cell.Clone());
 
-        // Undo hidden column shift
         var shifted = sheet.HiddenCols.Where(c => c >= _beforeCol + _count).ToList();
         foreach (var c in shifted) sheet.HiddenCols.Remove(c);
         foreach (var c in shifted) sheet.HiddenCols.Add(c - _count);
@@ -88,6 +94,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<(CellAddress Addr, Cell Cell)>? _deletedSnapshot;
     private List<(CellAddress Addr, Cell Cell)>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Column(s)";
 
@@ -119,13 +126,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count), cell.Clone());
 
-        // Shift hidden columns — remove in-range, shift above
         var inRangeHidden = sheet.HiddenCols.Where(c => c >= _startCol && c <= endCol).ToList();
         var aboveHidden   = sheet.HiddenCols.Where(c => c > endCol).ToList();
         foreach (var c in inRangeHidden) sheet.HiddenCols.Remove(c);
         foreach (var c in aboveHidden) { sheet.HiddenCols.Remove(c); sheet.HiddenCols.Add(c - _count); }
 
-        // Snapshot and remove any merged region overlapping the deleted columns
         _mergeSnapshot = sheet.MergedRegions.ToList();
         sheet.MergedRegions.RemoveAll(m => m.Start.Col <= endCol && m.End.Col >= _startCol);
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
@@ -139,6 +144,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
             }
         }
 
+        _formulaSnapshot.Clear();
+        InsertRowsCommand.RewriteAllFormulas(
+            ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _formulaSnapshot);
+
         return new CommandOutcome(true);
     }
 
@@ -146,6 +155,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     {
         if (_deletedSnapshot is null || _shiftedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var (addr, _) in _shiftedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count));
