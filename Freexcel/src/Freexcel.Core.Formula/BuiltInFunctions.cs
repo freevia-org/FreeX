@@ -1928,20 +1928,18 @@ public static class BuiltInFunctions
 
     private static ScalarValue VarS(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var nums = CollectNumbers(args);
-        if (nums is ErrorValue e) return e;
-        var list = (List<double>)nums;
-        if (list.Count < 2) return ErrorValue.DivByZero;
+        var (list, err) = CollectNumbers(args);
+        if (err is not null) return err;
+        if (list!.Count < 2) return ErrorValue.DivByZero;
         double mean = list.Average();
         return new NumberValue(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
     }
 
     private static ScalarValue VarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var nums = CollectNumbers(args);
-        if (nums is ErrorValue e) return e;
-        var list = (List<double>)nums;
-        if (list.Count == 0) return ErrorValue.DivByZero;
+        var (list, err) = CollectNumbers(args);
+        if (err is not null) return err;
+        if (list!.Count == 0) return ErrorValue.DivByZero;
         double mean = list.Average();
         return new NumberValue(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
     }
@@ -1952,15 +1950,15 @@ public static class BuiltInFunctions
         return r is NumberValue nv ? new NumberValue(Math.Sqrt(nv.Value)) : r;
     }
 
-    private static object CollectNumbers(IReadOnlyList<ScalarValue> args)
+    private static (List<double>? Nums, ErrorValue? Error) CollectNumbers(IReadOnlyList<ScalarValue> args)
     {
         var list = new List<double>();
         foreach (var a in args)
         {
-            if (a is ErrorValue e) return e;
+            if (a is ErrorValue e) return (null, e);
             if (a is NumberValue nv) list.Add(nv.Value);
         }
-        return list;
+        return (list, null);
     }
 
     private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2068,7 +2066,12 @@ public static class BuiltInFunctions
                 freq[nv.Value] = freq.GetValueOrDefault(nv.Value) + 1;
         }
         if (freq.Count == 0) return ErrorValue.NA;
-        return new NumberValue(freq.MaxBy(kv => kv.Value).Key);
+        int maxFreq = freq.Values.Max();
+        if (maxFreq < 2) return ErrorValue.NA;
+        // Preserve first-occurrence order for tie-breaking (matches Excel)
+        foreach (var key in freq.Keys)
+            if (freq[key] == maxFreq) return new NumberValue(key);
+        return ErrorValue.NA;
     }
 
     private static ScalarValue PercentrankInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2077,6 +2080,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e) return e;
         double x = ToNumber(args[1]);
         int sig = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 3;
+        if (sig < 1) return ErrorValue.Num;
         var sorted = rv.Flatten().OfType<NumberValue>().Select(n => n.Value).OrderBy(v => v).ToList();
         int n = sorted.Count;
         if (n == 0 || x < sorted[0] || x > sorted[^1]) return ErrorValue.NA;

@@ -1222,6 +1222,12 @@ public class FunctionLibraryTests
         _eval.Evaluate("=MODE(A1:A4)", sheet).Should().Be(new NumberValue(2));
     }
 
+    [Fact] public void Mode_AllUnique_ReturnsNA()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)));
+        _eval.Evaluate("=MODE(A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact] public void Percentrank_FindsRank()
     {
         var sheet = MakeSheet(
