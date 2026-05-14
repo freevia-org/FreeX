@@ -452,6 +452,54 @@ public class FormulaEvaluatorTests
         _evaluator.Evaluate("=IF(SUM(A1:A3)>50,\"big\",\"small\")", sheet)
             .Should().Be(new TextValue("big"));
     }
+
+    // ── Parser: $ flags ──
+
+    [Fact]
+    public void Parse_AbsoluteRef_BothAnchors_IsColAbsolute_And_IsRowAbsolute()
+    {
+        var tokens = new Lexer("=$A$1").Tokenize();
+        var ast = new Parser(tokens).Parse();
+        var cell = ast.Should().BeOfType<CellRefNode>().Subject;
+        cell.IsColAbsolute.Should().BeTrue();
+        cell.IsRowAbsolute.Should().BeTrue();
+        cell.ColumnName.Should().Be("A");
+        cell.Row.Should().Be(1);
+    }
+
+    [Fact]
+    public void Parse_AbsoluteRef_ColOnly_IsColAbsolute_True_RowAbsolute_False()
+    {
+        var tokens = new Lexer("=$B3").Tokenize();
+        var ast = new Parser(tokens).Parse();
+        var cell = ast.Should().BeOfType<CellRefNode>().Subject;
+        cell.IsColAbsolute.Should().BeTrue();
+        cell.IsRowAbsolute.Should().BeFalse();
+        cell.ColumnName.Should().Be("B");
+        cell.Row.Should().Be(3);
+    }
+
+    [Fact]
+    public void Parse_AbsoluteRef_RowOnly_IsColAbsolute_False_RowAbsolute_True()
+    {
+        var tokens = new Lexer("=C$5").Tokenize();
+        var ast = new Parser(tokens).Parse();
+        var cell = ast.Should().BeOfType<CellRefNode>().Subject;
+        cell.IsColAbsolute.Should().BeFalse();
+        cell.IsRowAbsolute.Should().BeTrue();
+        cell.ColumnName.Should().Be("C");
+        cell.Row.Should().Be(5);
+    }
+
+    [Fact]
+    public void Parse_RelativeRef_BothFlags_False()
+    {
+        var tokens = new Lexer("=D10").Tokenize();
+        var ast = new Parser(tokens).Parse();
+        var cell = ast.Should().BeOfType<CellRefNode>().Subject;
+        cell.IsColAbsolute.Should().BeFalse();
+        cell.IsRowAbsolute.Should().BeFalse();
+    }
 }
 
 public class CrossSheetReferenceTests

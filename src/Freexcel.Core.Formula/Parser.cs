@@ -271,14 +271,22 @@ public sealed class Parser
 
     private static CellRefNode ParseCellRef(Token token)
     {
-        var value = token.Value;
+        var value = token.Value;   // e.g. "$B$3", "$B3", "B$3", "B3"
         var i = 0;
-        while (i < value.Length && char.IsLetter(value[i]))
-            i++;
 
-        var colName = value[..i];
+        bool isColAbs = false;
+        if (i < value.Length && value[i] == '$') { isColAbs = true; i++; }
+
+        int colStart = i;
+        while (i < value.Length && char.IsLetter(value[i])) i++;
+        var colName = value[colStart..i];
+
+        bool isRowAbs = false;
+        if (i < value.Length && value[i] == '$') { isRowAbs = true; i++; }
+
         var row = uint.Parse(value[i..]);
-        return new CellRefNode(colName, row);
+
+        return new CellRefNode(colName, row, isColAbs, isRowAbs);
     }
 
     private static CellRefNode ParseCellRefWithSheet(Token token, string sheetName)
