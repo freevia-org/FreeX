@@ -107,6 +107,11 @@
             </Setter>
         </Style>
 
+        <!-- ComboBox: keep background white to match Excel toolbar -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="White"/>
+        </Style>
+
         <!-- ── Start-screen sidebar buttons ─────────────────────────────── -->
         <Style x:Key="SsNavBtn" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
@@ -1089,7 +1094,7 @@
                 <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Consolas" FontSize="13"
                          AcceptsReturn="True"
                          VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
-                         KeyDown="FormulaBar_KeyDown"/>
+                         PreviewKeyDown="FormulaBar_KeyDown"/>
 
                 <!-- Expand/collapse chevron -->
                 <Button x:Name="FormulaBarExpandBtn" Grid.Column="3"
@@ -1142,13 +1147,13 @@
 
                 <!-- Sheet navigation arrows -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
-                    <Button x:Name="SheetNavLeftBtn" Content="◄" Width="20" Height="20" Padding="0"
-                            FontSize="9" Background="Transparent" BorderBrush="#B0B0B0" BorderThickness="1"
+                    <Button x:Name="SheetNavLeftBtn" Content="&lt;" Width="20" Height="20" Padding="0"
+                            FontSize="11" Background="Transparent" BorderBrush="#B0B0B0" BorderThickness="1"
                             Cursor="Hand" Click="SheetNavLeftBtn_Click"
                             local:RibbonTooltip.Title="Scroll Tabs Left"
                             local:RibbonTooltip.Description="Scroll the sheet tab list to the left."/>
-                    <Button x:Name="SheetNavRightBtn" Content="►" Width="20" Height="20" Padding="0"
-                            FontSize="9" Background="Transparent" BorderBrush="#B0B0B0" BorderThickness="1"
+                    <Button x:Name="SheetNavRightBtn" Content="&gt;" Width="20" Height="20" Padding="0"
+                            FontSize="11" Background="Transparent" BorderBrush="#B0B0B0" BorderThickness="1"
                             Cursor="Hand" Click="SheetNavRightBtn_Click" Margin="2,0,0,0"
                             local:RibbonTooltip.Title="Scroll Tabs Right"
                             local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
@@ -1168,11 +1173,24 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
-                                            BorderBrush="#D0D0D0" BorderThickness="1"
                                             CornerRadius="3,3,0,0" Padding="10,3" Margin="2,0,0,0"
                                             Cursor="Hand"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                             MouseRightButtonDown="SheetTab_MouseRightButtonDown">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background"       Value="Transparent"/>
+                                                <Setter Property="BorderBrush"      Value="#D0D0D0"/>
+                                                <Setter Property="BorderThickness"  Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                        <Setter Property="Background"      Value="White"/>
+                                                        <Setter Property="BorderBrush"     Value="#217346"/>
+                                                        <Setter Property="BorderThickness" Value="1,2,1,0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <Border.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Rename…"         Click="SheetCtxRename_Click"/>
@@ -1183,7 +1201,18 @@
                                             </ContextMenu>
                                         </Border.ContextMenu>
                                         <TextBlock Text="{Binding Name}" FontSize="12"
-                                                   MouseDown="SheetTab_LabelMouseDown"/>
+                                                   MouseDown="SheetTab_LabelMouseDown">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="FontWeight" Value="Normal"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
