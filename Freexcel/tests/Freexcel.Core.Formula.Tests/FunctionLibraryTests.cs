@@ -1147,4 +1147,105 @@ public class FunctionLibraryTests
         ((NumberValue)_eval.Evaluate("=YEARFRAC(A1,B1,3)", sheet)).Value
             .Should().BeApproximately(182.0 / 365.0, 0.01);
     }
+
+    // ── Statistical ──────────────────────────────────────────────────────────────
+
+    [Fact] public void VarS_ThreeValues_ReturnsSampleVariance()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
+        // mean=4, var.s = ((4+0+4)/2) = 4
+        _eval.Evaluate("=VAR(A1:A3)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact] public void VarP_ThreeValues_ReturnsPopulationVariance()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
+        // mean=4, var.p = (4+0+4)/3 = 8/3
+        ((NumberValue)_eval.Evaluate("=VAR.P(A1:A3)", sheet)).Value
+            .Should().BeApproximately(8.0 / 3.0, 1e-10);
+    }
+
+    [Fact] public void StdevP_ThreeValues_ReturnsStdDev()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
+        ((NumberValue)_eval.Evaluate("=STDEV.P(A1:A3)", sheet)).Value
+            .Should().BeApproximately(Math.Sqrt(8.0 / 3.0), 1e-10);
+    }
+
+    [Fact] public void Percentile_Median_Returns4()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
+        _eval.Evaluate("=PERCENTILE(A1:A3,0.5)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact] public void PercentileExc_Middle_ReturnsInterpolated()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
+        // PERCENTILE.EXC([1,2,3,4], 0.4): rank = 0.4*5-1 = 1, index 1 → value 2
+        _eval.Evaluate("=PERCENTILE.EXC(A1:A4,0.4)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void Quartile_Q1_Returns25th()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
+        // QUARTILE([1,2,3,4], 1) = 25th percentile = 1.75
+        ((NumberValue)_eval.Evaluate("=QUARTILE(A1:A4,1)", sheet)).Value
+            .Should().BeApproximately(1.75, 1e-10);
+    }
+
+    [Fact] public void Geomean_TwoNumbers_ReturnsGeometricMean()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(4)),(2,1,new NumberValue(9)));
+        // geomean(4,9) = sqrt(36) = 6
+        _eval.Evaluate("=GEOMEAN(A1:A2)", sheet).Should().Be(new NumberValue(6));
+    }
+
+    [Fact] public void Harmean_TwoNumbers_ReturnsHarmonicMean()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(4)));
+        // harmean(1,4) = 2/(1+0.25) = 1.6
+        ((NumberValue)_eval.Evaluate("=HARMEAN(A1:A2)", sheet)).Value
+            .Should().BeApproximately(1.6, 1e-10);
+    }
+
+    [Fact] public void Avedev_ThreeValues_ReturnsAvgAbsDev()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
+        // mean=4, deviations=2,0,2 → avg=4/3
+        ((NumberValue)_eval.Evaluate("=AVEDEV(A1:A3)", sheet)).Value
+            .Should().BeApproximately(4.0 / 3.0, 1e-10);
+    }
+
+    [Fact] public void Mode_ReturnsValueWithHighestFrequency()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(2)),(4,1,new NumberValue(3)));
+        _eval.Evaluate("=MODE(A1:A4)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void Percentrank_FindsRank()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)),(5,1,new NumberValue(5)));
+        // PERCENTRANK([1..5], 3) = 0.5
+        _eval.Evaluate("=PERCENTRANK(A1:A5,3)", sheet).Should().Be(new NumberValue(0.5));
+    }
+
+    [Fact] public void Correl_PerfectPositive_Returns1()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),
+            (1,2,new NumberValue(2)),(2,2,new NumberValue(4)),(3,2,new NumberValue(6)));
+        ((NumberValue)_eval.Evaluate("=CORREL(A1:A3,B1:B3)", sheet)).Value
+            .Should().BeApproximately(1.0, 1e-10);
+    }
+
+    [Fact] public void Forecast_LinearTrend_PredictsCorrectly()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),
+            (1,2,new NumberValue(2)),(2,2,new NumberValue(4)),(3,2,new NumberValue(6)));
+        // FORECAST(8, known_y=A1:A3=[1,2,3], known_x=B1:B3=[2,4,6]) → predict y at x=8 → 4
+        ((NumberValue)_eval.Evaluate("=FORECAST(8,A1:A3,B1:B3)", sheet)).Value
+            .Should().BeApproximately(4.0, 1e-10);
+    }
 }
