@@ -1,3 +1,4 @@
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
@@ -10,6 +11,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly uint _count;
     private List<(CellAddress Addr, Cell Cell)>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
 
@@ -29,19 +31,16 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             .Select(p => (p.Address, p.Cell.Clone()))
             .ToList();
 
-        // Remove in descending order to avoid clobbering
         foreach (var (addr, _) in _movedSnapshot.OrderByDescending(p => p.Addr.Row))
             sheet.ClearCell(addr);
 
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col), cell.Clone());
 
-        // Shift hidden rows
         var hiddenToShift = sheet.HiddenRows.Where(r => r >= _beforeRow).ToList();
         foreach (var r in hiddenToShift) sheet.HiddenRows.Remove(r);
         foreach (var r in hiddenToShift) sheet.HiddenRows.Add(r + _count);
 
-        // Snapshot and shift merged regions
         _mergeSnapshot = sheet.MergedRegions.ToList();
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
         {
@@ -54,6 +53,9 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             }
         }
 
+        _formulaSnapshot.Clear();
+        RewriteAllFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _formulaSnapshot);
+
         return new CommandOutcome(true);
     }
 
@@ -61,6 +63,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     {
         if (_movedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
+
+        RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col));
@@ -78,6 +82,35 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             sheet.MergedRegions.AddRange(_mergeSnapshot);
         }
     }
+
+    internal static void RewriteAllFormulas(
+        Workbook workbook, RewriteOperation op, Dictionary<CellAddress, string> snapshot)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var (addr, cell) in sheet.EnumerateCells())
+            {
+                if (cell.FormulaText is null) continue;
+                var rewritten = FormulaRewriter.Rewrite(cell.FormulaText, op, sheet.Name);
+                if (rewritten is null) continue;
+                snapshot[addr] = cell.FormulaText;
+                cell.FormulaText = rewritten;
+            }
+        }
+    }
+
+    internal static void RestoreFormulas(
+        Workbook workbook, Dictionary<CellAddress, string> snapshot)
+    {
+        foreach (var (addr, original) in snapshot)
+        {
+            var s = workbook.GetSheet(addr.Sheet);
+            var cell = s?.GetCell(addr.Row, addr.Col);
+            if (cell is not null)
+                cell.FormulaText = original;
+        }
+        snapshot.Clear();
+    }
 }
 
 /// <summary>Deletes <paramref name="count"/> rows starting at <paramref name="startRow"/>.</summary>
@@ -89,6 +122,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<(CellAddress Addr, Cell Cell)>? _deletedSnapshot;
     private List<(CellAddress Addr, Cell Cell)>? _shiftedSnapshot;
     private List<GridRange>? _mergeSnapshot;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
 
@@ -116,19 +150,16 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         foreach (var (addr, _) in _deletedSnapshot)
             sheet.ClearCell(addr);
 
-        // Remove shifted cells, then re-place at new positions
         foreach (var (addr, _) in _shiftedSnapshot.OrderBy(p => p.Addr.Row))
             sheet.ClearCell(addr);
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col), cell.Clone());
 
-        // Shift hidden rows
         var inRangeHidden = sheet.HiddenRows.Where(r => r >= _startRow && r <= endRow).ToList();
         var belowHidden   = sheet.HiddenRows.Where(r => r > endRow).ToList();
         foreach (var r in inRangeHidden) sheet.HiddenRows.Remove(r);
         foreach (var r in belowHidden) { sheet.HiddenRows.Remove(r); sheet.HiddenRows.Add(r - _count); }
 
-        // Snapshot and shift merged regions — remove any that overlap the deleted rows
         _mergeSnapshot = sheet.MergedRegions.ToList();
         sheet.MergedRegions.RemoveAll(m => m.Start.Row <= endRow && m.End.Row >= _startRow);
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
@@ -142,6 +173,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             }
         }
 
+        _formulaSnapshot.Clear();
+        InsertRowsCommand.RewriteAllFormulas(
+            ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _formulaSnapshot);
+
         return new CommandOutcome(true);
     }
 
@@ -149,7 +184,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     {
         if (_deletedSnapshot is null || _shiftedSnapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        uint endRow = _startRow + _count - 1;
+
+        InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
         foreach (var (addr, _) in _shiftedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col));
