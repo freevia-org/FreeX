@@ -2378,8 +2378,11 @@ public static class BuiltInFunctions
         return new TextValue(sb.ToString());
     }
 
-    private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        args[0] is TextValue t ? t : new TextValue("");
+    private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return args[0] is TextValue t ? t : new TextValue("");
+    }
 
     private static ScalarValue Fixed(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
