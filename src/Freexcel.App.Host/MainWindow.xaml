@@ -107,6 +107,42 @@
             </Setter>
         </Style>
 
+        <!-- ── System (caption) buttons ──────────────────────────────────── -->
+        <Style x:Key="SysBtnStyle" TargetType="Button">
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush"  Value="Transparent"/>
+            <Setter Property="FontFamily"   Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize"     Value="10"/>
+            <Setter Property="Width"        Value="46"/>
+            <Setter Property="Padding"      Value="0"/>
+            <Setter Property="Cursor"       Value="Arrow"/>
+            <Setter Property="VerticalAlignment"        Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#20000000"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#33000000"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CloseSysBtnStyle" BasedOn="{StaticResource SysBtnStyle}" TargetType="Button">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#C42B1C"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#F1707A"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- ComboBox: keep background white to match Excel toolbar -->
         <Style TargetType="ComboBox">
             <Setter Property="Background" Value="White"/>
@@ -193,6 +229,14 @@
                         Click="RedoQatBtn_Click"
                         local:RibbonTooltip.Title="Redo"
                         local:RibbonTooltip.Description="Redo the last undone action."/>
+                <!-- System buttons — must be docked Right before the fill element -->
+                <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
+                <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right" Content="&#xE8BB;"
+                        Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"/>
+                <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right" Content="&#xE739;"
+                        Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"/>
+                <Button                         DockPanel.Dock="Right" Content="&#xE949;"
+                        Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"/>
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -1197,7 +1241,8 @@
                                                 <MenuItem Header="Insert Sheet"    Click="SheetCtxInsert_Click"/>
                                                 <MenuItem Header="Delete Sheet"    Click="SheetCtxDelete_Click"/>
                                                 <Separator/>
-                                                <MenuItem Header="Move/Copy…"      Click="SheetCtxMove_Click"/>
+                                                <MenuItem Header="Move Left"       Click="SheetCtxMoveLeft_Click"/>
+                                                <MenuItem Header="Move Right"      Click="SheetCtxMoveRight_Click"/>
                                             </ContextMenu>
                                         </Border.ContextMenu>
                                         <TextBlock Text="{Binding Name}" FontSize="12"
