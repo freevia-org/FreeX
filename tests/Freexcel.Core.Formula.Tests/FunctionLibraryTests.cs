@@ -1372,4 +1372,35 @@ public class FunctionLibraryTests
     [Fact] public void Dollar_FormatsAsCurrency() =>
         _eval.Evaluate("=DOLLAR(1234.5,2)", MakeSheet())
             .Should().Be(new TextValue("$1,234.50"));
+
+    // ── Reference ────────────────────────────────────────────────────────────────
+
+    [Fact] public void Indirect_A1String_ReturnsValue()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(42)));
+        _eval.Evaluate("=INDIRECT(\"A1\")", sheet).Should().Be(new NumberValue(42));
+    }
+
+    [Fact] public void Address_AbsoluteRef_ReturnsString() =>
+        _eval.Evaluate("=ADDRESS(2,3)", MakeSheet()).Should().Be(new TextValue("$C$2"));
+
+    [Fact] public void Address_RelativeRef_ReturnsString() =>
+        _eval.Evaluate("=ADDRESS(2,3,4)", MakeSheet()).Should().Be(new TextValue("C2"));
+
+    [Fact] public void Lookup_FindsValueInVector()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),
+            (1,2,new TextValue("A")),(2,2,new TextValue("B")),(3,2,new TextValue("C")));
+        _eval.Evaluate("=LOOKUP(2,A1:A3,B1:B3)", sheet).Should().Be(new TextValue("B"));
+    }
+
+    [Fact] public void N_Text_ReturnsZero() =>
+        _eval.Evaluate("=N(\"hello\")", MakeSheet()).Should().Be(new NumberValue(0));
+
+    [Fact] public void N_Number_ReturnsNumber() =>
+        _eval.Evaluate("=N(42)", MakeSheet()).Should().Be(new NumberValue(42));
+
+    [Fact] public void N_True_ReturnsOne() =>
+        _eval.Evaluate("=N(TRUE)", MakeSheet()).Should().Be(new NumberValue(1));
 }

@@ -220,6 +220,12 @@ public static class BuiltInFunctions
         ["FIXED"]       = (Fixed, 1, 3),
         ["CLEAN"]       = (Clean, 1, 1),
         ["DOLLAR"]      = (Dollar, 1, 2),
+
+        // ── Phase 4a: Reference ──────────────────────────────────────────────
+        ["INDIRECT"] = (Indirect, 1, 2),
+        ["ADDRESS"]  = (Address, 2, 5),
+        ["LOOKUP"]   = (Lookup, 2, 3),
+        ["N"]        = (NFunc, 1, 1),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -2415,6 +2421,84 @@ public static class BuiltInFunctions
                              .ToString("N" + dec, System.Globalization.CultureInfo.InvariantCulture);
         return new TextValue("$" + rounded);
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4a  –  Reference
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Indirect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var refText = ToText(args[0]).Trim();
+        string? sheetName = null;
+        int bangIdx = refText.IndexOf('!');
+        if (bangIdx >= 0)
+        {
+            sheetName = refText[..bangIdx].Trim('\'');
+            refText   = refText[(bangIdx + 1)..];
+        }
+        if (!TryParseA1Ref(refText, out uint row, out uint col))
+            return ErrorValue.Ref;
+        return sheetName is not null
+            ? ctx.GetCellValue(sheetName, row, col)
+            : ctx.GetCellValue(row, col);
+    }
+
+    private static bool TryParseA1Ref(string cellRef, out uint row, out uint col)
+    {
+        row = 0; col = 0;
+        int i = 0;
+        while (i < cellRef.Length && char.IsLetter(cellRef[i])) i++;
+        if (i == 0 || i >= cellRef.Length) return false;
+        string colStr = cellRef[..i].ToUpperInvariant();
+        if (!uint.TryParse(cellRef[i..], out row)) return false;
+        col = 0;
+        foreach (char c in colStr) col = col * 26 + (uint)(c - 'A' + 1);
+        return row > 0 && col > 0;
+    }
+
+    private static ScalarValue Address(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        int rowNum = (int)ToNumber(args[0]);
+        int colNum = (int)ToNumber(args[1]);
+        int absNum = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
+        string? sheetText = args.Count > 4 && args[4] is not BlankValue ? ToText(args[4]) : null;
+        string colLetter = CellAddress.NumberToColumnName((uint)colNum);
+        bool colAbs = absNum is 1 or 3;
+        bool rowAbs = absNum is 1 or 2;
+        string addr = $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}";
+        if (!string.IsNullOrEmpty(sheetText))
+            addr = $"'{sheetText}'!{addr}";
+        return new TextValue(addr);
+    }
+
+    private static ScalarValue Lookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
+        var lookupFlat = lookupVec.Flatten();
+        var resultFlat = args.Count > 2 && args[2] is RangeValue rv
+            ? rv.Flatten()
+            : lookupFlat;
+        var lookupVal = args[0];
+        int matchIdx = -1;
+        for (int i = 0; i < lookupFlat.Count; i++)
+            if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
+                matchIdx = i;
+        if (matchIdx < 0) return ErrorValue.NA;
+        return matchIdx < resultFlat.Count ? resultFlat[matchIdx] : ErrorValue.NA;
+    }
+
+    private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] switch
+        {
+            NumberValue nv   => nv,
+            BoolValue bv     => new NumberValue(bv.Value ? 1 : 0),
+            ErrorValue ev    => ev,
+            _                => new NumberValue(0)
+        };
 }
 
 /// <summary>
