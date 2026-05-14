@@ -79,14 +79,23 @@ public static class FormulaSerializer
                 break;
 
             case BinaryOpNode bin:
-                WriteNode(bin.Left, sb);
+                WriteSubExpr(bin.Left, GetPrecedence(bin.Operator), false, sb);
                 sb.Append(OpSymbols[bin.Operator]);
-                WriteNode(bin.Right, sb);
+                WriteSubExpr(bin.Right, GetPrecedence(bin.Operator), bin.Operator is BinaryOperator.Subtract or BinaryOperator.Divide, sb);
                 break;
 
             case UnaryOpNode u when u.Operator == UnaryOperator.Negate:
                 sb.Append('-');
-                WriteNode(u.Operand, sb);
+                if (u.Operand is BinaryOpNode)
+                {
+                    sb.Append('(');
+                    WriteNode(u.Operand, sb);
+                    sb.Append(')');
+                }
+                else
+                {
+                    WriteNode(u.Operand, sb);
+                }
                 break;
 
             case UnaryOpNode u when u.Operator == UnaryOperator.Percent:
@@ -94,6 +103,33 @@ public static class FormulaSerializer
                 sb.Append('%');
                 break;
         }
+    }
+
+    private static int GetPrecedence(BinaryOperator op) => op switch
+    {
+        BinaryOperator.Power                                         => 5,
+        BinaryOperator.Multiply or BinaryOperator.Divide            => 4,
+        BinaryOperator.Add or BinaryOperator.Subtract               => 3,
+        BinaryOperator.Concatenate                                   => 2,
+        _                                                            => 1,  // comparisons
+    };
+
+    private static void WriteSubExpr(FormulaNode node, int parentPrecedence, bool parentIsNonCommutative, StringBuilder sb)
+    {
+        if (node is BinaryOpNode child)
+        {
+            var childPrec = GetPrecedence(child.Operator);
+            bool needsParens = childPrec < parentPrecedence
+                || (parentIsNonCommutative && childPrec == parentPrecedence);
+            if (needsParens)
+            {
+                sb.Append('(');
+                WriteNode(node, sb);
+                sb.Append(')');
+                return;
+            }
+        }
+        WriteNode(node, sb);
     }
 
     private static void WriteCellRef(CellRefNode cr, StringBuilder sb)

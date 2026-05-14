@@ -112,4 +112,39 @@ public class FormulaSerializerTests
         var node = new ErrorNode(ErrorValue.Ref);
         FormulaSerializer.Serialize(node).Should().Be("#REF!");
     }
+
+    [Fact]
+    public void Serialize_ParensPreserved_AddInsideMultiply()
+    {
+        // =(A1+B1)*C1 → must stay (A1+B1)*C1
+        RoundTrip("=(A1+B1)*C1").Should().Be("(A1+B1)*C1");
+    }
+
+    [Fact]
+    public void Serialize_NoUnnecessaryParens_MultiplyInsideAdd()
+    {
+        // =A1*B1+C1 → A1*B1+C1 (no parens needed)
+        RoundTrip("=A1*B1+C1").Should().Be("A1*B1+C1");
+    }
+
+    [Fact]
+    public void Serialize_ParensPreserved_SubtractOnRight()
+    {
+        // =A1-(B1-C1) → must stay A1-(B1-C1)
+        RoundTrip("=A1-(B1-C1)").Should().Be("A1-(B1-C1)");
+    }
+
+    [Fact]
+    public void Serialize_ParensPreserved_NegateOfSum()
+    {
+        // =-(A1+B1) → must stay -(A1+B1)
+        RoundTrip("=-(A1+B1)").Should().Be("-(A1+B1)");
+    }
+
+    [Fact]
+    public void Serialize_NoUnnecessaryParens_Simple()
+    {
+        // =A1+B1 → A1+B1 (no parens)
+        RoundTrip("=A1+B1").Should().Be("A1+B1");
+    }
 }
