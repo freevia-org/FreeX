@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private StyleId _formatPainterStyleId;
     private bool _showFormulas;
     private double _zoomLevel = 1.0;
+    private bool _snapInProgress;
     private bool _formulaBarExpanded;
     private System.Windows.Controls.TextBox? _inlineEditor;
     private ColumnResizeSnapshot? _columnResizeSnapshot;
@@ -3267,7 +3268,7 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         double cols = range.ColCount, rows = range.RowCount;
-        double fit = Math.Max(25, Math.Min(300, Math.Min(
+        double fit = Math.Max(10, Math.Min(400, Math.Min(
             SheetGrid.ActualWidth  / Math.Max(1, cols * 80) * 100,
             SheetGrid.ActualHeight / Math.Max(1, rows * 20) * 100)));
         ZoomSlider.Value = fit;
@@ -3275,10 +3276,19 @@ public partial class MainWindow : Window
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (ZoomSlider == null || SheetGrid == null || StatusZoomText == null) return;
-        _zoomLevel = ZoomSlider.Value / 100.0;
+        if (_snapInProgress) return;
+        double raw = e.NewValue;
+        if (Math.Abs(raw - 100.0) < 5.0)
+        {
+            _snapInProgress = true;
+            ZoomSlider.Value = 100.0;
+            _snapInProgress = false;
+            raw = 100.0;
+        }
+        _zoomLevel = raw / 100.0;
         SheetGrid.ZoomFactor = _zoomLevel;
         SheetGrid.RenderTransform = new System.Windows.Media.ScaleTransform(_zoomLevel, _zoomLevel, 0, 0);
-        StatusZoomText.Text = $"{(int)ZoomSlider.Value}%";
+        StatusZoomText.Text = $"{(int)raw}%";
         UpdateViewport();
     }
 
