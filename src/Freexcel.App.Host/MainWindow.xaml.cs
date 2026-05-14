@@ -2860,12 +2860,14 @@ public partial class MainWindow : Window
 
     private void ViewGridlinesChk_Changed(object sender, RoutedEventArgs e)
     {
+        if (SheetGrid is null) return;
         if (sender is System.Windows.Controls.CheckBox chk)
             SheetGrid.ShowGridLines = chk.IsChecked == true;
     }
 
     private void ViewHeadersChk_Changed(object sender, RoutedEventArgs e)
     {
+        if (SheetGrid is null) return;
         if (sender is System.Windows.Controls.CheckBox chk)
             SheetGrid.ShowHeaders = chk.IsChecked == true;
     }
@@ -2935,7 +2937,7 @@ public partial class MainWindow : Window
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (ZoomSlider == null || SheetGrid == null) return;
+        if (ZoomSlider == null || SheetGrid == null || StatusZoomText == null) return;
         _zoomLevel = ZoomSlider.Value / 100.0;
         SheetGrid.RenderTransform = new System.Windows.Media.ScaleTransform(_zoomLevel, _zoomLevel, 0, 0);
         StatusZoomText.Text = $"{(int)ZoomSlider.Value}%";
