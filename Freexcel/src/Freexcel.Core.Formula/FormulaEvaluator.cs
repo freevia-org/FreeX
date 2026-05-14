@@ -309,7 +309,13 @@ public sealed class FormulaEvaluator
 
     private static bool IsAggregateFunction(string name) =>
         name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "COUNTA" or "AND" or "OR" or "CONCAT"
-             or "STDEV" or "MEDIAN";
+             or "STDEV" or "MEDIAN"
+             or "PRODUCT" or "XOR"
+             or "VAR" or "VAR.S" or "VAR.P" or "STDEV.P"
+             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
+             or "MODE" or "MODE.SNGL"
+             or "CONCATENATE"
+             or "NPV";
 
     private static bool IsStructuredRangeFunction(string name) =>
         name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH"

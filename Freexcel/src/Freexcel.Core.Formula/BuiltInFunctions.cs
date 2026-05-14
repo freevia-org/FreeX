@@ -144,6 +144,26 @@ public static class BuiltInFunctions
         ["EXACT"]       = (Exact, 2, 2),
         ["CODE"]        = (Code, 1, 1),
         ["CHAR"]        = (Char, 1, 1),
+
+        // ── Phase 4a: Math / Trig ────────────────────────────────────────────
+        ["SIN"]      = (Sin, 1, 1),
+        ["COS"]      = (Cos, 1, 1),
+        ["TAN"]      = (Tan, 1, 1),
+        ["ASIN"]     = (Asin, 1, 1),
+        ["ACOS"]     = (Acos, 1, 1),
+        ["ATAN"]     = (Atan, 1, 1),
+        ["ATAN2"]    = (Atan2Func, 2, 2),
+        ["DEGREES"]  = (Degrees, 1, 1),
+        ["RADIANS"]  = (Radians, 1, 1),
+        ["PRODUCT"]  = (Product, 1, 255),
+        ["QUOTIENT"] = (Quotient, 2, 2),
+        ["GCD"]      = (Gcd, 1, 255),
+        ["LCM"]      = (Lcm, 1, 255),
+        ["MROUND"]   = (Mround, 2, 2),
+        ["COMBIN"]   = (Combin, 2, 2),
+        ["PERMUT"]   = (Permut, 2, 2),
+        ["ODD"]      = (Odd, 1, 1),
+        ["EVEN"]     = (Even, 1, 1),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -1520,6 +1540,185 @@ public static class BuiltInFunctions
         if (a is BoolValue ba && b is BoolValue bb)
             return ba.Value == bb.Value;
         return false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4a  –  Math / Trig
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Sin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new NumberValue(Math.Sin(ToNumber(args[0])));
+    }
+
+    private static ScalarValue Cos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new NumberValue(Math.Cos(ToNumber(args[0])));
+    }
+
+    private static ScalarValue Tan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new NumberValue(Math.Tan(ToNumber(args[0])));
+    }
+
+    private static ScalarValue Asin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double n = ToNumber(args[0]);
+        if (n < -1 || n > 1) return ErrorValue.Num;
+        return new NumberValue(Math.Asin(n));
+    }
+
+    private static ScalarValue Acos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double n = ToNumber(args[0]);
+        if (n < -1 || n > 1) return ErrorValue.Num;
+        return new NumberValue(Math.Acos(n));
+    }
+
+    private static ScalarValue Atan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new NumberValue(Math.Atan(ToNumber(args[0])));
+    }
+
+    // ATAN2(x_num, y_num) – matches Excel argument order (x first, then y)
+    private static ScalarValue Atan2Func(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        double x = ToNumber(args[0]);
+        double y = ToNumber(args[1]);
+        if (x == 0 && y == 0) return ErrorValue.DivByZero;
+        return new NumberValue(Math.Atan2(y, x));
+    }
+
+    private static ScalarValue Degrees(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new NumberValue(ToNumber(args[0]) * 180.0 / Math.PI);
+    }
+
+    private static ScalarValue Radians(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new NumberValue(ToNumber(args[0]) * Math.PI / 180.0);
+    }
+
+    private static ScalarValue Product(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double result = 1.0;
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            if (a is NumberValue nv) result *= nv.Value;
+        }
+        return new NumberValue(result);
+    }
+
+    private static ScalarValue Quotient(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        double d = ToNumber(args[1]);
+        if (d == 0) return ErrorValue.DivByZero;
+        return new NumberValue(Math.Truncate(ToNumber(args[0]) / d));
+    }
+
+    private static ScalarValue Gcd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        long result = 0;
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            long n = (long)Math.Abs(ToNumber(a));
+            result = GcdCalc(result, n);
+        }
+        return new NumberValue(result);
+    }
+
+    private static long GcdCalc(long a, long b)
+    {
+        while (b != 0) { long t = b; b = a % b; a = t; }
+        return a;
+    }
+
+    private static ScalarValue Lcm(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        long result = 1;
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            long n = (long)Math.Abs(ToNumber(a));
+            if (n == 0) return new NumberValue(0);
+            long g = GcdCalc(result, n);
+            result = result / g * n;
+        }
+        return new NumberValue(result);
+    }
+
+    private static ScalarValue Mround(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        double n = ToNumber(args[0]);
+        double m = ToNumber(args[1]);
+        if (m == 0) return ErrorValue.DivByZero;
+        if (n != 0 && (n < 0) != (m < 0)) return ErrorValue.Num;
+        return new NumberValue(Math.Round(n / m, MidpointRounding.AwayFromZero) * m);
+    }
+
+    private static ScalarValue Combin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        int n = (int)ToNumber(args[0]);
+        int k = (int)ToNumber(args[1]);
+        if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
+        if (k > n - k) k = n - k;
+        double result = 1;
+        for (int i = 0; i < k; i++)
+            result = result * (n - i) / (i + 1);
+        return new NumberValue(Math.Round(result));
+    }
+
+    private static ScalarValue Permut(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        int n = (int)ToNumber(args[0]);
+        int k = (int)ToNumber(args[1]);
+        if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
+        double result = 1;
+        for (int i = 0; i < k; i++)
+            result *= (n - i);
+        return new NumberValue(result);
+    }
+
+    private static ScalarValue Odd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double n = ToNumber(args[0]);
+        if (n == 0) return new NumberValue(1);
+        int sign = n > 0 ? 1 : -1;
+        int abs = (int)Math.Ceiling(Math.Abs(n));
+        if (abs % 2 == 0) abs++;
+        return new NumberValue(sign * abs);
+    }
+
+    private static ScalarValue Even(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double n = ToNumber(args[0]);
+        if (n == 0) return new NumberValue(0);
+        int sign = n > 0 ? 1 : -1;
+        int abs = (int)Math.Ceiling(Math.Abs(n));
+        if (abs % 2 != 0) abs++;
+        return new NumberValue(sign * abs);
     }
 }
 
