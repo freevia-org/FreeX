@@ -12,8 +12,14 @@ public sealed record StringNode(string Value) : FormulaNode;
 /// <summary>A boolean literal (TRUE or FALSE).</summary>
 public sealed record BooleanNode(bool Value) : FormulaNode;
 
-/// <summary>A cell reference (e.g. A1, B5, Sheet2!A1).</summary>
-public sealed record CellRefNode(string ColumnName, uint Row, string? SheetName = null) : FormulaNode
+/// <summary>A cell reference (e.g. A1, $B$3, Sheet2!A1).</summary>
+public sealed record CellRefNode(
+    string  ColumnName,
+    uint    Row,
+    bool    IsColAbsolute = false,
+    bool    IsRowAbsolute = false,
+    string? SheetName = null
+) : FormulaNode
 {
     /// <summary>Get the column as a 1-based number.</summary>
     public uint ColumnNumber => Model.CellAddress.ColumnNameToNumber(ColumnName);
@@ -36,26 +42,15 @@ public sealed record FunctionCallNode(string FunctionName, IReadOnlyList<Formula
 /// </summary>
 public sealed record NamedRangeNode(string Name) : FormulaNode;
 
+/// <summary>A formula-level error literal produced by reference rewriting (e.g. #REF!).</summary>
+public sealed record ErrorNode(Model.ErrorValue Error) : FormulaNode;
+
 /// <summary>Binary operators.</summary>
 public enum BinaryOperator
 {
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Power,
-    Concatenate,
-    Equal,
-    NotEqual,
-    LessThan,
-    GreaterThan,
-    LessOrEqual,
-    GreaterOrEqual
+    Add, Subtract, Multiply, Divide, Power, Concatenate,
+    Equal, NotEqual, LessThan, GreaterThan, LessOrEqual, GreaterOrEqual
 }
 
 /// <summary>Unary operators.</summary>
-public enum UnaryOperator
-{
-    Negate,
-    Percent
-}
+public enum UnaryOperator { Negate, Percent }

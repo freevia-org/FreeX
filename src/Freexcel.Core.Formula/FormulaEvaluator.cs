@@ -40,6 +40,7 @@ public sealed class FormulaEvaluator
             NumberNode n => new NumberValue(n.Value),
             StringNode s => new TextValue(s.Value),
             BooleanNode b => new BoolValue(b.Value),
+            ErrorNode err => err.Error,
             CellRefNode cell when cell.SheetName is not null
                 => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
             CellRefNode cell => context.GetCellValue(cell.Row, cell.ColumnNumber),
