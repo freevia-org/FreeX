@@ -185,7 +185,7 @@ public sealed class Lexer
 
         // Otherwise it's a cell reference
         if (IsCellReference(value))
-            return new Token(TokenType.CellRef, value.Replace("$", "").ToUpperInvariant(), start);
+            return new Token(TokenType.CellRef, value.ToUpperInvariant(), start);
 
         // Named range (identifier that is not a cell reference, function, or boolean)
         return new Token(TokenType.NamedRange, upper, start);
