@@ -322,7 +322,14 @@ public sealed class FormulaEvaluator
              or "SUMIF" or "COUNTIF" or "AVERAGEIF"
              or "LARGE" or "SMALL" or "RANK"
              or "SUMIFS" or "COUNTIFS" or "AVERAGEIFS"
-             or "XLOOKUP";
+             or "XLOOKUP"
+             or "WORKDAY" or "NETWORKDAYS"
+             or "CORREL" or "FORECAST" or "FORECAST.LINEAR"
+             or "PERCENTILE" or "PERCENTILE.INC" or "PERCENTILE.EXC"
+             or "QUARTILE" or "QUARTILE.INC"
+             or "PERCENTRANK" or "PERCENTRANK.INC"
+             or "LOOKUP"
+             or "IRR";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {

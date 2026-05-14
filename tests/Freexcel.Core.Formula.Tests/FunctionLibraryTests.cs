@@ -1065,4 +1065,86 @@ public class FunctionLibraryTests
 
     [Fact] public void Even_3_Returns4() =>
         _eval.Evaluate("=EVEN(3)", MakeSheet()).Should().Be(new NumberValue(4));
+
+    // ── Date / Time ──────────────────────────────────────────────────────────────
+
+    [Fact] public void Time_HMS_ReturnsFraction()
+    {
+        // TIME(12, 0, 0) = 0.5 (half a day)
+        ((NumberValue)_eval.Evaluate("=TIME(12,0,0)", MakeSheet())).Value
+            .Should().BeApproximately(0.5, 1e-10);
+    }
+
+    [Fact] public void Timevalue_String_ReturnsFraction()
+    {
+        ((NumberValue)_eval.Evaluate("=TIMEVALUE(\"12:00:00\")", MakeSheet())).Value
+            .Should().BeApproximately(0.5, 1e-10);
+    }
+
+    [Fact] public void Datevalue_String_ReturnsSerial()
+    {
+        // 2024-01-01 OADate
+        double expected = new DateTime(2024, 1, 1).ToOADate();
+        ((NumberValue)_eval.Evaluate("=DATEVALUE(\"2024-01-01\")", MakeSheet())).Value
+            .Should().BeApproximately(expected, 1);
+    }
+
+    [Fact] public void Eomonth_Jan_ReturnsLastDayJan()
+    {
+        // DATE(2024,1,15) + EOMONTH offset 0 → 2024-01-31
+        double jan15 = new DateTime(2024, 1, 15).ToOADate();
+        double jan31 = new DateTime(2024, 1, 31).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(jan15)));
+        ((NumberValue)_eval.Evaluate("=EOMONTH(A1,0)", sheet)).Value
+            .Should().BeApproximately(jan31, 1);
+    }
+
+    [Fact] public void Weeknum_Jan8_Returns2()
+    {
+        double jan8 = new DateTime(2024, 1, 8).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(jan8)));
+        _eval.Evaluate("=WEEKNUM(A1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void Isoweeknum_Jan8_2024_Returns2()
+    {
+        double jan8 = new DateTime(2024, 1, 8).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(jan8)));
+        _eval.Evaluate("=ISOWEEKNUM(A1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void Workday_5BusinessDays_SkipsWeekend()
+    {
+        // 2024-01-08 (Monday) + 5 workdays = 2024-01-15 (Monday)
+        double mon = new DateTime(2024, 1, 8).ToOADate();
+        double expected = new DateTime(2024, 1, 15).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(mon)));
+        ((NumberValue)_eval.Evaluate("=WORKDAY(A1,5)", sheet)).Value
+            .Should().BeApproximately(expected, 1);
+    }
+
+    [Fact] public void Networkdays_MonToFri_Returns5()
+    {
+        double mon = new DateTime(2024, 1, 8).ToOADate();
+        double fri = new DateTime(2024, 1, 12).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(mon)), (1, 2, new NumberValue(fri)));
+        _eval.Evaluate("=NETWORKDAYS(A1,B1)", sheet).Should().Be(new NumberValue(5));
+    }
+
+    [Fact] public void Days_EndMinusStart_ReturnsDifference()
+    {
+        double d1 = new DateTime(2024, 1, 1).ToOADate();
+        double d2 = new DateTime(2024, 1, 11).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(d2)), (1, 2, new NumberValue(d1)));
+        _eval.Evaluate("=DAYS(A1,B1)", sheet).Should().Be(new NumberValue(10));
+    }
+
+    [Fact] public void Yearfrac_HalfYear_ReturnsApprox05()
+    {
+        double jan1 = new DateTime(2024, 1, 1).ToOADate();
+        double jul1 = new DateTime(2024, 7, 1).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(jan1)), (1, 2, new NumberValue(jul1)));
+        ((NumberValue)_eval.Evaluate("=YEARFRAC(A1,B1,3)", sheet)).Value
+            .Should().BeApproximately(182.0 / 365.0, 0.01);
+    }
 }

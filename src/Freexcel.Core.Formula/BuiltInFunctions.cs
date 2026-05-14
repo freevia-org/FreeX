@@ -164,6 +164,18 @@ public static class BuiltInFunctions
         ["PERMUT"]   = (Permut, 2, 2),
         ["ODD"]      = (Odd, 1, 1),
         ["EVEN"]     = (Even, 1, 1),
+
+        // ── Phase 4a: Date / Time ────────────────────────────────────────────
+        ["TIME"]         = (TimeFunc, 3, 3),
+        ["TIMEVALUE"]    = (Timevalue, 1, 1),
+        ["DATEVALUE"]    = (Datevalue, 1, 1),
+        ["EOMONTH"]      = (Eomonth, 2, 2),
+        ["WEEKNUM"]      = (Weeknum, 1, 2),
+        ["ISOWEEKNUM"]   = (Isoweeknum, 1, 1),
+        ["WORKDAY"]      = (Workday, 2, 3),
+        ["NETWORKDAYS"]  = (Networkdays, 2, 3),
+        ["DAYS"]         = (Days, 2, 2),
+        ["YEARFRAC"]     = (Yearfrac, 2, 3),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -1719,6 +1731,166 @@ public static class BuiltInFunctions
         int abs = (int)Math.Ceiling(Math.Abs(n));
         if (abs % 2 != 0) abs++;
         return new NumberValue(sign * abs);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4a  –  Date / Time
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue TimeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        double h = ToNumber(args[0]), m = ToNumber(args[1]), s = ToNumber(args[2]);
+        double frac = (h * 3600 + m * 60 + s) / 86400.0;
+        return new NumberValue(frac - Math.Floor(frac));
+    }
+
+    private static ScalarValue Timevalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var text = ToText(args[0]);
+        if (TimeSpan.TryParse(text, out var ts))
+            return new NumberValue(ts.TotalDays % 1.0);
+        if (DateTime.TryParse(text, out var dt))
+            return new NumberValue(dt.TimeOfDay.TotalDays);
+        return ErrorValue.Value;
+    }
+
+    private static ScalarValue Datevalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var text = ToText(args[0]);
+        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var dt))
+            return new NumberValue(Math.Floor(dt.ToOADate()));
+        return ErrorValue.Value;
+    }
+
+    private static ScalarValue Eomonth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var dt = DateTime.FromOADate(ToNumber(args[0]));
+        int months = (int)ToNumber(args[1]);
+        var target = dt.AddMonths(months + 1);
+        var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
+        return new NumberValue(eomonth.ToOADate());
+    }
+
+    private static ScalarValue Weeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var dt = DateTime.FromOADate(ToNumber(args[0]));
+        int returnType = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
+        DayOfWeek firstDay = returnType == 2 ? DayOfWeek.Monday : DayOfWeek.Sunday;
+        var jan1 = new DateTime(dt.Year, 1, 1);
+        int jan1Dow = ((int)jan1.DayOfWeek - (int)firstDay + 7) % 7;
+        int dayOfYear = (dt - jan1).Days;
+        return new NumberValue((dayOfYear + jan1Dow) / 7 + 1);
+    }
+
+    private static ScalarValue Isoweeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var dt = DateTime.FromOADate(ToNumber(args[0]));
+        var cal = System.Globalization.CultureInfo.InvariantCulture.Calendar;
+        int week = cal.GetWeekOfYear(dt,
+            System.Globalization.CalendarWeekRule.FirstFourDayWeek,
+            DayOfWeek.Monday);
+        return new NumberValue(week);
+    }
+
+    private static ScalarValue Workday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var current = DateTime.FromOADate(ToNumber(args[0]));
+        int days = (int)ToNumber(args[1]);
+        var holidays = new HashSet<DateTime>();
+        if (args.Count > 2 && args[2] is RangeValue hRange)
+            foreach (var v in hRange.Flatten())
+                if (v is NumberValue nv)
+                    holidays.Add(DateTime.FromOADate(nv.Value).Date);
+        int sign = days < 0 ? -1 : 1;
+        int remaining = Math.Abs(days);
+        while (remaining > 0)
+        {
+            current = current.AddDays(sign);
+            if (current.DayOfWeek != DayOfWeek.Saturday &&
+                current.DayOfWeek != DayOfWeek.Sunday &&
+                !holidays.Contains(current.Date))
+                remaining--;
+        }
+        return new NumberValue(current.ToOADate());
+    }
+
+    private static ScalarValue Networkdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var startDt = DateTime.FromOADate(ToNumber(args[0])).Date;
+        var endDt   = DateTime.FromOADate(ToNumber(args[1])).Date;
+        var holidays = new HashSet<DateTime>();
+        if (args.Count > 2 && args[2] is RangeValue hRange)
+            foreach (var v in hRange.Flatten())
+                if (v is NumberValue nv)
+                    holidays.Add(DateTime.FromOADate(nv.Value).Date);
+        int sign = startDt <= endDt ? 1 : -1;
+        var lo = startDt <= endDt ? startDt : endDt;
+        var hi = startDt <= endDt ? endDt   : startDt;
+        int count = 0;
+        for (var d = lo; d <= hi; d = d.AddDays(1))
+            if (d.DayOfWeek != DayOfWeek.Saturday &&
+                d.DayOfWeek != DayOfWeek.Sunday &&
+                !holidays.Contains(d))
+                count++;
+        return new NumberValue(sign * count);
+    }
+
+    private static ScalarValue Days(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var endDt   = DateTime.FromOADate(ToNumber(args[0]));
+        var startDt = DateTime.FromOADate(ToNumber(args[1]));
+        return new NumberValue((endDt - startDt).Days);
+    }
+
+    private static ScalarValue Yearfrac(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var startDt = DateTime.FromOADate(ToNumber(args[0])).Date;
+        var endDt   = DateTime.FromOADate(ToNumber(args[1])).Date;
+        int basis = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 0;
+        double totalDays = (endDt - startDt).TotalDays;
+        double result = basis switch
+        {
+            1 => totalDays / (DateTime.IsLeapYear(startDt.Year) || DateTime.IsLeapYear(endDt.Year) ? 366.0 : 365.0),
+            2 => totalDays / 360.0,
+            3 => totalDays / 365.0,
+            4 => Days30E360(startDt, endDt) / 360.0,
+            _ => Days30US360(startDt, endDt) / 360.0
+        };
+        return new NumberValue(result);
+    }
+
+    private static double Days30US360(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd1 == 31) dd1 = 30;
+        if (dd2 == 31 && dd1 == 30) dd2 = 30;
+        return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
+    }
+
+    private static double Days30E360(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd1 == 31) dd1 = 30;
+        if (dd2 == 31) dd2 = 30;
+        return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
 }
 
