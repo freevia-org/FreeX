@@ -53,4 +53,36 @@ public class LexerTests
         tokens[0].Type.Should().Be(TokenType.Boolean);
         tokens[0].Value.Should().Be("TRUE");
     }
+
+    [Fact]
+    public void Tokenizes_AbsoluteCellRef_BothAnchors()
+    {
+        var tokens = new Lexer("=$A$1").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.CellRef);
+        tokens[0].Value.Should().Be("$A$1");
+    }
+
+    [Fact]
+    public void Tokenizes_AbsoluteCellRef_ColOnly()
+    {
+        var tokens = new Lexer("=$B3").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.CellRef);
+        tokens[0].Value.Should().Be("$B3");
+    }
+
+    [Fact]
+    public void Tokenizes_AbsoluteCellRef_RowOnly()
+    {
+        var tokens = new Lexer("=C$5").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.CellRef);
+        tokens[0].Value.Should().Be("C$5");
+    }
+
+    [Fact]
+    public void Tokenizes_RelativeCellRef_Unchanged()
+    {
+        var tokens = new Lexer("=D10").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.CellRef);
+        tokens[0].Value.Should().Be("D10");
+    }
 }
