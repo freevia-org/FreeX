@@ -258,7 +258,7 @@
             <!-- ── HOME ──────────────────────────────────────────────── -->
             <TabItem Header="Home">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -270,11 +270,17 @@
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="2,2,2,0">
-                                <Button Content="Paste" Click="PasteBtn_Click"
-                                        Width="54" Height="30" Margin="1"
-                                        Style="{StaticResource RibbonBtn}" FontSize="12"
+                                <Button Click="PasteBtn_Click"
+                                        Width="54" Height="36" Margin="1"
+                                        Style="{StaticResource RibbonBtn}"
                                         local:RibbonTooltip.Title="Paste"
-                                        local:RibbonTooltip.Description="Paste the contents of the Clipboard into the document."/>
+                                        local:RibbonTooltip.Description="Paste the contents of the Clipboard into the document.">
+                                    <StackPanel>
+                                        <TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                                   HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Paste" FontSize="10" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="✂ Cut"  Click="CutBtn_Click"
                                             Width="54" Height="20" Margin="1,1"
@@ -491,14 +497,26 @@
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Find"    Width="66" Height="22" Margin="1,1"
+                                <Button Width="72" Height="22" Margin="1,1"
                                         Style="{StaticResource RibbonBtn}" Click="FindButton_Click"
                                         local:RibbonTooltip.Title="Find"
-                                        local:RibbonTooltip.Description="Find text, numbers, or formulas in the workbook."/>
-                                <Button Content="Replace" Width="66" Height="22" Margin="1,1"
+                                        local:RibbonTooltip.Description="Find text, numbers, or formulas in the workbook.">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <TextBlock Text="Find" VerticalAlignment="Center" FontSize="10"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Width="72" Height="22" Margin="1,1"
                                         Style="{StaticResource RibbonBtn}" Click="ReplaceButton_Click"
                                         local:RibbonTooltip.Title="Replace"
-                                        local:RibbonTooltip.Description="Replace text or data in the workbook with different content."/>
+                                        local:RibbonTooltip.Description="Replace text or data in the workbook with different content.">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <TextBlock Text="Replace" VerticalAlignment="Center" FontSize="10"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Editing" Style="{StaticResource GroupLbl}"/>
@@ -513,7 +531,7 @@
             <!-- ── INSERT ────────────────────────────────────────────── -->
             <TabItem Header="Insert">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -597,7 +615,7 @@
             <!-- ── DRAW ──────────────────────────────────────────────── -->
             <TabItem Header="Draw">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -645,7 +663,7 @@
             <!-- ── PAGE LAYOUT ───────────────────────────────────────── -->
             <TabItem Header="Page Layout">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -720,7 +738,7 @@
             <!-- ── FORMULAS ──────────────────────────────────────────── -->
             <TabItem Header="Formulas">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -852,7 +870,7 @@
             <!-- ── DATA ──────────────────────────────────────────────── -->
             <TabItem Header="Data">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -877,20 +895,32 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="Sort A-Z" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
+                                    <Button Content="&#x2191; A&#x2192;Z" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
                                             local:RibbonTooltip.Title="Sort Ascending"
                                             local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z)."/>
-                                    <Button Content="Sort Z-A" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
+                                    <Button Content="&#x2193; Z&#x2192;A" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
                                             local:RibbonTooltip.Title="Sort Descending"
                                             local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A)."/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="Filter"       Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
+                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
                                             local:RibbonTooltip.Title="Filter"
-                                            local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want."/>
-                                    <Button Content="Clear Filter" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
+                                            local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want.">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <TextBlock Text="Filter" VerticalAlignment="Center" FontSize="10"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
                                             local:RibbonTooltip.Title="Clear Filter"
-                                            local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range."/>
+                                            local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <TextBlock Text="Clear Filter" VerticalAlignment="Center" FontSize="10"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sort &amp; Filter" Style="{StaticResource GroupLbl}"/></Border>
@@ -938,7 +968,7 @@
             <!-- ── REVIEW ────────────────────────────────────────────── -->
             <TabItem Header="Review">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1012,7 +1042,7 @@
             <!-- ── VIEW ──────────────────────────────────────────────── -->
             <TabItem Header="View">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1081,7 +1111,7 @@
             <!-- ── HELP ──────────────────────────────────────────────── -->
             <TabItem Header="Help">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1160,22 +1190,13 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-
-            <ui:GridView x:Name="SheetGrid" Grid.Row="0" Grid.Column="0"/>
+            <ui:GridView x:Name="SheetGrid" Grid.Column="0"/>
             <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
-            <Canvas x:Name="EditOverlay" Grid.Row="0" Grid.Column="0"
+            <Canvas x:Name="EditOverlay" Grid.Column="0"
                     IsHitTestVisible="False" Panel.ZIndex="20"/>
 
-            <ScrollBar x:Name="VerticalScroll"   Grid.Row="0" Grid.Column="1"
-                       Orientation="Vertical"   Minimum="1" Maximum="1000000" Value="1"/>
-            <ScrollBar x:Name="HorizontalScroll" Grid.Row="1" Grid.Column="0"
-                       Orientation="Horizontal" Minimum="1" Maximum="16384"   Value="1"/>
-
-            <Border Grid.Row="1" Grid.Column="1" Background="#E8E8E8"/>
+            <ScrollBar x:Name="VerticalScroll" Grid.Column="1"
+                       Orientation="Vertical" Minimum="1" Maximum="1000000" Value="1" SmallChange="1"/>
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════════════════
@@ -1187,6 +1208,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>   <!-- Nav arrows -->
                     <ColumnDefinition Width="*"/>      <!-- Scrolling tabs + Add button -->
+                    <ColumnDefinition Width="160"/>    <!-- Horizontal scrollbar -->
                 </Grid.ColumnDefinitions>
 
                 <!-- Sheet navigation arrows -->
@@ -1217,7 +1239,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
-                                            CornerRadius="3,3,0,0" Padding="10,3" Margin="2,0,0,0"
+                                            CornerRadius="3,3,0,0" Padding="10,3"
                                             Cursor="Hand"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                             MouseRightButtonDown="SheetTab_MouseRightButtonDown">
@@ -1226,11 +1248,13 @@
                                                 <Setter Property="Background"       Value="Transparent"/>
                                                 <Setter Property="BorderBrush"      Value="#D0D0D0"/>
                                                 <Setter Property="BorderThickness"  Value="1"/>
+                                                <Setter Property="Margin"           Value="2,0,0,0"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="Background"      Value="White"/>
                                                         <Setter Property="BorderBrush"     Value="#217346"/>
-                                                        <Setter Property="BorderThickness" Value="1,2,1,0"/>
+                                                        <Setter Property="BorderThickness" Value="0,0,0,3"/>
+                                                        <Setter Property="Margin"          Value="2,-1,0,0"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -1272,6 +1296,11 @@
                                 local:RibbonTooltip.Description="Add a new sheet to the workbook."/>
                     </StackPanel>
                 </ScrollViewer>
+
+                <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
+                <ScrollBar x:Name="HorizontalScroll" Grid.Column="2"
+                           Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
+                           SmallChange="1" VerticalAlignment="Center" Margin="2,0"/>
             </Grid>
         </Border>
 
@@ -1296,15 +1325,16 @@
                     <Button Content="−" Width="18" Height="18" Margin="0,0,2,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
-                            Cursor="Hand" Click="ZoomOutBtn_Click"/>
-                    <Slider x:Name="ZoomSlider" Width="80" Minimum="50" Maximum="300" Value="100"
+                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"/>
+                    <Slider x:Name="ZoomSlider" Width="80" Minimum="10" Maximum="400" Value="100"
                             VerticalAlignment="Center" Margin="0,0,2,0"
-                            SmallChange="10" LargeChange="25" TickFrequency="25"
+                            SmallChange="10" LargeChange="25"
+                            TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
                     <Button Content="+" Width="18" Height="18" Margin="0,0,6,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
-                            Cursor="Hand" Click="ZoomInBtn_Click"/>
+                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"/>
                     <TextBlock x:Name="StatusZoomText" Text="100%" Foreground="White" FontSize="12"
                                VerticalAlignment="Center" Width="38"/>
                 </StackPanel>
