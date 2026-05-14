@@ -784,7 +784,8 @@ public partial class MainWindow : Window
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == System.Windows.Input.Key.Enter)
+        if (e.Key == System.Windows.Input.Key.Enter
+            && (e.KeyboardDevice.Modifiers & System.Windows.Input.ModifierKeys.Shift) == 0)
         {
             var current = SheetGrid.SelectedRange?.Start;
             CommitEdit();
@@ -917,8 +918,12 @@ public partial class MainWindow : Window
         SheetGrid.Charts = sheet?.Charts;
         SheetGrid.MergedRegions = sheet?.MergedRegions;
 
-        // Adjust scrollbar range to the used data range + buffer
+        // Adjust scrollbar range to the used data range + buffer, thumb to visible area
         UpdateScrollbarMaximums(sheet);
+        VerticalScroll.ViewportSize   = viewport.RowMetrics.Count;
+        HorizontalScroll.ViewportSize = viewport.ColMetrics.Count;
+        VerticalScroll.LargeChange    = Math.Max(1, viewport.RowMetrics.Count);
+        HorizontalScroll.LargeChange  = Math.Max(1, viewport.ColMetrics.Count);
     }
 
     private void UpdateScrollbarMaximums(Sheet? sheet)
@@ -1207,17 +1212,7 @@ public partial class MainWindow : Window
     {
         _sheetTabs.Clear();
         foreach (var sheet in _workbook.Sheets)
-            _sheetTabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name));
-
-        // Highlight active tab after layout
-        SheetTabsControl.UpdateLayout();
-        foreach (var tab in _sheetTabs)
-        {
-            var container = SheetTabsControl.ItemContainerGenerator
-                .ContainerFromItem(tab) as System.Windows.FrameworkElement;
-            if (container?.FindName("TabBorder") is System.Windows.Controls.Border border)
-                border.Background = tab.Id == _currentSheetId ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Transparent;
-        }
+            _sheetTabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name) { IsActive = sheet.Id == _currentSheetId });
     }
 
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -3154,6 +3149,13 @@ internal sealed class SheetTabViewModel(SheetId id, string name) : System.Compon
     {
         get => _name;
         set { _name = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Name))); }
+    }
+
+    private bool _isActive;
+    public bool IsActive
+    {
+        get => _isActive;
+        set { _isActive = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsActive))); }
     }
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
