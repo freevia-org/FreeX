@@ -6,6 +6,7 @@ namespace Freexcel.Core.Model;
 /// </summary>
 public sealed class Workbook
 {
+    private static readonly char[] InvalidSheetNameChars = [':', '\\', '/', '?', '*', '[', ']'];
     private readonly List<Sheet> _sheets = [];
     private readonly List<CellStyle> _styles = [CellStyle.Default];
 
@@ -41,6 +42,7 @@ public sealed class Workbook
     /// <summary>Add a new sheet with the given name. Returns the new sheet.</summary>
     public Sheet AddSheet(string name)
     {
+        EnsureCanUseSheetName(name);
         var sheet = new Sheet(SheetId.New(), name);
         _sheets.Add(sheet);
         return sheet;
@@ -49,9 +51,43 @@ public sealed class Workbook
     /// <summary>Insert a sheet at a specific position.</summary>
     public Sheet InsertSheet(int index, string name)
     {
+        EnsureCanUseSheetName(name);
         var sheet = new Sheet(SheetId.New(), name);
         _sheets.Insert(index, sheet);
         return sheet;
+    }
+
+    /// <summary>Reinsert an existing sheet instance at a specific position.</summary>
+    public void InsertSheet(int index, Sheet sheet)
+    {
+        EnsureCanUseSheetName(sheet.Name, sheet.Id);
+        _sheets.Insert(index, sheet);
+    }
+
+    /// <summary>Return an Excel-compatible validation error for a sheet name, or null when valid.</summary>
+    public string? ValidateSheetName(string name, SheetId? exceptSheetId = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Sheet name is invalid: it cannot be blank.";
+
+        if (name.Length > 31)
+            return "Sheet name is invalid: it cannot exceed 31 characters.";
+
+        if (name.IndexOfAny(InvalidSheetNameChars) >= 0)
+            return "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].";
+
+        if (_sheets.Any(s => s.Id != exceptSheetId &&
+                             string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))
+            return $"A sheet named '{name}' already exists.";
+
+        return null;
+    }
+
+    private void EnsureCanUseSheetName(string name, SheetId? exceptSheetId = null)
+    {
+        var error = ValidateSheetName(name, exceptSheetId);
+        if (error is not null)
+            throw new ArgumentException(error, nameof(name));
     }
 
     /// <summary>Remove a sheet by its ID. Returns true if found and removed.</summary>

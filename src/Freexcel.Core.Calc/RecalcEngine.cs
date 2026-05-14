@@ -114,6 +114,45 @@ public sealed class RecalcEngine
         _volatileCells.Remove(cell);
     }
 
+    /// <summary>Rebuild dependency and volatile-function tracking from every formula in a workbook.</summary>
+    public void RebuildFormulaDependencies(Workbook workbook)
+    {
+        _graph.ClearAll();
+        _volatileCells.Clear();
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var (addr, cell) in sheet.GetUsedCells())
+            {
+                if (!cell.HasFormula || cell.FormulaText is null)
+                    continue;
+
+                try
+                {
+                    var ast = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
+                    RegisterFormulaDependencies(addr, ast, sheet.Id, workbook);
+                }
+                catch (FormulaParseException)
+                {
+                    // Invalid formula text evaluates as an error during recalc; it contributes no dependencies.
+                }
+            }
+        }
+    }
+
+    /// <summary>Rebuild dependencies and evaluate every formula cell in the workbook.</summary>
+    public RecalcReport RecalculateAllFormulas(Workbook workbook)
+    {
+        RebuildFormulaDependencies(workbook);
+        var formulaCells = workbook.Sheets
+            .SelectMany(sheet => sheet.GetUsedCells())
+            .Where(pair => pair.Value.HasFormula)
+            .Select(pair => pair.Key)
+            .ToList();
+
+        return Recalculate(workbook, formulaCells);
+    }
+
     private static bool ContainsVolatileFunction(FormulaNode node)
     {
         return node switch

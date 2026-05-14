@@ -10,6 +10,7 @@ public sealed record DeleteRowsOp(string SheetName, uint StartRow,  uint Count) 
 public sealed record InsertColsOp(string SheetName, uint BeforeCol, uint Count) : RewriteOperation;
 public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count) : RewriteOperation;
 public sealed record PasteOffsetOp(int RowDelta, int ColDelta)                  : RewriteOperation;
+public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    : RewriteOperation;
 
 // ── Rewriter ─────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ public static class FormulaRewriter
             InsertColsOp ins => RewriteCellRefInsertCols(cr, ins, ref changed),
             DeleteColsOp del => RewriteCellRefDeleteCols(cr, del, ref changed),
             PasteOffsetOp paste => RewriteCellRefPaste(cr, paste, ref changed),
+            RenameSheetOp rename => RewriteCellRefRenameSheet(cr, rename, ref changed),
             _ => cr
         };
     }
@@ -107,7 +109,15 @@ public static class FormulaRewriter
             return new ErrorNode(ErrorValue.Ref);
         }
 
-        return rr with { Start = (CellRefNode)start, End = (CellRefNode)end };
+        var sheetName = rr.SheetName;
+        if (op is RenameSheetOp rename &&
+            sheetName is not null &&
+            string.Equals(sheetName, rename.OldSheetName, StringComparison.OrdinalIgnoreCase))
+        {
+            sheetName = rename.NewSheetName;
+        }
+
+        return rr with { Start = (CellRefNode)start, End = (CellRefNode)end, SheetName = sheetName };
     }
 
     // ── Row insert ────────────────────────────────────────────────────────────
@@ -229,11 +239,23 @@ public static class FormulaRewriter
         return cr with { Row = newRow, ColumnName = newColName };
     }
 
+    private static FormulaNode RewriteCellRefRenameSheet(
+        CellRefNode cr, RenameSheetOp op, ref bool changed)
+    {
+        if (cr.SheetName is null ||
+            !string.Equals(cr.SheetName, op.OldSheetName, StringComparison.OrdinalIgnoreCase))
+            return cr;
+
+        changed = true;
+        return cr with { SheetName = op.NewSheetName };
+    }
+
     // ── Sheet matching ────────────────────────────────────────────────────────
 
     private static bool Matches(CellRefNode cr, RewriteOperation op, string hostSheetName)
     {
         if (op is PasteOffsetOp) return true;   // paste always adjusts
+        if (op is RenameSheetOp) return cr.SheetName is not null;
 
         var opSheet = op switch
         {

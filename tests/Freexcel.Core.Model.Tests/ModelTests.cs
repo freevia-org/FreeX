@@ -95,6 +95,37 @@ public class WorkbookTests
         wb.GetSheet("sheet1").Should().NotBeNull();
         wb.GetSheet("SHEET1").Should().NotBeNull();
     }
+
+    [Fact]
+    public void AddSheet_DuplicateName_Throws()
+    {
+        var wb = new Workbook();
+        wb.AddSheet("Sheet1");
+
+        var act = () => wb.AddSheet("sheet1");
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("*already exists*");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Bad/Name")]
+    [InlineData("Bad\\Name")]
+    [InlineData("Bad?Name")]
+    [InlineData("Bad*Name")]
+    [InlineData("Bad[Name]")]
+    [InlineData("Bad:Name")]
+    [InlineData("12345678901234567890123456789012")]
+    public void AddSheet_InvalidExcelSheetName_Throws(string name)
+    {
+        var wb = new Workbook();
+
+        var act = () => wb.AddSheet(name);
+
+        act.Should().Throw<ArgumentException>();
+    }
 }
 
 public class SheetTests

@@ -1,4 +1,5 @@
 using Freexcel.Core.Calc;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -206,6 +207,53 @@ public class VolatileFunctionTests
     }
 
     [Fact]
+    public void RebuildFormulaDependencies_AfterFormulaRewrite_TracksNewReferences()
+    {
+        var wb = new Workbook("Test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetFormula(b1, "A2");
+        engine.RegisterFormulaDependencies(
+            b1,
+            new Parser(new Lexer("=A2").Tokenize()).Parse(),
+            sheet.Id,
+            wb);
+
+        new InsertRowsCommand(sheet.Id, 2).Apply(ctx);
+        sheet.GetCell(b1)!.FormulaText.Should().Be("A3");
+
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        engine.RebuildFormulaDependencies(wb);
+        sheet.SetCell(a3, new NumberValue(7));
+        engine.Recalculate(wb, [a3]);
+
+        sheet.GetValue(b1).Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
+    public void RecalculateAllFormulas_EvaluatesNonVolatileFormulaWithoutChangedCells()
+    {
+        var wb = new Workbook("Test");
+        var sheet = wb.AddSheet("Sheet1");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetFormula(b1, "A1*2");
+
+        var report = engine.RecalculateAllFormulas(wb);
+
+        report.RecalculatedCells.Should().Contain(b1);
+        sheet.GetValue(b1).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
     public void VolatileCell_EvaluatesBeforeItsDependents()
     {
         // A1 = =NOW() (volatile)
@@ -235,4 +283,10 @@ public class VolatileFunctionTests
         // B1 should equal A1 (meaning A1 was evaluated before B1 read it)
         sheet.GetValue(b1).Should().Be(sheet.GetValue(a1));
     }
+}
+
+file sealed class SimpleCtx(Workbook wb) : ICommandContext
+{
+    public Workbook Workbook { get; } = wb;
+    public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
 }

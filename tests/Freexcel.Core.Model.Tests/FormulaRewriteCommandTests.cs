@@ -181,4 +181,96 @@ public class FormulaRewriteCommandTests
 
         sheet.GetCell(1, 1)!.FormulaText.Should().Be("D1");
     }
+
+    // ── RenameSheet ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RenameSheet_RewritesCrossSheetFormulaReferences()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var sheet2 = wb.AddSheet("Sheet2");
+        sheet2.SetFormula(new CellAddress(sheet2.Id, 1, 1), "Sheet1!A1");
+
+        new RenameSheetCommand(sheet.Id, "Data").Apply(ctx);
+
+        sheet2.GetCell(1, 1)!.FormulaText.Should().Be("Data!A1");
+    }
+
+    [Fact]
+    public void RenameSheet_RewritesQuotedCrossSheetFormulaReferences()
+    {
+        var wb = new Workbook("test");
+        var data = wb.AddSheet("My Sheet");
+        var formulas = wb.AddSheet("Formulas");
+        var ctx = new SimpleCtx(wb);
+        formulas.SetFormula(new CellAddress(formulas.Id, 1, 1), "'My Sheet'!A1");
+
+        new RenameSheetCommand(data.Id, "New Sheet").Apply(ctx);
+
+        formulas.GetCell(1, 1)!.FormulaText.Should().Be("'New Sheet'!A1");
+    }
+
+    [Fact]
+    public void RenameSheet_Undo_RestoresFormulaReferences()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var sheet2 = wb.AddSheet("Sheet2");
+        sheet2.SetFormula(new CellAddress(sheet2.Id, 1, 1), "Sheet1!A1");
+
+        var cmd = new RenameSheetCommand(sheet.Id, "Data");
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        sheet.Name.Should().Be("Sheet1");
+        sheet2.GetCell(1, 1)!.FormulaText.Should().Be("Sheet1!A1");
+    }
+
+    [Fact]
+    public void RenameSheet_DuplicateName_FailsWithoutChangingSheet()
+    {
+        var (wb, sheet, ctx) = Setup();
+        wb.AddSheet("Data");
+
+        var outcome = new RenameSheetCommand(sheet.Id, "data").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("already exists");
+        sheet.Name.Should().Be("Sheet1");
+    }
+
+    [Fact]
+    public void RenameSheet_InvalidExcelSheetName_FailsWithoutChangingSheet()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        var outcome = new RenameSheetCommand(sheet.Id, "Bad/Name").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("invalid");
+        sheet.Name.Should().Be("Sheet1");
+    }
+
+    [Fact]
+    public void RemoveSheet_Undo_RestoresRemovedSheetContentsAndId()
+    {
+        var wb = new Workbook("test");
+        var first = wb.AddSheet("First");
+        var removed = wb.AddSheet("Data");
+        var third = wb.AddSheet("Third");
+        var ctx = new SimpleCtx(wb);
+        var removedId = removed.Id;
+        removed.SetCell(new CellAddress(removed.Id, 2, 3), new NumberValue(42));
+        removed.SetFormula(new CellAddress(removed.Id, 3, 3), "C2*2");
+
+        var cmd = new RemoveSheetCommand(removed.Id);
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        wb.Sheets.Select(s => s.Name).Should().Equal("First", "Data", "Third");
+        wb.Sheets[1].Id.Should().Be(removedId);
+        wb.Sheets[0].Id.Should().Be(first.Id);
+        wb.Sheets[2].Id.Should().Be(third.Id);
+        wb.Sheets[1].GetCell(2, 3)!.Value.Should().Be(new NumberValue(42));
+        wb.Sheets[1].GetCell(3, 3)!.FormulaText.Should().Be("C2*2");
+    }
 }

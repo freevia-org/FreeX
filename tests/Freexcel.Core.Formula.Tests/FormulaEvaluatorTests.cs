@@ -146,6 +146,13 @@ public class FormulaEvaluatorTests
         _evaluator.Evaluate("=-5+3", sheet).Should().Be(new NumberValue(-2));
     }
 
+    [Fact]
+    public void Precedence_PowerBeforeUnaryNegation()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=-2^2", sheet).Should().Be(new NumberValue(-4));
+    }
+
     // ── Cell references ──
 
     [Fact]
@@ -431,6 +438,20 @@ public class FormulaEvaluatorTests
         result.Should().Be(ErrorValue.DivByZero);
     }
 
+    [Theory]
+    [InlineData("#REF!")]
+    [InlineData("#N/A")]
+    [InlineData("#DIV/0!")]
+    [InlineData("#VALUE!")]
+    [InlineData("#NAME?")]
+    [InlineData("#NULL!")]
+    [InlineData("#NUM!")]
+    public void ErrorLiteral_EvaluatesToErrorValue(string errorCode)
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=" + errorCode, sheet).Should().Be(new ErrorValue(errorCode));
+    }
+
     // ── Percent operator ──
 
     [Fact]
@@ -517,6 +538,32 @@ public class CrossSheetReferenceTests
         var result = _evaluator.Evaluate("=Sheet2!A1", sheet1, workbook);
 
         result.Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
+    public void QuotedCrossSheetCellRef_ReadsValueFromSheetWithSpace()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("My Sheet");
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(42));
+
+        var result = _evaluator.Evaluate("='My Sheet'!A1", sheet1, workbook);
+
+        result.Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
+    public void QuotedCrossSheetCellRef_ReadsValueFromSheetWithApostrophe()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Bob's Sheet");
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(99));
+
+        var result = _evaluator.Evaluate("='Bob''s Sheet'!A1", sheet1, workbook);
+
+        result.Should().Be(new NumberValue(99));
     }
 
     [Fact]

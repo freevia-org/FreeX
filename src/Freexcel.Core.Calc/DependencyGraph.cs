@@ -56,6 +56,13 @@ public sealed class DependencyGraph
         }
     }
 
+    /// <summary>Remove every dependency edge from the graph.</summary>
+    public void ClearAll()
+    {
+        _precedents.Clear();
+        _dependents.Clear();
+    }
+
     /// <summary>Get all cells that directly depend on the given cell.</summary>
     public IReadOnlySet<CellAddress> GetDirectDependents(CellAddress cell)
     {

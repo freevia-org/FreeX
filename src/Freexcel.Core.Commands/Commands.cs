@@ -1,4 +1,5 @@
 using Freexcel.Core.Model;
+using Freexcel.Core.Formula;
 
 namespace Freexcel.Core.Commands;
 
@@ -85,6 +86,10 @@ public sealed class AddSheetCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        var validationError = ctx.Workbook.ValidateSheetName(_name);
+        if (validationError is not null)
+            return new CommandOutcome(false, validationError);
+
         var sheet = ctx.Workbook.AddSheet(_name);
         _addedSheetId = sheet.Id;
         return new CommandOutcome(true);
@@ -103,6 +108,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly string _newName;
     private string? _oldName;
+    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -115,8 +121,15 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        var validationError = ctx.Workbook.ValidateSheetName(_newName, _sheetId);
+        if (validationError is not null)
+            return new CommandOutcome(false, validationError);
+
         _oldName = sheet.Name;
         sheet.Name = _newName;
+        _formulaSnapshot.Clear();
+        InsertRowsCommand.RewriteAllFormulas(
+            ctx.Workbook, new RenameSheetOp(_oldName, _newName), _formulaSnapshot);
         return new CommandOutcome(true);
     }
 
@@ -126,6 +139,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         {
             var sheet = ctx.GetSheet(_sheetId);
             sheet.Name = _oldName;
+            InsertRowsCommand.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         }
     }
 }
@@ -134,7 +148,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
 public sealed class RemoveSheetCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
-    private string? _removedName;
+    private Sheet? _removedSheet;
     private int _removedIndex;
 
     public string Label => "Delete Sheet";
@@ -144,7 +158,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        _removedName = sheet.Name;
+        _removedSheet = sheet;
         var sheets = ctx.Workbook.Sheets;
         for (int i = 0; i < sheets.Count; i++)
             if (sheets[i].Id == _sheetId) { _removedIndex = i; break; }
@@ -154,7 +168,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_removedName is not null)
-            ctx.Workbook.InsertSheet(_removedIndex, _removedName);
+        if (_removedSheet is not null)
+            ctx.Workbook.InsertSheet(_removedIndex, _removedSheet);
     }
 }

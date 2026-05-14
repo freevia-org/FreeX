@@ -136,7 +136,7 @@ public static class FormulaSerializer
     {
         if (cr.SheetName is not null)
         {
-            sb.Append(cr.SheetName);
+            WriteSheetName(cr.SheetName, sb);
             sb.Append('!');
         }
         if (cr.IsColAbsolute) sb.Append('$');
@@ -150,7 +150,7 @@ public static class FormulaSerializer
         var sheetName = rr.SheetName ?? rr.Start.SheetName;
         if (sheetName is not null)
         {
-            sb.Append(sheetName);
+            WriteSheetName(sheetName, sb);
             sb.Append('!');
         }
         // Write start without its SheetName prefix (already written above)
@@ -165,5 +165,26 @@ public static class FormulaSerializer
         sb.Append(cr.ColumnName);
         if (cr.IsRowAbsolute) sb.Append('$');
         sb.Append(cr.Row);
+    }
+
+    private static void WriteSheetName(string sheetName, StringBuilder sb)
+    {
+        if (RequiresQuoting(sheetName))
+        {
+            sb.Append('\'');
+            sb.Append(sheetName.Replace("'", "''"));
+            sb.Append('\'');
+            return;
+        }
+
+        sb.Append(sheetName);
+    }
+
+    private static bool RequiresQuoting(string sheetName)
+    {
+        if (sheetName.Length == 0)
+            return true;
+
+        return sheetName.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_' && ch != '.');
     }
 }
