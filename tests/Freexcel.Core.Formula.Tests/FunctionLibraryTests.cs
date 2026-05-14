@@ -1353,6 +1353,12 @@ public class FunctionLibraryTests
     [Fact] public void T_Number_ReturnsEmpty() =>
         _eval.Evaluate("=T(42)", MakeSheet()).Should().Be(new TextValue(""));
 
+    [Fact] public void T_Error_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, ErrorValue.Ref));
+        _eval.Evaluate("=T(A1)", sheet).Should().Be(ErrorValue.Ref);
+    }
+
     [Fact] public void Fixed_TwoDecimals_ReturnsFormatted() =>
         _eval.Evaluate("=FIXED(1234.567,2,TRUE)", MakeSheet())
             .Should().Be(new TextValue("1234.57"));
