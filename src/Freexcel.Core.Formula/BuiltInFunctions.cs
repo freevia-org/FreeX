@@ -197,6 +197,16 @@ public static class BuiltInFunctions
         ["CORREL"]           = (Correl, 2, 2),
         ["FORECAST"]         = (Forecast, 3, 3),
         ["FORECAST.LINEAR"]  = (Forecast, 3, 3),
+
+        // ── Phase 4a: Financial ──────────────────────────────────────────────
+        ["PMT"]  = (Pmt, 3, 5),
+        ["PV"]   = (Pv, 3, 5),
+        ["FV"]   = (Fv, 3, 5),
+        ["NPER"] = (Nper, 3, 5),
+        ["RATE"] = (Rate, 3, 6),
+        ["NPV"]  = (Npv, 2, 255),
+        ["IRR"]  = (Irr, 1, 2),
+        ["SLN"]  = (Sln, 3, 3),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -2137,6 +2147,161 @@ public static class BuiltInFunctions
         double b = sXY / sXX;
         double a = yMean - b * xMean;
         return new NumberValue(a + b * x);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4a  –  Financial
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        double rate = ToNumber(args[0]);
+        int    nper = (int)ToNumber(args[1]);
+        double pv   = ToNumber(args[2]);
+        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
+        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (nper == 0) return ErrorValue.DivByZero;
+        if (Math.Abs(rate) < 1e-10)
+            return new NumberValue(-(pv + fv) / nper);
+        double rn  = Math.Pow(1 + rate, nper);
+        double pmt = -(pv * rn + fv) * rate / ((1 + rate * type) * (rn - 1));
+        return new NumberValue(pmt);
+    }
+
+    private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        double rate = ToNumber(args[0]);
+        int    nper = (int)ToNumber(args[1]);
+        double pmt  = ToNumber(args[2]);
+        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
+        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (nper == 0) return ErrorValue.DivByZero;
+        if (Math.Abs(rate) < 1e-10)
+            return new NumberValue(-pmt * nper - fv);
+        double rn = Math.Pow(1 + rate, nper);
+        double pv = (-pmt * (1 + rate * type) * (rn - 1) / rate - fv) / rn;
+        return new NumberValue(pv);
+    }
+
+    private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        double rate = ToNumber(args[0]);
+        int    nper = (int)ToNumber(args[1]);
+        double pmt  = ToNumber(args[2]);
+        double pv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
+        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (Math.Abs(rate) < 1e-10)
+            return new NumberValue(-pv - pmt * nper);
+        double rn = Math.Pow(1 + rate, nper);
+        return new NumberValue(-pv * rn - pmt * (1 + rate * type) * (rn - 1) / rate);
+    }
+
+    private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        double rate = ToNumber(args[0]);
+        double pmt  = ToNumber(args[1]);
+        double pv   = ToNumber(args[2]);
+        double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
+        double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (Math.Abs(rate) < 1e-10)
+        {
+            if (Math.Abs(pmt) < 1e-10) return ErrorValue.DivByZero;
+            return new NumberValue(-(pv + fv) / pmt);
+        }
+        double pmtAdj = pmt * (1 + rate * type);
+        double ratio  = (pmtAdj - fv * rate) / (pmtAdj + pv * rate);
+        if (ratio <= 0) return ErrorValue.Num;
+        return new NumberValue(Math.Log(ratio) / Math.Log(1 + rate));
+    }
+
+    private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        int    nper  = (int)ToNumber(args[0]);
+        double pmt   = ToNumber(args[1]);
+        double pv    = ToNumber(args[2]);
+        double fv    = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
+        double type  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        double guess = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0.1;
+        double r = guess;
+        for (int i = 0; i < 100; i++)
+        {
+            double rn   = Math.Pow(1 + r, nper);
+            double rn1  = nper * Math.Pow(1 + r, nper - 1);
+            double f, df;
+            if (Math.Abs(r) < 1e-10)
+            {
+                f  = pv + pmt * nper + fv;
+                df = pv * nper + pmt * nper * (nper - 1) / 2.0;
+            }
+            else
+            {
+                f  = pv * rn + pmt * (1 + r * type) * (rn - 1) / r + fv;
+                df = pv * rn1
+                   + pmt * type * (rn - 1) / r
+                   + pmt * (1 + r * type) * (rn1 * r - (rn - 1)) / (r * r);
+            }
+            if (Math.Abs(df) < 1e-15) break;
+            double delta = f / df;
+            r -= delta;
+            if (Math.Abs(delta) < 1e-10) break;
+        }
+        return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
+    }
+
+    private static ScalarValue Npv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double rate   = ToNumber(args[0]);
+        double result = 0;
+        for (int i = 1; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue ev) return ev;
+            if (args[i] is NumberValue nv)
+                result += nv.Value / Math.Pow(1 + rate, i);
+        }
+        return new NumberValue(result);
+    }
+
+    private static ScalarValue Irr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
+        double guess = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 0.1;
+        var values = valRange.Flatten()
+                             .OfType<NumberValue>()
+                             .Select(n => n.Value)
+                             .ToList();
+        if (values.Count == 0) return ErrorValue.Value;
+        double r = guess;
+        for (int iter = 0; iter < 100; iter++)
+        {
+            double f = 0, df = 0;
+            for (int i = 0; i < values.Count; i++)
+            {
+                double denom = Math.Pow(1 + r, i);
+                f  += values[i] / denom;
+                if (i > 0) df -= i * values[i] / (denom * (1 + r));
+            }
+            if (Math.Abs(f) < 1e-10) break;
+            if (Math.Abs(df) < 1e-15) return ErrorValue.Num;
+            double delta = f / df;
+            r -= delta;
+            if (Math.Abs(delta) < 1e-10) break;
+        }
+        return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
+    }
+
+    private static ScalarValue Sln(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        double cost    = ToNumber(args[0]);
+        double salvage = ToNumber(args[1]);
+        double life    = ToNumber(args[2]);
+        if (life == 0) return ErrorValue.DivByZero;
+        return new NumberValue((cost - salvage) / life);
     }
 }
 

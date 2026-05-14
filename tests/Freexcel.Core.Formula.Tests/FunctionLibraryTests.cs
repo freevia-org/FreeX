@@ -1254,4 +1254,68 @@ public class FunctionLibraryTests
         ((NumberValue)_eval.Evaluate("=FORECAST(8,A1:A3,B1:B3)", sheet)).Value
             .Should().BeApproximately(4.0, 1e-10);
     }
+
+    // ── Financial ────────────────────────────────────────────────────────────────
+
+    [Fact] public void Pmt_MonthlyPayment_ReturnsNegative()
+    {
+        // PMT(5%/12, 60, 10000) ≈ -188.71
+        ((NumberValue)_eval.Evaluate("=PMT(0.05/12,60,10000)", MakeSheet())).Value
+            .Should().BeApproximately(-188.71, 0.01);
+    }
+
+    [Fact] public void Pv_FutureValue_ReturnsPresent()
+    {
+        // PV(5%/12, 60, 188.71) ≈ -10000
+        ((NumberValue)_eval.Evaluate("=PV(0.05/12,60,188.71)", MakeSheet())).Value
+            .Should().BeApproximately(-10000, 1.0);
+    }
+
+    [Fact] public void Fv_Savings_ReturnsAccumulated()
+    {
+        // FV(5%/12, 12, -100) ≈ 1227.89
+        ((NumberValue)_eval.Evaluate("=FV(0.05/12,12,-100)", MakeSheet())).Value
+            .Should().BeApproximately(1227.89, 0.1);
+    }
+
+    [Fact] public void Nper_CountPeriods_Returns60()
+    {
+        ((NumberValue)_eval.Evaluate("=NPER(0.05/12,-188.71,10000)", MakeSheet())).Value
+            .Should().BeApproximately(60, 0.1);
+    }
+
+    [Fact] public void Rate_FindsInterestRate()
+    {
+        // RATE(60, -188.71, 10000) ≈ 0.05/12
+        ((NumberValue)_eval.Evaluate("=RATE(60,-188.71,10000)", MakeSheet())).Value
+            .Should().BeApproximately(0.05 / 12, 1e-5);
+    }
+
+    [Fact] public void Npv_BasicCashflow_ReturnsNpv()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(-1000)),
+            (2,1,new NumberValue(400)),
+            (3,1,new NumberValue(400)),
+            (4,1,new NumberValue(400)));
+        ((NumberValue)_eval.Evaluate("=NPV(0.1,A1:A4)", sheet)).Value
+            .Should().BeApproximately(-1000.0/1.1 + 400.0/1.21 + 400.0/1.331 + 400.0/1.4641, 0.01);
+    }
+
+    [Fact] public void Irr_CashflowSeries_ReturnsRate()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(-1000)),
+            (2,1,new NumberValue(300)),
+            (3,1,new NumberValue(400)),
+            (4,1,new NumberValue(500)));
+        ((NumberValue)_eval.Evaluate("=IRR(A1:A4)", sheet)).Value
+            .Should().BeApproximately(0.0890, 0.001);
+    }
+
+    [Fact] public void Sln_StraightLine_ReturnsAnnualDep()
+    {
+        // SLN(10000, 1000, 9) = 1000
+        _eval.Evaluate("=SLN(10000,1000,9)", MakeSheet()).Should().Be(new NumberValue(1000));
+    }
 }
