@@ -207,6 +207,19 @@ public static class BuiltInFunctions
         ["NPV"]  = (Npv, 2, 255),
         ["IRR"]  = (Irr, 1, 2),
         ["SLN"]  = (Sln, 3, 3),
+
+        // ── Phase 4a: Logical / Text ─────────────────────────────────────────
+        ["XOR"]         = (Xor, 1, 255),
+        ["TRUE"]        = (TrueFunc, 0, 0),
+        ["FALSE"]       = (FalseFunc, 0, 0),
+        ["ISEVEN"]      = (Iseven, 1, 1),
+        ["ISODD"]       = (Isodd, 1, 1),
+        ["REPLACE"]     = (Replace, 4, 4),
+        ["CONCATENATE"] = (Concatenate, 1, 255),
+        ["T"]           = (TFunc, 1, 1),
+        ["FIXED"]       = (Fixed, 1, 3),
+        ["CLEAN"]       = (Clean, 1, 1),
+        ["DOLLAR"]      = (Dollar, 1, 2),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -2307,6 +2320,97 @@ public static class BuiltInFunctions
         double life    = ToNumber(args[2]);
         if (life == 0) return ErrorValue.DivByZero;
         return new NumberValue((cost - salvage) / life);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4a  –  Logical / Text
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Xor(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        bool result = false;
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            result ^= ToBool(a);
+        }
+        return new BoolValue(result);
+    }
+
+    private static ScalarValue TrueFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(true);
+
+    private static ScalarValue FalseFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        new BoolValue(false);
+
+    private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new BoolValue((long)Math.Truncate(ToNumber(args[0])) % 2 == 0);
+    }
+
+    private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return new BoolValue((long)Math.Truncate(ToNumber(args[0])) % 2 != 0);
+    }
+
+    private static ScalarValue Replace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var text     = ToText(args[0]);
+        int start    = Math.Max(0, (int)ToNumber(args[1]) - 1); // 1-based → 0-based
+        int numChars = Math.Max(0, (int)ToNumber(args[2]));
+        var newText  = ToText(args[3]);
+        start = Math.Min(start, text.Length);
+        int end = Math.Min(start + numChars, text.Length);
+        return new TextValue(text[..start] + newText + text[end..]);
+    }
+
+    private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            sb.Append(ToText(a));
+        }
+        return new TextValue(sb.ToString());
+    }
+
+    private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        args[0] is TextValue t ? t : new TextValue("");
+
+    private static ScalarValue Fixed(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double n      = ToNumber(args[0]);
+        int dec       = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 2;
+        bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
+        dec = Math.Max(0, dec);
+        string fmt = noCommas ? "F" + dec : "N" + dec;
+        return new TextValue(Math.Round(n, dec, MidpointRounding.AwayFromZero)
+                                 .ToString(fmt, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static ScalarValue Clean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in ToText(args[0]))
+            if (c >= 32) sb.Append(c);
+        return new TextValue(sb.ToString());
+    }
+
+    private static ScalarValue Dollar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        double n = ToNumber(args[0]);
+        int dec  = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 2;
+        dec = Math.Max(0, dec);
+        string rounded = Math.Round(n, dec, MidpointRounding.AwayFromZero)
+                             .ToString("N" + dec, System.Globalization.CultureInfo.InvariantCulture);
+        return new TextValue("$" + rounded);
     }
 }
 

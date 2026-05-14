@@ -169,19 +169,20 @@ public sealed class Lexer
             return new Token(TokenType.SheetQualifier, value, start);
         }
 
-        // Check for boolean literals
-        if (upper == "TRUE")
-            return new Token(TokenType.Boolean, "TRUE", start);
-        if (upper == "FALSE")
-            return new Token(TokenType.Boolean, "FALSE", start);
-
-        // Check if it's a function name (followed by open paren)
+        // Check if it's a function name (followed by open paren) — must come before boolean check
+        // so that TRUE() and FALSE() are treated as zero-arg function calls.
         var lookAhead = _pos;
         while (lookAhead < _text.Length && _text[lookAhead] == ' ')
             lookAhead++;
 
         if (lookAhead < _text.Length && _text[lookAhead] == '(')
             return new Token(TokenType.FunctionName, upper, start);
+
+        // Check for boolean literals
+        if (upper == "TRUE")
+            return new Token(TokenType.Boolean, "TRUE", start);
+        if (upper == "FALSE")
+            return new Token(TokenType.Boolean, "FALSE", start);
 
         // Otherwise it's a cell reference
         if (IsCellReference(value))

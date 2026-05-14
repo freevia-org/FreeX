@@ -1318,4 +1318,52 @@ public class FunctionLibraryTests
         // SLN(10000, 1000, 9) = 1000
         _eval.Evaluate("=SLN(10000,1000,9)", MakeSheet()).Should().Be(new NumberValue(1000));
     }
+
+    // ── Logical / Text ───────────────────────────────────────────────────────────
+
+    [Fact] public void Xor_TrueTrue_ReturnsFalse() =>
+        _eval.Evaluate("=XOR(TRUE,TRUE)", MakeSheet()).Should().Be(new BoolValue(false));
+
+    [Fact] public void Xor_TrueFalse_ReturnsTrue() =>
+        _eval.Evaluate("=XOR(TRUE,FALSE)", MakeSheet()).Should().Be(new BoolValue(true));
+
+    [Fact] public void TrueFunc_ReturnsTrue() =>
+        _eval.Evaluate("=TRUE()", MakeSheet()).Should().Be(new BoolValue(true));
+
+    [Fact] public void FalseFunc_ReturnsFalse() =>
+        _eval.Evaluate("=FALSE()", MakeSheet()).Should().Be(new BoolValue(false));
+
+    [Fact] public void Iseven_4_ReturnsTrue() =>
+        _eval.Evaluate("=ISEVEN(4)", MakeSheet()).Should().Be(new BoolValue(true));
+
+    [Fact] public void Isodd_3_ReturnsTrue() =>
+        _eval.Evaluate("=ISODD(3)", MakeSheet()).Should().Be(new BoolValue(true));
+
+    [Fact] public void Replace_Middle_ReplacesCorrectly() =>
+        _eval.Evaluate("=REPLACE(\"Hello World\",7,5,\"Excel\")", MakeSheet())
+            .Should().Be(new TextValue("Hello Excel"));
+
+    [Fact] public void Concatenate_TwoStrings_JoinsThem() =>
+        _eval.Evaluate("=CONCATENATE(\"Hello \",\"World\")", MakeSheet())
+            .Should().Be(new TextValue("Hello World"));
+
+    [Fact] public void T_Text_ReturnsText() =>
+        _eval.Evaluate("=T(\"hello\")", MakeSheet()).Should().Be(new TextValue("hello"));
+
+    [Fact] public void T_Number_ReturnsEmpty() =>
+        _eval.Evaluate("=T(42)", MakeSheet()).Should().Be(new TextValue(""));
+
+    [Fact] public void Fixed_TwoDecimals_ReturnsFormatted() =>
+        _eval.Evaluate("=FIXED(1234.567,2,TRUE)", MakeSheet())
+            .Should().Be(new TextValue("1234.57"));
+
+    [Fact] public void Clean_RemovesControlChars()
+    {
+        var sheet = MakeSheet((1, 1, new TextValue("Hello\x01World")));
+        _eval.Evaluate("=CLEAN(A1)", sheet).Should().Be(new TextValue("HelloWorld"));
+    }
+
+    [Fact] public void Dollar_FormatsAsCurrency() =>
+        _eval.Evaluate("=DOLLAR(1234.5,2)", MakeSheet())
+            .Should().Be(new TextValue("$1,234.50"));
 }
