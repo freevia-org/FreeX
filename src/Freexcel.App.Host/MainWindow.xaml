@@ -1243,7 +1243,8 @@
         <Grid x:Name="StartScreenOverlay"
               Grid.Row="0" Grid.RowSpan="6"
               Panel.ZIndex="200"
-              Visibility="Collapsed">
+              Visibility="Collapsed"
+              WindowChrome.IsHitTestVisibleInChrome="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="190"/>
                 <ColumnDefinition Width="*"/>
