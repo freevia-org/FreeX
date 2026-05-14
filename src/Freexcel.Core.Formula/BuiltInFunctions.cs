@@ -176,6 +176,27 @@ public static class BuiltInFunctions
         ["NETWORKDAYS"]  = (Networkdays, 2, 3),
         ["DAYS"]         = (Days, 2, 2),
         ["YEARFRAC"]     = (Yearfrac, 2, 3),
+
+        // ── Phase 4a: Statistical ────────────────────────────────────────────
+        ["VAR"]              = (VarS, 1, 255),
+        ["VAR.S"]            = (VarS, 1, 255),
+        ["VAR.P"]            = (VarP, 1, 255),
+        ["STDEV.P"]          = (StdevP, 1, 255),
+        ["PERCENTILE"]       = (PercentileInc, 2, 2),
+        ["PERCENTILE.INC"]   = (PercentileInc, 2, 2),
+        ["PERCENTILE.EXC"]   = (PercentileExc, 2, 2),
+        ["QUARTILE"]         = (QuartileInc, 2, 2),
+        ["QUARTILE.INC"]     = (QuartileInc, 2, 2),
+        ["GEOMEAN"]          = (Geomean, 1, 255),
+        ["HARMEAN"]          = (Harmean, 1, 255),
+        ["AVEDEV"]           = (Avedev, 1, 255),
+        ["PERCENTRANK"]      = (PercentrankInc, 2, 3),
+        ["PERCENTRANK.INC"]  = (PercentrankInc, 2, 3),
+        ["MODE"]             = (ModeSngl, 1, 255),
+        ["MODE.SNGL"]        = (ModeSngl, 1, 255),
+        ["CORREL"]           = (Correl, 2, 2),
+        ["FORECAST"]         = (Forecast, 3, 3),
+        ["FORECAST.LINEAR"]  = (Forecast, 3, 3),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
@@ -1899,6 +1920,219 @@ public static class BuiltInFunctions
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4a  –  Statistical
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue VarS(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var nums = CollectNumbers(args);
+        if (nums is ErrorValue e) return e;
+        var list = (List<double>)nums;
+        if (list.Count < 2) return ErrorValue.DivByZero;
+        double mean = list.Average();
+        return new NumberValue(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
+    }
+
+    private static ScalarValue VarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var nums = CollectNumbers(args);
+        if (nums is ErrorValue e) return e;
+        var list = (List<double>)nums;
+        if (list.Count == 0) return ErrorValue.DivByZero;
+        double mean = list.Average();
+        return new NumberValue(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
+    }
+
+    private static ScalarValue StdevP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var r = VarP(args, ctx);
+        return r is NumberValue nv ? new NumberValue(Math.Sqrt(nv.Value)) : r;
+    }
+
+    private static object CollectNumbers(IReadOnlyList<ScalarValue> args)
+    {
+        var list = new List<double>();
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            if (a is NumberValue nv) list.Add(nv.Value);
+        }
+        return list;
+    }
+
+    private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is ErrorValue e) return e;
+        double k = ToNumber(args[1]);
+        if (k < 0 || k > 1) return ErrorValue.Num;
+        var sorted = rv.Flatten().OfType<NumberValue>().Select(n => n.Value).OrderBy(x => x).ToList();
+        if (sorted.Count == 0) return ErrorValue.Num;
+        double rank = k * (sorted.Count - 1);
+        int lo = (int)rank;
+        if (lo >= sorted.Count - 1) return new NumberValue(sorted[^1]);
+        return new NumberValue(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
+    }
+
+    private static ScalarValue PercentileExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is ErrorValue e) return e;
+        double k = ToNumber(args[1]);
+        if (k <= 0 || k >= 1) return ErrorValue.Num;
+        var sorted = rv.Flatten().OfType<NumberValue>().Select(n => n.Value).OrderBy(x => x).ToList();
+        int n = sorted.Count;
+        if (n == 0) return ErrorValue.Num;
+        double rank = k * (n + 1) - 1;
+        if (rank < 0 || rank >= n) return ErrorValue.Num;
+        int lo = (int)rank;
+        if (lo >= n - 1) return new NumberValue(sorted[n - 1]);
+        return new NumberValue(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
+    }
+
+    private static ScalarValue QuartileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is ErrorValue e) return e;
+        int quart = (int)ToNumber(args[1]);
+        if (quart < 0 || quart > 4) return ErrorValue.Num;
+        var sorted = rv.Flatten().OfType<NumberValue>().Select(n => n.Value).OrderBy(x => x).ToList();
+        if (sorted.Count == 0) return ErrorValue.Num;
+        if (quart == 0) return new NumberValue(sorted[0]);
+        if (quart == 4) return new NumberValue(sorted[^1]);
+        double rank = (quart / 4.0) * (sorted.Count - 1);
+        int lo = (int)rank;
+        if (lo >= sorted.Count - 1) return new NumberValue(sorted[^1]);
+        return new NumberValue(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
+    }
+
+    private static ScalarValue Geomean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var logSum = 0.0;
+        int count = 0;
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            if (a is NumberValue nv)
+            {
+                if (nv.Value <= 0) return ErrorValue.Num;
+                logSum += Math.Log(nv.Value);
+                count++;
+            }
+        }
+        if (count == 0) return ErrorValue.Num;
+        return new NumberValue(Math.Exp(logSum / count));
+    }
+
+    private static ScalarValue Harmean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        double recSum = 0;
+        int count = 0;
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            if (a is NumberValue nv)
+            {
+                if (nv.Value <= 0) return ErrorValue.Num;
+                recSum += 1.0 / nv.Value;
+                count++;
+            }
+        }
+        if (count == 0) return ErrorValue.Num;
+        return new NumberValue(count / recSum);
+    }
+
+    private static ScalarValue Avedev(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var nums = new List<double>();
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            if (a is NumberValue nv) nums.Add(nv.Value);
+        }
+        if (nums.Count == 0) return ErrorValue.DivByZero;
+        double mean = nums.Average();
+        return new NumberValue(nums.Average(x => Math.Abs(x - mean)));
+    }
+
+    private static ScalarValue ModeSngl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var freq = new Dictionary<double, int>();
+        foreach (var a in args)
+        {
+            if (a is ErrorValue e) return e;
+            if (a is NumberValue nv)
+                freq[nv.Value] = freq.GetValueOrDefault(nv.Value) + 1;
+        }
+        if (freq.Count == 0) return ErrorValue.NA;
+        return new NumberValue(freq.MaxBy(kv => kv.Value).Key);
+    }
+
+    private static ScalarValue PercentrankInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is ErrorValue e) return e;
+        double x = ToNumber(args[1]);
+        int sig = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 3;
+        var sorted = rv.Flatten().OfType<NumberValue>().Select(n => n.Value).OrderBy(v => v).ToList();
+        int n = sorted.Count;
+        if (n == 0 || x < sorted[0] || x > sorted[^1]) return ErrorValue.NA;
+        int below = sorted.Count(v => v < x);
+        int equal = sorted.Count(v => v == x);
+        if (equal == 0) return ErrorValue.NA;
+        double pctRank = n == 1 ? 0.0 : (double)below / (n - 1);
+        double factor = Math.Pow(10, sig);
+        return new NumberValue(Math.Floor(pctRank * factor) / factor);
+    }
+
+    private static ScalarValue Correl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue rv1) return ErrorValue.Value;
+        if (args[1] is not RangeValue rv2) return ErrorValue.Value;
+        var xs = rv1.Flatten().OfType<NumberValue>().Select(n => n.Value).ToList();
+        var ys = rv2.Flatten().OfType<NumberValue>().Select(n => n.Value).ToList();
+        int n = Math.Min(xs.Count, ys.Count);
+        if (n < 2) return ErrorValue.DivByZero;
+        double xMean = xs.Take(n).Average();
+        double yMean = ys.Take(n).Average();
+        double cov = 0, varX = 0, varY = 0;
+        for (int i = 0; i < n; i++)
+        {
+            double dx = xs[i] - xMean, dy = ys[i] - yMean;
+            cov  += dx * dy;
+            varX += dx * dx;
+            varY += dy * dy;
+        }
+        if (varX == 0 || varY == 0) return ErrorValue.DivByZero;
+        return new NumberValue(cov / Math.Sqrt(varX * varY));
+    }
+
+    private static ScalarValue Forecast(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[1] is not RangeValue knownY) return ErrorValue.Value;
+        if (args[2] is not RangeValue knownX) return ErrorValue.Value;
+        double x    = ToNumber(args[0]);
+        var ys      = knownY.Flatten().OfType<NumberValue>().Select(n => n.Value).ToList();
+        var xs      = knownX.Flatten().OfType<NumberValue>().Select(n => n.Value).ToList();
+        int n = Math.Min(xs.Count, ys.Count);
+        if (n < 2) return ErrorValue.NA;
+        double xMean = xs.Take(n).Average();
+        double yMean = ys.Take(n).Average();
+        double sXX = 0, sXY = 0;
+        for (int i = 0; i < n; i++)
+        {
+            double dx = xs[i] - xMean;
+            sXX += dx * dx;
+            sXY += dx * (ys[i] - yMean);
+        }
+        if (sXX == 0) return ErrorValue.DivByZero;
+        double b = sXY / sXX;
+        double a = yMean - b * xMean;
+        return new NumberValue(a + b * x);
     }
 }
 
