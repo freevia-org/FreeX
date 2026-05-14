@@ -1740,6 +1740,8 @@ public static class BuiltInFunctions
     private static ScalarValue TimeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         double h = ToNumber(args[0]), m = ToNumber(args[1]), s = ToNumber(args[2]);
         double frac = (h * 3600 + m * 60 + s) / 86400.0;
         return new NumberValue(frac - Math.Floor(frac));
@@ -1749,8 +1751,8 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
-        if (TimeSpan.TryParse(text, out var ts))
-            return new NumberValue(ts.TotalDays % 1.0);
+        if (TimeSpan.TryParse(text, out var ts) && ts.Days == 0)
+            return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, out var dt))
             return new NumberValue(dt.TimeOfDay.TotalDays);
         return ErrorValue.Value;
@@ -1793,11 +1795,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var dt = DateTime.FromOADate(ToNumber(args[0]));
-        var cal = System.Globalization.CultureInfo.InvariantCulture.Calendar;
-        int week = cal.GetWeekOfYear(dt,
-            System.Globalization.CalendarWeekRule.FirstFourDayWeek,
-            DayOfWeek.Monday);
-        return new NumberValue(week);
+        return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
     }
 
     private static ScalarValue Workday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1866,13 +1864,23 @@ public static class BuiltInFunctions
         double totalDays = (endDt - startDt).TotalDays;
         double result = basis switch
         {
-            1 => totalDays / (DateTime.IsLeapYear(startDt.Year) || DateTime.IsLeapYear(endDt.Year) ? 366.0 : 365.0),
+            1 => totalDays / ActualActualDenominator(startDt, endDt),
             2 => totalDays / 360.0,
             3 => totalDays / 365.0,
             4 => Days30E360(startDt, endDt) / 360.0,
             _ => Days30US360(startDt, endDt) / 360.0
         };
         return new NumberValue(result);
+    }
+
+    private static double ActualActualDenominator(DateTime start, DateTime end)
+    {
+        if (start.Year == end.Year)
+            return DateTime.IsLeapYear(start.Year) ? 366.0 : 365.0;
+        double total = 0;
+        for (int y = start.Year; y <= end.Year; y++)
+            total += DateTime.IsLeapYear(y) ? 366.0 : 365.0;
+        return total / (end.Year - start.Year + 1);
     }
 
     private static double Days30US360(DateTime d1, DateTime d2)
