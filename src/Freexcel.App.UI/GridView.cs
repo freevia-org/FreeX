@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Globalization;
 using Freexcel.Core.Model;
 using CellHAlign  = Freexcel.Core.Model.HorizontalAlignment;
@@ -16,39 +17,44 @@ public class GridView : FrameworkElement
 {
     public GridView() { Focusable = true; FocusVisualStyle = null; }
 
-    private const double HeaderSize = 30;
+    // Column header strip height (horizontal row of A, B, C … letters)
+    public const double ColHeaderHeight = 18;
+    // Row header strip width (vertical column of 1, 2, 3 … numbers)
+    public const double RowHeaderWidth  = 30;
+
     private const double ResizeHitZone = 4;
-    private const double MinCellSize = 5;
+    private const double MinCellSize   = 5;
 
-    private static readonly Typeface DefaultTypeface = new("Segoe UI");
-    private static readonly Brush GridLineBrush = new SolidColorBrush(Color.FromRgb(220, 220, 220));
-    private static readonly Brush TextBrush = Brushes.Black;
-    private static readonly Brush HeaderBackgroundBrush = new SolidColorBrush(Color.FromRgb(242, 242, 242));
-    private static readonly Brush SelectionBrush = new SolidColorBrush(Color.FromArgb(32, 33, 115, 70));
-    private static readonly Pen SelectionPen = new(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 2);
-    private static readonly Pen GridPen = new(GridLineBrush, 1);
-    private static readonly Pen ResizeLinePen = CreateResizeLinePen();
-    private static readonly Pen FreezePen = CreateFreezePen();
+    private static readonly Typeface DefaultTypeface       = new("Segoe UI");
+    private static readonly Brush    GridLineBrush         = new SolidColorBrush(Color.FromRgb(220, 220, 220));
+    private static readonly Brush    TextBrush             = Brushes.Black;
+    private static readonly Brush    HeaderBackgroundBrush = new SolidColorBrush(Color.FromRgb(242, 242, 242));
+    private static readonly Brush    HeaderHighlightBrush  = new SolidColorBrush(Color.FromRgb(218, 232, 218));
+    private static readonly Pen      GridPen               = new(GridLineBrush, 1);
+    private static readonly Brush    SelectionBrush        = new SolidColorBrush(Color.FromArgb(32, 33, 115, 70));
+    private static readonly Pen      SelectionPen          = new(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 2);
+    private static readonly Pen      ResizeLinePen         = MakeResizeLinePen();
+    private static readonly Pen      FreezePen             = MakeFreezePen();
 
-    private static Pen CreateResizeLinePen()
+    private static Pen MakeResizeLinePen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 100)), 1);
         pen.Freeze();
         return pen;
     }
 
-    private static Pen CreateFreezePen()
+    private static Pen MakeFreezePen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 200)), 2);
         pen.Freeze();
         return pen;
     }
 
-    // Dependency Properties
+    // ── Dependency Properties ─────────────────────────────────────────────────
+
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-
     public ViewportModel? Viewport
     {
         get => (ViewportModel?)GetValue(ViewportProperty);
@@ -58,7 +64,6 @@ public class GridView : FrameworkElement
     public static readonly DependencyProperty SelectedRangeProperty =
         DependencyProperty.Register(nameof(SelectedRange), typeof(GridRange?), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-
     public GridRange? SelectedRange
     {
         get => (GridRange?)GetValue(SelectedRangeProperty);
@@ -68,7 +73,6 @@ public class GridView : FrameworkElement
     public static readonly DependencyProperty ChartsProperty =
         DependencyProperty.Register(nameof(Charts), typeof(IReadOnlyList<ChartModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-
     public IReadOnlyList<ChartModel>? Charts
     {
         get => (IReadOnlyList<ChartModel>?)GetValue(ChartsProperty);
@@ -78,35 +82,107 @@ public class GridView : FrameworkElement
     public static readonly DependencyProperty MergedRegionsProperty =
         DependencyProperty.Register(nameof(MergedRegions), typeof(IReadOnlyList<GridRange>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-
     public IReadOnlyList<GridRange>? MergedRegions
     {
         get => (IReadOnlyList<GridRange>?)GetValue(MergedRegionsProperty);
         set => SetValue(MergedRegionsProperty, value);
     }
 
-    // Resize drag state
+    public static readonly DependencyProperty ShowGridLinesProperty =
+        DependencyProperty.Register(nameof(ShowGridLines), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool ShowGridLines
+    {
+        get => (bool)GetValue(ShowGridLinesProperty);
+        set => SetValue(ShowGridLinesProperty, value);
+    }
+
+    public static readonly DependencyProperty ShowHeadersProperty =
+        DependencyProperty.Register(nameof(ShowHeaders), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool ShowHeaders
+    {
+        get => (bool)GetValue(ShowHeadersProperty);
+        set => SetValue(ShowHeadersProperty, value);
+    }
+
+    // ClipboardRange: when set, draws marching ants around this range
+    public static readonly DependencyProperty ClipboardRangeProperty =
+        DependencyProperty.Register(nameof(ClipboardRange), typeof(GridRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, OnClipboardRangeChanged));
+    public GridRange? ClipboardRange
+    {
+        get => (GridRange?)GetValue(ClipboardRangeProperty);
+        set => SetValue(ClipboardRangeProperty, value);
+    }
+
+    private static void OnClipboardRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var gv = (GridView)d;
+        if (e.NewValue != null)
+            gv.StartMarchTimer();
+        else
+            gv.StopMarchTimer();
+    }
+
+    // ── Marching ants ─────────────────────────────────────────────────────────
+
+    private DispatcherTimer? _marchTimer;
+    private double _marchOffset;
+
+    private void StartMarchTimer()
+    {
+        if (_marchTimer != null) return;
+        _marchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+        _marchTimer.Tick += (_, _) =>
+        {
+            _marchOffset = (_marchOffset + 1.5) % 8.0;
+            InvalidateVisual();
+        };
+        _marchTimer.Start();
+    }
+
+    private void StopMarchTimer()
+    {
+        _marchTimer?.Stop();
+        _marchTimer = null;
+        _marchOffset = 0;
+        InvalidateVisual();
+    }
+
+    // ── Resize drag state ─────────────────────────────────────────────────────
+
     private enum ResizeTarget { None, Row, Column }
     private ResizeTarget _resizeTarget = ResizeTarget.None;
-    private uint _resizeIndex;
+    private uint   _resizeIndex;
     private double _resizeDragStart;
     private double _resizeSizeStart;
     private double _resizeLinePos;
 
     // Autofill drag state
-    private bool _autofillDragging;
+    private bool      _autofillDragging;
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
 
-    // Fired when user completes a resize drag
-    public event Action<uint, double>? RowResized;
+    // ── Events ────────────────────────────────────────────────────────────────
+
+    /// <summary>Fired while the user drags a column border (real-time).</summary>
+    public event Action<uint, double>? ColumnResizing;
+    /// <summary>Fired when the user releases after resizing a column.</summary>
     public event Action<uint, double>? ColumnResized;
+
+    /// <summary>Fired while the user drags a row border (real-time).</summary>
+    public event Action<uint, double>? RowResizing;
+    /// <summary>Fired when the user releases after resizing a row.</summary>
+    public event Action<uint, double>? RowResized;
 
     /// <summary>Fired when the user drags the autofill handle and releases.</summary>
     public event Action<GridRange, GridRange>? AutofillRequested;
 
     /// <summary>Fired on right mouse button down with the clicked cell address.</summary>
     public event Action<CellAddress, System.Windows.Point>? ContextMenuRequested;
+
+    // ── OnRender ──────────────────────────────────────────────────────────────
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -118,6 +194,8 @@ public class GridView : FrameworkElement
         RenderGridLines(dc);
         RenderCells(dc);
         RenderSelection(dc);
+        RenderAutofillPreview(dc);
+        RenderMarchingAnts(dc);
         RenderFreezeDivider(dc);
         RenderResizeLine(dc);
         RenderCharts(dc);
@@ -131,23 +209,21 @@ public class GridView : FrameworkElement
     {
         if (Viewport == null) return (ResizeTarget.None, 0, 0);
 
-        // Column: hover over right edge of a column header (y within header strip)
-        if (pos.Y < HeaderSize)
+        if (pos.Y < ColHeaderHeight)
         {
             foreach (var col in Viewport.ColMetrics)
             {
-                double rightEdge = col.LeftOffset + col.Width + HeaderSize;
+                double rightEdge = col.LeftOffset + col.Width + RowHeaderWidth;
                 if (Math.Abs(pos.X - rightEdge) <= ResizeHitZone)
                     return (ResizeTarget.Column, col.Col, col.Width);
             }
         }
 
-        // Row: hover over bottom edge of a row header (x within header strip)
-        if (pos.X < HeaderSize)
+        if (pos.X < RowHeaderWidth)
         {
             foreach (var row in Viewport.RowMetrics)
             {
-                double bottomEdge = row.TopOffset + row.Height + HeaderSize;
+                double bottomEdge = row.TopOffset + row.Height + ColHeaderHeight;
                 if (Math.Abs(pos.Y - bottomEdge) <= ResizeHitZone)
                     return (ResizeTarget.Row, row.Row, row.Height);
             }
@@ -165,8 +241,8 @@ public class GridView : FrameworkElement
         if (endRow == null || endCol == null) return false;
 
         const double handleSize = 6;
-        double hx = endCol.LeftOffset + endCol.Width + HeaderSize - handleSize / 2;
-        double hy = endRow.TopOffset  + endRow.Height + HeaderSize - handleSize / 2;
+        double hx = endCol.LeftOffset + endCol.Width + RowHeaderWidth  - handleSize / 2;
+        double hy = endRow.TopOffset  + endRow.Height + ColHeaderHeight - handleSize / 2;
         return pos.X >= hx - 3 && pos.X <= hx + handleSize + 3
             && pos.Y >= hy - 3 && pos.Y <= hy + handleSize + 3;
     }
@@ -179,12 +255,12 @@ public class GridView : FrameworkElement
         {
             foreach (var rm in Viewport.RowMetrics)
             {
-                double top = rm.TopOffset + HeaderSize;
+                double top = rm.TopOffset + ColHeaderHeight;
                 if (pos.Y >= top && pos.Y < top + rm.Height)
                 {
                     foreach (var cm in Viewport.ColMetrics)
                     {
-                        double left = cm.LeftOffset + HeaderSize;
+                        double left = cm.LeftOffset + RowHeaderWidth;
                         if (pos.X >= left && pos.X < left + cm.Width)
                         {
                             _autofillTarget = new CellAddress(default, rm.Row, cm.Col);
@@ -203,7 +279,8 @@ public class GridView : FrameworkElement
             var col = Viewport!.ColMetrics.FirstOrDefault(c => c.Col == _resizeIndex);
             if (col is null) return;
             double newWidth = Math.Max(MinCellSize, _resizeSizeStart + (pos.X - _resizeDragStart));
-            _resizeLinePos = col.LeftOffset + newWidth + HeaderSize;
+            _resizeLinePos = col.LeftOffset + newWidth + RowHeaderWidth;
+            ColumnResizing?.Invoke(_resizeIndex, newWidth);
             InvalidateVisual();
         }
         else if (_resizeTarget == ResizeTarget.Row)
@@ -211,7 +288,8 @@ public class GridView : FrameworkElement
             var row = Viewport!.RowMetrics.FirstOrDefault(r => r.Row == _resizeIndex);
             if (row is null) return;
             double newHeight = Math.Max(MinCellSize, _resizeSizeStart + (pos.Y - _resizeDragStart));
-            _resizeLinePos = row.TopOffset + newHeight + HeaderSize;
+            _resizeLinePos = row.TopOffset + newHeight + ColHeaderHeight;
+            RowResizing?.Invoke(_resizeIndex, newHeight);
             InvalidateVisual();
         }
         else
@@ -227,12 +305,11 @@ public class GridView : FrameworkElement
     {
         var pos = e.GetPosition(this);
 
-        // Hit-test autofill handle before resize
         if (SelectedRange.HasValue && IsOnAutofillHandle(pos))
         {
-            _autofillDragging = true;
+            _autofillDragging    = true;
             _autofillSourceRange = SelectedRange.Value;
-            _autofillTarget = SelectedRange.Value.End;
+            _autofillTarget      = SelectedRange.Value.End;
             CaptureMouse();
             Cursor = Cursors.Cross;
             e.Handled = true;
@@ -240,29 +317,27 @@ public class GridView : FrameworkElement
         }
 
         var (target, index, size) = HitTestResize(pos);
-
         if (target != ResizeTarget.None)
         {
-            _resizeTarget = target;
-            _resizeIndex  = index;
+            _resizeTarget    = target;
+            _resizeIndex     = index;
             _resizeSizeStart = size;
             _resizeDragStart = target == ResizeTarget.Column ? pos.X : pos.Y;
             Cursor = target == ResizeTarget.Column ? Cursors.SizeWE : Cursors.SizeNS;
 
-            // Initialise the overlay line at the current border position
             if (target == ResizeTarget.Column)
             {
                 var col = Viewport!.ColMetrics.First(c => c.Col == index);
-                _resizeLinePos = col.LeftOffset + col.Width + HeaderSize;
+                _resizeLinePos = col.LeftOffset + col.Width + RowHeaderWidth;
             }
             else
             {
                 var row = Viewport!.RowMetrics.First(r => r.Row == index);
-                _resizeLinePos = row.TopOffset + row.Height + HeaderSize;
+                _resizeLinePos = row.TopOffset + row.Height + ColHeaderHeight;
             }
 
             CaptureMouse();
-            e.Handled = true;   // prevent cell-selection from also firing
+            e.Handled = true;
         }
         else
         {
@@ -274,16 +349,15 @@ public class GridView : FrameworkElement
     {
         if (Viewport == null) { base.OnMouseRightButtonDown(e); return; }
         var pos = e.GetPosition(this);
-        const double hs = HeaderSize;
-        if (pos.X < hs || pos.Y < hs) { base.OnMouseRightButtonDown(e); return; }
+        if (pos.X < RowHeaderWidth || pos.Y < ColHeaderHeight) { base.OnMouseRightButtonDown(e); return; }
 
         foreach (var rm in Viewport.RowMetrics)
         {
-            double top = rm.TopOffset + hs;
+            double top = rm.TopOffset + ColHeaderHeight;
             if (pos.Y < top || pos.Y >= top + rm.Height) continue;
             foreach (var cm in Viewport.ColMetrics)
             {
-                double left = cm.LeftOffset + hs;
+                double left = cm.LeftOffset + RowHeaderWidth;
                 if (pos.X >= left && pos.X < left + cm.Width)
                 {
                     ContextMenuRequested?.Invoke(new CellAddress(default, rm.Row, cm.Col), pos);
@@ -305,7 +379,7 @@ public class GridView : FrameworkElement
 
             if (_autofillSourceRange.HasValue && _autofillTarget.HasValue)
             {
-                var src = _autofillSourceRange.Value;
+                var src    = _autofillSourceRange.Value;
                 var target = _autofillTarget.Value;
                 if (target.Row > src.End.Row || target.Col > src.End.Col)
                 {
@@ -319,7 +393,7 @@ public class GridView : FrameworkElement
             }
 
             _autofillSourceRange = null;
-            _autofillTarget = null;
+            _autofillTarget      = null;
             e.Handled = true;
             return;
         }
@@ -368,7 +442,7 @@ public class GridView : FrameworkElement
             var lastFrozenRow = Viewport.RowMetrics.FirstOrDefault(r => r.Row == fp.Rows);
             if (lastFrozenRow != null)
             {
-                double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + HeaderSize;
+                double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + ColHeaderHeight;
                 dc.DrawLine(FreezePen, new Point(0, y), new Point(ActualWidth, y));
             }
         }
@@ -378,7 +452,7 @@ public class GridView : FrameworkElement
             var lastFrozenCol = Viewport.ColMetrics.FirstOrDefault(c => c.Col == fp.Cols);
             if (lastFrozenCol != null)
             {
-                double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + HeaderSize;
+                double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + RowHeaderWidth;
                 dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, ActualHeight));
             }
         }
@@ -392,7 +466,7 @@ public class GridView : FrameworkElement
             var img = ChartRenderer.Render(chart, Viewport);
             if (img == null) continue;
             var rect = new Rect(
-                chart.Left + HeaderSize, chart.Top + HeaderSize,
+                chart.Left + RowHeaderWidth, chart.Top + ColHeaderHeight,
                 chart.Width, chart.Height);
             dc.DrawImage(img, rect);
         }
@@ -410,38 +484,84 @@ public class GridView : FrameworkElement
                 new Point(ActualWidth, _resizeLinePos));
     }
 
+    private void RenderAutofillPreview(DrawingContext dc)
+    {
+        if (!_autofillDragging || !_autofillSourceRange.HasValue || !_autofillTarget.HasValue) return;
+        var vp = Viewport;
+        if (vp == null) return;
+
+        var src = _autofillSourceRange.Value;
+        var tgt = _autofillTarget.Value;
+
+        // Extend selection rect to cover source + fill target
+        var previewStart = new CellAddress(src.Start.Sheet,
+            Math.Min(src.Start.Row, tgt.Row),
+            Math.Min(src.Start.Col, tgt.Col));
+        var previewEnd = new CellAddress(src.Start.Sheet,
+            Math.Max(src.End.Row, tgt.Row),
+            Math.Max(src.End.Col, tgt.Col));
+
+        var (top, left, bottom, right) = GetRangePixels(vp,
+            new GridRange(previewStart, previewEnd));
+        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
+
+        var dash = new DashStyle([4.0, 4.0], 0);
+        var pen  = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 1.5) { DashStyle = dash };
+        pen.Freeze();
+        var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
+        dc.DrawRectangle(null, pen, rect);
+    }
+
+    private void RenderMarchingAnts(DrawingContext dc)
+    {
+        var cbRange = ClipboardRange;
+        if (cbRange == null || Viewport == null) return;
+
+        var (top, left, bottom, right) = GetRangePixels(Viewport, cbRange.Value);
+        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
+
+        var dash = new DashStyle([4.0, 4.0], _marchOffset);
+        var pen  = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 1.5) { DashStyle = dash };
+        pen.Freeze();
+        var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
+        dc.DrawRectangle(null, pen, rect);
+    }
+
+    // Returns pixel coords for a range, clamped to viewport boundaries.
+    private (double? top, double? left, double? bottom, double? right) GetRangePixels(
+        ViewportModel vp, GridRange range)
+    {
+        double? top = null, left = null, bottom = null, right = null;
+        foreach (var row in vp.RowMetrics)
+        {
+            if (row.Row == range.Start.Row) top    = row.TopOffset + ColHeaderHeight;
+            if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + ColHeaderHeight;
+        }
+        foreach (var col in vp.ColMetrics)
+        {
+            if (col.Col == range.Start.Col) left  = col.LeftOffset + RowHeaderWidth;
+            if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + RowHeaderWidth;
+        }
+        return (top, left, bottom, right);
+    }
+
     private void RenderSelection(DrawingContext dc)
     {
         if (Viewport == null || SelectedRange == null) return;
 
         var range = SelectedRange.Value;
-        var rows = Viewport.RowMetrics;
-        var cols = Viewport.ColMetrics;
+        var rows  = Viewport.RowMetrics;
+        var cols  = Viewport.ColMetrics;
         if (rows.Count == 0 || cols.Count == 0) return;
 
-        // Skip rendering if the selection doesn't intersect the visible rows or visible columns.
-        // Without this, a cell scrolled off in one axis but visible in the other gets its
-        // fallback edge clamped to the viewport boundary, painting an entire row/column strip.
         if (range.End.Row < rows[0].Row || range.Start.Row > rows[^1].Row) return;
         if (range.End.Col < cols[0].Col || range.Start.Col > cols[^1].Col) return;
 
-        double? top = null, left = null, bottom = null, right = null;
+        var (top, left, bottom, right) = GetRangePixels(Viewport, range);
 
-        foreach (var row in rows)
-        {
-            if (row.Row == range.Start.Row) top    = row.TopOffset + HeaderSize;
-            if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + HeaderSize;
-        }
-
-        foreach (var col in cols)
-        {
-            if (col.Col == range.Start.Col) left  = col.LeftOffset + HeaderSize;
-            if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + HeaderSize;
-        }
-
-        double drawTop    = top    ?? HeaderSize;
+        double drawTop    = top    ?? ColHeaderHeight;
         double drawBottom = bottom ?? ActualHeight;
-        double drawLeft   = left   ?? HeaderSize;
+        double drawLeft   = left   ?? RowHeaderWidth;
         double drawRight  = right  ?? ActualWidth;
 
         var rect = new Rect(new Point(drawLeft, drawTop), new Point(drawRight, drawBottom));
@@ -452,7 +572,7 @@ public class GridView : FrameworkElement
         if (left.HasValue)   dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawLeft,  drawBottom));
         if (right.HasValue)  dc.DrawLine(SelectionPen, new Point(drawRight, drawTop),    new Point(drawRight, drawBottom));
 
-        // Autofill handle: 6×6 square at bottom-right of selection
+        // Autofill handle
         if (right.HasValue && bottom.HasValue)
         {
             const double handleSize = 6;
@@ -468,17 +588,26 @@ public class GridView : FrameworkElement
 
     private void RenderHeaders(DrawingContext dc)
     {
+        if (!ShowHeaders) return;
+
+        var selRange = SelectedRange;
+
         // Column Headers (A, B, C…)
         foreach (var col in Viewport!.ColMetrics)
         {
-            var rect = new Rect(col.LeftOffset + HeaderSize, 0, col.Width, HeaderSize);
-            dc.DrawRectangle(HeaderBackgroundBrush, GridPen, rect);
+            bool inSel = selRange.HasValue
+                && col.Col >= selRange.Value.Start.Col
+                && col.Col <= selRange.Value.End.Col;
+
+            var bg   = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
+            var rect = new Rect(col.LeftOffset + RowHeaderWidth, 0, col.Width, ColHeaderHeight);
+            dc.DrawRectangle(bg, GridPen, rect);
 
             var text = new FormattedText(
                 CellAddress.NumberToColumnName(col.Col),
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
-                DefaultTypeface, 12, TextBrush,
+                DefaultTypeface, 11, TextBrush,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
             dc.DrawText(text, new Point(
@@ -489,8 +618,13 @@ public class GridView : FrameworkElement
         // Row Headers (1, 2, 3…)
         foreach (var row in Viewport!.RowMetrics)
         {
-            var rect = new Rect(0, row.TopOffset + HeaderSize, HeaderSize, row.Height);
-            dc.DrawRectangle(HeaderBackgroundBrush, GridPen, rect);
+            bool inSel = selRange.HasValue
+                && row.Row >= selRange.Value.Start.Row
+                && row.Row <= selRange.Value.End.Row;
+
+            var bg   = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
+            var rect = new Rect(0, row.TopOffset + ColHeaderHeight, RowHeaderWidth, row.Height);
+            dc.DrawRectangle(bg, GridPen, rect);
 
             var text = new FormattedText(
                 row.Row.ToString(),
@@ -505,7 +639,8 @@ public class GridView : FrameworkElement
         }
 
         // Top-left corner
-        dc.DrawRectangle(HeaderBackgroundBrush, GridPen, new Rect(0, 0, HeaderSize, HeaderSize));
+        dc.DrawRectangle(HeaderBackgroundBrush, GridPen,
+            new Rect(0, 0, RowHeaderWidth, ColHeaderHeight));
     }
 
     private void RenderGridLines(DrawingContext dc)
@@ -531,12 +666,11 @@ public class GridView : FrameworkElement
         var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
 
-        // Pass 1: backgrounds (fill color or white)
+        // Pass 1: backgrounds
         foreach (var rowMetric in Viewport.RowMetrics)
         {
             foreach (var colMetric in Viewport.ColMetrics)
             {
-                // Skip non-top-left cells inside a merge
                 var merge = FindMerge(rowMetric.Row, colMetric.Col);
                 if (merge.HasValue && (rowMetric.Row != merge.Value.Start.Row || colMetric.Col != merge.Value.Start.Col))
                     continue;
@@ -553,7 +687,7 @@ public class GridView : FrameworkElement
                 }
 
                 var rect = new Rect(
-                    colMetric.LeftOffset + HeaderSize, rowMetric.TopOffset + HeaderSize, w, h);
+                    colMetric.LeftOffset + RowHeaderWidth, rowMetric.TopOffset + ColHeaderHeight, w, h);
 
                 Brush fill = Brushes.White;
                 if (styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg)
@@ -575,8 +709,8 @@ public class GridView : FrameworkElement
             var colMetric = Viewport.ColMetrics.FirstOrDefault(c => c.Col == cell.Col);
             if (rowMetric is null || colMetric is null) continue;
 
-            double x = colMetric.LeftOffset + HeaderSize;
-            double y = rowMetric.TopOffset  + HeaderSize;
+            double x = colMetric.LeftOffset + RowHeaderWidth;
+            double y = rowMetric.TopOffset   + ColHeaderHeight;
             double w = colMetric.Width;
             double h = rowMetric.Height;
 
@@ -590,7 +724,6 @@ public class GridView : FrameworkElement
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
 
-        // Cells with content block overflow from their left neighbour
         var occupied = new HashSet<(uint, uint)>(
             Viewport.Cells
                 .Where(c => !string.IsNullOrEmpty(c.DisplayText))
@@ -602,7 +735,6 @@ public class GridView : FrameworkElement
             if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;
             if (string.IsNullOrEmpty(cell.DisplayText)) continue;
 
-            // Skip non-top-left cells inside a merge
             var cellMerge = FindMerge(cell.Row, cell.Col);
             if (cellMerge.HasValue && (cell.Row != cellMerge.Value.Start.Row || cell.Col != cellMerge.Value.Start.Col))
                 continue;
@@ -620,16 +752,13 @@ public class GridView : FrameworkElement
             }
 
             var rect = new Rect(
-                colMetric.LeftOffset + HeaderSize, rowMetric.TopOffset + HeaderSize, w, h);
+                colMetric.LeftOffset + RowHeaderWidth, rowMetric.TopOffset + ColHeaderHeight, w, h);
 
-            var hAlign  = style?.HorizontalAlignment ?? CellHAlign.General;
+            var hAlign   = style?.HorizontalAlignment ?? CellHAlign.General;
             bool isNumeric = cell.RawValue is NumberValue or DateTimeValue;
             bool wrapText  = style?.WrapText == true;
 
-            // ── Determine how wide the text is allowed to render ──────────────
-            // Numbers and explicit right/center alignment always stay within the cell.
-            // Left-aligned / General text overflows into consecutive empty cells.
-            double renderWidth = w;  // use merged width as base
+            double renderWidth = w;
             bool canOverflow = !wrapText && !isNumeric && !cellMerge.HasValue
                 && (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
 
@@ -669,10 +798,11 @@ public class GridView : FrameworkElement
                 text.SetTextDecorations(TextDecorations.Strikethrough);
             if (style?.Underline == true && style?.Strikethrough != true)
                 text.SetTextDecorations(TextDecorations.Underline);
+            if (style?.DoubleUnderline == true && style?.Strikethrough != true)
+                text.SetTextDecorations(TextDecorations.Underline);
 
             if (wrapText)
             {
-                // Wrap mode: constrain width so FormattedText breaks lines at word boundaries
                 text.MaxTextWidth  = Math.Max(1, colMetric.Width - 4);
                 text.TextAlignment = hAlign switch
                 {
@@ -681,20 +811,17 @@ public class GridView : FrameworkElement
                     _                 => System.Windows.TextAlignment.Left
                 };
             }
-            // Overflow / clip mode: no MaxTextWidth — text stays on one line;
-            // the PushClip below is the hard boundary.
 
-            // ── Horizontal position ───────────────────────────────────────────
+            double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             double textX = hAlign switch
             {
                 CellHAlign.Right  => rect.Right - Math.Min(text.Width, colMetric.Width - 2) - 2,
                 CellHAlign.Center => rect.Left  + (colMetric.Width - text.Width) / 2,
                 CellHAlign.General when isNumeric
                                   => rect.Right - Math.Min(text.Width, colMetric.Width - 2) - 2,
-                _                 => rect.Left + 2   // Left / General-text: start at cell left
+                _                 => rect.Left + 2 + indentPx
             };
 
-            // ── Vertical position ─────────────────────────────────────────────
             double textY = style?.VerticalAlignment switch
             {
                 CellVAlign.Top    => rect.Top + 1,
@@ -704,11 +831,16 @@ public class GridView : FrameworkElement
             };
             textY = Math.Max(rect.Top, textY);
 
-            // Hard clip: overflow text stops at the first occupied neighbour;
-            // wrap text is clipped to the cell height.
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
             dc.PushClip(new RectangleGeometry(clipRect));
             dc.DrawText(text, new Point(textX, textY));
+
+            if (style?.DoubleUnderline == true)
+            {
+                double uY = textY + text.Height + 1;
+                dc.DrawLine(new Pen(textBrush, 1), new Point(textX, uY), new Point(textX + text.Width, uY));
+                dc.DrawLine(new Pen(textBrush, 1), new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
+            }
             dc.Pop();
         }
     }

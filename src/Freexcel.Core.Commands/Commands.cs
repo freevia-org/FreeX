@@ -26,6 +26,10 @@ public sealed class EditCellsCommand : IWorkbookCommand
     {
     }
 
+    /// <summary>Convenience factory for editing a single cell value.</summary>
+    public static EditCellsCommand ForValue(SheetId sheetId, CellAddress address, ScalarValue value)
+        => new(sheetId, address, value);
+
     /// <summary>Convenience constructor for setting a single cell formula.</summary>
     public static EditCellsCommand ForFormula(SheetId sheetId, CellAddress address, string formulaText)
     {
@@ -123,5 +127,34 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             var sheet = ctx.GetSheet(_sheetId);
             sheet.Name = _oldName;
         }
+    }
+}
+
+/// <summary>Command to delete a sheet from the workbook.</summary>
+public sealed class RemoveSheetCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private string? _removedName;
+    private int _removedIndex;
+
+    public string Label => "Delete Sheet";
+
+    public RemoveSheetCommand(SheetId sheetId) => _sheetId = sheetId;
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        _removedName = sheet.Name;
+        var sheets = ctx.Workbook.Sheets;
+        for (int i = 0; i < sheets.Count; i++)
+            if (sheets[i].Id == _sheetId) { _removedIndex = i; break; }
+        ctx.Workbook.RemoveSheet(_sheetId);
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_removedName is not null)
+            ctx.Workbook.InsertSheet(_removedIndex, _removedName);
     }
 }

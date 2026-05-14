@@ -47,6 +47,15 @@ public sealed class Sheet
     /// <summary>Merged cell regions on this sheet. Each region's top-left cell holds the display value.</summary>
     public List<GridRange> MergedRegions { get; } = [];
 
+    /// <summary>Cell comments keyed by address.</summary>
+    public Dictionary<CellAddress, string> Comments { get; } = [];
+
+    /// <summary>True when the sheet is protected against edits.</summary>
+    public bool IsProtected { get; set; }
+
+    /// <summary>Password hash for sheet protection. Null means no password required.</summary>
+    public string? ProtectionPassword { get; set; }
+
     /// <summary>Returns the merged region that contains <paramref name="addr"/>, or null if not merged.</summary>
     public GridRange? GetMergeRegion(CellAddress addr)
     {
