@@ -14,21 +14,26 @@ public sealed class NativeJsonAdapter : IFileAdapter
 
     public Workbook Load(Stream stream)
     {
-        var dto = JsonSerializer.Deserialize<WorkbookDto>(stream);
-        if (dto == null) throw new InvalidDataException("Invalid Freexcel file");
+        var dto = JsonSerializer.Deserialize<WorkbookDto>(stream)
+            ?? throw new InvalidDataException("Invalid Freexcel file");
 
         var workbook = new Workbook(dto.Name);
-        foreach (var sDto in dto.Sheets)
+        foreach (var sDto in dto.Sheets ?? [])
         {
+            if (string.IsNullOrEmpty(sDto?.Name)) continue;
             var sheet = workbook.AddSheet(sDto.Name);
-            foreach (var cDto in sDto.Cells)
+            foreach (var cDto in sDto.Cells ?? [])
             {
-                var addr = CellAddress.Parse(cDto.Address, sheet.Id);
-                var cell = cDto.Formula != null 
-                    ? Cell.FromFormula(cDto.Formula) 
-                    : Cell.FromValue(DeserializeValue(cDto.Value));
-                
-                sheet.SetCell(addr, cell);
+                if (string.IsNullOrEmpty(cDto?.Address)) continue;
+                try
+                {
+                    var addr = CellAddress.Parse(cDto.Address, sheet.Id);
+                    var cell = cDto.Formula != null
+                        ? Cell.FromFormula(cDto.Formula)
+                        : Cell.FromValue(DeserializeValue(cDto.Value, cDto.ValueType));
+                    sheet.SetCell(addr, cell);
+                }
+                catch (FormatException) { /* skip cells with unparseable addresses */ }
             }
         }
 
@@ -45,9 +50,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 Name = s.Name,
                 Cells = s.GetUsedCells().Select(pair => new CellDto
                 {
-                    Address = pair.Key.ToA1(),
-                    Value = pair.Value.Value.ToString(), // Simple for now
-                    Formula = pair.Value.HasFormula ? pair.Value.FormulaText : null
+                    Address   = pair.Key.ToA1(),
+                    Value     = SerializeValue(pair.Value.Value),
+                    ValueType = GetValueType(pair.Value.Value),
+                    Formula   = pair.Value.HasFormula ? pair.Value.FormulaText : null
                 }).ToList()
             }).ToList()
         };
@@ -55,12 +61,52 @@ public sealed class NativeJsonAdapter : IFileAdapter
         JsonSerializer.Serialize(stream, dto, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    private static ScalarValue DeserializeValue(string? val)
+    private static string? SerializeValue(ScalarValue value) => value switch
+    {
+        BlankValue  => null,
+        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        BoolValue b   => b.Value ? "TRUE" : "FALSE",
+        TextValue t   => t.Value,
+        ErrorValue e  => e.Code,
+        _             => null,
+    };
+
+    private static string? GetValueType(ScalarValue value) => value switch
+    {
+        NumberValue => "n",
+        BoolValue   => "b",
+        TextValue   => "t",
+        ErrorValue  => "e",
+        _           => null,
+    };
+
+    private static ScalarValue DeserializeValue(string? val, string? type)
     {
         if (val == null) return BlankValue.Instance;
-        if (double.TryParse(val, out var d)) return new NumberValue(d);
-        if (bool.TryParse(val, out var b)) return new BoolValue(b);
-        return new TextValue(val);
+        return type switch
+        {
+            "n" => double.TryParse(val, System.Globalization.NumberStyles.Any,
+                       System.Globalization.CultureInfo.InvariantCulture, out var d)
+                   ? new NumberValue(d) : new TextValue(val),
+            "b" => new BoolValue(val == "TRUE"),
+            "t" => new TextValue(val),
+            "e" => val switch {
+                       "#DIV/0!" => ErrorValue.DivByZero,
+                       "#VALUE!" => ErrorValue.Value,
+                       "#REF!"   => ErrorValue.Ref,
+                       "#NAME?"  => ErrorValue.Name,
+                       "#NULL!"  => ErrorValue.Null,
+                       "#N/A"    => ErrorValue.NA,
+                       "#NUM!"   => ErrorValue.Num,
+                       _         => new ErrorValue(val)
+                   },
+            // Legacy files without ValueType: sniff the value
+            _   => double.TryParse(val, System.Globalization.NumberStyles.Any,
+                       System.Globalization.CultureInfo.InvariantCulture, out var dn)
+                   ? new NumberValue(dn)
+                   : bool.TryParse(val, out var db) ? new BoolValue(db)
+                   : new TextValue(val)
+        };
     }
 
     private class WorkbookDto
@@ -79,6 +125,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
     {
         public string Address { get; set; } = "";
         public string? Value { get; set; }
+        public string? ValueType { get; set; }
         public string? Formula { get; set; }
     }
 }

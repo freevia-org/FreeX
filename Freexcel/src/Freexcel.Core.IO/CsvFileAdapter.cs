@@ -5,9 +5,9 @@ using Freexcel.Core.Model;
 namespace Freexcel.Core.IO;
 
 /// <summary>
-/// CSV file adapter. Phase 2 limitations: no quoted-field handling on read or write
-/// (values containing commas will be split on load; values containing commas will
-/// produce structurally invalid CSV on save). Full RFC 4180 quoting deferred to Phase 4.
+/// CSV file adapter with full RFC 4180 quoting support.
+/// Fields containing commas, double-quotes, or newlines are wrapped in double-quotes,
+/// and embedded double-quotes are escaped by doubling ("").
 /// </summary>
 public sealed class CsvFileAdapter : IFileAdapter
 {
@@ -24,18 +24,17 @@ public sealed class CsvFileAdapter : IFileAdapter
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            var fields = line.Split(',');
-            for (uint col = 1; col <= (uint)fields.Length; col++)
+            var fields = ParseCsvLine(line);
+            for (int i = 0; i < fields.Count; i++)
             {
-                var field = fields[col - 1];
+                var field = fields[i];
                 if (field.Length == 0) continue;
 
                 ScalarValue value = double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out var num)
                     ? new NumberValue(num)
                     : new TextValue(field);
 
-                var addr = new CellAddress(sheet.Id, row, col);
-                sheet.SetCell(addr, value);
+                sheet.SetCell(new CellAddress(sheet.Id, row, (uint)(i + 1)), value);
             }
             row++;
         }
@@ -57,21 +56,78 @@ public sealed class CsvFileAdapter : IFileAdapter
             for (uint c = range.Value.Start.Col; c <= range.Value.End.Col; c++)
             {
                 var cell = sheet.GetCell(r, c);
-                parts[c - range.Value.Start.Col] = cell is null
-                    ? ""
-                    : FormatValue(cell.Value);
+                var raw = cell is null ? "" : FormatValue(cell.Value);
+                parts[c - range.Value.Start.Col] = EscapeCsvField(raw);
             }
             writer.Write(string.Join(',', parts));
             writer.Write("\r\n");
         }
     }
 
+    // ── RFC 4180 helpers ──────────────────────────────────────────────────────
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        int i = 0;
+        while (i <= line.Length)
+        {
+            if (i == line.Length) { fields.Add(""); break; }
+
+            if (line[i] == '"')
+            {
+                // Quoted field
+                var sb = new StringBuilder();
+                i++; // skip opening quote
+                while (i < line.Length)
+                {
+                    if (line[i] == '"')
+                    {
+                        if (i + 1 < line.Length && line[i + 1] == '"')
+                        {
+                            sb.Append('"'); // escaped quote
+                            i += 2;
+                        }
+                        else
+                        {
+                            i++; // closing quote
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        sb.Append(line[i++]);
+                    }
+                }
+                fields.Add(sb.ToString());
+                if (i < line.Length && line[i] == ',') i++;
+            }
+            else
+            {
+                // Unquoted field
+                int start = i;
+                while (i < line.Length && line[i] != ',') i++;
+                fields.Add(line[start..i]);
+                if (i < line.Length) i++; // skip comma
+            }
+        }
+        return fields;
+    }
+
+    private static string EscapeCsvField(string value)
+    {
+        if (value.Length == 0) return value;
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        return value;
+    }
+
     private static string FormatValue(ScalarValue value) => value switch
     {
         NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        TextValue t => t.Value,
-        ErrorValue e => e.Code,
-        _ => "",
+        BoolValue b   => b.Value ? "TRUE" : "FALSE",
+        TextValue t   => t.Value,
+        ErrorValue e  => e.Code,
+        _             => "",
     };
 }

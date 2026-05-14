@@ -43,7 +43,7 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         }
 
         var col = ColumnNameToNumber(match.Groups[1].Value);
-        if (!uint.TryParse(match.Groups[2].Value, out var row) || row == 0)
+        if (!uint.TryParse(match.Groups[2].Value, out var row) || row == 0 || row > MaxRow || col > MaxCol)
         {
             result = default;
             return false;
@@ -98,9 +98,20 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
 
 /// <summary>
 /// Represents a rectangular range of cells.
+/// Start is always the top-left corner; End is always the bottom-right corner.
 /// </summary>
-public readonly record struct GridRange(CellAddress Start, CellAddress End)
+public readonly record struct GridRange
 {
+    public CellAddress Start { get; }
+    public CellAddress End   { get; }
+
+    public GridRange(CellAddress a, CellAddress b)
+    {
+        // Normalize so Start is always top-left, End is always bottom-right
+        Start = new CellAddress(a.Sheet, Math.Min(a.Row, b.Row), Math.Min(a.Col, b.Col));
+        End   = new CellAddress(a.Sheet, Math.Max(a.Row, b.Row), Math.Max(a.Col, b.Col));
+    }
+
     /// <summary>Number of rows in this range.</summary>
     public uint RowCount => End.Row - Start.Row + 1;
 

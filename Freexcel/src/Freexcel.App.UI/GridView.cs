@@ -125,6 +125,32 @@ public class GridView : FrameworkElement
             gv.StopMarchTimer();
     }
 
+    // ── Merge lookup (rebuilt once per render pass, O(1) per cell) ───────────
+
+    private Dictionary<(uint Row, uint Col), GridRange> _mergeLookup = [];
+
+    private void RebuildMergeLookup()
+    {
+        _mergeLookup.Clear();
+        if (MergedRegions == null || Viewport == null) return;
+
+        var visRows = new HashSet<uint>(Viewport.RowMetrics.Select(r => r.Row));
+        var visCols = new HashSet<uint>(Viewport.ColMetrics.Select(c => c.Col));
+
+        foreach (var merge in MergedRegions)
+        {
+            for (uint r = merge.Start.Row; r <= merge.End.Row; r++)
+            {
+                if (!visRows.Contains(r)) continue;
+                for (uint c = merge.Start.Col; c <= merge.End.Col; c++)
+                {
+                    if (visCols.Contains(c))
+                        _mergeLookup[(r, c)] = merge;
+                }
+            }
+        }
+    }
+
     // ── Marching ants ─────────────────────────────────────────────────────────
 
     private DispatcherTimer? _marchTimer;
@@ -188,6 +214,7 @@ public class GridView : FrameworkElement
     {
         if (Viewport == null) return;
 
+        RebuildMergeLookup();
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight)));
 
         RenderHeaders(dc);
@@ -650,11 +677,7 @@ public class GridView : FrameworkElement
 
     private GridRange? FindMerge(uint row, uint col)
     {
-        if (MergedRegions == null) return null;
-        foreach (var r in MergedRegions)
-            if (row >= r.Start.Row && row <= r.End.Row && col >= r.Start.Col && col <= r.End.Col)
-                return r;
-        return null;
+        return _mergeLookup.TryGetValue((row, col), out var r) ? r : null;
     }
 
     private void RenderCells(DrawingContext dc)
@@ -665,6 +688,7 @@ public class GridView : FrameworkElement
 
         var rowLookupAll = Viewport.RowMetrics.ToDictionary(r => r.Row);
         var colLookupAll = Viewport.ColMetrics.ToDictionary(c => c.Col);
+
 
         // Pass 1: backgrounds
         foreach (var rowMetric in Viewport.RowMetrics)

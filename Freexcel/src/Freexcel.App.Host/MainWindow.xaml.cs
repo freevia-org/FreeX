@@ -861,14 +861,18 @@ public partial class MainWindow : Window
             var sheet = _workbook.GetSheet(_currentSheetId);
             if (sheet != null)
             {
-                var violationMsg = DataValidationService
-                    .GetApplicable(sheet, addr)
-                    .Select(dv => DataValidationService.Validate(dv, value))
-                    .FirstOrDefault(msg => msg != null);
-
-                if (violationMsg != null)
+                var applicableRules = DataValidationService.GetApplicable(sheet, addr);
+                DataValidation? violatingRule = null;
+                string? violationMsg = null;
+                foreach (var dv in applicableRules)
                 {
-                    var dvRule = DataValidationService.GetApplicable(sheet, addr).First();
+                    var msg = DataValidationService.Validate(dv, value);
+                    if (msg != null) { violatingRule = dv; violationMsg = msg; break; }
+                }
+
+                if (violationMsg != null && violatingRule != null)
+                {
+                    var dvRule = violatingRule;
                     if (dvRule.Type == DvType.List && dvRule.ShowDropdown && !string.IsNullOrEmpty(text))
                         MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
                             MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -1710,10 +1714,12 @@ public partial class MainWindow : Window
         _commandBus.Execute(_workbook.Id, command);
         _recalcEngine.Recalculate(_workbook, edits.Select(e => e.Item1).ToList());
 
-        // Select the pasted region
-        var pastedEnd = new CellAddress(_currentSheetId,
-            range.Start.Row + (uint)(rows.Length - 1),
-            range.Start.Col + (uint)(rows[0].Length - 1));
+        // Select the pasted region — guard against jagged/empty rows
+        uint pastedRowSpan = rows.Length > 0 ? (uint)(rows.Length - 1) : 0;
+        uint pastedColSpan = rows.Length > 0 && rows[0].Length > 0 ? (uint)(rows[0].Length - 1) : 0;
+        var pastedEnd   = new CellAddress(_currentSheetId,
+            range.Start.Row + pastedRowSpan,
+            range.Start.Col + pastedColSpan);
         var pastedRange = new GridRange(range.Start, pastedEnd);
         _selectionAnchor = pastedRange.Start;
         _selectionCursor = pastedRange.End;
@@ -1723,6 +1729,7 @@ public partial class MainWindow : Window
         SheetGrid.ClipboardRange = null;
 
         UpdateViewport();
+        RefreshToolbar();
     }
 
     private void ExecuteClearSelection()

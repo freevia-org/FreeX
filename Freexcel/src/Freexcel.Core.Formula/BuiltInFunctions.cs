@@ -339,8 +339,9 @@ public static class BuiltInFunctions
     private static ScalarValue Left(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
-        var text = ToText(args[0]);
+        var text  = ToText(args[0]);
         var count = args.Count > 1 ? (int)ToNumber(args[1]) : 1;
+        if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
         return new TextValue(text[..count]);
     }
@@ -348,10 +349,11 @@ public static class BuiltInFunctions
     private static ScalarValue Right(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
-        var text = ToText(args[0]);
+        var text  = ToText(args[0]);
         var count = args.Count > 1 ? (int)ToNumber(args[1]) : 1;
+        if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        return new TextValue(text[^count..]);
+        return new TextValue(count == 0 ? "" : text[^count..]);
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -396,7 +398,7 @@ public static class BuiltInFunctions
         int colIndex = (int)ToNumber(args[2]);
         bool rangeLookup = args.Count < 4 || ToBool(args[3]); // default TRUE
 
-        if (colIndex < 1 || colIndex > table.ColCount) return ErrorValue.Ref;
+        if (colIndex < 1 || colIndex > (int)table.ColCount) return ErrorValue.Ref;
 
         if (rangeLookup)
         {
@@ -436,7 +438,7 @@ public static class BuiltInFunctions
         int rowIndex = (int)ToNumber(args[2]);
         bool rangeLookup = args.Count < 4 || ToBool(args[3]);
 
-        if (rowIndex < 1 || rowIndex > table.RowCount) return ErrorValue.Ref;
+        if (rowIndex < 1 || rowIndex > (int)table.RowCount) return ErrorValue.Ref;
 
         if (rangeLookup)
         {
@@ -794,7 +796,7 @@ public static class BuiltInFunctions
         int startNum   = args.Count > 2 ? (int)ToNumber(args[2]) : 1;
         if (startNum < 1) return ErrorValue.Value;
         int startIdx = startNum - 1;
-        if (startIdx > withinText.Length) return ErrorValue.Value;
+        if (startIdx >= withinText.Length) return ErrorValue.Value;
 
         // Convert Excel wildcard pattern to regex
         var sb = new System.Text.StringBuilder("(?i)");
@@ -1068,7 +1070,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var n = ToNumber(args[0]);
-        if (n < 0) return ErrorValue.Num;
+        if (n < 0 || n > 170) return ErrorValue.Num; // Excel limit; 171! overflows double
         int ni = (int)Math.Round(n);
         double result = 1;
         for (int i = 2; i <= ni; i++) result *= i;
@@ -1409,7 +1411,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         int code = (int)ToNumber(args[0]);
-        if (code < 1 || code > 255) return ErrorValue.Value;
+        if (code < 0 || code > 255) return ErrorValue.Value;
         return new TextValue(((char)code).ToString());
     }
 
