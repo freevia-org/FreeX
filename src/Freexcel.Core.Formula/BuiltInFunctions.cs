@@ -2156,6 +2156,8 @@ public static class BuiltInFunctions
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         double rate = ToNumber(args[0]);
         int    nper = (int)ToNumber(args[1]);
         double pv   = ToNumber(args[2]);
@@ -2220,6 +2222,9 @@ public static class BuiltInFunctions
 
     private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         int    nper  = (int)ToNumber(args[0]);
         double pmt   = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
