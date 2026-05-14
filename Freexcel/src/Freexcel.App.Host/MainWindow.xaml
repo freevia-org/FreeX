@@ -12,7 +12,7 @@
         Background="#F0F0F0">
 
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="34" ResizeBorderThickness="5" GlassFrameThickness="0"/>
+        <WindowChrome CaptionHeight="34" ResizeBorderThickness="5"/>
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
