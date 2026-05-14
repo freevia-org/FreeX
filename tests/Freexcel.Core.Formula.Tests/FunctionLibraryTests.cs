@@ -1000,4 +1000,69 @@ public class FunctionLibraryTests
         var result = _eval.Evaluate("=AVERAGEIFS(A1:A3,B1:B3,\"A\")", sheet);
         result.Should().Be(new NumberValue(20));
     }
+
+    // ── Math / Trig ─────────────────────────────────────────────────────────────
+
+    [Fact] public void Sin_Zero_ReturnsZero() =>
+        _eval.Evaluate("=SIN(0)", MakeSheet()).Should().Be(new NumberValue(0));
+
+    [Fact] public void Cos_Zero_ReturnsOne() =>
+        _eval.Evaluate("=COS(0)", MakeSheet()).Should().Be(new NumberValue(1));
+
+    [Fact] public void Tan_Zero_ReturnsZero() =>
+        _eval.Evaluate("=TAN(0)", MakeSheet()).Should().Be(new NumberValue(0));
+
+    [Fact] public void Asin_One_ReturnsHalfPi() =>
+        ((NumberValue)_eval.Evaluate("=ASIN(1)", MakeSheet())).Value
+            .Should().BeApproximately(Math.PI / 2, 1e-10);
+
+    [Fact] public void Acos_One_ReturnsZero() =>
+        ((NumberValue)_eval.Evaluate("=ACOS(1)", MakeSheet())).Value
+            .Should().BeApproximately(0, 1e-10);
+
+    [Fact] public void Atan_One_ReturnsQuarterPi() =>
+        ((NumberValue)_eval.Evaluate("=ATAN(1)", MakeSheet())).Value
+            .Should().BeApproximately(Math.PI / 4, 1e-10);
+
+    [Fact] public void Atan2_XY_ReturnsCorrect() =>
+        ((NumberValue)_eval.Evaluate("=ATAN2(1,1)", MakeSheet())).Value
+            .Should().BeApproximately(Math.PI / 4, 1e-10);
+
+    [Fact] public void Degrees_Pi_Returns180() =>
+        ((NumberValue)_eval.Evaluate("=DEGREES(PI())", MakeSheet())).Value
+            .Should().BeApproximately(180, 1e-10);
+
+    [Fact] public void Radians_180_ReturnsPi() =>
+        ((NumberValue)_eval.Evaluate("=RADIANS(180)", MakeSheet())).Value
+            .Should().BeApproximately(Math.PI, 1e-10);
+
+    [Fact] public void Product_Range_MultipliesAll()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(3)),(3,1,new NumberValue(4)));
+        _eval.Evaluate("=PRODUCT(A1:A3)", sheet).Should().Be(new NumberValue(24));
+    }
+
+    [Fact] public void Quotient_5_2_Returns2() =>
+        _eval.Evaluate("=QUOTIENT(5,2)", MakeSheet()).Should().Be(new NumberValue(2));
+
+    [Fact] public void Gcd_12_8_Returns4() =>
+        _eval.Evaluate("=GCD(12,8)", MakeSheet()).Should().Be(new NumberValue(4));
+
+    [Fact] public void Lcm_4_6_Returns12() =>
+        _eval.Evaluate("=LCM(4,6)", MakeSheet()).Should().Be(new NumberValue(12));
+
+    [Fact] public void Mround_14_5_Returns15() =>
+        _eval.Evaluate("=MROUND(14,5)", MakeSheet()).Should().Be(new NumberValue(15));
+
+    [Fact] public void Combin_5_2_Returns10() =>
+        _eval.Evaluate("=COMBIN(5,2)", MakeSheet()).Should().Be(new NumberValue(10));
+
+    [Fact] public void Permut_5_2_Returns20() =>
+        _eval.Evaluate("=PERMUT(5,2)", MakeSheet()).Should().Be(new NumberValue(20));
+
+    [Fact] public void Odd_2_Returns3() =>
+        _eval.Evaluate("=ODD(2)", MakeSheet()).Should().Be(new NumberValue(3));
+
+    [Fact] public void Even_3_Returns4() =>
+        _eval.Evaluate("=EVEN(3)", MakeSheet()).Should().Be(new NumberValue(4));
 }
