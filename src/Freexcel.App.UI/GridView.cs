@@ -106,6 +106,15 @@ public class GridView : FrameworkElement
         set => SetValue(ShowHeadersProperty, value);
     }
 
+    public static readonly DependencyProperty ZoomFactorProperty =
+        DependencyProperty.Register(nameof(ZoomFactor), typeof(double), typeof(GridView),
+            new FrameworkPropertyMetadata(1.0, FrameworkPropertyMetadataOptions.AffectsRender));
+    public double ZoomFactor
+    {
+        get => (double)GetValue(ZoomFactorProperty);
+        set => SetValue(ZoomFactorProperty, value);
+    }
+
     // ClipboardRange: when set, draws marching ants around this range
     public static readonly DependencyProperty ClipboardRangeProperty =
         DependencyProperty.Register(nameof(ClipboardRange), typeof(GridRange?), typeof(GridView),
@@ -215,7 +224,8 @@ public class GridView : FrameworkElement
         if (Viewport == null) return;
 
         RebuildMergeLookup();
-        dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight)));
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
 
         RenderHeaders(dc);
         RenderGridLines(dc);

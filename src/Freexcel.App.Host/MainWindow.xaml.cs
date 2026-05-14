@@ -2939,6 +2939,7 @@ public partial class MainWindow : Window
     {
         if (ZoomSlider == null || SheetGrid == null || StatusZoomText == null) return;
         _zoomLevel = ZoomSlider.Value / 100.0;
+        SheetGrid.ZoomFactor = _zoomLevel;
         SheetGrid.RenderTransform = new System.Windows.Media.ScaleTransform(_zoomLevel, _zoomLevel, 0, 0);
         StatusZoomText.Text = $"{(int)ZoomSlider.Value}%";
         UpdateViewport();
