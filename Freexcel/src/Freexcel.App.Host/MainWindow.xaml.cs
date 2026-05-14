@@ -47,9 +47,13 @@ public partial class MainWindow : Window
     private double _zoomLevel = 1.0;
     private bool _formulaBarExpanded;
     private System.Windows.Controls.TextBox? _inlineEditor;
+    private ColumnResizeSnapshot? _columnResizeSnapshot;
+    private RowResizeSnapshot? _rowResizeSnapshot;
 
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells);
     private InternalClipboard? _internalClipboard;
+    private sealed record ColumnResizeSnapshot(SheetId SheetId, uint Column, bool HadWidth, double Width);
+    private sealed record RowResizeSnapshot(SheetId SheetId, uint Row, bool HadHeight, double Height);
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -94,6 +98,11 @@ public partial class MainWindow : Window
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;
+        StateChanged += (_, _) =>
+        {
+            if (MaxRestoreBtn != null)
+                MaxRestoreBtn.Content = WindowState == WindowState.Maximized ? "" : "";
+        };
 
         _logger.LogInformation("MainWindow initialized with Workbook {WorkbookId}", _workbook.Id);
     }
@@ -577,7 +586,9 @@ public partial class MainWindow : Window
     private void ApplyStyleDiff(StyleDiff diff)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        _commandBus.Execute(_workbook.Id, new ApplyStyleCommand(_currentSheetId, range, diff));
+        if (!TryExecuteCommand(new ApplyStyleCommand(_currentSheetId, range, diff), "Apply Style"))
+            return;
+
         UpdateViewport();
         RefreshStatusBar();
     }
@@ -897,7 +908,9 @@ public partial class MainWindow : Window
             _recalcEngine.ClearFormulaDependencies(addr);
         }
 
-        _commandBus.Execute(_workbook.Id, command);
+        if (!TryExecuteCommand(command, "Edit Cell"))
+            return;
+
         _recalcEngine.Recalculate(_workbook, [addr]);
         UpdateViewport();
         RefreshStatusBar();
@@ -1267,6 +1280,19 @@ public partial class MainWindow : Window
             title, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
+    private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
+    {
+        outcome = _commandBus.Execute(_workbook.Id, command);
+        if (outcome.Success)
+            return true;
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    private bool TryExecuteCommand(IWorkbookCommand command, string title) =>
+        TryExecuteCommand(command, title, out _);
+
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
@@ -1338,7 +1364,8 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var cmd = new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending: true);
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Sort"))
+            return;
         UpdateViewport();
     }
 
@@ -1346,7 +1373,8 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var cmd = new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending: false);
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Sort"))
+            return;
         UpdateViewport();
     }
 
@@ -1359,7 +1387,8 @@ public partial class MainWindow : Window
             ? (IReadOnlyList<string>)[]
             : [value.Trim()];
         var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: allowedValues);
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Filter"))
+            return;
         UpdateViewport();
     }
 
@@ -1384,7 +1413,8 @@ public partial class MainWindow : Window
             FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
         };
 
-        _commandBus.Execute(_workbook.Id, new ApplyConditionalFormatCommand(_currentSheetId, cf));
+        if (!TryExecuteCommand(new ApplyConditionalFormatCommand(_currentSheetId, cf), "Conditional Formatting"))
+            return;
         UpdateViewport();
     }
 
@@ -1402,7 +1432,8 @@ public partial class MainWindow : Window
         var dv = dlg.Result;
         dv.AppliesTo = range;
 
-        _commandBus.Execute(_workbook.Id, new SetDataValidationCommand(_currentSheetId, dv));
+        if (!TryExecuteCommand(new SetDataValidationCommand(_currentSheetId, dv), "Data Validation"))
+            return;
         UpdateViewport();
     }
 
@@ -1410,7 +1441,8 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: []);
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Filter"))
+            return;
         UpdateViewport();
     }
 
@@ -1689,7 +1721,9 @@ public partial class MainWindow : Window
     private void OnAutofillRequested(GridRange sourceRange, GridRange fillRange)
     {
         var cmd = new AutofillCommand(_currentSheetId, sourceRange, fillRange);
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Autofill"))
+            return;
+
         _recalcEngine.Recalculate(_workbook, fillRange.AllCells().ToList());
         UpdateViewport();
         RefreshStatusBar();
@@ -1729,6 +1763,7 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
+        CaptureColumnResizeSnapshot(sheet, col);
         sheet.ColumnWidths[col] = newWidthPx / 8.0;
         UpdateViewport();
     }
@@ -1737,7 +1772,15 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        sheet.ColumnWidths[col] = newWidthPx / 8.0;
+        RestoreColumnResizeSnapshot(sheet, col);
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetColumnWidthCommand(_currentSheetId, col, col, newWidthPx / 8.0));
+        _columnResizeSnapshot = null;
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Column Width");
+            return;
+        }
         UpdateViewport();
     }
 
@@ -1745,6 +1788,7 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
+        CaptureRowResizeSnapshot(sheet, row);
         sheet.RowHeights[row] = newHeightPx;
         UpdateViewport();
     }
@@ -1753,8 +1797,64 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        sheet.RowHeights[row] = newHeightPx;
+        RestoreRowResizeSnapshot(sheet, row);
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetRowHeightCommand(_currentSheetId, row, row, newHeightPx));
+        _rowResizeSnapshot = null;
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Row Height");
+            return;
+        }
         UpdateViewport();
+    }
+
+    private void CaptureColumnResizeSnapshot(Sheet sheet, uint col)
+    {
+        if (_columnResizeSnapshot is not null &&
+            _columnResizeSnapshot.SheetId == sheet.Id &&
+            _columnResizeSnapshot.Column == col)
+            return;
+
+        var hadWidth = sheet.ColumnWidths.TryGetValue(col, out var width);
+        _columnResizeSnapshot = new ColumnResizeSnapshot(sheet.Id, col, hadWidth, width);
+    }
+
+    private void RestoreColumnResizeSnapshot(Sheet sheet, uint col)
+    {
+        if (_columnResizeSnapshot is not { } snapshot ||
+            snapshot.SheetId != sheet.Id ||
+            snapshot.Column != col)
+            return;
+
+        if (snapshot.HadWidth)
+            sheet.ColumnWidths[col] = snapshot.Width;
+        else
+            sheet.ColumnWidths.Remove(col);
+    }
+
+    private void CaptureRowResizeSnapshot(Sheet sheet, uint row)
+    {
+        if (_rowResizeSnapshot is not null &&
+            _rowResizeSnapshot.SheetId == sheet.Id &&
+            _rowResizeSnapshot.Row == row)
+            return;
+
+        var hadHeight = sheet.RowHeights.TryGetValue(row, out var height);
+        _rowResizeSnapshot = new RowResizeSnapshot(sheet.Id, row, hadHeight, height);
+    }
+
+    private void RestoreRowResizeSnapshot(Sheet sheet, uint row)
+    {
+        if (_rowResizeSnapshot is not { } snapshot ||
+            snapshot.SheetId != sheet.Id ||
+            snapshot.Row != row)
+            return;
+
+        if (snapshot.HadHeight)
+            sheet.RowHeights[row] = snapshot.Height;
+        else
+            sheet.RowHeights.Remove(row);
     }
 
     private void ExecuteCopy(bool isCut = false)
@@ -1821,7 +1921,8 @@ public partial class MainWindow : Window
             if (edits.Count > 0)
             {
                 var command = new EditCellsCommand(_currentSheetId, edits);
-                _commandBus.Execute(_workbook.Id, command);
+                if (!TryExecuteCommand(command, "Paste"))
+                    return;
                 _recalcEngine.Recalculate(_workbook, edits.Select(e => e.Item1).ToList());
             }
 
@@ -1867,7 +1968,8 @@ public partial class MainWindow : Window
         if (fallbackEdits.Count == 0) return;
 
         var fallbackCommand = new EditCellsCommand(_currentSheetId, fallbackEdits);
-        _commandBus.Execute(_workbook.Id, fallbackCommand);
+        if (!TryExecuteCommand(fallbackCommand, "Paste"))
+            return;
         _recalcEngine.Recalculate(_workbook, fallbackEdits.Select(e => e.Item1).ToList());
 
         uint pastedRowSpanFallback = rows.Length > 0 ? (uint)(rows.Length - 1) : 0;
@@ -1893,7 +1995,8 @@ public partial class MainWindow : Window
                 edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(BlankValue.Instance)));
 
         var command = new EditCellsCommand(_currentSheetId, edits);
-        _commandBus.Execute(_workbook.Id, command);
+        if (!TryExecuteCommand(command, "Clear"))
+            return;
         UpdateViewport();
     }
 
@@ -2003,8 +2106,10 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(_currentSheetId);
         var style = _workbook.GetStyle(_formatPainterStyleId);
         var diff = StyleDiff.FromStyle(style);
-        _commandBus.Execute(_workbook.Id, new ApplyStyleCommand(_currentSheetId,
-            new GridRange(addr, addr), diff));
+        if (!TryExecuteCommand(new ApplyStyleCommand(_currentSheetId,
+            new GridRange(addr, addr), diff), "Format Painter"))
+            return true;
+
         UpdateViewport();
         return true;
     }
@@ -2078,8 +2183,9 @@ public partial class MainWindow : Window
                     BorderBottom: r == range.End.Row   ? b : null,
                     BorderLeft:   c == range.Start.Col ? b : null,
                     BorderRight:  c == range.End.Col   ? b : null);
-                _commandBus.Execute(_workbook.Id, new ApplyStyleCommand(_currentSheetId,
-                    new GridRange(new CellAddress(_currentSheetId, r, c), new CellAddress(_currentSheetId, r, c)), d));
+                if (!TryExecuteCommand(new ApplyStyleCommand(_currentSheetId,
+                    new GridRange(new CellAddress(_currentSheetId, r, c), new CellAddress(_currentSheetId, r, c)), d), "Border"))
+                    return;
             }
         UpdateViewport();
     }
@@ -2233,11 +2339,12 @@ public partial class MainWindow : Window
             var fill = r == range.Start.Row ? headerFill : (r % 2 == 0 ? evenFill : oddFill);
             var fontColor = r == range.Start.Row ? CellColor.White : CellColor.Black;
             var bold = r == range.Start.Row;
-            _commandBus.Execute(_workbook.Id, new ApplyStyleCommand(_currentSheetId,
+            if (!TryExecuteCommand(new ApplyStyleCommand(_currentSheetId,
                 new GridRange(
                     new CellAddress(_currentSheetId, r, range.Start.Col),
                     new CellAddress(_currentSheetId, r, range.End.Col)),
-                new StyleDiff(FillColor: fill, FontColor: fontColor, Bold: bold)));
+                new StyleDiff(FillColor: fill, FontColor: fontColor, Bold: bold)), "Format as Table"))
+                return;
         }
         UpdateViewport();
     }
@@ -2309,17 +2416,25 @@ public partial class MainWindow : Window
         var input = PromptForInput("Row height (pixels):", "20");
         if (input is null || !double.TryParse(input, out var h) || h <= 0) return;
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        for (uint r = range.Start.Row; r <= range.End.Row; r++) sheet.RowHeights[r] = h;
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetRowHeightCommand(_currentSheetId, range.Start.Row, range.End.Row, h));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Row Height");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        for (uint r = range.Start.Row; r <= range.End.Row; r++) sheet.RowHeights.Remove(r);
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetRowHeightCommand(_currentSheetId, range.Start.Row, range.End.Row, height: null));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Auto Row Height");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
@@ -2327,46 +2442,74 @@ public partial class MainWindow : Window
         var input = PromptForInput("Column width (character units):", "8");
         if (input is null || !double.TryParse(input, out var w) || w <= 0) return;
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        for (uint c = range.Start.Col; c <= range.End.Col; c++) sheet.ColumnWidths[c] = w;
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetColumnWidthCommand(_currentSheetId, range.Start.Col, range.End.Col, w));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Column Width");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        for (uint c = range.Start.Col; c <= range.End.Col; c++) sheet.ColumnWidths.Remove(c);
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetColumnWidthCommand(_currentSheetId, range.Start.Col, range.End.Col, width: null));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Auto Column Width");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
     private void FormatHideRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        for (uint r = range.Start.Row; r <= range.End.Row; r++) sheet.RowHeights[r] = 0;
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetRowsHiddenCommand(_currentSheetId, range.Start.Row, range.End.Row, hidden: true));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Hide Row");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatUnhideRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        for (uint r = range.Start.Row; r <= range.End.Row; r++) sheet.RowHeights.Remove(r);
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetRowsHiddenCommand(_currentSheetId, range.Start.Row, range.End.Row, hidden: false));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Unhide Row");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatHideColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        for (uint c = range.Start.Col; c <= range.End.Col; c++) sheet.ColumnWidths[c] = 0;
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetColumnsHiddenCommand(_currentSheetId, range.Start.Col, range.End.Col, hidden: true));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Hide Column");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatUnhideColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        for (uint c = range.Start.Col; c <= range.End.Col; c++) sheet.ColumnWidths.Remove(c);
+        var outcome = _commandBus.Execute(_workbook.Id,
+            new SetColumnsHiddenCommand(_currentSheetId, range.Start.Col, range.End.Col, hidden: false));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Unhide Column");
+            return;
+        }
         UpdateViewport();
     }
     private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }
@@ -2414,7 +2557,9 @@ public partial class MainWindow : Window
     private void CommitFormulaAt(CellAddress addr, string formula)
     {
         var cmd = EditCellsCommand.ForFormula(_currentSheetId, addr, formula);
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "AutoSum"))
+            return;
+
         _recalcEngine.Recalculate(_workbook, [addr]);
         SetActiveCell(new CellAddress(_currentSheetId, addr.Row + 1, addr.Col));
         UpdateViewport();
@@ -2443,7 +2588,8 @@ public partial class MainWindow : Window
             for (uint r = range.Start.Row + 1; r <= range.End.Row; r++)
                 edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
         }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Fill Down"))
+            return;
         _recalcEngine.Recalculate(_workbook, edits.Select(x => x.Item1).ToList());
         UpdateViewport();
     }
@@ -2458,7 +2604,8 @@ public partial class MainWindow : Window
             for (uint c = range.Start.Col + 1; c <= range.End.Col; c++)
                 edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
         }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Fill Right"))
+            return;
         _recalcEngine.Recalculate(_workbook, edits.Select(x => x.Item1).ToList());
         UpdateViewport();
     }
@@ -2473,7 +2620,8 @@ public partial class MainWindow : Window
             for (uint r = range.Start.Row; r < range.End.Row; r++)
                 edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
         }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Fill Up"))
+            return;
         _recalcEngine.Recalculate(_workbook, edits.Select(x => x.Item1).ToList());
         UpdateViewport();
     }
@@ -2488,7 +2636,8 @@ public partial class MainWindow : Window
             for (uint c = range.Start.Col; c < range.End.Col; c++)
                 edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
         }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Fill Left"))
+            return;
         _recalcEngine.Recalculate(_workbook, edits.Select(x => x.Item1).ToList());
         UpdateViewport();
     }
@@ -2510,7 +2659,8 @@ public partial class MainWindow : Window
                 edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(new NumberValue(val))));
                 val += step;
             }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Fill Series"))
+            return;
         UpdateViewport();
     }
 
@@ -2561,7 +2711,11 @@ public partial class MainWindow : Window
     private void ClearValuesMenuItem_Click(object sender, RoutedEventArgs e)  => ClearValues();
     private void ClearCommentsMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("Comments cleared.", "Clear Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteCommand(new ClearCommentsCommand(_currentSheetId, range), "Clear Comments"))
+            return;
+
+        UpdateViewport();
     }
     private void ClearHyperlinksMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -2581,7 +2735,8 @@ public partial class MainWindow : Window
                 if (existing is not null) cleared.StyleId = existing.StyleId;
                 edits.Add((new CellAddress(_currentSheetId, r, c), cleared));
             }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Clear Values"))
+            return;
         UpdateViewport();
     }
     private void ClearFormats()
@@ -2651,7 +2806,8 @@ public partial class MainWindow : Window
         var text = string.IsNullOrWhiteSpace(label) ? url : label;
         var addr = SheetGrid.SelectedRange.Value.Start;
         var cmd = EditCellsCommand.ForValue(_currentSheetId, addr, new TextValue(text));
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Insert Link"))
+            return;
         UpdateViewport();
     }
 
@@ -2676,7 +2832,8 @@ public partial class MainWindow : Window
         var existing = sheet?.GetCell(addr)?.Value as TextValue;
         var newText = (existing?.Value ?? "") + dlg.SelectedChar;
         var cmd = EditCellsCommand.ForValue(_currentSheetId, addr, new TextValue(newText));
-        _commandBus.Execute(_workbook.Id, cmd);
+        if (!TryExecuteCommand(cmd, "Insert Symbol"))
+            return;
         UpdateViewport();
     }
 
@@ -2760,7 +2917,13 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         var name = PromptForInput("Define named range (name):", "");
         if (string.IsNullOrWhiteSpace(name)) return;
-        _workbook.DefineNamedRange(name, range);
+        var outcome = _commandBus.Execute(_workbook.Id, new DefineNamedRangeCommand(name.Trim(), range));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Define Name");
+            return;
+        }
+
         MessageBox.Show($"Named range '{name}' = {range} defined.", "Define Name", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -2873,7 +3036,8 @@ public partial class MainWindow : Window
                 edits.Add((addr, Cell.FromValue(val)));
             }
         }
-        _commandBus.Execute(_workbook.Id, new EditCellsCommand(_currentSheetId, edits));
+        if (!TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Text to Columns"))
+            return;
         _recalcEngine.Recalculate(_workbook, edits.Select(x => x.Item1).ToList());
         UpdateViewport();
     }
@@ -2892,7 +3056,11 @@ public partial class MainWindow : Window
             if (!seen.Add(key)) rowsToDelete.Add(r);
         }
         for (int i = rowsToDelete.Count - 1; i >= 0; i--)
-            _commandBus.Execute(_workbook.Id, new DeleteRowsCommand(_currentSheetId, rowsToDelete[i], 1));
+        {
+            if (!TryExecuteCommand(new DeleteRowsCommand(_currentSheetId, rowsToDelete[i], 1), "Remove Duplicates"))
+                return;
+        }
+
         MessageBox.Show($"Removed {rowsToDelete.Count} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
         UpdateViewport();
     }
@@ -2911,9 +3079,14 @@ public partial class MainWindow : Window
         var addr = SheetGrid.SelectedRange.Value.Start;
         var text = PromptForInput($"Add comment to {addr.ToA1()}:", "");
         if (text is null) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        sheet.Comments[addr] = text;
+        var outcome = _commandBus.Execute(_workbook.Id, new SetCommentCommand(_currentSheetId, addr, text));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Comment");
+            return;
+        }
+
+        UpdateViewport();
         MessageBox.Show($"Comment added to {addr.ToA1()}.", "Comment", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -2921,26 +3094,78 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is null) return;
         var addr = SheetGrid.SelectedRange.Value.Start;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        sheet?.Comments.Remove(addr);
+        var outcome = _commandBus.Execute(_workbook.Id, new DeleteCommentCommand(_currentSheetId, addr));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Comment");
+            return;
+        }
+
         UpdateViewport();
     }
 
     private void ReviewPrevCommentBtn_Click(object sender, RoutedEventArgs e)
-        => MessageBox.Show("Comment navigation is not yet implemented.", "Comments");
+    {
+        NavigateComment(previous: true);
+    }
+
     private void ReviewNextCommentBtn_Click(object sender, RoutedEventArgs e)
-        => MessageBox.Show("Comment navigation is not yet implemented.", "Comments");
+    {
+        NavigateComment(previous: false);
+    }
+
     private void ReviewShowCommentsBtn_Click(object sender, RoutedEventArgs e)
-        => MessageBox.Show("Show/hide all comments is not yet implemented.", "Comments");
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || sheet.Comments.Count == 0)
+        {
+            MessageBox.Show("No comments on this sheet.", "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var text = string.Join(Environment.NewLine, sheet.Comments
+            .OrderBy(c => c.Key.Row)
+            .ThenBy(c => c.Key.Col)
+            .Select(c => $"{c.Key.ToA1()}: {c.Value}"));
+        MessageBox.Show(text, "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void NavigateComment(bool previous)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || sheet.Comments.Count == 0)
+        {
+            MessageBox.Show("No comments on this sheet.", "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var comments = sheet.Comments.Keys
+            .OrderBy(a => a.Row)
+            .ThenBy(a => a.Col)
+            .ToList();
+        var current = SheetGrid.SelectedRange?.Start ?? comments[0];
+        var target = previous
+            ? comments.LastOrDefault(a => a.Row < current.Row || (a.Row == current.Row && a.Col < current.Col))
+            : comments.FirstOrDefault(a => a.Row > current.Row || (a.Row == current.Row && a.Col > current.Col));
+        if (target.Equals(default(CellAddress)))
+            target = previous ? comments[^1] : comments[0];
+
+        SetActiveCell(target);
+        EnsureCellVisible(target);
+        UpdateViewport();
+    }
 
     private void ProtectSheetBtn_Click(object sender, RoutedEventArgs e)
     {
         var pwd = PromptForInput("Set sheet protection password (leave blank for no password):", "");
         if (pwd is null) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        sheet.IsProtected = true;
-        sheet.ProtectionPassword = string.IsNullOrEmpty(pwd) ? null : pwd;
+        var outcome = _commandBus.Execute(_workbook.Id, new ProtectSheetCommand(_currentSheetId, pwd));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Protect Sheet");
+            return;
+        }
+
         MessageBox.Show("Sheet is now protected.", "Protect Sheet", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -2981,33 +3206,50 @@ public partial class MainWindow : Window
     private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        sheet.FrozenRows = (uint)Math.Max(0, (int)range.Start.Row - 1);
-        sheet.FrozenCols = (uint)Math.Max(0, (int)range.Start.Col - 1);
-        UpdateViewport();
+        SetFreezePanes(
+            (uint)Math.Max(0, (int)range.Start.Row - 1),
+            (uint)Math.Max(0, (int)range.Start.Col - 1));
     }
     private void FreezeTopRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        sheet.FrozenRows = 1; sheet.FrozenCols = 0;
-        UpdateViewport();
+        SetFreezePanes(1, 0);
     }
     private void FreezeFirstColMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        sheet.FrozenRows = 0; sheet.FrozenCols = 1;
-        UpdateViewport();
+        SetFreezePanes(0, 1);
     }
     private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-        sheet.FrozenRows = 0; sheet.FrozenCols = 0;
+        SetFreezePanes(0, 0);
+    }
+
+    private void SetFreezePanes(uint frozenRows, uint frozenCols)
+    {
+        var outcome = _commandBus.Execute(
+            _workbook.Id,
+            new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Freeze Panes");
+            return;
+        }
+
         UpdateViewport();
     }
+
+    private void MinimizeBtn_Click(object sender, RoutedEventArgs e) =>
+        SystemCommands.MinimizeWindow(this);
+
+    private void MaxRestoreBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+            SystemCommands.RestoreWindow(this);
+        else
+            SystemCommands.MaximizeWindow(this);
+    }
+
+    private void CloseSysBtn_Click(object sender, RoutedEventArgs e) =>
+        SystemCommands.CloseWindow(this);
 
     private void ZoomInBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -3148,10 +3390,32 @@ public partial class MainWindow : Window
         RefreshSheetTabs();
     }
 
-    private void SheetCtxMove_Click(object sender, RoutedEventArgs e)
+    private void SheetCtxMoveLeft_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("Move/Copy sheet is not yet implemented.", "Move/Copy",
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        MoveSheetTab(sender, -1);
+    }
+
+    private void SheetCtxMoveRight_Click(object sender, RoutedEventArgs e)
+    {
+        MoveSheetTab(sender, 1);
+    }
+
+    private void MoveSheetTab(object sender, int direction)
+    {
+        var tab = GetContextMenuTab(sender);
+        if (tab == null) return;
+
+        var fromIndex = _workbook.Sheets.ToList().FindIndex(s => s.Id == tab.Id);
+        var toIndex = fromIndex + direction;
+        var outcome = _commandBus.Execute(_workbook.Id, new MoveSheetCommand(fromIndex, toIndex));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Move Sheet");
+            return;
+        }
+
+        _currentSheetId = tab.Id;
+        RefreshSheetTabs();
     }
 
     private static SheetTabViewModel? GetContextMenuTab(object sender)
