@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Freexcel.Core.Model\Freexcel.Core.Model.csproj" />
+    <ProjectReference Include="..\Freexcel.Core.Formula\Freexcel.Core.Formula.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
