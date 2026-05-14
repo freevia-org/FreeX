@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private List<RecentFileViewModel> _allRecentItems = [];
     private FreexcelOptions _options = FreexcelOptions.Load();
     private string? _currentFilePath;
+    private XlsxFeatureReport? _currentXlsxFeatureReport;
     private bool _formatPainterActive;
     private StyleId _formatPainterStyleId;
     private bool _showFormulas;
@@ -119,6 +120,11 @@ public partial class MainWindow : Window
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
+    }
+
+    private void RecalculateWorkbook()
+    {
+        _recalcEngine.RecalculateAllFormulas(_workbook);
     }
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1022,8 +1028,9 @@ public partial class MainWindow : Window
         _workbookRef.Current = wb;
         _currentSheetId = wb.Sheets[0].Id;
         _currentFilePath = null;
+        _currentXlsxFeatureReport = null;
         UpdateTitleBar();
-        _recalcEngine.Recalculate(wb, []);
+        RecalculateWorkbook();
         SheetGrid.SelectedRange = null;
         _selectionAnchor = null;
         _selectionCursor = null;
@@ -1042,6 +1049,11 @@ public partial class MainWindow : Window
         try
         {
             using var stream = System.IO.File.OpenRead(path);
+            _currentXlsxFeatureReport = ext == ".xlsx"
+                ? XlsxFeatureInspector.Inspect(stream)
+                : null;
+            if (stream.CanSeek)
+                stream.Position = 0;
             _workbook = adapter.Load(stream);
             _workbookRef.Current = _workbook;
             _workbook.Name = System.IO.Path.GetFileNameWithoutExtension(path);
@@ -1049,25 +1061,7 @@ public partial class MainWindow : Window
             _currentFilePath = path;
             UpdateTitleBar();
 
-            foreach (var sheet in _workbook.Sheets)
-            {
-                _recalcEngine.Recalculate(_workbook, []);
-                foreach (var (addr, cell) in sheet.GetUsedCells())
-                {
-                    if (cell.HasFormula)
-                    {
-                        try
-                        {
-                            var lexer = new Lexer("=" + cell.FormulaText);
-                            var parser = new Parser(lexer.Tokenize());
-                            _recalcEngine.RegisterFormulaDependencies(addr, parser.Parse(), sheet.Id, _workbook);
-                        }
-                        catch { }
-                    }
-                }
-            }
-
-            _recalcEngine.Recalculate(_workbook, []);
+            RecalculateWorkbook();
             _recentFiles.AddOrUpdate(path);
             UpdateViewport();
             RefreshSheetTabs();
@@ -1159,11 +1153,49 @@ public partial class MainWindow : Window
             var ext = System.IO.Path.GetExtension(dialog.FileName).ToLower();
             var adapter = _fileAdapters.FirstOrDefault(a => a.Extension == ext);
             if (adapter == null) return;
+            if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
+                return;
 
             using var stream = dialog.OpenFile();
             adapter.Save(_workbook, stream);
+            _currentFilePath = dialog.FileName;
+            UpdateTitleBar();
         }
     }
+
+    private bool ConfirmUnsupportedXlsxFeatureSave()
+    {
+        if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
+            return true;
+
+        var featureList = string.Join(", ",
+            _currentXlsxFeatureReport.Features
+                .Select(f => FormatUnsupportedFeatureKind(f.Kind))
+                .Distinct()
+                .OrderBy(name => name));
+
+        var result = MessageBox.Show(
+            "This workbook contains features Freexcel does not preserve yet. " +
+            $"Saving to .xlsx may remove: {featureList}.\n\nContinue saving?",
+            "Unsupported XLSX Features",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        return result == MessageBoxResult.Yes;
+    }
+
+    private static string FormatUnsupportedFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
+    {
+        XlsxUnsupportedFeatureKind.Macros => "macros",
+        XlsxUnsupportedFeatureKind.PivotTables => "pivot tables",
+        XlsxUnsupportedFeatureKind.Charts => "charts",
+        XlsxUnsupportedFeatureKind.Slicers => "slicers",
+        XlsxUnsupportedFeatureKind.Timelines => "timelines",
+        XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
+        XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
+        XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
+        _ => kind.ToString()
+    };
 
     private void FindButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1215,6 +1247,26 @@ public partial class MainWindow : Window
             _sheetTabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name) { IsActive = sheet.Id == _currentSheetId });
     }
 
+    private string GenerateUniqueSheetName()
+    {
+        for (int i = _workbook.Sheets.Count + 1; i <= 10_000; i++)
+        {
+            var name = $"Sheet{i}";
+            if (_workbook.ValidateSheetName(name) is null)
+                return name;
+        }
+
+        return $"Sheet{Guid.NewGuid():N}"[..31];
+    }
+
+    private static void ShowCommandError(CommandOutcome outcome, string title)
+    {
+        if (outcome.Success) return;
+
+        MessageBox.Show(outcome.ErrorMessage ?? "The command could not be completed.",
+            title, MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
@@ -1229,7 +1281,14 @@ public partial class MainWindow : Window
         var name = PromptForInput("Rename Sheet", tab.Name);
         if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
         {
-            _commandBus.Execute(_workbook.Id, new RenameSheetCommand(_currentSheetId, name));
+            var outcome = _commandBus.Execute(_workbook.Id, new RenameSheetCommand(tab.Id, name));
+            if (!outcome.Success)
+            {
+                ShowCommandError(outcome, "Rename Sheet");
+                return;
+            }
+
+            RecalculateWorkbook();
             RefreshSheetTabs();
         }
         e.Handled = true;
@@ -1242,8 +1301,14 @@ public partial class MainWindow : Window
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
     {
-        var name = $"Sheet{_workbook.Sheets.Count + 1}";
-        _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
+        var name = GenerateUniqueSheetName();
+        var outcome = _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Sheet");
+            return;
+        }
+
         _currentSheetId = _workbook.Sheets[^1].Id;
         UpdateViewport();
         RefreshSheetTabs();
@@ -1478,7 +1543,7 @@ public partial class MainWindow : Window
     {
         var outcome = _commandBus.Undo(_workbook.Id);
         if (!outcome.Success) return;
-        _recalcEngine.Recalculate(_workbook, []);
+        RecalculateWorkbook();
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -1488,7 +1553,7 @@ public partial class MainWindow : Window
     {
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success) return;
-        _recalcEngine.Recalculate(_workbook, []);
+        RecalculateWorkbook();
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
@@ -1556,13 +1621,27 @@ public partial class MainWindow : Window
 
     private void InsertRows(uint beforeRow)
     {
-        _commandBus.Execute(_workbook.Id, new InsertRowsCommand(_currentSheetId, beforeRow));
+        var outcome = _commandBus.Execute(_workbook.Id, new InsertRowsCommand(_currentSheetId, beforeRow));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Row");
+            return;
+        }
+
+        RecalculateWorkbook();
         UpdateViewport();
     }
 
     private void InsertColumns(uint beforeCol)
     {
-        _commandBus.Execute(_workbook.Id, new InsertColumnsCommand(_currentSheetId, beforeCol));
+        var outcome = _commandBus.Execute(_workbook.Id, new InsertColumnsCommand(_currentSheetId, beforeCol));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Column");
+            return;
+        }
+
+        RecalculateWorkbook();
         UpdateViewport();
     }
 
@@ -1570,7 +1649,14 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         uint count = range.End.Row - range.Start.Row + 1;
-        _commandBus.Execute(_workbook.Id, new DeleteRowsCommand(_currentSheetId, range.Start.Row, count));
+        var outcome = _commandBus.Execute(_workbook.Id, new DeleteRowsCommand(_currentSheetId, range.Start.Row, count));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Delete Row");
+            return;
+        }
+
+        RecalculateWorkbook();
         UpdateViewport();
     }
 
@@ -1578,7 +1664,14 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         uint count = range.End.Col - range.Start.Col + 1;
-        _commandBus.Execute(_workbook.Id, new DeleteColumnsCommand(_currentSheetId, range.Start.Col, count));
+        var outcome = _commandBus.Execute(_workbook.Id, new DeleteColumnsCommand(_currentSheetId, range.Start.Col, count));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Delete Column");
+            return;
+        }
+
+        RecalculateWorkbook();
         UpdateViewport();
     }
 
@@ -2198,8 +2291,15 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || _workbook.Sheets.Count <= 1) { MessageBox.Show("Cannot delete the only sheet."); return; }
         if (MessageBox.Show($"Delete '{sheet.Name}'?", "Delete Sheet", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
-        _workbook.RemoveSheet(_currentSheetId);
+        var outcome = _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(_currentSheetId));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Delete Sheet");
+            return;
+        }
+
         _currentSheetId = _workbook.Sheets[0].Id;
+        RecalculateWorkbook();
         RefreshSheetTabs();
         UpdateViewport();
     }
@@ -2688,7 +2788,7 @@ public partial class MainWindow : Window
 
     private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
-        _recalcEngine.Recalculate(_workbook, []);
+        RecalculateWorkbook();
         UpdateViewport();
     }
     private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)   => CalcNowBtn_Click(sender, e);
@@ -2996,15 +3096,28 @@ public partial class MainWindow : Window
         var name = PromptForInput("Rename Sheet", tab.Name);
         if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
         {
-            _commandBus.Execute(_workbook.Id, new RenameSheetCommand(tab.Id, name));
+            var outcome = _commandBus.Execute(_workbook.Id, new RenameSheetCommand(tab.Id, name));
+            if (!outcome.Success)
+            {
+                ShowCommandError(outcome, "Rename Sheet");
+                return;
+            }
+
+            RecalculateWorkbook();
             RefreshSheetTabs();
         }
     }
 
     private void SheetCtxInsert_Click(object sender, RoutedEventArgs e)
     {
-        var name = $"Sheet{_workbook.Sheets.Count + 1}";
-        _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
+        var name = GenerateUniqueSheetName();
+        var outcome = _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Sheet");
+            return;
+        }
+
         _currentSheetId = _workbook.Sheets[^1].Id;
         UpdateViewport();
         RefreshSheetTabs();
@@ -3022,8 +3135,15 @@ public partial class MainWindow : Window
         if (tab == null) return;
         if (MessageBox.Show($"Delete sheet \"{tab.Name}\"?", "Delete Sheet",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(tab.Id));
+        var outcome = _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(tab.Id));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Delete Sheet");
+            return;
+        }
+
         _currentSheetId = _workbook.Sheets[0].Id;
+        RecalculateWorkbook();
         UpdateViewport();
         RefreshSheetTabs();
     }

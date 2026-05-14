@@ -188,7 +188,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (xlValue.IsText) return new TextValue(xlValue.GetText());
         if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
         if (xlValue.IsDateTime) return DateTimeValue.FromDateTime(xlValue.GetDateTime());
-        if (xlValue.IsError) return new ErrorValue(xlValue.GetError().ToString());
+        if (xlValue.IsError) return MapErrorValue(xlValue.GetError());
         return new TextValue(xlValue.ToString());
     }
 
@@ -198,8 +198,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
         TextValue t => t.Value,
         BoolValue b => b.Value,
         DateTimeValue dt => DateTime.FromOADate(dt.Value),
-        ErrorValue => XLError.NoValueAvailable,
+        ErrorValue e => MapErrorValueInverse(e),
         _ => Blank.Value
+    };
+
+    private static ErrorValue MapErrorValue(XLError error) => error switch
+    {
+        XLError.NullValue => ErrorValue.Null,
+        XLError.DivisionByZero => ErrorValue.DivByZero,
+        XLError.IncompatibleValue => ErrorValue.Value,
+        XLError.CellReference => ErrorValue.Ref,
+        XLError.NameNotRecognized => ErrorValue.Name,
+        XLError.NumberInvalid => ErrorValue.Num,
+        XLError.NoValueAvailable => ErrorValue.NA,
+        _ => new ErrorValue(error.ToString())
+    };
+
+    private static XLError MapErrorValueInverse(ErrorValue error) => error.Code.ToUpperInvariant() switch
+    {
+        "#NULL!" => XLError.NullValue,
+        "#DIV/0!" => XLError.DivisionByZero,
+        "#VALUE!" => XLError.IncompatibleValue,
+        "#REF!" => XLError.CellReference,
+        "#NAME?" => XLError.NameNotRecognized,
+        "#NUM!" => XLError.NumberInvalid,
+        "#N/A" => XLError.NoValueAvailable,
+        _ => XLError.NoValueAvailable
     };
 
     private static CellStyle MapStyle(IXLStyle xlStyle)

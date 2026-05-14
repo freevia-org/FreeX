@@ -2,7 +2,7 @@ namespace Freexcel.Core.Formula;
 
 /// <summary>
 /// Recursive descent parser that converts a token stream into an AST.
-/// Handles operator precedence: comparison &lt; concatenation &lt; addition &lt; multiplication &lt; power &lt; unary.
+/// Handles operator precedence: comparison &lt; concatenation &lt; addition &lt; multiplication &lt; unary &lt; power.
 /// </summary>
 public sealed class Parser
 {
@@ -104,38 +104,38 @@ public sealed class Parser
         return left;
     }
 
-    // Multiplication → Power ( ('*' | '/') Power )*
+    // Multiplication → Unary ( ('*' | '/') Unary )*
     private FormulaNode ParseMultiplication()
     {
-        var left = ParsePower();
+        var left = ParseUnary();
 
         while (Current.Type is TokenType.Multiply or TokenType.Divide)
         {
             var op = Current.Type == TokenType.Multiply ? BinaryOperator.Multiply : BinaryOperator.Divide;
             Advance();
-            var right = ParsePower();
+            var right = ParseUnary();
             left = new BinaryOpNode(left, op, right);
         }
 
         return left;
     }
 
-    // Power → Unary ( '^' Power )?   — right-associative: 2^3^2 = 2^(3^2) = 512
+    // Power → Postfix ( '^' Unary )?   — right-associative: 2^3^2 = 2^(3^2) = 512
     private FormulaNode ParsePower()
     {
-        var left = ParseUnary();
+        var left = ParsePostfix();
 
         if (Current.Type == TokenType.Power)
         {
             Advance();
-            var right = ParsePower(); // recurse for right-associativity
+            var right = ParseUnary();
             return new BinaryOpNode(left, BinaryOperator.Power, right);
         }
 
         return left;
     }
 
-    // Unary → ('-' | '+') Unary | Postfix
+    // Unary → ('-' | '+') Unary | Power
     private FormulaNode ParseUnary()
     {
         if (Current.Type == TokenType.Minus)
@@ -151,7 +151,7 @@ public sealed class Parser
             return ParseUnary(); // unary plus is a no-op
         }
 
-        return ParsePostfix();
+        return ParsePower();
     }
 
     // Postfix → Primary ( '%' )*
@@ -189,6 +189,12 @@ public sealed class Parser
             {
                 var token = Advance();
                 return new BooleanNode(token.Value == "TRUE");
+            }
+
+            case TokenType.Error:
+            {
+                var token = Advance();
+                return new ErrorNode(ParseErrorValue(token.Value));
             }
 
             case TokenType.FunctionName:
@@ -294,6 +300,18 @@ public sealed class Parser
         var node = ParseCellRef(token);
         return node with { SheetName = sheetName };
     }
+
+    private static Model.ErrorValue ParseErrorValue(string code) => code.ToUpperInvariant() switch
+    {
+        "#DIV/0!" => Model.ErrorValue.DivByZero,
+        "#VALUE!" => Model.ErrorValue.Value,
+        "#REF!" => Model.ErrorValue.Ref,
+        "#NAME?" => Model.ErrorValue.Name,
+        "#NULL!" => Model.ErrorValue.Null,
+        "#N/A" => Model.ErrorValue.NA,
+        "#NUM!" => Model.ErrorValue.Num,
+        _ => new Model.ErrorValue(code)
+    };
 
     private List<FormulaNode> ParseArgumentList()
     {

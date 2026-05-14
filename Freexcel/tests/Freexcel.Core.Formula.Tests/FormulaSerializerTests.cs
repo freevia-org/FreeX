@@ -56,7 +56,16 @@ public class FormulaSerializerTests
     public void Serialize_SheetQualifiedRef() => RoundTrip("=Sheet2!A1").Should().Be("Sheet2!A1");
 
     [Fact]
+    public void Serialize_QuotedSheetQualifiedRef_WithSpace() => RoundTrip("='My Sheet'!A1").Should().Be("'My Sheet'!A1");
+
+    [Fact]
+    public void Serialize_QuotedSheetQualifiedRef_WithApostrophe() => RoundTrip("='Bob''s Sheet'!A1").Should().Be("'Bob''s Sheet'!A1");
+
+    [Fact]
     public void Serialize_SheetQualifiedRange() => RoundTrip("=Sheet2!A1:B2").Should().Be("Sheet2!A1:B2");
+
+    [Fact]
+    public void Serialize_QuotedSheetQualifiedRange_WithSpace() => RoundTrip("='My Sheet'!A1:B2").Should().Be("'My Sheet'!A1:B2");
 
     [Fact]
     public void Serialize_FunctionCall() => RoundTrip("=SUM(A1:A3)").Should().Be("SUM(A1:A3)");
@@ -112,6 +121,9 @@ public class FormulaSerializerTests
         var node = new ErrorNode(ErrorValue.Ref);
         FormulaSerializer.Serialize(node).Should().Be("#REF!");
     }
+
+    [Fact]
+    public void Serialize_ErrorLiteral() => RoundTrip("=#N/A").Should().Be("#N/A");
 
     [Fact]
     public void Serialize_ParensPreserved_AddInsideMultiply()

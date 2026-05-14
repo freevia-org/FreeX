@@ -62,6 +62,20 @@ public class FormulaRewriterTests
     }
 
     [Fact]
+    public void InsertRows_QuotedCrossSheetRef_OnTargetSheet_ShiftsAndPreservesQuotes()
+    {
+        var result = FormulaRewriter.Rewrite("'My Sheet'!A3", new InsertRowsOp("My Sheet", 3, 1), "Sheet2");
+        result.Should().Be("'My Sheet'!A4");
+    }
+
+    [Fact]
+    public void InsertRows_QuotedCrossSheetRef_WithApostrophe_ShiftsAndEscapesSheetName()
+    {
+        var result = FormulaRewriter.Rewrite("'Bob''s Sheet'!A3", new InsertRowsOp("Bob's Sheet", 3, 1), "Sheet2");
+        result.Should().Be("'Bob''s Sheet'!A4");
+    }
+
+    [Fact]
     public void InsertRows_RangeRef_BothEndsShift()
     {
         var result = FormulaRewriter.Rewrite("SUM(A3:A10)", new InsertRowsOp("Sheet1", 3, 1), "Sheet1");
@@ -194,5 +208,16 @@ public class FormulaRewriterTests
         // Formula has no refs that need changing
         var result = FormulaRewriter.Rewrite("1+2", new InsertRowsOp("Sheet1", 3, 1), "Sheet1");
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public void RenameSheet_QuotedCrossSheetRange_RewritesSheetName()
+    {
+        var result = FormulaRewriter.Rewrite(
+            "SUM('Old Sheet'!A1:B2)",
+            new RenameSheetOp("Old Sheet", "New Sheet"),
+            "Host");
+
+        result.Should().Be("SUM('New Sheet'!A1:B2)");
     }
 }

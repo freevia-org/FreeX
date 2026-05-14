@@ -7,6 +7,7 @@ public enum TokenType
     Number,
     String,
     Boolean,
+    Error,
 
     // References
     CellRef,       // e.g. A1, $B$2

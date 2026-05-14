@@ -1,4 +1,5 @@
 using System.Text;
+using System.IO.Compression;
 using FluentAssertions;
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
@@ -129,6 +130,29 @@ public class FileAdapterSmokeTests
         loaded.GetSheetAt(0).ColumnWidths[2u].Should().BeApproximately(25.0, 1.0);
     }
 
+    [Theory]
+    [InlineData("#DIV/0!")]
+    [InlineData("#VALUE!")]
+    [InlineData("#REF!")]
+    [InlineData("#NAME?")]
+    [InlineData("#NULL!")]
+    [InlineData("#N/A")]
+    [InlineData("#NUM!")]
+    public void XlsxAdapter_RoundTrip_ErrorValues_PreservesErrorCode(string errorCode)
+    {
+        var workbook = new Workbook("ErrorRoundTrip");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new ErrorValue(errorCode));
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).GetValue(1, 1).Should().Be(new ErrorValue(errorCode));
+    }
+
     // ── XLSX — conditional formatting round-trip ──────────────────────────────
 
     [Fact]
@@ -213,6 +237,43 @@ public class FileAdapterSmokeTests
     }
 
     // ── CSV ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void XlsxAdapter_SaveFromModel_DoesNotPreserveUnknownPackageParts()
+    {
+        var workbook = new Workbook("UnknownPartTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnknownPackagePart(source, "customXml/item1.xml", "<freexcel-test />");
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("customXml/item1.xml").Should().BeNull(
+            "v1 XLSX save writes from the Freexcel model and does not preserve unsupported OOXML package parts");
+    }
+
+    private static void AddUnknownPackagePart(MemoryStream packageStream, string entryName, string content)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            archive.GetEntry(entryName)?.Delete();
+            var entry = archive.CreateEntry(entryName);
+            using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
+            writer.Write(content);
+        }
+
+        packageStream.Position = 0;
+    }
 
     [Fact]
     public void CsvAdapter_RoundTrip()

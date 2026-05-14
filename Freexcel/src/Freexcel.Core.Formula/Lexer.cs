@@ -43,7 +43,9 @@ public sealed class Lexer
 
         return c switch
         {
+            '\'' => ReadQuotedSheetQualifier(),
             '"' => ReadString(),
+            '#' => ReadErrorLiteral(),
             '+' => SingleChar(TokenType.Plus),
             '-' => SingleChar(TokenType.Minus),
             '*' => SingleChar(TokenType.Multiply),
@@ -161,8 +163,6 @@ public sealed class Lexer
         var value = sb.ToString();
         var upper = value.ToUpperInvariant();
 
-        // Phase 2: quoted sheet names ('My Sheet'!A1) are not supported.
-        // A leading '\'' triggers FormulaParseException, which surfaces as #VALUE!.
         if (_pos < _text.Length && _text[_pos] == '!')
         {
             _pos++;
@@ -189,6 +189,67 @@ public sealed class Lexer
 
         // Named range (identifier that is not a cell reference, function, or boolean)
         return new Token(TokenType.NamedRange, upper, start);
+    }
+
+    private Token ReadQuotedSheetQualifier()
+    {
+        var start = _pos;
+        _pos++; // skip opening apostrophe
+        var sb = new StringBuilder();
+
+        while (_pos < _text.Length)
+        {
+            var c = _text[_pos];
+            if (c == '\'')
+            {
+                _pos++;
+                if (_pos < _text.Length && _text[_pos] == '\'')
+                {
+                    sb.Append('\'');
+                    _pos++;
+                    continue;
+                }
+
+                if (_pos < _text.Length && _text[_pos] == '!')
+                {
+                    _pos++;
+                    return new Token(TokenType.SheetQualifier, sb.ToString(), start);
+                }
+
+                throw new FormulaParseException($"Expected '!' after quoted sheet name at position {_pos}");
+            }
+
+            sb.Append(c);
+            _pos++;
+        }
+
+        throw new FormulaParseException($"Unterminated quoted sheet name starting at position {start}");
+    }
+
+    private Token ReadErrorLiteral()
+    {
+        var start = _pos;
+        var knownErrors = new[]
+        {
+            "#DIV/0!",
+            "#VALUE!",
+            "#REF!",
+            "#NAME?",
+            "#NULL!",
+            "#N/A",
+            "#NUM!"
+        };
+
+        foreach (var error in knownErrors.OrderByDescending(e => e.Length))
+        {
+            if (_text.AsSpan(_pos).StartsWith(error, StringComparison.OrdinalIgnoreCase))
+            {
+                _pos += error.Length;
+                return new Token(TokenType.Error, error, start);
+            }
+        }
+
+        throw new FormulaParseException($"Unknown error literal at position {start}");
     }
 
     private static bool IsCellReference(string value)

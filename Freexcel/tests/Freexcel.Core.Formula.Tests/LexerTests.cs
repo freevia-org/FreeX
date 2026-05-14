@@ -85,4 +85,37 @@ public class LexerTests
         tokens[0].Type.Should().Be(TokenType.CellRef);
         tokens[0].Value.Should().Be("D10");
     }
+
+    [Fact]
+    public void Tokenizes_QuotedSheetQualifier_WithSpace()
+    {
+        var tokens = new Lexer("='My Sheet'!A1").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.SheetQualifier);
+        tokens[0].Value.Should().Be("My Sheet");
+        tokens[1].Type.Should().Be(TokenType.CellRef);
+        tokens[1].Value.Should().Be("A1");
+    }
+
+    [Fact]
+    public void Tokenizes_QuotedSheetQualifier_WithEscapedApostrophe()
+    {
+        var tokens = new Lexer("='Bob''s Sheet'!A1").Tokenize();
+        tokens[0].Type.Should().Be(TokenType.SheetQualifier);
+        tokens[0].Value.Should().Be("Bob's Sheet");
+    }
+
+    [Theory]
+    [InlineData("#REF!")]
+    [InlineData("#N/A")]
+    [InlineData("#DIV/0!")]
+    [InlineData("#VALUE!")]
+    [InlineData("#NAME?")]
+    [InlineData("#NULL!")]
+    [InlineData("#NUM!")]
+    public void Tokenizes_ErrorLiteral(string errorCode)
+    {
+        var tokens = new Lexer("=" + errorCode).Tokenize();
+        tokens[0].Type.Should().Be(TokenType.Error);
+        tokens[0].Value.Should().Be(errorCode);
+    }
 }
