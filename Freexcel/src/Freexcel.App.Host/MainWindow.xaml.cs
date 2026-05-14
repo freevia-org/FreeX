@@ -47,6 +47,9 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private System.Windows.Controls.TextBox? _inlineEditor;
 
+    private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells);
+    private InternalClipboard? _internalClipboard;
+
     public MainWindow(
         ILogger<MainWindow> logger,
         IViewportService viewportService,
@@ -1678,19 +1681,84 @@ public partial class MainWindow : Window
 
         // Show marching ants around the copied range
         SheetGrid.ClipboardRange = range;
+
+        // Capture raw cells (including formulas) for paste formula adjustment
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var clipCells = new List<(CellAddress, Cell)>();
+        for (uint r = range.Start.Row; r <= range.End.Row; r++)
+        {
+            for (uint c = range.Start.Col; c <= range.End.Col; c++)
+            {
+                var addr = new CellAddress(_currentSheetId, r, c);
+                var cell = sheet?.GetCell(r, c);
+                if (cell is not null)
+                    clipCells.Add((addr, cell.Clone()));
+            }
+        }
+        _internalClipboard = new InternalClipboard(range, clipCells);
     }
 
     private void ExecutePaste()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
+        // If we have an internal clipboard (copied from within this app), use it with formula adjustment
+        if (_internalClipboard is { } clip)
+        {
+            var edits = new List<(CellAddress, Cell)>();
+            int rowDelta = (int)range.Start.Row - (int)clip.SourceRange.Start.Row;
+            int colDelta = (int)range.Start.Col - (int)clip.SourceRange.Start.Col;
+            var pasteOp  = new Freexcel.Core.Formula.PasteOffsetOp(rowDelta, colDelta);
+            var activeSheetName = _workbook.GetSheet(_currentSheetId)?.Name ?? "";
+
+            foreach (var (sourceAddr, sourceCell) in clip.Cells)
+            {
+                var destAddr = new CellAddress(_currentSheetId,
+                    (uint)((int)sourceAddr.Row + rowDelta),
+                    (uint)((int)sourceAddr.Col + colDelta));
+
+                var destCell = sourceCell.Clone();
+
+                if (destCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
+                {
+                    destCell.FormulaText =
+                        Freexcel.Core.Formula.FormulaRewriter.Rewrite(
+                            destCell.FormulaText, pasteOp, activeSheetName)
+                        ?? destCell.FormulaText;
+                }
+
+                edits.Add((destAddr, destCell));
+            }
+
+            if (edits.Count > 0)
+            {
+                var command = new EditCellsCommand(_currentSheetId, edits);
+                _commandBus.Execute(_workbook.Id, command);
+                _recalcEngine.Recalculate(_workbook, edits.Select(e => e.Item1).ToList());
+            }
+
+            var pastedRowSpan = (uint)(clip.SourceRange.RowCount - 1);
+            var pastedColSpan = (uint)(clip.SourceRange.ColCount - 1);
+            var pastedEnd     = new CellAddress(_currentSheetId,
+                range.Start.Row + pastedRowSpan,
+                range.Start.Col + pastedColSpan);
+            _selectionAnchor = range.Start;
+            _selectionCursor = pastedEnd;
+            SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
+            SheetGrid.ClipboardRange = null;
+            UpdateViewport();
+            RefreshToolbar();
+            return;
+        }
+
+        // Fallback: external clipboard (plain text)
         string text;
         try { text = System.Windows.Clipboard.GetText(); }
         catch { return; }
         if (string.IsNullOrEmpty(text)) return;
 
         var rows = ClipboardSerializer.Deserialize(text);
-        var edits = new List<(CellAddress, Cell)>();
+        var fallbackEdits = new List<(CellAddress, Cell)>();
 
         for (int ri = 0; ri < rows.Length; ri++)
         {
@@ -1704,30 +1772,25 @@ public partial class MainWindow : Window
                     System.Globalization.CultureInfo.CurrentCulture, out var d)
                     ? new NumberValue(d)
                     : new TextValue(rows[ri][ci]);
-                edits.Add((addr, Cell.FromValue(val)));
+                fallbackEdits.Add((addr, Cell.FromValue(val)));
             }
         }
 
-        if (edits.Count == 0) return;
+        if (fallbackEdits.Count == 0) return;
 
-        var command = new EditCellsCommand(_currentSheetId, edits);
-        _commandBus.Execute(_workbook.Id, command);
-        _recalcEngine.Recalculate(_workbook, edits.Select(e => e.Item1).ToList());
+        var fallbackCommand = new EditCellsCommand(_currentSheetId, fallbackEdits);
+        _commandBus.Execute(_workbook.Id, fallbackCommand);
+        _recalcEngine.Recalculate(_workbook, fallbackEdits.Select(e => e.Item1).ToList());
 
-        // Select the pasted region — guard against jagged/empty rows
-        uint pastedRowSpan = rows.Length > 0 ? (uint)(rows.Length - 1) : 0;
-        uint pastedColSpan = rows.Length > 0 && rows[0].Length > 0 ? (uint)(rows[0].Length - 1) : 0;
-        var pastedEnd   = new CellAddress(_currentSheetId,
-            range.Start.Row + pastedRowSpan,
-            range.Start.Col + pastedColSpan);
-        var pastedRange = new GridRange(range.Start, pastedEnd);
-        _selectionAnchor = pastedRange.Start;
-        _selectionCursor = pastedRange.End;
-        SheetGrid.SelectedRange = pastedRange;
-
-        // Clear marching ants on paste
+        uint pastedRowSpanFallback = rows.Length > 0 ? (uint)(rows.Length - 1) : 0;
+        uint pastedColSpanFallback = rows.Length > 0 && rows[0].Length > 0 ? (uint)(rows[0].Length - 1) : 0;
+        var pastedEndFallback = new CellAddress(_currentSheetId,
+            range.Start.Row + pastedRowSpanFallback,
+            range.Start.Col + pastedColSpanFallback);
+        _selectionAnchor = range.Start;
+        _selectionCursor = pastedEndFallback;
+        SheetGrid.SelectedRange = new GridRange(range.Start, pastedEndFallback);
         SheetGrid.ClipboardRange = null;
-
         UpdateViewport();
         RefreshToolbar();
     }
