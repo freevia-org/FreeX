@@ -954,4 +954,50 @@ public class FunctionLibraryTests
             (4, 1, new NumberValue(4)));
         _eval.Evaluate("=MEDIAN(A1:A4)", sheet).Should().Be(new NumberValue(2.5));
     }
+
+    // ── Bug regression: SUMIFS must receive RangeValues ────────────────────────
+
+    [Fact]
+    public void Sumifs_RangeArg_WorksCorrectly()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (2, 1, new NumberValue(20)), (3, 1, new NumberValue(30)),
+            (1, 2, new TextValue("A")),  (2, 2, new TextValue("B")),  (3, 2, new TextValue("A")));
+        // SUMIFS(A1:A3, B1:B3, "A") → 40
+        var result = _eval.Evaluate("=SUMIFS(A1:A3,B1:B3,\"A\")", sheet);
+        result.Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Xlookup_RangeArg_WorksCorrectly()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")), (3, 1, new TextValue("C")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)), (3, 2, new NumberValue(3)));
+        // XLOOKUP("B", A1:A3, B1:B3) → 2
+        var result = _eval.Evaluate("=XLOOKUP(\"B\",A1:A3,B1:B3)", sheet);
+        result.Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Countifs_RangeArg_WorksCorrectly()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (2, 1, new NumberValue(20)), (3, 1, new NumberValue(30)),
+            (1, 2, new TextValue("A")),  (2, 2, new TextValue("B")),  (3, 2, new TextValue("A")));
+        // COUNTIFS(B1:B3, "A") → 2
+        var result = _eval.Evaluate("=COUNTIFS(B1:B3,\"A\")", sheet);
+        result.Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Averageifs_RangeArg_WorksCorrectly()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (2, 1, new NumberValue(20)), (3, 1, new NumberValue(30)),
+            (1, 2, new TextValue("A")),  (2, 2, new TextValue("B")),  (3, 2, new TextValue("A")));
+        // AVERAGEIFS(A1:A3, B1:B3, "A") → 20  (average of 10 and 30)
+        var result = _eval.Evaluate("=AVERAGEIFS(A1:A3,B1:B3,\"A\")", sheet);
+        result.Should().Be(new NumberValue(20));
+    }
 }

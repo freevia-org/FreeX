@@ -314,7 +314,9 @@ public sealed class FormulaEvaluator
     private static bool IsStructuredRangeFunction(string name) =>
         name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH"
              or "SUMIF" or "COUNTIF" or "AVERAGEIF"
-             or "LARGE" or "SMALL" or "RANK";
+             or "LARGE" or "SMALL" or "RANK"
+             or "SUMIFS" or "COUNTIFS" or "AVERAGEIFS"
+             or "XLOOKUP";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
