@@ -2558,8 +2558,44 @@ public static class BuiltInFunctions
         return new RangeValue(result);
     }
 
-    private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        ErrorValue.Name;
+    private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        int sortIdx   = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) - 1 : 0;
+        int sortOrder = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
+        bool byCol    = args.Count > 3 && args[3] is not BlankValue && ToBool(args[3]);
+
+        if (!byCol)
+        {
+            var rowIndices = Enumerable.Range(0, arr.RowCount).ToList();
+            rowIndices.Sort((a, b) =>
+            {
+                var va = sortIdx < arr.ColCount ? arr.Cells[a, sortIdx] : new BlankValue();
+                var vb = sortIdx < arr.ColCount ? arr.Cells[b, sortIdx] : new BlankValue();
+                return sortOrder * CompareScalar(va, vb);
+            });
+            var result = new ScalarValue[arr.RowCount, arr.ColCount];
+            for (int r = 0; r < arr.RowCount; r++)
+                for (int c = 0; c < arr.ColCount; c++)
+                    result[r, c] = arr.Cells[rowIndices[r], c];
+            return new RangeValue(result);
+        }
+        else
+        {
+            var colIndices = Enumerable.Range(0, arr.ColCount).ToList();
+            colIndices.Sort((a, b) =>
+            {
+                var va = sortIdx < arr.RowCount ? arr.Cells[sortIdx, a] : new BlankValue();
+                var vb = sortIdx < arr.RowCount ? arr.Cells[sortIdx, b] : new BlankValue();
+                return sortOrder * CompareScalar(va, vb);
+            });
+            var result = new ScalarValue[arr.RowCount, arr.ColCount];
+            for (int r = 0; r < arr.RowCount; r++)
+                for (int c = 0; c < arr.ColCount; c++)
+                    result[r, c] = arr.Cells[r, colIndices[c]];
+            return new RangeValue(result);
+        }
+    }
 
     private static ScalarValue Unique(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         ErrorValue.Name;
