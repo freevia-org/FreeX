@@ -1028,6 +1028,21 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌What-If Analysis ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Goal Seek" Width="90" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}" Click="GoalSeekBtn_Click"
+                                        local:RibbonTooltip.Title="Goal Seek"
+                                        local:RibbonTooltip.Description="Find the input value that produces a desired formula result."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                                <TextBlock Text="What-If Analysis" Style="{StaticResource GroupLbl}"/>
+                            </Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Outline ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
