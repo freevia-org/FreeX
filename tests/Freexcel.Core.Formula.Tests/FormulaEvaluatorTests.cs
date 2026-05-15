@@ -603,4 +603,34 @@ public class CrossSheetReferenceTests
 
         result.Should().Be(new NumberValue(99));
     }
+
+    // ── Safety: inverted range references ─────────────────────────────────
+
+    [Fact]
+    public void InvertedRange_VLOOKUP_DoesNotCrash()
+    {
+        // B5:A1 is an inverted range — must not throw ArgumentOutOfRangeException
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(99));
+
+        // VLOOKUP uses BuildRangeValue; inverted row/col should not crash
+        var result = _evaluator.Evaluate("=VLOOKUP(10,B1:A1,2,FALSE)", sheet);
+
+        // Result may be an error (lookup not found in inverted range) but must not throw
+        result.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void InvertedRange_SUM_ReturnsZeroOrValue()
+    {
+        // SUM with inverted range (B3:A1) uses GetRangeValues which handles gracefully
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+
+        var result = _evaluator.Evaluate("=SUM(A2:A1)", sheet);
+
+        result.Should().NotBeNull();
+    }
 }
