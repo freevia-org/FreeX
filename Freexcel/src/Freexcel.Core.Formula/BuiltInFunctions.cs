@@ -2597,8 +2597,87 @@ public static class BuiltInFunctions
         }
     }
 
-    private static ScalarValue Unique(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        ErrorValue.Name;
+    private static ScalarValue Unique(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        bool byCol       = args.Count > 1 && args[1] is not BlankValue && ToBool(args[1]);
+        bool exactlyOnce = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
+
+        if (!byCol)
+        {
+            var keyOrder  = new List<string>();
+            var keyIndex  = new Dictionary<string, int>();
+            var keyCounts = new List<int>();
+            var rowOfKey  = new List<int>();
+
+            for (int r = 0; r < arr.RowCount; r++)
+            {
+                var key = string.Join("\0", Enumerable.Range(0, arr.ColCount)
+                              .Select(c => ToText(arr.Cells[r, c])));
+                if (keyIndex.TryGetValue(key, out int idx))
+                {
+                    keyCounts[idx]++;
+                }
+                else
+                {
+                    keyIndex[key] = keyOrder.Count;
+                    keyOrder.Add(key);
+                    keyCounts.Add(1);
+                    rowOfKey.Add(r);
+                }
+            }
+
+            var selected = keyOrder
+                .Select((k, i) => (key: k, idx: i))
+                .Where(t => !exactlyOnce || keyCounts[t.idx] == 1)
+                .Select(t => rowOfKey[t.idx])
+                .ToList();
+
+            if (selected.Count == 0) return ErrorValue.NA;
+            var result = new ScalarValue[selected.Count, arr.ColCount];
+            for (int ri = 0; ri < selected.Count; ri++)
+                for (int c = 0; c < arr.ColCount; c++)
+                    result[ri, c] = arr.Cells[selected[ri], c];
+            return new RangeValue(result);
+        }
+        else
+        {
+            var keyOrder  = new List<string>();
+            var keyIndex  = new Dictionary<string, int>();
+            var keyCounts = new List<int>();
+            var colOfKey  = new List<int>();
+
+            for (int c = 0; c < arr.ColCount; c++)
+            {
+                var key = string.Join("\0", Enumerable.Range(0, arr.RowCount)
+                              .Select(r => ToText(arr.Cells[r, c])));
+                if (keyIndex.TryGetValue(key, out int idx))
+                {
+                    keyCounts[idx]++;
+                }
+                else
+                {
+                    keyIndex[key] = keyOrder.Count;
+                    keyOrder.Add(key);
+                    keyCounts.Add(1);
+                    colOfKey.Add(c);
+                }
+            }
+
+            var selected = keyOrder
+                .Select((k, i) => (key: k, idx: i))
+                .Where(t => !exactlyOnce || keyCounts[t.idx] == 1)
+                .Select(t => colOfKey[t.idx])
+                .ToList();
+
+            if (selected.Count == 0) return ErrorValue.NA;
+            var result = new ScalarValue[arr.RowCount, selected.Count];
+            for (int r = 0; r < arr.RowCount; r++)
+                for (int ci = 0; ci < selected.Count; ci++)
+                    result[r, ci] = arr.Cells[r, selected[ci]];
+            return new RangeValue(result);
+        }
+    }
 }
 
 /// <summary>

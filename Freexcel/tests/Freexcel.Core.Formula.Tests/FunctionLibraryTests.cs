@@ -1524,4 +1524,46 @@ public class FunctionLibraryTests
         rv.Cells[1, 0].Should().Be(new TextValue("B"));
         rv.Cells[2, 0].Should().Be(new TextValue("C"));
     }
+
+    // ── UNIQUE ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Unique_SingleColumn_RemovesDuplicates()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (2,1,new NumberValue(2)),
+            (3,1,new NumberValue(1)), (4,1,new NumberValue(3)));
+        var result = _eval.Evaluate("=UNIQUE(A1:A4)", sheet);
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(3);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 0].Should().Be(new NumberValue(2));
+        rv.Cells[2, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Unique_ExactlyOnce_ReturnsOnlySingletons()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (2,1,new NumberValue(2)),
+            (3,1,new NumberValue(1)), (4,1,new NumberValue(3)));
+        // UNIQUE(A1:A4, FALSE, TRUE) → only values appearing exactly once
+        var result = _eval.Evaluate("=UNIQUE(A1:A4,FALSE,TRUE)", sheet);
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new NumberValue(2));
+        rv.Cells[1, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Unique_MultiColumn_DeduplicatesRows()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("A")), (1,2,new NumberValue(1)),
+            (2,1,new TextValue("B")), (2,2,new NumberValue(2)),
+            (3,1,new TextValue("A")), (3,2,new NumberValue(1)));
+        var result = _eval.Evaluate("=UNIQUE(A1:B3)", sheet);
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(2);
+    }
 }
