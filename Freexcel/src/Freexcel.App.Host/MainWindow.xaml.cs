@@ -5108,6 +5108,42 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    // ── What-If Analysis ─────────────────────────────────────────────────────
+
+    private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedCell = _selectionAnchor;
+        var dlg = new GoalSeekDialog(_currentSheetId, selectedCell) { Owner = this };
+
+        if (dlg.ShowDialog() != true)
+            return;
+
+        var setCell = dlg.SetCell!.Value;
+        var changingCell = dlg.ChangingCell!.Value;
+        var targetValue = dlg.TargetValue;
+
+        var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
+
+        if (!result.Converged)
+        {
+            MessageBox.Show(
+                $"Goal Seek could not find a solution.\nClosest value: {result.FoundValue:G10}\nActual result: {result.ActualResult:G10}",
+                "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"Goal Seek found a solution.\nChanging cell value: {result.FoundValue:G10}",
+            "Goal Seek", MessageBoxButton.OKCancel, MessageBoxImage.Information);
+
+        if (confirm == MessageBoxResult.OK)
+        {
+            var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
+            if (TryExecuteCommand(cmd, "Goal Seek"))
+                RecalculateIfAutomatic([changingCell]);
+        }
+    }
+
     // ── Review tab ────────────────────────────────────────────────────────────
 
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
