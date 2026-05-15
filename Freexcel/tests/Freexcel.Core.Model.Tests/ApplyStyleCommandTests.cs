@@ -99,6 +99,91 @@ public class ApplyStyleCommandTests
         wb.GetStyle(cell!.StyleId).Bold.Should().BeTrue();
     }
 
+    [Fact]
+    public void Revert_RemovesBlankCellsCreatedOnlyForFormatting()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 5, 5);
+
+        var cmd = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(Bold: true));
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        sheet.GetCell(addr).Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyLockedFalse_UnlocksCellForSheetProtection()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("editable"));
+
+        new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(Locked: false)).Apply(ctx);
+
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).Locked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ClearConditionalFormatsCommand_RemovesRulesInRangeAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var inRange = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(a1, a1),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "1"
+        };
+        var outsideRange = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(b2, b2),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.LessThan,
+            Value1 = "10"
+        };
+        sheet.ConditionalFormats.Add(inRange);
+        sheet.ConditionalFormats.Add(outsideRange);
+
+        var command = new ClearConditionalFormatsCommand(sheet.Id, new GridRange(a1, a1));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.ConditionalFormats.Should().Equal(outsideRange);
+
+        command.Revert(ctx);
+
+        sheet.ConditionalFormats.Should().Equal(inRange, outsideRange);
+    }
+
+    [Fact]
+    public void ClearConditionalFormatsCommand_RejectsProtectedSheet()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(a1, a1),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "1"
+        });
+        sheet.IsProtected = true;
+
+        var outcome = new ClearConditionalFormatsCommand(sheet.Id, new GridRange(a1, a1)).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.ConditionalFormats.Should().HaveCount(1);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

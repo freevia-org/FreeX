@@ -26,6 +26,10 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        var validationError = ctx.Workbook.ValidateNamedRangeName(_name);
+        if (validationError is not null)
+            return new CommandOutcome(false, validationError);
+
         _existed = ctx.Workbook.TryGetNamedRange(_name, out _previousRange);
         ctx.Workbook.DefineNamedRange(_name, _range);
         return new CommandOutcome(true);

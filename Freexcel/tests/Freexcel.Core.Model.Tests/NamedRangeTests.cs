@@ -42,6 +42,28 @@ public class NamedRangeTests
         found.Should().Be(range);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Sales Total")]
+    [InlineData("1Sales")]
+    [InlineData("A1")]
+    [InlineData("R1C1")]
+    [InlineData("Sales-Total")]
+    public void DefineNamedRange_InvalidExcelName_Throws(string name)
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1));
+
+        var act = () => wb.DefineNamedRange(name, range);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("*name is invalid*");
+    }
+
     [Fact]
     public void RemoveNamedRange_ReturnsTrueAndRemovesIt()
     {
@@ -159,6 +181,22 @@ public class NamedRangeTests
 
         wb.TryGetNamedRange("Budget", out var restored).Should().BeTrue();
         restored.Should().Be(original);
+    }
+
+    [Fact]
+    public void DefineNamedRangeCommand_InvalidName_FailsWithoutStoringName()
+    {
+        var (wb, ctx) = CreateContext();
+        var sheet = wb.Sheets[0];
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1));
+
+        var outcome = new DefineNamedRangeCommand("Sales Total", range).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("name is invalid");
+        wb.NamedRanges.Should().BeEmpty();
     }
 
     [Fact]

@@ -57,4 +57,14 @@ public class ClipboardTests
 
         Assert.Equal("R1\r\nR2", text);
     }
+
+    [Fact]
+    public void Deserialize_ExcelTrailingNewline_DoesNotCreateExtraBlankRow()
+    {
+        var rows = ClipboardSerializer.Deserialize("A\tB\r\nC\tD\r\n");
+
+        Assert.Equal(2, rows.Length);
+        Assert.Equal(["A", "B"], rows[0]);
+        Assert.Equal(["C", "D"], rows[1]);
+    }
 }

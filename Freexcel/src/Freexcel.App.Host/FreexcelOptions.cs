@@ -13,6 +13,7 @@ public sealed class FreexcelOptions
 
     // Formulas
     public bool AutoCalculate { get; set; } = true;
+    public bool UseR1C1ReferenceStyle { get; set; }
 
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";

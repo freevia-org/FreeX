@@ -40,6 +40,124 @@ public class InsertDeleteRowsTests
     }
 
     [Fact]
+    public void InsertRow_ShiftsCustomRowHeightsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.RowHeights[3] = 30;
+        sheet.RowHeights[5] = 45;
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.RowHeights.Should().NotContainKey(3);
+        sheet.RowHeights.Should().NotContainKey(4);
+        sheet.RowHeights[5].Should().Be(30);
+        sheet.RowHeights[7].Should().Be(45);
+
+        cmd.Revert(ctx);
+
+        sheet.RowHeights[3].Should().Be(30);
+        sheet.RowHeights[5].Should().Be(45);
+        sheet.RowHeights.Should().NotContainKey(7);
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsCommentsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var original = new CellAddress(sheet.Id, 3, 2);
+        var shifted = new CellAddress(sheet.Id, 5, 2);
+        sheet.Comments[original] = "Check this";
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.Comments.Should().NotContainKey(original);
+        sheet.Comments[shifted].Should().Be("Check this");
+
+        cmd.Revert(ctx);
+
+        sheet.Comments[original].Should().Be("Check this");
+        sheet.Comments.Should().NotContainKey(shifted);
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsRuleRangesAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var validation = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 6, 1)),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 5, 2), new CellAddress(sheet.Id, 6, 2)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        };
+        sheet.DataValidations.Add(validation);
+        sheet.ConditionalFormats.Add(format);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        validation.AppliesTo.Start.Row.Should().Be(7);
+        validation.AppliesTo.End.Row.Should().Be(8);
+        format.AppliesTo.Start.Row.Should().Be(7);
+        format.AppliesTo.End.Row.Should().Be(8);
+
+        cmd.Revert(ctx);
+
+        validation.AppliesTo.Start.Row.Should().Be(5);
+        validation.AppliesTo.End.Row.Should().Be(6);
+        format.AppliesTo.Start.Row.Should().Be(5);
+        format.AppliesTo.End.Row.Should().Be(6);
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsNamedRangesAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = Setup();
+        wb.DefineNamedRange("Sales", new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 6, 1)));
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        wb.NamedRanges["Sales"].Start.Row.Should().Be(7);
+        wb.NamedRanges["Sales"].End.Row.Should().Be(8);
+
+        cmd.Revert(ctx);
+
+        wb.NamedRanges["Sales"].Start.Row.Should().Be(5);
+        wb.NamedRanges["Sales"].End.Row.Should().Be(6);
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsPrintAreaAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 6, 3));
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.PrintArea!.Value.Start.Row.Should().Be(7);
+        sheet.PrintArea.Value.End.Row.Should().Be(8);
+
+        cmd.Revert(ctx);
+
+        sheet.PrintArea!.Value.Start.Row.Should().Be(5);
+        sheet.PrintArea.Value.End.Row.Should().Be(6);
+    }
+
+    [Fact]
     public void DeleteRow_RemovesCellsAndShiftsUp()
     {
         var (_, sheet, ctx) = Setup();
@@ -68,6 +186,182 @@ public class InsertDeleteRowsTests
     }
 
     [Fact]
+    public void DeleteRow_ShiftsCustomRowHeightsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.RowHeights[2] = 22;
+        sheet.RowHeights[4] = 44;
+        sheet.RowHeights[6] = 66;
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.RowHeights[2].Should().Be(22);
+        sheet.RowHeights[4].Should().Be(66);
+        sheet.RowHeights.Should().NotContainKey(3);
+        sheet.RowHeights.Should().NotContainKey(6);
+
+        cmd.Revert(ctx);
+
+        sheet.RowHeights[2].Should().Be(22);
+        sheet.RowHeights[4].Should().Be(44);
+        sheet.RowHeights[6].Should().Be(66);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsHiddenRowsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.HiddenRows.Add(2);
+        sheet.HiddenRows.Add(4);
+        sheet.HiddenRows.Add(6);
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.HiddenRows.Should().BeEquivalentTo(new[] { 2u, 4u });
+
+        cmd.Revert(ctx);
+
+        sheet.HiddenRows.Should().BeEquivalentTo(new[] { 2u, 4u, 6u });
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsFilterHiddenRowsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.FilterHiddenRows.Add(3);
+        sheet.FilterHiddenRows.Add(5);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new[] { 5u, 7u });
+
+        cmd.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new[] { 3u, 5u });
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsFilterHiddenRowsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.FilterHiddenRows.Add(2);
+        sheet.FilterHiddenRows.Add(4);
+        sheet.FilterHiddenRows.Add(6);
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new[] { 2u, 4u });
+
+        cmd.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new[] { 2u, 4u, 6u });
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsCommentsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var deleted = new CellAddress(sheet.Id, 3, 2);
+        var originalBelow = new CellAddress(sheet.Id, 6, 2);
+        var shiftedBelow = new CellAddress(sheet.Id, 4, 2);
+        sheet.Comments[deleted] = "Remove with row";
+        sheet.Comments[originalBelow] = "Move up";
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.Comments.Should().NotContainKey(deleted);
+        sheet.Comments.Should().NotContainKey(originalBelow);
+        sheet.Comments[shiftedBelow].Should().Be("Move up");
+
+        cmd.Revert(ctx);
+
+        sheet.Comments[deleted].Should().Be("Remove with row");
+        sheet.Comments[originalBelow].Should().Be("Move up");
+        sheet.Comments.Should().NotContainKey(shiftedBelow);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsRuleRangesAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var validation = new DataValidation
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 6, 1), new CellAddress(sheet.Id, 7, 1)),
+            Type = DvType.List,
+            Formula1 = "A,B"
+        };
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 6, 2), new CellAddress(sheet.Id, 7, 2)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        };
+        sheet.DataValidations.Add(validation);
+        sheet.ConditionalFormats.Add(format);
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        validation.AppliesTo.Start.Row.Should().Be(4);
+        validation.AppliesTo.End.Row.Should().Be(5);
+        format.AppliesTo.Start.Row.Should().Be(4);
+        format.AppliesTo.End.Row.Should().Be(5);
+
+        cmd.Revert(ctx);
+
+        validation.AppliesTo.Start.Row.Should().Be(6);
+        validation.AppliesTo.End.Row.Should().Be(7);
+        format.AppliesTo.Start.Row.Should().Be(6);
+        format.AppliesTo.End.Row.Should().Be(7);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsNamedRangesAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = Setup();
+        wb.DefineNamedRange("Sales", new GridRange(
+            new CellAddress(sheet.Id, 6, 1),
+            new CellAddress(sheet.Id, 7, 1)));
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        wb.NamedRanges["Sales"].Start.Row.Should().Be(4);
+        wb.NamedRanges["Sales"].End.Row.Should().Be(5);
+
+        cmd.Revert(ctx);
+
+        wb.NamedRanges["Sales"].Start.Row.Should().Be(6);
+        wb.NamedRanges["Sales"].End.Row.Should().Be(7);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsPrintAreaAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 6, 1),
+            new CellAddress(sheet.Id, 7, 3));
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.PrintArea!.Value.Start.Row.Should().Be(4);
+        sheet.PrintArea.Value.End.Row.Should().Be(5);
+
+        cmd.Revert(ctx);
+
+        sheet.PrintArea!.Value.Start.Row.Should().Be(6);
+        sheet.PrintArea.Value.End.Row.Should().Be(7);
+    }
+
+    [Fact]
     public void InsertRow_ShiftsMergedRegions()
     {
         var (_, sheet, ctx) = Setup();
@@ -79,6 +373,26 @@ public class InsertDeleteRowsTests
         new InsertRowsCommand(sheet.Id, beforeRow: 2, count: 1).Apply(ctx);
 
         sheet.MergedRegions[0].Start.Row.Should().Be(4);
+        sheet.MergedRegions[0].End.Row.Should().Be(5);
+    }
+
+    [Fact]
+    public void InsertRow_InsideMergedRegionExpandsRegion()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.MergedRegions.Add(new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 5, 2)));
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 4, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.MergedRegions[0].Start.Row.Should().Be(3);
+        sheet.MergedRegions[0].End.Row.Should().Be(7);
+
+        cmd.Revert(ctx);
+
+        sheet.MergedRegions[0].Start.Row.Should().Be(3);
         sheet.MergedRegions[0].End.Row.Should().Be(5);
     }
 

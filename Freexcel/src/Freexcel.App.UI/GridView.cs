@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Globalization;
+using System.IO;
 using Freexcel.Core.Model;
 using CellHAlign  = Freexcel.Core.Model.HorizontalAlignment;
 using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
@@ -24,6 +25,7 @@ public class GridView : FrameworkElement
 
     private const double ResizeHitZone = 4;
     private const double MinCellSize   = 5;
+    private const double PageMarginGuideHitZone = 5;
 
     private static readonly Typeface DefaultTypeface       = new("Segoe UI");
     private static readonly Brush    GridLineBrush         = new SolidColorBrush(Color.FromRgb(220, 220, 220));
@@ -35,6 +37,11 @@ public class GridView : FrameworkElement
     private static readonly Pen      SelectionPen          = new(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 2);
     private static readonly Pen      ResizeLinePen         = MakeResizeLinePen();
     private static readonly Pen      FreezePen             = MakeFreezePen();
+    private static readonly Brush    PageBreakPreviewBrush = new SolidColorBrush(Color.FromArgb(28, 0, 103, 192));
+    private static readonly Pen      PageBreakPen          = MakePageBreakPen();
+    private static readonly Pen      PageLayoutPen         = MakePageLayoutPen();
+    private static readonly Pen      PageMarginGuidePen    = MakePageMarginGuidePen();
+    private static readonly Pen      SplitPanePen          = MakeSplitPanePen();
 
     private static Pen MakeResizeLinePen()
     {
@@ -46,6 +53,40 @@ public class GridView : FrameworkElement
     private static Pen MakeFreezePen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 200)), 2);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakePageBreakPen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0, 103, 192)), 2)
+        {
+            DashStyle = new DashStyle([6.0, 4.0], 0)
+        };
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakePageLayoutPen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(128, 128, 128)), 1.5);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakePageMarginGuidePen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(80, 150, 220)), 1)
+        {
+            DashStyle = new DashStyle([3.0, 3.0], 0)
+        };
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakeSplitPanePen()
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(120, 120, 120)), 3);
         pen.Freeze();
         return pen;
     }
@@ -70,6 +111,15 @@ public class GridView : FrameworkElement
         set => SetValue(SelectedRangeProperty, value);
     }
 
+    public static readonly DependencyProperty SelectedRangesProperty =
+        DependencyProperty.Register(nameof(SelectedRanges), typeof(IReadOnlyList<GridRange>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<GridRange>? SelectedRanges
+    {
+        get => (IReadOnlyList<GridRange>?)GetValue(SelectedRangesProperty);
+        set => SetValue(SelectedRangesProperty, value);
+    }
+
     public static readonly DependencyProperty ChartsProperty =
         DependencyProperty.Register(nameof(Charts), typeof(IReadOnlyList<ChartModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -77,6 +127,51 @@ public class GridView : FrameworkElement
     {
         get => (IReadOnlyList<ChartModel>?)GetValue(ChartsProperty);
         set => SetValue(ChartsProperty, value);
+    }
+
+    public static readonly DependencyProperty TextBoxesProperty =
+        DependencyProperty.Register(nameof(TextBoxes), typeof(IReadOnlyList<TextBoxModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<TextBoxModel>? TextBoxes
+    {
+        get => (IReadOnlyList<TextBoxModel>?)GetValue(TextBoxesProperty);
+        set => SetValue(TextBoxesProperty, value);
+    }
+
+    public static readonly DependencyProperty DrawingShapesProperty =
+        DependencyProperty.Register(nameof(DrawingShapes), typeof(IReadOnlyList<DrawingShapeModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<DrawingShapeModel>? DrawingShapes
+    {
+        get => (IReadOnlyList<DrawingShapeModel>?)GetValue(DrawingShapesProperty);
+        set => SetValue(DrawingShapesProperty, value);
+    }
+
+    public static readonly DependencyProperty PicturesProperty =
+        DependencyProperty.Register(nameof(Pictures), typeof(IReadOnlyList<PictureModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<PictureModel>? Pictures
+    {
+        get => (IReadOnlyList<PictureModel>?)GetValue(PicturesProperty);
+        set => SetValue(PicturesProperty, value);
+    }
+
+    public static readonly DependencyProperty SparklinesProperty =
+        DependencyProperty.Register(nameof(Sparklines), typeof(IReadOnlyList<SparklineModel>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyList<SparklineModel>? Sparklines
+    {
+        get => (IReadOnlyList<SparklineModel>?)GetValue(SparklinesProperty);
+        set => SetValue(SparklinesProperty, value);
+    }
+
+    public static readonly DependencyProperty SparklineValuesProperty =
+        DependencyProperty.Register(nameof(SparklineValues), typeof(IReadOnlyDictionary<Guid, IReadOnlyList<double>>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyDictionary<Guid, IReadOnlyList<double>>? SparklineValues
+    {
+        get => (IReadOnlyDictionary<Guid, IReadOnlyList<double>>?)GetValue(SparklineValuesProperty);
+        set => SetValue(SparklineValuesProperty, value);
     }
 
     public static readonly DependencyProperty MergedRegionsProperty =
@@ -106,6 +201,15 @@ public class GridView : FrameworkElement
         set => SetValue(ShowHeadersProperty, value);
     }
 
+    public static readonly DependencyProperty UseR1C1ReferenceStyleProperty =
+        DependencyProperty.Register(nameof(UseR1C1ReferenceStyle), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool UseR1C1ReferenceStyle
+    {
+        get => (bool)GetValue(UseR1C1ReferenceStyleProperty);
+        set => SetValue(UseR1C1ReferenceStyleProperty, value);
+    }
+
     public static readonly DependencyProperty ZoomFactorProperty =
         DependencyProperty.Register(nameof(ZoomFactor), typeof(double), typeof(GridView),
             new FrameworkPropertyMetadata(1.0, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -113,6 +217,87 @@ public class GridView : FrameworkElement
     {
         get => (double)GetValue(ZoomFactorProperty);
         set => SetValue(ZoomFactorProperty, value);
+    }
+
+    public static readonly DependencyProperty WorksheetViewModeProperty =
+        DependencyProperty.Register(nameof(WorksheetViewMode), typeof(WorksheetViewMode), typeof(GridView),
+            new FrameworkPropertyMetadata(WorksheetViewMode.Normal, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetViewMode WorksheetViewMode
+    {
+        get => (WorksheetViewMode)GetValue(WorksheetViewModeProperty);
+        set => SetValue(WorksheetViewModeProperty, value);
+    }
+
+    public static readonly DependencyProperty RowPageBreaksProperty =
+        DependencyProperty.Register(nameof(RowPageBreaks), typeof(IReadOnlyCollection<uint>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyCollection<uint>? RowPageBreaks
+    {
+        get => (IReadOnlyCollection<uint>?)GetValue(RowPageBreaksProperty);
+        set => SetValue(RowPageBreaksProperty, value);
+    }
+
+    public static readonly DependencyProperty ColumnPageBreaksProperty =
+        DependencyProperty.Register(nameof(ColumnPageBreaks), typeof(IReadOnlyCollection<uint>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyCollection<uint>? ColumnPageBreaks
+    {
+        get => (IReadOnlyCollection<uint>?)GetValue(ColumnPageBreaksProperty);
+        set => SetValue(ColumnPageBreaksProperty, value);
+    }
+
+    public static readonly DependencyProperty PrintAreaProperty =
+        DependencyProperty.Register(nameof(PrintArea), typeof(GridRange?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public GridRange? PrintArea
+    {
+        get => (GridRange?)GetValue(PrintAreaProperty);
+        set => SetValue(PrintAreaProperty, value);
+    }
+
+    public static readonly DependencyProperty SplitRowProperty =
+        DependencyProperty.Register(nameof(SplitRow), typeof(uint?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public uint? SplitRow
+    {
+        get => (uint?)GetValue(SplitRowProperty);
+        set => SetValue(SplitRowProperty, value);
+    }
+
+    public static readonly DependencyProperty SplitColumnProperty =
+        DependencyProperty.Register(nameof(SplitColumn), typeof(uint?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public uint? SplitColumn
+    {
+        get => (uint?)GetValue(SplitColumnProperty);
+        set => SetValue(SplitColumnProperty, value);
+    }
+
+    public static readonly DependencyProperty PageMarginsProperty =
+        DependencyProperty.Register(nameof(PageMargins), typeof(WorksheetPageMargins), typeof(GridView),
+            new FrameworkPropertyMetadata(WorksheetPageMargins.Narrow, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetPageMargins PageMargins
+    {
+        get => (WorksheetPageMargins)GetValue(PageMarginsProperty);
+        set => SetValue(PageMarginsProperty, value);
+    }
+
+    public static readonly DependencyProperty PageOrientationProperty =
+        DependencyProperty.Register(nameof(PageOrientation), typeof(WorksheetPageOrientation), typeof(GridView),
+            new FrameworkPropertyMetadata(WorksheetPageOrientation.Portrait, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetPageOrientation PageOrientation
+    {
+        get => (WorksheetPageOrientation)GetValue(PageOrientationProperty);
+        set => SetValue(PageOrientationProperty, value);
+    }
+
+    public static readonly DependencyProperty PaperSizeProperty =
+        DependencyProperty.Register(nameof(PaperSize), typeof(WorksheetPaperSize), typeof(GridView),
+            new FrameworkPropertyMetadata(WorksheetPaperSize.A4, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetPaperSize PaperSize
+    {
+        get => (WorksheetPaperSize)GetValue(PaperSizeProperty);
+        set => SetValue(PaperSizeProperty, value);
     }
 
     // ClipboardRange: when set, draws marching ants around this range
@@ -199,6 +384,9 @@ public class GridView : FrameworkElement
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
 
+    // Page Layout margin-guide drag state
+    private WorksheetPageMarginEdge? _marginDragEdge;
+
     // ── Events ────────────────────────────────────────────────────────────────
 
     /// <summary>Fired while the user drags a column border (real-time).</summary>
@@ -217,6 +405,9 @@ public class GridView : FrameworkElement
     /// <summary>Fired on right mouse button down with the clicked cell address.</summary>
     public event Action<CellAddress, System.Windows.Point>? ContextMenuRequested;
 
+    /// <summary>Fired when the user releases after dragging a Page Layout margin guide.</summary>
+    public event Action<WorksheetPageMargins>? PageMarginsChanged;
+
     // ── OnRender ──────────────────────────────────────────────────────────────
 
     protected override void OnRender(DrawingContext dc)
@@ -230,12 +421,18 @@ public class GridView : FrameworkElement
         RenderHeaders(dc);
         RenderGridLines(dc);
         RenderCells(dc);
+        RenderWorksheetViewOverlay(dc);
+        RenderSparklines(dc);
         RenderSelection(dc);
         RenderAutofillPreview(dc);
         RenderMarchingAnts(dc);
         RenderFreezeDivider(dc);
+        RenderSplitDivider(dc);
         RenderResizeLine(dc);
         RenderCharts(dc);
+        RenderDrawingShapes(dc);
+        RenderPictures(dc);
+        RenderTextBoxes(dc);
 
         dc.Pop();
     }
@@ -284,9 +481,68 @@ public class GridView : FrameworkElement
             && pos.Y >= hy - 3 && pos.Y <= hy + handleSize + 3;
     }
 
+    private WorksheetPageMarginEdge? HitTestPageMarginGuide(Point pos)
+    {
+        if (WorksheetViewMode != WorksheetViewMode.PageLayout || PrintArea is not { } printArea)
+            return null;
+
+        var guide = GetPageMarginGuidePixels(printArea);
+        if (guide is null) return null;
+
+        if (pos.Y >= guide.Value.Top && pos.Y <= guide.Value.Bottom)
+        {
+            if (Math.Abs(pos.X - guide.Value.MarginLeft) <= PageMarginGuideHitZone)
+                return WorksheetPageMarginEdge.Left;
+            if (Math.Abs(pos.X - guide.Value.MarginRight) <= PageMarginGuideHitZone)
+                return WorksheetPageMarginEdge.Right;
+        }
+
+        if (pos.X >= guide.Value.Left && pos.X <= guide.Value.Right)
+        {
+            if (Math.Abs(pos.Y - guide.Value.MarginTop) <= PageMarginGuideHitZone)
+                return WorksheetPageMarginEdge.Top;
+            if (Math.Abs(pos.Y - guide.Value.MarginBottom) <= PageMarginGuideHitZone)
+                return WorksheetPageMarginEdge.Bottom;
+        }
+
+        return null;
+    }
+
+    private WorksheetPageMargins? GetPageMarginsForDraggedGuide(Point pos)
+    {
+        if (_marginDragEdge is not { } edge || PrintArea is not { } printArea)
+            return null;
+
+        var guide = GetPageMarginGuidePixels(printArea);
+        if (guide is null) return null;
+
+        var fraction = edge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right
+            ? (pos.X - guide.Value.Left) / Math.Max(1.0, guide.Value.Right - guide.Value.Left)
+            : (pos.Y - guide.Value.Top) / Math.Max(1.0, guide.Value.Bottom - guide.Value.Top);
+
+        return WorksheetPageLayout.GetMarginsFromGuideFraction(
+            PaperSize,
+            PageOrientation,
+            PageMargins,
+            edge,
+            fraction);
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         var pos = e.GetPosition(this);
+
+        if (_marginDragEdge.HasValue)
+        {
+            if (GetPageMarginsForDraggedGuide(pos) is { } margins)
+                PageMargins = margins;
+            Cursor = _marginDragEdge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right
+                ? Cursors.SizeWE
+                : Cursors.SizeNS;
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
 
         if (_autofillDragging && Viewport != null)
         {
@@ -332,8 +588,11 @@ public class GridView : FrameworkElement
         else
         {
             var (target, _, _) = HitTestResize(pos);
+            var marginGuide = HitTestPageMarginGuide(pos);
             Cursor = target == ResizeTarget.Column ? Cursors.SizeWE
                    : target == ResizeTarget.Row    ? Cursors.SizeNS
+                   : marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
+                   : marginGuide is WorksheetPageMarginEdge.Top or WorksheetPageMarginEdge.Bottom ? Cursors.SizeNS
                    : null;
         }
     }
@@ -341,6 +600,17 @@ public class GridView : FrameworkElement
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         var pos = e.GetPosition(this);
+
+        if (HitTestPageMarginGuide(pos) is { } marginEdge)
+        {
+            _marginDragEdge = marginEdge;
+            Cursor = marginEdge is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right
+                ? Cursors.SizeWE
+                : Cursors.SizeNS;
+            CaptureMouse();
+            e.Handled = true;
+            return;
+        }
 
         if (SelectedRange.HasValue && IsOnAutofillHandle(pos))
         {
@@ -408,6 +678,23 @@ public class GridView : FrameworkElement
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        if (_marginDragEdge.HasValue)
+        {
+            var pos = e.GetPosition(this);
+            if (GetPageMarginsForDraggedGuide(pos) is { } margins)
+            {
+                PageMargins = margins;
+                PageMarginsChanged?.Invoke(margins);
+            }
+
+            _marginDragEdge = null;
+            Cursor = null;
+            ReleaseMouseCapture();
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         if (_autofillDragging)
         {
             _autofillDragging = false;
@@ -462,7 +749,7 @@ public class GridView : FrameworkElement
 
     protected override void OnMouseLeave(MouseEventArgs e)
     {
-        if (_resizeTarget == ResizeTarget.None)
+        if (_resizeTarget == ResizeTarget.None && !_marginDragEdge.HasValue)
             Cursor = null;
         base.OnMouseLeave(e);
     }
@@ -495,6 +782,31 @@ public class GridView : FrameworkElement
         }
     }
 
+    private void RenderSplitDivider(DrawingContext dc)
+    {
+        if (Viewport == null) return;
+
+        if (SplitRow is { } splitRow)
+        {
+            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == splitRow);
+            if (row is not null)
+            {
+                var y = row.TopOffset + ColHeaderHeight;
+                dc.DrawLine(SplitPanePen, new Point(RowHeaderWidth, y), new Point(ActualWidth, y));
+            }
+        }
+
+        if (SplitColumn is { } splitColumn)
+        {
+            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == splitColumn);
+            if (col is not null)
+            {
+                var x = col.LeftOffset + RowHeaderWidth;
+                dc.DrawLine(SplitPanePen, new Point(x, ColHeaderHeight), new Point(x, ActualHeight));
+            }
+        }
+    }
+
     private void RenderCharts(DrawingContext dc)
     {
         if (Charts == null || Viewport == null) return;
@@ -506,6 +818,291 @@ public class GridView : FrameworkElement
                 chart.Left + RowHeaderWidth, chart.Top + ColHeaderHeight,
                 chart.Width, chart.Height);
             dc.DrawImage(img, rect);
+        }
+    }
+
+    private void RenderTextBoxes(DrawingContext dc)
+    {
+        if (TextBoxes == null || Viewport == null) return;
+
+        foreach (var textBox in TextBoxes)
+        {
+            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == textBox.Anchor.Row);
+            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == textBox.Anchor.Col);
+            if (row is null || col is null) continue;
+
+            var rect = new Rect(
+                col.LeftOffset + RowHeaderWidth,
+                row.TopOffset + ColHeaderHeight,
+                Math.Max(24, textBox.Width),
+                Math.Max(18, textBox.Height));
+            var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
+            var fillBrush = textBox.FillColor is { } fillColor
+                ? new SolidColorBrush(Color.FromArgb(242, fillColor.R, fillColor.G, fillColor.B))
+                : new SolidColorBrush(Color.FromArgb(242, 255, 255, 255));
+            var borderColor = textBox.OutlineColor ?? new CellColor(89, 89, 89);
+            var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(borderColor.R, borderColor.G, borderColor.B)), 1);
+            dc.DrawRectangle(fillBrush, borderPen, rect);
+
+            var text = new FormattedText(
+                textBox.Text,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                DefaultTypeface,
+                12,
+                TextBrush,
+                VisualTreeHelper.GetDpi(this).PixelsPerDip)
+            {
+                MaxTextWidth = Math.Max(1, rect.Width - 8),
+                MaxTextHeight = Math.Max(1, rect.Height - 8)
+            };
+
+            dc.PushClip(new RectangleGeometry(new Rect(rect.Left + 4, rect.Top + 4, rect.Width - 8, rect.Height - 8)));
+            dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
+            dc.Pop();
+            if (rotationPushed) dc.Pop();
+        }
+    }
+
+    private void RenderDrawingShapes(DrawingContext dc)
+    {
+        if (DrawingShapes == null || Viewport == null) return;
+
+        foreach (var shape in DrawingShapes)
+        {
+            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == shape.Anchor.Row);
+            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == shape.Anchor.Col);
+            if (row is null || col is null) continue;
+
+            var rect = new Rect(
+                col.LeftOffset + RowHeaderWidth,
+                row.TopOffset + ColHeaderHeight,
+                Math.Max(8, shape.Width),
+                Math.Max(8, shape.Height));
+
+            var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
+            var outlineColor = shape.OutlineColor ?? new CellColor(68, 68, 68);
+            var fillColor = shape.FillColor ?? new CellColor(31, 119, 180);
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(outlineColor.R, outlineColor.G, outlineColor.B)), 1.5);
+            var fill = new SolidColorBrush(Color.FromArgb(32, fillColor.R, fillColor.G, fillColor.B));
+            switch (shape.Kind)
+            {
+                case DrawingShapeKind.Rectangle:
+                    dc.DrawRectangle(fill, pen, rect);
+                    break;
+                case DrawingShapeKind.Ellipse:
+                    dc.DrawEllipse(fill, pen, new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2), rect.Width / 2, rect.Height / 2);
+                    break;
+                case DrawingShapeKind.Line:
+                    dc.DrawLine(pen, rect.TopLeft, rect.BottomRight);
+                    break;
+            }
+            if (rotationPushed) dc.Pop();
+        }
+    }
+
+    private static bool PushRotation(DrawingContext dc, double rotationDegrees, Rect rect)
+    {
+        if (Math.Abs(rotationDegrees % 360) <= 0.0001)
+            return false;
+
+        dc.PushTransform(new RotateTransform(
+            rotationDegrees,
+            rect.Left + rect.Width / 2,
+            rect.Top + rect.Height / 2));
+        return true;
+    }
+
+    private void RenderPictures(DrawingContext dc)
+    {
+        if (Pictures == null || Viewport == null) return;
+
+        var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(120, 120, 120)), 1);
+        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(210, 210, 210)), 0.75);
+        var fill = Brushes.White;
+        foreach (var picture in Pictures)
+        {
+            var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == picture.Anchor.Row);
+            var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == picture.Anchor.Col);
+            if (row is null || col is null) continue;
+
+            var rect = new Rect(
+                col.LeftOffset + RowHeaderWidth,
+                row.TopOffset + ColHeaderHeight,
+                Math.Max(24, picture.Width),
+                Math.Max(18, picture.Height));
+
+            if (Math.Abs(picture.RotationDegrees) > 0.0001)
+                dc.PushTransform(new RotateTransform(
+                    picture.RotationDegrees,
+                    rect.Left + rect.Width / 2,
+                    rect.Top + rect.Height / 2));
+
+            if (picture.Kind == PictureKind.Image &&
+                TryLoadPictureImage(picture, out var image))
+            {
+                dc.DrawImage(image, rect);
+                dc.DrawRectangle(null, borderPen, rect);
+                if (Math.Abs(picture.RotationDegrees) > 0.0001)
+                    dc.Pop();
+                continue;
+            }
+
+            dc.DrawRectangle(fill, borderPen, rect);
+
+            var rows = Math.Max(1, picture.SourceRowCount);
+            var cols = Math.Max(1, picture.SourceColumnCount);
+            var cellWidth = rect.Width / cols;
+            var cellHeight = rect.Height / rows;
+
+            for (uint r = 1; r < rows; r++)
+            {
+                var y = rect.Top + r * cellHeight;
+                dc.DrawLine(gridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+            }
+
+            for (uint c = 1; c < cols; c++)
+            {
+                var x = rect.Left + c * cellWidth;
+                dc.DrawLine(gridPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+            }
+
+            foreach (var cell in picture.Cells)
+            {
+                if (cell.RowOffset >= rows || cell.ColumnOffset >= cols || string.IsNullOrEmpty(cell.Text))
+                    continue;
+                var textRect = new Rect(
+                    rect.Left + cell.ColumnOffset * cellWidth + 3,
+                    rect.Top + cell.RowOffset * cellHeight + 1,
+                    Math.Max(1, cellWidth - 6),
+                    Math.Max(1, cellHeight - 2));
+                var text = new FormattedText(
+                    cell.Text,
+                    CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    DefaultTypeface,
+                    11,
+                    TextBrush,
+                    VisualTreeHelper.GetDpi(this).PixelsPerDip)
+                {
+                    MaxTextWidth = textRect.Width,
+                    MaxTextHeight = textRect.Height,
+                    Trimming = TextTrimming.CharacterEllipsis
+                };
+                dc.PushClip(new RectangleGeometry(textRect));
+                dc.DrawText(text, textRect.TopLeft);
+                dc.Pop();
+            }
+
+            if (Math.Abs(picture.RotationDegrees) > 0.0001)
+                dc.Pop();
+        }
+    }
+
+    private static bool TryLoadPictureImage(PictureModel picture, out ImageSource? image)
+    {
+        image = null;
+        if (picture.ImageBytes is not { Length: > 0 })
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(picture.ImageBytes);
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            image = bitmap;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void RenderSparklines(DrawingContext dc)
+    {
+        if (Sparklines == null || SparklineValues == null || Viewport == null) return;
+
+        var rowLookup = Viewport.RowMetrics.ToDictionary(r => r.Row);
+        var colLookup = Viewport.ColMetrics.ToDictionary(c => c.Col);
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 1.25);
+        var fill = new SolidColorBrush(Color.FromRgb(33, 115, 70));
+        var negativeFill = new SolidColorBrush(Color.FromRgb(192, 0, 0));
+
+        foreach (var sparkline in Sparklines)
+        {
+            if (!rowLookup.TryGetValue(sparkline.Location.Row, out var row) ||
+                !colLookup.TryGetValue(sparkline.Location.Col, out var col) ||
+                !SparklineValues.TryGetValue(sparkline.Id, out var values) ||
+                values.Count == 0)
+            {
+                continue;
+            }
+
+            var rect = new Rect(
+                col.LeftOffset + RowHeaderWidth + 3,
+                row.TopOffset + ColHeaderHeight + 3,
+                Math.Max(1, col.Width - 6),
+                Math.Max(1, row.Height - 6));
+
+            dc.PushClip(new RectangleGeometry(rect));
+            if (sparkline.Kind == SparklineKind.Line)
+                DrawLineSparkline(dc, values, rect, pen);
+            else
+                DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, fill, negativeFill);
+            dc.Pop();
+        }
+    }
+
+    private static void DrawLineSparkline(DrawingContext dc, IReadOnlyList<double> values, Rect rect, Pen pen)
+    {
+        if (values.Count == 1)
+        {
+            var point = new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
+            dc.DrawEllipse(pen.Brush, null, point, 1.5, 1.5);
+            return;
+        }
+
+        var min = values.Min();
+        var max = values.Max();
+        var span = Math.Abs(max - min) < 0.0000001 ? 1 : max - min;
+        var points = values
+            .Select((value, index) => new Point(
+                rect.Left + rect.Width * index / (values.Count - 1),
+                rect.Bottom - ((value - min) / span * rect.Height)))
+            .ToList();
+
+        for (var i = 1; i < points.Count; i++)
+            dc.DrawLine(pen, points[i - 1], points[i]);
+    }
+
+    private static void DrawColumnSparkline(
+        DrawingContext dc,
+        IReadOnlyList<double> values,
+        Rect rect,
+        bool winLoss,
+        Brush positiveFill,
+        Brush negativeFill)
+    {
+        var maxAbs = values.Select(Math.Abs).DefaultIfEmpty(1).Max();
+        if (maxAbs < 0.0000001) maxAbs = 1;
+        var axis = rect.Top + rect.Height / 2;
+        var slot = rect.Width / values.Count;
+        var barWidth = Math.Max(1, slot * 0.65);
+
+        for (var i = 0; i < values.Count; i++)
+        {
+            var value = winLoss ? Math.Sign(values[i]) : values[i];
+            var height = winLoss
+                ? rect.Height / 2
+                : Math.Abs(value) / maxAbs * rect.Height / 2;
+            var x = rect.Left + i * slot + (slot - barWidth) / 2;
+            var y = value >= 0 ? axis - height : axis;
+            dc.DrawRectangle(value >= 0 ? positiveFill : negativeFill, null, new Rect(x, y, barWidth, Math.Max(1, height)));
         }
     }
 
@@ -564,6 +1161,111 @@ public class GridView : FrameworkElement
         dc.DrawRectangle(null, pen, rect);
     }
 
+    private void RenderWorksheetViewOverlay(DrawingContext dc)
+    {
+        if (Viewport == null || WorksheetViewMode == WorksheetViewMode.Normal) return;
+
+        if (WorksheetViewMode == WorksheetViewMode.PageBreakPreview)
+        {
+            dc.DrawRectangle(PageBreakPreviewBrush, null,
+                new Rect(RowHeaderWidth, ColHeaderHeight,
+                    Math.Max(0, ActualWidth - RowHeaderWidth),
+                    Math.Max(0, ActualHeight - ColHeaderHeight)));
+        }
+
+        if (PrintArea is { } printArea)
+        {
+            RenderPrintAreaBoundary(dc, printArea,
+                WorksheetViewMode == WorksheetViewMode.PageLayout ? PageLayoutPen : PageBreakPen);
+            if (WorksheetViewMode == WorksheetViewMode.PageLayout)
+                RenderPageMarginGuides(dc, printArea);
+        }
+
+        RenderManualPageBreaks(dc);
+    }
+
+    private void RenderPageMarginGuides(DrawingContext dc, GridRange printArea)
+    {
+        var guide = GetPageMarginGuidePixels(printArea);
+        if (guide is null) return;
+
+        dc.DrawLine(PageMarginGuidePen, new Point(guide.Value.MarginLeft, guide.Value.Top), new Point(guide.Value.MarginLeft, guide.Value.Bottom));
+        dc.DrawLine(PageMarginGuidePen, new Point(guide.Value.MarginRight, guide.Value.Top), new Point(guide.Value.MarginRight, guide.Value.Bottom));
+        dc.DrawLine(PageMarginGuidePen, new Point(guide.Value.Left, guide.Value.MarginTop), new Point(guide.Value.Right, guide.Value.MarginTop));
+        dc.DrawLine(PageMarginGuidePen, new Point(guide.Value.Left, guide.Value.MarginBottom), new Point(guide.Value.Right, guide.Value.MarginBottom));
+    }
+
+    private (double Top, double Left, double Bottom, double Right,
+        double MarginLeft, double MarginRight, double MarginTop, double MarginBottom)?
+        GetPageMarginGuidePixels(GridRange printArea)
+    {
+        if (Viewport == null) return null;
+        var (top, left, bottom, right) = GetRangePixels(Viewport, printArea);
+        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return null;
+
+        var guide = WorksheetPageLayout.GetMarginGuideFractions(PaperSize, PageOrientation, PageMargins);
+        var width = right.Value - left.Value;
+        var height = bottom.Value - top.Value;
+        if (width <= 0 || height <= 0) return null;
+
+        return (
+            top.Value,
+            left.Value,
+            bottom.Value,
+            right.Value,
+            left.Value + width * guide.Left,
+            left.Value + width * guide.Right,
+            top.Value + height * guide.Top,
+            top.Value + height * guide.Bottom);
+    }
+
+    private void RenderPrintAreaBoundary(DrawingContext dc, GridRange printArea, Pen pen)
+    {
+        if (Viewport == null) return;
+        var rows = Viewport.RowMetrics;
+        var cols = Viewport.ColMetrics;
+        if (rows.Count == 0 || cols.Count == 0) return;
+        if (printArea.End.Row < rows[0].Row || printArea.Start.Row > rows[^1].Row) return;
+        if (printArea.End.Col < cols[0].Col || printArea.Start.Col > cols[^1].Col) return;
+
+        var (top, left, bottom, right) = GetRangePixels(Viewport, printArea);
+        var drawTop = top ?? ColHeaderHeight;
+        var drawLeft = left ?? RowHeaderWidth;
+        var drawBottom = bottom ?? ActualHeight;
+        var drawRight = right ?? ActualWidth;
+
+        dc.DrawRectangle(null, pen, new Rect(
+            new Point(drawLeft, drawTop),
+            new Point(drawRight, drawBottom)));
+    }
+
+    private void RenderManualPageBreaks(DrawingContext dc)
+    {
+        if (Viewport == null) return;
+
+        if (RowPageBreaks is not null)
+        {
+            foreach (var rowBreak in RowPageBreaks)
+            {
+                var metric = Viewport.RowMetrics.FirstOrDefault(row => row.Row == rowBreak);
+                if (metric is null) continue;
+                var y = metric.TopOffset + ColHeaderHeight;
+                dc.DrawLine(PageBreakPen, new Point(RowHeaderWidth, y), new Point(ActualWidth, y));
+            }
+        }
+
+        if (ColumnPageBreaks is not null)
+        {
+            foreach (var columnBreak in ColumnPageBreaks)
+            {
+                var metric = Viewport.ColMetrics.FirstOrDefault(col => col.Col == columnBreak);
+                if (metric is null) continue;
+                var x = metric.LeftOffset + RowHeaderWidth;
+                dc.DrawLine(PageBreakPen, new Point(x, ColHeaderHeight), new Point(x, ActualHeight));
+            }
+        }
+    }
+
     // Returns pixel coords for a range, clamped to viewport boundaries.
     private (double? top, double? left, double? bottom, double? right) GetRangePixels(
         ViewportModel vp, GridRange range)
@@ -584,9 +1286,25 @@ public class GridView : FrameworkElement
 
     private void RenderSelection(DrawingContext dc)
     {
-        if (Viewport == null || SelectedRange == null) return;
+        if (Viewport == null) return;
+        if (SelectedRanges is { Count: > 0 } selectedRanges)
+        {
+            foreach (var range in selectedRanges)
+                RenderSelectionRange(dc, range, drawHandle: false);
 
-        var range = SelectedRange.Value;
+            if (SelectedRange is { } activeRange)
+                RenderSelectionHandle(dc, activeRange);
+            return;
+        }
+
+        if (SelectedRange == null) return;
+
+        RenderSelectionRange(dc, SelectedRange.Value, drawHandle: true);
+    }
+
+    private void RenderSelectionRange(DrawingContext dc, GridRange range, bool drawHandle)
+    {
+        if (Viewport == null) return;
         var rows  = Viewport.RowMetrics;
         var cols  = Viewport.ColMetrics;
         if (rows.Count == 0 || cols.Count == 0) return;
@@ -609,39 +1327,56 @@ public class GridView : FrameworkElement
         if (left.HasValue)   dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawLeft,  drawBottom));
         if (right.HasValue)  dc.DrawLine(SelectionPen, new Point(drawRight, drawTop),    new Point(drawRight, drawBottom));
 
-        // Autofill handle
-        if (right.HasValue && bottom.HasValue)
-        {
-            const double handleSize = 6;
-            double hx = drawRight - handleSize / 2;
-            double hy = drawBottom - handleSize / 2;
-            dc.DrawRectangle(Brushes.White, SelectionPen,
-                new Rect(hx, hy, handleSize, handleSize));
-            dc.DrawRectangle(
-                new SolidColorBrush(Color.FromRgb(33, 115, 70)), null,
-                new Rect(hx + 1, hy + 1, handleSize - 2, handleSize - 2));
-        }
+        if (drawHandle)
+            DrawSelectionHandle(dc, right, bottom, drawRight, drawBottom);
+    }
+
+    private void RenderSelectionHandle(DrawingContext dc, GridRange range)
+    {
+        if (Viewport == null) return;
+        var (top, left, bottom, right) = GetRangePixels(Viewport, range);
+        double drawBottom = bottom ?? ActualHeight;
+        double drawRight  = right  ?? ActualWidth;
+        DrawSelectionHandle(dc, right, bottom, drawRight, drawBottom);
+    }
+
+    private static void DrawSelectionHandle(DrawingContext dc, double? right, double? bottom, double drawRight, double drawBottom)
+    {
+        if (!right.HasValue || !bottom.HasValue)
+            return;
+
+        const double handleSize = 6;
+        double hx = drawRight - handleSize / 2;
+        double hy = drawBottom - handleSize / 2;
+        dc.DrawRectangle(Brushes.White, SelectionPen,
+            new Rect(hx, hy, handleSize, handleSize));
+        dc.DrawRectangle(
+            new SolidColorBrush(Color.FromRgb(33, 115, 70)), null,
+            new Rect(hx + 1, hy + 1, handleSize - 2, handleSize - 2));
     }
 
     private void RenderHeaders(DrawingContext dc)
     {
         if (!ShowHeaders) return;
 
+        var selectedRanges = SelectedRanges;
         var selRange = SelectedRange;
 
         // Column Headers (A, B, C…)
         foreach (var col in Viewport!.ColMetrics)
         {
-            bool inSel = selRange.HasValue
-                && col.Col >= selRange.Value.Start.Col
-                && col.Col <= selRange.Value.End.Col;
+            bool inSel = selectedRanges is { Count: > 0 }
+                ? selectedRanges.Any(r => col.Col >= r.Start.Col && col.Col <= r.End.Col)
+                : selRange.HasValue
+                    && col.Col >= selRange.Value.Start.Col
+                    && col.Col <= selRange.Value.End.Col;
 
             var bg   = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
             var rect = new Rect(col.LeftOffset + RowHeaderWidth, 0, col.Width, ColHeaderHeight);
             dc.DrawRectangle(bg, GridPen, rect);
 
             var text = new FormattedText(
-                CellAddress.NumberToColumnName(col.Col),
+                FormatColumnHeader(col.Col, UseR1C1ReferenceStyle),
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 DefaultTypeface, 11, TextBrush,
@@ -655,9 +1390,11 @@ public class GridView : FrameworkElement
         // Row Headers (1, 2, 3…)
         foreach (var row in Viewport!.RowMetrics)
         {
-            bool inSel = selRange.HasValue
-                && row.Row >= selRange.Value.Start.Row
-                && row.Row <= selRange.Value.End.Row;
+            bool inSel = selectedRanges is { Count: > 0 }
+                ? selectedRanges.Any(r => row.Row >= r.Start.Row && row.Row <= r.End.Row)
+                : selRange.HasValue
+                    && row.Row >= selRange.Value.Start.Row
+                    && row.Row <= selRange.Value.End.Row;
 
             var bg   = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
             var rect = new Rect(0, row.TopOffset + ColHeaderHeight, RowHeaderWidth, row.Height);
@@ -679,6 +1416,11 @@ public class GridView : FrameworkElement
         dc.DrawRectangle(HeaderBackgroundBrush, GridPen,
             new Rect(0, 0, RowHeaderWidth, ColHeaderHeight));
     }
+
+    internal static string FormatColumnHeader(uint column, bool useR1C1ReferenceStyle) =>
+        useR1C1ReferenceStyle
+            ? column.ToString(CultureInfo.InvariantCulture)
+            : CellAddress.NumberToColumnName(column);
 
     private void RenderGridLines(DrawingContext dc)
     {

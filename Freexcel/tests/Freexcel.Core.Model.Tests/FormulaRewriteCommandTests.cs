@@ -273,4 +273,81 @@ public class FormulaRewriteCommandTests
         wb.Sheets[1].GetCell(2, 3)!.Value.Should().Be(new NumberValue(42));
         wb.Sheets[1].GetCell(3, 3)!.FormulaText.Should().Be("C2*2");
     }
+
+    [Fact]
+    public void RemoveSheet_RemovesNamedRangesOnDeletedSheetAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var keep = wb.AddSheet("Keep");
+        var removed = wb.AddSheet("Data");
+        var ctx = new SimpleCtx(wb);
+        wb.DefineNamedRange("KeepRange", new GridRange(
+            new CellAddress(keep.Id, 1, 1),
+            new CellAddress(keep.Id, 2, 1)));
+        wb.DefineNamedRange("DataRange", new GridRange(
+            new CellAddress(removed.Id, 1, 1),
+            new CellAddress(removed.Id, 2, 1)));
+
+        var cmd = new RemoveSheetCommand(removed.Id);
+        cmd.Apply(ctx);
+
+        wb.NamedRanges.Should().ContainKey("KeepRange");
+        wb.NamedRanges.Should().NotContainKey("DataRange");
+
+        cmd.Revert(ctx);
+
+        wb.NamedRanges.Should().ContainKey("DataRange");
+        wb.NamedRanges["DataRange"].Start.Sheet.Should().Be(removed.Id);
+    }
+
+    [Fact]
+    public void RemoveSheet_OnlySheet_FailsWithoutRemovingSheet()
+    {
+        var wb = new Workbook("test");
+        var only = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new RemoveSheetCommand(only.Id).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("only sheet");
+        wb.Sheets.Should().ContainSingle().Which.Id.Should().Be(only.Id);
+    }
+
+    [Fact]
+    public void MoveSheet_MovesSheetAndUndoRestoresOriginalOrder()
+    {
+        var wb = new Workbook("test");
+        var first = wb.AddSheet("First");
+        var second = wb.AddSheet("Second");
+        var third = wb.AddSheet("Third");
+        var ctx = new SimpleCtx(wb);
+
+        var cmd = new MoveSheetCommand(fromIndex: 0, toIndex: 2);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        wb.Sheets.Select(s => s.Name).Should().Equal("Second", "Third", "First");
+        wb.Sheets.Select(s => s.Id).Should().Equal(second.Id, third.Id, first.Id);
+
+        cmd.Revert(ctx);
+
+        wb.Sheets.Select(s => s.Name).Should().Equal("First", "Second", "Third");
+        wb.Sheets.Select(s => s.Id).Should().Equal(first.Id, second.Id, third.Id);
+    }
+
+    [Fact]
+    public void MoveSheet_InvalidIndex_FailsWithoutChangingOrder()
+    {
+        var wb = new Workbook("test");
+        wb.AddSheet("First");
+        wb.AddSheet("Second");
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new MoveSheetCommand(fromIndex: 0, toIndex: 5).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("index");
+        wb.Sheets.Select(s => s.Name).Should().Equal("First", "Second");
+    }
 }

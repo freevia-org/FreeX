@@ -36,7 +36,8 @@ public static class ClipboardSerializer
     /// <summary>Parses tab/newline-delimited text into a 2-D array of strings.</summary>
     public static string[][] Deserialize(string text)
     {
-        var rows = text.Split(["\r\n", "\n"], StringSplitOptions.None);
+        text = text.TrimEnd('\r', '\n');
+        var rows = text.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
         return rows.Select(r => r.Split('\t')).ToArray();
     }
 }

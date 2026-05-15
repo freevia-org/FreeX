@@ -3,7 +3,7 @@ using Freexcel.Core.Model;
 namespace Freexcel.Core.Commands;
 
 /// <summary>
-/// Applies or clears a value filter on a range by toggling Sheet.HiddenRows.
+/// Applies or clears a value filter on a range by toggling Sheet.FilterHiddenRows.
 /// Rows whose filter-column value is not in <c>allowedValues</c> are hidden.
 /// Passing an empty/null <c>allowedValues</c> clears all hidden rows.
 /// </summary>
@@ -14,8 +14,9 @@ public sealed class FilterCommand : IWorkbookCommand
     private readonly uint _filterColOffset;   // 0 = first column of the range
     private readonly IReadOnlyList<string> _allowedValues;
 
-    // Snapshot of previously hidden rows for undo
+    // Snapshot of previous hidden-row state for undo
     private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousFilterHiddenRows;
 
     public string Label => _allowedValues.Count == 0 ? "Clear Filter" : "Apply Filter";
 
@@ -34,18 +35,21 @@ public sealed class FilterCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet    = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
 
         // Snapshot existing hidden-row state for undo
         _previousHiddenRows = [.. sheet.HiddenRows];
+        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
         uint filterCol  = _range.Start.Col + _filterColOffset;
         uint startRow   = _range.Start.Row;
         uint endRow     = _range.End.Row;
 
-        // Remove only the rows that are within this filter's range, preserving
-        // rows hidden for other reasons (e.g. imported from XLSX, freeze panes, etc.)
+        // Remove only the previous filter-hidden rows within this filter's range.
+        // Manual/imported hidden rows stay in Sheet.HiddenRows and remain hidden.
         for (uint r = startRow + 1; r <= endRow; r++)
-            sheet.HiddenRows.Remove(r);
+            sheet.FilterHiddenRows.Remove(r);
 
         if (_allowedValues.Count == 0)
         {
@@ -63,7 +67,7 @@ public sealed class FilterCommand : IWorkbookCommand
             var text  = ScalarToString(value);
 
             if (!allowed.Contains(text))
-                sheet.HiddenRows.Add(row);
+                sheet.FilterHiddenRows.Add(row);
         }
 
         return new CommandOutcome(true);
@@ -75,6 +79,9 @@ public sealed class FilterCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         sheet.HiddenRows.Clear();
         sheet.HiddenRows.UnionWith(_previousHiddenRows);
+        sheet.FilterHiddenRows.Clear();
+        if (_previousFilterHiddenRows is not null)
+            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
     }
 
     private static string ScalarToString(ScalarValue value) => value switch

@@ -58,6 +58,7 @@ public partial class App : Application
         services.AddSingleton<RecalcEngine>();
         services.AddSingleton<IViewportService, ViewportService>();
         services.AddSingleton<IFileAdapter, XlsxFileAdapter>();
+        services.AddSingleton<IFileAdapter, CsvFileAdapter>();
         services.AddSingleton<IFileAdapter, NativeJsonAdapter>();
 
         // Workbook (single workbook for now, will expand later)

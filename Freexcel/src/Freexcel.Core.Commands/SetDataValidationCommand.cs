@@ -23,6 +23,8 @@ public sealed class SetDataValidationCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
 
         var idx = sheet.DataValidations.FindIndex(r => r.Id == _rule.Id);
         if (idx >= 0)

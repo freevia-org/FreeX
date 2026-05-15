@@ -20,12 +20,12 @@ public sealed class ViewportService : IViewportService
         var rowMetrics = new List<RowMetric>();
         var colMetrics = new List<ColMetric>();
 
-        // Calculate Row Metrics — iterate until we've filled the available height, skipping filter-hidden rows
+        // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
         const uint MaxRow = CellAddress.MaxRow;
         double topOffset = 0;
         for (uint r = request.TopRow; r <= MaxRow; r++)
         {
-            if (sheet.HiddenRows.Contains(r)) continue;
+            if (IsRowHidden(sheet, r)) continue;
             double height = sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
             rowMetrics.Add(new RowMetric(r, height, topOffset));
             topOffset += height;
@@ -37,6 +37,7 @@ public sealed class ViewportService : IViewportService
         double leftOffset = 0;
         for (uint c = request.LeftCol; c <= MaxCol; c++)
         {
+            if (sheet.HiddenCols.Contains(c)) continue;
             double width = sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth) * 8;
             colMetrics.Add(new ColMetric(c, width, leftOffset));
             leftOffset += width;
@@ -83,17 +84,56 @@ public sealed class ViewportService : IViewportService
     {
         var sheet = workbook.GetSheet(sheetId);
         if (sheet == null) return null;
+        if (zoom <= 0) return null;
 
         // Apply zoom to incoming coordinates
         double targetX = x / zoom;
         double targetY = y / zoom;
+        if (targetX < 0 || targetY < 0) return null;
 
-        // Very simple hit testing (assuming fixed sizes for now to keep it fast)
-        uint col = 1 + (uint)(targetX / (sheet.DefaultColumnWidth * 8));
-        uint row = 1 + (uint)(targetY / sheet.DefaultRowHeight);
+        var row = HitTestRow(sheet, targetY);
+        var col = HitTestColumn(sheet, targetX);
+        if (row is null || col is null) return null;
 
-        return new CellAddress(sheetId, row, col);
+        return new CellAddress(sheetId, row.Value, col.Value);
     }
+
+    private static uint? HitTestRow(Sheet sheet, double y)
+    {
+        double top = 0;
+        for (uint row = 1; row <= CellAddress.MaxRow; row++)
+        {
+            if (IsRowHidden(sheet, row)) continue;
+
+            var height = sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+            if (y < top + height)
+                return row;
+
+            top += height;
+        }
+
+        return null;
+    }
+
+    private static uint? HitTestColumn(Sheet sheet, double x)
+    {
+        double left = 0;
+        for (uint col = 1; col <= CellAddress.MaxCol; col++)
+        {
+            if (sheet.HiddenCols.Contains(col)) continue;
+
+            var width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+            if (x < left + width)
+                return col;
+
+            left += width;
+        }
+
+        return null;
+    }
+
+    private static bool IsRowHidden(Sheet sheet, uint row) =>
+        sheet.HiddenRows.Contains(row) || sheet.FilterHiddenRows.Contains(row);
 
     // ── Conditional format evaluation ─────────────────────────────────────────
 

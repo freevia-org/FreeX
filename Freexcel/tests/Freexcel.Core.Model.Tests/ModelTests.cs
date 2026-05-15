@@ -158,6 +158,7 @@ public class CellStyleTests
         s.Bold.Should().BeFalse();
         s.FillColor.Should().BeNull();
         s.NumberFormat.Should().Be("General");
+        s.Locked.Should().BeTrue();
     }
 
     [Fact]
@@ -197,5 +198,13 @@ public class CellStyleTests
         var style = wb.GetStyle(StyleId.Default);
         style.FontName = "Mutated";
         wb.GetStyle(StyleId.Default).FontName.Should().Be("Calibri");
+    }
+
+    [Fact]
+    public void Workbook_DefaultCalculationMode_IsAutomatic()
+    {
+        var wb = new Workbook("test");
+
+        wb.CalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
     }
 }

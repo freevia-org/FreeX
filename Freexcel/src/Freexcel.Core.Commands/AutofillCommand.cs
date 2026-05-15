@@ -26,9 +26,12 @@ public sealed partial class AutofillCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
 
         var sourceAddr = _sourceRange.End;
         var sourceCell = sheet.GetCell(sourceAddr);
+        var scalarSeries = TryCreateScalarSeries(sheet);
 
         _snapshot = [];
 
@@ -46,7 +49,14 @@ public sealed partial class AutofillCommand : IWorkbookCommand
             int colOffset = (int)addr.Col - (int)sourceAddr.Col;
 
             Cell newCell;
-            if (sourceCell.HasFormula && sourceCell.FormulaText is not null)
+            if (scalarSeries is not null)
+            {
+                var offset = scalarSeries.Direction == FillDirection.Down
+                    ? (int)addr.Row - (int)sourceAddr.Row
+                    : (int)addr.Col - (int)sourceAddr.Col;
+                newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
+            }
+            else if (sourceCell.HasFormula && sourceCell.FormulaText is not null)
             {
                 var shifted = ShiftFormula(sourceCell.FormulaText, rowOffset, colOffset);
                 newCell = Cell.FromFormula(shifted);
@@ -102,6 +112,47 @@ public sealed partial class AutofillCommand : IWorkbookCommand
                  + m.Groups[3].Value
                  + rowNum;
         });
+    }
+
+    private ScalarSeries? TryCreateScalarSeries(Sheet sheet)
+    {
+        var isVertical = _sourceRange.ColCount == 1 && _sourceRange.RowCount >= 2;
+        var isHorizontal = _sourceRange.RowCount == 1 && _sourceRange.ColCount >= 2;
+        if (!isVertical && !isHorizontal)
+            return null;
+
+        var values = _sourceRange.AllCells()
+            .Select(addr => sheet.GetCell(addr)?.Value)
+            .ToList();
+
+        Func<double, ScalarValue>? createValue;
+        if (values.All(value => value is NumberValue))
+            createValue = serial => new NumberValue(serial);
+        else if (values.All(value => value is DateTimeValue))
+            createValue = serial => new DateTimeValue(serial);
+        else
+            return null;
+
+        var numbers = values.Select(value => value switch
+        {
+            NumberValue number => number.Value,
+            DateTimeValue date => date.Value,
+            _ => 0
+        }).ToList();
+        var step = numbers[^1] - numbers[^2];
+        return new ScalarSeries(numbers[^1], step, isVertical ? FillDirection.Down : FillDirection.Right, createValue);
+    }
+
+    private sealed record ScalarSeries(
+        double LastValue,
+        double Step,
+        FillDirection Direction,
+        Func<double, ScalarValue> CreateValue);
+
+    private enum FillDirection
+    {
+        Down,
+        Right
     }
 
     [GeneratedRegex(@"(\$?)([A-Z]{1,3})(\$?)(\d{1,7})")]

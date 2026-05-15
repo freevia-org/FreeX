@@ -33,6 +33,68 @@ public class AutofillCommandTests
     }
 
     [Fact]
+    public void FillNumberSeries_Down_ContinuesStepFromSourceRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(3));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1));
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 5, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(5));
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(7));
+        sheet.GetValue(5, 1).Should().Be(new NumberValue(9));
+    }
+
+    [Fact]
+    public void FillNumberSeries_Right_ContinuesStepFromSourceRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(5));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2));
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 1, 5));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetValue(1, 3).Should().Be(new NumberValue(8));
+        sheet.GetValue(1, 4).Should().Be(new NumberValue(11));
+        sheet.GetValue(1, 5).Should().Be(new NumberValue(14));
+    }
+
+    [Fact]
+    public void FillDateSeries_Down_ContinuesDayStepFromSourceRange()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 1)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 3)));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1));
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 4, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        ((DateTimeValue)sheet.GetValue(3, 1)).ToDateTime().Should().Be(new DateTime(2026, 5, 5));
+        ((DateTimeValue)sheet.GetValue(4, 1)).ToDateTime().Should().Be(new DateTime(2026, 5, 7));
+    }
+
+    [Fact]
     public void FillFormula_Down_IncrementsRowReferences()
     {
         var (_, sheet, ctx) = Setup();

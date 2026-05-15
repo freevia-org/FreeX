@@ -23,8 +23,27 @@ public sealed class Workbook
     public Dictionary<string, GridRange> NamedRanges { get; } =
         new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Saved workbook view snapshots, similar to Excel Custom Views.</summary>
+    public List<WorkbookCustomView> CustomViews { get; } = [];
+
+    /// <summary>Workbook calculation mode.</summary>
+    public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
+
+    /// <summary>True when workbook structure operations such as sheet add/delete/rename/move are protected.</summary>
+    public bool IsStructureProtected { get; set; }
+
+    /// <summary>Password hash/text for workbook structure protection. Null means no password required.</summary>
+    public string? StructureProtectionPassword { get; set; }
+
     /// <summary>Define or replace a named range.</summary>
-    public void DefineNamedRange(string name, GridRange range) => NamedRanges[name] = range;
+    public void DefineNamedRange(string name, GridRange range)
+    {
+        var error = ValidateNamedRangeName(name);
+        if (error is not null)
+            throw new ArgumentException(error, nameof(name));
+
+        NamedRanges[name] = range;
+    }
 
     /// <summary>Remove a named range. Returns true if found and removed.</summary>
     public bool RemoveNamedRange(string name) => NamedRanges.Remove(name);
@@ -90,6 +109,45 @@ public sealed class Workbook
             throw new ArgumentException(error, nameof(name));
     }
 
+    /// <summary>Return an Excel-compatible validation error for a named range name, or null when valid.</summary>
+    public string? ValidateNamedRangeName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Named range name is invalid: it cannot be blank.";
+
+        if (name.Length > 255)
+            return "Named range name is invalid: it cannot exceed 255 characters.";
+
+        if (!IsValidNamedRangeStart(name[0]) || name.Any(ch => !IsValidNamedRangeChar(ch)))
+            return "Named range name is invalid: use letters, numbers, underscores, and periods; start with a letter or underscore.";
+
+        if (CellAddress.TryParse(name, SheetId.New(), out _) || IsR1C1Reference(name))
+            return "Named range name is invalid: it cannot look like a cell reference.";
+
+        return null;
+    }
+
+    private static bool IsValidNamedRangeStart(char ch) =>
+        char.IsLetter(ch) || ch == '_';
+
+    private static bool IsValidNamedRangeChar(char ch) =>
+        char.IsLetterOrDigit(ch) || ch == '_' || ch == '.';
+
+    private static bool IsR1C1Reference(string name)
+    {
+        if (name.Length < 4 || char.ToUpperInvariant(name[0]) != 'R')
+            return false;
+
+        var cIndex = name.IndexOf("C", 1, StringComparison.OrdinalIgnoreCase);
+        if (cIndex <= 1 || cIndex == name.Length - 1)
+            return false;
+
+        return uint.TryParse(name[1..cIndex], out var row) &&
+               uint.TryParse(name[(cIndex + 1)..], out var col) &&
+               row is >= 1 and <= CellAddress.MaxRow &&
+               col is >= 1 and <= CellAddress.MaxCol;
+    }
+
     /// <summary>Remove a sheet by its ID. Returns true if found and removed.</summary>
     public bool RemoveSheet(SheetId sheetId)
     {
@@ -153,3 +211,13 @@ public sealed class Workbook
         _sheets.Insert(toIndex, sheet);
     }
 }
+
+public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets);
+
+public sealed record WorksheetCustomViewState(
+    string SheetName,
+    WorksheetViewMode ViewMode,
+    uint FrozenRows,
+    uint FrozenCols,
+    uint? SplitRow,
+    uint? SplitColumn);
