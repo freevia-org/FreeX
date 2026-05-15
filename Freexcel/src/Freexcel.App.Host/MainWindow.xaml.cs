@@ -52,6 +52,8 @@ public partial class MainWindow : Window
     private bool _snapInProgress;
     private bool _formulaBarExpanded;
     private System.Windows.Controls.TextBox? _inlineEditor;
+    private System.Windows.Controls.ComboBox? _validationDropdown;
+    private bool _suppressValidationDropdownCommit;
     private ColumnResizeSnapshot? _columnResizeSnapshot;
     private RowResizeSnapshot? _rowResizeSnapshot;
 
@@ -186,6 +188,7 @@ public partial class MainWindow : Window
 
     private void SelectRow(uint row)
     {
+        HideValidationDropdown();
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
         _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
@@ -201,6 +204,7 @@ public partial class MainWindow : Window
 
     private void SelectColumn(uint col)
     {
+        HideValidationDropdown();
         const uint maxRow = 1_048_576;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
         _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
@@ -217,6 +221,7 @@ public partial class MainWindow : Window
 
     private void SelectAll()
     {
+        HideValidationDropdown();
         const uint maxRow = 1_048_576;
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
@@ -701,6 +706,7 @@ public partial class MainWindow : Window
             SheetGrid.Focus();
             RefreshToolbar();
             RefreshStatusBar();
+            RefreshValidationDropdown();
             return;
         }
 
@@ -715,6 +721,7 @@ public partial class MainWindow : Window
         SheetGrid.Focus();
         RefreshToolbar();
         RefreshStatusBar();
+        RefreshValidationDropdown();
     }
 
     private void SelectCurrentRegionOrAll()
@@ -898,6 +905,7 @@ public partial class MainWindow : Window
 
     private void ShowInlineEditor(CellAddress addr)
     {
+        HideValidationDropdown();
         var vp = SheetGrid.Viewport;
         if (vp == null) { FormulaBar.Focus(); return; }
 
@@ -948,6 +956,111 @@ public partial class MainWindow : Window
         EditOverlay.IsHitTestVisible = false;
         if (commit)
             FormulaBar.Text = _inlineEditor.Text;
+    }
+
+    private void RefreshValidationDropdown()
+    {
+        if (_inlineEditor?.IsVisible == true)
+            return;
+
+        if (SheetGrid.SelectedRange is not { } range ||
+            _workbook.GetSheet(_currentSheetId) is not { } sheet ||
+            TryGetCellOverlayRect(range.Start) is not { } rect)
+        {
+            HideValidationDropdown();
+            return;
+        }
+
+        var rule = DataValidationService.GetApplicable(sheet, range.Start)
+            .FirstOrDefault(dv => dv.Type == DvType.List && dv.ShowDropdown);
+        if (rule is null)
+        {
+            HideValidationDropdown();
+            return;
+        }
+
+        var items = DataValidationService.GetListItems(rule, sheet, _workbook);
+        if (items.Count == 0)
+        {
+            HideValidationDropdown();
+            return;
+        }
+
+        EnsureValidationDropdown();
+
+        _suppressValidationDropdownCommit = true;
+        _validationDropdown!.ItemsSource = items;
+        var currentText = FormatCellValue(sheet.GetCell(range.Start)?.Value);
+        _validationDropdown.SelectedItem = items.FirstOrDefault(item =>
+            string.Equals(item, currentText, StringComparison.OrdinalIgnoreCase));
+        _suppressValidationDropdownCommit = false;
+
+        var width = Math.Max(18, Math.Min(rect.Width, 160));
+        System.Windows.Controls.Canvas.SetLeft(_validationDropdown, rect.Right - width);
+        System.Windows.Controls.Canvas.SetTop(_validationDropdown, rect.Top);
+        _validationDropdown.Width = width;
+        _validationDropdown.Height = Math.Max(18, rect.Height);
+        _validationDropdown.Visibility = Visibility.Visible;
+        EditOverlay.IsHitTestVisible = true;
+    }
+
+    private void EnsureValidationDropdown()
+    {
+        if (_validationDropdown is not null)
+            return;
+
+        _validationDropdown = new System.Windows.Controls.ComboBox
+        {
+            FontSize = 12,
+            Padding = new System.Windows.Thickness(0),
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(33, 115, 70)),
+            BorderThickness = new System.Windows.Thickness(1),
+            MaxDropDownHeight = 220,
+            ToolTip = "Pick from list"
+        };
+        _validationDropdown.SelectionChanged += ValidationDropdown_SelectionChanged;
+        EditOverlay.Children.Add(_validationDropdown);
+    }
+
+    private void HideValidationDropdown()
+    {
+        if (_validationDropdown is not null)
+            _validationDropdown.Visibility = Visibility.Collapsed;
+
+        if (_inlineEditor?.IsVisible != true)
+            EditOverlay.IsHitTestVisible = false;
+    }
+
+    private Rect? TryGetCellOverlayRect(CellAddress addr)
+    {
+        var vp = SheetGrid.Viewport;
+        if (vp is null)
+            return null;
+
+        var rowMetric = vp.RowMetrics.FirstOrDefault(r => r.Row == addr.Row);
+        var colMetric = vp.ColMetrics.FirstOrDefault(c => c.Col == addr.Col);
+        if (rowMetric is null || colMetric is null)
+            return null;
+
+        var left = colMetric.LeftOffset + Freexcel.App.UI.GridView.RowHeaderWidth;
+        var top = rowMetric.TopOffset + Freexcel.App.UI.GridView.ColHeaderHeight;
+        return new Rect(left, top, colMetric.Width, rowMetric.Height);
+    }
+
+    private void ValidationDropdown_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressValidationDropdownCommit ||
+            _validationDropdown?.SelectedItem is not string selected ||
+            SheetGrid.SelectedRange is not { } range)
+        {
+            return;
+        }
+
+        FormulaBar.Text = selected;
+        CommitEdit();
+        SetActiveCell(range.Start);
     }
 
     private void InlineEditor_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -1205,19 +1318,28 @@ public partial class MainWindow : Window
                 string? violationMsg = null;
                 foreach (var dv in applicableRules)
                 {
-                    var msg = DataValidationService.Validate(dv, value);
+                    var msg = DataValidationService.Validate(dv, value, sheet, addr, _workbook);
                     if (msg != null) { violatingRule = dv; violationMsg = msg; break; }
                 }
 
                 if (violationMsg != null && violatingRule != null)
                 {
                     var dvRule = violatingRule;
-                    if (dvRule.Type == DvType.List && dvRule.ShowDropdown && !string.IsNullOrEmpty(text))
-                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                            MessageBoxButton.OK, MessageBoxImage.Warning);
-                    else if (dvRule.Type != DvType.List)
-                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                    if (dvRule.ShowErrorMessage)
+                    {
+                        var icon = dvRule.AlertStyle switch
+                        {
+                            DvAlertStyle.Information => MessageBoxImage.Information,
+                            DvAlertStyle.Warning => MessageBoxImage.Warning,
+                            _ => MessageBoxImage.Error
+                        };
+                        if (dvRule.Type == DvType.List && dvRule.ShowDropdown && !string.IsNullOrEmpty(text))
+                            MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                                MessageBoxButton.OK, icon);
+                        else if (dvRule.Type != DvType.List)
+                            MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                                MessageBoxButton.OK, icon);
+                    }
                     // Still apply the value (soft validation like Excel default warning mode)
                 }
             }
@@ -1251,6 +1373,7 @@ public partial class MainWindow : Window
         RecalculateIfAutomatic(affectedCells);
         UpdateViewport();
         RefreshStatusBar();
+        RefreshValidationDropdown();
     }
 
     private void UpdateViewport()
@@ -1294,6 +1417,7 @@ public partial class MainWindow : Window
         HorizontalScroll.ViewportSize = viewport.ColMetrics.Count;
         VerticalScroll.LargeChange    = Math.Max(1, viewport.RowMetrics.Count);
         HorizontalScroll.LargeChange  = Math.Max(1, viewport.ColMetrics.Count);
+        RefreshValidationDropdown();
     }
 
     private void UpdateScrollbarMaximums(Sheet? sheet)
@@ -1807,7 +1931,9 @@ public partial class MainWindow : Window
             MaxColor = source.MaxColor,
             UseThreeColorScale = source.UseThreeColorScale,
             DataBarColor = source.DataBarColor,
-            AboveAverage = source.AboveAverage
+            AboveAverage = source.AboveAverage,
+            FormulaText  = source.FormulaText,
+            StopIfTrue   = source.StopIfTrue
         };
 
     private static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId) =>
@@ -1820,6 +1946,9 @@ public partial class MainWindow : Window
             Formula2 = source.Formula2,
             AllowBlank = source.AllowBlank,
             ShowDropdown = source.ShowDropdown,
+            AlertStyle = source.AlertStyle,
+            ShowInputMessage = source.ShowInputMessage,
+            ShowErrorMessage = source.ShowErrorMessage,
             ErrorTitle = source.ErrorTitle,
             ErrorMessage = source.ErrorMessage,
             PromptTitle = source.PromptTitle,
@@ -1971,14 +2100,94 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void SortCustomButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var input = PromptForInput("Sort keys (for example 1 asc; 2 desc):", "1 asc");
+        if (input is null) return;
+
+        if (!SortInputParser.TryParse(input, out var keys, out var error))
+        {
+            MessageBox.Show(error ?? "Enter sort keys such as 1 asc; 2 desc.",
+                "Custom Sort", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var cmd = new SortCommand(_currentSheetId, range, keys);
+        if (!TryExecuteCommand(cmd, "Sort"))
+            return;
+        UpdateViewport();
+    }
+
     private void FilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var value = PromptForInput("Filter: enter value to keep", "");
+        var value = PromptForInput("Filter: values separated by comma/semicolon, top:n, bottom:n, toppercent:n, bottompercent:n, aboveavg, belowavg, blank, nonblank, text=value, text<>value, contains:text, notcontains:text, begins:text, ends:text, between:min:max, date=yyyy-mm-dd, date<>yyyy-mm-dd, date>yyyy-mm-dd, date>=yyyy-mm-dd, date<yyyy-mm-dd, date<=yyyy-mm-dd, datebetween:start:end, >number, >=number, <number, <=number, =number, or <>number", "");
         if (value is null) return;  // user cancelled
-        var allowedValues = string.IsNullOrWhiteSpace(value)
-            ? (IReadOnlyList<string>)[]
-            : [value.Trim()];
+        var filterText = value.TrimStart();
+        if (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var error))
+            {
+                MessageBox.Show(error ?? "Enter top:n, bottom:n, toppercent:n, or bottompercent:n.",
+                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var topBottomCommand = percent
+                ? TopBottomFilterCommand.Percent(_currentSheetId, range, filterColOffset: 0, count, top)
+                : new TopBottomFilterCommand(_currentSheetId, range, filterColOffset: 0, count, top);
+            if (!TryExecuteCommand(topBottomCommand, "Filter"))
+                return;
+            UpdateViewport();
+            return;
+        }
+
+        if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
+        {
+            var averageCommand = new AverageFilterCommand(_currentSheetId, range, filterColOffset: 0, aboveAverage);
+            if (!TryExecuteCommand(averageCommand, "Filter"))
+                return;
+            UpdateViewport();
+            return;
+        }
+
+        if (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
+            filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
+            filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
+            filterText.StartsWith('>') ||
+            filterText.StartsWith('<') ||
+            filterText.StartsWith('='))
+        {
+            if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var error) || criterion is null)
+            {
+                MessageBox.Show(error ?? "Enter a supported filter criterion.",
+                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var conditionCommand = new FilterConditionCommand(_currentSheetId, range, filterColOffset: 0, criterion);
+            if (!TryExecuteCommand(conditionCommand, "Filter"))
+                return;
+            UpdateViewport();
+            return;
+        }
+
+        var allowedValues = FilterInputParser.ParseAllowedValues(value);
         var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: allowedValues);
         if (!TryExecuteCommand(cmd, "Filter"))
             return;
@@ -2050,41 +2259,66 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        uint startRow = range.Start.Row;
-        uint endRow   = range.End.Row;
-        // Increment to the highest existing level in the range + 1, min 1, max 8
-        int maxExisting = 0;
-        for (uint r = startRow; r <= endRow; r++)
+
+        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            if (sheet.RowOutlineLevels.TryGetValue(r, out var lvl) && lvl > maxExisting)
-                maxExisting = lvl;
+            int newLevel = GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
+            if (TryExecuteCommand(new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel), "Group Columns"))
+                UpdateViewport();
+            return;
         }
-        int newLevel = Math.Min(maxExisting + 1, 8);
-        var cmd = new GroupRowsCommand(_currentSheetId, startRow, endRow, newLevel);
-        if (TryExecuteCommand(cmd, "Group Rows"))
+
+        int rowLevel = GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
+        if (TryExecuteCommand(new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel), "Group Rows"))
             UpdateViewport();
     }
 
     private void UngroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var cmd = new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 0);
-        if (TryExecuteCommand(cmd, "Ungroup Rows"))
+
+        IWorkbookCommand command = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns
+            ? new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, 0)
+            : new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 0);
+
+        if (TryExecuteCommand(command, "Ungroup"))
             UpdateViewport();
     }
 
     private void CollapseGroupBtn_Click(object sender, RoutedEventArgs e)
     {
-        var cmd = new CollapseRowGroupCommand(_currentSheetId, 1);
+        var axis = SheetGrid.SelectedRange is { } range
+            ? OutlineGroupingService.GetGroupingAxis(range)
+            : OutlineGroupingAxis.Rows;
+        IWorkbookCommand cmd = axis == OutlineGroupingAxis.Columns
+            ? new CollapseColGroupCommand(_currentSheetId, 1)
+            : new CollapseRowGroupCommand(_currentSheetId, 1);
         if (TryExecuteCommand(cmd, "Collapse Group"))
             UpdateViewport();
     }
 
     private void ExpandGroupBtn_Click(object sender, RoutedEventArgs e)
     {
-        var cmd = new ExpandRowGroupCommand(_currentSheetId, 1);
+        var axis = SheetGrid.SelectedRange is { } range
+            ? OutlineGroupingService.GetGroupingAxis(range)
+            : OutlineGroupingAxis.Rows;
+        IWorkbookCommand cmd = axis == OutlineGroupingAxis.Columns
+            ? new ExpandColGroupCommand(_currentSheetId, 1)
+            : new ExpandRowGroupCommand(_currentSheetId, 1);
         if (TryExecuteCommand(cmd, "Expand Group"))
             UpdateViewport();
+    }
+
+    private static int GetNextOutlineLevel(uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
+    {
+        int maxExisting = 0;
+        for (uint index = start; index <= end; index++)
+        {
+            if (outlineLevels.TryGetValue(index, out var level) && level > maxExisting)
+                maxExisting = level;
+        }
+
+        return Math.Min(maxExisting + 1, 8);
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
@@ -2520,6 +2754,7 @@ public partial class MainWindow : Window
         {
             StatusStatsPanel.Visibility = Visibility.Collapsed;
             StatusReadyText.Visibility  = Visibility.Visible;
+            StatusReadyText.Text = "Ready";
             return;
         }
 
@@ -2532,6 +2767,7 @@ public partial class MainWindow : Window
         {
             StatusStatsPanel.Visibility = Visibility.Collapsed;
             StatusReadyText.Visibility  = Visibility.Visible;
+            StatusReadyText.Text = GetReadyStatusText(sheet, range.Start);
             return;
         }
 
@@ -2542,6 +2778,21 @@ public partial class MainWindow : Window
         StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {stats.Average.Value:N2}" : "";
         StatusMinText.Text   = stats.Min.HasValue ? $"Min: {stats.Min.Value:N2}" : "";
         StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {stats.Max.Value:N2}" : "";
+    }
+
+    private static string GetReadyStatusText(Sheet sheet, CellAddress activeCell)
+    {
+        var prompt = DataValidationService.GetInputPrompt(sheet, activeCell);
+        if (prompt is null)
+            return "Ready";
+
+        if (prompt.Title.Length == 0)
+            return prompt.Message;
+
+        if (prompt.Message.Length == 0)
+            return prompt.Title;
+
+        return $"{prompt.Title}: {prompt.Message}";
     }
 
     private void OnColumnResizing(uint col, double newWidthPx)
@@ -3283,6 +3534,7 @@ public partial class MainWindow : Window
     private void CfColorScaleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Color Scale");
     private void CfIconSetMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Icon Set");
     private void CfNewRuleMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("New Rule");
+    private void CfNewFormulaRuleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Formula");
     private void CfClearRulesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -3292,7 +3544,25 @@ public partial class MainWindow : Window
             return;
         UpdateViewport();
     }
-    private void CfManageRulesMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Manage Rules");
+    private void CfManageRulesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+        var dlg = new ManageConditionalFormatsDialog(sheet, SheetGrid.SelectedRange) { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.ResultRules is null) return;
+        var newRules = dlg.ResultRules;
+        if (!TryExecuteGroupedSheetCommand(
+                "Manage Conditional Formatting Rules",
+                sheetId =>
+                {
+                    var remapped = newRules
+                        .Select(r => CloneConditionalFormatForSheet(r, sheetId))
+                        .ToList();
+                    return new ReplaceAllConditionalFormatsCommand(sheetId, remapped);
+                }))
+            return;
+        UpdateViewport();
+    }
 
     private void ShowCfDialog(string ruleType)
     {
@@ -3702,7 +3972,7 @@ public partial class MainWindow : Window
     }
     private void SortAZMenuItem_Click(object sender, RoutedEventArgs e)    => SortAscButton_Click(sender, e);
     private void SortZAMenuItem_Click(object sender, RoutedEventArgs e)    => SortDescButton_Click(sender, e);
-    private void SortCustomMenuItem_Click(object sender, RoutedEventArgs e) => SortAscButton_Click(sender, e);
+    private void SortCustomMenuItem_Click(object sender, RoutedEventArgs e) => SortCustomButton_Click(sender, e);
     private void FilterToggleMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);
     private void FilterClearMenuItem_Click(object sender, RoutedEventArgs e)  => ClearFilterButton_Click(sender, e);
     private void FilterReapplyMenuItem_Click(object sender, RoutedEventArgs e) => FilterButton_Click(sender, e);
@@ -4433,6 +4703,19 @@ public partial class MainWindow : Window
         CellColor? FillColor,
         CellColor? OutlineColor);
 
+    private enum AltTextTargetKind
+    {
+        Picture,
+        Shape,
+        TextBox
+    }
+
+    private sealed record AltTextTarget(
+        AltTextTargetKind Kind,
+        Guid Id,
+        CellAddress Anchor,
+        string? AltText);
+
     private void PageLayoutDeferredBtn_Click(object sender, RoutedEventArgs e)
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
@@ -4900,6 +5183,71 @@ public partial class MainWindow : Window
             MessageBoxImage.Warning);
     }
 
+    private void EvaluateFormulaBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        RecalculateWorkbook();
+        var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, range.Start);
+        if (summary is null)
+        {
+            MessageBox.Show("Select a cell that contains a formula.", "Evaluate Formula", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        MessageBox.Show(
+            $"{summary.SheetName}!{summary.Address.ToA1()}\nFormula: {summary.FormulaText}\nResult: {summary.ValueText}",
+            "Evaluate Formula",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void AddWatchBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var added = WatchWindowService.AddWatch(_workbook, range.Start);
+        MessageBox.Show(
+            added ? $"{FormatAuditAddress(range.Start)} added to Watch Window." : $"{FormatAuditAddress(range.Start)} is already watched.",
+            "Watch Window",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void DeleteWatchBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var removed = WatchWindowService.RemoveWatch(_workbook, range.Start);
+        MessageBox.Show(
+            removed ? $"{FormatAuditAddress(range.Start)} removed from Watch Window." : $"{FormatAuditAddress(range.Start)} is not watched.",
+            "Watch Window",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void WatchWindowBtn_Click(object sender, RoutedEventArgs e)
+    {
+        RecalculateWorkbook();
+        var entries = WatchWindowService.GetEntries(_workbook);
+        if (entries.Count == 0)
+        {
+            MessageBox.Show("No watched cells.", "Watch Window", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var lines = entries.Take(20).Select(entry =>
+            $"{entry.SheetName}!{entry.Address.ToA1()} = {entry.ValueText}" +
+            (entry.FormulaText is null ? "" : $" ({entry.FormulaText})"));
+        var message = string.Join(Environment.NewLine, lines);
+        if (entries.Count > 20)
+            message += $"{Environment.NewLine}...and {entries.Count - 20} more.";
+        MessageBox.Show(message, "Watch Window", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
         RecalculateWorkbook();
@@ -5110,6 +5458,42 @@ public partial class MainWindow : Window
 
     // ── What-If Analysis ─────────────────────────────────────────────────────
 
+    private void SubtotalBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            MessageBox.Show("Select a range with a header row and data rows.", "Subtotal", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var input = PromptForInput("Group column, subtotal columns, function, options (for example 1,2+3,sum,replace pagebreak above):", "1,2,sum,replace");
+        if (input is null) return;
+
+        if (!SubtotalInputParser.TryParse(input, out var options, out var error))
+        {
+            MessageBox.Show(error ?? "Enter group column, subtotal columns, and optional function, for example 1,2+3,sum.",
+                "Subtotal", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var subtotalCommand = new SubtotalCommand(
+            _currentSheetId,
+            range,
+            groupByColumnOffset: options.GroupColumnOffset,
+            subtotalColumnOffsets: options.SubtotalColumnOffsets,
+            functionNumber: options.FunctionNumber,
+            pageBreakBetweenGroups: options.PageBreakBetweenGroups,
+            summaryBelowData: options.SummaryBelowData);
+        IWorkbookCommand command = options.ReplaceExisting
+            ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(_currentSheetId, range), subtotalCommand])
+            : subtotalCommand;
+        if (!TryExecuteCommand(command, "Subtotal", out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+    }
+
     private void GoalSeekBtn_Click(object sender, RoutedEventArgs e)
     {
         var selectedCell = _selectionAnchor;
@@ -5145,6 +5529,227 @@ public partial class MainWindow : Window
     }
 
     // ── Review tab ────────────────────────────────────────────────────────────
+
+    private void ScenariosBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var action = PromptForInput("Scenario action (save/show/list/report):", _workbook.Scenarios.Count == 0 ? "save" : "show");
+        if (action is null)
+            return;
+
+        switch (action.Trim().ToLowerInvariant())
+        {
+            case "save":
+            case "add":
+                SaveScenarioFromSelection();
+                break;
+            case "show":
+            case "apply":
+                ShowScenarioByName();
+                break;
+            case "list":
+            case "manager":
+                ListScenarios();
+                break;
+            case "report":
+            case "summary":
+                CreateScenarioSummaryReport();
+                break;
+            default:
+                MessageBox.Show("Enter save, show, list, or report.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+        }
+    }
+
+    private void SaveScenarioFromSelection()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            MessageBox.Show("Select the changing cells for the scenario.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var name = PromptForInput("Scenario name:", _workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}");
+        if (name is null)
+            return;
+
+        var changes = range.AllCells()
+            .Select(address => new ScenarioCellValue(address, sheet.GetValue(address.Row, address.Col)))
+            .ToList();
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes), "Scenario Manager"))
+            return;
+
+        MessageBox.Show($"Scenario '{name.Trim()}' saved for {changes.Count} changing cell(s).",
+            "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void ShowScenarioByName()
+    {
+        if (_workbook.Scenarios.Count == 0)
+        {
+            MessageBox.Show("No scenarios are saved in this workbook.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var name = PromptForInput("Scenario name to show:", _workbook.Scenarios[0].Name);
+        if (name is null)
+            return;
+
+        if (!TryExecuteCommand(new ApplyScenarioCommand(name), "Scenario Manager", out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        if (outcome.AffectedCells?.FirstOrDefault() is { } first)
+        {
+            SetActiveCell(first);
+            EnsureCellVisible(first);
+        }
+
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void ListScenarios()
+    {
+        if (_workbook.Scenarios.Count == 0)
+        {
+            MessageBox.Show("No scenarios are saved in this workbook.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var message = string.Join(Environment.NewLine,
+            _workbook.Scenarios.Select(s => $"{s.Name}: {s.ChangingCells.Count} changing cell(s)"));
+        MessageBox.Show(message, "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void CreateScenarioSummaryReport()
+    {
+        if (!TryExecuteCommand(new ScenarioSummaryReportCommand(), "Scenario Manager"))
+            return;
+
+        var report = _workbook.Sheets.LastOrDefault();
+        if (report is not null)
+        {
+            _currentSheetId = report.Id;
+            _groupedSheetIds.Clear();
+            _groupedSheetIds.Add(_currentSheetId);
+            SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        }
+
+        UpdateViewport();
+        RefreshSheetTabs();
+        RefreshStatusBar();
+    }
+
+    private void ForecastSheetBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            MessageBox.Show("Select a two-column range with headers and at least two data rows.",
+                "Forecast Sheet", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var periodsInput = PromptForInput("Forecast periods:", "3");
+        if (periodsInput is null)
+            return;
+        if (!uint.TryParse(periodsInput.Trim(), out var periods) || periods == 0)
+        {
+            MessageBox.Show("Enter a positive whole number of forecast periods.",
+                "Forecast Sheet", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryExecuteCommand(new ForecastSheetCommand(range, periods), "Forecast Sheet"))
+            return;
+
+        var forecastSheet = _workbook.Sheets.LastOrDefault();
+        if (forecastSheet is not null)
+        {
+            _currentSheetId = forecastSheet.Id;
+            _groupedSheetIds.Clear();
+            _groupedSheetIds.Add(_currentSheetId);
+            SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        }
+
+        RecalculateWorkbook();
+        UpdateViewport();
+        RefreshSheetTabs();
+        RefreshStatusBar();
+    }
+
+    private void DataTableBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+        {
+            MessageBox.Show("Select the data table range, including the formula row and input values.",
+                "Data Table", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var mode = PromptForInput("Data table type (one/two):", "one");
+        if (mode is null)
+            return;
+        var twoVariable = mode.Trim().Equals("two", StringComparison.OrdinalIgnoreCase) ||
+                          mode.Trim().Equals("2", StringComparison.OrdinalIgnoreCase);
+
+        var formulaDefault = new CellAddress(_currentSheetId, range.Start.Row, twoVariable ? range.Start.Col : range.Start.Col + 1).ToA1();
+        var formulaInput = PromptForInput("Formula cell:", formulaDefault);
+        if (formulaInput is null)
+            return;
+        if (!CellAddress.TryParse(formulaInput.Trim(), _currentSheetId, out var formulaCell))
+        {
+            MessageBox.Show("Enter a valid formula cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        IWorkbookCommand command;
+        if (twoVariable)
+        {
+            var rowInputText = PromptForInput("Row input cell:", formulaCell.ToA1());
+            if (rowInputText is null)
+                return;
+            if (!CellAddress.TryParse(rowInputText.Trim(), _currentSheetId, out var rowInputCell))
+            {
+                MessageBox.Show("Enter a valid row input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var columnInputText = PromptForInput("Column input cell:", formulaCell.ToA1());
+            if (columnInputText is null)
+                return;
+            if (!CellAddress.TryParse(columnInputText.Trim(), _currentSheetId, out var columnInputCell))
+            {
+                MessageBox.Show("Enter a valid column input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            command = new TwoVariableDataTableCommand(range, formulaCell, rowInputCell, columnInputCell);
+        }
+        else
+        {
+            var inputInput = PromptForInput("Column input cell:", formulaCell.ToA1());
+            if (inputInput is null)
+                return;
+            if (!CellAddress.TryParse(inputInput.Trim(), _currentSheetId, out var inputCell))
+            {
+                MessageBox.Show("Enter a valid input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            command = new OneVariableDataTableCommand(range, formulaCell, inputCell);
+        }
+
+        if (!TryExecuteCommand(command, "Data Table", out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
 
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -5186,6 +5791,111 @@ public partial class MainWindow : Window
             $"Shapes and text boxes: {statistics.ShapeCount}",
             $"Named ranges: {statistics.NamedRangeCount}");
         MessageBox.Show(message, "Workbook Statistics", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void AccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var issues = AccessibilityCheckerService.FindIssues(_workbook);
+        if (issues.Count == 0)
+        {
+            MessageBox.Show("No accessibility issues found.", "Accessibility", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var message = string.Join(Environment.NewLine,
+            issues.Take(20).Select(issue => $"{issue.SheetName}!{issue.Location}: {issue.Message}"));
+        if (issues.Count > 20)
+            message += $"{Environment.NewLine}...and {issues.Count - 20} more.";
+        MessageBox.Show(message, "Accessibility", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private void SetAltTextBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var target = GetTargetAltTextObject(_currentSheetId);
+        if (target is null)
+        {
+            MessageBox.Show("No picture, shape, or text box found on this sheet.",
+                "Alt Text", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var input = PromptForInput("Alt text:", target.AltText ?? "");
+        if (input is null)
+            return;
+
+        if (!TryExecuteGroupedSheetCommand(
+                "Alt Text",
+                sheetId =>
+                {
+                    var groupedTarget = GetTargetAltTextObject(sheetId, target.Kind);
+                    return target.Kind switch
+                    {
+                        AltTextTargetKind.Picture => new SetPictureAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
+                        AltTextTargetKind.Shape => new SetDrawingShapeAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
+                        _ => new SetTextBoxAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input)
+                    };
+                }))
+        {
+            return;
+        }
+
+        SetActiveCell(target.Anchor);
+        EnsureCellVisible(target.Anchor);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private AltTextTarget? GetTargetAltTextObject(SheetId sheetId, AltTextTargetKind? preferredKind = null)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return null;
+
+        if (SheetGrid.SelectedRange is { } range)
+        {
+            var row = range.Start.Row;
+            var col = range.Start.Col;
+            if (preferredKind is null or AltTextTargetKind.Picture)
+            {
+                var picture = sheet.Pictures.LastOrDefault(item => item.Anchor.Row == row && item.Anchor.Col == col);
+                if (picture is not null)
+                    return new AltTextTarget(AltTextTargetKind.Picture, picture.Id, picture.Anchor, picture.AltText);
+            }
+
+            if (preferredKind is null or AltTextTargetKind.Shape)
+            {
+                var shape = sheet.DrawingShapes.LastOrDefault(item => item.Anchor.Row == row && item.Anchor.Col == col);
+                if (shape is not null)
+                    return new AltTextTarget(AltTextTargetKind.Shape, shape.Id, shape.Anchor, shape.AltText);
+            }
+
+            if (preferredKind is null or AltTextTargetKind.TextBox)
+            {
+                var textBox = sheet.TextBoxes.LastOrDefault(item => item.Anchor.Row == row && item.Anchor.Col == col);
+                if (textBox is not null)
+                    return new AltTextTarget(AltTextTargetKind.TextBox, textBox.Id, textBox.Anchor, textBox.AltText);
+            }
+        }
+
+        if (preferredKind is null or AltTextTargetKind.Picture && sheet.Pictures.Count > 0)
+        {
+            var picture = sheet.Pictures[^1];
+            return new AltTextTarget(AltTextTargetKind.Picture, picture.Id, picture.Anchor, picture.AltText);
+        }
+
+        if (preferredKind is null or AltTextTargetKind.Shape && sheet.DrawingShapes.Count > 0)
+        {
+            var shape = sheet.DrawingShapes[^1];
+            return new AltTextTarget(AltTextTargetKind.Shape, shape.Id, shape.Anchor, shape.AltText);
+        }
+
+        if (preferredKind is null or AltTextTargetKind.TextBox && sheet.TextBoxes.Count > 0)
+        {
+            var textBox = sheet.TextBoxes[^1];
+            return new AltTextTarget(AltTextTargetKind.TextBox, textBox.Id, textBox.Anchor, textBox.AltText);
+        }
+
+        return null;
     }
 
     private void ReviewNewCommentBtn_Click(object sender, RoutedEventArgs e)

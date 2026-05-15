@@ -190,6 +190,131 @@ public class ConditionalFormatTests
         sheet.ConditionalFormats.Should().BeEmpty("revert should remove the rule");
     }
 
+    // ─── Formula CF rule tests ────────────────────────────────────────────────
+
+    [Fact]
+    public void Formula_Rule_AppliesWhenFormulaIsTrue()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(2)));
+
+        var redStyle = new CellStyle { FillColor = new CellColor(255, 0, 0) };
+        var cf = new ConditionalFormat
+        {
+            AppliesTo    = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 1)),
+            Priority     = 1,
+            RuleType     = CfRuleType.Formula,
+            FormulaText  = "A1>5",   // relative — for row 2 this shifts to A2>5
+            FormatIfTrue = redStyle
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var vp = GetViewport(wb, sheet);
+
+        var a1 = GetCell(vp, 1, 1);
+        var a2 = GetCell(vp, 2, 1);
+
+        a1.Style!.FillColor.Should().Be(new CellColor(255, 0, 0), "A1=10 > 5, formula true");
+        a2.Style!.FillColor.Should().NotBe(new CellColor(255, 0, 0), "A2=2, shifted formula A2>5 is false");
+    }
+
+    [Fact]
+    public void Formula_Rule_AbsoluteRef_SameForAllCells()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(3)));
+        // Threshold cell
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(5)));
+
+        var redStyle = new CellStyle { FillColor = new CellColor(255, 0, 0) };
+        var cf = new ConditionalFormat
+        {
+            AppliesTo    = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 2)),
+            Priority     = 1,
+            RuleType     = CfRuleType.Formula,
+            // Absolute reference — same condition for all cells in range
+            FormulaText  = "$A$1>5",
+            FormatIfTrue = redStyle
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var vp = GetViewport(wb, sheet);
+
+        // Both cells should be red because $A$1=10 > 5 is always true
+        var a1 = GetCell(vp, 1, 1);
+        var b1 = GetCell(vp, 1, 2);
+        a1.Style!.FillColor.Should().Be(new CellColor(255, 0, 0));
+        b1.Style!.FillColor.Should().Be(new CellColor(255, 0, 0));
+    }
+
+    // ─── ReplaceAllConditionalFormatsCommand tests ────────────────────────────
+
+    [Fact]
+    public void ReplaceAllCF_Commit_ReplacesAllRules()
+    {
+        var (wb, sheet) = MakeWorkbook();
+
+        var oldRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            Priority = 1, RuleType = CfRuleType.CellValue,
+            FormatIfTrue = new CellStyle { Bold = true }
+        };
+        sheet.ConditionalFormats.Add(oldRule);
+
+        var newRule1 = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1, RuleType = CfRuleType.Formula,
+            FormulaText = "A2>0", FormatIfTrue = new CellStyle { FillColor = new CellColor(0, 255, 0) }
+        };
+        var newRule2 = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 3, 1), new CellAddress(sheet.Id, 3, 1)),
+            Priority = 2, RuleType = CfRuleType.CellValue,
+            FormatIfTrue = new CellStyle { Italic = true }
+        };
+
+        var bus = new CommandBus(wbId => new TestCommandContext(wb));
+        var cmd = new ReplaceAllConditionalFormatsCommand(sheet.Id, [newRule1, newRule2]);
+
+        bus.Execute(wb.Id, cmd);
+
+        sheet.ConditionalFormats.Should().HaveCount(2);
+        sheet.ConditionalFormats.Should().NotContain(r => r.Id == oldRule.Id, "old rule replaced");
+        sheet.ConditionalFormats.Should().ContainSingle(r => r.Id == newRule1.Id);
+    }
+
+    [Fact]
+    public void ReplaceAllCF_Undo_RestoresOriginalRules()
+    {
+        var (wb, sheet) = MakeWorkbook();
+
+        var original = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            Priority = 1, RuleType = CfRuleType.CellValue,
+            FormatIfTrue = new CellStyle { Bold = true }
+        };
+        sheet.ConditionalFormats.Add(original);
+
+        var bus = new CommandBus(wbId => new TestCommandContext(wb));
+        var cmd = new ReplaceAllConditionalFormatsCommand(sheet.Id, []); // replace with empty
+
+        bus.Execute(wb.Id, cmd);
+        sheet.ConditionalFormats.Should().BeEmpty();
+
+        bus.Undo(wb.Id);
+        sheet.ConditionalFormats.Should().HaveCount(1);
+        sheet.ConditionalFormats[0].Id.Should().Be(original.Id, "undo restores the original rule");
+    }
+
     // ─── minimal test helpers ─────────────────────────────────────────────────
 
     private sealed class TestCommandContext(Workbook wb) : ICommandContext

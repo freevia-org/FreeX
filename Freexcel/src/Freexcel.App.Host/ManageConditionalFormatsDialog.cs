@@ -1,0 +1,416 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using Freexcel.Core.Model;
+
+namespace Freexcel.App.Host;
+
+/// <summary>
+/// "Manage Conditional Formatting Rules" dialog — lists all rules on a sheet,
+/// allows add / edit / delete / reorder, and returns the final ordered rule list.
+/// </summary>
+public sealed class ManageConditionalFormatsDialog : Window
+{
+    /// <summary>Set after OK or Apply is clicked. Priorities are re-assigned 1…N in list order.</summary>
+    public IReadOnlyList<ConditionalFormat>? ResultRules { get; private set; }
+
+    private readonly Sheet _sheet;
+    private readonly GridRange? _selection;
+
+    // Working copy — bound to the ListView
+    private readonly ObservableCollection<ConditionalFormat> _rules = [];
+
+    private readonly ComboBox _scopeBox;
+    private readonly ListView _listView;
+    private readonly Button _editBtn;
+    private readonly Button _deleteBtn;
+    private readonly Button _moveUpBtn;
+    private readonly Button _moveDownBtn;
+
+    private const string ScopeSheet     = "This Sheet";
+    private const string ScopeSelection = "Current Selection";
+
+    public ManageConditionalFormatsDialog(Sheet sheet, GridRange? selection)
+    {
+        _sheet     = sheet;
+        _selection = selection;
+
+        Title  = "Conditional Formatting Rules Manager";
+        Width  = 560;
+        Height = 420;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+
+        // ── Root layout ────────────────────────────────────────────────────────
+        var root = new DockPanel { Margin = new Thickness(12) };
+
+        // ── Top bar: scope selector ────────────────────────────────────────────
+        var topBar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin      = new Thickness(0, 0, 0, 8)
+        };
+        DockPanel.SetDock(topBar, Dock.Top);
+
+        topBar.Children.Add(new Label
+        {
+            Content = "Show formatting rules for:",
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0, 0, 6, 0)
+        });
+
+        _scopeBox = new ComboBox { MinWidth = 160, VerticalAlignment = System.Windows.VerticalAlignment.Center };
+        _scopeBox.Items.Add(ScopeSheet);
+        if (selection.HasValue) _scopeBox.Items.Add(ScopeSelection);
+        _scopeBox.SelectedIndex = 0;
+        _scopeBox.SelectionChanged += ScopeBox_SelectionChanged;
+        topBar.Children.Add(_scopeBox);
+
+        root.Children.Add(topBar);
+
+        // ── Bottom button row ──────────────────────────────────────────────────
+        var bottomRow = new StackPanel
+        {
+            Orientation         = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin              = new Thickness(0, 8, 0, 0)
+        };
+        DockPanel.SetDock(bottomRow, Dock.Bottom);
+
+        var okBtn     = new Button { Content = "OK",     Width = 72, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+        var cancelBtn = new Button { Content = "Cancel", Width = 72, Margin = new Thickness(0, 0, 6, 0), IsCancel = true };
+        var applyBtn  = new Button { Content = "Apply",  Width = 72 };
+        okBtn.Click    += OkBtn_Click;
+        applyBtn.Click += ApplyBtn_Click;
+        bottomRow.Children.Add(okBtn);
+        bottomRow.Children.Add(cancelBtn);
+        bottomRow.Children.Add(applyBtn);
+        root.Children.Add(bottomRow);
+
+        // ── Middle toolbar: New / Edit / Delete / reorder ──────────────────────
+        var toolBar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin      = new Thickness(0, 0, 0, 6)
+        };
+        DockPanel.SetDock(toolBar, Dock.Bottom);
+
+        var newBtn   = new Button { Content = "New Rule",    Width = 90, Margin = new Thickness(0, 0, 6, 0) };
+        _editBtn     = new Button { Content = "Edit Rule",   Width = 90, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        _deleteBtn   = new Button { Content = "Delete Rule", Width = 90, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
+        _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
+        _moveDownBtn = new Button { Content = "▼", Width = 32, IsEnabled = false };
+
+        newBtn.Click       += NewRule_Click;
+        _editBtn.Click     += EditRule_Click;
+        _deleteBtn.Click   += DeleteRule_Click;
+        _moveUpBtn.Click   += MoveUp_Click;
+        _moveDownBtn.Click += MoveDown_Click;
+
+        toolBar.Children.Add(newBtn);
+        toolBar.Children.Add(_editBtn);
+        toolBar.Children.Add(_deleteBtn);
+        toolBar.Children.Add(_moveUpBtn);
+        toolBar.Children.Add(_moveDownBtn);
+        root.Children.Add(toolBar);
+
+        // ── ListView ───────────────────────────────────────────────────────────
+        _listView = new ListView
+        {
+            ItemsSource   = _rules,
+            SelectionMode = SelectionMode.Single
+        };
+        _listView.SelectionChanged += ListView_SelectionChanged;
+
+        var gridView = new GridView();
+
+        // Column 1 — priority number (#)
+        var priorityCol = new GridViewColumn
+        {
+            Header = "#",
+            Width  = 30,
+            DisplayMemberBinding = new Binding("Priority")
+        };
+        gridView.Columns.Add(priorityCol);
+
+        // Column 2 — rule description (custom cell template)
+        var descCol = new GridViewColumn { Header = "Rule (Type)", Width = 200 };
+        var descTemplate = new DataTemplate();
+        var descFactory  = new FrameworkElementFactory(typeof(TextBlock));
+        descFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new RuleDescriptionConverter() });
+        descFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        descTemplate.VisualTree = descFactory;
+        descCol.CellTemplate = descTemplate;
+        gridView.Columns.Add(descCol);
+
+        // Column 3 — format preview (colored rectangle)
+        var fmtCol = new GridViewColumn { Header = "Format", Width = 60 };
+        var fmtTemplate = new DataTemplate();
+        var rectFactory  = new FrameworkElementFactory(typeof(Rectangle));
+        rectFactory.SetValue(Rectangle.WidthProperty, 40.0);
+        rectFactory.SetValue(Rectangle.HeightProperty, 14.0);
+        rectFactory.SetValue(Rectangle.MarginProperty, new Thickness(0, 2, 0, 2));
+        rectFactory.SetBinding(Rectangle.FillProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
+        fmtTemplate.VisualTree = rectFactory;
+        fmtCol.CellTemplate = fmtTemplate;
+        gridView.Columns.Add(fmtCol);
+
+        // Column 4 — AppliesTo range
+        var appliesToCol = new GridViewColumn { Header = "Applies To", Width = 130 };
+        var appliesToTemplate = new DataTemplate();
+        var appliesToFactory  = new FrameworkElementFactory(typeof(TextBlock));
+        appliesToFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new AppliesToConverter() });
+        appliesToFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        appliesToTemplate.VisualTree = appliesToFactory;
+        appliesToCol.CellTemplate = appliesToTemplate;
+        gridView.Columns.Add(appliesToCol);
+
+        _listView.View = gridView;
+        root.Children.Add(_listView);
+
+        Content = root;
+
+        // ── Initial load ───────────────────────────────────────────────────────
+        PopulateRules();
+    }
+
+    // ── Scope selector ─────────────────────────────────────────────────────────
+
+    private void ScopeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        PopulateRules();
+    }
+
+    private void PopulateRules()
+    {
+        _rules.Clear();
+        bool filterToSelection = _selection.HasValue
+            && _scopeBox.SelectedItem is string s
+            && s == ScopeSelection;
+
+        var source = filterToSelection
+            ? _sheet.ConditionalFormats.Where(r => RangesOverlap(r.AppliesTo, _selection!.Value))
+            : (IEnumerable<ConditionalFormat>)_sheet.ConditionalFormats;
+
+        var priority = 1;
+        foreach (var rule in source)
+        {
+            // Work on a shallow clone so we don't mutate the live sheet until OK/Apply
+            var copy = CloneWithPriority(rule, priority++);
+            _rules.Add(copy);
+        }
+    }
+
+    // ── Toolbar button handlers ────────────────────────────────────────────────
+
+    private void NewRule_Click(object sender, RoutedEventArgs e)
+    {
+        var defaultRange = _selection ?? _sheet.ConditionalFormats
+            .Select(r => (GridRange?)r.AppliesTo)
+            .FirstOrDefault() ?? new GridRange(
+                new CellAddress(_sheet.Id, 1, 1),
+                new CellAddress(_sheet.Id, 1, 1));
+
+        var dlg = new ConditionalFormatDialog("Greater Than", defaultRange) { Owner = this };
+        if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
+        {
+            var copy = CloneWithPriority(newRule, _rules.Count + 1);
+            _rules.Add(copy);
+            _listView.SelectedItem = copy;
+        }
+    }
+
+    private void EditRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+
+        var dlg = new ConditionalFormatDialog(selected) { Owner = this };
+        if (dlg.ShowDialog() == true && dlg.ResultRule is { } edited)
+        {
+            var idx  = _rules.IndexOf(selected);
+            var copy = CloneWithPriority(edited, idx + 1);
+            _rules[idx] = copy;
+            _listView.SelectedItem = copy;
+        }
+    }
+
+    private void DeleteRule_Click(object sender, RoutedEventArgs e)
+    {
+        if (_listView.SelectedItem is not ConditionalFormat selected) return;
+        _rules.Remove(selected);
+        ReassignPriorities();
+    }
+
+    private void MoveUp_Click(object sender, RoutedEventArgs e)
+    {
+        var idx = _rules.IndexOf(_listView.SelectedItem as ConditionalFormat ?? default!);
+        if (idx <= 0) return;
+        (_rules[idx - 1], _rules[idx]) = (_rules[idx], _rules[idx - 1]);
+        _listView.SelectedIndex = idx - 1;
+        ReassignPriorities();
+    }
+
+    private void MoveDown_Click(object sender, RoutedEventArgs e)
+    {
+        var idx = _rules.IndexOf(_listView.SelectedItem as ConditionalFormat ?? default!);
+        if (idx < 0 || idx >= _rules.Count - 1) return;
+        (_rules[idx + 1], _rules[idx]) = (_rules[idx], _rules[idx + 1]);
+        _listView.SelectedIndex = idx + 1;
+        ReassignPriorities();
+    }
+
+    private void ListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        bool hasSelection = _listView.SelectedItem is not null;
+        _editBtn.IsEnabled   = hasSelection;
+        _deleteBtn.IsEnabled = hasSelection;
+
+        var idx = _listView.SelectedIndex;
+        _moveUpBtn.IsEnabled   = hasSelection && idx > 0;
+        _moveDownBtn.IsEnabled = hasSelection && idx < _rules.Count - 1;
+    }
+
+    // ── OK / Apply ─────────────────────────────────────────────────────────────
+
+    private void OkBtn_Click(object sender, RoutedEventArgs e)
+    {
+        CommitResult();
+        DialogResult = true;
+    }
+
+    private void ApplyBtn_Click(object sender, RoutedEventArgs e)
+    {
+        CommitResult();
+    }
+
+    private void CommitResult()
+    {
+        ReassignPriorities();
+        ResultRules = [.. _rules];
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private void ReassignPriorities()
+    {
+        // ObservableCollection items are mutable objects — create new copies with updated priority
+        for (var i = 0; i < _rules.Count; i++)
+        {
+            var r = _rules[i];
+            if (r.Priority != i + 1)
+                _rules[i] = CloneWithPriority(r, i + 1);
+        }
+    }
+
+    private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority)
+    {
+        var cf = new ConditionalFormat
+        {
+            // preserve Id
+            Id            = src.Id,
+            AppliesTo     = src.AppliesTo,
+            Priority      = priority,
+            RuleType      = src.RuleType,
+            Operator      = src.Operator,
+            Value1        = src.Value1,
+            Value2        = src.Value2,
+            FormatIfTrue  = src.FormatIfTrue?.Clone(),
+            MinColor      = src.MinColor,
+            MidColor      = src.MidColor,
+            MaxColor      = src.MaxColor,
+            UseThreeColorScale = src.UseThreeColorScale,
+            DataBarColor  = src.DataBarColor,
+            AboveAverage  = src.AboveAverage,
+            FormulaText   = src.FormulaText,
+            StopIfTrue    = src.StopIfTrue,
+        };
+        return cf;
+    }
+
+    private static bool RangesOverlap(GridRange a, GridRange b)
+    {
+        if (a.Start.Sheet != b.Start.Sheet) return false;
+        return a.Start.Row <= b.End.Row && a.End.Row >= b.Start.Row
+            && a.Start.Col <= b.End.Col && a.End.Col >= b.Start.Col;
+    }
+
+    // ── Public static helpers (usable by value converters below) ───────────────
+
+    public static string DescribeRule(ConditionalFormat cf) => cf.RuleType switch
+    {
+        CfRuleType.Formula     => $"Formula: ={cf.FormulaText}",
+        CfRuleType.DataBar     => "Data Bar",
+        CfRuleType.ColorScale  => "Color Scale",
+        CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
+        CfRuleType.Top10       => cf.AboveAverage ? "Top 10" : "Bottom 10",
+        CfRuleType.CellValue   => BuildCellValueDescription(cf),
+        _ => cf.RuleType.ToString()
+    };
+
+    private static string BuildCellValueDescription(ConditionalFormat cf)
+    {
+        var op = cf.Operator switch
+        {
+            CfOperator.GreaterThan        => ">",
+            CfOperator.LessThan           => "<",
+            CfOperator.Equal              => "=",
+            CfOperator.NotEqual           => "<>",
+            CfOperator.GreaterThanOrEqual => ">=",
+            CfOperator.LessThanOrEqual    => "<=",
+            CfOperator.Between            => "between",
+            CfOperator.NotBetween         => "not between",
+            _ => "?"
+        };
+
+        if (cf.Operator is CfOperator.Between or CfOperator.NotBetween)
+            return $"Cell Value {op} {cf.Value1} and {cf.Value2}";
+
+        return $"Cell Value {op} {cf.Value1}";
+    }
+
+    public static Brush PreviewBrush(ConditionalFormat cf)
+    {
+        if (cf.FormatIfTrue?.FillColor is { } fc)
+            return new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
+        return Brushes.LightGray;
+    }
+
+    public static string AppliesToString(GridRange r)
+    {
+        var sc = CellAddress.NumberToColumnName(r.Start.Col);
+        var ec = CellAddress.NumberToColumnName(r.End.Col);
+        return $"${sc}${r.Start.Row}:${ec}${r.End.Row}";
+    }
+}
+
+// ── Value converters used by the GridView cell templates ──────────────────────
+
+internal sealed class RuleDescriptionConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.DescribeRule(cf) : "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+internal sealed class PreviewBrushConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewBrush(cf) : Brushes.LightGray;
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.AppliesToString(cf.AppliesTo) : "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => throw new NotSupportedException();
+}

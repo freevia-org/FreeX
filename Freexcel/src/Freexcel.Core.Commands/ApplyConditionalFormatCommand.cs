@@ -106,3 +106,43 @@ public sealed class ClearConditionalFormatsCommand : IWorkbookCommand
             rules.Insert(Math.Min(index, rules.Count), rule);
     }
 }
+
+/// <summary>
+/// Atomically replaces all conditional formatting rules on a sheet.
+/// Used by the Manage Rules dialog to commit reordering, edits, and deletions as one undo step.
+/// </summary>
+public sealed class ReplaceAllConditionalFormatsCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly IReadOnlyList<ConditionalFormat> _newRules;
+    private List<ConditionalFormat>? _previousRules;
+
+    public string Label => "Manage Conditional Formatting Rules";
+
+    public ReplaceAllConditionalFormatsCommand(SheetId sheetId, IReadOnlyList<ConditionalFormat> newRules)
+    {
+        _sheetId = sheetId;
+        _newRules = newRules;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _previousRules = [.. sheet.ConditionalFormats];
+        sheet.ConditionalFormats.Clear();
+        sheet.ConditionalFormats.AddRange(_newRules);
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousRules is null) return;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (sheet is null) return;
+        sheet.ConditionalFormats.Clear();
+        sheet.ConditionalFormats.AddRange(_previousRules);
+    }
+}
