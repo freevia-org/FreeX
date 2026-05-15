@@ -2715,6 +2715,7 @@ public static class BuiltInFunctions
 
         // Collect all numeric values from remaining args, respecting hidden-row exclusion
         var nums = new List<double>();
+        int countaCount = 0;
         for (int i = 1; i < args.Count; i++)
         {
             if (args[i] is ErrorValue ei) return ei;
@@ -2726,26 +2727,29 @@ public static class BuiltInFunctions
                     if (skipHidden && ctx.IsRowHidden(absRow)) continue;
                     for (int c = 0; c < rv.ColCount; c++)
                     {
-                        if (rv.Cells[r, c] is NumberValue nv) nums.Add(nv.Value);
+                        var cell = rv.Cells[r, c];
+                        if (cell is NumberValue nv) nums.Add(nv.Value);
+                        if (cell is not BlankValue && cell is not ErrorValue) countaCount++;
                     }
                 }
             }
             else if (args[i] is NumberValue nv2)
             {
                 nums.Add(nv2.Value);
+                countaCount++;
             }
         }
 
         if (nums.Count == 0 && baseFunc != 2 && baseFunc != 3)
-            return baseFunc is 4 or 5 ? ErrorValue.Value : new NumberValue(0);
+            return new NumberValue(0);
 
         return baseFunc switch
         {
             1  => new NumberValue(nums.Count == 0 ? 0 : nums.Average()),
             2  => new NumberValue(nums.Count),
-            3  => new NumberValue(nums.Count),  // COUNTA — simplified: counts numeric values collected
-            4  => nums.Count == 0 ? ErrorValue.Value : new NumberValue(nums.Max()),
-            5  => nums.Count == 0 ? ErrorValue.Value : new NumberValue(nums.Min()),
+            3  => new NumberValue(countaCount),
+            4  => new NumberValue(nums.Count == 0 ? 0 : nums.Max()),
+            5  => new NumberValue(nums.Count == 0 ? 0 : nums.Min()),
             6  => new NumberValue(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (acc, x) => acc * x)),
             7  => nums.Count < 2 ? ErrorValue.DivByZero : new NumberValue(SubtotalStdDevS(nums)),
             8  => nums.Count == 0 ? new NumberValue(0) : new NumberValue(SubtotalStdDevP(nums)),

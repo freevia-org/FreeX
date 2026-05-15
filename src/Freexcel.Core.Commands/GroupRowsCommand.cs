@@ -9,11 +9,14 @@ public sealed class GroupRowsCommand : IWorkbookCommand
     private readonly uint _startRow, _endRow;
     private readonly int _level;
     private Dictionary<uint, int>? _previousLevels;
+    private HashSet<uint>? _previouslyHiddenByGroup;
 
     public string Label => _level > 0 ? "Group Rows" : "Ungroup Rows";
 
     public GroupRowsCommand(SheetId sheetId, uint startRow, uint endRow, int level)
     {
+        if (level is < 0 or > 8)
+            throw new ArgumentOutOfRangeException(nameof(level), "Outline level must be 0–8.");
         _sheetId  = sheetId;
         _startRow = startRow;
         _endRow   = endRow;
@@ -26,12 +29,17 @@ public sealed class GroupRowsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } p) return p;
 
         _previousLevels = [];
+        _previouslyHiddenByGroup = [];
         for (uint r = _startRow; r <= _endRow; r++)
         {
             sheet.RowOutlineLevels.TryGetValue(r, out var prev);
             _previousLevels[r] = prev;
             if (_level == 0)
+            {
                 sheet.RowOutlineLevels.Remove(r);
+                if (sheet.GroupHiddenRows.Remove(r))
+                    _previouslyHiddenByGroup.Add(r);
+            }
             else
                 sheet.RowOutlineLevels[r] = _level;
         }
@@ -49,6 +57,9 @@ public sealed class GroupRowsCommand : IWorkbookCommand
             else
                 sheet.RowOutlineLevels[row] = prev;
         }
+        if (_previouslyHiddenByGroup is not null)
+            foreach (var r in _previouslyHiddenByGroup)
+                sheet.GroupHiddenRows.Add(r);
     }
 }
 
