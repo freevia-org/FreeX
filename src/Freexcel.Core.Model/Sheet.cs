@@ -273,7 +273,8 @@ public sealed class Sheet
     }
 
     /// <summary>
-    /// Returns true if any non-anchor cell in the proposed spill range is occupied by user data.
+    /// Returns true if any non-anchor cell in the proposed spill range is occupied by user data
+    /// or by a spill value from a different anchor.
     /// </summary>
     public bool IsSpillBlocked(CellAddress anchor, int rows, int cols)
     {
@@ -281,8 +282,9 @@ public sealed class Sheet
             for (int c = 0; c < cols; c++)
             {
                 if (r == 0 && c == 0) continue;
-                if (_cells.ContainsKey((anchor.Row + (uint)r, anchor.Col + (uint)c)))
-                    return true;
+                var key = (anchor.Row + (uint)r, anchor.Col + (uint)c);
+                if (_cells.ContainsKey(key)) return true;
+                if (_spillValues.ContainsKey(key)) return true;
             }
         return false;
     }
