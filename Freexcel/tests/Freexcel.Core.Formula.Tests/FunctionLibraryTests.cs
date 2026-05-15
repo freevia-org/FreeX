@@ -1638,4 +1638,24 @@ public class FunctionLibraryTests
         var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
         result.Should().Be(new NumberValue(60));
     }
+
+    [Fact]
+    public void Subtotal_FuncNum3_CountaIncludesTextCells()
+    {
+        // COUNTA should count text cells too, not just numbers
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("hello")),
+            (2, 1, new NumberValue(42)));
+        // row 3 is blank (not set)
+        var result = _eval.Evaluate("=SUBTOTAL(3,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum4_EmptyRange_ReturnsZero()
+    {
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=SUBTOTAL(4,B1:B3)", sheet);
+        result.Should().Be(new NumberValue(0));
+    }
 }

@@ -108,4 +108,41 @@ public class GroupCommandTests
         sheet.GroupHiddenCols.Should().NotContain(2);
         sheet.IsColEffectivelyHidden(2).Should().BeFalse();
     }
+
+    [Fact]
+    public void UngroupRows_WhileCollapsed_ShowsRows()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+        sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
+
+        new GroupRowsCommand(sheet.Id, 2, 4, 0).Apply(ctx);
+
+        sheet.IsRowEffectivelyHidden(3).Should().BeFalse();
+        sheet.RowOutlineLevels.Should().NotContainKey(3);
+    }
+
+    [Fact]
+    public void UngroupRows_WhileCollapsed_Revert_RestoresGroupAndHiddenState()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+
+        var ungroupCmd = new GroupRowsCommand(sheet.Id, 2, 4, 0);
+        ungroupCmd.Apply(ctx);
+        ungroupCmd.Revert(ctx);
+
+        sheet.RowOutlineLevels[3].Should().Be(1);
+        sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
+    }
+
+    [Fact]
+    public void GroupRows_InvalidLevel_Throws()
+    {
+        var (_, sheet, _) = Setup();
+        var act = () => new GroupRowsCommand(sheet.Id, 1, 3, 9);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }
