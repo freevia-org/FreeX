@@ -120,6 +120,9 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Text rotation in degrees: 0 = normal, 90 = rotated up, -90 = rotated down, 255 = vertical stacked.</summary>
     public int TextRotation { get; set; }
 
+    /// <summary>Whether the cell is locked when worksheet protection is enabled.</summary>
+    public bool Locked { get; set; } = true;
+
     /// <summary>Returns a fresh default-valued instance.</summary>
     public static readonly CellStyle Default = new();
 
@@ -145,6 +148,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         DoubleUnderline = DoubleUnderline,
         IndentLevel = IndentLevel,
         TextRotation = TextRotation,
+        Locked = Locked,
     };
 
     /// <inheritdoc/>
@@ -173,7 +177,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && WrapText == other.WrapText
             && DoubleUnderline == other.DoubleUnderline
             && IndentLevel == other.IndentLevel
-            && TextRotation == other.TextRotation;
+            && TextRotation == other.TextRotation
+            && Locked == other.Locked;
     }
 
     /// <inheritdoc/>
@@ -199,6 +204,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(DoubleUnderline);
         h.Add(IndentLevel);
         h.Add(TextRotation);
+        h.Add(Locked);
         return h.ToHashCode();
     }
 }
@@ -227,6 +233,7 @@ public record StyleDiff(
     CellBorder? BorderRight     = null,
     CellBorder? BorderBottom    = null,
     CellBorder? BorderLeft      = null,
+    bool? Locked                = null,
     bool? ClearFill             = null   // true → set FillColor to null
 )
 {
@@ -250,7 +257,8 @@ public record StyleDiff(
         BorderTop:       style.BorderTop,
         BorderRight:     style.BorderRight,
         BorderBottom:    style.BorderBottom,
-        BorderLeft:      style.BorderLeft
+        BorderLeft:      style.BorderLeft,
+        Locked:          style.Locked
     );
 
     /// <summary>Apply this diff to a base style, returning a new style with only non-null fields overridden.</summary>
@@ -277,6 +285,7 @@ public record StyleDiff(
         if (BorderRight    is not null) s.BorderRight   = BorderRight.Value;
         if (BorderBottom   is not null) s.BorderBottom  = BorderBottom.Value;
         if (BorderLeft     is not null) s.BorderLeft    = BorderLeft.Value;
+        if (Locked         is not null) s.Locked        = Locked.Value;
         return s;
     }
 }

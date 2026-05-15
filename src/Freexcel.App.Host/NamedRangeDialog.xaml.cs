@@ -84,7 +84,14 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         var cmd = new DefineNamedRangeCommand(name, range);
-        _commandBus.Execute(_workbook.Id, cmd);
+        var outcome = _commandBus.Execute(_workbook.Id, cmd);
+        if (!outcome.Success)
+        {
+            MessageBox.Show(outcome.ErrorMessage ?? "Could not define named range.",
+                "Named Range", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         RefreshList();
     }
 

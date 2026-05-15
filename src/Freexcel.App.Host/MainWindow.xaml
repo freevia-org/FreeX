@@ -263,6 +263,7 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
 
+
                         <!-- ▌Clipboard ▌ -->
                         <Grid>
                             <Grid.RowDefinitions>
@@ -593,7 +594,7 @@
                         <!-- ▌Links / Text / Symbols ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <UniformGrid Grid.Row="0" Rows="3" Columns="2" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Link"      Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
                                         local:RibbonTooltip.Title="Insert Link"
                                         local:RibbonTooltip.Description="Insert a hyperlink to a web page, file, or location in the workbook."/>
@@ -603,8 +604,17 @@
                                 <Button Content="Symbol"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert Symbol"
                                         local:RibbonTooltip.Description="Insert a special character or symbol at the cursor position."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Symbols" Style="{StaticResource GroupLbl}"/></Border>
+                                <Button Content="Picture"   Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
+                                        local:RibbonTooltip.Title="Insert Picture"
+                                        local:RibbonTooltip.Description="Insert a picture from a local image file."/>
+                                <Button Content="Pic Size"  Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Picture Size"
+                                        local:RibbonTooltip.Description="Resize the selected or most recent picture."/>
+                                <Button Content="Rotate"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureRotateBtn_Click"
+                                        local:RibbonTooltip.Title="Rotate Picture"
+                                        local:RibbonTooltip.Description="Rotate the selected or most recent picture."/>
+                            </UniformGrid>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Objects" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -644,15 +654,36 @@
                         <!-- ▌Arrange ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <UniformGrid Grid.Row="0" Rows="2" Columns="2" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Bring Forward" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
                                         local:RibbonTooltip.Title="Bring Forward"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the front."/>
                                 <Button Content="Send Backward" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
                                         local:RibbonTooltip.Title="Send Backward"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the back."/>
-                            </StackPanel>
+                                <Button Content="Size" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Object Size"
+                                        local:RibbonTooltip.Description="Resize the selected or most recent drawing object."/>
+                                <Button Content="Rotate" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                        local:RibbonTooltip.Title="Rotate Object"
+                                        local:RibbonTooltip.Description="Rotate the selected or most recent drawing object."/>
+                            </UniformGrid>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Arrange" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- â–ŒFormat â–Œ -->
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Fill" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectFillBtn_Click"
+                                        local:RibbonTooltip.Title="Object Fill"
+                                        local:RibbonTooltip.Description="Change the fill color of the selected drawing object."/>
+                                <Button Content="Outline" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectOutlineBtn_Click"
+                                        local:RibbonTooltip.Title="Object Outline"
+                                        local:RibbonTooltip.Description="Change the outline color of the selected drawing object."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Format" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
                     </StackPanel>
@@ -667,6 +698,30 @@
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
+
+                        <!-- Themes -->
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Themes"
+                                        local:RibbonTooltip.Description="Deferred: full workbook theme colors, fonts, and effects require a theme model."/>
+                                <Button Content="Colors" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Theme Colors"
+                                        local:RibbonTooltip.Description="Deferred: theme palette editing is not implemented yet."/>
+                                <Button Content="Fonts" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Theme Fonts"
+                                        local:RibbonTooltip.Description="Deferred: theme font pairs are not implemented yet."/>
+                                <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Theme Effects"
+                                        local:RibbonTooltip.Description="Deferred: theme effect sets are not implemented yet."/>
+                                <Button Content="Background" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Background"
+                                        local:RibbonTooltip.Description="Deferred: worksheet background images are not implemented yet."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Themes" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Page Setup ▌ -->
                         <Grid>
@@ -715,6 +770,21 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
+                                <Button Content="Scale" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
+                                        local:RibbonTooltip.Title="Scale to Fit"
+                                        local:RibbonTooltip.Description="Scale printed output by percentage or fit it to a fixed page count."/>
+                                <Button Content="Breaks" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreaksBtn_Click"
+                                        local:RibbonTooltip.Title="Breaks"
+                                        local:RibbonTooltip.Description="Insert or clear manual page breaks for printing."/>
+                                <Button Content="Print Titles" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PrintTitlesBtn_Click"
+                                        local:RibbonTooltip.Title="Print Titles"
+                                        local:RibbonTooltip.Description="Repeat selected rows or columns on every printed page."/>
+                                <Button Content="Header/Footer" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HeaderFooterBtn_Click"
+                                        local:RibbonTooltip.Title="Header &amp; Footer"
+                                        local:RibbonTooltip.Description="Edit printed page headers and footers."/>
+                                <Button Content="Page Setup" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSetupDialogBtn_Click"
+                                        local:RibbonTooltip.Title="Page Setup"
+                                        local:RibbonTooltip.Description="Open the Page Setup dialog for page, margin, and sheet print options."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Page Setup" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -976,12 +1046,20 @@
                         <!-- ▌Proofing ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <Button Grid.Row="0" Content="Spelling" Width="70" Height="46"
-                                    Style="{StaticResource RibbonBtn}" FontSize="12"
-                                    VerticalAlignment="Center" Margin="1,2,1,0"
-                                    Click="SpellCheckBtn_Click"
-                                    local:RibbonTooltip.Title="Spelling"
-                                    local:RibbonTooltip.Description="Check the spelling of text in the active sheet."/>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Spelling" Width="104" Height="22"
+                                        Style="{StaticResource RibbonBtn}" FontSize="12"
+                                        Margin="1,1"
+                                        Click="SpellCheckBtn_Click"
+                                        local:RibbonTooltip.Title="Spelling"
+                                        local:RibbonTooltip.Description="Check the spelling of text in the active sheet."/>
+                                <Button Content="Workbook Stats" Width="104" Height="22"
+                                        Style="{StaticResource RibbonBtn}" FontSize="12"
+                                        Margin="1,1"
+                                        Click="WorkbookStatisticsBtn_Click"
+                                        local:RibbonTooltip.Title="Workbook Statistics"
+                                        local:RibbonTooltip.Description="Show workbook counts for sheets, cells, formulas, comments, and objects."/>
+                            </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Proofing" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
@@ -1027,9 +1105,9 @@
                                 <Button Content="Allow Edit Ranges" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
                                         local:RibbonTooltip.Title="Allow Edit Ranges"
                                         local:RibbonTooltip.Description="Allow specific ranges to remain editable when the sheet is protected."/>
-                                <Button Content="Share Workbook"    Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
-                                        local:RibbonTooltip.Title="Share Workbook"
-                                        local:RibbonTooltip.Description="Share the workbook with other users for collaboration."/>
+                                <Button Content="Share (Excluded)" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
+                                        local:RibbonTooltip.Title="Share Excluded"
+                                        local:RibbonTooltip.Description="Microsoft 365 Share and cloud co-authoring are excluded; save the file and share it outside Freexcel."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Protect" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1048,6 +1126,26 @@
                     <StackPanel Orientation="Horizontal">
 
                         <!-- ▌Show ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Normal" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
+                                        local:RibbonTooltip.Title="Normal"
+                                        local:RibbonTooltip.Description="Show the worksheet in the standard editing view."/>
+                                <Button Content="Page Break Preview" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreakPreviewBtn_Click"
+                                        local:RibbonTooltip.Title="Page Break Preview"
+                                        local:RibbonTooltip.Description="Show manual page breaks and print area boundaries while editing."/>
+                                <Button Content="Page Layout" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutViewBtn_Click"
+                                        local:RibbonTooltip.Title="Page Layout"
+                                        local:RibbonTooltip.Description="Show the sheet with print layout boundaries."/>
+                                <Button Content="Custom Views" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CustomViewsBtn_Click"
+                                        local:RibbonTooltip.Title="Custom Views"
+                                        local:RibbonTooltip.Description="View, add, show, and delete saved workbook views."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Workbook Views" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
@@ -1076,6 +1174,9 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
+                                <Button Content="Split" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SplitViewBtn_Click"
+                                        local:RibbonTooltip.Title="Split"
+                                        local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Freeze Panes" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1240,12 +1341,14 @@
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
                                             CornerRadius="3,3,0,0" Padding="10,3"
+                                            Background="{Binding TabBrush}"
                                             Cursor="Hand"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
+                                            MouseMove="SheetTab_MouseMove"
+                                            MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
                                             MouseRightButtonDown="SheetTab_MouseRightButtonDown">
                                         <Border.Style>
                                             <Style TargetType="Border">
-                                                <Setter Property="Background"       Value="Transparent"/>
                                                 <Setter Property="BorderBrush"      Value="#D0D0D0"/>
                                                 <Setter Property="BorderThickness"  Value="1"/>
                                                 <Setter Property="Margin"           Value="2,0,0,0"/>
@@ -1256,6 +1359,10 @@
                                                         <Setter Property="BorderThickness" Value="0,0,0,3"/>
                                                         <Setter Property="Margin"          Value="2,-1,0,0"/>
                                                     </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                        <Setter Property="BorderBrush"     Value="#217346"/>
+                                                        <Setter Property="Background"      Value="#E8F5EC"/>
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
@@ -1263,7 +1370,15 @@
                                             <ContextMenu>
                                                 <MenuItem Header="Rename…"         Click="SheetCtxRename_Click"/>
                                                 <MenuItem Header="Insert Sheet"    Click="SheetCtxInsert_Click"/>
+                                                <MenuItem Header="Duplicate"       Click="SheetCtxDuplicate_Click"/>
                                                 <MenuItem Header="Delete Sheet"    Click="SheetCtxDelete_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Hide"            Click="SheetCtxHide_Click"/>
+                                                <MenuItem Header="Unhide…"         Click="SheetCtxUnhide_Click"/>
+                                                <MenuItem Header="Tab Color…"      Click="SheetCtxTabColor_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Select All Sheets" Click="SheetCtxSelectAllSheets_Click"/>
+                                                <MenuItem Header="Ungroup Sheets"    Click="SheetCtxUngroupSheets_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Move Left"       Click="SheetCtxMoveLeft_Click"/>
                                                 <MenuItem Header="Move Right"      Click="SheetCtxMoveRight_Click"/>

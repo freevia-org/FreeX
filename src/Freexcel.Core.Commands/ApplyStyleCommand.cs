@@ -11,7 +11,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly StyleDiff _diff;
-    private List<(CellAddress Address, StyleId OldStyleId)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
 
     public string Label => "Apply Style";
 
@@ -25,19 +25,21 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
         _snapshot = [];
 
         foreach (var addr in _range.AllCells())
         {
             var cell = sheet.GetCell(addr);
+            _snapshot.Add((addr, cell?.Clone()));
 
             if (cell is null)
             {
                 cell = Cell.FromValue(BlankValue.Instance);
                 sheet.SetCell(addr, cell);
             }
-
-            _snapshot.Add((addr, cell.StyleId));
 
             var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
             var newStyle  = _diff.ApplyTo(baseStyle);
@@ -51,11 +53,12 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldStyleId) in _snapshot)
+        foreach (var (addr, oldCell) in _snapshot)
         {
-            var cell = sheet.GetCell(addr);
-            if (cell is not null)
-                cell.StyleId = oldStyleId;
+            if (oldCell is null)
+                sheet.ClearCell(addr);
+            else
+                sheet.SetCell(addr, oldCell.Clone());
         }
     }
 }

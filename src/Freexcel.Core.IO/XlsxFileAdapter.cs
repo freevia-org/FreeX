@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using Freexcel.Core.Model;
 
@@ -14,12 +16,28 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     public Workbook Load(Stream stream)
     {
-        using var xlWorkbook = new XLWorkbook(stream);
+        using var packageStream = new MemoryStream();
+        stream.CopyTo(packageStream);
+
+        packageStream.Position = 0;
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
+
+        packageStream.Position = 0;
+        using var xlWorkbook = new XLWorkbook(packageStream);
         var workbook = new Workbook("Untitled");
+        workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
+            ? WorkbookCalculationMode.Manual
+            : WorkbookCalculationMode.Automatic;
 
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
             var sheet = workbook.AddSheet(xlSheet.Name);
+            sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
+            if (xlSheet.TabColor.HasValue)
+            {
+                var color = xlSheet.TabColor.Color;
+                sheet.TabColor = new CellColor(color.R, color.G, color.B);
+            }
 
             foreach (var xlCell in xlSheet.CellsUsed())
             {
@@ -47,18 +65,173 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
-            foreach (var row in xlSheet.RowsUsed())
+            foreach (var xlCell in xlSheet.CellsUsed(XLCellsUsedOptions.All))
+            {
+                try
+                {
+                    var comment = xlCell.GetComment();
+                    if (comment.Length == 0) continue;
+
+                    var addr = new CellAddress(sheet.Id, (uint)xlCell.Address.RowNumber, (uint)xlCell.Address.ColumnNumber);
+                    sheet.Comments[addr] = comment.Text;
+                }
+                catch
+                {
+                    // Skip cells without comments or comments ClosedXML cannot expose.
+                }
+            }
+
+            foreach (var hyperlink in xlSheet.Hyperlinks)
+            {
+                try
+                {
+                    var cell = hyperlink.Cell;
+                    if (cell is null) continue;
+
+                    var target = hyperlink.ExternalAddress?.ToString() ??
+                                 hyperlink.InternalAddress ??
+                                 string.Empty;
+                    if (string.IsNullOrEmpty(target)) continue;
+
+                    var addr = new CellAddress(sheet.Id, (uint)cell.Address.RowNumber, (uint)cell.Address.ColumnNumber);
+                    sheet.Hyperlinks[addr] = target;
+                }
+                catch
+                {
+                    // Skip hyperlinks ClosedXML cannot expose.
+                }
+            }
+
+            foreach (var row in xlSheet.RowsUsed(XLCellsUsedOptions.AllFormats))
+            {
+                var rowNumber = (uint)row.RowNumber();
                 if (row.Height > 0)
-                    sheet.RowHeights[(uint)row.RowNumber()] = row.Height * (96.0 / 72.0);
+                    sheet.RowHeights[rowNumber] = row.Height * (96.0 / 72.0);
+                if (row.IsHidden)
+                    sheet.HiddenRows.Add(rowNumber);
+            }
 
-            foreach (var col in xlSheet.ColumnsUsed())
+            foreach (var col in xlSheet.ColumnsUsed(XLCellsUsedOptions.AllFormats))
+            {
+                var colNumber = (uint)col.ColumnNumber();
                 if (col.Width > 0)
-                    sheet.ColumnWidths[(uint)col.ColumnNumber()] = col.Width;
+                    sheet.ColumnWidths[colNumber] = col.Width;
+                if (col.IsHidden)
+                    sheet.HiddenCols.Add(colNumber);
+            }
 
-            if (xlSheet.SheetView.SplitRow > 0)
-                sheet.FrozenRows = (uint)xlSheet.SheetView.SplitRow;
-            if (xlSheet.SheetView.SplitColumn > 0)
-                sheet.FrozenCols = (uint)xlSheet.SheetView.SplitColumn;
+            if (sheetXmlLayout.TryGetValue(xlSheet.Name, out var layout))
+            {
+                sheet.HiddenRows.UnionWith(layout.HiddenRows);
+                sheet.HiddenCols.UnionWith(layout.HiddenCols);
+                sheet.IsProtected = layout.IsProtected;
+                sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+            }
+
+            if (layout?.PaneState is "frozen" or "frozenSplit")
+            {
+                sheet.FrozenRows = layout.PaneRowSplit ?? 0;
+                sheet.FrozenCols = layout.PaneColumnSplit ?? 0;
+            }
+            else
+            {
+                var splitRow = xlSheet.SheetView.SplitRow > 0
+                    ? (uint)xlSheet.SheetView.SplitRow
+                    : layout?.PaneRowSplit;
+                var splitColumn = xlSheet.SheetView.SplitColumn > 0
+                    ? (uint)xlSheet.SheetView.SplitColumn
+                    : layout?.PaneColumnSplit;
+                if (splitRow > 0)
+                    sheet.SplitRow = splitRow;
+                if (splitColumn > 0)
+                    sheet.SplitColumn = splitColumn;
+            }
+
+            try { LoadPrintArea(xlSheet, sheet); }
+            catch { /* ignore print-area load failures */ }
+
+            sheet.PageOrientation = xlSheet.PageSetup.PageOrientation == XLPageOrientation.Landscape
+                ? WorksheetPageOrientation.Landscape
+                : WorksheetPageOrientation.Portrait;
+            sheet.PaperSize = xlSheet.PageSetup.PaperSize switch
+            {
+                XLPaperSize.LetterPaper => WorksheetPaperSize.Letter,
+                XLPaperSize.LegalPaper => WorksheetPaperSize.Legal,
+                _ => WorksheetPaperSize.A4
+            };
+            sheet.PageMargins = new WorksheetPageMargins(
+                xlSheet.PageSetup.Margins.Left,
+                xlSheet.PageSetup.Margins.Right,
+                xlSheet.PageSetup.Margins.Top,
+                xlSheet.PageSetup.Margins.Bottom);
+            sheet.HeaderMargin = xlSheet.PageSetup.Margins.Header;
+            sheet.FooterMargin = xlSheet.PageSetup.Margins.Footer;
+            sheet.PrintGridlines = xlSheet.PageSetup.ShowGridlines;
+            sheet.PrintHeadings = xlSheet.PageSetup.ShowRowAndColumnHeadings;
+            sheet.CenterHorizontallyOnPage = xlSheet.PageSetup.CenterHorizontally;
+            sheet.CenterVerticallyOnPage = xlSheet.PageSetup.CenterVertically;
+            sheet.PageOrder = xlSheet.PageSetup.PageOrder == XLPageOrderValues.OverThenDown
+                ? WorksheetPageOrder.OverThenDown
+                : WorksheetPageOrder.DownThenOver;
+            sheet.FirstPageNumber = xlSheet.PageSetup.FirstPageNumber == 0
+                ? null
+                : xlSheet.PageSetup.FirstPageNumber;
+            sheet.PrintBlackAndWhite = xlSheet.PageSetup.BlackAndWhite;
+            sheet.PrintDraftQuality = xlSheet.PageSetup.DraftQuality;
+            sheet.PrintQualityDpi = xlSheet.PageSetup.HorizontalDpi > 0
+                ? xlSheet.PageSetup.HorizontalDpi
+                : xlSheet.PageSetup.VerticalDpi > 0 ? xlSheet.PageSetup.VerticalDpi : null;
+            sheet.PrintErrorValue = FromXlsxPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
+            sheet.PrintComments = FromXlsxPrintComments(xlSheet.PageSetup.ShowComments);
+            sheet.DifferentFirstPageHeaderFooter = xlSheet.PageSetup.DifferentFirstPageOnHF;
+            sheet.DifferentOddEvenHeaderFooter = xlSheet.PageSetup.DifferentOddEvenPagesOnHF;
+            sheet.HeaderFooterScaleWithDocument = xlSheet.PageSetup.ScaleHFWithDocument;
+            sheet.HeaderFooterAlignWithMargins = xlSheet.PageSetup.AlignHFWithMargins;
+            sheet.PageHeader = new WorksheetHeaderFooter(
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
+            sheet.PageFooter = new WorksheetHeaderFooter(
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
+            sheet.FirstPageHeader = new WorksheetHeaderFooter(
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.FirstPage)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.FirstPage)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.FirstPage)));
+            sheet.FirstPageFooter = new WorksheetHeaderFooter(
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.FirstPage)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.FirstPage)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.FirstPage)));
+            sheet.EvenPageHeader = new WorksheetHeaderFooter(
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.EvenPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.EvenPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.EvenPages)));
+            sheet.EvenPageFooter = new WorksheetHeaderFooter(
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.EvenPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.EvenPages)),
+                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.EvenPages)));
+            if (xlSheet.PageSetup.FirstRowToRepeatAtTop > 0 && xlSheet.PageSetup.LastRowToRepeatAtTop > 0)
+            {
+                sheet.PrintTitleRows = new WorksheetRepeatRange(
+                    (uint)xlSheet.PageSetup.FirstRowToRepeatAtTop,
+                    (uint)xlSheet.PageSetup.LastRowToRepeatAtTop);
+            }
+            if (xlSheet.PageSetup.FirstColumnToRepeatAtLeft > 0 && xlSheet.PageSetup.LastColumnToRepeatAtLeft > 0)
+            {
+                sheet.PrintTitleColumns = new WorksheetRepeatRange(
+                    (uint)xlSheet.PageSetup.FirstColumnToRepeatAtLeft,
+                    (uint)xlSheet.PageSetup.LastColumnToRepeatAtLeft);
+            }
+            foreach (var rowBreak in xlSheet.PageSetup.RowBreaks)
+                if (rowBreak > 0) sheet.RowPageBreaks.Add((uint)rowBreak);
+            foreach (var columnBreak in xlSheet.PageSetup.ColumnBreaks)
+                if (columnBreak > 0) sheet.ColumnPageBreaks.Add((uint)columnBreak);
+            sheet.ScaleToFit = xlSheet.PageSetup.PagesWide > 0 || xlSheet.PageSetup.PagesTall > 0
+                ? new WorksheetScaleToFit(null,
+                    xlSheet.PageSetup.PagesWide > 0 ? xlSheet.PageSetup.PagesWide : null,
+                    xlSheet.PageSetup.PagesTall > 0 ? xlSheet.PageSetup.PagesTall : null)
+                : new WorksheetScaleToFit(xlSheet.PageSetup.Scale, null, null);
 
             // Load CellIs conditional format rules (best-effort; skip anything we can't map)
             try { LoadConditionalFormats(xlSheet, sheet, workbook); }
@@ -79,6 +252,150 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return workbook;
     }
+
+    private sealed record SheetXmlLayout(
+        HashSet<uint> HiddenRows,
+        HashSet<uint> HiddenCols,
+        bool IsProtected,
+        string? ProtectionPasswordHash,
+        string? PaneState,
+        uint? PaneRowSplit,
+        uint? PaneColumnSplit);
+
+    private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
+    {
+        var result = new Dictionary<string, SheetXmlLayout>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+            if (workbookEntry is null || relsEntry is null)
+                return result;
+
+            var workbookXml = LoadXml(workbookEntry);
+            var relsXml = LoadXml(relsEntry);
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var relTargets = relsXml.Root?
+                .Elements(packageRelNs + "Relationship")
+                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
+                .ToDictionary(
+                    e => e.Attribute("Id")!.Value,
+                    e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                    StringComparer.OrdinalIgnoreCase)
+                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+            {
+                var name = sheetElement.Attribute("name")?.Value;
+                var relId = sheetElement.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
+                    continue;
+                if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                    continue;
+
+                var worksheetEntry = archive.GetEntry(worksheetPath);
+                if (worksheetEntry is null)
+                    continue;
+
+                result[name] = ReadHiddenSheetLayout(worksheetEntry);
+            }
+        }
+        catch
+        {
+            // Worksheet XML metadata is best-effort; ClosedXML still loads workbook content.
+        }
+
+        return result;
+    }
+
+    private static XDocument LoadXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static string NormalizeWorkbookTarget(string target)
+    {
+        target = target.Replace('\\', '/').TrimStart('/');
+        return target.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+            ? target
+            : $"xl/{target}";
+    }
+
+    private static SheetXmlLayout ReadHiddenSheetLayout(ZipArchiveEntry worksheetEntry)
+    {
+        var hiddenRows = new HashSet<uint>();
+        var hiddenCols = new HashSet<uint>();
+        var worksheetXml = LoadXml(worksheetEntry);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        foreach (var row in worksheetXml.Descendants(worksheetNs + "row"))
+        {
+            if (!IsTruthy(row.Attribute("hidden")?.Value))
+                continue;
+            if (uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
+                hiddenRows.Add(rowNumber);
+        }
+
+        foreach (var col in worksheetXml.Descendants(worksheetNs + "col"))
+        {
+            if (!IsTruthy(col.Attribute("hidden")?.Value))
+                continue;
+            if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
+                continue;
+            if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
+                continue;
+
+            for (var colNumber = min; colNumber <= max; colNumber++)
+                hiddenCols.Add(colNumber);
+        }
+
+        var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
+        var isProtected = IsTruthy(protection?.Attribute("sheet")?.Value);
+        var passwordHash =
+            protection?.Attribute("password")?.Value ??
+            protection?.Attribute("hashValue")?.Value;
+
+        var pane = worksheetXml.Root?
+            .Element(worksheetNs + "sheetViews")?
+            .Elements(worksheetNs + "sheetView")
+            .FirstOrDefault()?
+            .Element(worksheetNs + "pane");
+
+        return new SheetXmlLayout(
+            hiddenRows,
+            hiddenCols,
+            isProtected,
+            passwordHash,
+            pane?.Attribute("state")?.Value,
+            ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
+            ParsePaneSplit(pane?.Attribute("xSplit")?.Value));
+    }
+
+    private static uint? ParsePaneSplit(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (uint.TryParse(value, out var integer))
+            return integer;
+
+        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var floating) &&
+            floating > 0 &&
+            floating <= uint.MaxValue)
+            return (uint)Math.Round(floating);
+
+        return null;
+    }
+
+    private static bool IsTruthy(string? value) =>
+        value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     private static void LoadNamedRanges(XLWorkbook xlWorkbook, Workbook workbook)
     {
@@ -117,10 +434,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
     public void Save(Workbook workbook, Stream stream)
     {
         using var xlWorkbook = new XLWorkbook();
+        xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
+            ? XLCalculateMode.Manual
+            : XLCalculateMode.Auto;
 
         foreach (var sheet in workbook.Sheets)
         {
             var xlSheet = xlWorkbook.Worksheets.Add(sheet.Name);
+            xlSheet.Visibility = sheet.IsHidden ? XLWorksheetVisibility.Hidden : XLWorksheetVisibility.Visible;
+            if (sheet.TabColor is { } tabColor)
+                xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
             foreach (var pair in sheet.GetUsedCells())
             {
@@ -148,11 +471,126 @@ public sealed class XlsxFileAdapter : IFileAdapter
             foreach (var (rowNum, height) in sheet.RowHeights)
                 xlSheet.Row((int)rowNum).Height = height * (72.0 / 96.0);
 
+            foreach (var rowNum in sheet.HiddenRows)
+                xlSheet.Row((int)rowNum).Hide();
+
             foreach (var (colNum, width) in sheet.ColumnWidths)
                 xlSheet.Column((int)colNum).Width = width;
 
+            foreach (var colNum in sheet.HiddenCols)
+                xlSheet.Column((int)colNum).Hide();
+
+            foreach (var (address, commentText) in sheet.Comments)
+            {
+                try
+                {
+                    xlSheet.Cell((int)address.Row, (int)address.Col)
+                        .CreateComment()
+                        .AddText(commentText);
+                }
+                catch
+                {
+                    // Skip comments ClosedXML cannot serialize.
+                }
+            }
+
+            foreach (var (address, target) in sheet.Hyperlinks)
+            {
+                try
+                {
+                    xlSheet.Cell((int)address.Row, (int)address.Col)
+                        .SetHyperlink(new XLHyperlink(target));
+                }
+                catch
+                {
+                    // Skip hyperlinks ClosedXML cannot serialize.
+                }
+            }
+
             if (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
                 xlSheet.SheetView.Freeze((int)sheet.FrozenRows, (int)sheet.FrozenCols);
+
+            if (sheet.PrintArea is { } printArea)
+            {
+                xlSheet.PageSetup.PrintAreas.Clear();
+                xlSheet.PageSetup.PrintAreas.Add(
+                    (int)printArea.Start.Row,
+                    (int)printArea.Start.Col,
+                    (int)printArea.End.Row,
+                    (int)printArea.End.Col);
+            }
+
+            xlSheet.PageSetup.PageOrientation = sheet.PageOrientation == WorksheetPageOrientation.Landscape
+                ? XLPageOrientation.Landscape
+                : XLPageOrientation.Portrait;
+            xlSheet.PageSetup.PaperSize = sheet.PaperSize switch
+            {
+                WorksheetPaperSize.Letter => XLPaperSize.LetterPaper,
+                WorksheetPaperSize.Legal => XLPaperSize.LegalPaper,
+                _ => XLPaperSize.A4Paper
+            };
+            xlSheet.PageSetup.Margins.Left = sheet.PageMargins.Left;
+            xlSheet.PageSetup.Margins.Right = sheet.PageMargins.Right;
+            xlSheet.PageSetup.Margins.Top = sheet.PageMargins.Top;
+            xlSheet.PageSetup.Margins.Bottom = sheet.PageMargins.Bottom;
+            xlSheet.PageSetup.Margins.Header = sheet.HeaderMargin;
+            xlSheet.PageSetup.Margins.Footer = sheet.FooterMargin;
+            xlSheet.PageSetup.ShowGridlines = sheet.PrintGridlines;
+            xlSheet.PageSetup.ShowRowAndColumnHeadings = sheet.PrintHeadings;
+            xlSheet.PageSetup.CenterHorizontally = sheet.CenterHorizontallyOnPage;
+            xlSheet.PageSetup.CenterVertically = sheet.CenterVerticallyOnPage;
+            xlSheet.PageSetup.PageOrder = sheet.PageOrder == WorksheetPageOrder.OverThenDown
+                ? XLPageOrderValues.OverThenDown
+                : XLPageOrderValues.DownThenOver;
+            if (sheet.FirstPageNumber is { } firstPageNumber)
+                xlSheet.PageSetup.FirstPageNumber = firstPageNumber;
+            xlSheet.PageSetup.BlackAndWhite = sheet.PrintBlackAndWhite;
+            xlSheet.PageSetup.DraftQuality = sheet.PrintDraftQuality;
+            if (sheet.PrintQualityDpi is { } printQualityDpi)
+            {
+                xlSheet.PageSetup.HorizontalDpi = printQualityDpi;
+                xlSheet.PageSetup.VerticalDpi = printQualityDpi;
+            }
+            xlSheet.PageSetup.PrintErrorValue = ToXlsxPrintErrorValue(sheet.PrintErrorValue);
+            xlSheet.PageSetup.ShowComments = ToXlsxPrintComments(sheet.PrintComments);
+            xlSheet.PageSetup.DifferentFirstPageOnHF = sheet.DifferentFirstPageHeaderFooter;
+            xlSheet.PageSetup.DifferentOddEvenPagesOnHF = sheet.DifferentOddEvenHeaderFooter;
+            xlSheet.PageSetup.ScaleHFWithDocument = sheet.HeaderFooterScaleWithDocument;
+            xlSheet.PageSetup.AlignHFWithMargins = sheet.HeaderFooterAlignWithMargins;
+            SetXlsxHeaderFooter(
+                xlSheet.PageSetup.Header,
+                sheet.PageHeader,
+                sheet.FirstPageHeader,
+                sheet.EvenPageHeader,
+                sheet.DifferentFirstPageHeaderFooter,
+                sheet.DifferentOddEvenHeaderFooter);
+            SetXlsxHeaderFooter(
+                xlSheet.PageSetup.Footer,
+                sheet.PageFooter,
+                sheet.FirstPageFooter,
+                sheet.EvenPageFooter,
+                sheet.DifferentFirstPageHeaderFooter,
+                sheet.DifferentOddEvenHeaderFooter);
+            if (sheet.ScaleToFit.ScalePercent is { } scalePercent)
+                xlSheet.PageSetup.Scale = scalePercent;
+            else if (sheet.ScaleToFit.FitToPagesWide.HasValue || sheet.ScaleToFit.FitToPagesTall.HasValue)
+                xlSheet.PageSetup.FitToPages(sheet.ScaleToFit.FitToPagesWide ?? 1, sheet.ScaleToFit.FitToPagesTall ?? 1);
+            if (sheet.PrintTitleRows is { } titleRows)
+                xlSheet.PageSetup.SetRowsToRepeatAtTop((int)titleRows.Start, (int)titleRows.End);
+            if (sheet.PrintTitleColumns is { } titleColumns)
+                xlSheet.PageSetup.SetColumnsToRepeatAtLeft((int)titleColumns.Start, (int)titleColumns.End);
+            foreach (var rowBreak in sheet.RowPageBreaks)
+                xlSheet.PageSetup.AddHorizontalPageBreak((int)rowBreak);
+            foreach (var columnBreak in sheet.ColumnPageBreaks)
+                xlSheet.PageSetup.AddVerticalPageBreak((int)columnBreak);
+
+            if (sheet.IsProtected)
+            {
+                if (string.IsNullOrEmpty(sheet.ProtectionPassword))
+                    xlSheet.Protect(XLProtectionAlgorithm.Algorithm.SimpleHash);
+                else
+                    xlSheet.Protect(sheet.ProtectionPassword, XLProtectionAlgorithm.Algorithm.SimpleHash);
+            }
 
             // Save CellValue conditional format rules back to XLSX
             SaveConditionalFormats(sheet, xlSheet);
@@ -178,7 +616,101 @@ public sealed class XlsxFileAdapter : IFileAdapter
         try { SaveNamedRanges(workbook, xlWorkbook); }
         catch { /* ignore named-range save failures */ }
 
-        xlWorkbook.SaveAs(stream);
+        using var packageStream = new MemoryStream();
+        xlWorkbook.SaveAs(packageStream);
+
+        if (workbook.Sheets.Any(sheet => sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+                                         (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)))
+        {
+            packageStream.Position = 0;
+            SaveSplitPaneSheetViews(packageStream, workbook);
+        }
+
+        packageStream.Position = 0;
+        packageStream.CopyTo(stream);
+    }
+
+    private static void SaveSplitPaneSheetViews(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        var relsXml = LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relTargets = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
+            .ToDictionary(
+                e => e.Attribute("Id")!.Value,
+                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var splitSheets = workbook.Sheets
+            .Where(sheet => sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+                            (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
+            .ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
+                continue;
+            if (!splitSheets.TryGetValue(name, out var sheet))
+                continue;
+            if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                continue;
+
+            UpdateSplitPaneSheetView(archive, worksheetPath, sheet);
+        }
+    }
+
+    private static void UpdateSplitPaneSheetView(ZipArchive archive, string worksheetPath, Sheet sheet)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadXml(worksheetEntry);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        var sheetViews = root.Element(worksheetNs + "sheetViews");
+        if (sheetViews is null)
+        {
+            sheetViews = new XElement(worksheetNs + "sheetViews");
+            root.AddFirst(sheetViews);
+        }
+
+        var sheetView = sheetViews.Elements(worksheetNs + "sheetView").FirstOrDefault();
+        if (sheetView is null)
+        {
+            sheetView = new XElement(worksheetNs + "sheetView", new XAttribute("workbookViewId", "0"));
+            sheetViews.Add(sheetView);
+        }
+
+        sheetView.Elements(worksheetNs + "pane").Remove();
+        sheetView.AddFirst(new XElement(
+            worksheetNs + "pane",
+            sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", splitColumn) : null,
+            sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", splitRow) : null,
+            new XAttribute("state", "split")));
+
+        worksheetEntry.Delete();
+        var updatedEntry = archive.CreateEntry(worksheetPath);
+        using var stream = updatedEntry.Open();
+        worksheetXml.Save(stream);
     }
 
     private static ScalarValue MapValue(XLCellValue xlValue)
@@ -264,6 +796,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 _ => VerticalAlignment.Bottom,
             },
             WrapText = xlStyle.Alignment.WrapText,
+            Locked = xlStyle.Protection.Locked,
         };
     }
 
@@ -356,6 +889,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (style.NumberFormat != def.NumberFormat)
             xlCell.Style.NumberFormat.Format = style.NumberFormat;
+
+        if (style.Locked != def.Locked)
+            xlCell.Style.Protection.Locked = style.Locked;
     }
 
     // ── Conditional formatting load ────────────────────────────────────────────
@@ -374,7 +910,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                 var startA1 = range.Start.ToA1();
                 var endA1   = range.End.ToA1();
-                var addr    = $"'{sheet.Name}'!{startA1}:{endA1}";
+                var sheetName = sheet.Name.Replace("'", "''");
+                var addr    = $"'{sheetName}'!{startA1}:{endA1}";
 
                 xlWorkbook.DefinedNames.Add(name, addr);
             }
@@ -383,6 +920,23 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 // Skip any named range that can't be serialized
             }
         }
+    }
+
+    private static void LoadPrintArea(IXLWorksheet xlSheet, Sheet sheet)
+    {
+        var xlRange = xlSheet.PageSetup.PrintAreas.FirstOrDefault();
+        if (xlRange is null)
+            return;
+
+        var start = new CellAddress(
+            sheet.Id,
+            (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
+            (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
+        var end = new CellAddress(
+            sheet.Id,
+            (uint)xlRange.RangeAddress.LastAddress.RowNumber,
+            (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
+        sheet.PrintArea = new GridRange(start, end);
     }
 
     private static void LoadConditionalFormats(IXLWorksheet xlSheet, Sheet sheet, Workbook workbook)
@@ -666,6 +1220,104 @@ public sealed class XlsxFileAdapter : IFileAdapter
             case DvOperator.LessThanOrEqual:    rule.EqualOrLessThan(f1); break;
         }
     }
+
+    private static void SetXlsxHeaderFooter(
+        IXLHeaderFooter target,
+        WorksheetHeaderFooter oddOrAllPages,
+        WorksheetHeaderFooter firstPage,
+        WorksheetHeaderFooter evenPages,
+        bool differentFirstPage,
+        bool differentOddEvenPages)
+    {
+        foreach (var occurrence in new[]
+                 {
+                     XLHFOccurrence.AllPages,
+                     XLHFOccurrence.OddPages,
+                     XLHFOccurrence.EvenPages,
+                     XLHFOccurrence.FirstPage
+                 })
+        {
+            target.Left.Clear(occurrence);
+            target.Center.Clear(occurrence);
+            target.Right.Clear(occurrence);
+        }
+
+        var primaryOccurrence = differentOddEvenPages ? XLHFOccurrence.OddPages : XLHFOccurrence.AllPages;
+        AddXlsxHeaderFooterText(target, oddOrAllPages, primaryOccurrence);
+        if (differentFirstPage)
+            AddXlsxHeaderFooterText(target, firstPage, XLHFOccurrence.FirstPage);
+        if (differentOddEvenPages)
+            AddXlsxHeaderFooterText(target, evenPages, XLHFOccurrence.EvenPages);
+    }
+
+    private static void AddXlsxHeaderFooterText(
+        IXLHeaderFooter target,
+        WorksheetHeaderFooter value,
+        XLHFOccurrence occurrence)
+    {
+        if (!string.IsNullOrEmpty(value.Left))
+            target.Left.AddText(ToXlsxHeaderFooterText(value.Left), occurrence);
+        if (!string.IsNullOrEmpty(value.Center))
+            target.Center.AddText(ToXlsxHeaderFooterText(value.Center), occurrence);
+        if (!string.IsNullOrEmpty(value.Right))
+            target.Right.AddText(ToXlsxHeaderFooterText(value.Right), occurrence);
+    }
+
+    private static string GetXlsxHeaderFooterText(IXLHFItem item, params XLHFOccurrence[] occurrences)
+    {
+        foreach (var occurrence in occurrences)
+        {
+            var text = item.GetText(occurrence);
+            if (!string.IsNullOrEmpty(text))
+                return text;
+        }
+
+        return "";
+    }
+
+    private static string ToXlsxHeaderFooterText(string text) =>
+        text
+            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
+            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase);
+
+    private static string FromXlsxHeaderFooterText(string text) =>
+        text
+            .Replace("&P", "&[Page]", StringComparison.Ordinal)
+            .Replace("&N", "&[Pages]", StringComparison.Ordinal);
+
+    private static XLPrintErrorValues ToXlsxPrintErrorValue(WorksheetPrintErrorValue value) =>
+        value switch
+        {
+            WorksheetPrintErrorValue.Blank => XLPrintErrorValues.Blank,
+            WorksheetPrintErrorValue.Dash => XLPrintErrorValues.Dash,
+            WorksheetPrintErrorValue.NotAvailable => XLPrintErrorValues.NA,
+            _ => XLPrintErrorValues.Displayed
+        };
+
+    private static WorksheetPrintErrorValue FromXlsxPrintErrorValue(XLPrintErrorValues value) =>
+        value switch
+        {
+            XLPrintErrorValues.Blank => WorksheetPrintErrorValue.Blank,
+            XLPrintErrorValues.Dash => WorksheetPrintErrorValue.Dash,
+            XLPrintErrorValues.NA => WorksheetPrintErrorValue.NotAvailable,
+            _ => WorksheetPrintErrorValue.Displayed
+        };
+
+    private static XLShowCommentsValues ToXlsxPrintComments(WorksheetPrintComments value) =>
+        value switch
+        {
+            WorksheetPrintComments.AtEnd => XLShowCommentsValues.AtEnd,
+            WorksheetPrintComments.AsDisplayed => XLShowCommentsValues.AsDisplayed,
+            _ => XLShowCommentsValues.None
+        };
+
+    private static WorksheetPrintComments FromXlsxPrintComments(XLShowCommentsValues value) =>
+        value switch
+        {
+            XLShowCommentsValues.AtEnd => WorksheetPrintComments.AtEnd,
+            XLShowCommentsValues.AsDisplayed => WorksheetPrintComments.AsDisplayed,
+            _ => WorksheetPrintComments.None
+        };
 
     private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch
     {

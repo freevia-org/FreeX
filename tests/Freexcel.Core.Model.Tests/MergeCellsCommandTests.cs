@@ -108,6 +108,21 @@ public class MergeCellsCommandTests
         sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(range);
     }
 
+    [Fact]
+    public void UnmergeRevert_DoesNotCreateRegionWhenApplyDidNothing()
+    {
+        var (_, sheet, ctx) = Setup();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+
+        var cmd = new UnmergeCellsCommand(sheet.Id, range);
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        sheet.MergedRegions.Should().BeEmpty();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

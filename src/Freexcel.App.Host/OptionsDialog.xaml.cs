@@ -41,6 +41,7 @@ public partial class OptionsDialog : Window
         // Formulas
         OptCalcAuto.IsChecked   =  _opts.AutoCalculate;
         OptCalcManual.IsChecked = !_opts.AutoCalculate;
+        OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
 
         // Save
@@ -69,6 +70,7 @@ public partial class OptionsDialog : Window
             DefaultSheetCount = int.TryParse(OptSheetCount.Text, out var sc) && sc is >= 1 and <= 255 ? sc : _opts.DefaultSheetCount,
             UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
             AutoCalculate     = OptCalcAuto.IsChecked == true,
+            UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
         };
         opts.Save();

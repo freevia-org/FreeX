@@ -168,8 +168,8 @@
                                    FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
 
-                        <CheckBox x:Name="OptR1C1" Content="Use R1C1 reference style (not yet implemented)"
-                                  FontSize="12" IsEnabled="False" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="OptR1C1" Content="Use R1C1 reference style"
+                                  FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox x:Name="OptFormulasAutocomplete"
                                   Content="Enable AutoComplete for cell values"
                                   FontSize="12" Margin="0,0,0,4"/>

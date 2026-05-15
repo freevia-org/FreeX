@@ -20,6 +20,8 @@ public sealed class MergeCellsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
 
         foreach (var existing in sheet.MergedRegions)
         {
@@ -68,6 +70,7 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
+    private bool _removed;
 
     public string Label => "Unmerge Cells";
 
@@ -80,14 +83,21 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.MergedRegions.Remove(_range);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _removed = sheet.MergedRegions.Remove(_range);
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
+        if (!_removed)
+            return;
+
         var sheet = ctx.GetSheet(_sheetId);
         if (!sheet.MergedRegions.Contains(_range))
             sheet.MergedRegions.Add(_range);
+        _removed = false;
     }
 }

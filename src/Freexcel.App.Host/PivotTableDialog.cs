@@ -24,7 +24,7 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(new TextBlock
         {
             Text = "PivotTable will be created on a new sheet.\n\n" +
-                   "(Full PivotTable builder coming in a future release.)",
+                   "(PivotTable creation is excluded from Freexcel v1.)",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
