@@ -455,6 +455,12 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            if (e.Key == Key.E && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                TryFlashFill();
+                e.Handled = true;
+                return;
+            }
             if ((e.Key == Key.D5 || e.Key == Key.NumPad5) && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 ApplyFontToggleShortcut(FontToggleShortcut.Strikethrough, StrikeButton);
@@ -3584,6 +3590,52 @@ public partial class MainWindow : Window
         if (!TryExecuteEditCells(edits, "Fill Series", out var outcome))
             return;
         RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
+        UpdateViewport();
+    }
+
+    private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();
+
+    private void TryFlashFill()
+    {
+        var range = SheetGrid.SelectedRange;
+        if (range is null) return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        uint fillCol = range.Value.Start.Col;
+        uint sourceCol = fillCol > 1 ? fillCol - 1 : fillCol + 1;
+        uint startRow = range.Value.Start.Row;
+        uint endRow = range.Value.End.Row;
+
+        // If selection is a single cell, auto-extend end row to the data region
+        if (startRow == endRow)
+        {
+            // Extend down to the last non-blank row in either the fill or source column
+            uint maxRow = startRow;
+            for (uint r = startRow + 1; r <= CellAddress.MaxRow; r++)
+            {
+                var fillVal = sheet.GetValue(r, fillCol);
+                var srcVal = sheet.GetValue(r, sourceCol);
+                if (fillVal is BlankValue && srcVal is BlankValue)
+                    break;
+                maxRow = r;
+            }
+            endRow = maxRow;
+        }
+
+        var cmd = new FlashFillCommand(_currentSheetId, fillCol, sourceCol, startRow, endRow);
+        if (!TryExecuteCommand(cmd, "Flash Fill", out var outcome))
+            return;
+
+        if (!outcome.Success)
+        {
+            MessageBox.Show(outcome.ErrorMessage ?? "Flash Fill could not detect a pattern.",
+                "Flash Fill", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
