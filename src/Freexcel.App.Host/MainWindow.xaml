@@ -518,6 +518,16 @@
                                         <TextBlock Text="Replace" VerticalAlignment="Center" FontSize="10"/>
                                     </StackPanel>
                                 </Button>
+                                <Button x:Name="FlashFillMenuItem" Width="72" Height="22" Margin="1,1"
+                                        Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
+                                        local:RibbonTooltip.Title="Flash Fill"
+                                        local:RibbonTooltip.Description="Automatically fill values based on a pattern you type. Ctrl+E">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <TextBlock Text="Flash Fill" VerticalAlignment="Center" FontSize="10"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Editing" Style="{StaticResource GroupLbl}"/>
