@@ -228,7 +228,7 @@ public static class BuiltInFunctions
         ["N"]        = (NFunc, 1, 1),
     };
 
-    private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN"];
+    private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "INDIRECT"];
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);
@@ -2452,8 +2452,7 @@ public static class BuiltInFunctions
         if (i == 0 || i >= cellRef.Length) return false;
         string colStr = cellRef[..i].ToUpperInvariant();
         if (!uint.TryParse(cellRef[i..], out row)) return false;
-        col = 0;
-        foreach (char c in colStr) col = col * 26 + (uint)(c - 'A' + 1);
+        col = CellAddress.ColumnNameToNumber(colStr);
         return row > 0 && col > 0;
     }
 
