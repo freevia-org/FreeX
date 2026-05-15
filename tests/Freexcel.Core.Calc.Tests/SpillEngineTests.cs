@@ -74,6 +74,7 @@ public class SpillEngineTests
         var evaluator = new FormulaEvaluator();
         var engine    = new RecalcEngine(graph, evaluator);
         var wb        = new Workbook();
+        wb.AddSheet("Sheet1");
         return (engine, wb);
     }
 

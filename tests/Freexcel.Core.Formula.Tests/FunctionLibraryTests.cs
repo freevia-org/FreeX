@@ -1403,4 +1403,42 @@ public class FunctionLibraryTests
 
     [Fact] public void N_True_ReturnsOne() =>
         _eval.Evaluate("=N(TRUE)", MakeSheet()).Should().Be(new NumberValue(1));
+
+    // ── SEQUENCE ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Sequence_3Rows_ReturnsColumnVector()
+    {
+        var result = _eval.Evaluate("=SEQUENCE(3)", MakeSheet());
+        result.Should().BeOfType<RangeValue>();
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(3);
+        rv.ColCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 0].Should().Be(new NumberValue(2));
+        rv.Cells[2, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Sequence_2x3_ReturnsMatrix()
+    {
+        var result = _eval.Evaluate("=SEQUENCE(2,3)", MakeSheet());
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(3);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[0, 2].Should().Be(new NumberValue(3));
+        rv.Cells[1, 0].Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Sequence_WithStartAndStep_CountsByTwos()
+    {
+        var result = _eval.Evaluate("=SEQUENCE(4,1,0,2)", MakeSheet());
+        var rv = (RangeValue)result;
+        rv.Cells[0, 0].Should().Be(new NumberValue(0));
+        rv.Cells[1, 0].Should().Be(new NumberValue(2));
+        rv.Cells[2, 0].Should().Be(new NumberValue(4));
+        rv.Cells[3, 0].Should().Be(new NumberValue(6));
+    }
 }
