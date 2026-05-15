@@ -292,8 +292,12 @@ public sealed class FormulaEvaluator
 
     private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)
     {
-        uint r0 = range.Start.Row, c0 = range.Start.ColumnNumber;
-        uint r1 = range.End.Row,   c1 = range.End.ColumnNumber;
+        // Normalize so r0 ≤ r1 and c0 ≤ c1 — Excel accepts B5:A1 and treats it as A1:B5.
+        // Without this, uint subtraction wraps and produces a negative dimension.
+        uint r0 = Math.Min(range.Start.Row, range.End.Row);
+        uint r1 = Math.Max(range.Start.Row, range.End.Row);
+        uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
         int rows = (int)(r1 - r0 + 1);
         int cols = (int)(c1 - c0 + 1);
         var cells = new ScalarValue[rows, cols];

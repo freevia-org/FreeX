@@ -106,6 +106,13 @@ public sealed class RecalcEngine
                 cell.Value = new ErrorValue(ex.ErrorCode);
                 errors.Add((addr, ex.ErrorCode));
             }
+            catch (Exception)
+            {
+                // Defensive: any unhandled exception from the evaluator (e.g. inverted range,
+                // overflow) must not crash the app — surface it as #VALUE! instead.
+                cell.Value = ErrorValue.Value;
+                errors.Add((addr, "#VALUE!"));
+            }
         }
 
         return new RecalcReport(recalculated, errors, plan.CyclicCells);
