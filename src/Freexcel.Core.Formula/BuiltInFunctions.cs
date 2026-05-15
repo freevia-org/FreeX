@@ -233,6 +233,9 @@ public static class BuiltInFunctions
         ["FILTER"]   = (Filter, 2, 3),
         ["SORT"]     = (Sort, 1, 4),
         ["UNIQUE"]   = (Unique, 1, 3),
+
+        // ── Subtotal ─────────────────────────────────────────────────────────
+        ["SUBTOTAL"] = (Subtotal, 2, 255),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "INDIRECT"];
@@ -2698,6 +2701,75 @@ public static class BuiltInFunctions
             return new RangeValue(result);
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SUBTOTAL
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Subtotal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        int funcNum = (int)ToNumber(args[0]);
+        bool skipHidden = funcNum >= 101;
+        int baseFunc = funcNum > 100 ? funcNum - 100 : funcNum;
+
+        // Collect all numeric values from remaining args, respecting hidden-row exclusion
+        var nums = new List<double>();
+        for (int i = 1; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue ei) return ei;
+            if (args[i] is RangeValue rv)
+            {
+                for (int r = 0; r < rv.RowCount; r++)
+                {
+                    uint absRow = rv.StartRow + (uint)r;
+                    if (skipHidden && ctx.IsRowHidden(absRow)) continue;
+                    for (int c = 0; c < rv.ColCount; c++)
+                    {
+                        if (rv.Cells[r, c] is NumberValue nv) nums.Add(nv.Value);
+                    }
+                }
+            }
+            else if (args[i] is NumberValue nv2)
+            {
+                nums.Add(nv2.Value);
+            }
+        }
+
+        if (nums.Count == 0 && baseFunc != 2 && baseFunc != 3)
+            return baseFunc is 4 or 5 ? ErrorValue.Value : new NumberValue(0);
+
+        return baseFunc switch
+        {
+            1  => new NumberValue(nums.Count == 0 ? 0 : nums.Average()),
+            2  => new NumberValue(nums.Count),
+            3  => new NumberValue(nums.Count),  // COUNTA — simplified: counts numeric values collected
+            4  => nums.Count == 0 ? ErrorValue.Value : new NumberValue(nums.Max()),
+            5  => nums.Count == 0 ? ErrorValue.Value : new NumberValue(nums.Min()),
+            6  => new NumberValue(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (acc, x) => acc * x)),
+            7  => nums.Count < 2 ? ErrorValue.DivByZero : new NumberValue(SubtotalStdDevS(nums)),
+            8  => nums.Count == 0 ? new NumberValue(0) : new NumberValue(SubtotalStdDevP(nums)),
+            9  => new NumberValue(nums.Sum()),
+            10 => nums.Count < 2 ? ErrorValue.DivByZero : new NumberValue(SubtotalVarS(nums)),
+            11 => nums.Count == 0 ? new NumberValue(0) : new NumberValue(SubtotalVarP(nums)),
+            _  => ErrorValue.Value
+        };
+    }
+
+    private static double SubtotalVarS(List<double> nums)
+    {
+        double mean = nums.Average();
+        return nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
+    }
+
+    private static double SubtotalVarP(List<double> nums)
+    {
+        double mean = nums.Average();
+        return nums.Sum(x => (x - mean) * (x - mean)) / nums.Count;
+    }
+
+    private static double SubtotalStdDevS(List<double> nums) => Math.Sqrt(SubtotalVarS(nums));
+    private static double SubtotalStdDevP(List<double> nums) => Math.Sqrt(SubtotalVarP(nums));
 }
 
 /// <summary>
@@ -2721,4 +2793,7 @@ public interface IEvalContext
     /// Used by the evaluator to expand cross-sheet named ranges.
     /// </summary>
     string? TryGetSheetName(Model.SheetId sheetId);
+
+    /// <summary>Returns true if the row is hidden (filter, manual, or group collapse).</summary>
+    bool IsRowHidden(uint row);
 }

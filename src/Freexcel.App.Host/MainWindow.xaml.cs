@@ -491,6 +491,18 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            if (e.SystemKey == Key.Right && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
+            {
+                GroupRowsBtn_Click(sender, e);
+                e.Handled = true;
+                return;
+            }
+            if (e.SystemKey == Key.Left && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
+            {
+                UngroupRowsBtn_Click(sender, e);
+                e.Handled = true;
+                return;
+            }
             if (IsCtrlPlus(e))
             {
                 ExecuteKeyboardInsert();
@@ -2029,6 +2041,50 @@ public partial class MainWindow : Window
         if (!TryExecuteCommand(cmd, "Filter"))
             return;
         UpdateViewport();
+    }
+
+    // ── Group / Ungroup handlers ─────────────────────────────────────────────
+
+    private void GroupRowsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+        uint startRow = range.Start.Row;
+        uint endRow   = range.End.Row;
+        // Increment to the highest existing level in the range + 1, min 1, max 8
+        int maxExisting = 0;
+        for (uint r = startRow; r <= endRow; r++)
+        {
+            if (sheet.RowOutlineLevels.TryGetValue(r, out var lvl) && lvl > maxExisting)
+                maxExisting = lvl;
+        }
+        int newLevel = Math.Min(maxExisting + 1, 8);
+        var cmd = new GroupRowsCommand(_currentSheetId, startRow, endRow, newLevel);
+        if (TryExecuteCommand(cmd, "Group Rows"))
+            UpdateViewport();
+    }
+
+    private void UngroupRowsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+        var cmd = new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 0);
+        if (TryExecuteCommand(cmd, "Ungroup Rows"))
+            UpdateViewport();
+    }
+
+    private void CollapseGroupBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var cmd = new CollapseRowGroupCommand(_currentSheetId, 1);
+        if (TryExecuteCommand(cmd, "Collapse Group"))
+            UpdateViewport();
+    }
+
+    private void ExpandGroupBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var cmd = new ExpandRowGroupCommand(_currentSheetId, 1);
+        if (TryExecuteCommand(cmd, "Expand Group"))
+            UpdateViewport();
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
