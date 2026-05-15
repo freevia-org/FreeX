@@ -175,6 +175,7 @@ public static class BuiltInFunctions
         ["WORKDAY"]      = (Workday, 2, 3),
         ["NETWORKDAYS"]  = (Networkdays, 2, 3),
         ["DAYS"]         = (Days, 2, 2),
+        ["DAYS360"]      = (Days360, 2, 3),
         ["YEARFRAC"]     = (Yearfrac, 2, 3),
 
         // ── Phase 4a: Statistical ────────────────────────────────────────────
@@ -1910,6 +1911,17 @@ public static class BuiltInFunctions
         return new NumberValue((endDt - startDt).Days);
     }
 
+    private static ScalarValue Days360(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var startDt = DateTime.FromOADate(ToNumber(args[0])).Date;
+        var endDt   = DateTime.FromOADate(ToNumber(args[1])).Date;
+        bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
+        double days = european ? Days30E360(startDt, endDt) : Days30US360(startDt, endDt);
+        return new NumberValue(Math.Truncate(days));
+    }
+
     private static ScalarValue Yearfrac(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -2199,6 +2211,8 @@ public static class BuiltInFunctions
     private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         double rate = ToNumber(args[0]);
         int    nper = (int)ToNumber(args[1]);
         double pmt  = ToNumber(args[2]);
@@ -2215,6 +2229,8 @@ public static class BuiltInFunctions
     private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         double rate = ToNumber(args[0]);
         int    nper = (int)ToNumber(args[1]);
         double pmt  = ToNumber(args[2]);
@@ -2229,6 +2245,8 @@ public static class BuiltInFunctions
     private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         double rate = ToNumber(args[0]);
         double pmt  = ToNumber(args[1]);
         double pv   = ToNumber(args[2]);
@@ -2327,6 +2345,8 @@ public static class BuiltInFunctions
     private static ScalarValue Sln(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
         double cost    = ToNumber(args[0]);
         double salvage = ToNumber(args[1]);
         double life    = ToNumber(args[2]);
