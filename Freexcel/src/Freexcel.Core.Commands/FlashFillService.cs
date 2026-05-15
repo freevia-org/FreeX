@@ -25,7 +25,9 @@ public static class FlashFillService
             return null;
 
         // Try each pattern in priority order.
-        var patternFn = TryConstant(examples)
+        // Non-nullable patterns are widened to Func<string, string?> for uniform handling.
+        Func<string, string?>? patternFn =
+            TryConstant(examples)
             ?? TryCaseTransform(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
@@ -37,12 +39,19 @@ public static class FlashFillService
         if (patternFn is null)
             return null;
 
-        return remaining.Select(patternFn).ToList();
+        var results = new List<string>(remaining.Count);
+        foreach (var src in remaining)
+        {
+            var filled = patternFn(src);
+            if (filled is null) return null;
+            results.Add(filled);
+        }
+        return results;
     }
 
     // ── Pattern detectors ─────────────────────────────────────────────────────
 
-    private static Func<string, string>? TryConstant(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TryConstant(IReadOnlyList<(string Source, string Expected)> examples)
     {
         // Need at least 2 examples to be confident it's truly a constant and not just
         // some other transform on the single available source value.
@@ -64,7 +73,7 @@ public static class FlashFillService
         return _ => first;
     }
 
-    private static Func<string, string>? TryCaseTransform(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TryCaseTransform(IReadOnlyList<(string Source, string Expected)> examples)
     {
         bool isUpper = examples.All(e => e.Expected == e.Source.ToUpperInvariant());
         if (isUpper)
@@ -81,7 +90,7 @@ public static class FlashFillService
         return null;
     }
 
-    private static Func<string, string>? TryExtractByDelimiter(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TryExtractByDelimiter(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var delimiter in Delimiters)
         {
@@ -140,7 +149,7 @@ public static class FlashFillService
         return null;
     }
 
-    private static Func<string, string>? TryPrefixTrim(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TryPrefixTrim(IReadOnlyList<(string Source, string Expected)> examples)
     {
         // Prefix trim: source = prefix + expected  =>  expected = source without leading prefix
         var first = examples[0];
@@ -168,7 +177,7 @@ public static class FlashFillService
             : s;
     }
 
-    private static Func<string, string>? TrySuffixTrim(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TrySuffixTrim(IReadOnlyList<(string Source, string Expected)> examples)
     {
         var first = examples[0];
         if (first.Source.Length <= first.Expected.Length)
@@ -192,7 +201,7 @@ public static class FlashFillService
             : s;
     }
 
-    private static Func<string, string>? TryPrefixAdd(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TryPrefixAdd(IReadOnlyList<(string Source, string Expected)> examples)
     {
         // Prefix add: expected = prefix + source
         var first = examples[0];
@@ -217,7 +226,7 @@ public static class FlashFillService
         return s => prefix + s;
     }
 
-    private static Func<string, string>? TrySuffixAdd(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TrySuffixAdd(IReadOnlyList<(string Source, string Expected)> examples)
     {
         var first = examples[0];
         // suffix add means: expected = source + suffix
@@ -239,7 +248,7 @@ public static class FlashFillService
         return s => s + suffix;
     }
 
-    private static Func<string, string>? TrySubstring(IReadOnlyList<(string Source, string Expected)> examples)
+    private static Func<string, string?>? TrySubstring(IReadOnlyList<(string Source, string Expected)> examples)
     {
         var first = examples[0];
         int sourceLen = first.Source.Length;
@@ -266,7 +275,7 @@ public static class FlashFillService
 
         return s => s.Length >= startIndex + expectedLen
             ? s.Substring(startIndex, expectedLen)
-            : s;
+            : null;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
