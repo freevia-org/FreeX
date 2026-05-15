@@ -60,8 +60,8 @@ public partial class MainWindow : Window
     private enum PasteMode { All, Values, Formulas, Formats }
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells);
     private InternalClipboard? _internalClipboard;
-    private sealed record ColumnResizeSnapshot(SheetId SheetId, uint Column, bool HadWidth, double Width);
-    private sealed record RowResizeSnapshot(SheetId SheetId, uint Row, bool HadHeight, double Height);
+    private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
+    private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -353,9 +353,15 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
         if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0) return;
 
-        FormulaBar.Text = e.Text;
-        FormulaBar.Focus();
-        FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        if (_selectionAnchor.HasValue)
+        {
+            ShowInlineEditor(_selectionAnchor.Value);
+            if (_inlineEditor != null)
+            {
+                _inlineEditor.Text = e.Text;
+                _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+            }
+        }
         e.Handled = true;
     }
 
@@ -935,14 +941,20 @@ public partial class MainWindow : Window
             EditOverlay.Children.Add(_inlineEditor);
         }
 
-        double cx = colMetric.LeftOffset + Freexcel.App.UI.GridView.RowHeaderWidth;
-        double cy = rowMetric.TopOffset  + Freexcel.App.UI.GridView.ColHeaderHeight;
+        // Cell metrics are in unzoomed coordinates; the EditOverlay is not transformed, so scale.
+        double zoom = _zoomLevel;
+        double cx = (colMetric.LeftOffset + Freexcel.App.UI.GridView.RowHeaderWidth) * zoom;
+        double cy = (rowMetric.TopOffset  + Freexcel.App.UI.GridView.ColHeaderHeight) * zoom;
+        double cellW = colMetric.Width  * zoom;
+        double cellH = rowMetric.Height * zoom;
 
         _inlineEditor.Text = text;
         System.Windows.Controls.Canvas.SetLeft(_inlineEditor, cx - 2);
         System.Windows.Controls.Canvas.SetTop(_inlineEditor,  cy - 2);
-        _inlineEditor.Width  = Math.Max(colMetric.Width  + 4, 60);
-        _inlineEditor.Height = Math.Max(rowMetric.Height + 4, 20);
+        // Allow text to spill rightward — use all space from this cell to the canvas edge
+        double availableWidth = Math.Max(cellW + 4, EditOverlay.ActualWidth - (cx - 2));
+        _inlineEditor.Width  = Math.Max(cellW + 4, Math.Min(availableWidth, 600));
+        _inlineEditor.Height = Math.Max(cellH + 4, 20);
         _inlineEditor.Visibility  = Visibility.Visible;
         EditOverlay.IsHitTestVisible = true;
         _inlineEditor.Focus();
@@ -1325,7 +1337,8 @@ public partial class MainWindow : Window
                 if (violationMsg != null && violatingRule != null)
                 {
                     var dvRule = violatingRule;
-                    if (dvRule.ShowErrorMessage)
+                    var action = DataValidationService.GetInvalidEntryAction(dvRule);
+                    if (action == DataValidationInvalidEntryAction.Block)
                     {
                         var icon = dvRule.AlertStyle switch
                         {
@@ -1333,14 +1346,31 @@ public partial class MainWindow : Window
                             DvAlertStyle.Warning => MessageBoxImage.Warning,
                             _ => MessageBoxImage.Error
                         };
-                        if (dvRule.Type == DvType.List && dvRule.ShowDropdown && !string.IsNullOrEmpty(text))
-                            MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                                MessageBoxButton.OK, icon);
-                        else if (dvRule.Type != DvType.List)
-                            MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
-                                MessageBoxButton.OK, icon);
+                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                            MessageBoxButton.OK, icon);
+                        RefreshValidationDropdown();
+                        return;
                     }
-                    // Still apply the value (soft validation like Excel default warning mode)
+
+                    if (action == DataValidationInvalidEntryAction.AskToContinue)
+                    {
+                        var icon = dvRule.AlertStyle switch
+                        {
+                            DvAlertStyle.Information => MessageBoxImage.Information,
+                            DvAlertStyle.Warning => MessageBoxImage.Warning,
+                            _ => MessageBoxImage.Error
+                        };
+                        var buttons = dvRule.AlertStyle == DvAlertStyle.Information
+                            ? MessageBoxButton.OKCancel
+                            : MessageBoxButton.YesNo;
+                        var result = MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                            buttons, icon);
+                        if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
+                        {
+                            RefreshValidationDropdown();
+                            return;
+                        }
+                    }
                 }
             }
 
@@ -1398,6 +1428,7 @@ public partial class MainWindow : Window
         SheetGrid.TextBoxes = sheet?.TextBoxes;
         SheetGrid.DrawingShapes = sheet?.DrawingShapes;
         SheetGrid.Pictures = sheet?.Pictures;
+        SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null ? null : BuildSparklineValues(sheet);
         SheetGrid.MergedRegions = sheet?.MergedRegions;
@@ -1422,15 +1453,10 @@ public partial class MainWindow : Window
 
     private void UpdateScrollbarMaximums(Sheet? sheet)
     {
-        uint maxRow = 1, maxCol = 1;
-        if (sheet != null)
-            foreach (var (addr, _) in sheet.GetUsedCells())
-            {
-                if (addr.Row > maxRow) maxRow = addr.Row;
-                if (addr.Col > maxCol) maxCol = addr.Col;
-            }
-        VerticalScroll.Maximum   = Math.Max(100, maxRow + 100);
-        HorizontalScroll.Maximum = Math.Max(26,  maxCol + 26);
+        // Use the full Excel grid limits so the increment/decrement arrows are never
+        // disabled just because the cursor is at the last used cell.
+        VerticalScroll.Maximum   = Freexcel.Core.Model.CellAddress.MaxRow;
+        HorizontalScroll.Maximum = Freexcel.Core.Model.CellAddress.MaxCol;
     }
 
     private void UpdateTitleBar()
@@ -2230,8 +2256,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dlg = new DataValidationDialog { Owner = this };
-        if (dlg.ShowDialog() != true || dlg.Result == null) return;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dlg = new DataValidationDialog
+        {
+            Owner = this,
+            SelectionSource = DataValidationService.FormatListSourceRange(range, sheet?.Name, sheet?.Name)
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        if (dlg.ClearRequested)
+        {
+            if (!TryExecuteGroupedSheetCommand(
+                    "Clear Data Validation",
+                    sheetId => new ClearDataValidationCommand(sheetId, RemapRangeToSheet(range, sheetId))))
+                return;
+
+            UpdateViewport();
+            return;
+        }
+
+        if (dlg.Result == null) return;
 
         var dv = dlg.Result;
         dv.AppliesTo = range;
@@ -2773,11 +2817,19 @@ public partial class MainWindow : Window
 
         StatusReadyText.Visibility  = Visibility.Collapsed;
         StatusStatsPanel.Visibility = Visibility.Visible;
-        StatusSumText.Text   = $"Sum: {stats.Sum:N2}";
+        StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {FormatStatusNumber(stats.Average.Value)}" : "";
         StatusCountText.Text = $"Count: {stats.Count}";
-        StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {stats.Average.Value:N2}" : "";
-        StatusMinText.Text   = stats.Min.HasValue ? $"Min: {stats.Min.Value:N2}" : "";
-        StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {stats.Max.Value:N2}" : "";
+        StatusSumText.Text   = $"Sum: {FormatStatusNumber(stats.Sum)}";
+        StatusMinText.Text   = stats.Min.HasValue ? $"Min: {FormatStatusNumber(stats.Min.Value)}" : "";
+        StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {FormatStatusNumber(stats.Max.Value)}" : "";
+    }
+
+    private static string FormatStatusNumber(double value)
+    {
+        // Show integers without decimal places; use comma grouping for large numbers
+        if (value == Math.Floor(value) && Math.Abs(value) < 1e15)
+            return value.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
+        return value.ToString("G10", System.Globalization.CultureInfo.CurrentCulture);
     }
 
     private static string GetReadyStatusText(Sheet sheet, CellAddress activeCell)
@@ -2795,12 +2847,32 @@ public partial class MainWindow : Window
         return $"{prompt.Title}: {prompt.Message}";
     }
 
+    private (uint start, uint end) GetSelectedColRange(uint col)
+    {
+        var sel = SheetGrid.SelectedRange;
+        if (sel.HasValue && col >= sel.Value.Start.Col && col <= sel.Value.End.Col
+            && sel.Value.Start.Col != sel.Value.End.Col)
+            return (sel.Value.Start.Col, sel.Value.End.Col);
+        return (col, col);
+    }
+
+    private (uint start, uint end) GetSelectedRowRange(uint row)
+    {
+        var sel = SheetGrid.SelectedRange;
+        if (sel.HasValue && row >= sel.Value.Start.Row && row <= sel.Value.End.Row
+            && sel.Value.Start.Row != sel.Value.End.Row)
+            return (sel.Value.Start.Row, sel.Value.End.Row);
+        return (row, row);
+    }
+
     private void OnColumnResizing(uint col, double newWidthPx)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        CaptureColumnResizeSnapshot(sheet, col);
-        sheet.ColumnWidths[col] = newWidthPx / 8.0;
+        var (startCol, endCol) = GetSelectedColRange(col);
+        CaptureColumnResizeSnapshot(sheet, startCol, endCol);
+        for (uint c = startCol; c <= endCol; c++)
+            sheet.ColumnWidths[c] = newWidthPx / 8.0;
         UpdateViewport();
     }
 
@@ -2808,9 +2880,12 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        RestoreColumnResizeSnapshot(sheet, col);
+        var (startCol, endCol) = _columnResizeSnapshot is { } snap
+            ? (snap.StartCol, snap.EndCol)
+            : GetSelectedColRange(col);
+        RestoreColumnResizeSnapshot(sheet);
         _columnResizeSnapshot = null;
-        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, col, col, newWidthPx / 8.0)))
+        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, startCol, endCol, newWidthPx / 8.0)))
             return;
         UpdateViewport();
     }
@@ -2819,8 +2894,10 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        CaptureRowResizeSnapshot(sheet, row);
-        sheet.RowHeights[row] = newHeightPx;
+        var (startRow, endRow) = GetSelectedRowRange(row);
+        CaptureRowResizeSnapshot(sheet, startRow, endRow);
+        for (uint r = startRow; r <= endRow; r++)
+            sheet.RowHeights[r] = newHeightPx;
         UpdateViewport();
     }
 
@@ -2828,9 +2905,12 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
-        RestoreRowResizeSnapshot(sheet, row);
+        var (startRow, endRow) = _rowResizeSnapshot is { } snap
+            ? (snap.StartRow, snap.EndRow)
+            : GetSelectedRowRange(row);
+        RestoreRowResizeSnapshot(sheet);
         _rowResizeSnapshot = null;
-        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, row, row, newHeightPx)))
+        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, startRow, endRow, newHeightPx)))
             return;
         UpdateViewport();
     }
@@ -2844,52 +2924,56 @@ public partial class MainWindow : Window
         RefreshStatusBar();
     }
 
-    private void CaptureColumnResizeSnapshot(Sheet sheet, uint col)
+    private void CaptureColumnResizeSnapshot(Sheet sheet, uint startCol, uint endCol)
     {
-        if (_columnResizeSnapshot is not null &&
-            _columnResizeSnapshot.SheetId == sheet.Id &&
-            _columnResizeSnapshot.Column == col)
+        if (_columnResizeSnapshot is { } existing &&
+            existing.SheetId == sheet.Id &&
+            existing.StartCol == startCol && existing.EndCol == endCol)
             return;
 
-        var hadWidth = sheet.ColumnWidths.TryGetValue(col, out var width);
-        _columnResizeSnapshot = new ColumnResizeSnapshot(sheet.Id, col, hadWidth, width);
+        var widths = new Dictionary<uint, (bool, double)>();
+        for (uint c = startCol; c <= endCol; c++)
+        {
+            var had = sheet.ColumnWidths.TryGetValue(c, out var w);
+            widths[c] = (had, w);
+        }
+        _columnResizeSnapshot = new ColumnResizeSnapshot(sheet.Id, startCol, endCol, widths);
     }
 
-    private void RestoreColumnResizeSnapshot(Sheet sheet, uint col)
+    private void RestoreColumnResizeSnapshot(Sheet sheet)
     {
-        if (_columnResizeSnapshot is not { } snapshot ||
-            snapshot.SheetId != sheet.Id ||
-            snapshot.Column != col)
-            return;
-
-        if (snapshot.HadWidth)
-            sheet.ColumnWidths[col] = snapshot.Width;
-        else
-            sheet.ColumnWidths.Remove(col);
+        if (_columnResizeSnapshot is not { } snapshot || snapshot.SheetId != sheet.Id) return;
+        foreach (var (c, (had, w)) in snapshot.Widths)
+        {
+            if (had) sheet.ColumnWidths[c] = w;
+            else sheet.ColumnWidths.Remove(c);
+        }
     }
 
-    private void CaptureRowResizeSnapshot(Sheet sheet, uint row)
+    private void CaptureRowResizeSnapshot(Sheet sheet, uint startRow, uint endRow)
     {
-        if (_rowResizeSnapshot is not null &&
-            _rowResizeSnapshot.SheetId == sheet.Id &&
-            _rowResizeSnapshot.Row == row)
+        if (_rowResizeSnapshot is { } existing &&
+            existing.SheetId == sheet.Id &&
+            existing.StartRow == startRow && existing.EndRow == endRow)
             return;
 
-        var hadHeight = sheet.RowHeights.TryGetValue(row, out var height);
-        _rowResizeSnapshot = new RowResizeSnapshot(sheet.Id, row, hadHeight, height);
+        var heights = new Dictionary<uint, (bool, double)>();
+        for (uint r = startRow; r <= endRow; r++)
+        {
+            var had = sheet.RowHeights.TryGetValue(r, out var h);
+            heights[r] = (had, h);
+        }
+        _rowResizeSnapshot = new RowResizeSnapshot(sheet.Id, startRow, endRow, heights);
     }
 
-    private void RestoreRowResizeSnapshot(Sheet sheet, uint row)
+    private void RestoreRowResizeSnapshot(Sheet sheet)
     {
-        if (_rowResizeSnapshot is not { } snapshot ||
-            snapshot.SheetId != sheet.Id ||
-            snapshot.Row != row)
-            return;
-
-        if (snapshot.HadHeight)
-            sheet.RowHeights[row] = snapshot.Height;
-        else
-            sheet.RowHeights.Remove(row);
+        if (_rowResizeSnapshot is not { } snapshot || snapshot.SheetId != sheet.Id) return;
+        foreach (var (r, (had, h)) in snapshot.Heights)
+        {
+            if (had) sheet.RowHeights[r] = h;
+            else sheet.RowHeights.Remove(r);
+        }
     }
 
     private void ExecuteCopy(bool isCut = false)
@@ -4726,6 +4810,67 @@ public partial class MainWindow : Window
             MessageBoxImage.Information);
     }
 
+    private void BackgroundBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+    }
+
+    private void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Sheet Background",
+            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(dialog.FileName);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            MessageBox.Show($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var background = new WorksheetBackgroundImage(
+            bytes,
+            GetImageContentType(Path.GetExtension(dialog.FileName)),
+            Path.GetFileName(dialog.FileName));
+
+        if (!TryExecuteGroupedSheetCommand("Sheet Background", sheetId => new SetWorksheetBackgroundCommand(sheetId, background)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void BackgroundClearMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryExecuteGroupedSheetCommand("Clear Sheet Background", sheetId => new ClearWorksheetBackgroundCommand(sheetId)))
+            return;
+
+        UpdateViewport();
+    }
+
+    private static string GetImageContentType(string extension) =>
+        extension.ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".bmp" => "image/bmp",
+            ".gif" => "image/gif",
+            _ => "image/png"
+        };
+
     private void PageMarginsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
@@ -6169,13 +6314,32 @@ public partial class MainWindow : Window
     private void CloseSysBtn_Click(object sender, RoutedEventArgs e) =>
         SystemCommands.CloseWindow(this);
 
+    // Slider is 0–200 with 100 at the midpoint.
+    // Below midpoint: 30%–100%; above midpoint: 100%–400%.
+    private static double SliderToZoomPct(double sliderVal)
+    {
+        if (sliderVal <= 100.0)
+            return 30.0 + (sliderVal / 100.0) * 70.0;   // 30% … 100%
+        else
+            return 100.0 + ((sliderVal - 100.0) / 100.0) * 300.0; // 100% … 400%
+    }
+
+    private static double ZoomPctToSlider(double zoomPct)
+    {
+        zoomPct = Math.Max(30.0, Math.Min(400.0, zoomPct));
+        if (zoomPct <= 100.0)
+            return (zoomPct - 30.0) / 70.0 * 100.0;
+        else
+            return 100.0 + (zoomPct - 100.0) / 300.0 * 100.0;
+    }
+
     private void ZoomInBtn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + 10);
+        ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + 5);
     }
     private void ZoomOutBtn_Click(object sender, RoutedEventArgs e)
     {
-        ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - 10);
+        ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - 5);
     }
     private void Zoom100Btn_Click(object sender, RoutedEventArgs e)
     {
@@ -6185,27 +6349,31 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         double cols = range.ColCount, rows = range.RowCount;
-        double fit = Math.Max(10, Math.Min(400, Math.Min(
+        double fitPct = Math.Max(30, Math.Min(400, Math.Min(
             SheetGrid.ActualWidth  / Math.Max(1, cols * 80) * 100,
             SheetGrid.ActualHeight / Math.Max(1, rows * 20) * 100)));
-        ZoomSlider.Value = fit;
+        ZoomSlider.Value = ZoomPctToSlider(fitPct);
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (ZoomSlider == null || SheetGrid == null || StatusZoomText == null) return;
         if (_snapInProgress) return;
-        double raw = e.NewValue;
-        if (Math.Abs(raw - 100.0) < 5.0)
+        double sliderVal = e.NewValue;
+
+        // Snap to 100% when near the midpoint
+        if (Math.Abs(sliderVal - 100.0) < 3.0)
         {
             _snapInProgress = true;
             ZoomSlider.Value = 100.0;
             _snapInProgress = false;
-            raw = 100.0;
+            sliderVal = 100.0;
         }
-        _zoomLevel = raw / 100.0;
+
+        double zoomPct = SliderToZoomPct(sliderVal);
+        _zoomLevel = zoomPct / 100.0;
         SheetGrid.ZoomFactor = _zoomLevel;
         SheetGrid.RenderTransform = new System.Windows.Media.ScaleTransform(_zoomLevel, _zoomLevel, 0, 0);
-        StatusZoomText.Text = $"{(int)raw}%";
+        StatusZoomText.Text = $"{(int)Math.Round(zoomPct)}%";
         UpdateViewport();
     }
 

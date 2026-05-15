@@ -156,6 +156,15 @@ public class GridView : FrameworkElement
         set => SetValue(PicturesProperty, value);
     }
 
+    public static readonly DependencyProperty WorksheetBackgroundProperty =
+        DependencyProperty.Register(nameof(WorksheetBackground), typeof(WorksheetBackgroundImage), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorksheetBackgroundImage? WorksheetBackground
+    {
+        get => (WorksheetBackgroundImage?)GetValue(WorksheetBackgroundProperty);
+        set => SetValue(WorksheetBackgroundProperty, value);
+    }
+
     public static readonly DependencyProperty SparklinesProperty =
         DependencyProperty.Register(nameof(Sparklines), typeof(IReadOnlyList<SparklineModel>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -419,6 +428,7 @@ public class GridView : FrameworkElement
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
 
         RenderHeaders(dc);
+        RenderWorksheetBackground(dc);
         RenderGridLines(dc);
         RenderCells(dc);
         RenderWorksheetViewOverlay(dc);
@@ -999,6 +1009,51 @@ public class GridView : FrameworkElement
         }
     }
 
+    private void RenderWorksheetBackground(DrawingContext dc)
+    {
+        if (WorksheetBackground == null || !TryLoadWorksheetBackgroundImage(WorksheetBackground, out var image) || image == null)
+            return;
+
+        var brush = new ImageBrush(image)
+        {
+            TileMode = TileMode.Tile,
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewport = new Rect(RowHeaderWidth, ColHeaderHeight, image.Width, image.Height),
+            Stretch = Stretch.None,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top
+        };
+
+        dc.DrawRectangle(
+            brush,
+            null,
+            new Rect(RowHeaderWidth, ColHeaderHeight, Math.Max(0, ActualWidth - RowHeaderWidth), Math.Max(0, ActualHeight - ColHeaderHeight)));
+    }
+
+    private static bool TryLoadWorksheetBackgroundImage(WorksheetBackgroundImage background, out ImageSource? image)
+    {
+        image = null;
+        if (background.ImageBytes.Length == 0)
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(background.ImageBytes);
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            image = bitmap;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static bool TryLoadPictureImage(PictureModel picture, out ImageSource? image)
     {
         image = null;
@@ -1139,11 +1194,11 @@ public class GridView : FrameworkElement
             new GridRange(previewStart, previewEnd));
         if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
 
-        var dash = new DashStyle([4.0, 4.0], 0);
-        var pen  = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 1.5) { DashStyle = dash };
-        pen.Freeze();
         var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
-        dc.DrawRectangle(null, pen, rect);
+        var dashPen = new Pen(new SolidColorBrush(Color.FromRgb(0, 0, 0)), 2.0)
+            { DashStyle = new DashStyle([4.0, 4.0], 0) };
+        dashPen.Freeze();
+        dc.DrawRectangle(null, dashPen, rect);
     }
 
     private void RenderMarchingAnts(DrawingContext dc)
@@ -1154,11 +1209,19 @@ public class GridView : FrameworkElement
         var (top, left, bottom, right) = GetRangePixels(Viewport, cbRange.Value);
         if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
 
-        var dash = new DashStyle([4.0, 4.0], _marchOffset);
-        var pen  = new Pen(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 1.5) { DashStyle = dash };
-        pen.Freeze();
         var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
-        dc.DrawRectangle(null, pen, rect);
+
+        // Black under-stroke so the dashes are visible on any background color
+        var dashBlack = new DashStyle([4.0, 4.0], _marchOffset);
+        var penBlack  = new Pen(new SolidColorBrush(Color.FromRgb(0, 0, 0)), 2.5) { DashStyle = dashBlack };
+        penBlack.Freeze();
+        dc.DrawRectangle(null, penBlack, rect);
+
+        // White on-stroke on top
+        var dashWhite = new DashStyle([4.0, 4.0], _marchOffset);
+        var penWhite  = new Pen(new SolidColorBrush(Color.FromRgb(255, 255, 255)), 1.5) { DashStyle = dashWhite };
+        penWhite.Freeze();
+        dc.DrawRectangle(null, penWhite, rect);
     }
 
     private void RenderWorksheetViewOverlay(DrawingContext dc)
@@ -1465,7 +1528,7 @@ public class GridView : FrameworkElement
                 var rect = new Rect(
                     colMetric.LeftOffset + RowHeaderWidth, rowMetric.TopOffset + ColHeaderHeight, w, h);
 
-                Brush fill = Brushes.White;
+                Brush? fill = WorksheetBackground == null ? Brushes.White : null;
                 if (styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg)
                     && bg.FillColor.HasValue)
                 {
@@ -1557,7 +1620,9 @@ public class GridView : FrameworkElement
                 _              => DefaultTypeface
             };
 
-            double fontSize = (style?.FontSize > 0) ? style!.FontSize : 12.0;
+            // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
+            // Multiply by 96/72 so an Excel 11pt font renders at the correct visual size.
+            double fontSize = ((style?.FontSize > 0) ? style!.FontSize : 11.0) * (96.0 / 72.0);
 
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fc && !fc.IsBlack)
