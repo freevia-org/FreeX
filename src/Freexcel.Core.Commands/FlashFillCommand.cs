@@ -63,7 +63,7 @@ public sealed class FlashFillCommand : IWorkbookCommand
             {
                 // This row has a user-typed example
                 var expectedStr = ScalarToString(fillValue);
-                if (sourceStr.Length > 0 || expectedStr.Length > 0)
+                if (sourceStr.Length > 0 && expectedStr.Length > 0)
                     examplePairs.Add((sourceStr, expectedStr));
             }
             else

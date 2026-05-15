@@ -139,6 +139,23 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["LMN"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void Fill_NoExamples_ReturnsNull()
+    {
+        var result = FlashFillService.Fill([], ["Bob"]);
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_SubstringPatternSourceTooShort_ReturnsNull()
+    {
+        // Pattern: startIndex=1, length=3 — but "AB" is only 2 chars
+        var result = FlashFillService.Fill(
+            [("ABCDE", "BCD"), ("FGHIJ", "GHI")],
+            ["AB"]);
+        result.Should().BeNull();
+    }
+
     // ── No pattern ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -252,6 +269,30 @@ public sealed class FlashFillCommandTests
 
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Command_SourceColumnOnRight_FillsCorrectly()
+    {
+        var wb    = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx   = new SimpleCtx(wb);
+
+        // Source data in col 2: "ALICE", "BOB", "CAROL"
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("ALICE"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("BOB"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("CAROL"));
+
+        // Example in col 1 row 1: "alice" (LOWER pattern)
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("alice"));
+
+        // Fill col=1, source col=2
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 1, sourceColIndex: 2, startRow: 1, endRow: 3);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("bob"));
+        sheet.GetCell(3, 1)!.Value.Should().Be(new TextValue("carol"));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
