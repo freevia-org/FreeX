@@ -1441,4 +1441,46 @@ public class FunctionLibraryTests
         rv.Cells[2, 0].Should().Be(new NumberValue(4));
         rv.Cells[3, 0].Should().Be(new NumberValue(6));
     }
+
+    // ── FILTER ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Filter_ByBoolArray_ReturnsMatchingRows()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(10)), (2,1,new NumberValue(20)), (3,1,new NumberValue(30)),
+            (1,2,new BoolValue(true)), (2,2,new BoolValue(false)), (3,2,new BoolValue(true)));
+        var result = _eval.Evaluate("=FILTER(A1:A3,B1:B3)", sheet);
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new NumberValue(10));
+        rv.Cells[1, 0].Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
+    public void Filter_NoMatches_ReturnsIfEmptyArg()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(10)),
+            (1,2,new BoolValue(false)));
+        var result = _eval.Evaluate("=FILTER(A1:A1,B1:B1,\"none\")", sheet);
+        result.Should().BeOfType<RangeValue>();
+        var rv = (RangeValue)result;
+        rv.Cells[0, 0].Should().Be(new TextValue("none"));
+    }
+
+    [Fact]
+    public void Filter_MultiColumn_PreservesAllColumns()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new TextValue("A")), (1,3,new BoolValue(true)),
+            (2,1,new NumberValue(2)), (2,2,new TextValue("B")), (2,3,new BoolValue(false)),
+            (3,1,new NumberValue(3)), (3,2,new TextValue("C")), (3,3,new BoolValue(true)));
+        var result = _eval.Evaluate("=FILTER(A1:B3,C1:C3)", sheet);
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 1].Should().Be(new TextValue("A"));
+        rv.Cells[1, 1].Should().Be(new TextValue("C"));
+    }
 }

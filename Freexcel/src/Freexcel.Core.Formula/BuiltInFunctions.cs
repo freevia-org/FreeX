@@ -2528,8 +2528,35 @@ public static class BuiltInFunctions
         return new RangeValue(cells);
     }
 
-    private static ScalarValue Filter(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
-        ErrorValue.Name;
+    private static ScalarValue Filter(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (args[1] is not RangeValue include) return ErrorValue.Value;
+        var ifEmpty = args.Count > 2 ? args[2] : new TextValue("");
+
+        var includeFlat = include.Flatten();
+        var matchedRows = new List<int>();
+        int rowLimit = Math.Min(includeFlat.Count, arr.RowCount);
+        for (int i = 0; i < rowLimit; i++)
+        {
+            var v = includeFlat[i];
+            bool matched = v is BoolValue { Value: true }
+                        || (v is NumberValue nv && nv.Value != 0);
+            if (matched) matchedRows.Add(i);
+        }
+
+        if (matchedRows.Count == 0)
+        {
+            if (ifEmpty is RangeValue rvEmpty) return rvEmpty;
+            return new RangeValue(new ScalarValue[1, 1] { { ifEmpty } });
+        }
+
+        var result = new ScalarValue[matchedRows.Count, arr.ColCount];
+        for (int ri = 0; ri < matchedRows.Count; ri++)
+            for (int c = 0; c < arr.ColCount; c++)
+                result[ri, c] = arr.Cells[matchedRows[ri], c];
+        return new RangeValue(result);
+    }
 
     private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         ErrorValue.Name;
