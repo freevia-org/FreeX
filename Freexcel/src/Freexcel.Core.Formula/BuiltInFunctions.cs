@@ -226,6 +226,12 @@ public static class BuiltInFunctions
         ["ADDRESS"]  = (Address, 2, 5),
         ["LOOKUP"]   = (Lookup, 2, 3),
         ["N"]        = (NFunc, 1, 1),
+
+        // ── Phase 4b: Dynamic arrays ─────────────────────────────────────────
+        ["SEQUENCE"] = (Sequence, 1, 4),
+        ["FILTER"]   = (Filter, 2, 3),
+        ["SORT"]     = (Sort, 1, 4),
+        ["UNIQUE"]   = (Unique, 1, 3),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "INDIRECT"];
@@ -2498,6 +2504,38 @@ public static class BuiltInFunctions
             ErrorValue ev    => ev,
             _                => new NumberValue(0)
         };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 4b  –  Dynamic arrays
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Sequence(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        int rows   = (int)ToNumber(args[0]);
+        int cols   = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
+        double start = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
+        double step  = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        if (rows < 1 || cols < 1) return ErrorValue.Value;
+        var cells = new ScalarValue[rows, cols];
+        double val = start;
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                cells[r, c] = new NumberValue(val);
+                val += step;
+            }
+        return new RangeValue(cells);
+    }
+
+    private static ScalarValue Filter(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        ErrorValue.Name;
+
+    private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        ErrorValue.Name;
+
+    private static ScalarValue Unique(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        ErrorValue.Name;
 }
 
 /// <summary>

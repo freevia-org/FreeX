@@ -329,7 +329,8 @@ public sealed class FormulaEvaluator
              or "QUARTILE" or "QUARTILE.INC"
              or "PERCENTRANK" or "PERCENTRANK.INC"
              or "LOOKUP"
-             or "IRR";
+             or "IRR"
+             or "FILTER" or "SORT" or "UNIQUE";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
