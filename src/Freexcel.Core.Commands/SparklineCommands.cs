@@ -33,6 +33,8 @@ public sealed class AddSparklineCommand : IWorkbookCommand
         {
             return new CommandOutcome(false, "Sparkline data range and location must be on the target sheet.");
         }
+        if (!Enum.IsDefined(_sparkline.Kind))
+            return new CommandOutcome(false, "Sparkline type is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.Sparklines.Add(_sparkline);

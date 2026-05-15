@@ -24,6 +24,19 @@ public sealed class CalculationOptionsCommandTests
         wb.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
     }
 
+    [Fact]
+    public void SetCalculationModeCommand_RejectsInvalidMode()
+    {
+        var wb = new Workbook("test");
+        var ctx = new SimpleCtx(wb);
+        wb.CalculationMode = WorkbookCalculationMode.Automatic;
+
+        var outcome = new SetCalculationModeCommand((WorkbookCalculationMode)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        wb.CalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

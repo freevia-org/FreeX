@@ -11,12 +11,15 @@ public partial class DataValidationDialog : Window
 {
     /// <summary>Set to the resulting rule when the user clicks OK.</summary>
     public DataValidation? Result { get; private set; }
+    public bool ClearRequested { get; private set; }
+    public string? SelectionSource { get; set; }
 
     public DataValidationDialog()
     {
         InitializeComponent();
         TypeCombo.SelectedIndex = 0;
         OperatorCombo.SelectedIndex = 0;
+        AlertStyleCombo.SelectedIndex = 0;
         UpdateVisibility();
     }
 
@@ -31,17 +34,20 @@ public partial class DataValidationDialog : Window
 
         var tag = (TypeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Any";
 
-        bool isAny  = tag == "Any";
-        bool isList = tag == "List";
+        bool isAny    = tag == "Any";
+        bool isList   = tag == "List";
+        bool isCustom = tag == "Custom";
 
         // Operator row: hide for Any and List
-        var operatorRowVis = (!isAny && !isList) ? Visibility.Visible : Visibility.Collapsed;
+        var operatorRowVis = (!isAny && !isList && !isCustom) ? Visibility.Visible : Visibility.Collapsed;
         OperatorLabel.Visibility  = operatorRowVis;
         OperatorCombo.Visibility  = operatorRowVis;
 
         // Formula1 label changes by type
         if (isList)
-            Formula1Label.Text = "List items (comma-separated):";
+            Formula1Label.Text = "Source:";
+        else if (isCustom)
+            Formula1Label.Text = "Formula:";
         else
         {
             var opTag = (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
@@ -50,18 +56,24 @@ public partial class DataValidationDialog : Window
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
         Formula1Box.Visibility   = isAny ? Visibility.Collapsed : Visibility.Visible;
+        UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // Formula2 only for Between / NotBetween
-        bool showFormula2 = !isAny && !isList &&
+        bool showFormula2 = !isAny && !isList && !isCustom &&
                             (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag is "Between" or "NotBetween";
         Formula2Label.Visibility = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
         Formula2Box.Visibility   = showFormula2 ? Visibility.Visible : Visibility.Collapsed;
+
+        ShowDropdownBox.Visibility = isList ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
         var typeTag = (TypeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Any";
         var opTag   = (OperatorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
+        var alertTag = (AlertStyleCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Stop";
 
         var dvType = typeTag switch
         {
@@ -69,7 +81,9 @@ public partial class DataValidationDialog : Window
             "WholeNumber" => DvType.WholeNumber,
             "Decimal"     => DvType.Decimal,
             "Date"        => DvType.Date,
+            "Time"        => DvType.Time,
             "TextLength"  => DvType.TextLength,
+            "Custom"      => DvType.Custom,
             _             => DvType.Any
         };
 
@@ -85,6 +99,13 @@ public partial class DataValidationDialog : Window
             _                    => DvOperator.Between
         };
 
+        var alertStyle = alertTag switch
+        {
+            "Warning" => DvAlertStyle.Warning,
+            "Information" => DvAlertStyle.Information,
+            _ => DvAlertStyle.Stop
+        };
+
         Result = new DataValidation
         {
             Type         = dvType,
@@ -92,7 +113,13 @@ public partial class DataValidationDialog : Window
             Formula1     = Formula1Box.Text.Trim(),
             Formula2     = Formula2Box.Text.Trim(),
             AllowBlank   = AllowBlankBox.IsChecked == true,
-            ShowDropdown = true,
+            ShowDropdown = dvType == DvType.List && ShowDropdownBox.IsChecked == true,
+            AlertStyle   = alertStyle,
+            ShowInputMessage = ShowInputMessageBox.IsChecked == true,
+            ShowErrorMessage = ShowErrorMessageBox.IsChecked == true,
+            ErrorTitle = ErrorTitleBox.Text.Trim(),
+            PromptTitle = PromptTitleBox.Text.Trim(),
+            PromptMessage = PromptMessageBox.Text.Trim(),
             ErrorMessage = ErrorMessageBox.Text.Trim(),
         };
 
@@ -104,5 +131,19 @@ public partial class DataValidationDialog : Window
     {
         DialogResult = false;
         Close();
+    }
+
+    private void ClearAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        ClearRequested = true;
+        Result = null;
+        DialogResult = true;
+        Close();
+    }
+
+    private void UseSelectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(SelectionSource))
+            Formula1Box.Text = SelectionSource;
     }
 }

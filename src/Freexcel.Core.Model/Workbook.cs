@@ -26,8 +26,20 @@ public sealed class Workbook
     /// <summary>Saved workbook view snapshots, similar to Excel Custom Views.</summary>
     public List<WorkbookCustomView> CustomViews { get; } = [];
 
+    /// <summary>Saved What-If Analysis scenarios.</summary>
+    public List<WorkbookScenario> Scenarios { get; } = [];
+
+    /// <summary>Cells tracked in the formulas Watch Window.</summary>
+    public List<CellAddress> WatchedCells { get; } = [];
+
+    /// <summary>Formula error codes disabled in Error Checking options.</summary>
+    public HashSet<string> DisabledFormulaErrorCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
+
+    /// <summary>Last requested workbook-window arrangement.</summary>
+    public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
 
     /// <summary>True when workbook structure operations such as sheet add/delete/rename/move are protected.</summary>
     public bool IsStructureProtected { get; set; }
@@ -214,10 +226,19 @@ public sealed class Workbook
 
 public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets);
 
+public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells);
+
+public sealed record ScenarioCellValue(CellAddress Address, ScalarValue Value);
+
 public sealed record WorksheetCustomViewState(
     string SheetName,
     WorksheetViewMode ViewMode,
     uint FrozenRows,
     uint FrozenCols,
     uint? SplitRow,
-    uint? SplitColumn);
+    uint? SplitColumn,
+    bool ShowGridlines = true,
+    bool ShowHeadings = true,
+    bool ShowRulers = true,
+    int ZoomPercent = 100,
+    bool ShowFormulas = false);

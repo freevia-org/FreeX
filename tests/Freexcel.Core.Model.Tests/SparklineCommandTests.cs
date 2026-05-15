@@ -52,6 +52,26 @@ public sealed class SparklineCommandTests
         sheet1.Sparklines.Should().BeEmpty();
     }
 
+    [Fact]
+    public void AddSparklineCommand_RejectsInvalidSparklineKind()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 5));
+
+        var command = new AddSparklineCommand(
+            sheet.Id,
+            dataRange,
+            new CellAddress(sheet.Id, 1, 6),
+            (SparklineKind)99);
+
+        command.Apply(ctx).Success.Should().BeFalse();
+        sheet.Sparklines.Should().BeEmpty();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

@@ -32,6 +32,25 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void GetPrecedentTraceArrows_ReturnsMultiLevelFormulaChain()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetCell(b1, Cell.FromFormula("A1+1"));
+        sheet.SetCell(c1, Cell.FromFormula("B1*2"));
+
+        var arrows = FormulaAuditingService.GetPrecedentTraceArrows(wb, c1);
+
+        arrows.Should().Equal(
+            new FormulaTraceArrow(b1, c1),
+            new FormulaTraceArrow(a1, b1));
+    }
+
+    [Fact]
     public void GetDirectDependents_ReturnsFormulaCellsThatReferenceAddress()
     {
         var wb = new Workbook("test");
@@ -50,6 +69,25 @@ public sealed class FormulaAuditingServiceTests
         var dependents = FormulaAuditingService.GetDirectDependents(wb, target);
 
         dependents.Should().Equal(localDependent, rangeDependent, crossSheetDependent);
+    }
+
+    [Fact]
+    public void GetDependentTraceArrows_ReturnsMultiLevelFormulaChain()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetCell(b1, Cell.FromFormula("A1+1"));
+        sheet.SetCell(c1, Cell.FromFormula("B1*2"));
+
+        var arrows = FormulaAuditingService.GetDependentTraceArrows(wb, a1);
+
+        arrows.Should().Equal(
+            new FormulaTraceArrow(a1, b1),
+            new FormulaTraceArrow(b1, c1));
     }
 
     [Fact]
@@ -97,5 +135,120 @@ public sealed class FormulaAuditingServiceTests
         errors[0].Address.Should().Be(new CellAddress(sheet2.Id, 1, 1));
         errors[0].FormulaText.Should().BeNull();
         errors[0].Error.Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_ReturnsUserFacingIssueMessages()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 2, 3);
+        var cell = Cell.FromFormula("1/0");
+        cell.Value = ErrorValue.DivByZero;
+        sheet.SetCell(address, cell);
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Cell.Should().Be("C2");
+        issue.ErrorCode.Should().Be("#DIV/0!");
+        issue.FormulaText.Should().Be("=1/0");
+        issue.Description.Should().Contain("division by zero");
+    }
+
+    [Fact]
+    public void FindFormulaErrors_SkipsIgnoredFormulaErrors()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ignoredAddress = new CellAddress(sheet.Id, 1, 1);
+        var visibleAddress = new CellAddress(sheet.Id, 2, 1);
+        var ignored = Cell.FromFormula("1/0");
+        ignored.Value = ErrorValue.DivByZero;
+        ignored.IgnoreFormulaError = true;
+        var visible = Cell.FromFormula("MISSING()");
+        visible.Value = ErrorValue.Name;
+        sheet.SetCell(ignoredAddress, ignored);
+        sheet.SetCell(visibleAddress, visible);
+
+        FormulaAuditingService.FindFormulaErrors(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.Address.Should().Be(visibleAddress);
+    }
+
+    [Fact]
+    public void FindFormulaErrors_SkipsDisabledErrorCheckingRules()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var div0Address = new CellAddress(sheet.Id, 1, 1);
+        var nameAddress = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(div0Address, new Cell { FormulaText = "1/0", Value = ErrorValue.DivByZero });
+        sheet.SetCell(nameAddress, new Cell { FormulaText = "MISSING()", Value = ErrorValue.Name });
+        wb.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
+
+        FormulaAuditingService.FindFormulaErrors(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.Address.Should().Be(nameAddress);
+    }
+
+    [Fact]
+    public void SetFormulaErrorIgnoredCommand_SetsStateAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromFormula("1/0");
+        cell.Value = ErrorValue.DivByZero;
+        sheet.SetCell(address, cell);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.GetCell(address)!.IgnoreFormulaError.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.GetCell(address)!.IgnoreFormulaError.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorCheckingRuleCommand(ErrorValue.DivByZero.Code, enabled: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        wb.DisabledFormulaErrorCodes.Should().Contain(ErrorValue.DivByZero.Code);
+
+        command.Revert(ctx);
+
+        wb.DisabledFormulaErrorCodes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FormulaErrorCheckingRuleCatalog_ListsSupportedOptionsInStableExcelLikeOrder()
+    {
+        FormulaErrorCheckingRuleCatalog.SupportedRules.Select(rule => (rule.ErrorCode, rule.Label))
+            .Should().Equal(
+                (ErrorValue.DivByZero.Code, "Formulas that divide by zero"),
+                (ErrorValue.Value.Code, "Formulas with incompatible values"),
+                (ErrorValue.Ref.Code, "Formulas with invalid cell references"),
+                (ErrorValue.Name.Code, "Formulas with unrecognized names"),
+                (ErrorValue.NA.Code, "Formulas returning #N/A"),
+                (ErrorValue.Num.Code, "Formulas with invalid numbers"),
+                (ErrorValue.Null.Code, "Formulas with invalid intersections"),
+                (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
+                (ErrorValue.Circular.Code, "Formulas with circular references"));
+    }
+
+    private sealed class SimpleCtx(Workbook wb) : ICommandContext
+    {
+        public Workbook Workbook { get; } = wb;
+        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }

@@ -1,13 +1,17 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.IO;
+using Freexcel.Core.Commands;
 
 namespace Freexcel.App.Host;
 
 public partial class OptionsDialog : Window
 {
     private readonly FreexcelOptions _opts;
+    private readonly HashSet<string> _disabledFormulaErrorCodes;
+    private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     public FreexcelOptions Result { get; private set; }
+    public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     private static readonly string[] Fonts =
         ["Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
@@ -15,9 +19,11 @@ public partial class OptionsDialog : Window
     private static readonly string[] Sizes =
         ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36"];
 
-    public OptionsDialog(FreexcelOptions opts)
+    public OptionsDialog(FreexcelOptions opts, IEnumerable<string>? disabledFormulaErrorCodes = null)
     {
         _opts = opts;
+        _disabledFormulaErrorCodes = new HashSet<string>(disabledFormulaErrorCodes ?? [], StringComparer.OrdinalIgnoreCase);
+        DisabledFormulaErrorCodesResult = new HashSet<string>(_disabledFormulaErrorCodes, StringComparer.OrdinalIgnoreCase);
         Result = opts;
         InitializeComponent();
         Loaded += (_, _) => Populate();
@@ -43,6 +49,7 @@ public partial class OptionsDialog : Window
         OptCalcManual.IsChecked = !_opts.AutoCalculate;
         OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
+        PopulateErrorCheckingRules();
 
         // Save
         OptDefaultFormat.ItemsSource = new[] { "Excel Workbook (.xlsx)", "Freexcel JSON (.json)" };
@@ -75,8 +82,45 @@ public partial class OptionsDialog : Window
         };
         opts.Save();
         Result = opts;
+        DisabledFormulaErrorCodesResult = CollectDisabledFormulaErrorCodes();
         DialogResult = true;
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private void PopulateErrorCheckingRules()
+    {
+        OptErrorCheckingRules.Children.Clear();
+        _errorRuleBoxes.Clear();
+
+        foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+        {
+            var checkBox = new CheckBox
+            {
+                Content = rule.Label,
+                ToolTip = rule.Description,
+                IsChecked = !_disabledFormulaErrorCodes.Contains(rule.ErrorCode),
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 6),
+                Tag = rule.ErrorCode
+            };
+            _errorRuleBoxes[rule.ErrorCode] = checkBox;
+            OptErrorCheckingRules.Children.Add(checkBox);
+        }
+    }
+
+    private IReadOnlySet<string> CollectDisabledFormulaErrorCodes()
+    {
+        var disabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+        {
+            if (_errorRuleBoxes.TryGetValue(rule.ErrorCode, out var box) &&
+                box.IsChecked != true)
+            {
+                disabled.Add(rule.ErrorCode);
+            }
+        }
+
+        return disabled;
+    }
 }

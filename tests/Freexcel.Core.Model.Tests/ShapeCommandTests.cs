@@ -50,6 +50,40 @@ public sealed class ShapeCommandTests
     }
 
     [Fact]
+    public void AddDrawingShapeCommand_RejectsInvalidShapeKind()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+
+        var command = new AddDrawingShapeCommand(
+            sheet.Id,
+            new CellAddress(sheet.Id, 1, 1),
+            (DrawingShapeKind)99);
+
+        command.Apply(ctx).Success.Should().BeFalse();
+        sheet.DrawingShapes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddDrawingShapeCommand_RejectsInvalidInitialSize()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 4, 2);
+
+        new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle, double.PositiveInfinity, 70)
+            .Apply(ctx).Success.Should().BeFalse();
+        new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle, 120, double.NaN)
+            .Apply(ctx).Success.Should().BeFalse();
+        new AddDrawingShapeCommand(sheet.Id, anchor, DrawingShapeKind.Rectangle, -1, 70)
+            .Apply(ctx).Success.Should().BeFalse();
+
+        sheet.DrawingShapes.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BringDrawingShapeForwardCommand_MovesShapeLaterAndUndoRestores()
     {
         var wb = new Workbook("test");

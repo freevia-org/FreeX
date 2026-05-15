@@ -1,0 +1,1398 @@
+using System.Reflection;
+using FluentAssertions;
+using Freexcel.App.UI;
+using Freexcel.Core.Model;
+using OxyPlot;
+using OxyPlot.Annotations;
+using OxyPlot.Axes;
+using OxyPlot.Legends;
+using OxyPlot.Series;
+
+namespace Freexcel.App.UI.Tests;
+
+public sealed class ChartRendererTests
+{
+    [Fact]
+    public void PercentStackedBarRenderer_FormatsPercentageDataLabels()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.PercentStackedBar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+            ShowDataLabels = true,
+            ShowDataLabelPercentage = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "25"),
+                Cell(2, 3, "75")
+            ],
+            [],
+            []));
+
+        model.Annotations.Should().HaveCount(2);
+        model.Annotations.Should().AllBeOfType<TextAnnotation>();
+        model.Annotations.Cast<TextAnnotation>().Select(annotation => annotation.Text)
+            .Should().BeEquivalentTo("25%", "75%");
+        model.Series.Should().AllSatisfy(series =>
+            series.Should().BeOfType<RectangleBarSeries>().Subject.LabelFormatString.Should().BeNull());
+    }
+
+    [Fact]
+    public void PercentStackedBarRenderer_FormatsValueDataLabelsFromSourceValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.PercentStackedBar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+            ShowDataLabels = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "30")
+            ],
+            [],
+            []));
+
+        model.Annotations.Should().HaveCount(2);
+        model.Annotations.Should().AllBeOfType<TextAnnotation>();
+        model.Annotations.Cast<TextAnnotation>().Select(annotation => annotation.Text)
+            .Should().BeEquivalentTo("10", "30");
+        model.Series.Should().AllSatisfy(series =>
+            series.Should().BeOfType<RectangleBarSeries>().Subject.LabelFormatString.Should().BeNull());
+    }
+
+    [Fact]
+    public void BarRenderer_IgnoresPercentageToggleForNativeValueLabels()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            ShowDataLabelPercentage = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.LabelFormatString.Should().Be("{0}");
+        model.Annotations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BarRenderer_IgnoresPercentageToggleForCategoryAnnotations()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            ShowDataLabelCategoryName = true,
+            ShowDataLabelPercentage = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var annotation = model.Annotations.Should().ContainSingle().Which.Should().BeOfType<TextAnnotation>().Subject;
+        annotation.Text.Should().Be("Q1, 10");
+        annotation.Background.Should().Be(OxyColors.Transparent);
+        annotation.Stroke.Should().Be(OxyColors.Transparent);
+        annotation.StrokeThickness.Should().Be(0);
+    }
+
+    [Fact]
+    public void BarRenderer_AppliesYAxisStylingButIgnoresNumericBoundsOnCategoryAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowYAxisLabels = false,
+            YAxisLabelTextColor = new CellColor(31, 78, 121),
+            YAxisLabelFontSize = 14,
+            YAxisLineColor = new CellColor(217, 83, 25),
+            YAxisLineThickness = 2.5,
+            YAxisMajorTickStyle = ChartAxisTickStyle.None,
+            YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
+            YAxisMinimum = 5,
+            YAxisMaximum = 9
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Left)
+            .Should().BeOfType<CategoryAxis>().Subject;
+        axis.TextColor.Should().Be(OxyColors.Transparent);
+        axis.FontSize.Should().Be(14);
+        axis.AxislineColor.Should().Be(OxyColor.FromRgb(217, 83, 25));
+        axis.AxislineThickness.Should().Be(2.5);
+        axis.MajorTickSize.Should().Be(0);
+        axis.Minimum.Should().NotBe(5);
+        axis.Maximum.Should().NotBe(9);
+        axis.FormatValue(0).Should().Be("Q1");
+    }
+
+    [Fact]
+    public void ColumnRenderer_AppliesAxisTickPlacement()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            XAxisMajorTickStyle = ChartAxisTickStyle.Inside,
+            XAxisMinorTickStyle = ChartAxisTickStyle.None,
+            YAxisMajorTickStyle = ChartAxisTickStyle.Cross,
+            YAxisMinorTickStyle = ChartAxisTickStyle.Inside
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var xAxis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
+        xAxis.TickStyle.Should().Be(TickStyle.Inside);
+        xAxis.MajorTickSize.Should().Be(4);
+        xAxis.MinorTickSize.Should().Be(0);
+
+        var yAxis = model.Axes.Single(axis => axis.Position == AxisPosition.Left);
+        yAxis.TickStyle.Should().Be(TickStyle.Crossing);
+        yAxis.MajorTickSize.Should().Be(8);
+        yAxis.MinorTickSize.Should().Be(4);
+    }
+
+    [Fact]
+    public void ColumnRenderer_AppliesAxisLabelAngles()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            XAxisLabelAngle = -45,
+            YAxisLabelAngle = 90
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        model.Axes.Single(axis => axis.Position == AxisPosition.Bottom).Angle.Should().Be(-45);
+        model.Axes.Single(axis => axis.Position == AxisPosition.Left).Angle.Should().Be(90);
+    }
+
+    [Fact]
+    public void ColumnRenderer_AppliesLegendOverlayPlacement()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3)),
+            LegendPosition = ChartLegendPosition.Right,
+            LegendOverlay = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "20")
+            ],
+            [],
+            []));
+
+        var legend = model.Legends.Should().ContainSingle().Subject;
+        legend.LegendPlacement.Should().Be(LegendPlacement.Inside);
+        legend.LegendPosition.Should().Be(OxyPlot.Legends.LegendPosition.RightTop);
+    }
+
+    [Fact]
+    public void BarRenderer_UsesAnnotationsForDataLabelFillAndBorder()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            DataLabelFillColor = new CellColor(255, 242, 204),
+            DataLabelBorderColor = new CellColor(191, 144, 0),
+            DataLabelBorderThickness = 1.5,
+            DataLabelAngle = -35
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.LabelFormatString.Should().BeNull();
+        var annotation = model.Annotations.Should().ContainSingle().Which.Should().BeOfType<TextAnnotation>().Subject;
+        annotation.Text.Should().Be("10");
+        annotation.Background.Should().Be(OxyColor.FromRgb(255, 242, 204));
+        annotation.Stroke.Should().Be(OxyColor.FromRgb(191, 144, 0));
+        annotation.StrokeThickness.Should().Be(1.5);
+        annotation.TextRotation.Should().Be(-35);
+    }
+
+    [Fact]
+    public void BarRenderer_UsesAnnotationsForRotatedValueLabels()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            DataLabelAngle = 45
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject.LabelFormatString.Should().BeNull();
+        var annotation = model.Annotations.Should().ContainSingle().Which.Should().BeOfType<TextAnnotation>().Subject;
+        annotation.Text.Should().Be("10");
+        annotation.TextRotation.Should().Be(45);
+    }
+
+    [Fact]
+    public void BarRenderer_AppliesPointSpecificDataLabelFormatting()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowDataLabels = true,
+            DataLabelFillColor = new CellColor(255, 255, 255),
+            DataLabelBorderColor = new CellColor(191, 191, 191),
+            DataLabelBorderThickness = 0.5,
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    0,
+                    1,
+                    FillColor: new CellColor(226, 239, 218),
+                    BorderColor: new CellColor(112, 173, 71),
+                    BorderThickness: 2,
+                    TextColor: new CellColor(0, 97, 0),
+                    FontSize: 14)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var annotations = model.Annotations.OfType<TextAnnotation>().ToList();
+        annotations.Should().HaveCount(2);
+        annotations[0].Background.Should().Be(OxyColor.FromRgb(255, 255, 255));
+        annotations[0].Stroke.Should().Be(OxyColor.FromRgb(191, 191, 191));
+        annotations[0].FontSize.Should().Be(11);
+        annotations[1].Background.Should().Be(OxyColor.FromRgb(226, 239, 218));
+        annotations[1].Stroke.Should().Be(OxyColor.FromRgb(112, 173, 71));
+        annotations[1].StrokeThickness.Should().Be(2);
+        annotations[1].TextColor.Should().Be(OxyColor.FromRgb(0, 97, 0));
+        annotations[1].FontSize.Should().Be(14);
+    }
+
+    [Fact]
+    public void PieRenderer_UsesCorrectCategoryValueAndPercentagePlaceholders()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            ShowDataLabelCategoryName = true,
+            ShowDataLabelPercentage = true,
+            DataLabelSeparator = ChartDataLabelSeparator.NewLine
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.OutsideLabelFormat.Should().Be("{1}" + Environment.NewLine + "{2:0%}");
+    }
+
+    [Fact]
+    public void PieRenderer_AnglesInsideDataLabelsWhenRotationIsRequested()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.InsideEnd,
+            DataLabelAngle = 45
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject
+            .AreInsideLabelsAngled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PieRenderer_HidesLabelsWhenDataLabelsAreOff()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = false,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.InsideLabelFormat.Should().BeEmpty();
+        series.OutsideLabelFormat.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BarRenderer_AppliesNativeDataLabelNumberFormat()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            ShowDataLabels = true,
+            DataLabelNumberFormat = ChartDataLabelNumberFormat.Currency
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.LabelFormatString.Should().Be("{0:$#,##0.00}");
+    }
+
+    [Fact]
+    public void BarRenderer_AppliesNativeDataLabelTextColorAndFontSize()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowDataLabels = true,
+            DataLabelTextColor = new CellColor(192, 0, 0),
+            DataLabelFontSize = 13
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.LabelFormatString.Should().Be("{0}");
+        series.TextColor.Should().Be(OxyColor.FromRgb(192, 0, 0));
+        series.FontSize.Should().Be(13);
+    }
+
+    [Fact]
+    public void PieRenderer_AppliesDataLabelTextColorAndFontSize()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.Center,
+            DataLabelTextColor = new CellColor(112, 48, 160),
+            DataLabelFontSize = 14
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.InsideLabelColor.Should().Be(OxyColor.FromRgb(112, 48, 160));
+        series.TextColor.Should().Be(OxyColor.FromRgb(112, 48, 160));
+        series.FontSize.Should().Be(14);
+    }
+
+    [Fact]
+    public void LineRenderer_AppliesSeriesFormatToMarkers()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(255, 192, 0),
+                    StrokeColor: new CellColor(68, 114, 196),
+                    StrokeThickness: 2,
+                    MarkerStyle: ChartMarkerStyle.Diamond,
+                    MarkerSize: 8)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.MarkerType.Should().Be(MarkerType.Diamond);
+        series.MarkerSize.Should().Be(8);
+        series.MarkerFill.Should().Be(OxyColor.FromRgb(255, 192, 0));
+        series.MarkerStroke.Should().Be(OxyColor.FromRgb(68, 114, 196));
+        series.MarkerStrokeThickness.Should().Be(2);
+    }
+
+    [Fact]
+    public void BarRenderer_AppliesSeriesFormatToFillAndOutline()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(112, 173, 71),
+                    StrokeColor: new CellColor(55, 86, 35),
+                    StrokeThickness: 2.25)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.FillColor.Should().Be(OxyColor.FromRgb(112, 173, 71));
+        series.StrokeColor.Should().Be(OxyColor.FromRgb(55, 86, 35));
+        series.StrokeThickness.Should().Be(2.25);
+    }
+
+    [Fact]
+    public void AreaRenderer_AppliesSeriesFormatToFillOutlineAndDash()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Area,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(91, 155, 213),
+                    StrokeColor: new CellColor(31, 78, 121),
+                    StrokeThickness: 2.5,
+                    DashStyle: ChartLineDashStyle.Dot)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<AreaSeries>().Subject;
+        series.Fill.Should().Be(OxyColor.FromRgb(91, 155, 213));
+        series.Color.Should().Be(OxyColor.FromRgb(31, 78, 121));
+        series.StrokeThickness.Should().Be(2.5);
+        series.LineStyle.Should().Be(LineStyle.Dot);
+    }
+
+    [Fact]
+    public void ScatterRenderer_UsesFirstNumericColumnAsXValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        series.Title.Should().Be("Revenue");
+        series.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (2, 20));
+    }
+
+    [Fact]
+    public void ScatterRenderer_IndexesSeriesFormatsAfterSharedXColumn()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(255, 192, 0),
+                    StrokeColor: new CellColor(68, 114, 196),
+                    StrokeThickness: 2,
+                    MarkerStyle: ChartMarkerStyle.Diamond,
+                    MarkerSize: 7),
+                new ChartSeriesFormat(
+                    1,
+                    FillColor: new CellColor(112, 173, 71),
+                    StrokeColor: new CellColor(55, 86, 35),
+                    StrokeThickness: 3,
+                    MarkerStyle: ChartMarkerStyle.Triangle,
+                    MarkerSize: 9)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Cost"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "6"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "20"),
+                Cell(3, 3, "11")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        var first = model.Series[0].Should().BeOfType<ScatterSeries>().Subject;
+        var second = model.Series[1].Should().BeOfType<ScatterSeries>().Subject;
+
+        first.Title.Should().Be("Revenue");
+        first.MarkerType.Should().Be(MarkerType.Diamond);
+        first.MarkerFill.Should().Be(OxyColor.FromRgb(255, 192, 0));
+        first.MarkerStroke.Should().Be(OxyColor.FromRgb(68, 114, 196));
+        first.MarkerStrokeThickness.Should().Be(2);
+        first.MarkerSize.Should().Be(7);
+        first.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (2, 20));
+
+        second.Title.Should().Be("Cost");
+        second.MarkerType.Should().Be(MarkerType.Triangle);
+        second.MarkerFill.Should().Be(OxyColor.FromRgb(112, 173, 71));
+        second.MarkerStroke.Should().Be(OxyColor.FromRgb(55, 86, 35));
+        second.MarkerStrokeThickness.Should().Be(3);
+        second.MarkerSize.Should().Be(9);
+        second.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 6), (2, 11));
+    }
+
+    [Fact]
+    public void ScatterRenderer_AssignsRequestedSeriesToSecondaryAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Cost"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "6"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "20"),
+                Cell(3, 3, "11")
+            ],
+            [],
+            []));
+
+        model.Axes.Should().Contain(axis => axis.Key == "SecondaryY");
+        var first = model.Series[0].Should().BeOfType<ScatterSeries>().Subject;
+        var second = model.Series[1].Should().BeOfType<ScatterSeries>().Subject;
+        first.YAxisKey.Should().BeNull();
+        second.YAxisKey.Should().Be("SecondaryY");
+    }
+
+    [Fact]
+    public void ColumnRenderer_DoesNotAddSecondaryAxisWhenNoSeriesUsesIt()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowSecondaryAxis = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Series.Should().ContainSingle();
+        model.Series.OfType<RectangleBarSeries>().Single().YAxisKey.Should().BeNull();
+        model.Axes.Should().NotContain(axis => axis.Key == "SecondaryY");
+    }
+
+    [Fact]
+    public void ScatterRenderer_AddsLinearTrendlineFromActualXValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowLinearTrendline = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "3"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (3, 30));
+    }
+
+    [Fact]
+    public void BarRenderer_AddsLinearTrendlineFromCategoryValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowLinearTrendline = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((10, 0), (30, 1));
+    }
+
+    [Fact]
+    public void BarRenderer_CalculatesTrendlineFromCategoryOrderBeforeRenderingHorizontally()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2)),
+            ShowLinearTrendline = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(4, 1, "Q3"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        trendline.Points.Select(point => (Math.Round(point.X, 3), point.Y))
+            .Should().Equal((13.333, 0), (33.333, 2));
+    }
+
+    [Fact]
+    public void BarRenderer_PositionsTrendlineInfoInHorizontalAxisSpace()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2)),
+            ShowLinearTrendline = true,
+            ShowTrendlineEquation = true,
+            ShowTrendlineRSquared = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(4, 1, "Q3"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var annotation = model.Annotations.Should().ContainSingle().Which.Should().BeOfType<TextAnnotation>().Subject;
+        annotation.Text.Should().Contain("y = 10x + 13.333");
+        annotation.Text.Should().Contain("R² = ");
+        annotation.TextPosition.Should().Be(new DataPoint(10, 2));
+    }
+
+    [Fact]
+    public void AreaRenderer_AddsLinearTrendlineFromCategoryValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Area,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            ShowLinearTrendline = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((0, 10), (1, 30));
+    }
+
+    [Fact]
+    public void ColumnRenderer_RendersRequestedComboSeriesAsLine()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = [1]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Margin"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "2"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "5")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        model.Series[0].Should().BeOfType<RectangleBarSeries>();
+        var line = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        line.Title.Should().Be("Margin");
+        line.Points.Select(point => (point.X, point.Y)).Should().Equal((0, 2), (1, 5));
+    }
+
+    [Fact]
+    public void ColumnRenderer_DoesNotTreatEmptyComboSeriesListAsAllSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 4)),
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = []
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Cost"),
+                Cell(1, 4, "Margin"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(2, 4, "2"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "12"),
+                Cell(3, 4, "5")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(3);
+        model.Series.Should().OnlyContain(series => series is RectangleBarSeries);
+    }
+
+    [Fact]
+    public void StackedColumnRenderer_RendersRequestedComboSeriesAsLine()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.StackedColumn,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 4)),
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = [2]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Cost"),
+                Cell(1, 4, "Margin"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(2, 4, "2"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "12"),
+                Cell(3, 4, "5")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(3);
+        model.Series[0].Should().BeOfType<RectangleBarSeries>();
+        model.Series[1].Should().BeOfType<RectangleBarSeries>();
+        var line = model.Series[2].Should().BeOfType<LineSeries>().Subject;
+        line.Title.Should().Be("Margin");
+        line.Points.Select(point => (point.X, point.Y)).Should().Equal((0, 2), (1, 5));
+    }
+
+    [Fact]
+    public void PercentStackedColumnRenderer_RendersRequestedComboSeriesAsLine()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.PercentStackedColumn,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 4)),
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = [2]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Cost"),
+                Cell(1, 4, "Margin"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(2, 4, "20"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "12"),
+                Cell(3, 4, "50")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(3);
+        model.Series[0].Should().BeOfType<RectangleBarSeries>();
+        model.Series[1].Should().BeOfType<RectangleBarSeries>();
+        var line = model.Series[2].Should().BeOfType<LineSeries>().Subject;
+        line.Title.Should().Be("Margin");
+        line.Points.Select(point => (point.X, point.Y)).Should().Equal((0, 20), (1, 50));
+    }
+
+    [Fact]
+    public void ColumnRenderer_DoesNotApplyLogScaleToCategoryXAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            XAxisLogScale = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Axes.Single(axis => axis.Position == AxisPosition.Bottom)
+            .Should().BeOfType<LinearAxis>();
+    }
+
+    [Fact]
+    public void ScatterRenderer_AppliesLogScaleToNumericXAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            XAxisLogScale = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "10"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Axes.Single(axis => axis.Position == AxisPosition.Bottom)
+            .Should().BeOfType<LogarithmicAxis>();
+    }
+
+    [Fact]
+    public void ColumnRenderer_DoesNotApplyNumberFormatToCategoryXAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            XAxisNumberFormat = ChartDataLabelNumberFormat.Currency
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
+        axis.FormatValue(0).Should().Be("Q1");
+        axis.FormatValue(1).Should().Be("Q2");
+    }
+
+    [Fact]
+    public void ScatterRenderer_AppliesNumberFormatToNumericXAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            XAxisNumberFormat = ChartDataLabelNumberFormat.Currency
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "10"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
+        axis.FormatValue(10).Should().Be("$10.00");
+    }
+
+    [Fact]
+    public void BubbleRenderer_UsesXyAndSizeColumns()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bubble,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Market"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "20"),
+                Cell(3, 3, "8")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        series.Title.Should().Be("Revenue");
+        series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 10, 4), (2, 20, 8));
+    }
+
+    [Fact]
+    public void BubbleRenderer_AddsLinearTrendlineFromActualXValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bubble,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowLinearTrendline = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Market"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(3, 1, "3"),
+                Cell(3, 2, "30"),
+                Cell(3, 3, "8")
+            ],
+            [],
+            []));
+
+        model.Series.Should().HaveCount(2);
+        var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (3, 30));
+    }
+
+    [Fact]
+    public void BubbleRenderer_IgnoresCategoryFlagAndUsesFirstRangeColumnAsXValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bubble,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Market"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "20"),
+                Cell(3, 3, "8")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        series.Title.Should().Be("Revenue");
+        series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 10, 4), (2, 20, 8));
+    }
+
+    [Fact]
+    public void PieRenderer_UsesDistinctSliceColorsByDefault()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20"),
+                Cell(4, 1, "Q3"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.Slices.Select(slice => slice.Fill).Should().OnlyHaveUniqueItems();
+        series.Slices.Should().OnlyContain(slice => !slice.Fill.IsInvisible());
+    }
+
+    [Fact]
+    public void PieRenderer_AppliesSeriesFormatToSliceFillAndOutline()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(91, 155, 213),
+                    StrokeColor: new CellColor(31, 78, 121),
+                    StrokeThickness: 2.5)
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        series.Stroke.Should().Be(OxyColor.FromRgb(31, 78, 121));
+        series.StrokeThickness.Should().Be(2.5);
+        series.Slices.Should().HaveCount(2);
+        series.Slices.Should().OnlyContain(slice => slice.Fill == OxyColor.FromRgb(91, 155, 213));
+    }
+
+    private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
+    {
+        var method = typeof(ChartRenderer).GetMethod("BuildPlotModel", BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+        return method!.Invoke(null, [chart, viewport]).Should().BeOfType<PlotModel>().Subject;
+    }
+
+    private static DisplayCell Cell(uint row, uint col, string text) =>
+        new(row, col, null, text, null, StyleId.Default, null);
+}

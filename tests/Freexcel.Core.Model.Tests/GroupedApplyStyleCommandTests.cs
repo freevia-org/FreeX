@@ -66,6 +66,32 @@ public sealed class GroupedApplyStyleCommandTests
         sheet2.GetCell(address2)!.StyleId.Should().Be(oldStyle2);
     }
 
+    [Fact]
+    public void Apply_RejectsInvalidStyleChoicesBeforeChangingAnyGroupedSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        var address1 = new CellAddress(sheet1.Id, 1, 1);
+        var address2 = new CellAddress(sheet2.Id, 1, 1);
+        sheet1.SetCell(address1, Cell.FromValue(new TextValue("old1")));
+        sheet2.SetCell(address2, Cell.FromValue(new TextValue("old2")));
+        var oldStyle1 = sheet1.GetCell(address1)!.StyleId;
+        var oldStyle2 = sheet2.GetCell(address2)!.StyleId;
+
+        var command = new GroupedApplyStyleCommand(
+            [sheet1.Id, sheet2.Id],
+            new GridRange(address1, address1),
+            new StyleDiff(TextRotation: 91));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet1.GetCell(address1)!.StyleId.Should().Be(oldStyle1);
+        sheet2.GetCell(address2)!.StyleId.Should().Be(oldStyle2);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

@@ -59,6 +59,22 @@ public sealed class InsertDeleteCellsCommandTests
     }
 
     [Fact]
+    public void InsertCellsCommand_RejectsInvalidShiftDirection()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+
+        var outcome = new InsertCellsCommand(sheet.Id, range, (InsertCellsShiftDirection)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("A1"));
+        sheet.GetCell(2, 1).Should().BeNull();
+    }
+
+    [Fact]
     public void DeleteCellsShiftLeft_ShiftsCellsInSelectedRowsOnlyAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -104,6 +120,23 @@ public sealed class InsertDeleteCellsCommandTests
 
         sheet.GetValue(2, 1).Should().Be(new TextValue("A2"));
         sheet.GetValue(3, 1).Should().Be(new TextValue("A3"));
+    }
+
+    [Fact]
+    public void DeleteCellsCommand_RejectsInvalidShiftDirection()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A2"));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+
+        var outcome = new DeleteCellsCommand(sheet.Id, range, (DeleteCellsShiftDirection)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.GetValue(1, 1).Should().Be(new TextValue("A1"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("A2"));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

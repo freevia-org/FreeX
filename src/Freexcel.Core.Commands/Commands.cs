@@ -322,6 +322,11 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             FrozenCols = source.FrozenCols,
             SplitRow = source.SplitRow,
             SplitColumn = source.SplitColumn,
+            ShowGridlines = source.ShowGridlines,
+            ShowHeadings = source.ShowHeadings,
+            ShowRulers = source.ShowRulers,
+            ZoomPercent = source.ZoomPercent,
+            ShowFormulas = source.ShowFormulas,
             PrintArea = RemapRange(source.PrintArea, copyId),
             PageOrientation = source.PageOrientation,
             PaperSize = source.PaperSize,
@@ -384,22 +389,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         foreach (var range in source.AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, copyId));
         foreach (var chart in source.Charts)
-            copy.Charts.Add(new ChartModel
-            {
-                Type = chart.Type,
-                DataRange = RemapRange(chart.DataRange, copyId),
-                FirstRowIsHeader = chart.FirstRowIsHeader,
-                FirstColIsCategories = chart.FirstColIsCategories,
-                Title = chart.Title,
-                XAxisTitle = chart.XAxisTitle,
-                YAxisTitle = chart.YAxisTitle,
-                LegendPosition = chart.LegendPosition,
-                ShowLegend = chart.ShowLegend,
-                Left = chart.Left,
-                Top = chart.Top,
-                Width = chart.Width,
-                Height = chart.Height
-            });
+            copy.Charts.Add(CloneChart(chart, copyId));
         foreach (var textBox in source.TextBoxes)
             copy.TextBoxes.Add(new TextBoxModel
             {
@@ -409,7 +399,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 Height = textBox.Height,
                 RotationDegrees = textBox.RotationDegrees,
                 FillColor = textBox.FillColor,
-                OutlineColor = textBox.OutlineColor
+                OutlineColor = textBox.OutlineColor,
+                AltText = textBox.AltText
             });
         foreach (var shape in source.DrawingShapes)
             copy.DrawingShapes.Add(new DrawingShapeModel
@@ -420,7 +411,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 Height = shape.Height,
                 RotationDegrees = shape.RotationDegrees,
                 FillColor = shape.FillColor,
-                OutlineColor = shape.OutlineColor
+                OutlineColor = shape.OutlineColor,
+                AltText = shape.AltText
             });
         foreach (var picture in source.Pictures)
         {
@@ -434,7 +426,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 ContentType = picture.ContentType,
                 Width = picture.Width,
                 Height = picture.Height,
-                RotationDegrees = picture.RotationDegrees
+                RotationDegrees = picture.RotationDegrees,
+                AltText = picture.AltText
             };
             foreach (var cell in picture.Cells)
                 copiedPicture.Cells.Add(cell);
@@ -482,6 +475,109 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
 
         return copy;
     }
+
+    private static ChartModel CloneChart(ChartModel chart, SheetId copyId) =>
+        new()
+        {
+            Type = chart.Type,
+            DataRange = RemapRange(chart.DataRange, copyId),
+            FirstRowIsHeader = chart.FirstRowIsHeader,
+            FirstColIsCategories = chart.FirstColIsCategories,
+            Title = chart.Title,
+            XAxisTitle = chart.XAxisTitle,
+            YAxisTitle = chart.YAxisTitle,
+            ChartTitleTextColor = chart.ChartTitleTextColor,
+            ChartTitleFontSize = chart.ChartTitleFontSize,
+            AxisTitleTextColor = chart.AxisTitleTextColor,
+            AxisTitleFontSize = chart.AxisTitleFontSize,
+            ChartAreaFillColor = chart.ChartAreaFillColor,
+            PlotAreaFillColor = chart.PlotAreaFillColor,
+            PlotAreaBorderColor = chart.PlotAreaBorderColor,
+            PlotAreaBorderThickness = chart.PlotAreaBorderThickness,
+            LegendTextColor = chart.LegendTextColor,
+            LegendFillColor = chart.LegendFillColor,
+            LegendBorderColor = chart.LegendBorderColor,
+            LegendBorderThickness = chart.LegendBorderThickness,
+            LegendFontSize = chart.LegendFontSize,
+            DoughnutHoleSize = chart.DoughnutHoleSize,
+            FirstSliceAngle = chart.FirstSliceAngle,
+            ExplodedSliceIndex = chart.ExplodedSliceIndex,
+            ExplodedSliceDistance = chart.ExplodedSliceDistance,
+            XAxisMinimum = chart.XAxisMinimum,
+            XAxisMaximum = chart.XAxisMaximum,
+            XAxisMajorUnit = chart.XAxisMajorUnit,
+            XAxisMinorUnit = chart.XAxisMinorUnit,
+            XAxisLogScale = chart.XAxisLogScale,
+            XAxisNumberFormat = chart.XAxisNumberFormat,
+            ShowXAxisMajorGridlines = chart.ShowXAxisMajorGridlines,
+            ShowXAxisMinorGridlines = chart.ShowXAxisMinorGridlines,
+            XAxisMajorGridlineColor = chart.XAxisMajorGridlineColor,
+            XAxisMinorGridlineColor = chart.XAxisMinorGridlineColor,
+            XAxisGridlineThickness = chart.XAxisGridlineThickness,
+            XAxisMajorTickStyle = chart.XAxisMajorTickStyle,
+            XAxisMinorTickStyle = chart.XAxisMinorTickStyle,
+            ShowXAxisLabels = chart.ShowXAxisLabels,
+            XAxisLabelTextColor = chart.XAxisLabelTextColor,
+            XAxisLabelFontSize = chart.XAxisLabelFontSize,
+            XAxisLabelAngle = chart.XAxisLabelAngle,
+            XAxisLineColor = chart.XAxisLineColor,
+            XAxisLineThickness = chart.XAxisLineThickness,
+            YAxisMinimum = chart.YAxisMinimum,
+            YAxisMaximum = chart.YAxisMaximum,
+            YAxisMajorUnit = chart.YAxisMajorUnit,
+            YAxisMinorUnit = chart.YAxisMinorUnit,
+            YAxisLogScale = chart.YAxisLogScale,
+            YAxisNumberFormat = chart.YAxisNumberFormat,
+            ShowYAxisMajorGridlines = chart.ShowYAxisMajorGridlines,
+            ShowYAxisMinorGridlines = chart.ShowYAxisMinorGridlines,
+            YAxisMajorGridlineColor = chart.YAxisMajorGridlineColor,
+            YAxisMinorGridlineColor = chart.YAxisMinorGridlineColor,
+            YAxisGridlineThickness = chart.YAxisGridlineThickness,
+            YAxisMajorTickStyle = chart.YAxisMajorTickStyle,
+            YAxisMinorTickStyle = chart.YAxisMinorTickStyle,
+            ShowYAxisLabels = chart.ShowYAxisLabels,
+            YAxisLabelTextColor = chart.YAxisLabelTextColor,
+            YAxisLabelFontSize = chart.YAxisLabelFontSize,
+            YAxisLabelAngle = chart.YAxisLabelAngle,
+            YAxisLineColor = chart.YAxisLineColor,
+            YAxisLineThickness = chart.YAxisLineThickness,
+            LegendPosition = chart.LegendPosition,
+            LegendOverlay = chart.LegendOverlay,
+            ShowLegend = chart.ShowLegend,
+            ShowDataLabels = chart.ShowDataLabels,
+            DataLabelPosition = chart.DataLabelPosition,
+            ShowDataLabelCategoryName = chart.ShowDataLabelCategoryName,
+            ShowDataLabelSeriesName = chart.ShowDataLabelSeriesName,
+            ShowDataLabelPercentage = chart.ShowDataLabelPercentage,
+            DataLabelSeparator = chart.DataLabelSeparator,
+            DataLabelNumberFormat = chart.DataLabelNumberFormat,
+            ShowDataLabelCallouts = chart.ShowDataLabelCallouts,
+            DataLabelFillColor = chart.DataLabelFillColor,
+            DataLabelBorderColor = chart.DataLabelBorderColor,
+            DataLabelTextColor = chart.DataLabelTextColor,
+            DataLabelBorderThickness = chart.DataLabelBorderThickness,
+            DataLabelFontSize = chart.DataLabelFontSize,
+            DataLabelAngle = chart.DataLabelAngle,
+            ShowLinearTrendline = chart.ShowLinearTrendline,
+            TrendlineType = chart.TrendlineType,
+            TrendlinePeriod = chart.TrendlinePeriod,
+            TrendlineOrder = chart.TrendlineOrder,
+            ShowTrendlineEquation = chart.ShowTrendlineEquation,
+            ShowTrendlineRSquared = chart.ShowTrendlineRSquared,
+            TrendlineColor = chart.TrendlineColor,
+            TrendlineThickness = chart.TrendlineThickness,
+            TrendlineDashStyle = chart.TrendlineDashStyle,
+            ShowSecondaryAxis = chart.ShowSecondaryAxis,
+            SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
+            ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
+            SeriesFormats = chart.SeriesFormats.ToList(),
+            PointDataLabelFormats = chart.PointDataLabelFormats.ToList(),
+            UseComboLineForSecondarySeries = chart.UseComboLineForSecondarySeries,
+            Left = chart.Left,
+            Top = chart.Top,
+            Width = chart.Width,
+            Height = chart.Height
+        };
 
     private static CellAddress RemapAddress(CellAddress address, SheetId sheetId) =>
         new(sheetId, address.Row, address.Col);

@@ -13,6 +13,7 @@
     <Project Path="tests/Freexcel.Core.Formula.Tests/Freexcel.Core.Formula.Tests.csproj" />
     <Project Path="tests/Freexcel.Core.IO.Tests/Freexcel.Core.IO.Tests.csproj" />
     <Project Path="tests/Freexcel.Core.Model.Tests/Freexcel.Core.Model.Tests.csproj" />
+    <Project Path="tests/Freexcel.App.UI.Tests/Freexcel.App.UI.Tests.csproj" />
     <Project Path="tests/Freexcel.Fixtures/Freexcel.Fixtures.csproj" />
     <Project Path="tests/Freexcel.Integration.Tests/Freexcel.Integration.Tests.csproj" />
   </Folder>

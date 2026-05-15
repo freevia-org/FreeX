@@ -44,6 +44,24 @@ public sealed class TextBoxCommandTests
     }
 
     [Fact]
+    public void AddTextBoxCommand_RejectsInvalidInitialSize()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 2, 3);
+
+        new AddTextBoxCommand(sheet.Id, anchor, "Notes", double.NegativeInfinity, 80)
+            .Apply(ctx).Success.Should().BeFalse();
+        new AddTextBoxCommand(sheet.Id, anchor, "Notes", 180, double.NaN)
+            .Apply(ctx).Success.Should().BeFalse();
+        new AddTextBoxCommand(sheet.Id, anchor, "Notes", 180, 0)
+            .Apply(ctx).Success.Should().BeFalse();
+
+        sheet.TextBoxes.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ResizeTextBoxCommand_SetsSizeAndUndoRestores()
     {
         var wb = new Workbook("test");

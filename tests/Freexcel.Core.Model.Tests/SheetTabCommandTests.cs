@@ -31,6 +31,7 @@ public class SheetTabCommandTests
             Width = 80,
             Height = 20,
             Kind = PictureKind.CellRangeSnapshot,
+            AltText = "Copied range",
             Cells = { new PictureCellSnapshot(0, 0, "hello") }
         });
         sheet.Pictures.Add(new PictureModel
@@ -41,7 +42,8 @@ public class SheetTabCommandTests
             ContentType = "image/png",
             Width = 90,
             Height = 60,
-            RotationDegrees = 45
+            RotationDegrees = 45,
+            AltText = "Embedded image"
         });
         sheet.Charts.Add(new ChartModel
         {
@@ -50,8 +52,17 @@ public class SheetTabCommandTests
             Title = "Trend",
             XAxisTitle = "Month",
             YAxisTitle = "Sales",
+            ChartTitleTextColor = new CellColor(31, 78, 121),
+            XAxisLabelAngle = -45,
+            YAxisLabelAngle = 90,
             LegendPosition = ChartLegendPosition.Top,
+            LegendOverlay = true,
+            LegendTextColor = new CellColor(60, 60, 60),
             ShowLegend = false,
+            ShowDataLabels = true,
+            DataLabelAngle = 45,
+            DataLabelTextColor = new CellColor(192, 0, 0),
+            SeriesFormats = [new ChartSeriesFormat(0, StrokeColor: new CellColor(0, 114, 178), StrokeThickness: 2.5)],
             Left = 10,
             Top = 20,
             Width = 300,
@@ -65,7 +76,8 @@ public class SheetTabCommandTests
             Height = 80,
             RotationDegrees = 25,
             FillColor = new CellColor(240, 250, 255),
-            OutlineColor = new CellColor(70, 80, 90)
+            OutlineColor = new CellColor(70, 80, 90),
+            AltText = "Text box note"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
@@ -75,7 +87,8 @@ public class SheetTabCommandTests
             Height = 70,
             RotationDegrees = 35,
             FillColor = new CellColor(200, 210, 220),
-            OutlineColor = new CellColor(30, 40, 50)
+            OutlineColor = new CellColor(30, 40, 50),
+            AltText = "Process box"
         });
 
         var command = new DuplicateSheetCommand(sheet.Id);
@@ -100,20 +113,32 @@ public class SheetTabCommandTests
         copy.Pictures.Should().HaveCount(2);
         var copiedPicture = copy.Pictures[0];
         copiedPicture.Anchor.Should().Be(new CellAddress(copy.Id, 1, 1));
+        copiedPicture.AltText.Should().Be("Copied range");
         copiedPicture.Cells.Should().ContainSingle().Which.Text.Should().Be("hello");
         var copiedImage = copy.Pictures[1];
         copiedImage.Anchor.Should().Be(new CellAddress(copy.Id, 2, 2));
         copiedImage.Kind.Should().Be(PictureKind.Image);
         copiedImage.ImageBytes.Should().Equal(1, 2, 3);
         copiedImage.RotationDegrees.Should().Be(45);
+        copiedImage.AltText.Should().Be("Embedded image");
         var copiedChart = copy.Charts.Should().ContainSingle().Subject;
         copiedChart.Type.Should().Be(ChartType.Line);
         copiedChart.DataRange.Start.Sheet.Should().Be(copy.Id);
         copiedChart.Title.Should().Be("Trend");
         copiedChart.XAxisTitle.Should().Be("Month");
         copiedChart.YAxisTitle.Should().Be("Sales");
+        copiedChart.ChartTitleTextColor.Should().Be(new CellColor(31, 78, 121));
+        copiedChart.XAxisLabelAngle.Should().Be(-45);
+        copiedChart.YAxisLabelAngle.Should().Be(90);
         copiedChart.LegendPosition.Should().Be(ChartLegendPosition.Top);
+        copiedChart.LegendOverlay.Should().BeTrue();
+        copiedChart.LegendTextColor.Should().Be(new CellColor(60, 60, 60));
         copiedChart.ShowLegend.Should().BeFalse();
+        copiedChart.ShowDataLabels.Should().BeTrue();
+        copiedChart.DataLabelAngle.Should().Be(45);
+        copiedChart.DataLabelTextColor.Should().Be(new CellColor(192, 0, 0));
+        copiedChart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, StrokeColor: new CellColor(0, 114, 178), StrokeThickness: 2.5));
         copiedChart.Left.Should().Be(10);
         copiedChart.Top.Should().Be(20);
         copiedChart.Width.Should().Be(300);
@@ -124,10 +149,12 @@ public class SheetTabCommandTests
         copiedTextBox.RotationDegrees.Should().Be(25);
         copiedTextBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         copiedTextBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
+        copiedTextBox.AltText.Should().Be("Text box note");
         var copiedShape = copy.DrawingShapes.Should().ContainSingle().Subject;
         copiedShape.Anchor.Should().Be(new CellAddress(copy.Id, 4, 2));
         copiedShape.Kind.Should().Be(DrawingShapeKind.Rectangle);
         copiedShape.RotationDegrees.Should().Be(35);
+        copiedShape.AltText.Should().Be("Process box");
         copiedShape.FillColor.Should().Be(new CellColor(200, 210, 220));
         copiedShape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
 

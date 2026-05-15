@@ -6,6 +6,11 @@ namespace Freexcel.Core.Calc;
 /// Finds the input value for a changing cell such that a formula cell reaches a target value.
 /// Uses the secant method (two-point Newton approximation).
 /// </summary>
+/// <remarks>
+/// Precondition: formula dependencies must be up-to-date (i.e., the workbook must have been
+/// recalculated since the last formula edit) so that <paramref name="engine"/>'s dependency
+/// graph correctly propagates changes from <c>changingCell</c> to <c>setCell</c>.
+/// </remarks>
 public static class GoalSeekService
 {
     public static GoalSeekResult Seek(

@@ -27,6 +27,8 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
+        if (StyleDiffValidator.Validate(_diff) is { } validationOutcome)
+            return validationOutcome;
 
         _snapshot = [];
 
@@ -61,4 +63,35 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
                 sheet.SetCell(addr, oldCell.Clone());
         }
     }
+}
+
+internal static class StyleDiffValidator
+{
+    public static CommandOutcome? Validate(StyleDiff diff)
+    {
+        if (diff.HAlign is { } hAlign && !Enum.IsDefined(hAlign))
+            return new CommandOutcome(false, "Horizontal alignment is not supported.");
+        if (diff.VAlign is { } vAlign && !Enum.IsDefined(vAlign))
+            return new CommandOutcome(false, "Vertical alignment is not supported.");
+        if (diff.FontSize is { } fontSize && !IsSupportedFontSize(fontSize))
+            return new CommandOutcome(false, "Font size is not supported.");
+        if (diff.TextRotation is { } rotation && !IsSupportedTextRotation(rotation))
+            return new CommandOutcome(false, "Text rotation is not supported.");
+        if (HasInvalidBorderStyle(diff.BorderTop) ||
+            HasInvalidBorderStyle(diff.BorderRight) ||
+            HasInvalidBorderStyle(diff.BorderBottom) ||
+            HasInvalidBorderStyle(diff.BorderLeft))
+            return new CommandOutcome(false, "Border style is not supported.");
+
+        return null;
+    }
+
+    private static bool IsSupportedTextRotation(int rotation) =>
+        rotation == 255 || rotation is >= -90 and <= 90;
+
+    private static bool IsSupportedFontSize(double fontSize) =>
+        double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
+
+    private static bool HasInvalidBorderStyle(CellBorder? border) =>
+        border is { } value && !Enum.IsDefined(value.Style);
 }

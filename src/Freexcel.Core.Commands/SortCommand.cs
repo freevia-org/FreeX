@@ -2,6 +2,8 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
 
+public sealed record SortKey(uint ColumnOffset, bool Ascending);
+
 /// <summary>
 /// Sorts the rows of a rectangular range by a specified column, ascending or descending.
 /// Stores a snapshot of the original arrangement for undo via Revert.
@@ -10,8 +12,7 @@ public sealed class SortCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
-    private readonly uint _sortByColOffset;   // 0 = first column of the range
-    private readonly bool _ascending;
+    private readonly IReadOnlyList<SortKey> _sortKeys;
 
     // Snapshot for undo: list of rows, each row is a list of (address, cell?) pairs
     private List<List<(CellAddress Address, Cell? Cell)>>? _snapshot;
@@ -19,14 +20,20 @@ public sealed class SortCommand : IWorkbookCommand
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
 
-    public string Label => $"Sort {(_ascending ? "Ascending" : "Descending")}";
+    public string Label => _sortKeys.Count == 1
+        ? $"Sort {(_sortKeys[0].Ascending ? "Ascending" : "Descending")}"
+        : "Sort";
 
     public SortCommand(SheetId sheetId, GridRange range, uint sortByColOffset, bool ascending)
+        : this(sheetId, range, [new SortKey(sortByColOffset, ascending)])
+    {
+    }
+
+    public SortCommand(SheetId sheetId, GridRange range, IReadOnlyList<SortKey> sortKeys)
     {
         _sheetId = sheetId;
         _range = range;
-        _sortByColOffset = sortByColOffset;
-        _ascending = ascending;
+        _sortKeys = sortKeys.Count == 0 ? [new SortKey(0, true)] : sortKeys;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -43,10 +50,9 @@ public sealed class SortCommand : IWorkbookCommand
         uint endRow   = _range.End.Row;
         uint startCol = _range.Start.Col;
         uint endCol   = _range.End.Col;
-        uint sortCol  = startCol + _sortByColOffset;
-
-        // Clamp sort column to range
-        if (sortCol > endCol) sortCol = startCol;
+        var keyColIndexes = _sortKeys
+            .Select(key => (Index: (int)((startCol + key.ColumnOffset > endCol ? startCol : startCol + key.ColumnOffset) - startCol), key.Ascending))
+            .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);
         int colCount = (int)(endCol - startCol + 1);
@@ -87,14 +93,18 @@ public sealed class SortCommand : IWorkbookCommand
             .Where(p => _range.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
 
-        // Sort rows by the sort-key column
-        int keyColIdx = (int)(sortCol - startCol);
         rows.Sort((a, b) =>
         {
-            var va = a.Cells[keyColIdx]?.Value ?? BlankValue.Instance;
-            var vb = b.Cells[keyColIdx]?.Value ?? BlankValue.Instance;
-            int cmp = CompareScalar(va, vb);
-            return _ascending ? cmp : -cmp;
+            foreach (var (index, ascending) in keyColIndexes)
+            {
+                var va = a.Cells[index]?.Value ?? BlankValue.Instance;
+                var vb = b.Cells[index]?.Value ?? BlankValue.Instance;
+                int cmp = CompareScalar(va, vb);
+                if (cmp != 0)
+                    return ascending ? cmp : -cmp;
+            }
+
+            return 0;
         });
 
         // Write sorted rows back

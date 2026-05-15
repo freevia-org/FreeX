@@ -258,11 +258,10 @@
             <!-- ── HOME ──────────────────────────────────────────────── -->
             <TabItem Header="Home">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
-
 
                         <!-- ▌Clipboard ▌ -->
                         <Grid>
@@ -270,29 +269,45 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="2,2,2,0">
-                                <Button Click="PasteBtn_Click"
-                                        Width="54" Height="36" Margin="1"
+                            <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="2,2,2,0">
+                                <Button Click="PasteBtn_Click" Width="54" Height="46" Margin="1"
                                         Style="{StaticResource RibbonBtn}"
                                         local:RibbonTooltip.Title="Paste"
-                                        local:RibbonTooltip.Description="Paste the contents of the Clipboard into the document.">
+                                        local:RibbonTooltip.Description="Paste the contents of the Clipboard (Ctrl+V).">
                                     <StackPanel>
-                                        <TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" FontSize="18"
+                                        <TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" FontSize="22"
                                                    HorizontalAlignment="Center"/>
                                         <TextBlock Text="Paste" FontSize="10" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="✂ Cut"  Click="CutBtn_Click"
-                                            Width="54" Height="20" Margin="1,1"
-                                            Style="{StaticResource RibbonBtn}" FontSize="10"
+                                    <Button Click="CutBtn_Click" Width="40" Height="14" Margin="1,0"
+                                            Style="{StaticResource RibbonBtn}"
                                             local:RibbonTooltip.Title="Cut"
-                                            local:RibbonTooltip.Description="Cut the selection and put it on the Clipboard."/>
-                                    <Button Content="⧉ Copy" Click="CopyBtn_Click"
-                                            Width="56" Height="20" Margin="1,1"
-                                            Style="{StaticResource RibbonBtn}" FontSize="10"
+                                            local:RibbonTooltip.Description="Cut the selection and put it on the Clipboard (Ctrl+X).">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE8C6;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <TextBlock Text="Cut" VerticalAlignment="Center" FontSize="10"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Click="CopyBtn_Click" Width="46" Height="14" Margin="1,0"
+                                            Style="{StaticResource RibbonBtn}"
                                             local:RibbonTooltip.Title="Copy"
-                                            local:RibbonTooltip.Description="Copy the selection and put it on the Clipboard."/>
+                                            local:RibbonTooltip.Description="Copy the selection and put it on the Clipboard (Ctrl+C).">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <TextBlock Text="Copy" VerticalAlignment="Center" FontSize="10"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Click="FormatPainterBtn_Click" Width="22" Height="14" Margin="1,0"
+                                            Style="{StaticResource RibbonBtn}"
+                                            local:RibbonTooltip.Title="Format Painter"
+                                            local:RibbonTooltip.Description="Copy formatting from one place and apply it to another.">
+                                        <TextBlock Text="&#xF0E3;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
@@ -308,33 +323,45 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <ComboBox x:Name="FontNameBox" Width="116" Height="22" Margin="1,1,2,1"
+                                    <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="1" Background="White"
                                               SelectionChanged="FontNameBox_SelectionChanged"
                                               local:RibbonTooltip.Title="Font"
-                                              local:RibbonTooltip.Description="Change the font of the selected text."/>
-                                    <ComboBox x:Name="FontSizeBox" Width="48" Height="22" Margin="1" IsEditable="True"
+                                              local:RibbonTooltip.Description="Change the font of the selected cells."/>
+                                    <ComboBox x:Name="FontSizeBox" Width="40" Height="22" Margin="1" IsEditable="True" Background="White"
                                               SelectionChanged="FontSizeBox_SelectionChanged"
                                               local:RibbonTooltip.Title="Font Size"
-                                              local:RibbonTooltip.Description="Change the font size of the selected text."/>
+                                              local:RibbonTooltip.Description="Change the font size of the selected cells."/>
+                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="IncreaseFontSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Increase Font Size"
+                                            local:RibbonTooltip.Description="Make the font larger.">
+                                        <TextBlock Text="A+" FontSize="10" FontWeight="Bold"/>
+                                    </Button>
+                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="DecreaseFontSizeBtn_Click"
+                                            local:RibbonTooltip.Title="Decrease Font Size"
+                                            local:RibbonTooltip.Description="Make the font smaller.">
+                                        <TextBlock Text="A-" FontSize="9"/>
+                                    </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <ToggleButton x:Name="BoldButton"      Width="24" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}" FontWeight="Bold"
                                                   Click="BoldButton_Click"
                                                   local:RibbonTooltip.Title="Bold"
-                                                  local:RibbonTooltip.Description="Make the selected text bold.">B</ToggleButton>
+                                                  local:RibbonTooltip.Description="Make the selected text bold (Ctrl+B).">B</ToggleButton>
                                     <ToggleButton x:Name="ItalicButton"    Width="24" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}" FontStyle="Italic"
                                                   Click="ItalicButton_Click"
                                                   local:RibbonTooltip.Title="Italic"
-                                                  local:RibbonTooltip.Description="Italicize the selected text.">I</ToggleButton>
+                                                  local:RibbonTooltip.Description="Italicize the selected text (Ctrl+I).">I</ToggleButton>
                                     <ToggleButton x:Name="UnderlineButton" Width="24" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="UnderlineButton_Click"
                                                   local:RibbonTooltip.Title="Underline"
-                                                  local:RibbonTooltip.Description="Underline the selected text.">
+                                                  local:RibbonTooltip.Description="Underline the selected text (Ctrl+U).">
                                         <TextBlock Text="U" TextDecorations="Underline"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="StrikeButton"    Width="24" Height="22"
@@ -344,6 +371,28 @@
                                                   local:RibbonTooltip.Description="Draw a line through the middle of the selected text.">
                                         <TextBlock Text="S" TextDecorations="Strikethrough"/>
                                     </ToggleButton>
+                                    <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
+                                    <Button Width="30" Height="22" Style="{StaticResource RibbonBtn}"
+                                            Click="BorderPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Borders"
+                                            local:RibbonTooltip.Description="Apply or change borders on the selected cells.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="All Borders"          Click="BorderAllMenuItem_Click"/>
+                                                <MenuItem Header="Outside Borders"      Click="BorderOutsideMenuItem_Click"/>
+                                                <MenuItem Header="No Border"            Click="BorderNoneMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Bottom Border"        Click="BorderBottomMenuItem_Click"/>
+                                                <MenuItem Header="Top Border"           Click="BorderTopMenuItem_Click"/>
+                                                <MenuItem Header="Left Border"          Click="BorderLeftMenuItem_Click"/>
+                                                <MenuItem Header="Right Border"         Click="BorderRightMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Thick Bottom Border"  Click="BorderThickBottomMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <TextBlock Text="&#xE91C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Button>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
                                     <Button x:Name="FontColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonBtn}"
@@ -370,35 +419,92 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
+                                <!-- Vertical align + Orientation + Wrap -->
                                 <StackPanel Orientation="Horizontal">
-                                    <ToggleButton x:Name="AlignLeftBtn"   Width="28" Height="22"
+                                    <ToggleButton x:Name="AlignTopBtn" Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
-                                                  Click="AlignLeftBtn_Click"
-                                                  local:RibbonTooltip.Title="Align Left"
-                                                  local:RibbonTooltip.Description="Align the contents of the selected cells to the left edge.">L</ToggleButton>
-                                    <ToggleButton x:Name="AlignCenterBtn" Width="28" Height="22"
+                                                  Click="AlignTopBtn_Click"
+                                                  local:RibbonTooltip.Title="Top Align"
+                                                  local:RibbonTooltip.Description="Align the contents to the top of the cell.">
+                                        <TextBlock Text="&#x2191;" FontSize="12"/>
+                                    </ToggleButton>
+                                    <ToggleButton x:Name="AlignMiddleBtn" Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
-                                                  Click="AlignCenterBtn_Click"
-                                                  local:RibbonTooltip.Title="Center"
-                                                  local:RibbonTooltip.Description="Center the contents of the selected cells.">C</ToggleButton>
-                                    <ToggleButton x:Name="AlignRightBtn"  Width="28" Height="22"
+                                                  Click="AlignMiddleBtn_Click"
+                                                  local:RibbonTooltip.Title="Middle Align"
+                                                  local:RibbonTooltip.Description="Align the contents between the top and bottom of the cell.">
+                                        <TextBlock Text="&#x2550;" FontSize="12"/>
+                                    </ToggleButton>
+                                    <ToggleButton x:Name="AlignBottomBtn" Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
-                                                  Click="AlignRightBtn_Click"
-                                                  local:RibbonTooltip.Title="Align Right"
-                                                  local:RibbonTooltip.Description="Align the contents of the selected cells to the right edge.">R</ToggleButton>
+                                                  Click="AlignBottomBtn_Click"
+                                                  local:RibbonTooltip.Title="Bottom Align"
+                                                  local:RibbonTooltip.Description="Align the contents to the bottom of the cell.">
+                                        <TextBlock Text="&#x2193;" FontSize="12"/>
+                                    </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <ToggleButton x:Name="WrapTextBtn" Width="46" Height="22"
+                                    <Button Width="36" Height="22" Style="{StaticResource RibbonBtn}"
+                                            Click="OrientationPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Orientation"
+                                            local:RibbonTooltip.Description="Rotate text diagonally or vertically in a cell.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Horizontal"               Click="OrientHorizMenuItem_Click"/>
+                                                <MenuItem Header="Angle Counterclockwise"   Click="OrientAngleCCWMenuItem_Click"/>
+                                                <MenuItem Header="Angle Clockwise"          Click="OrientAngleCWMenuItem_Click"/>
+                                                <MenuItem Header="Vertical Text"            Click="OrientVertMenuItem_Click"/>
+                                                <MenuItem Header="Rotate Text Up"           Click="OrientRotateUpMenuItem_Click"/>
+                                                <MenuItem Header="Rotate Text Down"         Click="OrientRotateDownMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <TextBlock Text="ab&#x2197;" FontSize="10" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <ToggleButton x:Name="WrapTextBtn" Width="44" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="WrapTextBtn_Click"
                                                   local:RibbonTooltip.Title="Wrap Text"
-                                                  local:RibbonTooltip.Description="Make all content visible within a cell by displaying it on multiple lines.">Wrap</ToggleButton>
+                                                  local:RibbonTooltip.Description="Make all content visible within a cell by displaying it on multiple lines.">
+                                        <TextBlock Text="Wrap" FontSize="10"/>
+                                    </ToggleButton>
                                 </StackPanel>
-                                <Button Content="Merge &amp; Center" Width="117" Height="22" Margin="1,2"
-                                        Style="{StaticResource RibbonBtn}"
-                                        Click="MergeCenterBtn_Click"
-                                        local:RibbonTooltip.Title="Merge &amp; Center"
-                                        local:RibbonTooltip.Description="Join the selected cells into one larger cell and center the contents."/>
+                                <!-- Horizontal align + indent + merge -->
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <ToggleButton x:Name="AlignLeftBtn"   Width="26" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="AlignLeftBtn_Click"
+                                                  local:RibbonTooltip.Title="Align Left"
+                                                  local:RibbonTooltip.Description="Align the contents to the left edge of the cell (Ctrl+L).">L</ToggleButton>
+                                    <ToggleButton x:Name="AlignCenterBtn" Width="26" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="AlignCenterBtn_Click"
+                                                  local:RibbonTooltip.Title="Center"
+                                                  local:RibbonTooltip.Description="Center the contents of the selected cells (Ctrl+E).">C</ToggleButton>
+                                    <ToggleButton x:Name="AlignRightBtn"  Width="26" Height="22"
+                                                  Style="{StaticResource RibbonToggleBtn}"
+                                                  Click="AlignRightBtn_Click"
+                                                  local:RibbonTooltip.Title="Align Right"
+                                                  local:RibbonTooltip.Description="Align the contents to the right edge of the cell (Ctrl+R).">R</ToggleButton>
+                                    <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
+                                    <Button Width="24" Height="22" Style="{StaticResource RibbonBtn}"
+                                            Click="IndentDecBtn_Click"
+                                            local:RibbonTooltip.Title="Decrease Indent"
+                                            local:RibbonTooltip.Description="Decrease the indent level of the cell contents.">
+                                        <TextBlock Text="&#x2190;|" FontSize="9" HorizontalAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="24" Height="22" Style="{StaticResource RibbonBtn}"
+                                            Click="IndentIncBtn_Click"
+                                            local:RibbonTooltip.Title="Increase Indent"
+                                            local:RibbonTooltip.Description="Increase the indent level of the cell contents.">
+                                        <TextBlock Text="|&#x2192;" FontSize="9" HorizontalAlignment="Center"/>
+                                    </Button>
+                                    <Button Width="90" Height="22" Margin="2,0,0,0" Style="{StaticResource RibbonBtn}"
+                                            Click="MergeCenterBtn_Click"
+                                            local:RibbonTooltip.Title="Merge &amp; Center"
+                                            local:RibbonTooltip.Description="Join the selected cells into one larger cell and center the contents.">
+                                        <TextBlock Text="Merge &amp; Center" FontSize="10"/>
+                                    </Button>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Alignment" Style="{StaticResource GroupLbl}"/>
@@ -408,16 +514,49 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Number ▌ -->
-                        <Grid Width="112">
+                        <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <ComboBox x:Name="NumberFormatBox" Grid.Row="0" Height="22"
-                                      VerticalAlignment="Top" Margin="1,6,1,0"
-                                      SelectionChanged="NumberFormatBox_SelectionChanged"
-                                      local:RibbonTooltip.Title="Number Format"
-                                      local:RibbonTooltip.Description="Choose how to display the values in the selected cells."/>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
+                                <ComboBox x:Name="NumberFormatBox" Width="116" Height="22" Margin="1,4,1,2" Background="White"
+                                          SelectionChanged="NumberFormatBox_SelectionChanged"
+                                          local:RibbonTooltip.Title="Number Format"
+                                          local:RibbonTooltip.Description="Choose how to display values in the selected cells."/>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="CurrencyBtn_Click"
+                                            local:RibbonTooltip.Title="Accounting Number Format"
+                                            local:RibbonTooltip.Description="Choose the currency format for selected cells.">
+                                        <TextBlock Text="$" FontSize="11" FontWeight="Bold"/>
+                                    </Button>
+                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="PercentBtn_Click"
+                                            local:RibbonTooltip.Title="Percent Style"
+                                            local:RibbonTooltip.Description="Display values as a percentage (Ctrl+Shift+%).">
+                                        <TextBlock Text="%" FontSize="11" FontWeight="Bold"/>
+                                    </Button>
+                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="CommaStyleBtn_Click"
+                                            local:RibbonTooltip.Title="Comma Style"
+                                            local:RibbonTooltip.Description="Display values with a thousands separator.">
+                                        <TextBlock Text="," FontSize="11" FontWeight="Bold"/>
+                                    </Button>
+                                    <Button Width="24" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="IncDecimalBtn_Click"
+                                            local:RibbonTooltip.Title="Increase Decimal Places"
+                                            local:RibbonTooltip.Description="Show more decimal places.">
+                                        <TextBlock Text=".0+" FontSize="9"/>
+                                    </Button>
+                                    <Button Width="24" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                            Click="DecDecimalBtn_Click"
+                                            local:RibbonTooltip.Title="Decrease Decimal Places"
+                                            local:RibbonTooltip.Description="Show fewer decimal places.">
+                                        <TextBlock Text=".0-" FontSize="9"/>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Number" Style="{StaticResource GroupLbl}"/>
                             </Border>
@@ -431,59 +570,163 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="CF Rule"    Width="72" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="CfRuleButton_Click"
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,2,2,0">
+                                <!-- Conditional Formatting -->
+                                <Button Width="62" Height="60" Margin="1,0"
+                                        Style="{StaticResource RibbonBtn}" Click="CfPickerBtn_Click"
                                         local:RibbonTooltip.Title="Conditional Formatting"
-                                        local:RibbonTooltip.Description="Highlight cells based on their values using rules, color scales, or data bars."/>
-                                <Button Content="Validation" Width="72" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
-                                        local:RibbonTooltip.Title="Data Validation"
-                                        local:RibbonTooltip.Description="Control what data can be entered in the selected cells."/>
+                                        local:RibbonTooltip.Description="Highlight cells based on their values using rules, color scales, or data bars.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Highlight Cells Rules">
+                                                <MenuItem Header="Greater Than..."        Click="CfGtMenuItem_Click"/>
+                                                <MenuItem Header="Less Than..."           Click="CfLtMenuItem_Click"/>
+                                                <MenuItem Header="Between..."             Click="CfBetweenMenuItem_Click"/>
+                                                <MenuItem Header="Equal To..."            Click="CfEqMenuItem_Click"/>
+                                                <MenuItem Header="Text that Contains..."  Click="CfTextMenuItem_Click"/>
+                                                <MenuItem Header="A Date Occurring..."    Click="CfDateMenuItem_Click"/>
+                                                <MenuItem Header="Duplicate Values..."    Click="CfDuplicateMenuItem_Click"/>
+                                            </MenuItem>
+                                            <MenuItem Header="Top/Bottom Rules">
+                                                <MenuItem Header="Top 10 Items..."        Click="CfTop10MenuItem_Click"/>
+                                                <MenuItem Header="Bottom 10 Items..."     Click="CfBottom10MenuItem_Click"/>
+                                                <MenuItem Header="Above Average..."       Click="CfAboveAvgMenuItem_Click"/>
+                                            </MenuItem>
+                                            <MenuItem Header="Data Bars..."               Click="CfDataBarMenuItem_Click"/>
+                                            <MenuItem Header="Color Scales..."            Click="CfColorScaleMenuItem_Click"/>
+                                            <MenuItem Header="Icon Sets..."               Click="CfIconSetMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="New Rule..."                Click="CfNewRuleMenuItem_Click"/>
+                                            <MenuItem Header="New Formula Rule..."        Click="CfNewFormulaRuleMenuItem_Click"/>
+                                            <MenuItem Header="Clear Rules"                Click="CfClearRulesMenuItem_Click"/>
+                                            <MenuItem Header="Manage Rules..."            Click="CfManageRulesMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                                                   HorizontalAlignment="Center" Margin="0,5,0,3"/>
+                                        <TextBlock Text="Conditional" FontSize="8" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Formatting" FontSize="8" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <!-- Format as Table -->
+                                <Button Width="58" Height="60" Margin="1,0"
+                                        Style="{StaticResource RibbonBtn}" Click="FormatTableBtn_Click"
+                                        local:RibbonTooltip.Title="Format as Table"
+                                        local:RibbonTooltip.Description="Quickly format a range as a styled table.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Light"    Click="FormatTableLightMenuItem_Click"/>
+                                            <MenuItem Header="Medium"   Click="FormatTableMediumMenuItem_Click"/>
+                                            <MenuItem Header="Dark"     Click="FormatTableDarkMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE8A9;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                                                   HorizontalAlignment="Center" Margin="0,5,0,3"/>
+                                        <TextBlock Text="Format as" FontSize="8" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Table" FontSize="8" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <!-- Cell Styles -->
+                                <Button Width="52" Height="60" Margin="1,0"
+                                        Style="{StaticResource RibbonBtn}" Click="CellStylesBtn_Click"
+                                        local:RibbonTooltip.Title="Cell Styles"
+                                        local:RibbonTooltip.Description="Apply a predefined cell style.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Good"         Click="CellStyleGoodMenuItem_Click"/>
+                                            <MenuItem Header="Bad"          Click="CellStyleBadMenuItem_Click"/>
+                                            <MenuItem Header="Neutral"      Click="CellStyleNeutralMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Heading 1"    Click="CellStyleH1MenuItem_Click"/>
+                                            <MenuItem Header="Heading 2"    Click="CellStyleH2MenuItem_Click"/>
+                                            <MenuItem Header="Note"         Click="CellStyleNoteMenuItem_Click"/>
+                                            <MenuItem Header="Warning Text" Click="CellStyleWarningMenuItem_Click"/>
+                                            <MenuItem Header="Total"        Click="CellStyleTotalMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="&#xE91C;" FontFamily="Segoe MDL2 Assets" FontSize="20"
+                                                   HorizontalAlignment="Center" Margin="0,5,0,3"/>
+                                        <TextBlock Text="Cell" FontSize="8" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Styles" FontSize="8" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Styles" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Cells ▌ -->
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>                        <!-- ▌Cells ▌ -->
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <Button Grid.Row="0" Grid.Column="0" Content="+ Row" Width="52" Height="22" Margin="1"
-                                        Style="{StaticResource RibbonBtn}" FontSize="10"
-                                        Click="InsertRowBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Row"
-                                        local:RibbonTooltip.Description="Insert a blank row above the selected row."/>
-                                <Button Grid.Row="0" Grid.Column="1" Content="− Row" Width="52" Height="22" Margin="1"
-                                        Style="{StaticResource RibbonBtn}" FontSize="10"
-                                        Click="DeleteRowBtn_Click"
-                                        local:RibbonTooltip.Title="Delete Row"
-                                        local:RibbonTooltip.Description="Delete the selected rows from the sheet."/>
-                                <Button Grid.Row="1" Grid.Column="0" Content="+ Col" Width="52" Height="22" Margin="1"
-                                        Style="{StaticResource RibbonBtn}" FontSize="10"
-                                        Click="InsertColBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Column"
-                                        local:RibbonTooltip.Description="Insert a blank column to the left of the selected column."/>
-                                <Button Grid.Row="1" Grid.Column="1" Content="− Col" Width="52" Height="22" Margin="1"
-                                        Style="{StaticResource RibbonBtn}" FontSize="10"
-                                        Click="DeleteColBtn_Click"
-                                        local:RibbonTooltip.Title="Delete Column"
-                                        local:RibbonTooltip.Description="Delete the selected columns from the sheet."/>
-                            </Grid>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}"
+                                        Click="InsertPickerBtn_Click"
+                                        local:RibbonTooltip.Title="Insert"
+                                        local:RibbonTooltip.Description="Insert cells, rows, columns, or a new sheet.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Insert Cells..."        Click="InsertCellsMenuItem_Click"/>
+                                            <MenuItem Header="Insert Sheet Rows"     Click="InsertRowBtn_Click"/>
+                                            <MenuItem Header="Insert Sheet Columns"  Click="InsertColBtn_Click"/>
+                                            <MenuItem Header="Insert Sheet..."        Click="InsertSheetMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="+" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBlock Text="Insert" FontSize="10" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}"
+                                        Click="DeletePickerBtn_Click"
+                                        local:RibbonTooltip.Title="Delete"
+                                        local:RibbonTooltip.Description="Delete cells, rows, columns, or the active sheet.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Delete Cells..."        Click="DeleteCellsMenuItem_Click"/>
+                                            <MenuItem Header="Delete Sheet Rows"     Click="DeleteRowBtn_Click"/>
+                                            <MenuItem Header="Delete Sheet Columns"  Click="DeleteColBtn_Click"/>
+                                            <MenuItem Header="Delete Sheet..."        Click="DeleteSheetMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="&#x2212;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBlock Text="Delete" FontSize="10" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}"
+                                        Click="FormatPickerBtn_Click"
+                                        local:RibbonTooltip.Title="Format"
+                                        local:RibbonTooltip.Description="Change row height, column width, visibility, or cell protection.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Row Height..."          Click="FormatRowHeightMenuItem_Click"/>
+                                            <MenuItem Header="AutoFit Row Height"     Click="FormatAutoRowMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Column Width..."        Click="FormatColWidthMenuItem_Click"/>
+                                            <MenuItem Header="AutoFit Column Width"   Click="FormatAutoColMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Hide Rows"              Click="FormatHideRowMenuItem_Click"/>
+                                            <MenuItem Header="Unhide Rows"            Click="FormatUnhideRowMenuItem_Click"/>
+                                            <MenuItem Header="Hide Columns"           Click="FormatHideColMenuItem_Click"/>
+                                            <MenuItem Header="Unhide Columns"         Click="FormatUnhideColMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Protect Sheet..."       Click="FormatProtectSheetMenuItem_Click"/>
+                                            <MenuItem Header="Lock Cell"              Click="FormatLockCellMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="&#x2699;" FontSize="11" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <TextBlock Text="Format" FontSize="10" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Cells" Style="{StaticResource GroupLbl}"/>
                             </Border>
@@ -491,44 +734,137 @@
 
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+
                         <!-- ▌Editing ▌ -->
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="16"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Width="72" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="FindButton_Click"
-                                        local:RibbonTooltip.Title="Find"
-                                        local:RibbonTooltip.Description="Find text, numbers, or formulas in the workbook.">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Find" VerticalAlignment="Center" FontSize="10"/>
+                            <Grid Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- AutoSum: tall left button -->
+                                <Button Grid.Column="0" Width="54" Height="60" Margin="1,0,3,0"
+                                        Style="{StaticResource RibbonBtn}" Click="AutoSumPickerBtn_Click"
+                                        local:RibbonTooltip.Title="AutoSum"
+                                        local:RibbonTooltip.Description="Automatically insert a SUM, AVERAGE, COUNT, MAX, or MIN formula.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Sum"              Click="AutoSumSumMenuItem_Click"/>
+                                            <MenuItem Header="Average"          Click="AutoSumAvgMenuItem_Click"/>
+                                            <MenuItem Header="Count Numbers"    Click="AutoSumCountMenuItem_Click"/>
+                                            <MenuItem Header="Max"              Click="AutoSumMaxMenuItem_Click"/>
+                                            <MenuItem Header="Min"              Click="AutoSumMinMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="More Functions..."  Click="AutoSumMoreMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#x03A3;" FontSize="22" HorizontalAlignment="Center" Margin="0,4,0,1"/>
+                                        <TextBlock Text="AutoSum" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Width="72" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="ReplaceButton_Click"
-                                        local:RibbonTooltip.Title="Replace"
-                                        local:RibbonTooltip.Description="Replace text or data in the workbook with different content.">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Replace" VerticalAlignment="Center" FontSize="10"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button x:Name="FlashFillMenuItem" Width="72" Height="22" Margin="1,1"
-                                        Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
-                                        local:RibbonTooltip.Title="Flash Fill"
-                                        local:RibbonTooltip.Description="Automatically fill values based on a pattern you type. Ctrl+E">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Flash Fill" VerticalAlignment="Center" FontSize="10"/>
-                                    </StackPanel>
-                                </Button>
-                            </StackPanel>
+                                <!-- Right: 2×2 grid of Fill/Clear/Sort&Filter/Find&Select -->
+                                <Grid Grid.Column="1">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Fill -->
+                                    <Button Grid.Row="0" Grid.Column="0" Width="46" Height="28" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="FillPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Fill"
+                                            local:RibbonTooltip.Description="Continue a pattern into one or more adjacent cells.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Fill Down"    Click="FillDownMenuItem_Click"/>
+                                                <MenuItem Header="Fill Right"   Click="FillRightMenuItem_Click"/>
+                                                <MenuItem Header="Fill Up"      Click="FillUpMenuItem_Click"/>
+                                                <MenuItem Header="Fill Left"    Click="FillLeftMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Series..."    Click="FillSeriesMenuItem_Click"/>
+                                                <MenuItem Header="Flash Fill"   Click="FlashFillMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
+                                            <TextBlock Text="Fill" FontSize="8" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <!-- Clear -->
+                                    <Button Grid.Row="0" Grid.Column="1" Width="46" Height="28" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="ClearPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Clear"
+                                            local:RibbonTooltip.Description="Delete everything in the cell, or just the content, formatting, or comments.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Clear All"        Click="ClearAllMenuItem_Click"/>
+                                                <MenuItem Header="Clear Formats"    Click="ClearFormatsMenuItem_Click"/>
+                                                <MenuItem Header="Clear Contents"   Click="ClearValuesMenuItem_Click"/>
+                                                <MenuItem Header="Clear Comments"   Click="ClearCommentsMenuItem_Click"/>
+                                                <MenuItem Header="Clear Hyperlinks" Click="ClearHyperlinksMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
+                                            <TextBlock Text="Clear" FontSize="8" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <!-- Sort & Filter -->
+                                    <Button Grid.Row="1" Grid.Column="0" Width="46" Height="28" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="SortFilterPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Sort &amp; Filter"
+                                            local:RibbonTooltip.Description="Sort and filter data to find the information you need.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Sort A to Z"    Click="SortAZMenuItem_Click"/>
+                                                <MenuItem Header="Sort Z to A"    Click="SortZAMenuItem_Click"/>
+                                                <MenuItem Header="Custom Sort..."  Click="SortCustomMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Filter"          Click="FilterToggleMenuItem_Click"/>
+                                                <MenuItem Header="Clear"           Click="FilterClearMenuItem_Click"/>
+                                                <MenuItem Header="Reapply"         Click="FilterReapplyMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
+                                            <TextBlock Text="Sort &amp;" FontSize="8" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Filter" FontSize="8" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <!-- Find & Select -->
+                                    <Button Grid.Row="1" Grid.Column="1" Width="46" Height="28" Margin="1,1"
+                                            Style="{StaticResource RibbonBtn}" Click="FindSelectPickerBtn_Click"
+                                            local:RibbonTooltip.Title="Find &amp; Select"
+                                            local:RibbonTooltip.Description="Find, replace, or go to specific cells in the workbook.">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Find..."            Click="FindFindMenuItem_Click"/>
+                                                <MenuItem Header="Replace..."         Click="FindReplaceMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Go To..."           Click="FindGoToMenuItem_Click"/>
+                                                <MenuItem Header="Go To Special..."   Click="FindGoToSpecialMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
+                                            <TextBlock Text="Find &amp;" FontSize="8" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Select" FontSize="8" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </Grid>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
                                 <TextBlock Text="Editing" Style="{StaticResource GroupLbl}"/>
                             </Border>
@@ -542,7 +878,7 @@
             <!-- ── INSERT ────────────────────────────────────────────── -->
             <TabItem Header="Insert">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -569,15 +905,240 @@
                                 <Button Content="Column" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartColumnMenuItem_Click"
                                         local:RibbonTooltip.Title="Column Chart"
                                         local:RibbonTooltip.Description="Insert a column chart to compare values across categories."/>
+                                <Button Content="Stack Col" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStackedColumnMenuItem_Click"
+                                        local:RibbonTooltip.Title="Stacked Column Chart"
+                                        local:RibbonTooltip.Description="Insert a stacked column chart to show parts of a whole by category."/>
+                                <Button Content="100% Col" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPercentStackedColumnMenuItem_Click"
+                                        local:RibbonTooltip.Title="100% Stacked Column Chart"
+                                        local:RibbonTooltip.Description="Insert a 100% stacked column chart to compare percentage contributions by category."/>
                                 <Button Content="Line"   Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
                                         local:RibbonTooltip.Title="Line Chart"
                                         local:RibbonTooltip.Description="Insert a line chart to show trends over time."/>
                                 <Button Content="Pie"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPieMenuItem_Click"
                                         local:RibbonTooltip.Title="Pie Chart"
                                         local:RibbonTooltip.Description="Insert a pie chart to show proportions of a whole."/>
+                                <Button Content="Slice Angle" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFirstSliceAngleBtn_Click"
+                                        local:RibbonTooltip.Title="First Slice Angle"
+                                        local:RibbonTooltip.Description="Cycle the first-slice angle for pie and doughnut charts."/>
+                                <Button Content="Explode" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartExplodedSliceBtn_Click"
+                                        local:RibbonTooltip.Title="Explode Slice"
+                                        local:RibbonTooltip.Description="Cycle the exploded slice for pie and doughnut charts."/>
+                                <Button Content="Doughnut" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutMenuItem_Click"
+                                        local:RibbonTooltip.Title="Doughnut Chart"
+                                        local:RibbonTooltip.Description="Insert a doughnut chart to show proportions with a center hole."/>
+                                <Button Content="Hole Size" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDoughnutHoleSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Doughnut Hole Size"
+                                        local:RibbonTooltip.Description="Cycle the current doughnut chart hole size."/>
                                 <Button Content="Bar"    Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBarMenuItem_Click"
                                         local:RibbonTooltip.Title="Bar Chart"
                                         local:RibbonTooltip.Description="Insert a horizontal bar chart to compare values across categories."/>
+                                <Button Content="Stack Bar" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStackedBarMenuItem_Click"
+                                        local:RibbonTooltip.Title="Stacked Bar Chart"
+                                        local:RibbonTooltip.Description="Insert a stacked bar chart to show parts of a whole by category."/>
+                                <Button Content="100% Bar" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPercentStackedBarMenuItem_Click"
+                                        local:RibbonTooltip.Title="100% Stacked Bar Chart"
+                                        local:RibbonTooltip.Description="Insert a 100% stacked bar chart to compare percentage contributions by category."/>
+                                <Button Content="Scatter" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartScatterMenuItem_Click"
+                                        local:RibbonTooltip.Title="Scatter Chart"
+                                        local:RibbonTooltip.Description="Insert a scatter chart to compare numeric X and Y values."/>
+                                <Button Content="Bubble" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartBubbleMenuItem_Click"
+                                        local:RibbonTooltip.Title="Bubble Chart"
+                                        local:RibbonTooltip.Description="Insert a bubble chart to compare X, Y, and size values."/>
+                                <Button Content="Area" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaMenuItem_Click"
+                                        local:RibbonTooltip.Title="Area Chart"
+                                        local:RibbonTooltip.Description="Insert an area chart to show trends with filled areas."/>
+                                <Button Content="Data Labels" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
+                                        local:RibbonTooltip.Title="Data Labels"
+                                        local:RibbonTooltip.Description="Show or hide value labels on the current chart."/>
+                                <Button Content="Label Pos" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPositionBtn_Click"
+                                        local:RibbonTooltip.Title="Data Label Position"
+                                        local:RibbonTooltip.Description="Cycle through common Excel data-label positions for the current chart."/>
+                                <Button Content="Cat Label" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelCategoryBtn_Click"
+                                        local:RibbonTooltip.Title="Category Name"
+                                        local:RibbonTooltip.Description="Show or hide category names in chart data labels."/>
+                                <Button Content="Series Label" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSeriesBtn_Click"
+                                        local:RibbonTooltip.Title="Series Name"
+                                        local:RibbonTooltip.Description="Show or hide series names in chart data labels."/>
+                                <Button Content="Percent" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelPercentageBtn_Click"
+                                        local:RibbonTooltip.Title="Percentage"
+                                        local:RibbonTooltip.Description="Show or hide percentage values in pie and doughnut chart data labels."/>
+                                <Button Content="Separator" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSeparatorBtn_Click"
+                                        local:RibbonTooltip.Title="Label Separator"
+                                        local:RibbonTooltip.Description="Cycle the separator used between chart data-label fields."/>
+                                <Button Content="Label Num" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelNumberFormatBtn_Click"
+                                        local:RibbonTooltip.Title="Label Number Format"
+                                        local:RibbonTooltip.Description="Cycle the number format used by chart data labels."/>
+                                <Button Content="Callout" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelCalloutBtn_Click"
+                                        local:RibbonTooltip.Title="Data Callout"
+                                        local:RibbonTooltip.Description="Show or hide boxed callout-style data labels."/>
+                                <Button Content="Label Fill" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelFillBtn_Click"
+                                        local:RibbonTooltip.Title="Data Label Fill"
+                                        local:RibbonTooltip.Description="Cycle the current chart data-label fill color."/>
+                                <Button Content="Label Text" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelTextBtn_Click"
+                                        local:RibbonTooltip.Title="Data Label Text"
+                                        local:RibbonTooltip.Description="Cycle the current chart data-label text color."/>
+                                <Button Content="Label Border" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelBorderBtn_Click"
+                                        local:RibbonTooltip.Title="Data Label Border"
+                                        local:RibbonTooltip.Description="Cycle the current chart data-label border color and weight."/>
+                                <Button Content="Label Size" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Data Label Size"
+                                        local:RibbonTooltip.Description="Cycle the current chart data-label font size."/>
+                                <Button Content="Label Angle" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelAngleBtn_Click"
+                                        local:RibbonTooltip.Title="Data Label Angle"
+                                        local:RibbonTooltip.Description="Cycle the current chart data-label text rotation."/>
+                                <Button Content="Point Label" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPointDataLabelBtn_Click"
+                                        local:RibbonTooltip.Title="Format Data Point Label"
+                                        local:RibbonTooltip.Description="Cycle fill, border, text color, and font size for the first data point label."/>
+                                <Button Content="Chart Fill" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAreaFillBtn_Click"
+                                        local:RibbonTooltip.Title="Chart Area Fill"
+                                        local:RibbonTooltip.Description="Cycle the current chart area fill color."/>
+                                <Button Content="Title Color" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleColorBtn_Click"
+                                        local:RibbonTooltip.Title="Chart Title Color"
+                                        local:RibbonTooltip.Description="Cycle the current chart title text color."/>
+                                <Button Content="Title Size" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Chart Title Size"
+                                        local:RibbonTooltip.Description="Cycle the current chart title font size."/>
+                                <Button Content="Axis Title" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleColorBtn_Click"
+                                        local:RibbonTooltip.Title="Axis Title Color"
+                                        local:RibbonTooltip.Description="Cycle chart axis-title text color."/>
+                                <Button Content="Axis Title Size" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartAxisTitleSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Axis Title Size"
+                                        local:RibbonTooltip.Description="Cycle chart axis-title font size."/>
+                                <Button Content="Plot Fill" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaFillBtn_Click"
+                                        local:RibbonTooltip.Title="Plot Area Fill"
+                                        local:RibbonTooltip.Description="Cycle the current chart plot area fill color."/>
+                                <Button Content="Plot Border" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartPlotAreaBorderBtn_Click"
+                                        local:RibbonTooltip.Title="Plot Area Border"
+                                        local:RibbonTooltip.Description="Cycle the current chart plot area border color and weight."/>
+                                <Button Content="Legend Text" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendTextBtn_Click"
+                                        local:RibbonTooltip.Title="Legend Text"
+                                        local:RibbonTooltip.Description="Cycle the current chart legend text color."/>
+                                <Button Content="Legend Fill" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendFillBtn_Click"
+                                        local:RibbonTooltip.Title="Legend Fill"
+                                        local:RibbonTooltip.Description="Cycle the current chart legend fill color."/>
+                                <Button Content="Legend Border" Width="98" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendBorderBtn_Click"
+                                        local:RibbonTooltip.Title="Legend Border"
+                                        local:RibbonTooltip.Description="Cycle the current chart legend border color and weight."/>
+                                <Button Content="Legend Size" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Legend Font Size"
+                                        local:RibbonTooltip.Description="Cycle the current chart legend font size."/>
+                                <Button Content="Legend Overlay" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLegendOverlayBtn_Click"
+                                        local:RibbonTooltip.Title="Legend Overlay"
+                                        local:RibbonTooltip.Description="Toggle whether the legend overlays the plot area."/>
+                                <Button Content="Trendline" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineBtn_Click"
+                                        local:RibbonTooltip.Title="Trendline"
+                                        local:RibbonTooltip.Description="Show or hide a trendline on the current column or line chart."/>
+                                <Button Content="Trend Type" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineTypeBtn_Click"
+                                        local:RibbonTooltip.Title="Trendline Type"
+                                        local:RibbonTooltip.Description="Switch the current chart trendline between supported Excel-like trendline types."/>
+                                <Button Content="Trend Period" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlinePeriodBtn_Click"
+                                        local:RibbonTooltip.Title="Moving Average Period"
+                                        local:RibbonTooltip.Description="Cycle the moving-average trendline period for the current chart."/>
+                                <Button Content="Trend Order" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineOrderBtn_Click"
+                                        local:RibbonTooltip.Title="Polynomial Order"
+                                        local:RibbonTooltip.Description="Cycle the polynomial trendline order for the current chart."/>
+                                <Button Content="Equation" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineEquationBtn_Click"
+                                        local:RibbonTooltip.Title="Trendline Equation"
+                                        local:RibbonTooltip.Description="Show or hide the trendline equation on the current chart."/>
+                                <Button Content="R²" Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
+                                        local:RibbonTooltip.Title="R-squared"
+                                        local:RibbonTooltip.Description="Show or hide the trendline R-squared value on the current chart."/>
+                                <Button Content="Trend Color" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineColorBtn_Click"
+                                        local:RibbonTooltip.Title="Trendline Color"
+                                        local:RibbonTooltip.Description="Cycle the current chart trendline color."/>
+                                <Button Content="Trend Dash" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineDashBtn_Click"
+                                        local:RibbonTooltip.Title="Trendline Dash"
+                                        local:RibbonTooltip.Description="Cycle the current chart trendline dash style."/>
+                                <Button Content="Trend Width" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineWidthBtn_Click"
+                                        local:RibbonTooltip.Title="Trendline Width"
+                                        local:RibbonTooltip.Description="Cycle the current chart trendline width."/>
+                                <Button Content="2nd Axis" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisBtn_Click"
+                                        local:RibbonTooltip.Title="Secondary Axis"
+                                        local:RibbonTooltip.Description="Plot additional series on a secondary value axis for the current column or line chart."/>
+                                <Button Content="X Bounds" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisBoundsBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Bounds"
+                                        local:RibbonTooltip.Description="Toggle automatic or data-based X axis bounds for the current chart."/>
+                                <Button Content="Y Bounds" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisBoundsBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Bounds"
+                                        local:RibbonTooltip.Description="Toggle automatic or data-based Y axis bounds for the current chart."/>
+                                <Button Content="X Log" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLogBtn_Click"
+                                        local:RibbonTooltip.Title="X Log Scale"
+                                        local:RibbonTooltip.Description="Toggle logarithmic scale for the current chart X axis."/>
+                                <Button Content="Y Log" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLogBtn_Click"
+                                        local:RibbonTooltip.Title="Y Log Scale"
+                                        local:RibbonTooltip.Description="Toggle logarithmic scale for the current chart Y axis."/>
+                                <Button Content="X Num" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisNumberFormatBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Number Format"
+                                        local:RibbonTooltip.Description="Cycle the current chart X axis number format."/>
+                                <Button Content="Y Num" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisNumberFormatBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Number Format"
+                                        local:RibbonTooltip.Description="Cycle the current chart Y axis number format."/>
+                                <Button Content="X Grid" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlinesBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Gridlines"
+                                        local:RibbonTooltip.Description="Cycle X axis gridlines between off, major, and major plus minor."/>
+                                <Button Content="Y Grid" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlinesBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Gridlines"
+                                        local:RibbonTooltip.Description="Cycle Y axis gridlines between off, major, and major plus minor."/>
+                                <Button Content="X Grid Style" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisGridlineStyleBtn_Click"
+                                        local:RibbonTooltip.Title="X Gridline Style"
+                                        local:RibbonTooltip.Description="Cycle X axis gridline color and weight."/>
+                                <Button Content="Y Grid Style" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisGridlineStyleBtn_Click"
+                                        local:RibbonTooltip.Title="Y Gridline Style"
+                                        local:RibbonTooltip.Description="Cycle Y axis gridline color and weight."/>
+                                <Button Content="X Tick" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisTickBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Ticks"
+                                        local:RibbonTooltip.Description="Cycle X axis tick mark styles."/>
+                                <Button Content="Y Tick" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisTickBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Ticks"
+                                        local:RibbonTooltip.Description="Cycle Y axis tick mark styles."/>
+                                <Button Content="X Labels" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelsBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Labels"
+                                        local:RibbonTooltip.Description="Show or hide X axis labels on the current chart."/>
+                                <Button Content="Y Labels" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelsBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Labels"
+                                        local:RibbonTooltip.Description="Show or hide Y axis labels on the current chart."/>
+                                <Button Content="X Label Font" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelFontBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Label Font"
+                                        local:RibbonTooltip.Description="Cycle X axis label text color and font size."/>
+                                <Button Content="X Angle" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLabelAngleBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Label Angle"
+                                        local:RibbonTooltip.Description="Cycle X axis label rotation."/>
+                                <Button Content="Y Label Font" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelFontBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Label Font"
+                                        local:RibbonTooltip.Description="Cycle Y axis label text color and font size."/>
+                                <Button Content="Y Angle" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLabelAngleBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Label Angle"
+                                        local:RibbonTooltip.Description="Cycle Y axis label rotation."/>
+                                <Button Content="X Line" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartXAxisLineBtn_Click"
+                                        local:RibbonTooltip.Title="X Axis Line"
+                                        local:RibbonTooltip.Description="Cycle X axis line color and weight on the current chart."/>
+                                <Button Content="Y Line" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartYAxisLineBtn_Click"
+                                        local:RibbonTooltip.Title="Y Axis Line"
+                                        local:RibbonTooltip.Description="Cycle Y axis line color and weight on the current chart."/>
+                                <Button Content="Axis Series" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisSeriesBtn_Click"
+                                        local:RibbonTooltip.Title="Secondary Axis Series"
+                                        local:RibbonTooltip.Description="Cycle which chart series uses the secondary value axis."/>
+                                <Button Content="Combo" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboBtn_Click"
+                                        local:RibbonTooltip.Title="Combo Chart"
+                                        local:RibbonTooltip.Description="Render additional column or area chart series as lines."/>
+                                <Button Content="Combo Series" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartComboSeriesBtn_Click"
+                                        local:RibbonTooltip.Title="Combo Chart Series"
+                                        local:RibbonTooltip.Description="Cycle which data series renders as the combo chart line."/>
+                                <Button Content="Series Color" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesColorBtn_Click"
+                                        local:RibbonTooltip.Title="Series Color"
+                                        local:RibbonTooltip.Description="Cycle the first chart series fill or line color."/>
+                                <Button Content="Series Width" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesWidthBtn_Click"
+                                        local:RibbonTooltip.Title="Series Width"
+                                        local:RibbonTooltip.Description="Cycle the first chart series outline or line width."/>
+                                <Button Content="Series Dash" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesDashBtn_Click"
+                                        local:RibbonTooltip.Title="Series Dash"
+                                        local:RibbonTooltip.Description="Cycle the first chart series line dash style."/>
+                                <Button Content="Marker" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerBtn_Click"
+                                        local:RibbonTooltip.Title="Series Marker"
+                                        local:RibbonTooltip.Description="Cycle the first chart series marker style."/>
+                                <Button Content="Marker Size" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSeriesMarkerSizeBtn_Click"
+                                        local:RibbonTooltip.Title="Marker Size"
+                                        local:RibbonTooltip.Description="Cycle the first chart series marker size."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Charts" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -635,7 +1196,7 @@
             <!-- ── DRAW ──────────────────────────────────────────────── -->
             <TabItem Header="Draw">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -704,7 +1265,7 @@
             <!-- ── PAGE LAYOUT ───────────────────────────────────────── -->
             <TabItem Header="Page Layout">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -825,7 +1386,7 @@
             <!-- ── FORMULAS ──────────────────────────────────────────── -->
             <TabItem Header="Formulas">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -971,7 +1532,7 @@
             <!-- ── DATA ──────────────────────────────────────────────── -->
             <TabItem Header="Data">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1124,7 +1685,7 @@
             <!-- ── REVIEW ────────────────────────────────────────────── -->
             <TabItem Header="Review">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1226,7 +1787,7 @@
             <!-- ── VIEW ──────────────────────────────────────────────── -->
             <TabItem Header="View">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1255,9 +1816,10 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
-                                <CheckBox Content="Gridlines"              Margin="4,3" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"/>
-                                <CheckBox Content="Row and Column Headers" Margin="4,3" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"/>
-                                <CheckBox Content="Formula Bar"            Margin="4,3" IsChecked="True" Checked="ViewFormulaBarChk_Changed" Unchecked="ViewFormulaBarChk_Changed"/>
+                                <CheckBox x:Name="ViewGridlinesChk" Content="Gridlines"              Margin="4,3" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"/>
+                                <CheckBox x:Name="ViewHeadersChk"   Content="Row and Column Headers" Margin="4,3" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"/>
+                                <CheckBox x:Name="ViewRulerChk"     Content="Ruler"                  Margin="4,3" IsChecked="True" Checked="ViewRulerChk_Changed"     Unchecked="ViewRulerChk_Changed"/>
+                                <CheckBox x:Name="ViewFormulaBarChk" Content="Formula Bar" Margin="4,3" IsChecked="True" Checked="ViewFormulaBarChk_Changed" Unchecked="ViewFormulaBarChk_Changed"/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Show" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1292,6 +1854,21 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="Zoom" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomPickerBtn_Click"
+                                        local:RibbonTooltip.Title="Zoom"
+                                        local:RibbonTooltip.Description="Choose an Excel-style zoom preset from 10% to 400%.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="200%" Tag="200" Click="ZoomPresetMenuItem_Click"/>
+                                            <MenuItem Header="100%" Tag="100" Click="ZoomPresetMenuItem_Click"/>
+                                            <MenuItem Header="75%"  Tag="75"  Click="ZoomPresetMenuItem_Click"/>
+                                            <MenuItem Header="50%"  Tag="50"  Click="ZoomPresetMenuItem_Click"/>
+                                            <MenuItem Header="25%"  Tag="25"  Click="ZoomPresetMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Custom..." Click="ZoomCustomMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="-"    Width="28" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomOutBtn_Click"
                                             local:RibbonTooltip.Title="Zoom Out"
@@ -1309,6 +1886,42 @@
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Zoom" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
+                        <!-- ▌Window ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="New Window" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="New Window"
+                                        local:RibbonTooltip.Description="Deferred: requires multiple live windows over the same workbook session."/>
+                                <Button Content="Arrange All" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
+                                        local:RibbonTooltip.Title="Arrange All"
+                                        local:RibbonTooltip.Description="Choose the workbook-window arrangement to use when multiple Freexcel windows are available.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Tiled"      Tag="Tiled"      Click="ArrangeAllMenuItem_Click"/>
+                                            <MenuItem Header="Horizontal" Tag="Horizontal" Click="ArrangeAllMenuItem_Click"/>
+                                            <MenuItem Header="Vertical"   Tag="Vertical"   Click="ArrangeAllMenuItem_Click"/>
+                                            <MenuItem Header="Cascade"    Tag="Cascade"    Click="ArrangeAllMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button Content="Side by Side" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="View Side by Side"
+                                        local:RibbonTooltip.Description="Deferred: requires multi-window workbook hosting and synchronized scroll routing."/>
+                                <Button Content="Sync Scrolling" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Synchronous Scrolling"
+                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows with synchronized viewport state."/>
+                                <Button Content="Reset Position" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Reset Window Position"
+                                        local:RibbonTooltip.Description="Deferred: requires paired workbook windows and side-by-side layout state."/>
+                                <Button Content="Switch Windows" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                        local:RibbonTooltip.Title="Switch Windows"
+                                        local:RibbonTooltip.Description="Deferred: requires a multi-window workbook registry."/>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Window" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
 
                     </StackPanel>
                     </ScrollViewer>
@@ -1318,7 +1931,7 @@
             <!-- ── HELP ──────────────────────────────────────────────── -->
             <TabItem Header="Help">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1372,7 +1985,7 @@
                         local:RibbonTooltip.Title="Insert Function"
                         local:RibbonTooltip.Description="Search for and insert a function into the selected cell."/>
 
-                <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Consolas" FontSize="13"
+                <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Calibri" FontSize="14.667" TextOptions.TextFormattingMode="Display"
                          AcceptsReturn="True"
                          VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
                          PreviewKeyDown="FormulaBar_KeyDown"/>
@@ -1434,7 +2047,7 @@
 
                 <!-- Sheet tabs + Add button in a horizontal ScrollViewer -->
                 <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
-                              HorizontalScrollBarVisibility="Hidden"
+                              HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Disabled">
                     <StackPanel Orientation="Horizontal">
                         <ItemsControl x:Name="SheetTabsControl">
@@ -1462,8 +2075,8 @@
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="Background"      Value="White"/>
                                                         <Setter Property="BorderBrush"     Value="#217346"/>
-                                                        <Setter Property="BorderThickness" Value="0,0,0,3"/>
-                                                        <Setter Property="Margin"          Value="2,-1,0,0"/>
+                                                        <Setter Property="BorderThickness" Value="1,3,1,0"/>
+                                                        <Setter Property="Margin"          Value="2,-3,0,-1"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                                         <Setter Property="BorderBrush"     Value="#217346"/>
@@ -1533,8 +2146,8 @@
                 <TextBlock x:Name="StatusReadyText" Text="Ready" Foreground="White"
                            FontSize="12" VerticalAlignment="Center"/>
                 <StackPanel x:Name="StatusStatsPanel" Orientation="Horizontal"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Visibility="Collapsed">
+                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Visibility="Collapsed" Margin="0,0,180,0">
                     <TextBlock x:Name="StatusAvgText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
                     <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12" Margin="0,0,16,0"/>
                     <TextBlock x:Name="StatusSumText"   Foreground="White" FontSize="12" Margin="0,0,16,0"/>
@@ -1547,7 +2160,7 @@
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"/>
-                    <Slider x:Name="ZoomSlider" Width="80" Minimum="0" Maximum="200" Value="100"
+                    <Slider x:Name="ZoomSlider" Width="120" Minimum="0" Maximum="200" Value="100"
                             VerticalAlignment="Center" Margin="0,0,2,0"
                             SmallChange="5" LargeChange="10"
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"

@@ -12,6 +12,11 @@ public sealed class CustomViewCommandTests
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         sheet.ViewMode = WorksheetViewMode.PageBreakPreview;
+        sheet.ShowGridlines = false;
+        sheet.ShowHeadings = false;
+        sheet.ShowRulers = false;
+        sheet.ZoomPercent = 125;
+        sheet.ShowFormulas = true;
         sheet.FrozenRows = 1;
         sheet.SplitColumn = 3;
         var ctx = new SimpleCtx(workbook);
@@ -22,7 +27,13 @@ public sealed class CustomViewCommandTests
 
         var view = workbook.CustomViews.Should().ContainSingle().Subject;
         view.Name.Should().Be("Audit View");
-        view.Sheets.Should().ContainSingle().Which.SplitColumn.Should().Be(3);
+        var state = view.Sheets.Should().ContainSingle().Subject;
+        state.SplitColumn.Should().Be(3);
+        state.ShowGridlines.Should().BeFalse();
+        state.ShowHeadings.Should().BeFalse();
+        state.ShowRulers.Should().BeFalse();
+        state.ZoomPercent.Should().Be(125);
+        state.ShowFormulas.Should().BeTrue();
 
         command.Revert(ctx);
 
@@ -36,9 +47,25 @@ public sealed class CustomViewCommandTests
         var sheet = workbook.AddSheet("Sheet1");
         workbook.CustomViews.Add(new WorkbookCustomView(
             "Saved",
-            [new WorksheetCustomViewState("Sheet1", WorksheetViewMode.PageLayout, 2, 0, null, 4)]));
+            [new WorksheetCustomViewState(
+                "Sheet1",
+                WorksheetViewMode.PageLayout,
+                2,
+                0,
+                null,
+                4,
+                ShowGridlines: false,
+                ShowHeadings: false,
+                ShowRulers: false,
+                ZoomPercent: 150,
+                ShowFormulas: true)]));
         var ctx = new SimpleCtx(workbook);
         sheet.ViewMode = WorksheetViewMode.Normal;
+        sheet.ShowGridlines = true;
+        sheet.ShowHeadings = true;
+        sheet.ShowRulers = true;
+        sheet.ZoomPercent = 100;
+        sheet.ShowFormulas = false;
         sheet.FrozenRows = 0;
         sheet.SplitColumn = null;
 
@@ -46,12 +73,22 @@ public sealed class CustomViewCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
         sheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.ShowHeadings.Should().BeFalse();
+        sheet.ShowRulers.Should().BeFalse();
+        sheet.ZoomPercent.Should().Be(150);
+        sheet.ShowFormulas.Should().BeTrue();
         sheet.FrozenRows.Should().Be(2);
         sheet.SplitColumn.Should().Be(4);
 
         command.Revert(ctx);
 
         sheet.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        sheet.ShowGridlines.Should().BeTrue();
+        sheet.ShowHeadings.Should().BeTrue();
+        sheet.ShowRulers.Should().BeTrue();
+        sheet.ZoomPercent.Should().Be(100);
+        sheet.ShowFormulas.Should().BeFalse();
         sheet.FrozenRows.Should().Be(0);
         sheet.SplitColumn.Should().BeNull();
     }

@@ -25,6 +25,8 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
+        if (ConditionalFormatValidator.Validate(_sheetId, _format) is { } validationOutcome)
+            return validationOutcome;
 
         // Replace an existing rule that shares the same Id (for edits), or just add.
         var idx = sheet.ConditionalFormats.FindIndex(f => f.Id == _format.Id);
@@ -130,6 +132,9 @@ public sealed class ReplaceAllConditionalFormatsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
+        foreach (var rule in _newRules)
+            if (ConditionalFormatValidator.Validate(_sheetId, rule) is { } validationOutcome)
+                return validationOutcome;
 
         _previousRules = [.. sheet.ConditionalFormats];
         sheet.ConditionalFormats.Clear();
@@ -144,5 +149,20 @@ public sealed class ReplaceAllConditionalFormatsCommand : IWorkbookCommand
         if (sheet is null) return;
         sheet.ConditionalFormats.Clear();
         sheet.ConditionalFormats.AddRange(_previousRules);
+    }
+}
+
+internal static class ConditionalFormatValidator
+{
+    public static CommandOutcome? Validate(SheetId sheetId, ConditionalFormat format)
+    {
+        if (format.AppliesTo.Start.Sheet != sheetId || format.AppliesTo.End.Sheet != sheetId)
+            return new CommandOutcome(false, "Conditional format range must be on the target sheet.");
+        if (!Enum.IsDefined(format.RuleType))
+            return new CommandOutcome(false, "Conditional format rule type is not supported.");
+        if (!Enum.IsDefined(format.Operator))
+            return new CommandOutcome(false, "Conditional format operator is not supported.");
+
+        return null;
     }
 }

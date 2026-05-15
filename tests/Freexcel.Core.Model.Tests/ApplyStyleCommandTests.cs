@@ -131,6 +131,116 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void ApplyStyleCommand_RejectsInvalidStyleChoices()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("kept"));
+        var range = new GridRange(addr, addr);
+        var original = sheet.GetCell(addr)!.Clone();
+        var invalidDiffs = new[]
+        {
+            new StyleDiff(HAlign: (HorizontalAlignment)99),
+            new StyleDiff(VAlign: (VerticalAlignment)99),
+            new StyleDiff(BorderTop: new CellBorder((BorderStyle)99)),
+            new StyleDiff(BorderRight: new CellBorder((BorderStyle)99)),
+            new StyleDiff(BorderBottom: new CellBorder((BorderStyle)99)),
+            new StyleDiff(BorderLeft: new CellBorder((BorderStyle)99))
+        };
+
+        foreach (var diff in invalidDiffs)
+        {
+            var outcome = new ApplyStyleCommand(sheet.Id, range, diff).Apply(ctx);
+
+            outcome.Success.Should().BeFalse();
+            sheet.GetCell(addr)!.Should().BeEquivalentTo(original);
+        }
+    }
+
+    [Theory]
+    [InlineData(-91)]
+    [InlineData(91)]
+    [InlineData(256)]
+    public void ApplyStyleCommand_RejectsUnsupportedTextRotation(int rotation)
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("kept"));
+        var range = new GridRange(addr, addr);
+        var originalStyleId = sheet.GetCell(addr)!.StyleId;
+
+        var outcome = new ApplyStyleCommand(sheet.Id, range, new StyleDiff(TextRotation: rotation)).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.GetCell(addr)!.StyleId.Should().Be(originalStyleId);
+    }
+
+    [Theory]
+    [InlineData(-90)]
+    [InlineData(0)]
+    [InlineData(90)]
+    [InlineData(255)]
+    public void ApplyStyleCommand_AcceptsSupportedTextRotation(int rotation)
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("rotated"));
+        var range = new GridRange(addr, addr);
+
+        var outcome = new ApplyStyleCommand(sheet.Id, range, new StyleDiff(TextRotation: rotation)).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).TextRotation.Should().Be(rotation);
+    }
+
+    public static TheoryData<double> UnsupportedFontSizes => new()
+    {
+        0,
+        -1,
+        410,
+        double.NaN,
+        double.PositiveInfinity,
+        double.NegativeInfinity
+    };
+
+    [Theory]
+    [MemberData(nameof(UnsupportedFontSizes))]
+    public void ApplyStyleCommand_RejectsUnsupportedFontSize(double fontSize)
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("kept"));
+        var originalStyleId = sheet.GetCell(addr)!.StyleId;
+
+        var outcome = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(FontSize: fontSize)).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.GetCell(addr)!.StyleId.Should().Be(originalStyleId);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(11)]
+    [InlineData(409)]
+    public void ApplyStyleCommand_AcceptsSupportedFontSize(double fontSize)
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("resized"));
+
+        var outcome = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(FontSize: fontSize)).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).FontSize.Should().Be(fontSize);
+    }
+
+    [Fact]
     public void ClearConditionalFormatsCommand_RemovesRulesInRangeAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();

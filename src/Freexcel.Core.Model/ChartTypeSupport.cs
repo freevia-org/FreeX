@@ -1,0 +1,94 @@
+namespace Freexcel.Core.Model;
+
+public static class ChartTypeSupport
+{
+    public static bool SupportsTrendlines(ChartType type) =>
+        type is ChartType.Column or ChartType.Line or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
+
+    public static bool SupportsSecondaryAxis(ChartType type) =>
+        type is ChartType.Column or ChartType.Line or ChartType.Area or ChartType.Scatter;
+
+    public static bool SupportsComboLineOverlay(ChartType type) =>
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area;
+
+    public static bool SupportsComboLineOverlay(ChartModel chart) =>
+        SupportsComboLineOverlay(chart.Type) && GetDataSeriesCount(chart) >= 2;
+
+    public static bool SupportsXAxisLogScale(ChartType type) =>
+        type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.Scatter or ChartType.Bubble;
+
+    public static bool SupportsYAxisLogScale(ChartType type) =>
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Line or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
+
+    public static bool SupportsXAxisBounds(ChartType type) => SupportsXAxisLogScale(type);
+
+    public static bool SupportsYAxisBounds(ChartType type) => SupportsYAxisLogScale(type);
+
+    public static bool SupportsSeriesMarkers(ChartType type) =>
+        type is ChartType.Line or ChartType.Scatter;
+
+    public static int GetDataSeriesCount(ChartModel chart)
+    {
+        if (chart.Type == ChartType.Bubble)
+            return chart.DataRange.End.Col - chart.DataRange.Start.Col >= 1 ? 1 : 0;
+
+        var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
+            startCol++;
+
+        return startCol > chart.DataRange.End.Col
+            ? 0
+            : (int)(chart.DataRange.End.Col - startCol + 1);
+    }
+
+    public static int GetDataPointCount(ChartModel chart)
+    {
+        var startRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        return startRow > chart.DataRange.End.Row
+            ? 0
+            : (int)(chart.DataRange.End.Row - startRow + 1);
+    }
+
+    public static uint? GetXAxisValueColumn(ChartModel chart)
+    {
+        if (chart.Type is ChartType.Scatter or ChartType.Bubble)
+            return chart.DataRange.Start.Col;
+
+        return chart.FirstColIsCategories ? chart.DataRange.Start.Col : null;
+    }
+
+    public static IReadOnlyList<uint> GetXAxisValueColumns(ChartModel chart)
+    {
+        if (chart.Type is ChartType.Scatter or ChartType.Bubble)
+            return [chart.DataRange.Start.Col];
+
+        if (chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar)
+            return GetSeriesValueColumns(chart);
+
+        return [];
+    }
+
+    public static IReadOnlyList<uint> GetYAxisValueColumns(ChartModel chart)
+    {
+        if (chart.Type == ChartType.Bubble)
+            return chart.DataRange.Start.Col + 1 <= chart.DataRange.End.Col
+                ? [chart.DataRange.Start.Col + 1]
+                : [];
+
+        return GetSeriesValueColumns(chart);
+    }
+
+    private static IReadOnlyList<uint> GetSeriesValueColumns(ChartModel chart)
+    {
+        var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
+            startCol++;
+        if (startCol > chart.DataRange.End.Col)
+            return [];
+
+        var columns = new List<uint>();
+        for (var col = startCol; col <= chart.DataRange.End.Col; col++)
+            columns.Add(col);
+        return columns;
+    }
+}

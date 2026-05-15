@@ -59,12 +59,16 @@ AssemblyInfo.cs
 ConditionalFormatDialog.cs
 CustomViewsDialog.xaml.cs
 DataValidationDialog.xaml.cs
+ErrorCheckingDialog.cs
+EvaluateFormulaDialog.cs
 FindReplaceDialog.xaml.cs
 FormatCellsDialog.xaml.cs
 FreexcelOptions.cs
+GoalSeekDialog.xaml.cs
 HeaderFooterDialog.xaml.cs
 InsertFunctionDialog.cs
 MainWindow.xaml.cs
+ManageConditionalFormatsDialog.cs
 NamedRangeDialog.xaml.cs
 obj/Debug/net10.0-windows/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
@@ -76,6 +80,7 @@ obj/Debug/net10.0-windows/
  Freexcel.App.Host.AssemblyInfo.cs
  Freexcel.App.Host.GlobalUsings.g.cs
  GeneratedInternalTypeHelper.g.cs
+ GoalSeekDialog.g.cs
  HeaderFooterDialog.g.cs
  MainWindow.g.cs
  NamedRangeDialog.g.cs
@@ -90,6 +95,7 @@ RecentFilesStore.cs
 RibbonTooltip.cs
 StatusBarCalculator.cs
 SymbolPickerDialog.cs
+WatchWindowDialog.cs
 
 [metadataReferences]
 ../

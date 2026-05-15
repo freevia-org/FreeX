@@ -59,10 +59,12 @@ Cell.cs
 CellAddress.cs
 CellStyle.cs
 ChartModel.cs
+ChartTypeSupport.cs
 ConditionalFormat.cs
 DataValidation.cs
 DrawingShapeModel.cs
 Dtos.cs
+FormulaTraceArrow.cs
 Identity.cs
 IViewportService.cs
 obj/Debug/net10.0/
@@ -77,6 +79,7 @@ Sheet.cs
 SparklineModel.cs
 TextBoxModel.cs
 Workbook.cs
+WorkbookWindowOptions.cs
 
 [metadataReferences]
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.8/ref/net10.0/

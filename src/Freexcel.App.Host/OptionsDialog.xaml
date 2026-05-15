@@ -173,6 +173,14 @@
                         <CheckBox x:Name="OptFormulasAutocomplete"
                                   Content="Enable AutoComplete for cell values"
                                   FontSize="12" Margin="0,0,0,4"/>
+
+                        <TextBlock Text="Error Checking Rules"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+
+                        <TextBlock Text="Enable background error checks for:"
+                                   FontSize="12" Foreground="#555" Margin="0,0,0,8"/>
+                        <StackPanel x:Name="OptErrorCheckingRules"/>
                     </StackPanel>
 
                     <!-- ═══ SAVE ═══════════════════════════════════════════ -->
