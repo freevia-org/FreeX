@@ -7,6 +7,8 @@ namespace Freexcel.Core.Model;
 public sealed class Sheet
 {
     private readonly Dictionary<(uint Row, uint Col), Cell> _cells = [];
+    private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
+    private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -32,8 +34,131 @@ public sealed class Sheet
     /// <summary>Number of columns frozen at the left (0 = none).</summary>
     public uint FrozenCols { get; set; } = 0;
 
+    /// <summary>First row below a split pane, or null when no horizontal split is active.</summary>
+    public uint? SplitRow { get; set; }
+
+    /// <summary>First column to the right of a split pane, or null when no vertical split is active.</summary>
+    public uint? SplitColumn { get; set; }
+
+    /// <summary>Optional worksheet print area. Null means print the used range.</summary>
+    public GridRange? PrintArea { get; set; }
+
+    /// <summary>Worksheet page orientation used for print preview/export.</summary>
+    public WorksheetPageOrientation PageOrientation { get; set; } = WorksheetPageOrientation.Portrait;
+
+    /// <summary>Worksheet paper size used for print preview/export.</summary>
+    public WorksheetPaperSize PaperSize { get; set; } = WorksheetPaperSize.A4;
+
+    /// <summary>Worksheet page margins in inches.</summary>
+    public WorksheetPageMargins PageMargins { get; set; } = WorksheetPageMargins.Narrow;
+
+    /// <summary>Distance from the page top to the printed header, in inches.</summary>
+    public double HeaderMargin { get; set; } = 0.3;
+
+    /// <summary>Distance from the page bottom to the printed footer, in inches.</summary>
+    public double FooterMargin { get; set; } = 0.3;
+
+    /// <summary>Whether gridlines are printed for this worksheet.</summary>
+    public bool PrintGridlines { get; set; }
+
+    /// <summary>Whether row and column headings are printed for this worksheet.</summary>
+    public bool PrintHeadings { get; set; }
+
+    /// <summary>Worksheet print scaling settings.</summary>
+    public WorksheetScaleToFit ScaleToFit { get; set; } = WorksheetScaleToFit.Default;
+
+    /// <summary>Rows repeated at the top of every printed page.</summary>
+    public WorksheetRepeatRange? PrintTitleRows { get; set; }
+
+    /// <summary>Columns repeated at the left of every printed page.</summary>
+    public WorksheetRepeatRange? PrintTitleColumns { get; set; }
+
+    /// <summary>Worksheet printed page header text.</summary>
+    public WorksheetHeaderFooter PageHeader { get; set; } = new("", "", "");
+
+    /// <summary>Worksheet printed page footer text.</summary>
+    public WorksheetHeaderFooter PageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Optional first-page header used when different first-page headers/footers are enabled.</summary>
+    public WorksheetHeaderFooter FirstPageHeader { get; set; } = new("", "", "");
+
+    /// <summary>Optional first-page footer used when different first-page headers/footers are enabled.</summary>
+    public WorksheetHeaderFooter FirstPageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Optional even-page header used when different odd/even headers/footers are enabled.</summary>
+    public WorksheetHeaderFooter EvenPageHeader { get; set; } = new("", "", "");
+
+    /// <summary>Optional even-page footer used when different odd/even headers/footers are enabled.</summary>
+    public WorksheetHeaderFooter EvenPageFooter { get; set; } = new("", "", "");
+
+    /// <summary>Whether the first printed page uses separate header/footer text.</summary>
+    public bool DifferentFirstPageHeaderFooter { get; set; }
+
+    /// <summary>Whether even printed pages use separate header/footer text from odd pages.</summary>
+    public bool DifferentOddEvenHeaderFooter { get; set; }
+
+    /// <summary>Whether headers and footers scale with worksheet print scaling.</summary>
+    public bool HeaderFooterScaleWithDocument { get; set; } = true;
+
+    /// <summary>Whether headers and footers align with the configured page margins.</summary>
+    public bool HeaderFooterAlignWithMargins { get; set; } = true;
+
+    /// <summary>Whether the printed grid is centered horizontally within the printable page area.</summary>
+    public bool CenterHorizontallyOnPage { get; set; }
+
+    /// <summary>Whether the printed grid is centered vertically within the printable page area.</summary>
+    public bool CenterVerticallyOnPage { get; set; }
+
+    /// <summary>Order used when printing multi-page worksheets.</summary>
+    public WorksheetPageOrder PageOrder { get; set; } = WorksheetPageOrder.DownThenOver;
+
+    /// <summary>Optional first printed page number. Null means automatic numbering from 1.</summary>
+    public int? FirstPageNumber { get; set; }
+
+    /// <summary>Whether the worksheet should be printed in black and white.</summary>
+    public bool PrintBlackAndWhite { get; set; }
+
+    /// <summary>Whether the worksheet should be printed in draft quality.</summary>
+    public bool PrintDraftQuality { get; set; }
+
+    /// <summary>Optional worksheet print quality in dots per inch. Null means printer/default quality.</summary>
+    public int? PrintQualityDpi { get; set; }
+
+    /// <summary>How formula/cell error values are represented when printing.</summary>
+    public WorksheetPrintErrorValue PrintErrorValue { get; set; } = WorksheetPrintErrorValue.Displayed;
+
+    /// <summary>How cell comments are included in printed output.</summary>
+    public WorksheetPrintComments PrintComments { get; set; } = WorksheetPrintComments.None;
+
+    /// <summary>Manual row page breaks, stored as the first row after each break.</summary>
+    public SortedSet<uint> RowPageBreaks { get; } = [];
+
+    /// <summary>Manual column page breaks, stored as the first column after each break.</summary>
+    public SortedSet<uint> ColumnPageBreaks { get; } = [];
+
+    /// <summary>Worksheet view mode shown in the grid.</summary>
+    public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
+
+    /// <summary>True when the sheet is hidden from the worksheet tab strip.</summary>
+    public bool IsHidden { get; set; }
+
+    /// <summary>Optional worksheet tab color.</summary>
+    public CellColor? TabColor { get; set; }
+
     /// <summary>Charts embedded in this sheet.</summary>
     public List<ChartModel> Charts { get; } = [];
+
+    /// <summary>Text boxes embedded in this sheet.</summary>
+    public List<TextBoxModel> TextBoxes { get; } = [];
+
+    /// <summary>Drawing shapes embedded in this sheet.</summary>
+    public List<DrawingShapeModel> DrawingShapes { get; } = [];
+
+    /// <summary>Pictures embedded in this sheet, including pasted cell-range pictures.</summary>
+    public List<PictureModel> Pictures { get; } = [];
+
+    /// <summary>Sparklines embedded in cells on this sheet.</summary>
+    public List<SparklineModel> Sparklines { get; } = [];
 
     /// <summary>Conditional formatting rules applied to this sheet, ordered by priority.</summary>
     public List<ConditionalFormat> ConditionalFormats { get; } = [];
@@ -41,8 +166,11 @@ public sealed class Sheet
     /// <summary>Data validation rules applied to this sheet.</summary>
     public List<DataValidation> DataValidations { get; } = [];
 
-    /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
+    /// <summary>Set of row numbers manually hidden or imported as hidden (1-based).</summary>
     public HashSet<uint> HiddenRows { get; } = [];
+
+    /// <summary>Set of row numbers hidden by the active filter (1-based). Empty when no filter is active.</summary>
+    public HashSet<uint> FilterHiddenRows { get; } = [];
 
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];
@@ -53,11 +181,17 @@ public sealed class Sheet
     /// <summary>Cell comments keyed by address.</summary>
     public Dictionary<CellAddress, string> Comments { get; } = [];
 
+    /// <summary>Cell hyperlinks keyed by address. Value is the target URL/location.</summary>
+    public Dictionary<CellAddress, string> Hyperlinks { get; } = [];
+
     /// <summary>True when the sheet is protected against edits.</summary>
     public bool IsProtected { get; set; }
 
     /// <summary>Password hash for sheet protection. Null means no password required.</summary>
     public string? ProtectionPassword { get; set; }
+
+    /// <summary>Ranges that remain editable while the sheet is protected.</summary>
+    public List<GridRange> AllowEditRanges { get; } = [];
 
     /// <summary>Returns the merged region that contains <paramref name="addr"/>, or null if not merged.</summary>
     public GridRange? GetMergeRegion(CellAddress addr)
@@ -138,10 +272,58 @@ public sealed class Sheet
         _cells.Remove((address.Row, address.Col));
     }
 
+    /// <summary>
+    /// Returns true if any non-anchor cell in the proposed spill range is occupied by user data.
+    /// </summary>
+    public bool IsSpillBlocked(CellAddress anchor, int rows, int cols)
+    {
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                if (r == 0 && c == 0) continue;
+                if (_cells.ContainsKey((anchor.Row + (uint)r, anchor.Col + (uint)c)))
+                    return true;
+            }
+        return false;
+    }
+
+    /// <summary>
+    /// Write the spill range for a dynamic-array anchor cell.
+    /// Clears any previous spill from this anchor first.
+    /// Does NOT check for blockage — call IsSpillBlocked first.
+    /// </summary>
+    public void SetSpillRange(CellAddress anchor, RangeValue rv)
+    {
+        ClearSpillRange(anchor);
+        int rows = rv.RowCount, cols = rv.ColCount;
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                if (r == 0 && c == 0) continue;
+                _spillValues[(anchor.Row + (uint)r, anchor.Col + (uint)c)] = rv.Cells[r, c];
+            }
+        _spillAnchors[(anchor.Row, anchor.Col)] = ((uint)rows, (uint)cols);
+    }
+
+    /// <summary>Remove all spill values written by the given anchor cell's formula.</summary>
+    public void ClearSpillRange(CellAddress anchor)
+    {
+        if (!_spillAnchors.TryGetValue((anchor.Row, anchor.Col), out var extent)) return;
+        for (uint r = 0; r < extent.Rows; r++)
+            for (uint c = 0; c < extent.Cols; c++)
+            {
+                if (r == 0 && c == 0) continue;
+                _spillValues.Remove((anchor.Row + r, anchor.Col + c));
+            }
+        _spillAnchors.Remove((anchor.Row, anchor.Col));
+    }
+
     /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>
     public ScalarValue GetValue(uint row, uint col)
     {
-        return _cells.TryGetValue((row, col), out var cell) ? cell.Value : new BlankValue();
+        if (_cells.TryGetValue((row, col), out var cell)) return cell.Value;
+        if (_spillValues.TryGetValue((row, col), out var spill)) return spill;
+        return new BlankValue();
     }
 
     /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>
@@ -198,4 +380,11 @@ public sealed class Sheet
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
     }
+}
+
+public enum WorksheetViewMode
+{
+    Normal,
+    PageBreakPreview,
+    PageLayout
 }
