@@ -41,6 +41,7 @@ public sealed record ErrorValue(string Code) : ScalarValue
     public static readonly ErrorValue NA = new("#N/A");
     public static readonly ErrorValue Num = new("#NUM!");
     public static readonly ErrorValue Circular = new("#CIRCULAR!");
+    public static readonly ErrorValue Spill = new("#SPILL!");
 }
 
 /// <summary>
