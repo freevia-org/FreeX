@@ -337,13 +337,15 @@
                                             Click="IncreaseFontSizeBtn_Click"
                                             local:RibbonTooltip.Title="Increase Font Size"
                                             local:RibbonTooltip.Description="Make the font larger.">
-                                        <TextBlock Text="A+" FontSize="10" FontWeight="Bold"/>
+                                        <TextBlock Text="&#xE8DF;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
                                     <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
                                             Click="DecreaseFontSizeBtn_Click"
                                             local:RibbonTooltip.Title="Decrease Font Size"
                                             local:RibbonTooltip.Description="Make the font smaller.">
-                                        <TextBlock Text="A-" FontSize="9"/>
+                                        <TextBlock Text="&#xE8E0;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
@@ -398,12 +400,23 @@
                                             Style="{StaticResource RibbonBtn}"
                                             Click="FontColorBtn_Click"
                                             local:RibbonTooltip.Title="Font Color"
-                                            local:RibbonTooltip.Description="Change the color of the text.">A</Button>
+                                            local:RibbonTooltip.Description="Change the color of the text.">
+                                        <StackPanel>
+                                            <TextBlock Text="A" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                                            <Rectangle x:Name="FontColorBar" Height="3" Width="14" Fill="#FF0000" Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                    </Button>
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
                                             Style="{StaticResource RibbonBtn}"
                                             Click="FillColorBtn_Click"
                                             local:RibbonTooltip.Title="Fill Color"
-                                            local:RibbonTooltip.Description="Color the background of the selected cells.">H</Button>
+                                            local:RibbonTooltip.Description="Color the background of the selected cells.">
+                                        <StackPanel>
+                                            <TextBlock Text="&#xE771;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                                            <Rectangle x:Name="FillColorBar" Height="3" Width="14" Fill="#FFFF00" Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
@@ -427,21 +440,24 @@
                                                   Click="AlignTopBtn_Click"
                                                   local:RibbonTooltip.Title="Top Align"
                                                   local:RibbonTooltip.Description="Align the contents to the top of the cell.">
-                                        <TextBlock Text="&#x2191;" FontSize="12"/>
+                                        <TextBlock Text="&#xE1D3;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="AlignMiddleBtn" Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="AlignMiddleBtn_Click"
                                                   local:RibbonTooltip.Title="Middle Align"
                                                   local:RibbonTooltip.Description="Align the contents between the top and bottom of the cell.">
-                                        <TextBlock Text="&#x2550;" FontSize="12"/>
+                                        <TextBlock Text="&#xE1D5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="AlignBottomBtn" Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="AlignBottomBtn_Click"
                                                   local:RibbonTooltip.Title="Bottom Align"
                                                   local:RibbonTooltip.Description="Align the contents to the bottom of the cell.">
-                                        <TextBlock Text="&#x2193;" FontSize="12"/>
+                                        <TextBlock Text="&#xE1D4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
                                     <Button Width="36" Height="22" Style="{StaticResource RibbonBtn}"
@@ -465,7 +481,11 @@
                                                   Click="WrapTextBtn_Click"
                                                   local:RibbonTooltip.Title="Wrap Text"
                                                   local:RibbonTooltip.Description="Make all content visible within a cell by displaying it on multiple lines.">
-                                        <TextBlock Text="Wrap" FontSize="10"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE292;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <TextBlock Text="Wrap" FontSize="9" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                     </ToggleButton>
                                 </StackPanel>
                                 <!-- Horizontal align + indent + merge -->
@@ -474,29 +494,40 @@
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="AlignLeftBtn_Click"
                                                   local:RibbonTooltip.Title="Align Left"
-                                                  local:RibbonTooltip.Description="Align the contents to the left edge of the cell (Ctrl+L).">L</ToggleButton>
+                                                  local:RibbonTooltip.Description="Align the contents to the left edge of the cell (Ctrl+L).">
+                                        <TextBlock Text="&#xE8E4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </ToggleButton>
                                     <ToggleButton x:Name="AlignCenterBtn" Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="AlignCenterBtn_Click"
                                                   local:RibbonTooltip.Title="Center"
-                                                  local:RibbonTooltip.Description="Center the contents of the selected cells (Ctrl+E).">C</ToggleButton>
+                                                  local:RibbonTooltip.Description="Center the contents of the selected cells (Ctrl+E).">
+                                        <TextBlock Text="&#xE8E3;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </ToggleButton>
                                     <ToggleButton x:Name="AlignRightBtn"  Width="26" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="AlignRightBtn_Click"
                                                   local:RibbonTooltip.Title="Align Right"
-                                                  local:RibbonTooltip.Description="Align the contents to the right edge of the cell (Ctrl+R).">R</ToggleButton>
+                                                  local:RibbonTooltip.Description="Align the contents to the right edge of the cell (Ctrl+R).">
+                                        <TextBlock Text="&#xE8E2;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
                                     <Button Width="24" Height="22" Style="{StaticResource RibbonBtn}"
                                             Click="IndentDecBtn_Click"
                                             local:RibbonTooltip.Title="Decrease Indent"
                                             local:RibbonTooltip.Description="Decrease the indent level of the cell contents.">
-                                        <TextBlock Text="&#x2190;|" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="&#xE8AC;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
                                     <Button Width="24" Height="22" Style="{StaticResource RibbonBtn}"
                                             Click="IndentIncBtn_Click"
                                             local:RibbonTooltip.Title="Increase Indent"
                                             local:RibbonTooltip.Description="Increase the indent level of the cell contents.">
-                                        <TextBlock Text="|&#x2192;" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="&#xE8AB;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Button>
                                     <Button Width="90" Height="22" Margin="2,0,0,0" Style="{StaticResource RibbonBtn}"
                                             Click="MergeCenterBtn_Click"
@@ -679,7 +710,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="+" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock Text="Insert" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -696,7 +728,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#x2212;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBlock Text="&#xE738;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock Text="Delete" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -722,7 +755,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#x2699;" FontSize="11" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock Text="Format" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
