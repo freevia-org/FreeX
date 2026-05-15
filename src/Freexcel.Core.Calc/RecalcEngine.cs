@@ -73,8 +73,28 @@ public sealed class RecalcEngine
             try
             {
                 var result = _evaluator.Evaluate("=" + cell.FormulaText, sheet, workbook);
-                cell.Value = result;
-                recalculated.Add(addr);
+
+                if (result is RangeValue rv)
+                {
+                    if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
+                    {
+                        cell.Value = ErrorValue.Spill;
+                        sheet.ClearSpillRange(addr);
+                        errors.Add((addr, "#SPILL!"));
+                    }
+                    else
+                    {
+                        cell.Value = rv.Cells[0, 0];
+                        sheet.SetSpillRange(addr, rv);
+                        recalculated.Add(addr);
+                    }
+                }
+                else
+                {
+                    sheet.ClearSpillRange(addr);
+                    cell.Value = result;
+                    recalculated.Add(addr);
+                }
             }
             catch (FormulaParseException)
             {
