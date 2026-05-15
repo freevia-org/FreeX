@@ -15,7 +15,7 @@ public readonly record struct RgbColor(byte R, byte G, byte B)
 }
 
 /// <summary>Rule type for a conditional format.</summary>
-public enum CfRuleType { CellValue, ColorScale, DataBar, AboveAverage, Top10 }
+public enum CfRuleType { CellValue, ColorScale, DataBar, AboveAverage, Top10, Formula }
 
 /// <summary>Comparison operator used in CellValue rules.</summary>
 public enum CfOperator
@@ -75,4 +75,14 @@ public sealed class ConditionalFormat
 
     /// <summary>True = highlight cells above the range average; false = below.</summary>
     public bool AboveAverage { get; set; } = true;
+
+    // ── Formula rule ────────────────────────────────────────────────────────
+
+    /// <summary>Formula text (without leading =) evaluated per cell; truthy result triggers the format.</summary>
+    public string? FormulaText { get; set; }
+
+    // ── Rule control ────────────────────────────────────────────────────────
+
+    /// <summary>When true, no lower-priority rules are evaluated for a cell that matches this rule.</summary>
+    public bool StopIfTrue { get; set; }
 }

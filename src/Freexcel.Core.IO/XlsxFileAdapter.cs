@@ -1029,6 +1029,25 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 };
                 sheet.ConditionalFormats.Add(fmt);
             }
+            else if (xlCf.ConditionalFormatType == XLConditionalFormatType.Expression)
+            {
+                var values = xlCf.Values;
+                string? formula = values.TryGetValue(1, out var xvf) ? xvf.Value : null;
+                if (string.IsNullOrWhiteSpace(formula)) { priority++; continue; }
+
+                // Strip leading = if present (Freexcel stores formula without it)
+                if (formula.StartsWith('=')) formula = formula[1..];
+
+                var fmt = new ConditionalFormat
+                {
+                    AppliesTo    = appliesTo,
+                    Priority     = priority++,
+                    RuleType     = CfRuleType.Formula,
+                    FormulaText  = formula,
+                    FormatIfTrue = MapStyle(xlCf.Style)
+                };
+                sheet.ConditionalFormats.Add(fmt);
+            }
             // ColorScale, DataBar etc. are intentionally skipped on load for v1
         }
     }
@@ -1052,11 +1071,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         foreach (var cf in sheet.ConditionalFormats)
         {
-            if (cf.RuleType != CfRuleType.CellValue) continue;
-            if (cf.FormatIfTrue is null) continue;
-
-            var v1 = cf.Value1 ?? "";
-            var v2 = cf.Value2 ?? "";
+            if (cf.FormatIfTrue is null && cf.RuleType != CfRuleType.ColorScale && cf.RuleType != CfRuleType.DataBar)
+                continue;
 
             var rangeStr = $"{CellAddress.NumberToColumnName(cf.AppliesTo.Start.Col)}{cf.AppliesTo.Start.Row}" +
                            $":{CellAddress.NumberToColumnName(cf.AppliesTo.End.Col)}{cf.AppliesTo.End.Row}";
@@ -1064,21 +1080,33 @@ public sealed class XlsxFileAdapter : IFileAdapter
             try
             {
                 var xlRange = xlSheet.Range(rangeStr);
-                var xlCf   = xlRange.AddConditionalFormat();
+                var xlCf    = xlRange.AddConditionalFormat();
 
-                IXLStyle xlStyle = cf.Operator switch
+                if (cf.RuleType == CfRuleType.Formula && !string.IsNullOrWhiteSpace(cf.FormulaText))
                 {
-                    CfOperator.Equal              => xlCf.WhenEquals(v1),
-                    CfOperator.NotEqual           => xlCf.WhenNotEquals(v1),
-                    CfOperator.GreaterThan        => xlCf.WhenGreaterThan(v1),
-                    CfOperator.GreaterThanOrEqual => xlCf.WhenEqualOrGreaterThan(v1),
-                    CfOperator.LessThan           => xlCf.WhenLessThan(v1),
-                    CfOperator.LessThanOrEqual    => xlCf.WhenEqualOrLessThan(v1),
-                    CfOperator.Between            => xlCf.WhenBetween(v1, v2),
-                    CfOperator.NotBetween         => xlCf.WhenNotBetween(v1, v2),
-                    _                             => xlCf.WhenEquals(v1)
-                };
-                ApplyCfStyle(xlStyle, cf.FormatIfTrue);
+                    // ClosedXML uses WhenIsTrue for formula-based CF rules
+                    var xlStyle = xlCf.WhenIsTrue("=" + cf.FormulaText);
+                    if (cf.FormatIfTrue is not null) ApplyCfStyle(xlStyle, cf.FormatIfTrue);
+                }
+                else if (cf.RuleType == CfRuleType.CellValue)
+                {
+                    var v1 = cf.Value1 ?? "";
+                    var v2 = cf.Value2 ?? "";
+                    IXLStyle xlStyle = cf.Operator switch
+                    {
+                        CfOperator.Equal              => xlCf.WhenEquals(v1),
+                        CfOperator.NotEqual           => xlCf.WhenNotEquals(v1),
+                        CfOperator.GreaterThan        => xlCf.WhenGreaterThan(v1),
+                        CfOperator.GreaterThanOrEqual => xlCf.WhenEqualOrGreaterThan(v1),
+                        CfOperator.LessThan           => xlCf.WhenLessThan(v1),
+                        CfOperator.LessThanOrEqual    => xlCf.WhenEqualOrLessThan(v1),
+                        CfOperator.Between            => xlCf.WhenBetween(v1, v2),
+                        CfOperator.NotBetween         => xlCf.WhenNotBetween(v1, v2),
+                        _                             => xlCf.WhenEquals(v1)
+                    };
+                    if (cf.FormatIfTrue is not null) ApplyCfStyle(xlStyle, cf.FormatIfTrue);
+                }
+                // ColorScale, DataBar, AboveAverage, Top10 — skip for now (partial support)
             }
             catch
             {
@@ -1134,6 +1162,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     AppliesTo    = appliesTo,
                     AllowBlank   = xlDv.IgnoreBlanks,
                     ShowDropdown = !xlDv.InCellDropdown.Equals(false),
+                    AlertStyle   = xlDv.ErrorStyle switch
+                    {
+                        XLErrorStyle.Warning => DvAlertStyle.Warning,
+                        XLErrorStyle.Information => DvAlertStyle.Information,
+                        _ => DvAlertStyle.Stop
+                    },
+                    ShowInputMessage = xlDv.ShowInputMessage,
+                    ShowErrorMessage = xlDv.ShowErrorMessage,
                     ErrorTitle   = xlDv.ErrorTitle,
                     ErrorMessage = xlDv.ErrorMessage,
                     PromptTitle  = xlDv.InputTitle,
@@ -1210,6 +1246,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                 xlDv.IgnoreBlanks  = dv.AllowBlank;
                 xlDv.InCellDropdown = dv.ShowDropdown;
+                xlDv.ErrorStyle = dv.AlertStyle switch
+                {
+                    DvAlertStyle.Warning => XLErrorStyle.Warning,
+                    DvAlertStyle.Information => XLErrorStyle.Information,
+                    _ => XLErrorStyle.Stop
+                };
+                xlDv.ShowInputMessage = dv.ShowInputMessage;
+                xlDv.ShowErrorMessage = dv.ShowErrorMessage;
 
                 if (!string.IsNullOrEmpty(dv.ErrorTitle))   xlDv.ErrorTitle   = dv.ErrorTitle;
                 if (!string.IsNullOrEmpty(dv.ErrorMessage)) xlDv.ErrorMessage = dv.ErrorMessage;

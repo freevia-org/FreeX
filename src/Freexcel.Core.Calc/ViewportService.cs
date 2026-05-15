@@ -1,3 +1,4 @@
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Calc;
@@ -142,44 +143,119 @@ public sealed class ViewportService : IViewportService
     /// Priority ascending = highest precedence first). Returns the first matching rule's style,
     /// or null when no rule fires.
     /// </summary>
+    private static readonly FormulaEvaluator _cfEvaluator = new();
+
     private static CellStyle? EvaluateConditionalFormats(
         Sheet sheet, CellAddress addr, ScalarValue value, Workbook workbook)
     {
         if (sheet.ConditionalFormats.Count == 0)
             return null;
 
-        // Work through rules in priority order
         var rules = sheet.ConditionalFormats
             .Where(cf => cf.AppliesTo.Contains(addr))
             .OrderBy(cf => cf.Priority);
 
         foreach (var cf in rules)
         {
-            switch (cf.RuleType)
+            // ColorScale and DataBar always apply when in range — return immediately.
+            if (cf.RuleType == CfRuleType.ColorScale)
+                return ComputeColorScaleStyle(cf, sheet, addr, value);
+            if (cf.RuleType == CfRuleType.DataBar)
+                return new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
+
+            bool conditionMet = cf.RuleType switch
             {
-                case CfRuleType.CellValue:
-                {
-                    if (MatchesCellValue(cf, value))
-                        return cf.FormatIfTrue;
-                    break;
-                }
+                CfRuleType.CellValue    => MatchesCellValue(cf, value),
+                CfRuleType.AboveAverage => MatchesAboveAverage(cf, sheet, addr, value),
+                CfRuleType.Formula      => MatchesFormula(cf, sheet, addr, workbook),
+                _                       => false
+            };
 
-                case CfRuleType.AboveAverage:
-                {
-                    if (MatchesAboveAverage(cf, sheet, addr, value))
-                        return cf.FormatIfTrue;
-                    break;
-                }
+            if (conditionMet)
+                return cf.FormatIfTrue; // may be null if rule has no visible format
 
-                case CfRuleType.ColorScale:
-                    return ComputeColorScaleStyle(cf, sheet, addr, value);
-
-                case CfRuleType.DataBar:
-                    return new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
-            }
+            // StopIfTrue stops further evaluation only when the condition is true.
+            // If condition was false, continue regardless of StopIfTrue.
         }
 
         return null;
+    }
+
+    // ── Formula CF evaluation ─────────────────────────────────────────────────
+
+    private static bool MatchesFormula(ConditionalFormat cf, Sheet sheet, CellAddress addr, Workbook workbook)
+    {
+        if (string.IsNullOrWhiteSpace(cf.FormulaText)) return false;
+        try
+        {
+            // Shift relative references from the CF range's top-left to the current cell.
+            int dr = (int)addr.Row - (int)cf.AppliesTo.Start.Row;
+            int dc = (int)addr.Col - (int)cf.AppliesTo.Start.Col;
+            var formulaText = dr == 0 && dc == 0
+                ? cf.FormulaText
+                : ShiftCfFormula(cf.FormulaText, dr, dc);
+
+            var result = _cfEvaluator.Evaluate("=" + formulaText, sheet, workbook);
+            return result switch
+            {
+                BoolValue bv   => bv.Value,
+                NumberValue nv => nv.Value != 0,
+                _              => false
+            };
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string ShiftCfFormula(string formulaText, int dr, int dc)
+    {
+        try
+        {
+            var ast = new Parser(new Lexer("=" + formulaText).Tokenize()).Parse();
+            var shifted = ShiftAst(ast, dr, dc);
+            return FormulaSerializer.Serialize(shifted);
+        }
+        catch
+        {
+            return formulaText;
+        }
+    }
+
+    private static FormulaNode ShiftAst(FormulaNode node, int dr, int dc)
+    {
+        return node switch
+        {
+            CellRefNode cr   => ShiftCellRef(cr, dr, dc),
+            RangeRefNode rr  => rr with
+            {
+                Start = ShiftCellRef(rr.Start, dr, dc),
+                End   = ShiftCellRef(rr.End,   dr, dc)
+            },
+            BinaryOpNode bin => bin with
+            {
+                Left  = ShiftAst(bin.Left,  dr, dc),
+                Right = ShiftAst(bin.Right, dr, dc)
+            },
+            UnaryOpNode un   => un with { Operand = ShiftAst(un.Operand, dr, dc) },
+            FunctionCallNode fn => fn with
+            {
+                Arguments = fn.Arguments.Select(a => ShiftAst(a, dr, dc)).ToList()
+            },
+            _ => node
+        };
+    }
+
+    private static CellRefNode ShiftCellRef(CellRefNode cr, int dr, int dc)
+    {
+        uint newRow = cr.IsRowAbsolute ? cr.Row
+            : (uint)Math.Max(1, (int)cr.Row + dr);
+        uint newColNum = cr.IsColAbsolute ? cr.ColumnNumber
+            : (uint)Math.Max(1, (int)cr.ColumnNumber + dc);
+        var newColName = cr.IsColAbsolute ? cr.ColumnName
+            : CellAddress.NumberToColumnName(newColNum);
+        return cr with { Row = newRow, ColumnName = newColName };
     }
 
     // ── CellValue matching ────────────────────────────────────────────────────
