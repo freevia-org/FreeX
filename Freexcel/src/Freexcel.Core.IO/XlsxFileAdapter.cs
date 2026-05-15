@@ -126,6 +126,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sheet.HiddenCols.UnionWith(layout.HiddenCols);
                 sheet.IsProtected = layout.IsProtected;
                 sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+
+                foreach (var (rowNum, level) in layout.RowOutlineLevels)
+                    sheet.RowOutlineLevels[rowNum] = level;
+                foreach (var (colNum, level) in layout.ColOutlineLevels)
+                    sheet.ColOutlineLevels[colNum] = level;
+                sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
+                sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
             }
 
             if (layout?.PaneState is "frozen" or "frozenSplit")
@@ -260,7 +267,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string? ProtectionPasswordHash,
         string? PaneState,
         uint? PaneRowSplit,
-        uint? PaneColumnSplit);
+        uint? PaneColumnSplit,
+        Dictionary<uint, int> RowOutlineLevels,
+        Dictionary<uint, int> ColOutlineLevels,
+        HashSet<uint> GroupHiddenRows,
+        HashSet<uint> GroupHiddenCols);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
     {
@@ -332,28 +343,54 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         var hiddenRows = new HashSet<uint>();
         var hiddenCols = new HashSet<uint>();
+        var rowOutlineLevels = new Dictionary<uint, int>();
+        var colOutlineLevels = new Dictionary<uint, int>();
+        var groupHiddenRows = new HashSet<uint>();
+        var groupHiddenCols = new HashSet<uint>();
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         foreach (var row in worksheetXml.Descendants(worksheetNs + "row"))
         {
-            if (!IsTruthy(row.Attribute("hidden")?.Value))
+            if (!uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
                 continue;
-            if (uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
+
+            if (IsTruthy(row.Attribute("hidden")?.Value))
                 hiddenRows.Add(rowNumber);
+
+            var outlineStr = row.Attribute("outlineLevel")?.Value;
+            if (int.TryParse(outlineStr, out var outlineLevel) && outlineLevel > 0)
+            {
+                rowOutlineLevels[rowNumber] = outlineLevel;
+                if (IsTruthy(row.Attribute("collapsed")?.Value))
+                    groupHiddenRows.Add(rowNumber);
+            }
         }
 
         foreach (var col in worksheetXml.Descendants(worksheetNs + "col"))
         {
-            if (!IsTruthy(col.Attribute("hidden")?.Value))
-                continue;
             if (!uint.TryParse(col.Attribute("min")?.Value, out var min))
                 continue;
             if (!uint.TryParse(col.Attribute("max")?.Value, out var max))
                 continue;
 
-            for (var colNumber = min; colNumber <= max; colNumber++)
-                hiddenCols.Add(colNumber);
+            if (IsTruthy(col.Attribute("hidden")?.Value))
+            {
+                for (var colNumber = min; colNumber <= max; colNumber++)
+                    hiddenCols.Add(colNumber);
+            }
+
+            var colOutlineStr = col.Attribute("outlineLevel")?.Value;
+            if (int.TryParse(colOutlineStr, out var colOutlineLevel) && colOutlineLevel > 0)
+            {
+                var collapsed = IsTruthy(col.Attribute("collapsed")?.Value);
+                for (var colNumber = min; colNumber <= max; colNumber++)
+                {
+                    colOutlineLevels[colNumber] = colOutlineLevel;
+                    if (collapsed)
+                        groupHiddenCols.Add(colNumber);
+                }
+            }
         }
 
         var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
@@ -375,7 +412,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             passwordHash,
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
-            ParsePaneSplit(pane?.Attribute("xSplit")?.Value));
+            ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
+            rowOutlineLevels,
+            colOutlineLevels,
+            groupHiddenRows,
+            groupHiddenCols);
     }
 
     private static uint? ParsePaneSplit(string? value)
@@ -474,11 +515,23 @@ public sealed class XlsxFileAdapter : IFileAdapter
             foreach (var rowNum in sheet.HiddenRows)
                 xlSheet.Row((int)rowNum).Hide();
 
+            foreach (var (rowNum, level) in sheet.RowOutlineLevels)
+                xlSheet.Row((int)rowNum).OutlineLevel = level;
+
+            foreach (var rowNum in sheet.GroupHiddenRows)
+                xlSheet.Row((int)rowNum).Collapse();
+
             foreach (var (colNum, width) in sheet.ColumnWidths)
                 xlSheet.Column((int)colNum).Width = width;
 
             foreach (var colNum in sheet.HiddenCols)
                 xlSheet.Column((int)colNum).Hide();
+
+            foreach (var (colNum, level) in sheet.ColOutlineLevels)
+                xlSheet.Column((int)colNum).OutlineLevel = level;
+
+            foreach (var colNum in sheet.GroupHiddenCols)
+                xlSheet.Column((int)colNum).Collapse();
 
             foreach (var (address, commentText) in sheet.Comments)
             {

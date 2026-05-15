@@ -330,7 +330,8 @@ public sealed class FormulaEvaluator
              or "PERCENTRANK" or "PERCENTRANK.INC"
              or "LOOKUP"
              or "IRR"
-             or "FILTER" or "SORT" or "UNIQUE";
+             or "FILTER" or "SORT" or "UNIQUE"
+             or "SUBTOTAL";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
@@ -404,5 +405,7 @@ public sealed class FormulaEvaluator
 
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId sheetId)
             => _workbook?.GetSheet(sheetId)?.Name;
+
+        public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
     }
 }

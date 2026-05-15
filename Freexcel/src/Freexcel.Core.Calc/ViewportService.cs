@@ -37,7 +37,7 @@ public sealed class ViewportService : IViewportService
         double leftOffset = 0;
         for (uint c = request.LeftCol; c <= MaxCol; c++)
         {
-            if (sheet.HiddenCols.Contains(c)) continue;
+            if (sheet.IsColEffectivelyHidden(c)) continue;
             double width = sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth) * 8;
             colMetrics.Add(new ColMetric(c, width, leftOffset));
             leftOffset += width;
@@ -120,7 +120,7 @@ public sealed class ViewportService : IViewportService
         double left = 0;
         for (uint col = 1; col <= CellAddress.MaxCol; col++)
         {
-            if (sheet.HiddenCols.Contains(col)) continue;
+            if (sheet.IsColEffectivelyHidden(col)) continue;
 
             var width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
             if (x < left + width)
@@ -133,7 +133,7 @@ public sealed class ViewportService : IViewportService
     }
 
     private static bool IsRowHidden(Sheet sheet, uint row) =>
-        sheet.HiddenRows.Contains(row) || sheet.FilterHiddenRows.Contains(row);
+        sheet.IsRowEffectivelyHidden(row);
 
     // ── Conditional format evaluation ─────────────────────────────────────────
 

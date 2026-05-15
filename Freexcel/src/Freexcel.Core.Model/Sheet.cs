@@ -175,6 +175,26 @@ public sealed class Sheet
     /// <summary>Set of column numbers that are hidden (1-based).</summary>
     public HashSet<uint> HiddenCols { get; } = [];
 
+    /// <summary>Outline level (1–8) per row. 0 = no grouping.</summary>
+    public Dictionary<uint, int> RowOutlineLevels { get; } = [];
+
+    /// <summary>Outline level (1–8) per column. 0 = no grouping.</summary>
+    public Dictionary<uint, int> ColOutlineLevels { get; } = [];
+
+    /// <summary>Rows currently collapsed by a group expand/collapse operation.</summary>
+    public HashSet<uint> GroupHiddenRows { get; } = [];
+
+    /// <summary>Columns currently collapsed by a group expand/collapse operation.</summary>
+    public HashSet<uint> GroupHiddenCols { get; } = [];
+
+    /// <summary>True if the row is hidden by any mechanism (filter, manual, or group collapse).</summary>
+    public bool IsRowEffectivelyHidden(uint row) =>
+        HiddenRows.Contains(row) || FilterHiddenRows.Contains(row) || GroupHiddenRows.Contains(row);
+
+    /// <summary>True if the column is hidden by any mechanism.</summary>
+    public bool IsColEffectivelyHidden(uint col) =>
+        HiddenCols.Contains(col) || GroupHiddenCols.Contains(col);
+
     /// <summary>Merged cell regions on this sheet. Each region's top-left cell holds the display value.</summary>
     public List<GridRange> MergedRegions { get; } = [];
 

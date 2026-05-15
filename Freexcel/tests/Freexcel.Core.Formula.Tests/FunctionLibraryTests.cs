@@ -1566,4 +1566,76 @@ public class FunctionLibraryTests
         var rv = (RangeValue)result;
         rv.RowCount.Should().Be(2);
     }
+
+    // ── SUBTOTAL ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Subtotal_FuncNum9_Sum_NoHiddenRows()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(60));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum1_Average_NoHiddenRows()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        var result = _eval.Evaluate("=SUBTOTAL(1,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum4_Max_NoHiddenRows()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        var result = _eval.Evaluate("=SUBTOTAL(4,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum5_Min_NoHiddenRows()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        var result = _eval.Evaluate("=SUBTOTAL(5,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum109_SumExcludesGroupHiddenRow()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        // Mark row 2 as group-hidden
+        sheet.GroupHiddenRows.Add(2);
+        var result = _eval.Evaluate("=SUBTOTAL(109,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Subtotal_FuncNum9_IncludesGroupHiddenRow()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (3, 1, new NumberValue(30)));
+        // With funcNum=9 (not 109), hidden rows are NOT excluded
+        sheet.GroupHiddenRows.Add(2);
+        var result = _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet);
+        result.Should().Be(new NumberValue(60));
+    }
 }

@@ -1028,6 +1028,31 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
+                        <!-- ▌Outline ▌ -->
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Group Rows" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="GroupRowsBtn_Click"
+                                            local:RibbonTooltip.Title="Group Rows"
+                                            local:RibbonTooltip.Description="Group the selected rows (Alt+Shift+Right Arrow)."/>
+                                    <Button Content="Ungroup Rows" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UngroupRowsBtn_Click"
+                                            local:RibbonTooltip.Title="Ungroup Rows"
+                                            local:RibbonTooltip.Description="Remove grouping from the selected rows (Alt+Shift+Left Arrow)."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Collapse" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CollapseGroupBtn_Click"
+                                            local:RibbonTooltip.Title="Collapse Group"
+                                            local:RibbonTooltip.Description="Hide all rows in the current outline group."/>
+                                    <Button Content="Expand" Width="90" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ExpandGroupBtn_Click"
+                                            local:RibbonTooltip.Title="Expand Group"
+                                            local:RibbonTooltip.Description="Show all rows in the current outline group."/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Outline" Style="{StaticResource GroupLbl}"/></Border>
+                        </Grid>
+                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+
                         <!-- ▌Named Ranges ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
