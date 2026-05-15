@@ -1483,4 +1483,45 @@ public class FunctionLibraryTests
         rv.Cells[0, 1].Should().Be(new TextValue("A"));
         rv.Cells[1, 1].Should().Be(new TextValue("C"));
     }
+
+    // ── SORT ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Sort_SingleColumn_SortsAscending()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(3)), (2,1,new NumberValue(1)), (3,1,new NumberValue(2)));
+        var result = _eval.Evaluate("=SORT(A1:A3)", sheet);
+        var rv = (RangeValue)result;
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 0].Should().Be(new NumberValue(2));
+        rv.Cells[2, 0].Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Sort_SingleColumn_SortsDescending()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(3)), (2,1,new NumberValue(1)), (3,1,new NumberValue(2)));
+        var result = _eval.Evaluate("=SORT(A1:A3,1,-1)", sheet);
+        var rv = (RangeValue)result;
+        rv.Cells[0, 0].Should().Be(new NumberValue(3));
+        rv.Cells[1, 0].Should().Be(new NumberValue(2));
+        rv.Cells[2, 0].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Sort_MultiColumn_SortsBySecondColumn()
+    {
+        var sheet = MakeSheet(
+            (1,1,new TextValue("B")), (1,2,new NumberValue(2)),
+            (2,1,new TextValue("A")), (2,2,new NumberValue(1)),
+            (3,1,new TextValue("C")), (3,2,new NumberValue(3)));
+        // SORT(A1:B3, 2, 1) → sort by col 2 ascending
+        var result = _eval.Evaluate("=SORT(A1:B3,2,1)", sheet);
+        var rv = (RangeValue)result;
+        rv.Cells[0, 0].Should().Be(new TextValue("A"));
+        rv.Cells[1, 0].Should().Be(new TextValue("B"));
+        rv.Cells[2, 0].Should().Be(new TextValue("C"));
+    }
 }
