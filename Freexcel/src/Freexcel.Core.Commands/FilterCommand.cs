@@ -64,7 +64,7 @@ public sealed class FilterCommand : IWorkbookCommand
         for (uint row = startRow + 1; row <= endRow; row++)
         {
             var value = sheet.GetValue(row, filterCol);
-            var text  = ScalarToString(value);
+            var text  = FilterValueFormatter.ToText(value);
 
             if (!allowed.Contains(text))
                 sheet.FilterHiddenRows.Add(row);
@@ -84,16 +84,20 @@ public sealed class FilterCommand : IWorkbookCommand
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
     }
 
-    private static string ScalarToString(ScalarValue value) => value switch
+}
+
+internal static class FilterValueFormatter
+{
+    public static string ToText(ScalarValue value) => value switch
     {
-        TextValue t      => t.Value,
+        TextValue t => t.Value,
         // Use CurrentCulture to match what NumberFormatter.Format produces, so filter
         // comparisons work correctly regardless of the user's locale decimal separator.
-        NumberValue n    => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
-        BoolValue b      => b.Value ? "TRUE" : "FALSE",
+        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
+        BoolValue b => b.Value ? "TRUE" : "FALSE",
         DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd"),
-        BlankValue       => "",
-        ErrorValue e     => e.Code,
-        _                => ""
+        BlankValue => "",
+        ErrorValue e => e.Code,
+        _ => ""
     };
 }

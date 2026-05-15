@@ -6,6 +6,9 @@ public enum DvType { Any, WholeNumber, Decimal, List, Date, Time, TextLength, Cu
 /// <summary>Comparison operator for data validation rules.</summary>
 public enum DvOperator { Between, NotBetween, Equal, NotEqual, GreaterThan, LessThan, GreaterThanOrEqual, LessThanOrEqual }
 
+/// <summary>Alert style shown when a validation rule rejects input.</summary>
+public enum DvAlertStyle { Stop, Warning, Information }
+
 /// <summary>
 /// A data validation rule applied to a rectangular range of cells.
 /// </summary>
@@ -27,6 +30,9 @@ public sealed class DataValidation
 
     public bool AllowBlank { get; set; } = true;
     public bool ShowDropdown { get; set; } = true;
+    public DvAlertStyle AlertStyle { get; set; } = DvAlertStyle.Stop;
+    public bool ShowInputMessage { get; set; } = true;
+    public bool ShowErrorMessage { get; set; } = true;
 
     public string? ErrorTitle { get; set; }
     public string? ErrorMessage { get; set; }

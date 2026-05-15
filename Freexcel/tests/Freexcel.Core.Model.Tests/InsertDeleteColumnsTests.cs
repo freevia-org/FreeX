@@ -158,6 +158,23 @@ public class InsertDeleteColumnsTests
     }
 
     [Fact]
+    public void InsertColumn_ShiftsColumnPageBreaksAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ColumnPageBreaks.Add(3);
+        sheet.ColumnPageBreaks.Add(8);
+
+        var cmd = new InsertColumnsCommand(sheet.Id, beforeCol: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ColumnPageBreaks.Should().Equal(5u, 10u);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnPageBreaks.Should().Equal(3u, 8u);
+    }
+
+    [Fact]
     public void DeleteColumn_RemovesAndShiftsLeft()
     {
         var (_, sheet, ctx) = Setup();
@@ -324,6 +341,24 @@ public class InsertDeleteColumnsTests
 
         sheet.PrintArea!.Value.Start.Col.Should().Be(6);
         sheet.PrintArea.Value.End.Col.Should().Be(7);
+    }
+
+    [Fact]
+    public void DeleteColumn_ShiftsColumnPageBreaksAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ColumnPageBreaks.Add(2);
+        sheet.ColumnPageBreaks.Add(4);
+        sheet.ColumnPageBreaks.Add(8);
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ColumnPageBreaks.Should().Equal(2u, 6u);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnPageBreaks.Should().Equal(2u, 4u, 8u);
     }
 
     [Fact]

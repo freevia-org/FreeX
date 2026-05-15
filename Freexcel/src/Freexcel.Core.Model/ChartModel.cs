@@ -1,8 +1,40 @@
 namespace Freexcel.Core.Model;
 
-public enum ChartType { Column, Line, Pie, Bar }
+public enum ChartType { Column, StackedColumn, PercentStackedColumn, Line, Pie, Doughnut, Bar, StackedBar, PercentStackedBar, Scatter, Bubble, Area }
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
+
+public enum ChartDataLabelPosition { BestFit, Center, InsideEnd, OutsideEnd }
+
+public enum ChartDataLabelSeparator { Comma, Semicolon, NewLine, Space }
+
+public enum ChartDataLabelNumberFormat { General, Number, Currency, Percent }
+
+public enum ChartTrendlineType { Linear, Exponential, Logarithmic, Power, MovingAverage, Polynomial }
+
+public enum ChartLineDashStyle { Solid, Dash, Dot }
+
+public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
+
+public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
+
+public sealed record ChartSeriesFormat(
+    int SeriesIndex,
+    CellColor? FillColor = null,
+    CellColor? StrokeColor = null,
+    double? StrokeThickness = null,
+    ChartLineDashStyle? DashStyle = null,
+    ChartMarkerStyle? MarkerStyle = null,
+    double? MarkerSize = null);
+
+public sealed record ChartPointDataLabelFormat(
+    int SeriesIndex,
+    int PointIndex,
+    CellColor? FillColor = null,
+    CellColor? BorderColor = null,
+    double? BorderThickness = null,
+    CellColor? TextColor = null,
+    double? FontSize = null);
 
 /// <summary>Lightweight chart definition stored on a Sheet.</summary>
 public sealed class ChartModel
@@ -15,8 +47,93 @@ public sealed class ChartModel
     public string? Title { get; set; }
     public string? XAxisTitle { get; set; }
     public string? YAxisTitle { get; set; }
+    public CellColor? ChartTitleTextColor { get; set; }
+    public double ChartTitleFontSize { get; set; } = 16;
+    public CellColor? AxisTitleTextColor { get; set; }
+    public double AxisTitleFontSize { get; set; } = 12;
+    public CellColor? ChartAreaFillColor { get; set; }
+    public CellColor? PlotAreaFillColor { get; set; }
+    public CellColor? PlotAreaBorderColor { get; set; }
+    public double PlotAreaBorderThickness { get; set; } = 1;
+    public CellColor? LegendTextColor { get; set; }
+    public CellColor? LegendFillColor { get; set; }
+    public CellColor? LegendBorderColor { get; set; }
+    public double LegendBorderThickness { get; set; }
+    public double LegendFontSize { get; set; } = 12;
+    public double DoughnutHoleSize { get; set; } = 0.55;
+    public double FirstSliceAngle { get; set; }
+    public int ExplodedSliceIndex { get; set; } = -1;
+    public double ExplodedSliceDistance { get; set; } = 0.1;
+    public double? XAxisMinimum { get; set; }
+    public double? XAxisMaximum { get; set; }
+    public double? XAxisMajorUnit { get; set; }
+    public double? XAxisMinorUnit { get; set; }
+    public bool XAxisLogScale { get; set; }
+    public ChartDataLabelNumberFormat XAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public bool ShowXAxisMajorGridlines { get; set; }
+    public bool ShowXAxisMinorGridlines { get; set; }
+    public CellColor? XAxisMajorGridlineColor { get; set; }
+    public CellColor? XAxisMinorGridlineColor { get; set; }
+    public double XAxisGridlineThickness { get; set; } = 1;
+    public ChartAxisTickStyle XAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
+    public ChartAxisTickStyle XAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
+    public bool ShowXAxisLabels { get; set; } = true;
+    public CellColor? XAxisLabelTextColor { get; set; }
+    public double XAxisLabelFontSize { get; set; } = 11;
+    public double XAxisLabelAngle { get; set; }
+    public CellColor? XAxisLineColor { get; set; }
+    public double XAxisLineThickness { get; set; } = 1;
+    public double? YAxisMinimum { get; set; }
+    public double? YAxisMaximum { get; set; }
+    public double? YAxisMajorUnit { get; set; }
+    public double? YAxisMinorUnit { get; set; }
+    public bool YAxisLogScale { get; set; }
+    public ChartDataLabelNumberFormat YAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public bool ShowYAxisMajorGridlines { get; set; }
+    public bool ShowYAxisMinorGridlines { get; set; }
+    public CellColor? YAxisMajorGridlineColor { get; set; }
+    public CellColor? YAxisMinorGridlineColor { get; set; }
+    public double YAxisGridlineThickness { get; set; } = 1;
+    public ChartAxisTickStyle YAxisMajorTickStyle { get; set; } = ChartAxisTickStyle.Outside;
+    public ChartAxisTickStyle YAxisMinorTickStyle { get; set; } = ChartAxisTickStyle.None;
+    public bool ShowYAxisLabels { get; set; } = true;
+    public CellColor? YAxisLabelTextColor { get; set; }
+    public double YAxisLabelFontSize { get; set; } = 11;
+    public double YAxisLabelAngle { get; set; }
+    public CellColor? YAxisLineColor { get; set; }
+    public double YAxisLineThickness { get; set; } = 1;
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
+    public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;
+    public bool ShowDataLabels { get; set; }
+    public ChartDataLabelPosition DataLabelPosition { get; set; } = ChartDataLabelPosition.BestFit;
+    public bool ShowDataLabelCategoryName { get; set; }
+    public bool ShowDataLabelSeriesName { get; set; }
+    public bool ShowDataLabelPercentage { get; set; }
+    public ChartDataLabelSeparator DataLabelSeparator { get; set; } = ChartDataLabelSeparator.Comma;
+    public ChartDataLabelNumberFormat DataLabelNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
+    public bool ShowDataLabelCallouts { get; set; }
+    public CellColor? DataLabelFillColor { get; set; }
+    public CellColor? DataLabelBorderColor { get; set; }
+    public CellColor? DataLabelTextColor { get; set; }
+    public double DataLabelBorderThickness { get; set; }
+    public double DataLabelFontSize { get; set; } = 11;
+    public double DataLabelAngle { get; set; }
+    public bool ShowLinearTrendline { get; set; }
+    public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
+    public int TrendlinePeriod { get; set; } = 2;
+    public int TrendlineOrder { get; set; } = 2;
+    public bool ShowTrendlineEquation { get; set; }
+    public bool ShowTrendlineRSquared { get; set; }
+    public CellColor? TrendlineColor { get; set; }
+    public double TrendlineThickness { get; set; } = 1.5;
+    public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
+    public bool ShowSecondaryAxis { get; set; }
+    public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
+    public List<int> ComboLineSeriesIndexes { get; set; } = [];
+    public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];
+    public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];
+    public bool UseComboLineForSecondarySeries { get; set; }
     public double Left   { get; set; } = 50;
     public double Top    { get; set; } = 50;
     public double Width  { get; set; } = 400;

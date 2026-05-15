@@ -91,6 +91,30 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteSpecialCellsCommand_RejectsInvalidOperation()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new NumberValue(10));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(5)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: (PasteSpecialOperation)99));
+
+        command.Apply(ctx).Success.Should().BeFalse();
+        sheet.GetValue(dest).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
     public void PasteColumnWidthsCommand_CopiesWidthsAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -213,6 +237,24 @@ public sealed class PasteSpecialCommandTests
         picture.Height.Should().Be(72);
 
         command.Revert(ctx);
+
+        sheet.Pictures.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void InsertPictureCommand_RejectsInvalidInitialSize()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var anchor = new CellAddress(sheet.Id, 4, 2);
+
+        new InsertPictureCommand(sheet.Id, anchor, [1], "image/png", double.NaN, 72)
+            .Apply(ctx).Success.Should().BeFalse();
+        new InsertPictureCommand(sheet.Id, anchor, [1], "image/png", 96, double.PositiveInfinity)
+            .Apply(ctx).Success.Should().BeFalse();
+        new InsertPictureCommand(sheet.Id, anchor, [1], "image/png", 0, 72)
+            .Apply(ctx).Success.Should().BeFalse();
 
         sheet.Pictures.Should().BeEmpty();
     }

@@ -180,6 +180,26 @@ public sealed class RecalcEngine
         return Recalculate(workbook, formulaCells);
     }
 
+    /// <summary>Rebuild dependencies and evaluate formula cells on a single worksheet.</summary>
+    public RecalcReport RecalculateSheetFormulas(Workbook workbook, SheetId sheetId)
+    {
+        RebuildFormulaDependencies(workbook);
+        var sheet = workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new RecalcReport([], [], []);
+
+        var formulaCells = sheet.GetUsedCells()
+            .Where(pair => pair.Value.HasFormula)
+            .Select(pair => pair.Key)
+            .ToList();
+
+        var report = Recalculate(workbook, formulaCells);
+        return new RecalcReport(
+            report.RecalculatedCells.Where(addr => addr.Sheet.Equals(sheetId)).ToList(),
+            report.Errors.Where(error => error.Cell.Sheet.Equals(sheetId)).ToList(),
+            report.CyclicCells.Where(addr => addr.Sheet.Equals(sheetId)).ToList());
+    }
+
     private static bool ContainsVolatileFunction(FormulaNode node)
     {
         return node switch

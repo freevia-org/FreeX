@@ -46,16 +46,30 @@ public sealed record ViewportRequest(
     double AvailableWidth,
     bool IncludeFormulas = true,
     bool IncludeStyles = true,
-    bool IncludeObjects = true);
+    bool IncludeObjects = true,
+    SplitPaneViewportOffsets? SplitPaneOffsets = null);
+
+public sealed record SplitPaneViewportOffsets(
+    uint? TopRightLeftCol = null,
+    uint? BottomLeftTopRow = null);
 
 public sealed record ViewportModel(
     IReadOnlyList<DisplayCell> Cells,
     IReadOnlyList<RowMetric> RowMetrics,
     IReadOnlyList<ColMetric> ColMetrics,
     FrozenPaneState? FrozenPanes = null,
-    IReadOnlyList<OverlayPrimitive> Overlays = null!);
+    IReadOnlyList<OverlayPrimitive> Overlays = null!,
+    SplitPaneState? SplitPanes = null);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);
 public sealed record FrozenPaneState(uint Rows, uint Cols);
+public sealed record SplitPaneState(
+    uint? Row,
+    uint? Column,
+    IReadOnlyList<RowMetric> TopRows = null!,
+    IReadOnlyList<ColMetric> LeftColumns = null!,
+    IReadOnlyList<DisplayCell> Cells = null!,
+    IReadOnlyList<ColMetric> TopRightColumns = null!,
+    IReadOnlyList<RowMetric> BottomLeftRows = null!);
 public sealed record OverlayPrimitive(); // Placeholder for charts, etc.

@@ -158,6 +158,23 @@ public class InsertDeleteRowsTests
     }
 
     [Fact]
+    public void InsertRow_ShiftsRowPageBreaksAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.RowPageBreaks.Add(3);
+        sheet.RowPageBreaks.Add(8);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.RowPageBreaks.Should().Equal(5u, 10u);
+
+        cmd.Revert(ctx);
+
+        sheet.RowPageBreaks.Should().Equal(3u, 8u);
+    }
+
+    [Fact]
     public void DeleteRow_RemovesCellsAndShiftsUp()
     {
         var (_, sheet, ctx) = Setup();
@@ -359,6 +376,24 @@ public class InsertDeleteRowsTests
 
         sheet.PrintArea!.Value.Start.Row.Should().Be(6);
         sheet.PrintArea.Value.End.Row.Should().Be(7);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsRowPageBreaksAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.RowPageBreaks.Add(2);
+        sheet.RowPageBreaks.Add(4);
+        sheet.RowPageBreaks.Add(8);
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.RowPageBreaks.Should().Equal(2u, 6u);
+
+        cmd.Revert(ctx);
+
+        sheet.RowPageBreaks.Should().Equal(2u, 4u, 8u);
     }
 
     [Fact]

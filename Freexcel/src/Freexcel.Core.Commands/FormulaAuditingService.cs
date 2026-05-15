@@ -10,6 +10,111 @@ public sealed record FormulaErrorInfo(
     ErrorValue Error,
     string? FormulaText);
 
+public sealed record FormulaErrorIssue(
+    SheetId SheetId,
+    string SheetName,
+    CellAddress Address,
+    string Cell,
+    string ErrorCode,
+    string? FormulaText,
+    string Description);
+
+public sealed record FormulaErrorCheckingRule(string ErrorCode, string Label, string Description);
+
+public static class FormulaErrorCheckingRuleCatalog
+{
+    public static IReadOnlyList<FormulaErrorCheckingRule> SupportedRules { get; } =
+    [
+        new(ErrorValue.DivByZero.Code, "Formulas that divide by zero", "Flag formulas that result in #DIV/0!."),
+        new(ErrorValue.Value.Code, "Formulas with incompatible values", "Flag formulas that result in #VALUE!."),
+        new(ErrorValue.Ref.Code, "Formulas with invalid cell references", "Flag formulas that result in #REF!."),
+        new(ErrorValue.Name.Code, "Formulas with unrecognized names", "Flag formulas that result in #NAME?."),
+        new(ErrorValue.NA.Code, "Formulas returning #N/A", "Flag formulas that result in #N/A."),
+        new(ErrorValue.Num.Code, "Formulas with invalid numbers", "Flag formulas that result in #NUM!."),
+        new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
+        new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
+        new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!.")
+    ];
+
+    public static bool IsSupported(string errorCode) =>
+        SupportedRules.Any(rule => string.Equals(rule.ErrorCode, errorCode, StringComparison.OrdinalIgnoreCase));
+}
+
+public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private readonly bool _ignored;
+    private bool _previousIgnored;
+
+    public SetFormulaErrorIgnoredCommand(SheetId sheetId, CellAddress address, bool ignored)
+    {
+        _sheetId = sheetId;
+        _address = address;
+        _ignored = ignored;
+    }
+
+    public string Label => _ignored ? "Ignore Error" : "Reset Ignored Error";
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var cell = ctx.GetSheet(_sheetId).GetCell(_address);
+        if (cell is null)
+            return new CommandOutcome(false, "No cell exists at the selected error.");
+
+        if (_ignored && cell.Value is not ErrorValue)
+            return new CommandOutcome(false, "The selected cell does not currently contain an error.");
+
+        _previousIgnored = cell.IgnoreFormulaError;
+        cell.IgnoreFormulaError = _ignored;
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var cell = ctx.GetSheet(_sheetId).GetCell(_address);
+        if (cell is not null)
+            cell.IgnoreFormulaError = _previousIgnored;
+    }
+}
+
+public sealed class SetFormulaErrorCheckingRuleCommand : IWorkbookCommand
+{
+    private readonly string _errorCode;
+    private readonly bool _enabled;
+    private bool _wasDisabled;
+
+    public SetFormulaErrorCheckingRuleCommand(string errorCode, bool enabled)
+    {
+        _errorCode = errorCode;
+        _enabled = enabled;
+    }
+
+    public string Label => "Error Checking Options";
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (!FormulaErrorCheckingRuleCatalog.IsSupported(_errorCode))
+            return new CommandOutcome(false, "Formula error checking rule is not supported.");
+
+        _wasDisabled = ctx.Workbook.DisabledFormulaErrorCodes.Contains(_errorCode);
+        if (_enabled)
+            ctx.Workbook.DisabledFormulaErrorCodes.Remove(_errorCode);
+        else
+            ctx.Workbook.DisabledFormulaErrorCodes.Add(_errorCode);
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_wasDisabled)
+            ctx.Workbook.DisabledFormulaErrorCodes.Add(_errorCode);
+        else
+            ctx.Workbook.DisabledFormulaErrorCodes.Remove(_errorCode);
+    }
+}
+
 public static class FormulaAuditingService
 {
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
@@ -20,6 +125,14 @@ public static class FormulaAuditingService
             return [];
 
         return ExtractPrecedents(workbook, formulaAddress.Sheet, cell.FormulaText);
+    }
+
+    public static IReadOnlyList<FormulaTraceArrow> GetPrecedentTraceArrows(Workbook workbook, CellAddress formulaAddress)
+    {
+        var result = new List<FormulaTraceArrow>();
+        var visited = new HashSet<CellAddress>();
+        CollectPrecedentTraceArrows(workbook, formulaAddress, result, visited);
+        return result;
     }
 
     public static IReadOnlyList<CellAddress> GetDirectDependents(Workbook workbook, CellAddress address)
@@ -42,6 +155,46 @@ public static class FormulaAuditingService
         return SortByWorkbookOrder(workbook, result).ToList();
     }
 
+    public static IReadOnlyList<FormulaTraceArrow> GetDependentTraceArrows(Workbook workbook, CellAddress address)
+    {
+        var result = new List<FormulaTraceArrow>();
+        var visited = new HashSet<CellAddress>();
+        CollectDependentTraceArrows(workbook, address, result, visited);
+        return result;
+    }
+
+    private static void CollectPrecedentTraceArrows(
+        Workbook workbook,
+        CellAddress formulaAddress,
+        List<FormulaTraceArrow> result,
+        HashSet<CellAddress> visited)
+    {
+        if (!visited.Add(formulaAddress))
+            return;
+
+        foreach (var precedent in GetDirectPrecedents(workbook, formulaAddress))
+        {
+            result.Add(new FormulaTraceArrow(precedent, formulaAddress));
+            CollectPrecedentTraceArrows(workbook, precedent, result, visited);
+        }
+    }
+
+    private static void CollectDependentTraceArrows(
+        Workbook workbook,
+        CellAddress address,
+        List<FormulaTraceArrow> result,
+        HashSet<CellAddress> visited)
+    {
+        if (!visited.Add(address))
+            return;
+
+        foreach (var dependent in GetDirectDependents(workbook, address))
+        {
+            result.Add(new FormulaTraceArrow(address, dependent));
+            CollectDependentTraceArrows(workbook, dependent, result, visited);
+        }
+    }
+
     public static IReadOnlyList<FormulaErrorInfo> FindFormulaErrors(Workbook workbook, SheetId? sheetId = null)
     {
         var result = new List<FormulaErrorInfo>();
@@ -53,7 +206,13 @@ public static class FormulaAuditingService
 
             foreach (var (address, cell) in sheet.EnumerateCells().OrderBy(c => c.Address.Row).ThenBy(c => c.Address.Col))
             {
+                if (cell.IgnoreFormulaError)
+                    continue;
+
                 if (cell.Value is not ErrorValue error)
+                    continue;
+
+                if (workbook.DisabledFormulaErrorCodes.Contains(error.Code))
                     continue;
 
                 result.Add(new FormulaErrorInfo(
@@ -67,6 +226,32 @@ public static class FormulaAuditingService
 
         return result;
     }
+
+    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null) =>
+        FindFormulaErrors(workbook, sheetId)
+            .Select(error => new FormulaErrorIssue(
+                error.SheetId,
+                error.SheetName,
+                error.Address,
+                error.Address.ToA1(),
+                error.Error.Code,
+                error.FormulaText is null ? null : "=" + error.FormulaText,
+                DescribeError(error.Error)))
+            .ToList();
+
+    private static string DescribeError(ErrorValue error) => error.Code switch
+    {
+        "#DIV/0!" => "The formula or value results in division by zero.",
+        "#VALUE!" => "The formula uses an incompatible value or argument type.",
+        "#REF!" => "The formula contains an invalid cell reference.",
+        "#NAME?" => "The formula contains an unrecognized name or function.",
+        "#N/A" => "A value is not available to the formula.",
+        "#NUM!" => "The formula contains an invalid number or numeric result.",
+        "#NULL!" => "The formula specifies an invalid intersection.",
+        "#SPILL!" => "The formula result cannot spill into the requested cells.",
+        "#CIRCULAR!" => "The formula contains a circular reference.",
+        _ => "The formula or cell contains an error value."
+    };
 
     private static IReadOnlyList<CellAddress> ExtractPrecedents(Workbook workbook, SheetId hostSheetId, string formulaText)
     {

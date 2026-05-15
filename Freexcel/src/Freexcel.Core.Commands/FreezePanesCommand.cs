@@ -10,6 +10,8 @@ public sealed class SetFreezePanesCommand : IWorkbookCommand
     private readonly uint _frozenCols;
     private uint _previousFrozenRows;
     private uint _previousFrozenCols;
+    private uint? _previousSplitRow;
+    private uint? _previousSplitColumn;
 
     public string Label => "Freeze Panes";
 
@@ -28,8 +30,15 @@ public sealed class SetFreezePanesCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         _previousFrozenRows = sheet.FrozenRows;
         _previousFrozenCols = sheet.FrozenCols;
+        _previousSplitRow = sheet.SplitRow;
+        _previousSplitColumn = sheet.SplitColumn;
         sheet.FrozenRows = _frozenRows;
         sheet.FrozenCols = _frozenCols;
+        if (_frozenRows > 0 || _frozenCols > 0)
+        {
+            sheet.SplitRow = null;
+            sheet.SplitColumn = null;
+        }
         return new CommandOutcome(true);
     }
 
@@ -38,6 +47,8 @@ public sealed class SetFreezePanesCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         sheet.FrozenRows = _previousFrozenRows;
         sheet.FrozenCols = _previousFrozenCols;
+        sheet.SplitRow = _previousSplitRow;
+        sheet.SplitColumn = _previousSplitColumn;
     }
 }
 

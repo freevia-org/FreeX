@@ -31,6 +31,10 @@ public sealed class AddDrawingShapeCommand : IWorkbookCommand
     {
         if (_shape.Anchor.Sheet != _sheetId)
             return new CommandOutcome(false, "Shape anchor must be on the target sheet.");
+        if (!Enum.IsDefined(_shape.Kind))
+            return new CommandOutcome(false, "Drawing shape kind is not supported.");
+        if (!double.IsFinite(_shape.Width) || !double.IsFinite(_shape.Height) || _shape.Width <= 0 || _shape.Height <= 0)
+            return new CommandOutcome(false, "Shape size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.DrawingShapes.Add(_shape);

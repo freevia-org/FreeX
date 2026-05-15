@@ -71,6 +71,20 @@ public sealed class PageLayoutCommandTests
     }
 
     [Fact]
+    public void SetPageOrientationCommand_RejectsInvalidOrientation()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.PageOrientation = WorksheetPageOrientation.Portrait;
+
+        var outcome = new SetPageOrientationCommand(sheet.Id, (WorksheetPageOrientation)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.PageOrientation.Should().Be(WorksheetPageOrientation.Portrait);
+    }
+
+    [Fact]
     public void SetPaperSizeCommand_SetsPaperSizeAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -86,6 +100,20 @@ public sealed class PageLayoutCommandTests
         command.Revert(ctx);
 
         sheet.PaperSize.Should().Be(WorksheetPaperSize.A4);
+    }
+
+    [Fact]
+    public void SetPaperSizeCommand_RejectsInvalidPaperSize()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+
+        var outcome = new SetPaperSizeCommand(sheet.Id, (WorksheetPaperSize)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.PaperSize.Should().Be(WorksheetPaperSize.Letter);
     }
 
     [Fact]
@@ -297,6 +325,47 @@ public sealed class PageLayoutCommandTests
     }
 
     [Fact]
+    public void SetWorksheetBackgroundCommand_SetsBackgroundAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.BackgroundImage = new WorksheetBackgroundImage([1, 2, 3], "image/png", "old.png");
+        var next = new WorksheetBackgroundImage([9, 8, 7], "image/jpeg", "new.jpg");
+
+        var command = new SetWorksheetBackgroundCommand(sheet.Id, next);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.BackgroundImage.Should().Be(next);
+
+        command.Revert(ctx);
+
+        sheet.BackgroundImage.Should().NotBeNull();
+        sheet.BackgroundImage!.ImageBytes.Should().Equal(1, 2, 3);
+        sheet.BackgroundImage.ContentType.Should().Be("image/png");
+        sheet.BackgroundImage.FileName.Should().Be("old.png");
+    }
+
+    [Fact]
+    public void ClearWorksheetBackgroundCommand_ClearsBackgroundAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.BackgroundImage = new WorksheetBackgroundImage([1, 2, 3], "image/png", "background.png");
+
+        var command = new ClearWorksheetBackgroundCommand(sheet.Id);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.BackgroundImage.Should().BeNull();
+
+        command.Revert(ctx);
+
+        sheet.BackgroundImage.Should().NotBeNull();
+        sheet.BackgroundImage!.FileName.Should().Be("background.png");
+    }
+
+    [Fact]
     public void SetPageSetupCommand_AppliesDialogSettingsAsOneUndoableOperation()
     {
         var wb = new Workbook("test");
@@ -382,6 +451,42 @@ public sealed class PageLayoutCommandTests
         sheet.PrintBlackAndWhite.Should().BeFalse();
         sheet.PrintDraftQuality.Should().BeFalse();
         sheet.PrintQualityDpi.Should().BeNull();
+        sheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Displayed);
+        sheet.PrintComments.Should().Be(WorksheetPrintComments.None);
+    }
+
+    [Fact]
+    public void SetPageSetupCommand_RejectsInvalidChoiceValues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        sheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageOrder = WorksheetPageOrder.DownThenOver;
+        sheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
+        sheet.PrintComments = WorksheetPrintComments.None;
+
+        var command = new SetPageSetupCommand(
+            sheet.Id,
+            (WorksheetPageOrientation)99,
+            (WorksheetPaperSize)99,
+            WorksheetPageMargins.Normal,
+            printGridlines: false,
+            printHeadings: false,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            pageOrder: (WorksheetPageOrder)99,
+            printErrorValue: (WorksheetPrintErrorValue)99,
+            printComments: (WorksheetPrintComments)99);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.PageOrientation.Should().Be(WorksheetPageOrientation.Portrait);
+        sheet.PaperSize.Should().Be(WorksheetPaperSize.Letter);
+        sheet.PageOrder.Should().Be(WorksheetPageOrder.DownThenOver);
         sheet.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Displayed);
         sheet.PrintComments.Should().Be(WorksheetPrintComments.None);
     }

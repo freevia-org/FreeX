@@ -17,6 +17,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
+    private List<uint>? _rowPageBreakSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
@@ -65,6 +66,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         ShiftNamedRangeRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         _printAreaSnapshot = sheet.PrintArea;
         ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
+        _rowPageBreakSnapshot = sheet.RowPageBreaks.ToList();
+        ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         for (int i = 0; i < sheet.MergedRegions.Count; i++)
@@ -122,6 +125,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
         RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
+        RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
     }
 
     internal static void RewriteAllFormulas(
@@ -181,6 +185,39 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             values.Remove(key);
         foreach (var (key, value) in shifted)
             values[key - count] = value;
+    }
+
+    internal static void ShiftSortedSetUp(SortedSet<uint> values, uint start, uint count)
+    {
+        var shifted = values.Where(value => value >= start).OrderByDescending(value => value).ToList();
+        foreach (var value in shifted)
+            values.Remove(value);
+        foreach (var value in shifted)
+            values.Add(value + count);
+    }
+
+    internal static void ShiftSortedSetDown(SortedSet<uint> values, uint start, uint count)
+    {
+        var end = start + count - 1;
+        var removed = values.Where(value => value >= start && value <= end).ToList();
+        var shifted = values.Where(value => value > end).OrderBy(value => value).ToList();
+
+        foreach (var value in removed)
+            values.Remove(value);
+        foreach (var value in shifted)
+            values.Remove(value);
+        foreach (var value in shifted)
+            values.Add(value - count);
+    }
+
+    internal static void RestoreSortedSet(SortedSet<uint> target, IReadOnlyCollection<uint>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        target.Clear();
+        foreach (var value in snapshot)
+            target.Add(value);
     }
 
     internal static void RestoreDictionary(Dictionary<uint, double> target, Dictionary<uint, double>? snapshot)
@@ -483,6 +520,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
+    private List<uint>? _rowPageBreakSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
@@ -543,6 +581,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftNamedRangeRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         _printAreaSnapshot = sheet.PrintArea;
         InsertRowsCommand.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
+        _rowPageBreakSnapshot = sheet.RowPageBreaks.ToList();
+        InsertRowsCommand.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         sheet.MergedRegions.RemoveAll(m => m.Start.Row <= endRow && m.End.Row >= _startRow);
@@ -593,5 +633,6 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
+        InsertRowsCommand.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
     }
 }

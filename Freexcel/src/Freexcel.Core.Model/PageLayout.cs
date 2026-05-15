@@ -34,6 +34,8 @@ public enum WorksheetPrintComments
     AsDisplayed
 }
 
+public sealed record WorksheetBackgroundImage(byte[] ImageBytes, string ContentType, string? FileName = null);
+
 public enum WorksheetPageMarginEdge
 {
     Left,

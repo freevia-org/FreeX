@@ -18,33 +18,11 @@ public sealed class ViewportService : IViewportService
         }
 
         var cells = new List<DisplayCell>();
-        var rowMetrics = new List<RowMetric>();
-        var colMetrics = new List<ColMetric>();
+        var rowMetrics = BuildRowMetrics(sheet, request.TopRow, CellAddress.MaxRow, request.AvailableHeight);
+        var colMetrics = BuildColMetrics(sheet, request.LeftCol, CellAddress.MaxCol, request.AvailableWidth);
 
         // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
-        const uint MaxRow = CellAddress.MaxRow;
-        double topOffset = 0;
-        for (uint r = request.TopRow; r <= MaxRow; r++)
-        {
-            if (IsRowHidden(sheet, r)) continue;
-            double height = sheet.RowHeights.GetValueOrDefault(r, sheet.DefaultRowHeight);
-            rowMetrics.Add(new RowMetric(r, height, topOffset));
-            topOffset += height;
-            if (topOffset > request.AvailableHeight) break;
-        }
-
         // Calculate Column Metrics — iterate until we've filled the available width
-        const uint MaxCol = CellAddress.MaxCol;
-        double leftOffset = 0;
-        for (uint c = request.LeftCol; c <= MaxCol; c++)
-        {
-            if (sheet.IsColEffectivelyHidden(c)) continue;
-            double width = sheet.ColumnWidths.GetValueOrDefault(c, sheet.DefaultColumnWidth) * 8;
-            colMetrics.Add(new ColMetric(c, width, leftOffset));
-            leftOffset += width;
-            if (leftOffset > request.AvailableWidth) break;
-        }
-
         // Retrieve Cells in Viewport
         foreach (var rowMetric in rowMetrics)
         {
@@ -64,7 +42,7 @@ public sealed class ViewportService : IViewportService
                     cells.Add(new DisplayCell(
                         rowMetric.Row, colMetric.Col,
                         cell.Value,
-                        NumberFormatter.Format(cell.Value, style.NumberFormat),
+                        GetDisplayText(sheet, cell, style),
                         request.IncludeFormulas ? cell.FormulaText : null,
                         cell.StyleId,
                         null,
@@ -77,8 +55,30 @@ public sealed class ViewportService : IViewportService
         var frozenPanes = (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
             ? new FrozenPaneState(sheet.FrozenRows, sheet.FrozenCols)
             : null;
+        var splitTopRows = sheet.SplitRow is { } splitRow
+            ? BuildRowMetrics(sheet, 1, splitRow - 1, request.AvailableHeight)
+            : [];
+        var splitLeftColumns = sheet.SplitColumn is { } splitColumn
+            ? BuildColMetrics(sheet, 1, splitColumn - 1, request.AvailableWidth)
+            : [];
+        var topRightColumns = sheet.SplitColumn.HasValue
+            ? BuildColMetrics(sheet, request.SplitPaneOffsets?.TopRightLeftCol ?? request.LeftCol, CellAddress.MaxCol, request.AvailableWidth)
+            : colMetrics;
+        var bottomLeftRows = sheet.SplitRow.HasValue
+            ? BuildRowMetrics(sheet, request.SplitPaneOffsets?.BottomLeftTopRow ?? request.TopRow, CellAddress.MaxRow, request.AvailableHeight)
+            : rowMetrics;
+        var splitPanes = (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)
+            ? new SplitPaneState(
+                sheet.SplitRow,
+                sheet.SplitColumn,
+                splitTopRows,
+                splitLeftColumns,
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas),
+                topRightColumns,
+                bottomLeftRows)
+            : null;
 
-        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, []);
+        return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes);
     }
 
     public CellAddress? HitTest(Workbook workbook, SheetId sheetId, double x, double y, double zoom)
@@ -136,6 +136,110 @@ public sealed class ViewportService : IViewportService
     private static bool IsRowHidden(Sheet sheet, uint row) =>
         sheet.IsRowEffectivelyHidden(row);
 
+    private static List<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
+    {
+        var rowMetrics = new List<RowMetric>();
+        if (startRow < 1 || endRow < startRow)
+            return rowMetrics;
+
+        var maxRow = Math.Min(endRow, CellAddress.MaxRow);
+        double topOffset = 0;
+        for (uint row = startRow; row <= maxRow; row++)
+        {
+            if (IsRowHidden(sheet, row)) continue;
+            double height = sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+            rowMetrics.Add(new RowMetric(row, height, topOffset));
+            topOffset += height;
+            if (topOffset > availableHeight) break;
+        }
+
+        return rowMetrics;
+    }
+
+    private static List<ColMetric> BuildColMetrics(Sheet sheet, uint startCol, uint endCol, double availableWidth)
+    {
+        var colMetrics = new List<ColMetric>();
+        if (startCol < 1 || endCol < startCol)
+            return colMetrics;
+
+        var maxCol = Math.Min(endCol, CellAddress.MaxCol);
+        double leftOffset = 0;
+        for (uint col = startCol; col <= maxCol; col++)
+        {
+            if (sheet.IsColEffectivelyHidden(col)) continue;
+            double width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+            colMetrics.Add(new ColMetric(col, width, leftOffset));
+            leftOffset += width;
+            if (leftOffset > availableWidth) break;
+        }
+
+        return colMetrics;
+    }
+
+    private static List<DisplayCell> BuildSplitPaneCells(
+        Workbook workbook,
+        Sheet sheet,
+        SheetId sheetId,
+        IReadOnlyList<RowMetric> topRows,
+        IReadOnlyList<ColMetric> leftColumns,
+        IReadOnlyList<RowMetric> bottomLeftRows,
+        IReadOnlyList<ColMetric> topRightColumns,
+        bool includeFormulas)
+    {
+        var cells = new List<DisplayCell>();
+        var seen = new HashSet<(uint Row, uint Col)>();
+
+        foreach (var row in topRows)
+        {
+            foreach (var column in leftColumns)
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas);
+            foreach (var column in topRightColumns)
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas);
+        }
+
+        foreach (var row in bottomLeftRows)
+        {
+            foreach (var column in leftColumns)
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas);
+        }
+
+        return cells;
+    }
+
+    private static void AddDisplayCell(
+        List<DisplayCell> cells,
+        HashSet<(uint Row, uint Col)> seen,
+        Workbook workbook,
+        Sheet sheet,
+        SheetId sheetId,
+        uint row,
+        uint col,
+        bool includeFormulas)
+    {
+        if (!seen.Add((row, col)))
+            return;
+
+        var cell = sheet.GetCell(row, col);
+        if (cell is null)
+            return;
+
+        var style = workbook.GetStyle(cell.StyleId);
+        var addr = new CellAddress(sheetId, row, col);
+        var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook);
+        if (cfStyle != null)
+            style = MergeStyles(style, cfStyle);
+
+        cells.Add(new DisplayCell(
+            row,
+            col,
+            cell.Value,
+            GetDisplayText(sheet, cell, style),
+            includeFormulas ? cell.FormulaText : null,
+            cell.StyleId,
+            null,
+            style));
+    }
+
     // ── Conditional format evaluation ─────────────────────────────────────────
 
     /// <summary>
@@ -143,6 +247,11 @@ public sealed class ViewportService : IViewportService
     /// Priority ascending = highest precedence first). Returns the first matching rule's style,
     /// or null when no rule fires.
     /// </summary>
+    private static string GetDisplayText(Sheet sheet, Cell cell, CellStyle style) =>
+        sheet.ShowFormulas && cell.FormulaText is not null
+            ? "=" + cell.FormulaText
+            : NumberFormatter.Format(cell.Value, style.NumberFormat);
+
     private static readonly FormulaEvaluator _cfEvaluator = new();
 
     private static CellStyle? EvaluateConditionalFormats(

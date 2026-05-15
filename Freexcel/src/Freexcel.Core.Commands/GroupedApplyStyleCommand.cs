@@ -32,6 +32,8 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
             if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
                 return protectedOutcome;
         }
+        if (StyleDiffValidator.Validate(_diff) is { } validationOutcome)
+            return validationOutcome;
 
         _snapshot = [];
 

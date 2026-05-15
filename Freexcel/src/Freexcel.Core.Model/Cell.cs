@@ -17,6 +17,9 @@ public sealed class Cell
     /// <summary>Whether this cell contains a formula.</summary>
     public bool HasFormula => FormulaText is not null;
 
+    /// <summary>Whether formula error checking should skip this cell.</summary>
+    public bool IgnoreFormulaError { get; set; }
+
     /// <summary>The style applied to this cell.</summary>
     public StyleId StyleId { get; set; } = StyleId.Default;
 
@@ -31,6 +34,7 @@ public sealed class Cell
     {
         Value = Value,
         FormulaText = FormulaText,
+        IgnoreFormulaError = IgnoreFormulaError,
         StyleId = StyleId
     };
 }

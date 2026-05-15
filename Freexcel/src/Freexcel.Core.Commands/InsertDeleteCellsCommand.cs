@@ -34,6 +34,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     {
         if (_range.Start.Sheet != _sheetId || _range.End.Sheet != _sheetId)
             return new CommandOutcome(false, "Insert range must be on the target sheet.");
+        if (!Enum.IsDefined(_direction))
+            return new CommandOutcome(false, "Insert shift direction is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
@@ -131,6 +133,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     {
         if (_range.Start.Sheet != _sheetId || _range.End.Sheet != _sheetId)
             return new CommandOutcome(false, "Delete range must be on the target sheet.");
+        if (!Enum.IsDefined(_direction))
+            return new CommandOutcome(false, "Delete shift direction is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)

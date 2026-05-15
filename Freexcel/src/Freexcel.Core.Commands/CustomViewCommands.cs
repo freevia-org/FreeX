@@ -33,7 +33,12 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
                 sheet.FrozenRows,
                 sheet.FrozenCols,
                 sheet.SplitRow,
-                sheet.SplitColumn)).ToList());
+                sheet.SplitColumn,
+                sheet.ShowGridlines,
+                sheet.ShowHeadings,
+                sheet.ShowRulers,
+                sheet.ZoomPercent,
+                sheet.ShowFormulas)).ToList());
 
         if (_hadPreviousView)
             workbook.CustomViews[index] = view;
@@ -116,7 +121,12 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             sheet.FrozenRows,
             sheet.FrozenCols,
             sheet.SplitRow,
-            sheet.SplitColumn)).ToList();
+            sheet.SplitColumn,
+            sheet.ShowGridlines,
+            sheet.ShowHeadings,
+            sheet.ShowRulers,
+            sheet.ZoomPercent,
+            sheet.ShowFormulas)).ToList();
 
     private static void ApplyState(Sheet sheet, WorksheetCustomViewState state)
     {
@@ -125,6 +135,11 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         sheet.FrozenCols = state.FrozenCols;
         sheet.SplitRow = state.SplitRow;
         sheet.SplitColumn = state.SplitColumn;
+        sheet.ShowGridlines = state.ShowGridlines;
+        sheet.ShowHeadings = state.ShowHeadings;
+        sheet.ShowRulers = state.ShowRulers;
+        sheet.ZoomPercent = state.ZoomPercent;
+        sheet.ShowFormulas = state.ShowFormulas;
     }
 }
 

@@ -51,6 +51,94 @@ public class FileAdapterSmokeTests
     // ── XLSX ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_IgnoredFormulaErrors()
+    {
+        var workbook = new Workbook("IgnoredErrors");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromFormula("1/0");
+        cell.Value = ErrorValue.DivByZero;
+        cell.IgnoreFormulaError = true;
+        sheet.SetCell(address, cell);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_ErrorCheckingOptions()
+    {
+        var workbook = new Workbook("ErrorCheckingOptions");
+        workbook.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.DisabledFormulaErrorCodes.Should().ContainSingle(ErrorValue.DivByZero.Code);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WatchedCells()
+    {
+        var workbook = new Workbook("WatchTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var watched = new CellAddress(sheet.Id, 2, 3);
+        sheet.SetFormula(watched, "A1+1");
+        workbook.WatchedCells.Add(watched);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loaded.WatchedCells.Should().ContainSingle()
+            .Which.Should().Be(new CellAddress(loadedSheet.Id, 2, 3));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_Scenarios()
+    {
+        var workbook = new Workbook("ScenarioTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Best Case",
+            [
+                new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(42)),
+                new ScenarioCellValue(new CellAddress(sheet.Id, 2, 1), new TextValue("manual"))
+            ]));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
+        scenario.Name.Should().Be("Best Case");
+        scenario.ChangingCells.Should().Contain(new ScenarioCellValue(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new NumberValue(42)));
+        scenario.ChangingCells.Should().Contain(new ScenarioCellValue(
+            new CellAddress(loadedSheet.Id, 2, 1),
+            new TextValue("manual")));
+    }
+
+    [Fact]
     public void FileSavePlanner_TryResolveExistingPath_UsesAdapterForCurrentPath()
     {
         var adapter = new XlsxFileAdapter();
@@ -85,17 +173,124 @@ public class FileAdapterSmokeTests
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Quarter"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Revenue"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Cost"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Q1"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(4));
         sheet.Charts.Add(new ChartModel
         {
-            Type = ChartType.Bar,
-            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            Type = ChartType.Area,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
             Title = "Revenue",
             XAxisTitle = "Amount",
             YAxisTitle = "Quarter",
+            ChartTitleTextColor = new CellColor(31, 78, 121),
+            ChartTitleFontSize = 18,
+            AxisTitleTextColor = new CellColor(89, 89, 89),
+            AxisTitleFontSize = 12,
+            ChartAreaFillColor = new CellColor(245, 245, 245),
+            PlotAreaFillColor = new CellColor(250, 252, 255),
+            PlotAreaBorderColor = new CellColor(120, 120, 120),
+            PlotAreaBorderThickness = 2.25,
+            LegendTextColor = new CellColor(40, 40, 40),
+            LegendFillColor = new CellColor(248, 248, 248),
+            LegendBorderColor = new CellColor(180, 180, 180),
+            LegendBorderThickness = 1.25,
+            LegendFontSize = 11,
+            DoughnutHoleSize = 0.72,
+            FirstSliceAngle = 135,
+            ExplodedSliceIndex = 0,
+            ExplodedSliceDistance = 0.18,
+            XAxisMinimum = 0,
+            XAxisMaximum = 10,
+            XAxisMajorUnit = 2,
+            XAxisMinorUnit = 1,
+            XAxisLogScale = true,
+            XAxisNumberFormat = ChartDataLabelNumberFormat.Number,
+            ShowXAxisMajorGridlines = true,
+            ShowXAxisMinorGridlines = true,
+            XAxisMajorGridlineColor = new CellColor(200, 200, 200),
+            XAxisMinorGridlineColor = new CellColor(230, 230, 230),
+            XAxisGridlineThickness = 1.5,
+            XAxisMajorTickStyle = ChartAxisTickStyle.Outside,
+            XAxisMinorTickStyle = ChartAxisTickStyle.Inside,
+            ShowXAxisLabels = false,
+            XAxisLabelTextColor = new CellColor(70, 70, 70),
+            XAxisLabelFontSize = 10,
+            XAxisLabelAngle = -45,
+            XAxisLineColor = new CellColor(10, 20, 30),
+            XAxisLineThickness = 2.5,
+            YAxisMinimum = -5,
+            YAxisMaximum = 25,
+            YAxisMajorUnit = 5,
+            YAxisMinorUnit = 2.5,
+            YAxisLogScale = true,
+            YAxisNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowYAxisMajorGridlines = true,
+            ShowYAxisMinorGridlines = true,
+            YAxisMajorGridlineColor = new CellColor(190, 190, 190),
+            YAxisMinorGridlineColor = new CellColor(225, 225, 225),
+            YAxisGridlineThickness = 2,
+            YAxisMajorTickStyle = ChartAxisTickStyle.Cross,
+            YAxisMinorTickStyle = ChartAxisTickStyle.None,
+            ShowYAxisLabels = false,
+            YAxisLabelTextColor = new CellColor(80, 80, 80),
+            YAxisLabelFontSize = 11,
+            YAxisLabelAngle = 90,
+            YAxisLineColor = new CellColor(40, 50, 60),
+            YAxisLineThickness = 3.5,
             LegendPosition = ChartLegendPosition.Bottom,
+            LegendOverlay = true,
             ShowLegend = false,
+            ShowDataLabels = true,
+            DataLabelPosition = ChartDataLabelPosition.OutsideEnd,
+            ShowDataLabelCategoryName = true,
+            ShowDataLabelSeriesName = true,
+            ShowDataLabelPercentage = true,
+            DataLabelSeparator = ChartDataLabelSeparator.NewLine,
+            DataLabelNumberFormat = ChartDataLabelNumberFormat.Currency,
+            ShowDataLabelCallouts = true,
+            DataLabelFillColor = new CellColor(255, 255, 225),
+            DataLabelBorderColor = new CellColor(128, 128, 128),
+            DataLabelTextColor = new CellColor(30, 30, 30),
+            DataLabelBorderThickness = 1.5,
+            DataLabelFontSize = 13,
+            DataLabelAngle = -35,
+            ShowLinearTrendline = true,
+            TrendlineType = ChartTrendlineType.Power,
+            TrendlinePeriod = 3,
+            TrendlineOrder = 4,
+            ShowTrendlineEquation = true,
+            ShowTrendlineRSquared = true,
+            TrendlineColor = new CellColor(217, 83, 25),
+            TrendlineThickness = 2.5,
+            TrendlineDashStyle = ChartLineDashStyle.Solid,
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1],
+            ComboLineSeriesIndexes = [1],
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(0, 114, 178),
+                    StrokeColor: new CellColor(0, 0, 0),
+                    StrokeThickness: 2.5,
+                    DashStyle: ChartLineDashStyle.Dot,
+                    MarkerStyle: ChartMarkerStyle.Diamond,
+                    MarkerSize: 7)
+            ],
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(
+                    1,
+                    0,
+                    FillColor: new CellColor(226, 239, 218),
+                    BorderColor: new CellColor(112, 173, 71),
+                    BorderThickness: 2,
+                    TextColor: new CellColor(0, 97, 0),
+                    FontSize: 14)
+            ],
+            UseComboLineForSecondarySeries = true,
             Left = 12,
             Top = 34,
             Width = 500,
@@ -110,18 +305,363 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
-        chart.Type.Should().Be(ChartType.Bar);
+        chart.Type.Should().Be(ChartType.Area);
         chart.DataRange.Start.ToA1().Should().Be("A1");
-        chart.DataRange.End.ToA1().Should().Be("B2");
+        chart.DataRange.End.ToA1().Should().Be("C2");
         chart.Title.Should().Be("Revenue");
         chart.XAxisTitle.Should().Be("Amount");
         chart.YAxisTitle.Should().Be("Quarter");
+        chart.ChartTitleTextColor.Should().Be(new CellColor(31, 78, 121));
+        chart.ChartTitleFontSize.Should().Be(18);
+        chart.AxisTitleTextColor.Should().Be(new CellColor(89, 89, 89));
+        chart.AxisTitleFontSize.Should().Be(12);
+        chart.ChartAreaFillColor.Should().Be(new CellColor(245, 245, 245));
+        chart.PlotAreaFillColor.Should().Be(new CellColor(250, 252, 255));
+        chart.PlotAreaBorderColor.Should().Be(new CellColor(120, 120, 120));
+        chart.PlotAreaBorderThickness.Should().Be(2.25);
+        chart.LegendTextColor.Should().Be(new CellColor(40, 40, 40));
+        chart.LegendFillColor.Should().Be(new CellColor(248, 248, 248));
+        chart.LegendBorderColor.Should().Be(new CellColor(180, 180, 180));
+        chart.LegendBorderThickness.Should().Be(1.25);
+        chart.LegendFontSize.Should().Be(11);
+        chart.DoughnutHoleSize.Should().Be(0.72);
+        chart.FirstSliceAngle.Should().Be(135);
+        chart.ExplodedSliceIndex.Should().Be(0);
+        chart.ExplodedSliceDistance.Should().Be(0.18);
+        chart.XAxisMinimum.Should().Be(0);
+        chart.XAxisMaximum.Should().Be(10);
+        chart.XAxisMajorUnit.Should().Be(2);
+        chart.XAxisMinorUnit.Should().Be(1);
+        chart.XAxisLogScale.Should().BeTrue();
+        chart.XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Number);
+        chart.ShowXAxisMajorGridlines.Should().BeTrue();
+        chart.ShowXAxisMinorGridlines.Should().BeTrue();
+        chart.XAxisMajorGridlineColor.Should().Be(new CellColor(200, 200, 200));
+        chart.XAxisMinorGridlineColor.Should().Be(new CellColor(230, 230, 230));
+        chart.XAxisGridlineThickness.Should().Be(1.5);
+        chart.XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        chart.XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.Inside);
+        chart.ShowXAxisLabels.Should().BeFalse();
+        chart.XAxisLabelTextColor.Should().Be(new CellColor(70, 70, 70));
+        chart.XAxisLabelFontSize.Should().Be(10);
+        chart.XAxisLabelAngle.Should().Be(-45);
+        chart.XAxisLineColor.Should().Be(new CellColor(10, 20, 30));
+        chart.XAxisLineThickness.Should().Be(2.5);
+        chart.YAxisMinimum.Should().Be(-5);
+        chart.YAxisMaximum.Should().Be(25);
+        chart.YAxisMajorUnit.Should().Be(5);
+        chart.YAxisMinorUnit.Should().Be(2.5);
+        chart.YAxisLogScale.Should().BeTrue();
+        chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+        chart.ShowYAxisMajorGridlines.Should().BeTrue();
+        chart.ShowYAxisMinorGridlines.Should().BeTrue();
+        chart.YAxisMajorGridlineColor.Should().Be(new CellColor(190, 190, 190));
+        chart.YAxisMinorGridlineColor.Should().Be(new CellColor(225, 225, 225));
+        chart.YAxisGridlineThickness.Should().Be(2);
+        chart.YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Cross);
+        chart.YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.ShowYAxisLabels.Should().BeFalse();
+        chart.YAxisLabelTextColor.Should().Be(new CellColor(80, 80, 80));
+        chart.YAxisLabelFontSize.Should().Be(11);
+        chart.YAxisLabelAngle.Should().Be(90);
+        chart.YAxisLineColor.Should().Be(new CellColor(40, 50, 60));
+        chart.YAxisLineThickness.Should().Be(3.5);
         chart.LegendPosition.Should().Be(ChartLegendPosition.Bottom);
+        chart.LegendOverlay.Should().BeTrue();
         chart.ShowLegend.Should().BeFalse();
+        chart.ShowDataLabels.Should().BeTrue();
+        chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.OutsideEnd);
+        chart.ShowDataLabelCategoryName.Should().BeTrue();
+        chart.ShowDataLabelSeriesName.Should().BeTrue();
+        chart.ShowDataLabelPercentage.Should().BeTrue();
+        chart.DataLabelSeparator.Should().Be(ChartDataLabelSeparator.NewLine);
+        chart.DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+        chart.ShowDataLabelCallouts.Should().BeTrue();
+        chart.DataLabelFillColor.Should().Be(new CellColor(255, 255, 225));
+        chart.DataLabelBorderColor.Should().Be(new CellColor(128, 128, 128));
+        chart.DataLabelTextColor.Should().Be(new CellColor(30, 30, 30));
+        chart.DataLabelBorderThickness.Should().Be(1.5);
+        chart.DataLabelFontSize.Should().Be(13);
+        chart.DataLabelAngle.Should().Be(-35);
+        chart.ShowLinearTrendline.Should().BeTrue();
+        chart.TrendlineType.Should().Be(ChartTrendlineType.Power);
+        chart.TrendlinePeriod.Should().Be(3);
+        chart.TrendlineOrder.Should().Be(4);
+        chart.ShowTrendlineEquation.Should().BeTrue();
+        chart.ShowTrendlineRSquared.Should().BeTrue();
+        chart.TrendlineColor.Should().Be(new CellColor(217, 83, 25));
+        chart.TrendlineThickness.Should().Be(2.5);
+        chart.TrendlineDashStyle.Should().Be(ChartLineDashStyle.Solid);
+        chart.ShowSecondaryAxis.Should().BeTrue();
+        chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
+        chart.ComboLineSeriesIndexes.Should().Equal(1);
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(
+                0,
+                FillColor: new CellColor(0, 114, 178),
+                StrokeColor: new CellColor(0, 0, 0),
+                StrokeThickness: 2.5,
+                DashStyle: ChartLineDashStyle.Dot,
+                MarkerStyle: ChartMarkerStyle.Diamond,
+                MarkerSize: 7));
+        chart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartPointDataLabelFormat(
+                1,
+                0,
+                FillColor: new CellColor(226, 239, 218),
+                BorderColor: new CellColor(112, 173, 71),
+                BorderThickness: 2,
+                TextColor: new CellColor(0, 97, 0),
+                FontSize: 14));
+        chart.UseComboLineForSecondarySeries.Should().BeTrue();
         chart.Left.Should().Be(12);
         chart.Top.Should().Be(34);
         chart.Width.Should().Be(500);
         chart.Height.Should().Be(240);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_SanitizesChartIndexesAgainstPersistedDataRange()
+    {
+        var workbook = new Workbook("ChartIndexSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3)),
+            ExplodedSliceIndex = 5,
+            SecondaryAxisSeriesIndexes = [-1, 0, 1, 1, 2],
+            ComboLineSeriesIndexes = [-1, 0, 1, 1, 2],
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(-1, FillColor: new CellColor(255, 0, 0)),
+                new ChartSeriesFormat(0, FillColor: new CellColor(0, 114, 178), StrokeThickness: -1, MarkerSize: 99),
+                new ChartSeriesFormat(2, FillColor: new CellColor(255, 192, 0))
+            ],
+            PointDataLabelFormats =
+            [
+                new ChartPointDataLabelFormat(-1, 0, FillColor: new CellColor(255, 0, 0)),
+                new ChartPointDataLabelFormat(0, -1, FillColor: new CellColor(255, 0, 0)),
+                new ChartPointDataLabelFormat(0, 0, FillColor: new CellColor(0, 114, 178)),
+                new ChartPointDataLabelFormat(0, 0, FillColor: new CellColor(112, 48, 160), BorderThickness: 25, FontSize: 2),
+                new ChartPointDataLabelFormat(1, 2, FillColor: new CellColor(255, 192, 0)),
+                new ChartPointDataLabelFormat(2, 0, FillColor: new CellColor(255, 0, 0))
+            ]
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.ExplodedSliceIndex.Should().Be(-1);
+        chart.SecondaryAxisSeriesIndexes.Should().Equal(1);
+        chart.ComboLineSeriesIndexes.Should().Equal(1);
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, FillColor: new CellColor(0, 114, 178), StrokeThickness: 0.5, MarkerSize: 30));
+        chart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartPointDataLabelFormat(0, 0, FillColor: new CellColor(112, 48, 160), BorderThickness: 10, FontSize: 6));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ClearsUnsupportedComboLineOverlayState()
+    {
+        var workbook = new Workbook("ChartComboSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3)),
+            UseComboLineForSecondarySeries = true,
+            ComboLineSeriesIndexes = [1]
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.UseComboLineForSecondarySeries.Should().BeFalse();
+        chart.ComboLineSeriesIndexes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ClampsChartLabelAngles()
+    {
+        var workbook = new Workbook("ChartAngleSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            XAxisLabelAngle = -120,
+            YAxisLabelAngle = 135,
+            DataLabelAngle = 180
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.XAxisLabelAngle.Should().Be(-90);
+        chart.YAxisLabelAngle.Should().Be(90);
+        chart.DataLabelAngle.Should().Be(90);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ClampsChartLayoutNumbers()
+    {
+        var workbook = new Workbook("ChartLayoutSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3)),
+            ChartTitleFontSize = 2,
+            AxisTitleFontSize = 100,
+            PlotAreaBorderThickness = -1,
+            LegendBorderThickness = 25,
+            LegendFontSize = 2,
+            DoughnutHoleSize = 2,
+            FirstSliceAngle = 725,
+            ExplodedSliceDistance = 2,
+            XAxisMajorUnit = -5,
+            XAxisMinorUnit = -1,
+            XAxisGridlineThickness = 0,
+            XAxisLabelFontSize = 100,
+            XAxisLineThickness = 0,
+            YAxisMajorUnit = -10,
+            YAxisMinorUnit = -2,
+            YAxisGridlineThickness = 25,
+            YAxisLabelFontSize = 1,
+            YAxisLineThickness = 25,
+            DataLabelBorderThickness = 25,
+            DataLabelFontSize = 1,
+            TrendlinePeriod = 0,
+            TrendlineOrder = 99,
+            TrendlineThickness = 0
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.ChartTitleFontSize.Should().Be(6);
+        chart.AxisTitleFontSize.Should().Be(72);
+        chart.PlotAreaBorderThickness.Should().Be(0);
+        chart.LegendBorderThickness.Should().Be(10);
+        chart.LegendFontSize.Should().Be(6);
+        chart.DoughnutHoleSize.Should().Be(0.9);
+        chart.FirstSliceAngle.Should().Be(5);
+        chart.ExplodedSliceDistance.Should().Be(0.5);
+        chart.XAxisMajorUnit.Should().Be(double.Epsilon);
+        chart.XAxisMinorUnit.Should().Be(double.Epsilon);
+        chart.XAxisGridlineThickness.Should().Be(0.25);
+        chart.XAxisLabelFontSize.Should().Be(72);
+        chart.XAxisLineThickness.Should().Be(0.5);
+        chart.YAxisMajorUnit.Should().Be(double.Epsilon);
+        chart.YAxisMinorUnit.Should().Be(double.Epsilon);
+        chart.YAxisGridlineThickness.Should().Be(10);
+        chart.YAxisLabelFontSize.Should().Be(6);
+        chart.YAxisLineThickness.Should().Be(10);
+        chart.DataLabelBorderThickness.Should().Be(10);
+        chart.DataLabelFontSize.Should().Be(6);
+        chart.TrendlinePeriod.Should().Be(2);
+        chart.TrendlineOrder.Should().Be(6);
+        chart.TrendlineThickness.Should().Be(0.5);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ReplacesInvalidChartDimensionsWithDefaults()
+    {
+        var workbook = new Workbook("ChartDimensionSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            Width = -1,
+            Height = 0
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.Width.Should().Be(400);
+        chart.Height.Should().Be(300);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ReplacesInvalidChartChoicesWithDefaults()
+    {
+        var workbook = new Workbook("ChartChoiceSanitizeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = (ChartType)99,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            XAxisNumberFormat = (ChartDataLabelNumberFormat)99,
+            XAxisMajorTickStyle = (ChartAxisTickStyle)99,
+            XAxisMinorTickStyle = (ChartAxisTickStyle)99,
+            YAxisNumberFormat = (ChartDataLabelNumberFormat)99,
+            YAxisMajorTickStyle = (ChartAxisTickStyle)99,
+            YAxisMinorTickStyle = (ChartAxisTickStyle)99,
+            LegendPosition = (ChartLegendPosition)99,
+            DataLabelPosition = (ChartDataLabelPosition)99,
+            DataLabelSeparator = (ChartDataLabelSeparator)99,
+            DataLabelNumberFormat = (ChartDataLabelNumberFormat)99,
+            TrendlineType = (ChartTrendlineType)99,
+            TrendlineDashStyle = (ChartLineDashStyle)99,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    DashStyle: (ChartLineDashStyle)99,
+                    MarkerStyle: (ChartMarkerStyle)99)
+            ]
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.Type.Should().Be(ChartType.Column);
+        chart.XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        chart.XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        chart.XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        chart.YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        chart.YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Right);
+        chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.BestFit);
+        chart.DataLabelSeparator.Should().Be(ChartDataLabelSeparator.Comma);
+        chart.DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        chart.TrendlineType.Should().Be(ChartTrendlineType.Linear);
+        chart.TrendlineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(new ChartSeriesFormat(0));
     }
 
     [Fact]
@@ -139,6 +679,48 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.GetSheetAt(0).ViewMode.Should().Be(WorksheetViewMode.PageBreakPreview);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetViewOptions()
+    {
+        var workbook = new Workbook("ViewOptionsTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ShowGridlines = false;
+        sheet.ShowHeadings = false;
+        sheet.ShowRulers = false;
+        sheet.ZoomPercent = 125;
+        sheet.ShowFormulas = true;
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).ShowGridlines.Should().BeFalse();
+        loaded.GetSheetAt(0).ShowHeadings.Should().BeFalse();
+        loaded.GetSheetAt(0).ShowRulers.Should().BeFalse();
+        loaded.GetSheetAt(0).ZoomPercent.Should().Be(125);
+        loaded.GetSheetAt(0).ShowFormulas.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookWindowArrangement()
+    {
+        var workbook = new Workbook("WindowArrangementTest");
+        workbook.AddSheet("Sheet1");
+        workbook.WindowArrangement = WorkbookWindowArrangement.Cascade;
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.WindowArrangement.Should().Be(WorkbookWindowArrangement.Cascade);
     }
 
     [Fact]
@@ -167,7 +749,18 @@ public class FileAdapterSmokeTests
         workbook.AddSheet("Sheet1");
         workbook.CustomViews.Add(new WorkbookCustomView(
             "Review",
-            [new WorksheetCustomViewState("Sheet1", WorksheetViewMode.PageLayout, 1, 0, null, 3)]));
+            [new WorksheetCustomViewState(
+                "Sheet1",
+                WorksheetViewMode.PageLayout,
+                0,
+                0,
+                null,
+                3,
+                ShowGridlines: false,
+                ShowHeadings: false,
+                ShowRulers: false,
+                ZoomPercent: 125,
+                ShowFormulas: true)]));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -181,8 +774,86 @@ public class FileAdapterSmokeTests
         var state = view.Sheets.Should().ContainSingle().Subject;
         state.SheetName.Should().Be("Sheet1");
         state.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
-        state.FrozenRows.Should().Be(1);
+        state.ShowGridlines.Should().BeFalse();
+        state.ShowHeadings.Should().BeFalse();
+        state.ShowRulers.Should().BeFalse();
+        state.ZoomPercent.Should().Be(125);
+        state.ShowFormulas.Should().BeTrue();
+        state.FrozenRows.Should().Be(0);
         state.SplitColumn.Should().Be(3);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_SanitizesInvalidViewPaneState()
+    {
+        var workbook = new Workbook("ViewPaneSanitizeTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SplitRow = 0;
+        sheet.SplitColumn = CellAddress.MaxCol + 1;
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Bad panes",
+            [new WorksheetCustomViewState(
+                "Sheet1",
+                (WorksheetViewMode)99,
+                CellAddress.MaxRow + 1,
+                CellAddress.MaxCol + 1,
+                0,
+                CellAddress.MaxCol + 1)]));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SplitRow.Should().BeNull();
+        loadedSheet.SplitColumn.Should().BeNull();
+        var state = loaded.CustomViews.Should().ContainSingle().Subject.Sheets.Should().ContainSingle().Subject;
+        state.ViewMode.Should().Be(WorksheetViewMode.Normal);
+        state.FrozenRows.Should().Be(0);
+        state.FrozenCols.Should().Be(0);
+        state.SplitRow.Should().BeNull();
+        state.SplitColumn.Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_DropsSplitPaneStateWhenFrozenPanesArePresent()
+    {
+        var workbook = new Workbook("ViewPaneMutualExclusionTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 2;
+        sheet.SplitRow = 12;
+        sheet.SplitColumn = 4;
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Both pane modes",
+            [new WorksheetCustomViewState(
+                "Sheet1",
+                WorksheetViewMode.Normal,
+                1,
+                2,
+                12,
+                4)]));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.FrozenRows.Should().Be(1);
+        loadedSheet.FrozenCols.Should().Be(2);
+        loadedSheet.SplitRow.Should().BeNull();
+        loadedSheet.SplitColumn.Should().BeNull();
+        var state = loaded.CustomViews.Should().ContainSingle().Subject.Sheets.Should().ContainSingle().Subject;
+        state.FrozenRows.Should().Be(1);
+        state.FrozenCols.Should().Be(2);
+        state.SplitRow.Should().BeNull();
+        state.SplitColumn.Should().BeNull();
     }
 
     [Fact]
@@ -271,6 +942,40 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SanitizesInvalidPageSetupNumbers()
+    {
+        var workbook = new Workbook("PageSetupSanitizeTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.PageMargins = new WorksheetPageMargins(-1, 0.8, -2, 1.1);
+        sheet.HeaderMargin = -0.35;
+        sheet.FooterMargin = -0.45;
+        sheet.FirstPageNumber = 0;
+        sheet.PrintQualityDpi = 0;
+        sheet.ScaleToFit = new WorksheetScaleToFit(5, 0, -1);
+        sheet.RowPageBreaks.Add(1);
+        sheet.RowPageBreaks.Add(CellAddress.MaxRow + 1);
+        sheet.ColumnPageBreaks.Add(1);
+        sheet.ColumnPageBreaks.Add(CellAddress.MaxCol + 1);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageMargins.Should().Be(WorksheetPageMargins.Narrow);
+        loadedSheet.HeaderMargin.Should().Be(0.3);
+        loadedSheet.FooterMargin.Should().Be(0.3);
+        loadedSheet.FirstPageNumber.Should().BeNull();
+        loadedSheet.PrintQualityDpi.Should().BeNull();
+        loadedSheet.ScaleToFit.Should().Be(WorksheetScaleToFit.Default);
+        loadedSheet.RowPageBreaks.Should().BeEmpty();
+        loadedSheet.ColumnPageBreaks.Should().BeEmpty();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_Pictures()
     {
         var workbook = new Workbook("PictureTest");
@@ -282,6 +987,7 @@ public class FileAdapterSmokeTests
             SourceColumnCount = 2,
             Width = 160,
             Height = 40,
+            AltText = "Copied range snapshot",
             Cells =
             {
                 new PictureCellSnapshot(0, 0, "A"),
@@ -300,6 +1006,7 @@ public class FileAdapterSmokeTests
         picture.Anchor.Row.Should().Be(3);
         picture.Anchor.Col.Should().Be(4);
         picture.SourceRowCount.Should().Be(2);
+        picture.AltText.Should().Be("Copied range snapshot");
         picture.Cells.Should().Contain(cell => cell.RowOffset == 1 && cell.ColumnOffset == 1 && cell.Text == "D");
     }
 
@@ -316,7 +1023,8 @@ public class FileAdapterSmokeTests
             ContentType = "image/png",
             Width = 90,
             Height = 60,
-            RotationDegrees = 30
+            RotationDegrees = 30,
+            AltText = "Product photo"
         });
 
         var ms = new MemoryStream();
@@ -333,6 +1041,50 @@ public class FileAdapterSmokeTests
         picture.Width.Should().Be(90);
         picture.Height.Should().Be(60);
         picture.RotationDegrees.Should().Be(30);
+        picture.AltText.Should().Be("Product photo");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetBackgroundImage()
+    {
+        var workbook = new Workbook("BackgroundTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.BackgroundImage = new WorksheetBackgroundImage([4, 5, 6], "image/png", "grid-bg.png");
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var background = loaded.GetSheetAt(0).BackgroundImage;
+        background.Should().NotBeNull();
+        background!.ImageBytes.Should().Equal(4, 5, 6);
+        background.ContentType.Should().Be("image/png");
+        background.FileName.Should().Be("grid-bg.png");
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_WorksheetBackgroundImage()
+    {
+        var workbook = new Workbook("BackgroundXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.BackgroundImage = new WorksheetBackgroundImage([4, 5, 6], "image/png", "grid-bg.png");
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var background = loaded.GetSheetAt(0).BackgroundImage;
+        background.Should().NotBeNull();
+        background!.ImageBytes.Should().Equal(4, 5, 6);
+        background.ContentType.Should().Be("image/png");
+        background.FileName.Should().Be("grid-bg.png");
     }
 
     [Fact]
@@ -348,7 +1100,8 @@ public class FileAdapterSmokeTests
             Height = 120,
             RotationDegrees = 20,
             FillColor = new CellColor(240, 250, 255),
-            OutlineColor = new CellColor(70, 80, 90)
+            OutlineColor = new CellColor(70, 80, 90),
+            AltText = "Review note callout"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
@@ -358,7 +1111,8 @@ public class FileAdapterSmokeTests
             Height = 90,
             RotationDegrees = 45,
             FillColor = new CellColor(200, 210, 220),
-            OutlineColor = new CellColor(30, 40, 50)
+            OutlineColor = new CellColor(30, 40, 50),
+            AltText = "Approval marker"
         });
 
         var ms = new MemoryStream();
@@ -377,6 +1131,7 @@ public class FileAdapterSmokeTests
         textBox.RotationDegrees.Should().Be(20);
         textBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         textBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
+        textBox.AltText.Should().Be("Review note callout");
         var shape = loaded.GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
         shape.Anchor.Row.Should().Be(4);
         shape.Anchor.Col.Should().Be(3);
@@ -386,6 +1141,119 @@ public class FileAdapterSmokeTests
         shape.RotationDegrees.Should().Be(45);
         shape.FillColor.Should().Be(new CellColor(200, 210, 220));
         shape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
+        shape.AltText.Should().Be("Approval marker");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ReplacesInvalidObjectKindsWithDefaults()
+    {
+        var workbook = new Workbook("ObjectKindSanitizeTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = (PictureKind)99,
+            Width = 90,
+            Height = 60
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 3),
+            Kind = (DrawingShapeKind)99,
+            Width = 140,
+            Height = 90
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).Pictures.Should().ContainSingle()
+            .Which.Kind.Should().Be(PictureKind.CellRangeSnapshot);
+        loaded.GetSheetAt(0).DrawingShapes.Should().ContainSingle()
+            .Which.Kind.Should().Be(DrawingShapeKind.Rectangle);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_ReplacesInvalidObjectDimensionsWithDefaults()
+    {
+        var workbook = new Workbook("ObjectDimensionSanitizeTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Width = -1,
+            Height = 0
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Text = "Note",
+            Width = -5,
+            Height = 0
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 3),
+            Width = 0,
+            Height = -10
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        var picture = loadedSheet.Pictures.Should().ContainSingle().Subject;
+        picture.Width.Should().Be(240);
+        picture.Height.Should().Be(140);
+        var textBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        textBox.Width.Should().Be(180);
+        textBox.Height.Should().Be(80);
+        var shape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        shape.Width.Should().Be(120);
+        shape.Height.Should().Be(70);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_NormalizesObjectRotation()
+    {
+        var workbook = new Workbook("ObjectRotationSanitizeTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            RotationDegrees = -90
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Text = "Note",
+            RotationDegrees = 450
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 3),
+            RotationDegrees = 725
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.Pictures.Should().ContainSingle().Which.RotationDegrees.Should().Be(270);
+        loadedSheet.TextBoxes.Should().ContainSingle().Which.RotationDegrees.Should().Be(90);
+        loadedSheet.DrawingShapes.Should().ContainSingle().Which.RotationDegrees.Should().Be(5);
     }
 
     [Fact]
@@ -716,6 +1584,32 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_WorksheetViewOptions()
+    {
+        var workbook = new Workbook("ViewOptionsTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.ShowGridlines = false;
+        sheet.ShowHeadings = false;
+        sheet.ShowRulers = false;
+        sheet.ZoomPercent = 125;
+        sheet.ShowFormulas = true;
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).ShowGridlines.Should().BeFalse();
+        loaded.GetSheetAt(0).ShowHeadings.Should().BeFalse();
+        loaded.GetSheetAt(0).ShowRulers.Should().BeFalse();
+        loaded.GetSheetAt(0).ZoomPercent.Should().Be(125);
+        loaded.GetSheetAt(0).ShowFormulas.Should().BeTrue();
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_PrintTitlesPageBreaksAndScaleToFit()
     {
         var workbook = new Workbook("PageSetupTest");
@@ -959,7 +1853,10 @@ public class FileAdapterSmokeTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 10, 1)),
             Type     = DvType.List,
-            Formula1 = "Apple,Banana,Cherry"
+            Formula1 = "Apple,Banana,Cherry",
+            AlertStyle = DvAlertStyle.Information,
+            ShowInputMessage = false,
+            ShowErrorMessage = false
         };
         sheet.DataValidations.Add(dv);
 
@@ -973,6 +1870,62 @@ public class FileAdapterSmokeTests
         loadedSheet.DataValidations.Should().NotBeEmpty("DV rule must survive XLSX round-trip");
         var rule = loadedSheet.DataValidations[0];
         rule.Type.Should().Be(DvType.List);
+        rule.AlertStyle.Should().Be(DvAlertStyle.Information);
+        rule.ShowInputMessage.Should().BeFalse();
+        rule.ShowErrorMessage.Should().BeFalse();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_DataValidationRule_Survives()
+    {
+        var workbook = new Workbook("DvNativeTest");
+        var sheet = workbook.AddSheet("S1");
+        var dv = new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            Formula1 = "09:00",
+            Formula2 = "17:30",
+            AllowBlank = false,
+            ShowDropdown = false,
+            AlertStyle = DvAlertStyle.Warning,
+            ShowInputMessage = false,
+            ShowErrorMessage = false,
+            ErrorTitle = "Invalid time",
+            ErrorMessage = "Enter a time during business hours.",
+            PromptTitle = "Business hours",
+            PromptMessage = "Use 09:00 through 17:30."
+        };
+        sheet.DataValidations.Add(dv);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DataValidations.Should().ContainSingle();
+        var rule = loadedSheet.DataValidations[0];
+        rule.AppliesTo.Start.ToA1().Should().Be("A1");
+        rule.AppliesTo.End.ToA1().Should().Be("A5");
+        rule.Type.Should().Be(DvType.Time);
+        rule.Operator.Should().Be(DvOperator.Between);
+        rule.Formula1.Should().Be("09:00");
+        rule.Formula2.Should().Be("17:30");
+        rule.AllowBlank.Should().BeFalse();
+        rule.ShowDropdown.Should().BeFalse();
+        rule.AlertStyle.Should().Be(DvAlertStyle.Warning);
+        rule.ShowInputMessage.Should().BeFalse();
+        rule.ShowErrorMessage.Should().BeFalse();
+        rule.ErrorTitle.Should().Be("Invalid time");
+        rule.ErrorMessage.Should().Be("Enter a time during business hours.");
+        rule.PromptTitle.Should().Be("Business hours");
+        rule.PromptMessage.Should().Be("Use 09:00 through 17:30.");
     }
 
     [Fact]

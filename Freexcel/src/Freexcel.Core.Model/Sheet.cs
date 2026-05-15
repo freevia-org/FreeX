@@ -136,8 +136,26 @@ public sealed class Sheet
     /// <summary>Manual column page breaks, stored as the first column after each break.</summary>
     public SortedSet<uint> ColumnPageBreaks { get; } = [];
 
+    /// <summary>Display-only tiled worksheet background image. It is not printed, matching Excel behavior.</summary>
+    public WorksheetBackgroundImage? BackgroundImage { get; set; }
+
     /// <summary>Worksheet view mode shown in the grid.</summary>
     public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
+
+    /// <summary>Whether worksheet gridlines are displayed in the editing view.</summary>
+    public bool ShowGridlines { get; set; } = true;
+
+    /// <summary>Whether row and column headings are displayed in the editing view.</summary>
+    public bool ShowHeadings { get; set; } = true;
+
+    /// <summary>Whether Page Layout rulers are displayed in the editing view.</summary>
+    public bool ShowRulers { get; set; } = true;
+
+    /// <summary>Worksheet zoom percentage for the editing view.</summary>
+    public int ZoomPercent { get; set; } = 100;
+
+    /// <summary>Whether formulas are displayed in cells instead of their calculated values.</summary>
+    public bool ShowFormulas { get; set; }
 
     /// <summary>True when the sheet is hidden from the worksheet tab strip.</summary>
     public bool IsHidden { get; set; }
@@ -251,6 +269,7 @@ public sealed class Sheet
         {
             existing.Value = value;
             existing.FormulaText = null;
+            existing.IgnoreFormulaError = false;
         }
         else
         {
@@ -267,6 +286,7 @@ public sealed class Sheet
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.FormulaText = formulaText;
+            existing.IgnoreFormulaError = false;
         }
         else
         {

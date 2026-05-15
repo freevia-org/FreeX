@@ -58,6 +58,7 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 ConditionalFormatTests.cs
 DataValidationTests.cs
 DependencyGraphTests.cs
+GoalSeekServiceTests.cs
 NumberFormatterTests.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs

@@ -79,6 +79,9 @@ public sealed class SetPageOrientationCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!Enum.IsDefined(_orientation))
+            return new CommandOutcome(false, "Page orientation is not supported.");
+
         var sheet = ctx.GetSheet(_sheetId);
         _previousOrientation = sheet.PageOrientation;
         sheet.PageOrientation = _orientation;
@@ -108,6 +111,9 @@ public sealed class SetPaperSizeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!Enum.IsDefined(_paperSize))
+            return new CommandOutcome(false, "Paper size is not supported.");
+
         var sheet = ctx.GetSheet(_sheetId);
         _previousPaperSize = sheet.PaperSize;
         sheet.PaperSize = _paperSize;
@@ -351,6 +357,71 @@ public sealed class SetPageBreaksCommand : IWorkbookCommand
     }
 }
 
+public sealed class SetWorksheetBackgroundCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly WorksheetBackgroundImage _background;
+    private WorksheetBackgroundImage? _previousBackground;
+    private bool _applied;
+
+    public string Label => "Sheet Background";
+
+    public SetWorksheetBackgroundCommand(SheetId sheetId, WorksheetBackgroundImage background)
+    {
+        _sheetId = sheetId;
+        _background = background;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (_background.ImageBytes.Length == 0)
+            return new CommandOutcome(false, "Background image cannot be empty.");
+
+        var sheet = ctx.GetSheet(_sheetId);
+        _previousBackground = sheet.BackgroundImage;
+        sheet.BackgroundImage = _background;
+        _applied = true;
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        ctx.GetSheet(_sheetId).BackgroundImage = _previousBackground;
+        _applied = false;
+    }
+}
+
+public sealed class ClearWorksheetBackgroundCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private WorksheetBackgroundImage? _previousBackground;
+    private bool _applied;
+
+    public string Label => "Clear Sheet Background";
+
+    public ClearWorksheetBackgroundCommand(SheetId sheetId)
+    {
+        _sheetId = sheetId;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        _previousBackground = sheet.BackgroundImage;
+        sheet.BackgroundImage = null;
+        _applied = true;
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        ctx.GetSheet(_sheetId).BackgroundImage = _previousBackground;
+        _applied = false;
+    }
+}
+
 public sealed class SetPageSetupCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
@@ -443,6 +514,16 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!Enum.IsDefined(_orientation))
+            return new CommandOutcome(false, "Page orientation is not supported.");
+        if (!Enum.IsDefined(_paperSize))
+            return new CommandOutcome(false, "Paper size is not supported.");
+        if (!Enum.IsDefined(_pageOrder))
+            return new CommandOutcome(false, "Page order is not supported.");
+        if (!Enum.IsDefined(_printErrorValue))
+            return new CommandOutcome(false, "Printed cell-error display option is not supported.");
+        if (!Enum.IsDefined(_printComments))
+            return new CommandOutcome(false, "Printed comments option is not supported.");
         if (_margins.Left < 0 || _margins.Right < 0 || _margins.Top < 0 || _margins.Bottom < 0)
             return new CommandOutcome(false, "Page margins cannot be negative.");
         if (_headerMargin < 0 || _footerMargin < 0)

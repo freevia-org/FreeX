@@ -44,6 +44,8 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     {
         if (_destination.Sheet != _sheetId)
             return new CommandOutcome(false, "Paste destination must be on the target sheet.");
+        if (!Enum.IsDefined(_options.Operation))
+            return new CommandOutcome(false, "Paste Special operation is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
         var cells = BuildDestinationCells(sheet).ToList();

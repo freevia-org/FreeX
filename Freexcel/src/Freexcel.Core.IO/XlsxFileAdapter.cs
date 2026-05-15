@@ -126,6 +126,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sheet.HiddenCols.UnionWith(layout.HiddenCols);
                 sheet.IsProtected = layout.IsProtected;
                 sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+                sheet.ShowGridlines = layout.ShowGridlines;
+                sheet.ShowHeadings = layout.ShowHeadings;
+                sheet.ShowRulers = layout.ShowRulers;
+                sheet.ZoomPercent = layout.ZoomPercent;
+                sheet.ShowFormulas = layout.ShowFormulas;
+                sheet.BackgroundImage = layout.BackgroundImage;
 
                 foreach (var (rowNum, level) in layout.RowOutlineLevels)
                     sheet.RowOutlineLevels[rowNum] = level;
@@ -265,9 +271,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         HashSet<uint> HiddenCols,
         bool IsProtected,
         string? ProtectionPasswordHash,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        int ZoomPercent,
+        bool ShowFormulas,
         string? PaneState,
         uint? PaneRowSplit,
         uint? PaneColumnSplit,
+        WorksheetBackgroundImage? BackgroundImage,
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
         HashSet<uint> GroupHiddenRows,
@@ -314,7 +326,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (worksheetEntry is null)
                     continue;
 
-                result[name] = ReadHiddenSheetLayout(worksheetEntry);
+                result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry);
             }
         }
         catch
@@ -339,7 +351,147 @@ public sealed class XlsxFileAdapter : IFileAdapter
             : $"xl/{target}";
     }
 
-    private static SheetXmlLayout ReadHiddenSheetLayout(ZipArchiveEntry worksheetEntry)
+    private static string GetWorksheetRelsPath(string worksheetPath)
+    {
+        var normalized = worksheetPath.Replace('\\', '/');
+        var slash = normalized.LastIndexOf('/');
+        if (slash < 0)
+            return $"_rels/{normalized}.rels";
+
+        return $"{normalized[..slash]}/_rels/{normalized[(slash + 1)..]}.rels";
+    }
+
+    private static string ResolveRelationshipTarget(string sourcePath, string target)
+    {
+        var normalizedTarget = target.Replace('\\', '/');
+        if (normalizedTarget.StartsWith('/'))
+            return normalizedTarget.TrimStart('/');
+        if (normalizedTarget.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
+            return normalizedTarget;
+
+        var sourceDirectory = sourcePath.Replace('\\', '/');
+        var slash = sourceDirectory.LastIndexOf('/');
+        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
+        return NormalizeZipPath($"{sourceDirectory}/{normalizedTarget}");
+    }
+
+    private static string GetRelativeTarget(string sourcePath, string targetPath)
+    {
+        var sourceDirectory = sourcePath.Replace('\\', '/');
+        var slash = sourceDirectory.LastIndexOf('/');
+        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
+
+        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../media/{targetPath["xl/media/".Length..]}";
+        }
+
+        return targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
+            ? targetPath["xl/".Length..]
+            : targetPath;
+    }
+
+    private static string NormalizeZipPath(string path)
+    {
+        var parts = new List<string>();
+        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == ".")
+                continue;
+            if (part == "..")
+            {
+                if (parts.Count > 0)
+                    parts.RemoveAt(parts.Count - 1);
+                continue;
+            }
+
+            parts.Add(part);
+        }
+
+        return string.Join('/', parts);
+    }
+
+    private static string GetContentTypeFromPath(string path)
+    {
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".bmp" => "image/bmp",
+            ".gif" => "image/gif",
+            _ => "image/png"
+        };
+    }
+
+    private static string GetExtensionFromContentType(string contentType) =>
+        contentType.ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/bmp" => ".bmp",
+            "image/gif" => ".gif",
+            _ => ".png"
+        };
+
+    private static string GetWorksheetBackgroundMediaFileName(string? fileName, int backgroundIndex, string extension)
+    {
+        var candidate = Path.GetFileName(fileName ?? "");
+        if (string.IsNullOrWhiteSpace(candidate) ||
+            candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return $"freexcelBackground{backgroundIndex}{extension}";
+        }
+
+        return Path.HasExtension(candidate)
+            ? candidate
+            : $"{candidate}{extension}";
+    }
+
+    private static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
+    {
+        var used = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Select(e => e.Attribute("Id")?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? [];
+
+        for (var i = 1; ; i++)
+        {
+            var candidate = $"rId{i}";
+            if (!used.Contains(candidate))
+                return candidate;
+        }
+    }
+
+    private static void EnsureContentType(ZipArchive archive, string extension, string contentType)
+    {
+        const string contentTypesPath = "[Content_Types].xml";
+        var entry = archive.GetEntry(contentTypesPath);
+        if (entry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var xml = LoadXml(entry);
+        var hasDefault = xml.Root?
+            .Elements(contentTypeNs + "Default")
+            .Any(e => string.Equals(e.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase))
+            == true;
+        if (hasDefault)
+            return;
+
+        xml.Root?.Add(new XElement(
+            contentTypeNs + "Default",
+            new XAttribute("Extension", extension),
+            new XAttribute("ContentType", contentType)));
+
+        entry.Delete();
+        var updatedEntry = archive.CreateEntry(contentTypesPath);
+        using var stream = updatedEntry.Open();
+        xml.Save(stream);
+    }
+
+    private static SheetXmlLayout ReadHiddenSheetLayout(ZipArchive archive, string worksheetPath, ZipArchiveEntry worksheetEntry)
     {
         var hiddenRows = new HashSet<uint>();
         var hiddenCols = new HashSet<uint>();
@@ -399,20 +551,27 @@ public sealed class XlsxFileAdapter : IFileAdapter
             protection?.Attribute("password")?.Value ??
             protection?.Attribute("hashValue")?.Value;
 
-        var pane = worksheetXml.Root?
+        var sheetView = worksheetXml.Root?
             .Element(worksheetNs + "sheetViews")?
             .Elements(worksheetNs + "sheetView")
-            .FirstOrDefault()?
-            .Element(worksheetNs + "pane");
+            .FirstOrDefault();
+        var pane = sheetView?.Element(worksheetNs + "pane");
+        var background = ReadWorksheetBackground(archive, worksheetPath, worksheetXml);
 
         return new SheetXmlLayout(
             hiddenRows,
             hiddenCols,
             isProtected,
             passwordHash,
+            !IsFalse(sheetView?.Attribute("showGridLines")?.Value),
+            !IsFalse(sheetView?.Attribute("showRowColHeaders")?.Value),
+            !IsFalse(sheetView?.Attribute("showRuler")?.Value),
+            ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
+            IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
+            background,
             rowOutlineLevels,
             colOutlineLevels,
             groupHiddenRows,
@@ -437,6 +596,54 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static bool IsTruthy(string? value) =>
         value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFalse(string? value) =>
+        value is "0" || string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+
+    private static int ParseZoomPercent(string? value) =>
+        int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
+
+    private static WorksheetBackgroundImage? ReadWorksheetBackground(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relId = worksheetXml.Root?
+            .Element(worksheetNs + "picture")?
+            .Attribute(relNs + "id")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(relId))
+            return null;
+
+        var relsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        if (relsEntry is null)
+            return null;
+
+        var relsXml = LoadXml(relsEntry);
+        var relationship = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, relId, StringComparison.Ordinal));
+        var target = relationship?.Attribute("Target")?.Value;
+        if (string.IsNullOrWhiteSpace(target))
+            return null;
+
+        var imagePath = ResolveRelationshipTarget(worksheetPath, target);
+        var imageEntry = archive.GetEntry(imagePath);
+        if (imageEntry is null)
+            return null;
+
+        using var imageStream = imageEntry.Open();
+        using var ms = new MemoryStream();
+        imageStream.CopyTo(ms);
+        return new WorksheetBackgroundImage(
+            ms.ToArray(),
+            GetContentTypeFromPath(imagePath),
+            Path.GetFileName(imagePath));
+    }
 
     private static void LoadNamedRanges(XLWorkbook xlWorkbook, Workbook workbook)
     {
@@ -672,8 +879,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var packageStream = new MemoryStream();
         xlWorkbook.SaveAs(packageStream);
 
-        if (workbook.Sheets.Any(sheet => sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
-                                         (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)))
+        if (workbook.Sheets.Any(sheet => sheet.BackgroundImage is not null))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetBackgrounds(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet =>
+                !sheet.ShowGridlines ||
+                !sheet.ShowHeadings ||
+                !sheet.ShowRulers ||
+                sheet.ZoomPercent != 100 ||
+                sheet.ShowFormulas ||
+                (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+                 (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))))
         {
             packageStream.Position = 0;
             SaveSplitPaneSheetViews(packageStream, workbook);
@@ -681,6 +900,111 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
+    }
+
+    private static void SaveWorksheetBackgrounds(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        var relsXml = LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relTargets = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
+            .ToDictionary(
+                e => e.Attribute("Id")!.Value,
+                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+        var backgroundIndex = 1;
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
+                continue;
+            if (!sheetsByName.TryGetValue(name, out var sheet) || sheet.BackgroundImage is null)
+                continue;
+            if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                continue;
+
+            WriteWorksheetBackground(archive, worksheetPath, sheet.BackgroundImage, backgroundIndex++);
+        }
+    }
+
+    private static void WriteWorksheetBackground(
+        ZipArchive archive,
+        string worksheetPath,
+        WorksheetBackgroundImage background,
+        int backgroundIndex)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var extension = GetExtensionFromContentType(background.ContentType);
+        var mediaFileName = GetWorksheetBackgroundMediaFileName(background.FileName, backgroundIndex, extension);
+        var imagePath = $"xl/media/{mediaFileName}";
+        var existingImageEntry = archive.GetEntry(imagePath);
+        existingImageEntry?.Delete();
+        var imageEntry = archive.CreateEntry(imagePath);
+        using (var imageStream = imageEntry.Open())
+            imageStream.Write(background.ImageBytes);
+
+        EnsureContentType(archive, extension.TrimStart('.'), background.ContentType);
+
+        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsEntry = archive.GetEntry(relsPath);
+        XDocument relsXml;
+        if (relsEntry is null)
+        {
+            relsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        }
+        else
+        {
+            relsXml = LoadXml(relsEntry);
+            relsEntry.Delete();
+        }
+
+        var relId = NextRelationshipId(relsXml, packageRelNs);
+        relsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", relId),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+            new XAttribute("Target", GetRelativeTarget(worksheetPath, imagePath))));
+
+        var updatedRelsEntry = archive.CreateEntry(relsPath);
+        using (var relsStream = updatedRelsEntry.Open())
+            relsXml.Save(relsStream);
+
+        var worksheetXml = LoadXml(worksheetEntry);
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+        root.Elements(worksheetNs + "picture").Remove();
+        root.Add(new XElement(worksheetNs + "picture", new XAttribute(relNs + "id", relId)));
+
+        worksheetEntry.Delete();
+        var updatedWorksheetEntry = archive.CreateEntry(worksheetPath);
+        using var worksheetStream = updatedWorksheetEntry.Open();
+        worksheetXml.Save(worksheetStream);
     }
 
     private static void SaveSplitPaneSheetViews(Stream xlsxStream, Workbook workbook)
@@ -708,8 +1032,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var splitSheets = workbook.Sheets
-            .Where(sheet => sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
-                            (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
+            .Where(sheet =>
+                !sheet.ShowGridlines ||
+                !sheet.ShowHeadings ||
+                !sheet.ShowRulers ||
+                sheet.ZoomPercent != 100 ||
+                sheet.ShowFormulas ||
+                (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+                 (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)))
             .ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
@@ -753,12 +1083,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sheetViews.Add(sheetView);
         }
 
-        sheetView.Elements(worksheetNs + "pane").Remove();
-        sheetView.AddFirst(new XElement(
-            worksheetNs + "pane",
-            sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", splitColumn) : null,
-            sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", splitRow) : null,
-            new XAttribute("state", "split")));
+        sheetView.SetAttributeValue("showGridLines", sheet.ShowGridlines ? null : "0");
+        sheetView.SetAttributeValue("showRowColHeaders", sheet.ShowHeadings ? null : "0");
+        sheetView.SetAttributeValue("showRuler", sheet.ShowRulers ? null : "0");
+        sheetView.SetAttributeValue("zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent);
+        sheetView.SetAttributeValue("showFormulas", sheet.ShowFormulas ? "1" : null);
+
+        if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
+            (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
+        {
+            sheetView.Elements(worksheetNs + "pane").Remove();
+            sheetView.AddFirst(new XElement(
+                worksheetNs + "pane",
+                sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", splitColumn) : null,
+                sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", splitRow) : null,
+                new XAttribute("state", "split")));
+        }
 
         worksheetEntry.Delete();
         var updatedEntry = archive.CreateEntry(worksheetPath);

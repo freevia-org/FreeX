@@ -254,6 +254,31 @@ public class VolatileFunctionTests
     }
 
     [Fact]
+    public void RecalculateSheetFormulas_RecalculatesOnlyRequestedSheetFormulaCells()
+    {
+        var wb = new Workbook("Test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        var s1a1 = new CellAddress(sheet1.Id, 1, 1);
+        var s1b1 = new CellAddress(sheet1.Id, 1, 2);
+        var s2a1 = new CellAddress(sheet2.Id, 1, 1);
+        var s2b1 = new CellAddress(sheet2.Id, 1, 2);
+
+        sheet1.SetCell(s1a1, new NumberValue(5));
+        sheet1.SetFormula(s1b1, "A1*2");
+        sheet2.SetCell(s2a1, new NumberValue(7));
+        sheet2.SetFormula(s2b1, "A1*3");
+
+        var report = engine.RecalculateSheetFormulas(wb, sheet1.Id);
+
+        report.RecalculatedCells.Should().Contain(s1b1);
+        report.RecalculatedCells.Should().NotContain(s2b1);
+        sheet1.GetValue(s1b1).Should().Be(new NumberValue(10));
+        sheet2.GetValue(s2b1).Should().BeOfType<BlankValue>();
+    }
+
+    [Fact]
     public void VolatileCell_EvaluatesBeforeItsDependents()
     {
         // A1 = =NOW() (volatile)

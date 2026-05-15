@@ -17,6 +17,9 @@ public sealed class SetCalculationModeCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!Enum.IsDefined(_mode))
+            return new CommandOutcome(false, "Calculation mode is not supported.");
+
         _previousMode = ctx.Workbook.CalculationMode;
         ctx.Workbook.CalculationMode = _mode;
         return new CommandOutcome(true);

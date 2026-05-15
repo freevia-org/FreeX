@@ -31,6 +31,8 @@ public sealed class AddTextBoxCommand : IWorkbookCommand
     {
         if (_textBox.Anchor.Sheet != _sheetId)
             return new CommandOutcome(false, "Text box anchor must be on the target sheet.");
+        if (!double.IsFinite(_textBox.Width) || !double.IsFinite(_textBox.Height) || _textBox.Width <= 0 || _textBox.Height <= 0)
+            return new CommandOutcome(false, "Text box size must be positive.");
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.TextBoxes.Add(_textBox);

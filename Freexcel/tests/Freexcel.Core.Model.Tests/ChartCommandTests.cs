@@ -6,11 +6,231 @@ namespace Freexcel.Core.Model.Tests;
 
 public sealed class ChartCommandTests
 {
+    [Fact]
+    public void ChartTypeSupport_IdentifiesTrendlineChartTypes()
+    {
+        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Bar, ChartType.Scatter, ChartType.Bubble, ChartType.Area };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsTrendlines(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsTrendlines(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_IdentifiesSecondaryAxisChartTypes()
+    {
+        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.Area, ChartType.Scatter };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsSecondaryAxis(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsSecondaryAxis(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_IdentifiesComboLineOverlayChartTypes()
+    {
+        var supportedTypes = new[] { ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.Area };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsComboLineOverlay(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsComboLineOverlay(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_RequiresAssignableSeriesForComboLineOverlay()
+    {
+        var sheetId = SheetId.New();
+        var singleSeriesColumn = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+        var twoSeriesColumn = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+        var twoSeriesLine = new ChartModel
+        {
+            Type = ChartType.Line,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+
+        ChartTypeSupport.SupportsComboLineOverlay(singleSeriesColumn).Should().BeFalse();
+        ChartTypeSupport.SupportsComboLineOverlay(twoSeriesColumn).Should().BeTrue();
+        ChartTypeSupport.SupportsComboLineOverlay(twoSeriesLine).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ChartTypeSupport_IdentifiesXAxisLogScaleChartTypes()
+    {
+        var supportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Scatter, ChartType.Bubble };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsXAxisLogScale(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsXAxisLogScale(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_IdentifiesYAxisLogScaleChartTypes()
+    {
+        var supportedTypes = new[]
+        {
+            ChartType.Column,
+            ChartType.StackedColumn,
+            ChartType.PercentStackedColumn,
+            ChartType.Line,
+            ChartType.Scatter,
+            ChartType.Bubble,
+            ChartType.Area
+        };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsYAxisLogScale(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsYAxisLogScale(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_IdentifiesValueAxisBoundsChartTypes()
+    {
+        var xAxisSupportedTypes = new[] { ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Scatter, ChartType.Bubble };
+        var yAxisSupportedTypes = new[]
+        {
+            ChartType.Column,
+            ChartType.StackedColumn,
+            ChartType.PercentStackedColumn,
+            ChartType.Line,
+            ChartType.Scatter,
+            ChartType.Bubble,
+            ChartType.Area
+        };
+
+        xAxisSupportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsXAxisBounds(type));
+        Enum.GetValues<ChartType>().Except(xAxisSupportedTypes).Should().OnlyContain(type => !ChartTypeSupport.SupportsXAxisBounds(type));
+        yAxisSupportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsYAxisBounds(type));
+        Enum.GetValues<ChartType>().Except(yAxisSupportedTypes).Should().OnlyContain(type => !ChartTypeSupport.SupportsYAxisBounds(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_IdentifiesSeriesMarkerChartTypes()
+    {
+        var supportedTypes = new[] { ChartType.Line, ChartType.Scatter };
+        var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
+
+        supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsSeriesMarkers(type));
+        unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsSeriesMarkers(type));
+    }
+
+    [Fact]
+    public void ChartTypeSupport_CountsDataSeriesWithoutScatterXColumn()
+    {
+        var sheetId = SheetId.New();
+        var scatter = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+        var column = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+        var bubble = new ChartModel
+        {
+            Type = ChartType.Bubble,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+
+        ChartTypeSupport.GetDataSeriesCount(scatter).Should().Be(2);
+        ChartTypeSupport.GetDataSeriesCount(column).Should().Be(2);
+        ChartTypeSupport.GetDataSeriesCount(bubble).Should().Be(1);
+    }
+
+    [Fact]
+    public void ChartTypeSupport_CountsChartDataPointsWithoutHeaderRow()
+    {
+        var sheetId = SheetId.New();
+        var withHeader = new ChartModel
+        {
+            Type = ChartType.Pie,
+            FirstRowIsHeader = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2))
+        };
+        var withoutHeader = new ChartModel
+        {
+            Type = ChartType.Pie,
+            FirstRowIsHeader = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2))
+        };
+
+        ChartTypeSupport.GetDataPointCount(withHeader).Should().Be(4);
+        ChartTypeSupport.GetDataPointCount(withoutHeader).Should().Be(5);
+    }
+
+    [Fact]
+    public void ChartTypeSupport_SelectsAxisValueColumnsForXyCharts()
+    {
+        var sheetId = SheetId.New();
+        var scatter = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+        var bubble = new ChartModel
+        {
+            Type = ChartType.Bubble,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+        var column = new ChartModel
+        {
+            Type = ChartType.Column,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+
+        ChartTypeSupport.GetXAxisValueColumn(scatter).Should().Be(1);
+        ChartTypeSupport.GetYAxisValueColumns(scatter).Should().Equal(2u, 3u);
+        ChartTypeSupport.GetXAxisValueColumn(bubble).Should().Be(1);
+        ChartTypeSupport.GetYAxisValueColumns(bubble).Should().Equal(2u);
+        ChartTypeSupport.GetXAxisValueColumn(column).Should().Be(1);
+        ChartTypeSupport.GetYAxisValueColumns(column).Should().Equal(2u, 3u);
+    }
+
+    [Fact]
+    public void ChartTypeSupport_SelectsBarXAxisValueColumnsFromSeriesData()
+    {
+        var sheetId = SheetId.New();
+        var bar = new ChartModel
+        {
+            Type = ChartType.Bar,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+
+        ChartTypeSupport.GetXAxisValueColumns(bar).Should().Equal(2u, 3u);
+    }
+
     [Theory]
     [InlineData(ChartType.Column)]
+    [InlineData(ChartType.StackedColumn)]
+    [InlineData(ChartType.PercentStackedColumn)]
     [InlineData(ChartType.Line)]
     [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.Doughnut)]
     [InlineData(ChartType.Bar)]
+    [InlineData(ChartType.StackedBar)]
+    [InlineData(ChartType.PercentStackedBar)]
+    [InlineData(ChartType.Scatter)]
+    [InlineData(ChartType.Bubble)]
+    [InlineData(ChartType.Area)]
     public void AddChartCommand_AddsRequestedChartTypeAndUndoRemovesIt(ChartType type)
     {
         var wb = new Workbook("test");
@@ -18,7 +238,7 @@ public sealed class ChartCommandTests
         var ctx = new SimpleCtx(wb);
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 3, 2));
+            new CellAddress(sheet.Id, 3, 4));
 
         var command = new AddChartCommand(sheet.Id, range, type, "Sales");
 
@@ -52,7 +272,7 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
-    public void SetChartLayoutCommand_UpdatesTitleAxesLegendAndUndoRestores()
+    public void AddChartCommand_ReplacesInvalidChartTypeWithColumn()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
@@ -60,6 +280,64 @@ public sealed class ChartCommandTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2));
+
+        var command = new AddChartCommand(sheet.Id, range, (ChartType)99, "Sales");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Column);
+        sheet.Charts[0].FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AddChartCommand_RejectsInvalidInitialSize()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+
+        new AddChartCommand(sheet.Id, range, ChartType.Column, width: double.NaN)
+            .Apply(ctx).Success.Should().BeFalse();
+        new AddChartCommand(sheet.Id, range, ChartType.Column, height: double.PositiveInfinity)
+            .Apply(ctx).Success.Should().BeFalse();
+        new AddChartCommand(sheet.Id, range, ChartType.Column, width: 0)
+            .Apply(ctx).Success.Should().BeFalse();
+
+        sheet.Charts.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(ChartType.Scatter)]
+    [InlineData(ChartType.Bubble)]
+    public void AddChartCommand_UsesNumericFirstColumnForXyCharts(ChartType type)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+
+        var command = new AddChartCommand(sheet.Id, range, type);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts.Should().ContainSingle();
+        sheet.Charts[0].FirstColIsCategories.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_UpdatesTitleAxesLegendAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 4));
         new AddChartCommand(sheet.Id, range, ChartType.Column, "Old").Apply(ctx);
         var chartId = sheet.Charts[0].Id;
 
@@ -70,24 +348,294 @@ public sealed class ChartCommandTests
                 Title: "Revenue",
                 XAxisTitle: "Quarter",
                 YAxisTitle: "Amount",
+                ChartTitleTextColor: new CellColor(31, 78, 121),
+                ChartTitleFontSize: 18,
+                AxisTitleTextColor: new CellColor(89, 89, 89),
+                AxisTitleFontSize: 12,
+                ChartAreaFillColor: new CellColor(245, 245, 245),
+                PlotAreaFillColor: new CellColor(250, 252, 255),
+                PlotAreaBorderColor: new CellColor(120, 120, 120),
+                PlotAreaBorderThickness: 2.25,
+                LegendTextColor: new CellColor(40, 40, 40),
+                LegendFillColor: new CellColor(248, 248, 248),
+                LegendBorderColor: new CellColor(180, 180, 180),
+                LegendBorderThickness: 1.25,
+                LegendFontSize: 11,
+                DoughnutHoleSize: 0.72,
+                FirstSliceAngle: 135,
+                ExplodedSliceIndex: 1,
+                ExplodedSliceDistance: 0.18,
+                XAxisMinimum: 0,
+                XAxisMaximum: 10,
+                XAxisMajorUnit: 2,
+                XAxisMinorUnit: 1,
+                XAxisLogScale: true,
+                XAxisNumberFormat: ChartDataLabelNumberFormat.Number,
+                ShowXAxisMajorGridlines: true,
+                ShowXAxisMinorGridlines: true,
+                XAxisMajorGridlineColor: new CellColor(200, 200, 200),
+                XAxisMinorGridlineColor: new CellColor(230, 230, 230),
+                XAxisGridlineThickness: 1.5,
+                XAxisMajorTickStyle: ChartAxisTickStyle.Outside,
+                XAxisMinorTickStyle: ChartAxisTickStyle.Inside,
+                ShowXAxisLabels: false,
+                XAxisLabelTextColor: new CellColor(70, 70, 70),
+                XAxisLabelFontSize: 10,
+                XAxisLabelAngle: -45,
+                XAxisLineColor: new CellColor(10, 20, 30),
+                XAxisLineThickness: 2.5,
+                YAxisMinimum: -5,
+                YAxisMaximum: 25,
+                YAxisMajorUnit: 5,
+                YAxisMinorUnit: 2.5,
+                YAxisLogScale: true,
+                YAxisNumberFormat: ChartDataLabelNumberFormat.Currency,
+                ShowYAxisMajorGridlines: true,
+                ShowYAxisMinorGridlines: true,
+                YAxisMajorGridlineColor: new CellColor(190, 190, 190),
+                YAxisMinorGridlineColor: new CellColor(225, 225, 225),
+                YAxisGridlineThickness: 2,
+                YAxisMajorTickStyle: ChartAxisTickStyle.Cross,
+                YAxisMinorTickStyle: ChartAxisTickStyle.None,
+                ShowYAxisLabels: false,
+                YAxisLabelTextColor: new CellColor(80, 80, 80),
+                YAxisLabelFontSize: 11,
+                YAxisLabelAngle: 90,
+                YAxisLineColor: new CellColor(40, 50, 60),
+                YAxisLineThickness: 3.5,
                 LegendPosition: ChartLegendPosition.Bottom,
-                ShowLegend: true));
+                LegendOverlay: true,
+                ShowLegend: true,
+                ShowDataLabels: true,
+                DataLabelPosition: ChartDataLabelPosition.OutsideEnd,
+                ShowDataLabelCategoryName: true,
+                ShowDataLabelSeriesName: true,
+                ShowDataLabelPercentage: true,
+                DataLabelSeparator: ChartDataLabelSeparator.NewLine,
+                DataLabelNumberFormat: ChartDataLabelNumberFormat.Currency,
+                ShowDataLabelCallouts: true,
+                DataLabelFillColor: new CellColor(255, 255, 225),
+                DataLabelBorderColor: new CellColor(128, 128, 128),
+                DataLabelTextColor: new CellColor(30, 30, 30),
+                DataLabelBorderThickness: 1.5,
+                DataLabelFontSize: 13,
+                DataLabelAngle: -35,
+                ShowLinearTrendline: true,
+                TrendlineType: ChartTrendlineType.Power,
+                TrendlinePeriod: 3,
+                TrendlineOrder: 4,
+                ShowTrendlineEquation: true,
+                ShowTrendlineRSquared: true,
+                TrendlineColor: new CellColor(217, 83, 25),
+                TrendlineThickness: 2.5,
+                TrendlineDashStyle: ChartLineDashStyle.Solid,
+                ShowSecondaryAxis: true,
+                SecondaryAxisSeriesIndexes: [1],
+                ComboLineSeriesIndexes: [2],
+                SeriesFormats:
+                [
+                    new ChartSeriesFormat(
+                        0,
+                        FillColor: new CellColor(0, 114, 178),
+                        StrokeColor: new CellColor(0, 0, 0),
+                        StrokeThickness: 2.5,
+                        DashStyle: ChartLineDashStyle.Dot,
+                        MarkerStyle: ChartMarkerStyle.Diamond,
+                        MarkerSize: 7)
+                ],
+                UseComboLineForSecondarySeries: true));
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         sheet.Charts[0].Title.Should().Be("Revenue");
         sheet.Charts[0].XAxisTitle.Should().Be("Quarter");
         sheet.Charts[0].YAxisTitle.Should().Be("Amount");
+        sheet.Charts[0].ChartTitleTextColor.Should().Be(new CellColor(31, 78, 121));
+        sheet.Charts[0].ChartTitleFontSize.Should().Be(18);
+        sheet.Charts[0].AxisTitleTextColor.Should().Be(new CellColor(89, 89, 89));
+        sheet.Charts[0].AxisTitleFontSize.Should().Be(12);
+        sheet.Charts[0].ChartAreaFillColor.Should().Be(new CellColor(245, 245, 245));
+        sheet.Charts[0].PlotAreaFillColor.Should().Be(new CellColor(250, 252, 255));
+        sheet.Charts[0].PlotAreaBorderColor.Should().Be(new CellColor(120, 120, 120));
+        sheet.Charts[0].PlotAreaBorderThickness.Should().Be(2.25);
+        sheet.Charts[0].LegendTextColor.Should().Be(new CellColor(40, 40, 40));
+        sheet.Charts[0].LegendFillColor.Should().Be(new CellColor(248, 248, 248));
+        sheet.Charts[0].LegendBorderColor.Should().Be(new CellColor(180, 180, 180));
+        sheet.Charts[0].LegendBorderThickness.Should().Be(1.25);
+        sheet.Charts[0].LegendFontSize.Should().Be(11);
+        sheet.Charts[0].DoughnutHoleSize.Should().Be(0.72);
+        sheet.Charts[0].FirstSliceAngle.Should().Be(135);
+        sheet.Charts[0].ExplodedSliceIndex.Should().Be(1);
+        sheet.Charts[0].ExplodedSliceDistance.Should().Be(0.18);
+        sheet.Charts[0].XAxisMinimum.Should().Be(0);
+        sheet.Charts[0].XAxisMaximum.Should().Be(10);
+        sheet.Charts[0].XAxisMajorUnit.Should().Be(2);
+        sheet.Charts[0].XAxisMinorUnit.Should().Be(1);
+        sheet.Charts[0].XAxisLogScale.Should().BeTrue();
+        sheet.Charts[0].XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Number);
+        sheet.Charts[0].ShowXAxisMajorGridlines.Should().BeTrue();
+        sheet.Charts[0].ShowXAxisMinorGridlines.Should().BeTrue();
+        sheet.Charts[0].XAxisMajorGridlineColor.Should().Be(new CellColor(200, 200, 200));
+        sheet.Charts[0].XAxisMinorGridlineColor.Should().Be(new CellColor(230, 230, 230));
+        sheet.Charts[0].XAxisGridlineThickness.Should().Be(1.5);
+        sheet.Charts[0].XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        sheet.Charts[0].XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.Inside);
+        sheet.Charts[0].ShowXAxisLabels.Should().BeFalse();
+        sheet.Charts[0].XAxisLabelTextColor.Should().Be(new CellColor(70, 70, 70));
+        sheet.Charts[0].XAxisLabelFontSize.Should().Be(10);
+        sheet.Charts[0].XAxisLabelAngle.Should().Be(-45);
+        sheet.Charts[0].XAxisLineColor.Should().Be(new CellColor(10, 20, 30));
+        sheet.Charts[0].XAxisLineThickness.Should().Be(2.5);
+        sheet.Charts[0].YAxisMinimum.Should().Be(-5);
+        sheet.Charts[0].YAxisMaximum.Should().Be(25);
+        sheet.Charts[0].YAxisMajorUnit.Should().Be(5);
+        sheet.Charts[0].YAxisMinorUnit.Should().Be(2.5);
+        sheet.Charts[0].YAxisLogScale.Should().BeTrue();
+        sheet.Charts[0].YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+        sheet.Charts[0].ShowYAxisMajorGridlines.Should().BeTrue();
+        sheet.Charts[0].ShowYAxisMinorGridlines.Should().BeTrue();
+        sheet.Charts[0].YAxisMajorGridlineColor.Should().Be(new CellColor(190, 190, 190));
+        sheet.Charts[0].YAxisMinorGridlineColor.Should().Be(new CellColor(225, 225, 225));
+        sheet.Charts[0].YAxisGridlineThickness.Should().Be(2);
+        sheet.Charts[0].YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Cross);
+        sheet.Charts[0].YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        sheet.Charts[0].ShowYAxisLabels.Should().BeFalse();
+        sheet.Charts[0].YAxisLabelTextColor.Should().Be(new CellColor(80, 80, 80));
+        sheet.Charts[0].YAxisLabelFontSize.Should().Be(11);
+        sheet.Charts[0].YAxisLabelAngle.Should().Be(90);
+        sheet.Charts[0].YAxisLineColor.Should().Be(new CellColor(40, 50, 60));
+        sheet.Charts[0].YAxisLineThickness.Should().Be(3.5);
         sheet.Charts[0].LegendPosition.Should().Be(ChartLegendPosition.Bottom);
+        sheet.Charts[0].LegendOverlay.Should().BeTrue();
         sheet.Charts[0].ShowLegend.Should().BeTrue();
+        sheet.Charts[0].ShowDataLabels.Should().BeTrue();
+        sheet.Charts[0].DataLabelPosition.Should().Be(ChartDataLabelPosition.OutsideEnd);
+        sheet.Charts[0].ShowDataLabelCategoryName.Should().BeTrue();
+        sheet.Charts[0].ShowDataLabelSeriesName.Should().BeTrue();
+        sheet.Charts[0].ShowDataLabelPercentage.Should().BeTrue();
+        sheet.Charts[0].DataLabelSeparator.Should().Be(ChartDataLabelSeparator.NewLine);
+        sheet.Charts[0].DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
+        sheet.Charts[0].ShowDataLabelCallouts.Should().BeTrue();
+        sheet.Charts[0].DataLabelFillColor.Should().Be(new CellColor(255, 255, 225));
+        sheet.Charts[0].DataLabelBorderColor.Should().Be(new CellColor(128, 128, 128));
+        sheet.Charts[0].DataLabelTextColor.Should().Be(new CellColor(30, 30, 30));
+        sheet.Charts[0].DataLabelBorderThickness.Should().Be(1.5);
+        sheet.Charts[0].DataLabelFontSize.Should().Be(13);
+        sheet.Charts[0].DataLabelAngle.Should().Be(-35);
+        sheet.Charts[0].ShowLinearTrendline.Should().BeTrue();
+        sheet.Charts[0].TrendlineType.Should().Be(ChartTrendlineType.Power);
+        sheet.Charts[0].TrendlinePeriod.Should().Be(3);
+        sheet.Charts[0].TrendlineOrder.Should().Be(4);
+        sheet.Charts[0].ShowTrendlineEquation.Should().BeTrue();
+        sheet.Charts[0].ShowTrendlineRSquared.Should().BeTrue();
+        sheet.Charts[0].TrendlineColor.Should().Be(new CellColor(217, 83, 25));
+        sheet.Charts[0].TrendlineThickness.Should().Be(2.5);
+        sheet.Charts[0].TrendlineDashStyle.Should().Be(ChartLineDashStyle.Solid);
+        sheet.Charts[0].ShowSecondaryAxis.Should().BeTrue();
+        sheet.Charts[0].SecondaryAxisSeriesIndexes.Should().Equal(1);
+        sheet.Charts[0].ComboLineSeriesIndexes.Should().Equal(2);
+        sheet.Charts[0].SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(
+                0,
+                FillColor: new CellColor(0, 114, 178),
+                StrokeColor: new CellColor(0, 0, 0),
+                StrokeThickness: 2.5,
+                DashStyle: ChartLineDashStyle.Dot,
+                MarkerStyle: ChartMarkerStyle.Diamond,
+                MarkerSize: 7));
+        sheet.Charts[0].UseComboLineForSecondarySeries.Should().BeTrue();
 
         command.Revert(ctx);
 
         sheet.Charts[0].Title.Should().Be("Old");
         sheet.Charts[0].XAxisTitle.Should().BeNull();
         sheet.Charts[0].YAxisTitle.Should().BeNull();
+        sheet.Charts[0].ChartTitleTextColor.Should().BeNull();
+        sheet.Charts[0].ChartTitleFontSize.Should().Be(16);
+        sheet.Charts[0].AxisTitleTextColor.Should().BeNull();
+        sheet.Charts[0].AxisTitleFontSize.Should().Be(12);
+        sheet.Charts[0].ChartAreaFillColor.Should().BeNull();
+        sheet.Charts[0].PlotAreaFillColor.Should().BeNull();
+        sheet.Charts[0].PlotAreaBorderColor.Should().BeNull();
+        sheet.Charts[0].PlotAreaBorderThickness.Should().Be(1);
+        sheet.Charts[0].LegendTextColor.Should().BeNull();
+        sheet.Charts[0].LegendFillColor.Should().BeNull();
+        sheet.Charts[0].LegendBorderColor.Should().BeNull();
+        sheet.Charts[0].LegendBorderThickness.Should().Be(0);
+        sheet.Charts[0].LegendFontSize.Should().Be(12);
+        sheet.Charts[0].DoughnutHoleSize.Should().Be(0.55);
+        sheet.Charts[0].FirstSliceAngle.Should().Be(0);
+        sheet.Charts[0].ExplodedSliceIndex.Should().Be(-1);
+        sheet.Charts[0].ExplodedSliceDistance.Should().Be(0.1);
+        sheet.Charts[0].XAxisMinimum.Should().BeNull();
+        sheet.Charts[0].XAxisMaximum.Should().BeNull();
+        sheet.Charts[0].XAxisMajorUnit.Should().BeNull();
+        sheet.Charts[0].XAxisMinorUnit.Should().BeNull();
+        sheet.Charts[0].XAxisLogScale.Should().BeFalse();
+        sheet.Charts[0].XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        sheet.Charts[0].ShowXAxisMajorGridlines.Should().BeFalse();
+        sheet.Charts[0].ShowXAxisMinorGridlines.Should().BeFalse();
+        sheet.Charts[0].XAxisMajorGridlineColor.Should().BeNull();
+        sheet.Charts[0].XAxisMinorGridlineColor.Should().BeNull();
+        sheet.Charts[0].XAxisGridlineThickness.Should().Be(1);
+        sheet.Charts[0].XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        sheet.Charts[0].XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        sheet.Charts[0].ShowXAxisLabels.Should().BeTrue();
+        sheet.Charts[0].XAxisLabelTextColor.Should().BeNull();
+        sheet.Charts[0].XAxisLabelFontSize.Should().Be(11);
+        sheet.Charts[0].XAxisLabelAngle.Should().Be(0);
+        sheet.Charts[0].XAxisLineColor.Should().BeNull();
+        sheet.Charts[0].XAxisLineThickness.Should().Be(1);
+        sheet.Charts[0].YAxisMinimum.Should().BeNull();
+        sheet.Charts[0].YAxisMaximum.Should().BeNull();
+        sheet.Charts[0].YAxisMajorUnit.Should().BeNull();
+        sheet.Charts[0].YAxisMinorUnit.Should().BeNull();
+        sheet.Charts[0].YAxisLogScale.Should().BeFalse();
+        sheet.Charts[0].YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        sheet.Charts[0].ShowYAxisMajorGridlines.Should().BeFalse();
+        sheet.Charts[0].ShowYAxisMinorGridlines.Should().BeFalse();
+        sheet.Charts[0].YAxisMajorGridlineColor.Should().BeNull();
+        sheet.Charts[0].YAxisMinorGridlineColor.Should().BeNull();
+        sheet.Charts[0].YAxisGridlineThickness.Should().Be(1);
+        sheet.Charts[0].YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        sheet.Charts[0].YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        sheet.Charts[0].ShowYAxisLabels.Should().BeTrue();
+        sheet.Charts[0].YAxisLabelTextColor.Should().BeNull();
+        sheet.Charts[0].YAxisLabelFontSize.Should().Be(11);
+        sheet.Charts[0].YAxisLabelAngle.Should().Be(0);
+        sheet.Charts[0].YAxisLineColor.Should().BeNull();
+        sheet.Charts[0].YAxisLineThickness.Should().Be(1);
         sheet.Charts[0].LegendPosition.Should().Be(ChartLegendPosition.Right);
+        sheet.Charts[0].LegendOverlay.Should().BeFalse();
         sheet.Charts[0].ShowLegend.Should().BeTrue();
+        sheet.Charts[0].ShowDataLabels.Should().BeFalse();
+        sheet.Charts[0].DataLabelPosition.Should().Be(ChartDataLabelPosition.BestFit);
+        sheet.Charts[0].ShowDataLabelCategoryName.Should().BeFalse();
+        sheet.Charts[0].ShowDataLabelSeriesName.Should().BeFalse();
+        sheet.Charts[0].ShowDataLabelPercentage.Should().BeFalse();
+        sheet.Charts[0].DataLabelSeparator.Should().Be(ChartDataLabelSeparator.Comma);
+        sheet.Charts[0].DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        sheet.Charts[0].ShowDataLabelCallouts.Should().BeFalse();
+        sheet.Charts[0].DataLabelFillColor.Should().BeNull();
+        sheet.Charts[0].DataLabelBorderColor.Should().BeNull();
+        sheet.Charts[0].DataLabelTextColor.Should().BeNull();
+        sheet.Charts[0].DataLabelBorderThickness.Should().Be(0);
+        sheet.Charts[0].DataLabelFontSize.Should().Be(11);
+        sheet.Charts[0].DataLabelAngle.Should().Be(0);
+        sheet.Charts[0].ShowLinearTrendline.Should().BeFalse();
+        sheet.Charts[0].TrendlineType.Should().Be(ChartTrendlineType.Linear);
+        sheet.Charts[0].TrendlinePeriod.Should().Be(2);
+        sheet.Charts[0].TrendlineOrder.Should().Be(2);
+        sheet.Charts[0].ShowTrendlineEquation.Should().BeFalse();
+        sheet.Charts[0].ShowTrendlineRSquared.Should().BeFalse();
+        sheet.Charts[0].TrendlineColor.Should().BeNull();
+        sheet.Charts[0].TrendlineThickness.Should().Be(1.5);
+        sheet.Charts[0].TrendlineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+        sheet.Charts[0].ShowSecondaryAxis.Should().BeFalse();
+        sheet.Charts[0].SecondaryAxisSeriesIndexes.Should().BeEmpty();
+        sheet.Charts[0].ComboLineSeriesIndexes.Should().BeEmpty();
+        sheet.Charts[0].SeriesFormats.Should().BeEmpty();
+        sheet.Charts[0].UseComboLineForSecondarySeries.Should().BeFalse();
     }
 
     [Fact]
@@ -103,6 +651,422 @@ public sealed class ChartCommandTests
             new ChartLayoutOptions(Title: "Revenue"));
 
         command.Apply(ctx).Success.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClearsAxisBounds()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                XAxisMinimum: 0,
+                XAxisMaximum: 10,
+                XAxisMajorUnit: 2,
+                XAxisMinorUnit: 1,
+                XAxisLogScale: true,
+                YAxisMinimum: -5,
+                YAxisMaximum: 25,
+                YAxisMajorUnit: 5,
+                YAxisMinorUnit: 2.5,
+                YAxisLogScale: true)).Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(ClearXAxisBounds: true, ClearYAxisBounds: true));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].XAxisMinimum.Should().BeNull();
+        sheet.Charts[0].XAxisMaximum.Should().BeNull();
+        sheet.Charts[0].XAxisMajorUnit.Should().BeNull();
+        sheet.Charts[0].XAxisMinorUnit.Should().BeNull();
+        sheet.Charts[0].XAxisLogScale.Should().BeFalse();
+        sheet.Charts[0].YAxisMinimum.Should().BeNull();
+        sheet.Charts[0].YAxisMaximum.Should().BeNull();
+        sheet.Charts[0].YAxisMajorUnit.Should().BeNull();
+        sheet.Charts[0].YAxisMinorUnit.Should().BeNull();
+        sheet.Charts[0].YAxisLogScale.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        sheet.Charts[0].XAxisMinimum.Should().Be(0);
+        sheet.Charts[0].XAxisMaximum.Should().Be(10);
+        sheet.Charts[0].XAxisMajorUnit.Should().Be(2);
+        sheet.Charts[0].XAxisMinorUnit.Should().Be(1);
+        sheet.Charts[0].XAxisLogScale.Should().BeTrue();
+        sheet.Charts[0].YAxisMinimum.Should().Be(-5);
+        sheet.Charts[0].YAxisMaximum.Should().Be(25);
+        sheet.Charts[0].YAxisMajorUnit.Should().Be(5);
+        sheet.Charts[0].YAxisMinorUnit.Should().Be(2.5);
+        sheet.Charts[0].YAxisLogScale.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(ChartTrendlineType.Linear)]
+    [InlineData(ChartTrendlineType.Exponential)]
+    [InlineData(ChartTrendlineType.Logarithmic)]
+    [InlineData(ChartTrendlineType.Power)]
+    [InlineData(ChartTrendlineType.MovingAverage)]
+    [InlineData(ChartTrendlineType.Polynomial)]
+    public void SetChartLayoutCommand_UpdatesSupportedTrendlineTypes(ChartTrendlineType type)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(ShowLinearTrendline: true, TrendlineType: type));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].ShowLinearTrendline.Should().BeTrue();
+        sheet.Charts[0].TrendlineType.Should().Be(type);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_UpdatesMovingAveragePeriod()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 6, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                TrendlineType: ChartTrendlineType.MovingAverage,
+                TrendlinePeriod: 4));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].TrendlineType.Should().Be(ChartTrendlineType.MovingAverage);
+        sheet.Charts[0].TrendlinePeriod.Should().Be(4);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_UpdatesPolynomialOrder()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 6, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                ShowLinearTrendline: true,
+                TrendlineType: ChartTrendlineType.Polynomial,
+                TrendlineOrder: 5));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].TrendlineType.Should().Be(ChartTrendlineType.Polynomial);
+        sheet.Charts[0].TrendlineOrder.Should().Be(5);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_SanitizesSecondaryAxisSeriesIndexes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                ShowSecondaryAxis: true,
+                SecondaryAxisSeriesIndexes: [-1, 0, 1, 1, 2]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].SecondaryAxisSeriesIndexes.Should().Equal(1);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClearsComboLineOverlayStateWhenUnsupported()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                UseComboLineForSecondarySeries: true,
+                ComboLineSeriesIndexes: [1]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].UseComboLineForSecondarySeries.Should().BeFalse();
+        sheet.Charts[0].ComboLineSeriesIndexes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_SanitizesSeriesFormatsToExistingSeries()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                SeriesFormats:
+                [
+                    new ChartSeriesFormat(-1, FillColor: new CellColor(255, 0, 0)),
+                    new ChartSeriesFormat(0, FillColor: new CellColor(0, 114, 178)),
+                    new ChartSeriesFormat(2, FillColor: new CellColor(255, 192, 0))
+                ]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].SeriesFormats.Should().ContainSingle().Which.SeriesIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClampsSeriesFormatStrokeAndMarkerSizes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                SeriesFormats:
+                [
+                    new ChartSeriesFormat(0, StrokeThickness: -1, MarkerSize: 99)
+                ]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, StrokeThickness: 0.5, MarkerSize: 30));
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ReplacesInvalidChartChoicesWithDefaults()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                XAxisNumberFormat: (ChartDataLabelNumberFormat)99,
+                XAxisMajorTickStyle: (ChartAxisTickStyle)99,
+                XAxisMinorTickStyle: (ChartAxisTickStyle)99,
+                YAxisNumberFormat: (ChartDataLabelNumberFormat)99,
+                YAxisMajorTickStyle: (ChartAxisTickStyle)99,
+                YAxisMinorTickStyle: (ChartAxisTickStyle)99,
+                LegendPosition: (ChartLegendPosition)99,
+                DataLabelPosition: (ChartDataLabelPosition)99,
+                DataLabelSeparator: (ChartDataLabelSeparator)99,
+                DataLabelNumberFormat: (ChartDataLabelNumberFormat)99,
+                TrendlineType: (ChartTrendlineType)99,
+                TrendlineDashStyle: (ChartLineDashStyle)99,
+                SeriesFormats:
+                [
+                    new ChartSeriesFormat(
+                        0,
+                        DashStyle: (ChartLineDashStyle)99,
+                        MarkerStyle: (ChartMarkerStyle)99)
+                ]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var chart = sheet.Charts[0];
+        chart.XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        chart.XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        chart.XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        chart.YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
+        chart.YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.LegendPosition.Should().Be(ChartLegendPosition.Right);
+        chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.BestFit);
+        chart.DataLabelSeparator.Should().Be(ChartDataLabelSeparator.Comma);
+        chart.DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
+        chart.TrendlineType.Should().Be(ChartTrendlineType.Linear);
+        chart.TrendlineDashStyle.Should().Be(ChartLineDashStyle.Dash);
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(new ChartSeriesFormat(0));
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_SanitizesPointDataLabelFormatsToExistingPoints()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                PointDataLabelFormats:
+                [
+                    new ChartPointDataLabelFormat(-1, 0, FillColor: new CellColor(255, 0, 0)),
+                    new ChartPointDataLabelFormat(0, -1, FillColor: new CellColor(255, 0, 0)),
+                    new ChartPointDataLabelFormat(0, 0, FillColor: new CellColor(0, 114, 178)),
+                    new ChartPointDataLabelFormat(0, 0, FillColor: new CellColor(112, 48, 160)),
+                    new ChartPointDataLabelFormat(1, 2, FillColor: new CellColor(255, 192, 0)),
+                    new ChartPointDataLabelFormat(2, 0, FillColor: new CellColor(255, 0, 0))
+                ]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartPointDataLabelFormat(0, 0, FillColor: new CellColor(112, 48, 160)));
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClampsPointDataLabelFormatWeightsAndFontSizes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                PointDataLabelFormats:
+                [
+                    new ChartPointDataLabelFormat(0, 0, BorderThickness: 25, FontSize: 2)
+                ]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var format = sheet.Charts[0].PointDataLabelFormats.Should().ContainSingle().Subject;
+        format.BorderThickness.Should().Be(10);
+        format.FontSize.Should().Be(6);
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_SanitizesNonFiniteNumericOptions()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                ChartTitleFontSize: double.NaN,
+                XAxisMinimum: double.NaN,
+                XAxisMaximum: double.PositiveInfinity,
+                XAxisMajorUnit: double.NaN,
+                XAxisGridlineThickness: double.NaN,
+                DataLabelFontSize: double.NaN,
+                TrendlineThickness: double.NaN,
+                SeriesFormats:
+                [
+                    new ChartSeriesFormat(0, StrokeThickness: double.NaN, MarkerSize: double.PositiveInfinity)
+                ],
+                PointDataLabelFormats:
+                [
+                    new ChartPointDataLabelFormat(0, 0, BorderThickness: double.NaN, FontSize: double.NegativeInfinity)
+                ]));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var chart = sheet.Charts[0];
+        chart.ChartTitleFontSize.Should().Be(6);
+        chart.XAxisMinimum.Should().BeNull();
+        chart.XAxisMaximum.Should().BeNull();
+        chart.XAxisMajorUnit.Should().Be(double.Epsilon);
+        chart.XAxisGridlineThickness.Should().Be(0.25);
+        chart.DataLabelFontSize.Should().Be(6);
+        chart.TrendlineThickness.Should().Be(0.5);
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, StrokeThickness: 0.5, MarkerSize: 30));
+        chart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartPointDataLabelFormat(0, 0, BorderThickness: 0, FontSize: 6));
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_SanitizesExplodedSliceIndexToExistingDataPoints()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Pie, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(ExplodedSliceIndex: 5, ExplodedSliceDistance: 0.2));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].ExplodedSliceIndex.Should().Be(-1);
+        sheet.Charts[0].ExplodedSliceDistance.Should().Be(0.2);
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

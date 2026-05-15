@@ -15,6 +15,10 @@ public sealed class FreexcelOptions
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }
 
+    // View
+    public bool ShowFormulaBar { get; set; } = true;
+    public bool FormulaBarExpanded { get; set; }
+
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";
 

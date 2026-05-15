@@ -23,18 +23,18 @@ public sealed class GoalSeekCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_changingCell.Sheet);
+        if (sheet is null)
+            return new CommandOutcome(false, ErrorMessage: "Sheet no longer exists.");
 
-        // Snapshot original value for undo
         _originalCell = sheet.GetCell(_changingCell)?.Clone();
-
         sheet.SetCell(_changingCell, new NumberValue(_newValue));
-
         return new CommandOutcome(true, AffectedCells: [_changingCell]);
     }
 
     public void Revert(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_changingCell.Sheet);
+        if (sheet is null) return;
 
         if (_originalCell is not null)
             sheet.SetCell(_changingCell, _originalCell.Clone());

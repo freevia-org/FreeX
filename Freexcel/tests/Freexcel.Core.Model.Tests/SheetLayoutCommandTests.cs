@@ -90,6 +90,32 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void SetRowHeightCommand_RejectsNonFiniteHeight()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        new SetRowHeightCommand(sheet.Id, 1, 1, double.NaN)
+            .Apply(ctx).Success.Should().BeFalse();
+        new SetRowHeightCommand(sheet.Id, 1, 1, double.PositiveInfinity)
+            .Apply(ctx).Success.Should().BeFalse();
+
+        sheet.RowHeights.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SetColumnWidthCommand_RejectsNonFiniteWidth()
+    {
+        var (_, sheet, ctx) = Setup();
+
+        new SetColumnWidthCommand(sheet.Id, 1, 1, double.NaN)
+            .Apply(ctx).Success.Should().BeFalse();
+        new SetColumnWidthCommand(sheet.Id, 1, 1, double.NegativeInfinity)
+            .Apply(ctx).Success.Should().BeFalse();
+
+        sheet.ColumnWidths.Should().BeEmpty();
+    }
+
+    [Fact]
     public void SetRowsHiddenCommand_HidesAndUnhidesRowsAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();
@@ -162,6 +188,115 @@ public class SheetLayoutCommandTests
 
         outcome.Success.Should().BeFalse();
         sheet.ViewMode.Should().Be(WorksheetViewMode.Normal);
+    }
+
+    [Fact]
+    public void SetWorksheetViewOptionsCommand_SetsGridlinesAndHeadingsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ShowGridlines = true;
+        sheet.ShowHeadings = false;
+        sheet.ShowRulers = true;
+
+        var command = new SetWorksheetViewOptionsCommand(sheet.Id, showGridlines: false, showHeadings: true, showRulers: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.ShowHeadings.Should().BeTrue();
+        sheet.ShowRulers.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        sheet.ShowGridlines.Should().BeTrue();
+        sheet.ShowHeadings.Should().BeFalse();
+        sheet.ShowRulers.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetWorksheetZoomCommand_SetsZoomAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ZoomPercent = 75;
+
+        var command = new SetWorksheetZoomCommand(sheet.Id, 125);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.ZoomPercent.Should().Be(125);
+
+        command.Revert(ctx);
+
+        sheet.ZoomPercent.Should().Be(75);
+    }
+
+    [Theory]
+    [InlineData(9)]
+    [InlineData(401)]
+    public void SetWorksheetZoomCommand_RejectsUnsupportedZoom(int zoomPercent)
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ZoomPercent = 100;
+
+        var outcome = new SetWorksheetZoomCommand(sheet.Id, zoomPercent).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.ZoomPercent.Should().Be(100);
+    }
+
+    [Fact]
+    public void SetWorksheetShowFormulasCommand_SetsStateAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ShowFormulas = false;
+
+        var command = new SetWorksheetShowFormulasCommand(sheet.Id, true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.ShowFormulas.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.ShowFormulas.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetFreezePanesCommand_ClearsExistingSplitPaneAndUndoRestoresIt()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SplitRow = 12;
+        sheet.SplitColumn = 4;
+
+        var command = new SetFreezePanesCommand(sheet.Id, 1, 2);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(1);
+        sheet.FrozenCols.Should().Be(2);
+        sheet.SplitRow.Should().BeNull();
+        sheet.SplitColumn.Should().BeNull();
+
+        command.Revert(ctx);
+
+        sheet.FrozenRows.Should().Be(0);
+        sheet.FrozenCols.Should().Be(0);
+        sheet.SplitRow.Should().Be(12);
+        sheet.SplitColumn.Should().Be(4);
+    }
+
+    [Fact]
+    public void SetFreezePanesCommand_UnfreezeDoesNotClearExistingSplitPane()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 2;
+        sheet.SplitRow = 12;
+        sheet.SplitColumn = 4;
+
+        var command = new SetFreezePanesCommand(sheet.Id, 0, 0);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(0);
+        sheet.FrozenCols.Should().Be(0);
+        sheet.SplitRow.Should().Be(12);
+        sheet.SplitColumn.Should().Be(4);
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
