@@ -36,7 +36,7 @@ public sealed class FreexcelOptions
                 return JsonSerializer.Deserialize<FreexcelOptions>(json) ?? new();
             }
         }
-        catch { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[FreexcelOptions] Failed to load: {ex.Message}"); }
         return new FreexcelOptions();
     }
 
@@ -48,6 +48,6 @@ public sealed class FreexcelOptions
             File.WriteAllText(StorePath, JsonSerializer.Serialize(this,
                 new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch { }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[FreexcelOptions] Failed to save: {ex.Message}"); }
     }
 }

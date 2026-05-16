@@ -57,6 +57,7 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
         uint result = 0;
         foreach (var c in name.ToUpperInvariant())
         {
+            if (result > MaxCol) return result; // already beyond valid range — avoids overflow
             result = result * 26 + (uint)(c - 'A' + 1);
         }
         return result;
