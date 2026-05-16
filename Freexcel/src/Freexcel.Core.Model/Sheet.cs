@@ -310,6 +310,7 @@ public sealed class Sheet
         {
             _cells[(address.Row, address.Col)] = Cell.FromFormula(formulaText);
         }
+        _styleOnly.Remove((address.Row, address.Col));
     }
 
     /// <summary>Set a cell directly.</summary>
