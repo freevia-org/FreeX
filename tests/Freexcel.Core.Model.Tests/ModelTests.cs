@@ -263,3 +263,40 @@ public class CellStyleTests
         wb.StyleCount.Should().Be(2, "10,000 identical bold styles collapse to one entry (plus Default)");
     }
 }
+
+public class SheetCloneTests
+{
+    [Fact]
+    public void Sheet_Clone_CopiesBackgroundImage()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        var imageBytes = new byte[] { 1, 2, 3, 4 };
+        src.BackgroundImage = new WorksheetBackgroundImage(imageBytes, "image/png", "bg.png");
+
+        var copy = src.Clone(SheetId.New(), "Copy");
+
+        copy.BackgroundImage.Should().NotBeNull();
+        copy.BackgroundImage!.ContentType.Should().Be("image/png");
+        copy.BackgroundImage.FileName.Should().Be("bg.png");
+        copy.BackgroundImage.ImageBytes.Should().Equal(imageBytes);
+    }
+
+    [Fact]
+    public void Sheet_Clone_CopiesOutlineLevels()
+    {
+        var wb = new Workbook("T");
+        var src = wb.AddSheet("S");
+        src.RowOutlineLevels[5] = 2;
+        src.ColOutlineLevels[3] = 1;
+        src.GroupHiddenRows.Add(5);
+        src.GroupHiddenCols.Add(3);
+
+        var copy = src.Clone(SheetId.New(), "Copy");
+
+        copy.RowOutlineLevels.Should().ContainKey(5).WhoseValue.Should().Be(2);
+        copy.ColOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(1);
+        copy.GroupHiddenRows.Should().Contain(5u);
+        copy.GroupHiddenCols.Should().Contain(3u);
+    }
+}
