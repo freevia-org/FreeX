@@ -126,6 +126,18 @@ public sealed class ViewportService : IViewportService
 
     private static uint? HitTestRow(Sheet sheet, double y)
     {
+        // Fast path: no custom heights or hidden rows — use direct arithmetic.
+        if (sheet.RowHeights.Count == 0 &&
+            sheet.HiddenRows.Count == 0 &&
+            sheet.FilterHiddenRows.Count == 0 &&
+            sheet.GroupHiddenRows.Count == 0)
+        {
+            if (sheet.DefaultRowHeight <= 0) return null;
+            var row = (uint)(y / sheet.DefaultRowHeight) + 1;
+            return row <= CellAddress.MaxRow ? row : null;
+        }
+
+        // Slow path: iterate accounting for custom heights and hidden rows.
         double top = 0;
         for (uint row = 1; row <= CellAddress.MaxRow; row++)
         {
@@ -143,6 +155,19 @@ public sealed class ViewportService : IViewportService
 
     private static uint? HitTestColumn(Sheet sheet, double x)
     {
+        // Fast path: no custom widths or hidden columns — use direct arithmetic.
+        // ColumnWidths are stored in character units; the slow path multiplies by 8 to get pixels.
+        if (sheet.ColumnWidths.Count == 0 &&
+            sheet.HiddenCols.Count == 0 &&
+            sheet.GroupHiddenCols.Count == 0)
+        {
+            var pixelWidth = sheet.DefaultColumnWidth * 8;
+            if (pixelWidth <= 0) return null;
+            var col = (uint)(x / pixelWidth) + 1;
+            return col <= CellAddress.MaxCol ? col : null;
+        }
+
+        // Slow path: iterate accounting for custom widths and hidden columns.
         double left = 0;
         for (uint col = 1; col <= CellAddress.MaxCol; col++)
         {
