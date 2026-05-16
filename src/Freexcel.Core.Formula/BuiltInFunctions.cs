@@ -692,12 +692,15 @@ public static class BuiltInFunctions
         foreach (var arg in args)
             if (arg is ErrorValue e) return e;
 
-        int rows = args.Count > 0 && args[0] is not BlankValue ? (int)ToNumber(args[0]) : 1;
-        int cols = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
+        double rowsD = args.Count > 0 && args[0] is not BlankValue ? ToNumber(args[0]) : 1;
+        double colsD = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         double min = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
         double max = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
         bool wholeNumber = args.Count > 4 && args[4] is not BlankValue && ToBool(args[4]);
 
+        if (!double.IsFinite(rowsD) || !double.IsFinite(colsD)) return ErrorValue.Value;
+        int rows = (int)rowsD;
+        int cols = (int)colsD;
         if (rows < 1 || cols < 1) return ErrorValue.Value;
         if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
         if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
@@ -3453,13 +3456,17 @@ public static class BuiltInFunctions
 
     private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue arrayError) return arrayError;
         if (args[0] is not RangeValue arr) return ErrorValue.Value;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        int sortIdx   = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) - 1 : 0;
+        double sortIdxRaw   = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        double sortOrderRaw = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
+        if (!double.IsFinite(sortIdxRaw) || !double.IsFinite(sortOrderRaw)) return ErrorValue.Value;
+        int sortIdx   = (int)sortIdxRaw - 1;
         if (sortIdx < 0) return ErrorValue.Value;
-        int sortOrder = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
+        int sortOrder = (int)sortOrderRaw;
         if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
         bool byCol    = args.Count > 3 && args[3] is not BlankValue && ToBool(args[3]);
         if (!byCol && sortIdx >= arr.ColCount) return ErrorValue.Value;
@@ -3518,7 +3525,9 @@ public static class BuiltInFunctions
             if (i + 1 < args.Count && args[i + 1] is not RangeValue)
             {
                 if (args[i + 1] is ErrorValue orderError) return orderError;
-                sortOrder = (int)ToNumber(args[i + 1]);
+                double orderRaw = ToNumber(args[i + 1]);
+                if (!double.IsFinite(orderRaw)) return ErrorValue.Value;
+                sortOrder = (int)orderRaw;
                 if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
                 i++;
             }
@@ -4039,6 +4048,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue Unique(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue arrayError) return arrayError;
         if (args[0] is not RangeValue arr) return ErrorValue.Value;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;

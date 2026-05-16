@@ -34,14 +34,16 @@ public class FormulaRewriteCommandTests
     }
 
     [Fact]
-    public void InsertRows_AbsoluteRowRef_NotShifted()
+    public void InsertRows_AbsoluteRowRef_IsShifted()
     {
+        // Excel adjusts $A$5 → $A$6 when a row is inserted above row 5.
+        // The $ only prevents copy-paste offsets, not structural row shifts.
         var (_, sheet, ctx) = Setup();
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 2), "$A$5");
 
         new InsertRowsCommand(sheet.Id, 3, 1).Apply(ctx);
 
-        sheet.GetCell(1, 2)!.FormulaText.Should().Be("$A$5");
+        sheet.GetCell(1, 2)!.FormulaText.Should().Be("$A$6");
     }
 
     [Fact]
@@ -122,14 +124,15 @@ public class FormulaRewriteCommandTests
     }
 
     [Fact]
-    public void InsertCols_AbsoluteColRef_NotShifted()
+    public void InsertCols_AbsoluteColRef_IsShifted()
     {
+        // Excel adjusts $B1 → $C1 when a column is inserted before column B.
         var (_, sheet, ctx) = Setup();
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "$B1");
 
         new InsertColumnsCommand(sheet.Id, 2, 1).Apply(ctx);
 
-        sheet.GetCell(1, 1)!.FormulaText.Should().Be("$B1");
+        sheet.GetCell(1, 1)!.FormulaText.Should().Be("$C1");
     }
 
     [Fact]

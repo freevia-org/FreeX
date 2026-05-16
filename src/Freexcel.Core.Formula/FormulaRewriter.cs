@@ -125,7 +125,9 @@ public static class FormulaRewriter
     private static FormulaNode RewriteCellRefInsertRows(
         CellRefNode cr, InsertRowsOp op, ref bool changed)
     {
-        if (cr.IsRowAbsolute || cr.Row < op.BeforeRow)
+        // $ does NOT protect against structural row shifts — Excel adjusts $A$5 → $A$7
+        // after inserting 2 rows above row 5. Only paste offsets respect IsRowAbsolute.
+        if (cr.Row < op.BeforeRow)
             return cr;
 
         changed = true;
@@ -137,9 +139,6 @@ public static class FormulaRewriter
     private static FormulaNode RewriteCellRefDeleteRows(
         CellRefNode cr, DeleteRowsOp op, ref bool changed)
     {
-        if (cr.IsRowAbsolute)
-            return cr;
-
         uint endRow = op.StartRow + op.Count - 1;
 
         if (cr.Row >= op.StartRow && cr.Row <= endRow)
@@ -162,7 +161,8 @@ public static class FormulaRewriter
     private static FormulaNode RewriteCellRefInsertCols(
         CellRefNode cr, InsertColsOp op, ref bool changed)
     {
-        if (cr.IsColAbsolute || cr.ColumnNumber < op.BeforeCol)
+        // $ does NOT protect against structural column shifts (same rule as rows above).
+        if (cr.ColumnNumber < op.BeforeCol)
             return cr;
 
         changed = true;
@@ -175,9 +175,6 @@ public static class FormulaRewriter
     private static FormulaNode RewriteCellRefDeleteCols(
         CellRefNode cr, DeleteColsOp op, ref bool changed)
     {
-        if (cr.IsColAbsolute)
-            return cr;
-
         uint endCol = op.StartCol + op.Count - 1;
 
         if (cr.ColumnNumber >= op.StartCol && cr.ColumnNumber <= endCol)

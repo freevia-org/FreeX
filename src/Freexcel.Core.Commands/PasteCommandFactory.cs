@@ -115,6 +115,8 @@ public static class PasteCommandFactory
         int newCol = (int)source.Col + colDelta;
         if (newRow < 1) newRow = 1;
         if (newCol < 1) newCol = 1;
+        if (newRow > (int)CellAddress.MaxRow) newRow = (int)CellAddress.MaxRow;
+        if (newCol > (int)CellAddress.MaxCol) newCol = (int)CellAddress.MaxCol;
         return new(targetSheetId, (uint)newRow, (uint)newCol);
     }
 
