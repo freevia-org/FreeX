@@ -21,6 +21,9 @@ public sealed class ViewportService : IViewportService
         var rowMetrics = BuildRowMetrics(sheet, request.TopRow, CellAddress.MaxRow, request.AvailableHeight);
         var colMetrics = BuildColMetrics(sheet, request.LeftCol, CellAddress.MaxCol, request.AvailableWidth);
 
+        // Pre-compute CF aggregates (average/min/max) once per frame rather than per cell.
+        var cfCache = PrecomputeCfAggregates(sheet);
+
         // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
         // Calculate Column Metrics — iterate until we've filled the available width
         // Retrieve Cells in Viewport
@@ -35,7 +38,7 @@ public sealed class ViewportService : IViewportService
 
                     // Evaluate conditional formats and merge any triggered CF style on top
                     var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
-                    var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook);
+                    var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfCache);
                     if (cfStyle != null)
                         style = MergeStyles(style, cfStyle);
 
@@ -56,7 +59,7 @@ public sealed class ViewportService : IViewportService
                     {
                         var style = workbook.GetStyle(styleOnlyId.Value);
                         var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
-                        var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook);
+                        var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfCache);
                         if (cfStyle != null)
                             style = MergeStyles(style, cfStyle);
 
@@ -95,7 +98,7 @@ public sealed class ViewportService : IViewportService
                 sheet.SplitColumn,
                 splitTopRows,
                 splitLeftColumns,
-                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas),
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfCache),
                 topRightColumns,
                 bottomLeftRows)
             : null;
@@ -206,7 +209,8 @@ public sealed class ViewportService : IViewportService
         IReadOnlyList<ColMetric> leftColumns,
         IReadOnlyList<RowMetric> bottomLeftRows,
         IReadOnlyList<ColMetric> topRightColumns,
-        bool includeFormulas)
+        bool includeFormulas,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         var cells = new List<DisplayCell>();
         var seen = new HashSet<(uint Row, uint Col)>();
@@ -214,15 +218,15 @@ public sealed class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfCache);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfCache);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, includeFormulas, cfCache);
         }
 
         return cells;
@@ -236,7 +240,8 @@ public sealed class ViewportService : IViewportService
         SheetId sheetId,
         uint row,
         uint col,
-        bool includeFormulas)
+        bool includeFormulas,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         if (!seen.Add((row, col)))
             return;
@@ -250,7 +255,7 @@ public sealed class ViewportService : IViewportService
 
             var style = workbook.GetStyle(styleOnlyId.Value);
             var addr = new CellAddress(sheetId, row, col);
-            var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook);
+            var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfCache);
             if (cfStyle != null)
                 style = MergeStyles(style, cfStyle);
 
@@ -269,7 +274,7 @@ public sealed class ViewportService : IViewportService
         {
         var style = workbook.GetStyle(cell.StyleId);
         var addr = new CellAddress(sheetId, row, col);
-        var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook);
+        var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfCache);
         if (cfStyle != null)
             style = MergeStyles(style, cfStyle);
 
@@ -299,8 +304,43 @@ public sealed class ViewportService : IViewportService
 
     private static readonly FormulaEvaluator _cfEvaluator = new();
 
+    // ── Per-frame CF aggregate cache ──────────────────────────────────────────
+
+    private sealed record CfAggregateCache(double Average, double Min, double Max);
+
+    /// <summary>
+    /// Scans every AboveAverage and ColorScale CF rule once and stores the
+    /// aggregate statistics (average, min, max) keyed by rule identity.
+    /// Called once per <see cref="GetViewport"/> call to avoid O(cells × range) scans.
+    /// </summary>
+    private static Dictionary<ConditionalFormat, CfAggregateCache> PrecomputeCfAggregates(Sheet sheet)
+    {
+        var result = new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance);
+        foreach (var cf in sheet.ConditionalFormats)
+        {
+            if (cf.RuleType is not (CfRuleType.AboveAverage or CfRuleType.ColorScale))
+                continue;
+
+            double sum = 0, min = double.MaxValue, max = double.MinValue;
+            int count = 0;
+            foreach (var a in cf.AppliesTo.AllCells())
+            {
+                var v = sheet.GetValue(a);
+                if (!TryGetDouble(v, out double x)) continue;
+                sum += x;
+                if (x < min) min = x;
+                if (x > max) max = x;
+                count++;
+            }
+            if (count > 0)
+                result[cf] = new CfAggregateCache(sum / count, min, max);
+        }
+        return result;
+    }
+
     private static CellStyle? EvaluateConditionalFormats(
-        Sheet sheet, CellAddress addr, ScalarValue value, Workbook workbook)
+        Sheet sheet, CellAddress addr, ScalarValue value, Workbook workbook,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         if (sheet.ConditionalFormats.Count == 0)
             return null;
@@ -313,14 +353,14 @@ public sealed class ViewportService : IViewportService
         {
             // ColorScale and DataBar always apply when in range — return immediately.
             if (cf.RuleType == CfRuleType.ColorScale)
-                return ComputeColorScaleStyle(cf, sheet, addr, value);
+                return ComputeColorScaleStyle(cf, addr, value, cfCache);
             if (cf.RuleType == CfRuleType.DataBar)
                 return new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
 
             bool conditionMet = cf.RuleType switch
             {
                 CfRuleType.CellValue    => MatchesCellValue(cf, value),
-                CfRuleType.AboveAverage => MatchesAboveAverage(cf, sheet, addr, value),
+                CfRuleType.AboveAverage => MatchesAboveAverage(cf, addr, value, cfCache),
                 CfRuleType.Formula      => MatchesFormula(cf, sheet, addr, workbook),
                 _                       => false
             };
@@ -450,42 +490,24 @@ public sealed class ViewportService : IViewportService
     // ── AboveAverage matching ─────────────────────────────────────────────────
 
     private static bool MatchesAboveAverage(
-        ConditionalFormat cf, Sheet sheet, CellAddress addr, ScalarValue value)
+        ConditionalFormat cf, CellAddress addr, ScalarValue value,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         if (!TryGetDouble(value, out double cellVal)) return false;
-
-        // Collect all numeric values in the CF range
-        double sum = 0;
-        int count = 0;
-        foreach (var a in cf.AppliesTo.AllCells())
-        {
-            var v = sheet.GetValue(a);
-            if (TryGetDouble(v, out double x)) { sum += x; count++; }
-        }
-        if (count == 0) return false;
-        double avg = sum / count;
-
-        return cf.AboveAverage ? cellVal > avg : cellVal < avg;
+        if (!cfCache.TryGetValue(cf, out var cache)) return false;
+        return cf.AboveAverage ? cellVal > cache.Average : cellVal < cache.Average;
     }
 
     // ── ColorScale ────────────────────────────────────────────────────────────
 
     private static CellStyle? ComputeColorScaleStyle(
-        ConditionalFormat cf, Sheet sheet, CellAddress addr, ScalarValue value)
+        ConditionalFormat cf, CellAddress addr, ScalarValue value,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         if (!TryGetDouble(value, out double cellVal)) return null;
+        if (!cfCache.TryGetValue(cf, out var cache)) return null;
 
-        // Gather all numeric values in the range
-        var nums = cf.AppliesTo.AllCells()
-            .Select(a => sheet.GetValue(a))
-            .Where(v => TryGetDouble(v, out _))
-            .Select(v => { TryGetDouble(v, out double x); return x; })
-            .ToList();
-
-        if (nums.Count == 0) return null;
-
-        double min = nums.Min();
-        double max = nums.Max();
+        double min = cache.Min, max = cache.Max;
         if (max == min) return new CellStyle { FillColor = cf.MinColor.ToCellColor() };
 
         double t = (cellVal - min) / (max - min); // 0..1
