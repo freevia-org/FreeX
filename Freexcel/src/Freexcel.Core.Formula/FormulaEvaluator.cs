@@ -309,6 +309,14 @@ public sealed class FormulaEvaluator
         {
             return ErrorFromCode(ex.ErrorCode);
         }
+        catch (OverflowException)
+        {
+            return ErrorValue.Num;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return ErrorValue.Num;
+        }
     }
 
     private static ErrorValue ErrorFromCode(string code) => code.ToUpperInvariant() switch
@@ -375,9 +383,11 @@ public sealed class FormulaEvaluator
         if (cond is ErrorValue e) return e;
         bool? taken = cond switch
         {
-            BoolValue b   => b.Value,
-            NumberValue n => n.Value != 0,
-            _             => null   // text condition is #VALUE! in Excel
+            BoolValue b     => b.Value,
+            NumberValue n   => n.Value != 0,
+            DateTimeValue d => d.Value != 0,
+            BlankValue      => false,
+            _               => null   // text condition is #VALUE! in Excel
         };
         if (taken is null) return ErrorValue.Value;
         if (taken.Value)  return EvaluateNode(node.Arguments[1], context);
@@ -420,9 +430,11 @@ public sealed class FormulaEvaluator
             if (cond is ErrorValue e) return e;
             bool? taken = cond switch
             {
-                BoolValue b   => b.Value,
-                NumberValue n => n.Value != 0,
-                _             => null
+                BoolValue b     => b.Value,
+                NumberValue n   => n.Value != 0,
+                DateTimeValue d => d.Value != 0,
+                BlankValue      => false,
+                _               => null
             };
             if (taken is null) return ErrorValue.Value;
             if (taken.Value) return EvaluateNode(node.Arguments[i + 1], context);
