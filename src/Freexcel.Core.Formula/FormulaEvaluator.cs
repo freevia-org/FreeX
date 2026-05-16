@@ -300,9 +300,11 @@ public sealed class FormulaEvaluator
         uint r1 = Math.Max(range.Start.Row, range.End.Row);
         uint c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
         uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
-        int rows = (int)(r1 - r0 + 1);
-        int cols = (int)(c1 - c0 + 1);
-        var cells = new ScalarValue[rows, cols];
+        long rows = r1 - r0 + 1;
+        long cols = c1 - c0 + 1;
+        if (rows * cols > 1_000_000L)
+            return new RangeValue(new ScalarValue[0, 0], r0, c0); // guard against whole-column refs
+        var cells = new ScalarValue[(int)rows, (int)cols];
         for (int ri = 0; ri < rows; ri++)
             for (int ci = 0; ci < cols; ci++)
             {

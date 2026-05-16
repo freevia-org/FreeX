@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Calc;
@@ -63,16 +64,19 @@ public sealed class DependencyGraph
         _dependents.Clear();
     }
 
+    private static readonly IReadOnlySet<CellAddress> EmptySet =
+        new HashSet<CellAddress>().ToFrozenSet();
+
     /// <summary>Get all cells that directly depend on the given cell.</summary>
     public IReadOnlySet<CellAddress> GetDirectDependents(CellAddress cell)
     {
-        return _dependents.TryGetValue(cell, out var deps) ? deps : new HashSet<CellAddress>();
+        return _dependents.TryGetValue(cell, out var deps) ? deps : EmptySet;
     }
 
     /// <summary>Get all cells that the given cell directly references.</summary>
     public IReadOnlySet<CellAddress> GetDirectPrecedents(CellAddress cell)
     {
-        return _precedents.TryGetValue(cell, out var precs) ? precs : new HashSet<CellAddress>();
+        return _precedents.TryGetValue(cell, out var precs) ? precs : EmptySet;
     }
 
     /// <summary>
