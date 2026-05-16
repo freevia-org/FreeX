@@ -215,8 +215,27 @@ public sealed class Sheet
     public bool IsColEffectivelyHidden(uint col) =>
         HiddenCols.Contains(col) || GroupHiddenCols.Contains(col);
 
+    private readonly List<GridRange> _mergedRegions = [];
+
     /// <summary>Merged cell regions on this sheet. Each region's top-left cell holds the display value.</summary>
-    public List<GridRange> MergedRegions { get; } = [];
+    public IReadOnlyList<GridRange> MergedRegions => _mergedRegions;
+
+    /// <summary>Add a merged region and invalidate the merge index.</summary>
+    public void AddMergedRegion(GridRange region) { _mergedRegions.Add(region); _mergeIndex = null; }
+
+    /// <summary>Remove a merged region and invalidate the merge index.</summary>
+    public bool RemoveMergedRegion(GridRange region) { var removed = _mergedRegions.Remove(region); if (removed) _mergeIndex = null; return removed; }
+
+    /// <summary>Replace the entire merged-regions list and invalidate the merge index.</summary>
+    public void ReplaceMergedRegions(IEnumerable<GridRange> regions)
+    {
+        // Materialize before clearing to guard against callers passing a lazy LINQ query
+        // over MergedRegions itself (would otherwise enumerate an already-emptied list).
+        var list = regions is List<GridRange> l ? l : regions.ToList();
+        _mergedRegions.Clear();
+        _mergedRegions.AddRange(list);
+        _mergeIndex = null;
+    }
 
     /// <summary>Cell comments keyed by address.</summary>
     public Dictionary<CellAddress, string> Comments { get; } = [];
@@ -233,14 +252,11 @@ public sealed class Sheet
     /// <summary>Ranges that remain editable while the sheet is protected.</summary>
     public List<GridRange> AllowEditRanges { get; } = [];
 
-    /// <summary>Invalidates the lazy merge-region index. Must be called after any mutation to MergedRegions.</summary>
-    public void InvalidateMergeIndex() => _mergeIndex = null;
-
     private void EnsureMergeIndex()
     {
         if (_mergeIndex is not null) return;
-        _mergeIndex = new Dictionary<(uint, uint), GridRange>(MergedRegions.Count * 4);
-        foreach (var region in MergedRegions)
+        _mergeIndex = new Dictionary<(uint, uint), GridRange>(_mergedRegions.Count * 4);
+        foreach (var region in _mergedRegions)
             for (var r = region.Start.Row; r <= region.End.Row; r++)
                 for (var c = region.Start.Col; c <= region.End.Col; c++)
                     _mergeIndex[(r, c)] = region;
@@ -557,9 +573,7 @@ public sealed class Sheet
             copy.SetStyleOnly(row, col, styleId);
 
         // Merged regions
-        foreach (var range in MergedRegions)
-            copy.MergedRegions.Add(RemapRange(range, newId));
-        copy.InvalidateMergeIndex();
+        copy.ReplaceMergedRegions(MergedRegions.Select(r => RemapRange(r, newId)));
 
         // Comments and hyperlinks
         foreach (var (address, comment) in Comments)
