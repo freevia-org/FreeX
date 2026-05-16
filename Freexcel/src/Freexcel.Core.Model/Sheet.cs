@@ -9,6 +9,7 @@ public sealed class Sheet
     private readonly Dictionary<(uint Row, uint Col), Cell> _cells = [];
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
+    private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -242,6 +243,22 @@ public sealed class Sheet
     /// <summary>True if <paramref name="addr"/> is inside any merged region.</summary>
     public bool IsMerged(CellAddress addr) => GetMergeRegion(addr) is not null;
 
+    /// <summary>Returns the style-only override for an empty cell, or null if none exists.</summary>
+    public StyleId? GetStyleOnly(uint row, uint col)
+        => _styleOnly.TryGetValue((row, col), out var s) ? s : null;
+
+    /// <summary>Sets a style-only override for an empty cell.</summary>
+    public void SetStyleOnly(uint row, uint col, StyleId styleId)
+        => _styleOnly[(row, col)] = styleId;
+
+    /// <summary>Removes the style-only override for an empty cell.</summary>
+    public void ClearStyleOnly(uint row, uint col)
+        => _styleOnly.Remove((row, col));
+
+    /// <summary>Enumerates all style-only entries (for empty cells that have been styled).</summary>
+    public IEnumerable<((uint Row, uint Col) Key, StyleId StyleId)> GetStyleOnlyEntries()
+        => _styleOnly.Select(kv => (kv.Key, kv.Value));
+
     public Sheet(SheetId id, string name)
     {
         Id = id;
@@ -298,6 +315,7 @@ public sealed class Sheet
     public void SetCell(CellAddress address, Cell cell)
     {
         _cells[(address.Row, address.Col)] = cell;
+        _styleOnly.Remove((address.Row, address.Col));
     }
 
     /// <summary>Remove a cell (clear its contents).</summary>

@@ -11,7 +11,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly StyleDiff _diff;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Apply Style";
 
@@ -35,17 +35,24 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
         foreach (var addr in _range.AllCells())
         {
             var cell = sheet.GetCell(addr);
-            _snapshot.Add((addr, cell?.Clone()));
 
             if (cell is null)
             {
-                cell = Cell.FromValue(BlankValue.Instance);
-                sheet.SetCell(addr, cell);
-            }
+                _snapshot.Add((addr, null, sheet.GetStyleOnly(addr.Row, addr.Col)));
 
-            var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
-            var newStyle  = _diff.ApplyTo(baseStyle);
-            cell.StyleId  = ctx.Workbook.RegisterStyle(newStyle);
+                var baseStyle  = ctx.Workbook.GetStyle(StyleId.Default);
+                var newStyle   = _diff.ApplyTo(baseStyle);
+                var newStyleId = ctx.Workbook.RegisterStyle(newStyle);
+                sheet.SetStyleOnly(addr.Row, addr.Col, newStyleId);
+            }
+            else
+            {
+                _snapshot.Add((addr, cell.Clone(), null));
+
+                var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
+                var newStyle  = _diff.ApplyTo(baseStyle);
+                cell.StyleId  = ctx.Workbook.RegisterStyle(newStyle);
+            }
         }
 
         return new CommandOutcome(true);
@@ -55,12 +62,19 @@ public sealed class ApplyStyleCommand : IWorkbookCommand
     {
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (addr, oldCell) in _snapshot)
+        foreach (var (addr, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
-                sheet.ClearCell(addr);
+            {
+                if (oldStyleOnly.HasValue)
+                    sheet.SetStyleOnly(addr.Row, addr.Col, oldStyleOnly.Value);
+                else
+                    sheet.ClearStyleOnly(addr.Row, addr.Col);
+            }
             else
+            {
                 sheet.SetCell(addr, oldCell.Clone());
+            }
         }
     }
 }
