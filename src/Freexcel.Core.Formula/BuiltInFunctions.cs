@@ -1708,6 +1708,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue Large(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue range) return ErrorValue.Value;
         if (args[1] is ErrorValue e1) return e1;
         var kD = ToNumber(args[1]);
@@ -1722,6 +1723,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue Small(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue range) return ErrorValue.Value;
         if (args[1] is ErrorValue e1) return e1;
         var kD = ToNumber(args[1]);
@@ -1737,6 +1739,7 @@ public static class BuiltInFunctions
     private static ScalarValue Rank(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue range) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var number = ToNumber(args[0]);
@@ -1775,7 +1778,7 @@ public static class BuiltInFunctions
         var (numsOrNull, err) = CollectNumbers(args);
         if (err is not null) return err;
         var nums = numsOrNull!;
-        if (nums.Count == 0) return ErrorValue.Value;
+        if (nums.Count == 0) return ErrorValue.Num;
         nums.Sort();
         int mid = nums.Count / 2;
         if (nums.Count % 2 == 1)
@@ -2788,6 +2791,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
@@ -2805,6 +2809,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue PercentileExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
@@ -2824,6 +2829,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue QuartileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
         double rawQuart = ToNumber(args[1]);
@@ -2901,6 +2907,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue PercentrankInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
@@ -2926,7 +2933,9 @@ public static class BuiltInFunctions
 
     private static ScalarValue Correl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue rv1) return ErrorValue.Value;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue rv2) return ErrorValue.Value;
         var (xs, xErr) = CollectRangeNumbers(rv1);
         if (xErr is not null) return xErr;
@@ -2951,7 +2960,9 @@ public static class BuiltInFunctions
     private static ScalarValue Forecast(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue knownY) return ErrorValue.Value;
+        if (args[2] is ErrorValue e2) return e2;
         if (args[2] is not RangeValue knownX) return ErrorValue.Value;
         double x    = ToNumber(args[0]);
         if (!double.IsFinite(x)) return ErrorValue.Num;
