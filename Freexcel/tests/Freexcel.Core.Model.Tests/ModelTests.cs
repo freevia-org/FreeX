@@ -147,6 +147,34 @@ public class SheetTests
     }
 }
 
+public class CellAddressBoundsTests
+{
+    [Fact]
+    public void CellAddress_Parse_ThrowsForRowZero()
+    {
+        var sheet = SheetId.New();
+        Action act = () => CellAddress.Parse("A0", sheet);
+        act.Should().Throw<FormatException>("row 0 is below the valid range");
+    }
+
+    [Fact]
+    public void CellAddress_Parse_ThrowsForRowAboveMax()
+    {
+        var sheet = SheetId.New();
+        Action act = () => CellAddress.Parse("A1048577", sheet);
+        act.Should().Throw<FormatException>("row 1048577 exceeds MaxRow");
+    }
+
+    [Fact]
+    public void CellAddress_Parse_ThrowsForColumnAboveMax()
+    {
+        var sheet = SheetId.New();
+        // XFE is column 16385, one past the maximum XFD (16384)
+        Action act = () => CellAddress.Parse("XFE1", sheet);
+        act.Should().Throw<FormatException>("column XFE exceeds MaxCol");
+    }
+}
+
 public class CellStyleTests
 {
     [Fact]

@@ -118,4 +118,19 @@ public class LexerTests
         tokens[0].Type.Should().Be(TokenType.Error);
         tokens[0].Value.Should().Be(errorCode);
     }
+
+    [Fact]
+    public void Lexer_TabWhitespace_IsSkippedLikeSpace()
+    {
+        var tokens = new Lexer("=1\t+\t2").Tokenize();
+        tokens.Select(t => t.Type).Should().Contain(TokenType.Number).And.Contain(TokenType.Plus);
+    }
+
+    [Fact]
+    public void Lexer_FourLetterColumnLikeWord_IsNotACellReference()
+    {
+        // "ABCD1" has 4 letters — exceeds max column XFD (3 letters), should be NamedRange/Identifier, not CellRef
+        var tokens = new Lexer("=ABCD1").Tokenize();
+        tokens.Should().NotContain(t => t.Type == TokenType.CellRef);
+    }
 }
