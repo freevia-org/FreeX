@@ -112,7 +112,8 @@ public sealed class FormulaEvaluator
         var b = CoerceToNumber(right);
         if (a is ErrorValue errA) return errA;
         if (b is ErrorValue errB) return errB;
-        return new NumberValue(op(((NumberValue)a).Value, ((NumberValue)b).Value));
+        double result = op(((NumberValue)a).Value, ((NumberValue)b).Value);
+        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
     private static ScalarValue DivideOp(ScalarValue left, ScalarValue right)
@@ -123,7 +124,8 @@ public sealed class FormulaEvaluator
         if (b is ErrorValue errB) return errB;
         var divisor = ((NumberValue)b).Value;
         if (divisor == 0) return ErrorValue.DivByZero;
-        return new NumberValue(((NumberValue)a).Value / divisor);
+        double result = ((NumberValue)a).Value / divisor;
+        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
     private static ScalarValue ConcatOp(ScalarValue left, ScalarValue right)
@@ -416,7 +418,9 @@ public sealed class FormulaEvaluator
         if (indexVal is ErrorValue e) return e;
         var coerced = CoerceToNumber(indexVal);
         if (coerced is ErrorValue ec) return ec;
-        int idx = (int)((NumberValue)coerced).Value;
+        double rawIdx = ((NumberValue)coerced).Value;
+        if (!double.IsFinite(rawIdx)) return ErrorValue.Value;
+        int idx = (int)rawIdx;
         if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
         return EvaluateNode(node.Arguments[idx], context);
     }

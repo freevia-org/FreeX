@@ -3338,7 +3338,7 @@ public static class BuiltInFunctions
         string colStr = cellRef[..i].ToUpperInvariant();
         if (!uint.TryParse(cellRef[i..], out row)) return false;
         col = CellAddress.ColumnNameToNumber(colStr);
-        return row > 0 && col > 0;
+        return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
     }
 
     private static bool TryParseR1C1Ref(string cellRef, out uint row, out uint col)
@@ -3381,7 +3381,9 @@ public static class BuiltInFunctions
     private static ScalarValue Lookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var lookupFlat = lookupVec.Flatten();
         var resultFlat = args.Count > 2 && args[2] is RangeValue rv
             ? rv.Flatten()
