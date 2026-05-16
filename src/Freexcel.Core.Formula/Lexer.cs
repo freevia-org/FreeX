@@ -258,19 +258,16 @@ public sealed class Lexer
         // Strip $ signs for validation
         var clean = value.Replace("$", "").ToUpperInvariant();
 
-        var i = 0;
-        // Must start with letters
-        while (i < clean.Length && char.IsLetter(clean[i]))
-            i++;
+        int i = 0;
+        while (i < clean.Length && char.IsLetter(clean[i])) i++;
 
-        if (i == 0 || i == clean.Length)
-            return false;
+        // Column names can be at most 3 letters (A–XFD = columns 1–16384)
+        if (i == 0 || i > 3 || i == clean.Length) return false;
 
-        // Must end with digits
-        while (i < clean.Length && char.IsDigit(clean[i]))
-            i++;
+        int digitStart = i;
+        while (i < clean.Length && char.IsDigit(clean[i])) i++;
 
-        return i == clean.Length;
+        return i == clean.Length && digitStart < clean.Length;
     }
 
     private Token ReadLessThanOrComposite()
@@ -311,7 +308,7 @@ public sealed class Lexer
 
     private void SkipWhitespace()
     {
-        while (_pos < _text.Length && _text[_pos] == ' ')
+        while (_pos < _text.Length && char.IsWhiteSpace(_text[_pos]))
             _pos++;
     }
 }

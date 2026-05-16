@@ -20,14 +20,10 @@ public readonly partial record struct CellAddress(SheetId Sheet, uint Row, uint 
     /// </summary>
     public static CellAddress Parse(string a1, SheetId sheet)
     {
-        var match = A1Regex().Match(a1.Trim());
-        if (!match.Success)
+        if (!TryParse(a1, sheet, out var result))
             throw new FormatException($"Invalid A1 notation: '{a1}'");
 
-        var col = ColumnNameToNumber(match.Groups[1].Value);
-        var row = uint.Parse(match.Groups[2].Value);
-
-        return new CellAddress(sheet, row, col);
+        return result;
     }
 
     /// <summary>
