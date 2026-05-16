@@ -26,11 +26,25 @@ public static class ClipboardSerializer
                 firstCol = false;
 
                 if (cellLookup.TryGetValue((r, c), out var cell))
-                    sb.Append(cell.DisplayText);
+                    AppendTsvCell(sb, cell.DisplayText);
             }
         }
 
         return sb.ToString();
+    }
+
+    private static void AppendTsvCell(StringBuilder sb, string text)
+    {
+        if (text.Contains('\t') || text.Contains('\n') || text.Contains('"'))
+        {
+            sb.Append('"');
+            sb.Append(text.Replace("\"", "\"\""));
+            sb.Append('"');
+        }
+        else
+        {
+            sb.Append(text);
+        }
     }
 
     /// <summary>Parses tab/newline-delimited text into a 2-D array of strings.</summary>

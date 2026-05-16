@@ -67,4 +67,39 @@ public class ClipboardTests
         Assert.Equal(["A", "B"], rows[0]);
         Assert.Equal(["C", "D"], rows[1]);
     }
+
+    [Fact]
+    public void Serialize_CellWithTab_QuotesCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("a\tb")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("c")));
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var text = ClipboardSerializer.Serialize(vp, new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2)));
+
+        Assert.Equal("\"a\tb\"\tc", text);
+    }
+
+    [Fact]
+    public void Serialize_CellWithNewline_QuotesCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("a\nb")));
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var text = ClipboardSerializer.Serialize(vp, new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1)));
+
+        Assert.Equal("\"a\nb\"", text);
+    }
 }
