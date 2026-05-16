@@ -2035,6 +2035,7 @@ public partial class MainWindow : Window
     private void ShowStartScreen()
     {
         UpdateSsGreeting();
+        SwitchToRecentTab();
         UpdateSsRecentList();
         ShowHomeView();
         StartScreenOverlay.Visibility = Visibility.Visible;
@@ -2093,14 +2094,18 @@ public partial class MainWindow : Window
             .Select(e => new RecentFileViewModel(e))
             .ToList();
 
-        var unpinned = _allRecentItems.Where(vm => !vm.IsPinned).ToList();
-        SsRecentList.ItemsSource = string.IsNullOrEmpty(filter)
-            ? unpinned
-            : unpinned
-                .Where(vm => vm.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+        bool hasFilter = !string.IsNullOrEmpty(filter);
+        var unpinned = _allRecentItems.Where(vm => !vm.IsPinned);
+        var pinned   = _allRecentItems.Where(vm =>  vm.IsPinned);
 
-        SsPinnedList.ItemsSource = _allRecentItems.Where(vm => vm.IsPinned).ToList();
+        if (hasFilter)
+        {
+            unpinned = unpinned.Where(vm => vm.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase));
+            pinned   = pinned  .Where(vm => vm.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        SsRecentList.ItemsSource = unpinned.ToList();
+        SsPinnedList.ItemsSource = pinned.ToList();
     }
 
     private void SsRecentTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
