@@ -9,6 +9,7 @@ public sealed class Workbook
     private static readonly char[] InvalidSheetNameChars = [':', '\\', '/', '?', '*', '[', ']'];
     private readonly List<Sheet> _sheets = [];
     private readonly List<CellStyle> _styles = [CellStyle.Default];
+    private readonly Dictionary<CellStyle, int> _styleIndex = new() { [CellStyle.Default] = 0 };
 
     /// <summary>Unique identifier for this workbook instance.</summary>
     public WorkbookId Id { get; }
@@ -37,6 +38,9 @@ public sealed class Workbook
 
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
+
+    /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
+    public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
 
     /// <summary>Last requested workbook-window arrangement.</summary>
     public WorkbookWindowArrangement WindowArrangement { get; set; } = WorkbookWindowArrangement.Tiled;
@@ -193,13 +197,14 @@ public sealed class Workbook
     /// </summary>
     public StyleId RegisterStyle(CellStyle style)
     {
-        for (int i = 0; i < _styles.Count; i++)
-        {
-            if (_styles[i].Equals(style))
-                return new StyleId(i);
-        }
-        _styles.Add(style.Clone());
-        return new StyleId(_styles.Count - 1);
+        if (_styleIndex.TryGetValue(style, out var idx))
+            return new StyleId(idx);
+
+        var clone = style.Clone();
+        var newIdx = _styles.Count;
+        _styles.Add(clone);
+        _styleIndex[clone] = newIdx;
+        return new StyleId(newIdx);
     }
 
     /// <summary>

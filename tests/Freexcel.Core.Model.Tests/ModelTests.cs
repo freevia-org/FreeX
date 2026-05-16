@@ -235,4 +235,13 @@ public class CellStyleTests
 
         wb.CalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
     }
+
+    [Fact]
+    public void RegisterStyle_ManyDuplicates_DoesNotGrowRegistry()
+    {
+        var wb = new Workbook("T");
+        for (int i = 0; i < 10_000; i++)
+            wb.RegisterStyle(new CellStyle { Bold = true });
+        wb.StyleCount.Should().Be(2, "10,000 identical bold styles collapse to one entry (plus Default)");
+    }
 }
