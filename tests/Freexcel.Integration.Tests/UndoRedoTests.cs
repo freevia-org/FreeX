@@ -105,6 +105,6 @@ public class UndoRedoTests
     private sealed class SimpleContext(Workbook wb, Sheet sheet) : ICommandContext
     {
         public Workbook Workbook => wb;
-        public Sheet GetSheet(SheetId id) => sheet;
+        public Sheet GetSheet(SheetId id) => wb.GetSheet(id) ?? throw new InvalidOperationException($"Sheet {id} not found");
     }
 }
