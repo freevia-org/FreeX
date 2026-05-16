@@ -48,7 +48,7 @@ public static class NumberFormatter
     private static string FormatGeneral(ScalarValue value) => value switch
     {
         NumberValue n   => FormatNumberGeneral(n.Value),
-        DateTimeValue d => DateTime.FromOADate(d.Value).ToShortDateString(),
+        DateTimeValue d => DateTime.FromOADate(d.Value).ToString("d", CultureInfo.InvariantCulture),
         TextValue t     => t.Value,
         BoolValue b     => b.Value ? "TRUE" : "FALSE",
         ErrorValue e    => e.Code,

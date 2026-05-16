@@ -32,7 +32,7 @@ public class NumberFormatterTests
     public void Format_DateTimeValue_WithGeneralFormat_ReturnsShortDate()
     {
         var result = NumberFormatter.Format(new DateTimeValue(45292), "General");
-        Assert.Equal("1/1/2024", result);
+        Assert.Equal("01/01/2024", result);
     }
 
     [Theory]
