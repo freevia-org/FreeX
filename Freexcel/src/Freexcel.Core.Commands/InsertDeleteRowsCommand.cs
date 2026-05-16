@@ -35,6 +35,15 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        var maxOccupied = sheet.EnumerateCells()
+            .Where(p => p.Address.Row >= _beforeRow)
+            .Select(p => p.Address.Row)
+            .DefaultIfEmpty(0u)
+            .Max();
+        if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxRow)
+            return new CommandOutcome(false,
+                ErrorMessage: $"Cannot insert {_count} row(s): data would be pushed past the last row ({Model.CellAddress.MaxRow}).");
+
         _movedSnapshot = sheet.EnumerateCells()
             .Where(p => p.Address.Row >= _beforeRow)
             .Select(p => (p.Address, p.Cell.Clone()))

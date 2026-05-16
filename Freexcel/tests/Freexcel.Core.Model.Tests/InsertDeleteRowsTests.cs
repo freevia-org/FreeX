@@ -403,7 +403,7 @@ public class InsertDeleteRowsTests
         var mergeRange = new GridRange(
             new CellAddress(sheet.Id, 3, 1),
             new CellAddress(sheet.Id, 4, 2));
-        sheet.MergedRegions.Add(mergeRange);
+        sheet.AddMergedRegion(mergeRange);
 
         new InsertRowsCommand(sheet.Id, beforeRow: 2, count: 1).Apply(ctx);
 
@@ -415,7 +415,7 @@ public class InsertDeleteRowsTests
     public void InsertRow_InsideMergedRegionExpandsRegion()
     {
         var (_, sheet, ctx) = Setup();
-        sheet.MergedRegions.Add(new GridRange(
+        sheet.AddMergedRegion(new GridRange(
             new CellAddress(sheet.Id, 3, 1),
             new CellAddress(sheet.Id, 5, 2)));
 
@@ -429,6 +429,40 @@ public class InsertDeleteRowsTests
 
         sheet.MergedRegions[0].Start.Row.Should().Be(3);
         sheet.MergedRegions[0].End.Row.Should().Be(5);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsMergedRegionsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 6, 1),
+            new CellAddress(sheet.Id, 7, 2)));
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 4, 1),
+            new CellAddress(sheet.Id, 5, 2)));
+
+        cmd.Revert(ctx);
+
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 6, 1),
+            new CellAddress(sheet.Id, 7, 2)));
+    }
+
+    [Fact]
+    public void InsertRows_WhenDataWouldBePushedPastMaxRow_ReturnsFailed()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, CellAddress.MaxRow, 1), new NumberValue(1));
+
+        var result = new InsertRowsCommand(sheet.Id, beforeRow: 1, count: 1).Apply(ctx);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("pushed past the last row");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
