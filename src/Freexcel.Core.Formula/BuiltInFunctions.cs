@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Formula;
@@ -753,10 +755,10 @@ public static class BuiltInFunctions
         };
     }
 
-    /// <summary>Simple Excel-style wildcard match (* = any chars, ? = any single char).</summary>
-    private static bool WildcardMatch(string text, string pattern, bool ignoreCase)
+    private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
+
+    private static string WildcardToRegexPattern(string pattern)
     {
-        // Convert pattern to regex
         var sb = new System.Text.StringBuilder("^");
         foreach (var ch in pattern)
         {
@@ -764,14 +766,22 @@ public static class BuiltInFunctions
             {
                 case '*': sb.Append(".*"); break;
                 case '?': sb.Append('.'); break;
-                default:  sb.Append(System.Text.RegularExpressions.Regex.Escape(ch.ToString())); break;
+                default:  sb.Append(Regex.Escape(ch.ToString())); break;
             }
         }
         sb.Append('$');
-        var opts = ignoreCase
-            ? System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            : System.Text.RegularExpressions.RegexOptions.None;
-        return System.Text.RegularExpressions.Regex.IsMatch(text, sb.ToString(), opts);
+        return sb.ToString();
+    }
+
+    /// <summary>Simple Excel-style wildcard match (* = any chars, ? = any single char).</summary>
+    private static bool WildcardMatch(string text, string pattern, bool ignoreCase)
+    {
+        var regex = WildcardCache.GetOrAdd((pattern, ignoreCase), key =>
+        {
+            var opts = key.IgnoreCase ? RegexOptions.IgnoreCase | RegexOptions.Compiled : RegexOptions.Compiled;
+            return new Regex(WildcardToRegexPattern(key.Pattern), opts);
+        });
+        return regex.IsMatch(text);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -880,6 +890,8 @@ public static class BuiltInFunctions
         return new NumberValue(pos + 1);
     }
 
+    private static readonly ConcurrentDictionary<string, Regex> SearchCache = new();
+
     private static ScalarValue Search(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
@@ -890,21 +902,23 @@ public static class BuiltInFunctions
         int startIdx = startNum - 1;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
 
-        // Convert Excel wildcard pattern to regex
-        var sb = new System.Text.StringBuilder("(?i)");
-        foreach (var ch in findText)
+        var regex = SearchCache.GetOrAdd(findText, pattern =>
         {
-            switch (ch)
+            var sb = new System.Text.StringBuilder();
+            foreach (var ch in pattern)
             {
-                case '*': sb.Append(".*"); break;
-                case '?': sb.Append('.'); break;
-                default:  sb.Append(System.Text.RegularExpressions.Regex.Escape(ch.ToString())); break;
+                switch (ch)
+                {
+                    case '*': sb.Append(".*"); break;
+                    case '?': sb.Append('.'); break;
+                    default:  sb.Append(Regex.Escape(ch.ToString())); break;
+                }
             }
-        }
-        var match = System.Text.RegularExpressions.Regex.Match(
-            withinText[startIdx..], sb.ToString());
+            return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        });
+        var match = regex.Match(withinText, startIdx);
         if (!match.Success) return ErrorValue.Value;
-        return new NumberValue(startIdx + match.Index + 1);
+        return new NumberValue(match.Index + 1);
     }
 
     private static ScalarValue Mid(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1517,7 +1531,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         int code = (int)ToNumber(args[0]);
-        if (code < 0 || code > 255) return ErrorValue.Value;
+        if (code <= 0 || code > 255) return ErrorValue.Value;
         return new TextValue(((char)code).ToString());
     }
 
@@ -2395,13 +2409,17 @@ public static class BuiltInFunctions
     private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new BoolValue((long)Math.Truncate(ToNumber(args[0])) % 2 == 0);
+        double d = Math.Truncate(ToNumber(args[0]));
+        if (!double.IsFinite(d) || d > long.MaxValue || d < long.MinValue) return ErrorValue.Num;
+        return new BoolValue((long)d % 2 == 0);
     }
 
     private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new BoolValue((long)Math.Truncate(ToNumber(args[0])) % 2 != 0);
+        double d = Math.Truncate(ToNumber(args[0]));
+        if (!double.IsFinite(d) || d > long.MaxValue || d < long.MinValue) return ErrorValue.Num;
+        return new BoolValue((long)d % 2 != 0);
     }
 
     private static ScalarValue Replace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2649,10 +2667,16 @@ public static class BuiltInFunctions
             var keyCounts = new List<int>();
             var rowOfKey  = new List<int>();
 
+            var keySb = new System.Text.StringBuilder();
             for (int r = 0; r < arr.RowCount; r++)
             {
-                var key = string.Join("\0", Enumerable.Range(0, arr.ColCount)
-                              .Select(c => ToText(arr.Cells[r, c])));
+                keySb.Clear();
+                for (int c = 0; c < arr.ColCount; c++)
+                {
+                    if (c > 0) keySb.Append('\0');
+                    keySb.Append(ToText(arr.Cells[r, c]));
+                }
+                var key = keySb.ToString();
                 if (keyIndex.TryGetValue(key, out int idx))
                 {
                     keyCounts[idx]++;
