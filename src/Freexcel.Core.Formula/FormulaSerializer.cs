@@ -102,7 +102,16 @@ public static class FormulaSerializer
                 break;
 
             case UnaryOpNode u when u.Operator == UnaryOperator.Percent:
-                WriteNode(u.Operand, sb);
+                if (u.Operand is BinaryOpNode)
+                {
+                    sb.Append('(');
+                    WriteNode(u.Operand, sb);
+                    sb.Append(')');
+                }
+                else
+                {
+                    WriteNode(u.Operand, sb);
+                }
                 sb.Append('%');
                 break;
         }
@@ -187,7 +196,9 @@ public static class FormulaSerializer
     {
         if (sheetName.Length == 0)
             return true;
-
+        // Sheet names starting with a digit must be quoted: "1Q24!A1" would lex as number "1" + name "Q24"
+        if (char.IsDigit(sheetName[0]))
+            return true;
         return sheetName.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_' && ch != '.');
     }
 }
