@@ -1069,8 +1069,9 @@ public class GridView : FrameworkElement
 
     private void RenderSplitDividerHandles(DrawingContext dc, SplitDividerLayout layout)
     {
-        var brush = new SolidColorBrush(Color.FromRgb(112, 112, 112));
+        var brush = MakeBrush(112, 112, 112);
         var pen = new Pen(brush, 1);
+        pen.Freeze();
 
         if (layout.HorizontalY is { } horizontalY)
         {
@@ -1716,8 +1717,9 @@ public class GridView : FrameworkElement
             var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
             var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
             DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);
-            var fillBrush = new SolidColorBrush(Color.FromArgb(242, colors.Fill.R, colors.Fill.G, colors.Fill.B));
-            var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(colors.Outline.R, colors.Outline.G, colors.Outline.B)), 1);
+            var fillBrush = MakeBrushAlpha(242, colors.Fill.R, colors.Fill.G, colors.Fill.B);
+            var borderPen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1);
+            borderPen.Freeze();
             dc.DrawRectangle(fillBrush, borderPen, rect);
 
             var text = new FormattedText(
@@ -1759,8 +1761,9 @@ public class GridView : FrameworkElement
             var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
             var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
             DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);
-            var pen = new Pen(new SolidColorBrush(Color.FromRgb(colors.Outline.R, colors.Outline.G, colors.Outline.B)), 1.5);
-            var fill = new SolidColorBrush(Color.FromArgb(32, colors.Fill.R, colors.Fill.G, colors.Fill.B));
+            var pen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1.5);
+            pen.Freeze();
+            var fill = MakeBrushAlpha(32, colors.Fill.R, colors.Fill.G, colors.Fill.B);
             switch (shape.Kind)
             {
                 case DrawingShapeKind.Rectangle:
@@ -1786,7 +1789,7 @@ public class GridView : FrameworkElement
         var shadowRect = rect;
         shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
         var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
-        dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(alpha, 0, 0, 0)), null, shadowRect);
+        dc.DrawRectangle(MakeBrushAlpha(alpha, 0, 0, 0), null, shadowRect);
     }
 
     private static void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookTheme theme)
@@ -1798,8 +1801,9 @@ public class GridView : FrameworkElement
         var shadowRect = rect;
         shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
         var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
-        var shadowBrush = new SolidColorBrush(Color.FromArgb(alpha, 0, 0, 0));
+        var shadowBrush = MakeBrushAlpha(alpha, 0, 0, 0);
         var shadowPen = new Pen(shadowBrush, 2);
+        shadowPen.Freeze();
 
         switch (kind)
         {
