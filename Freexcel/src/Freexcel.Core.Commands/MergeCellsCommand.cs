@@ -41,6 +41,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         }
 
         sheet.MergedRegions.Add(_range);
+        sheet.InvalidateMergeIndex();
         return new CommandOutcome(true);
     }
 
@@ -50,6 +51,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         sheet.MergedRegions.Remove(_range);
+        sheet.InvalidateMergeIndex();
 
         foreach (var (addr, oldCell) in _snapshot)
         {
@@ -87,6 +89,7 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
             return protectedOutcome;
 
         _removed = sheet.MergedRegions.Remove(_range);
+        sheet.InvalidateMergeIndex();
         return new CommandOutcome(true);
     }
 
@@ -98,6 +101,7 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (!sheet.MergedRegions.Contains(_range))
             sheet.MergedRegions.Add(_range);
+        sheet.InvalidateMergeIndex();
         _removed = false;
     }
 }

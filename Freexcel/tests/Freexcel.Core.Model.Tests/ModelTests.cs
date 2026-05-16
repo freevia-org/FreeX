@@ -145,6 +145,24 @@ public class SheetTests
         var sheet = new Sheet(SheetId.New(), "Test");
         sheet.GetValue(1, 1).Should().BeOfType<BlankValue>();
     }
+
+    [Fact]
+    public void GetMergeRegion_FindsMergeInLargeList()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        for (uint r = 1; r <= 500; r++)
+        {
+            var start = new CellAddress(sheet.Id, r * 2, 1);
+            var end   = new CellAddress(sheet.Id, r * 2, 2);
+            sheet.MergedRegions.Add(new GridRange(start, end));
+            sheet.InvalidateMergeIndex();
+        }
+        var target = new CellAddress(sheet.Id, 500, 1);
+        var found  = sheet.GetMergeRegion(target);
+        found.Should().NotBeNull("cell at row 500 col 1 is inside a merge region");
+        found!.Value.Start.Row.Should().Be(500);
+    }
 }
 
 public class CellAddressBoundsTests

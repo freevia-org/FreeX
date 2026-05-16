@@ -10,6 +10,7 @@ public sealed class Sheet
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
+    private Dictionary<(uint Row, uint Col), GridRange>? _mergeIndex;
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -232,12 +233,24 @@ public sealed class Sheet
     /// <summary>Ranges that remain editable while the sheet is protected.</summary>
     public List<GridRange> AllowEditRanges { get; } = [];
 
+    /// <summary>Invalidates the lazy merge-region index. Must be called after any mutation to MergedRegions.</summary>
+    public void InvalidateMergeIndex() => _mergeIndex = null;
+
+    private void EnsureMergeIndex()
+    {
+        if (_mergeIndex is not null) return;
+        _mergeIndex = new Dictionary<(uint, uint), GridRange>(MergedRegions.Count * 4);
+        foreach (var region in MergedRegions)
+            for (var r = region.Start.Row; r <= region.End.Row; r++)
+                for (var c = region.Start.Col; c <= region.End.Col; c++)
+                    _mergeIndex[(r, c)] = region;
+    }
+
     /// <summary>Returns the merged region that contains <paramref name="addr"/>, or null if not merged.</summary>
     public GridRange? GetMergeRegion(CellAddress addr)
     {
-        foreach (var r in MergedRegions)
-            if (r.Contains(addr)) return r;
-        return null;
+        EnsureMergeIndex();
+        return _mergeIndex!.TryGetValue((addr.Row, addr.Col), out var r) ? r : null;
     }
 
     /// <summary>True if <paramref name="addr"/> is inside any merged region.</summary>

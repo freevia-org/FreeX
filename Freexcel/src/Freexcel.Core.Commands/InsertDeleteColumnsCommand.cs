@@ -82,6 +82,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
                     new CellAddress(m.End.Sheet, m.End.Row, m.End.Col + _count));
             }
         }
+        sheet.InvalidateMergeIndex();
 
         _formulaSnapshot.Clear();
         InsertRowsCommand.RewriteAllFormulas(
@@ -111,6 +112,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         {
             sheet.MergedRegions.Clear();
             sheet.MergedRegions.AddRange(_mergeSnapshot);
+            sheet.InvalidateMergeIndex();
         }
 
         InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
@@ -207,6 +209,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
                     new CellAddress(m.End.Sheet,   m.End.Row,   m.End.Col   - _count));
             }
         }
+        sheet.InvalidateMergeIndex();
 
         _formulaSnapshot.Clear();
         InsertRowsCommand.RewriteAllFormulas(
@@ -235,6 +238,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         {
             sheet.MergedRegions.Clear();
             sheet.MergedRegions.AddRange(_mergeSnapshot);
+            sheet.InvalidateMergeIndex();
         }
 
         InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
