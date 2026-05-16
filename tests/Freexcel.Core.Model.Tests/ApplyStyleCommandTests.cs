@@ -85,7 +85,7 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
-    public void Apply_CreatesNewCellIfMissing()
+    public void Apply_EmptyCellGetsStyleOnly_NotMaterialised()
     {
         var (wb, sheet, ctx) = Setup();
         var addr = new CellAddress(sheet.Id, 5, 5);
@@ -94,13 +94,16 @@ public class ApplyStyleCommandTests
         var cmd = new ApplyStyleCommand(sheet.Id, range, new StyleDiff(Bold: true));
         cmd.Apply(ctx);
 
-        var cell = sheet.GetCell(addr);
-        cell.Should().NotBeNull();
-        wb.GetStyle(cell!.StyleId).Bold.Should().BeTrue();
+        // Must NOT materialise a blank cell in the sparse dictionary
+        sheet.GetCell(addr).Should().BeNull();
+        // Style must be retrievable via the style-only path
+        var styleOnlyId = sheet.GetStyleOnly(addr.Row, addr.Col);
+        styleOnlyId.Should().NotBeNull();
+        wb.GetStyle(styleOnlyId!.Value).Bold.Should().BeTrue();
     }
 
     [Fact]
-    public void Revert_RemovesBlankCellsCreatedOnlyForFormatting()
+    public void Revert_RemovesStyleOnlyEntryCreatedOnlyForFormatting()
     {
         var (_, sheet, ctx) = Setup();
         var addr = new CellAddress(sheet.Id, 5, 5);
@@ -113,6 +116,40 @@ public class ApplyStyleCommandTests
         cmd.Revert(ctx);
 
         sheet.GetCell(addr).Should().BeNull();
+        sheet.GetStyleOnly(addr.Row, addr.Col).Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyStyle_ToEmptyRange_DoesNotCreateBlankCells()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 100, 26)); // 2600 empty cells
+
+        var cmd = new ApplyStyleCommand(sheet.Id, range,
+            new StyleDiff(FillColor: new CellColor(255, 0, 0)));
+        cmd.Apply(ctx);
+
+        sheet.CellCount.Should().Be(0,
+            "styling empty cells must not materialise blank entries in the sparse cell dictionary");
+    }
+
+    [Fact]
+    public void ApplyStyle_ToEmptyRange_ThenUndo_LeavesNoTrace()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var range = new GridRange(addr, addr);
+
+        var cmd = new ApplyStyleCommand(sheet.Id, range,
+            new StyleDiff(FillColor: new CellColor(255, 0, 0)));
+        cmd.Apply(ctx);
+        cmd.Revert(ctx);
+
+        sheet.CellCount.Should().Be(0);
+        sheet.GetStyleOnly(addr.Row, addr.Col).Should().BeNull(
+            "undo must remove the style-only entry");
     }
 
     [Fact]

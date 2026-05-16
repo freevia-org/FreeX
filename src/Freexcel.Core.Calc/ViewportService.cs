@@ -49,6 +49,28 @@ public sealed class ViewportService : IViewportService
                         style
                     ));
                 }
+                else
+                {
+                    var styleOnlyId = sheet.GetStyleOnly(rowMetric.Row, colMetric.Col);
+                    if (styleOnlyId.HasValue)
+                    {
+                        var style = workbook.GetStyle(styleOnlyId.Value);
+                        var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
+                        var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook);
+                        if (cfStyle != null)
+                            style = MergeStyles(style, cfStyle);
+
+                        cells.Add(new DisplayCell(
+                            rowMetric.Row, colMetric.Col,
+                            BlankValue.Instance,
+                            "",
+                            null,
+                            styleOnlyId.Value,
+                            null,
+                            style
+                        ));
+                    }
+                }
             }
         }
 
@@ -221,8 +243,30 @@ public sealed class ViewportService : IViewportService
 
         var cell = sheet.GetCell(row, col);
         if (cell is null)
-            return;
+        {
+            var styleOnlyId = sheet.GetStyleOnly(row, col);
+            if (!styleOnlyId.HasValue)
+                return;
 
+            var style = workbook.GetStyle(styleOnlyId.Value);
+            var addr = new CellAddress(sheetId, row, col);
+            var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook);
+            if (cfStyle != null)
+                style = MergeStyles(style, cfStyle);
+
+            cells.Add(new DisplayCell(
+                row,
+                col,
+                BlankValue.Instance,
+                "",
+                null,
+                styleOnlyId.Value,
+                null,
+                style));
+            return;
+        }
+
+        {
         var style = workbook.GetStyle(cell.StyleId);
         var addr = new CellAddress(sheetId, row, col);
         var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook);
@@ -238,6 +282,7 @@ public sealed class ViewportService : IViewportService
             cell.StyleId,
             null,
             style));
+        }
     }
 
     // ── Conditional format evaluation ─────────────────────────────────────────
