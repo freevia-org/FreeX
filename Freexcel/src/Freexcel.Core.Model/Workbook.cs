@@ -8,6 +8,7 @@ public sealed class Workbook
 {
     private static readonly char[] InvalidSheetNameChars = [':', '\\', '/', '?', '*', '[', ']'];
     private readonly List<Sheet> _sheets = [];
+    private readonly Dictionary<SheetId, Sheet> _sheetById = [];
     private readonly List<CellStyle> _styles = [CellStyle.Default];
     private readonly Dictionary<CellStyle, int> _styleIndex = new() { [CellStyle.Default] = 0 };
 
@@ -80,6 +81,7 @@ public sealed class Workbook
         EnsureCanUseSheetName(name);
         var sheet = new Sheet(SheetId.New(), name);
         _sheets.Add(sheet);
+        _sheetById[sheet.Id] = sheet;
         return sheet;
     }
 
@@ -89,6 +91,7 @@ public sealed class Workbook
         EnsureCanUseSheetName(name);
         var sheet = new Sheet(SheetId.New(), name);
         _sheets.Insert(index, sheet);
+        _sheetById[sheet.Id] = sheet;
         return sheet;
     }
 
@@ -97,6 +100,7 @@ public sealed class Workbook
     {
         EnsureCanUseSheetName(sheet.Name, sheet.Id);
         _sheets.Insert(index, sheet);
+        _sheetById[sheet.Id] = sheet;
     }
 
     /// <summary>Return an Excel-compatible validation error for a sheet name, or null when valid.</summary>
@@ -170,13 +174,15 @@ public sealed class Workbook
         var idx = _sheets.FindIndex(s => s.Id == sheetId);
         if (idx < 0) return false;
         _sheets.RemoveAt(idx);
+        _sheetById.Remove(sheetId);
         return true;
     }
 
     /// <summary>Get a sheet by ID, or null if not found.</summary>
     public Sheet? GetSheet(SheetId sheetId)
     {
-        return _sheets.Find(s => s.Id == sheetId);
+        _sheetById.TryGetValue(sheetId, out var sheet);
+        return sheet;
     }
 
     /// <summary>Get a sheet by name (case-insensitive), or null if not found.</summary>
