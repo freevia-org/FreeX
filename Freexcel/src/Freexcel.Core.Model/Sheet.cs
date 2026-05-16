@@ -371,7 +371,10 @@ public sealed class Sheet
             for (int c = 0; c < cols; c++)
             {
                 if (r == 0 && c == 0) continue;
-                var key = (anchor.Row + (uint)r, anchor.Col + (uint)c);
+                long targetRow = (long)anchor.Row + r;
+                long targetCol = (long)anchor.Col + c;
+                if (targetRow > CellAddress.MaxRow || targetCol > CellAddress.MaxCol) return true;
+                var key = ((uint)targetRow, (uint)targetCol);
                 if (_cells.ContainsKey(key)) return true;
                 if (_spillValues.ContainsKey(key)) return true;
             }
