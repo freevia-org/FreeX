@@ -25,10 +25,13 @@ public sealed class GroupedApplyStyleCommandTests
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
-        wb.GetStyle(sheet1.GetCell(new CellAddress(sheet1.Id, 1, 1))!.StyleId).Bold.Should().BeTrue();
-        wb.GetStyle(sheet1.GetCell(new CellAddress(sheet1.Id, 1, 2))!.StyleId).Bold.Should().BeTrue();
-        wb.GetStyle(sheet2.GetCell(new CellAddress(sheet2.Id, 1, 1))!.StyleId).Bold.Should().BeTrue();
-        wb.GetStyle(sheet2.GetCell(new CellAddress(sheet2.Id, 1, 2))!.StyleId).Bold.Should().BeTrue();
+        // Empty cells use the style-only path — no blank Cell is materialised
+        wb.GetStyle(sheet1.GetStyleOnly(1, 1)!.Value).Bold.Should().BeTrue();
+        wb.GetStyle(sheet1.GetStyleOnly(1, 2)!.Value).Bold.Should().BeTrue();
+        wb.GetStyle(sheet2.GetStyleOnly(1, 1)!.Value).Bold.Should().BeTrue();
+        wb.GetStyle(sheet2.GetStyleOnly(1, 2)!.Value).Bold.Should().BeTrue();
+        sheet1.CellCount.Should().Be(0);
+        sheet2.CellCount.Should().Be(0);
 
         command.Revert(ctx);
 
@@ -36,6 +39,10 @@ public sealed class GroupedApplyStyleCommandTests
         sheet1.GetCell(new CellAddress(sheet1.Id, 1, 2)).Should().BeNull();
         sheet2.GetCell(new CellAddress(sheet2.Id, 1, 1)).Should().BeNull();
         sheet2.GetCell(new CellAddress(sheet2.Id, 1, 2)).Should().BeNull();
+        sheet1.GetStyleOnly(1, 1).Should().BeNull();
+        sheet1.GetStyleOnly(1, 2).Should().BeNull();
+        sheet2.GetStyleOnly(1, 1).Should().BeNull();
+        sheet2.GetStyleOnly(1, 2).Should().BeNull();
     }
 
     [Fact]

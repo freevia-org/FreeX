@@ -10,7 +10,7 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly GridRange _sourceRange;
     private readonly StyleDiff _diff;
-    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Apply Style to Grouped Sheets";
 
@@ -44,17 +44,24 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
             {
                 var address = new CellAddress(sheetId, sourceAddress.Row, sourceAddress.Col);
                 var cell = sheet.GetCell(address);
-                _snapshot.Add((sheetId, address, cell?.Clone()));
 
                 if (cell is null)
                 {
-                    cell = Cell.FromValue(BlankValue.Instance);
-                    sheet.SetCell(address, cell);
-                }
+                    _snapshot.Add((sheetId, address, null, sheet.GetStyleOnly(address.Row, address.Col)));
 
-                var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
-                var newStyle = _diff.ApplyTo(baseStyle);
-                cell.StyleId = ctx.Workbook.RegisterStyle(newStyle);
+                    var baseStyle  = ctx.Workbook.GetStyle(StyleId.Default);
+                    var newStyle   = _diff.ApplyTo(baseStyle);
+                    var newStyleId = ctx.Workbook.RegisterStyle(newStyle);
+                    sheet.SetStyleOnly(address.Row, address.Col, newStyleId);
+                }
+                else
+                {
+                    _snapshot.Add((sheetId, address, cell.Clone(), null));
+
+                    var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
+                    var newStyle  = _diff.ApplyTo(baseStyle);
+                    cell.StyleId  = ctx.Workbook.RegisterStyle(newStyle);
+                }
             }
         }
 
@@ -66,13 +73,20 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
         if (_snapshot is null)
             return;
 
-        foreach (var (sheetId, address, oldCell) in _snapshot)
+        foreach (var (sheetId, address, oldCell, oldStyleOnly) in _snapshot)
         {
             var sheet = ctx.GetSheet(sheetId);
             if (oldCell is null)
-                sheet.ClearCell(address);
+            {
+                if (oldStyleOnly.HasValue)
+                    sheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
+                else
+                    sheet.ClearStyleOnly(address.Row, address.Col);
+            }
             else
+            {
                 sheet.SetCell(address, oldCell.Clone());
+            }
         }
     }
 }
