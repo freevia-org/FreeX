@@ -2593,8 +2593,8 @@ public static class BuiltInFunctions
             var rowIndices = Enumerable.Range(0, arr.RowCount).ToList();
             rowIndices.Sort((a, b) =>
             {
-                var va = sortIdx < arr.ColCount ? arr.Cells[a, sortIdx] : new BlankValue();
-                var vb = sortIdx < arr.ColCount ? arr.Cells[b, sortIdx] : new BlankValue();
+                var va = sortIdx < arr.ColCount ? arr.Cells[a, sortIdx] : BlankValue.Instance;
+                var vb = sortIdx < arr.ColCount ? arr.Cells[b, sortIdx] : BlankValue.Instance;
                 return sortOrder * CompareScalar(va, vb);
             });
             var result = new ScalarValue[arr.RowCount, arr.ColCount];
@@ -2608,8 +2608,8 @@ public static class BuiltInFunctions
             var colIndices = Enumerable.Range(0, arr.ColCount).ToList();
             colIndices.Sort((a, b) =>
             {
-                var va = sortIdx < arr.RowCount ? arr.Cells[sortIdx, a] : new BlankValue();
-                var vb = sortIdx < arr.RowCount ? arr.Cells[sortIdx, b] : new BlankValue();
+                var va = sortIdx < arr.RowCount ? arr.Cells[sortIdx, a] : BlankValue.Instance;
+                var vb = sortIdx < arr.RowCount ? arr.Cells[sortIdx, b] : BlankValue.Instance;
                 return sortOrder * CompareScalar(va, vb);
             });
             var result = new ScalarValue[arr.RowCount, arr.ColCount];

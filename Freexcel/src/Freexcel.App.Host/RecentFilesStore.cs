@@ -34,7 +34,10 @@ public sealed class RecentFilesStore
                 store.Entries = JsonSerializer.Deserialize<List<RecentFileEntry>>(json) ?? [];
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to load: {ex.Message}");
+        }
         return store;
     }
 
@@ -85,6 +88,9 @@ public sealed class RecentFilesStore
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(StorePath)!);
             File.WriteAllText(StorePath, JsonSerializer.Serialize(Entries));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to save: {ex.Message}");
+        }
     }
 }

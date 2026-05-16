@@ -10,6 +10,8 @@ using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
 
 namespace Freexcel.App.UI;
 
+public readonly record struct DrawingObjectColors(CellColor Fill, CellColor Outline);
+
 /// <summary>
 /// A high-performance, virtualized spreadsheet grid control.
 /// Renders only the visible portion of the workbook using low-level DrawingContext.
@@ -53,27 +55,27 @@ public class GridView : FrameworkElement
     private const double PageMarginRulerHandleThickness = 8;
 
     private static readonly Typeface DefaultTypeface       = new("Calibri");
-    private static readonly Brush    GridLineBrush         = new SolidColorBrush(Color.FromRgb(220, 220, 220));
+    private static readonly Brush    GridLineBrush         = MakeBrush(220, 220, 220);
     private static readonly Brush    TextBrush             = Brushes.Black;
-    private static readonly Brush    HeaderBackgroundBrush = new SolidColorBrush(Color.FromRgb(242, 242, 242));
-    private static readonly Brush    HeaderHighlightBrush  = new SolidColorBrush(Color.FromRgb(218, 232, 218));
+    private static readonly Brush    HeaderBackgroundBrush = MakeBrush(242, 242, 242);
+    private static readonly Brush    HeaderHighlightBrush  = MakeBrush(218, 232, 218);
     private static readonly Pen      GridPen               = new(GridLineBrush, 1);
-    private static readonly Brush    SelectionBrush        = new SolidColorBrush(Color.FromArgb(32, 33, 115, 70));
-    private static readonly Pen      SelectionPen          = new(new SolidColorBrush(Color.FromRgb(33, 115, 70)), 2);
+    private static readonly Brush    SelectionBrush        = MakeBrushAlpha(32, 33, 115, 70);
+    private static readonly Pen      SelectionPen          = new(MakeBrush(33, 115, 70), 2);
     private static readonly Pen      ResizeLinePen         = MakeResizeLinePen();
     private static readonly Pen      FreezePen             = MakeFreezePen();
-    private static readonly Brush    PageBreakPreviewBrush = new SolidColorBrush(Color.FromArgb(28, 0, 103, 192));
+    private static readonly Brush    PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
     private static readonly Pen      PageBreakPen          = MakePageBreakPen();
     private static readonly Pen      PageLayoutPen         = MakePageLayoutPen();
     private static readonly Pen      PageMarginGuidePen    = MakePageMarginGuidePen();
-    private static readonly Pen      PageMarginRulerHandlePen = new(new SolidColorBrush(Color.FromRgb(75, 75, 75)), 1);
-    private static readonly Brush    PageMarginRulerHandleBrush = new SolidColorBrush(Color.FromRgb(238, 238, 238));
+    private static readonly Pen      PageMarginRulerHandlePen = new(MakeBrush(75, 75, 75), 1);
+    private static readonly Brush    PageMarginRulerHandleBrush = MakeBrush(238, 238, 238);
     private static readonly Pen      SplitPanePen          = MakeSplitPanePen();
-    private static readonly Brush    SplitScrollbarTrackBrush = new SolidColorBrush(Color.FromRgb(244, 244, 244));
-    private static readonly Brush    SplitScrollbarThumbBrush = new SolidColorBrush(Color.FromRgb(188, 188, 188));
-    private static readonly Pen      SplitScrollbarPen        = new(new SolidColorBrush(Color.FromRgb(196, 196, 196)), 1);
+    private static readonly Brush    SplitScrollbarTrackBrush = MakeBrush(244, 244, 244);
+    private static readonly Brush    SplitScrollbarThumbBrush = MakeBrush(188, 188, 188);
+    private static readonly Pen      SplitScrollbarPen        = new(MakeBrush(196, 196, 196), 1);
+    private static readonly Brush    FormulaTraceArrowBrush   = MakeBrush(0, 102, 204);
     private static readonly Pen      FormulaTraceArrowPen     = MakeFormulaTraceArrowPen();
-    private static readonly Brush    FormulaTraceArrowBrush   = new SolidColorBrush(Color.FromRgb(0, 102, 204));
 
     private static Pen MakeResizeLinePen()
     {
@@ -128,6 +130,20 @@ public class GridView : FrameworkElement
         var pen = new Pen(FormulaTraceArrowBrush, 1.5);
         pen.Freeze();
         return pen;
+    }
+
+    private static SolidColorBrush MakeBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static SolidColorBrush MakeBrushAlpha(byte a, byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(a, r, g, b));
+        brush.Freeze();
+        return brush;
     }
 
     // â”€â”€ Dependency Properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -202,6 +218,15 @@ public class GridView : FrameworkElement
     {
         get => (IReadOnlyList<DrawingShapeModel>?)GetValue(DrawingShapesProperty);
         set => SetValue(DrawingShapesProperty, value);
+    }
+
+    public static readonly DependencyProperty WorkbookThemeProperty =
+        DependencyProperty.Register(nameof(WorkbookTheme), typeof(WorkbookTheme), typeof(GridView),
+            new FrameworkPropertyMetadata(WorkbookTheme.Office, FrameworkPropertyMetadataOptions.AffectsRender));
+    public WorkbookTheme WorkbookTheme
+    {
+        get => (WorkbookTheme)GetValue(WorkbookThemeProperty);
+        set => SetValue(WorkbookThemeProperty, value);
     }
 
     public static readonly DependencyProperty PicturesProperty =
@@ -1664,7 +1689,7 @@ public class GridView : FrameworkElement
         if (Charts == null || Viewport == null) return;
         foreach (var chart in Charts)
         {
-            var img = ChartRenderer.Render(chart, Viewport);
+            var img = ChartRenderer.Render(chart, Viewport, WorkbookTheme);
             if (img == null) continue;
             var rect = new Rect(
                 chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight,
@@ -1689,11 +1714,10 @@ public class GridView : FrameworkElement
                 Math.Max(24, textBox.Width),
                 Math.Max(18, textBox.Height));
             var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
-            var fillBrush = textBox.FillColor is { } fillColor
-                ? new SolidColorBrush(Color.FromArgb(242, fillColor.R, fillColor.G, fillColor.B))
-                : new SolidColorBrush(Color.FromArgb(242, 255, 255, 255));
-            var borderColor = textBox.OutlineColor ?? new CellColor(89, 89, 89);
-            var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(borderColor.R, borderColor.G, borderColor.B)), 1);
+            var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
+            DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);
+            var fillBrush = new SolidColorBrush(Color.FromArgb(242, colors.Fill.R, colors.Fill.G, colors.Fill.B));
+            var borderPen = new Pen(new SolidColorBrush(Color.FromRgb(colors.Outline.R, colors.Outline.G, colors.Outline.B)), 1);
             dc.DrawRectangle(fillBrush, borderPen, rect);
 
             var text = new FormattedText(
@@ -1733,10 +1757,10 @@ public class GridView : FrameworkElement
                 Math.Max(8, shape.Height));
 
             var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
-            var outlineColor = shape.OutlineColor ?? new CellColor(68, 68, 68);
-            var fillColor = shape.FillColor ?? new CellColor(31, 119, 180);
-            var pen = new Pen(new SolidColorBrush(Color.FromRgb(outlineColor.R, outlineColor.G, outlineColor.B)), 1.5);
-            var fill = new SolidColorBrush(Color.FromArgb(32, fillColor.R, fillColor.G, fillColor.B));
+            var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
+            DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(colors.Outline.R, colors.Outline.G, colors.Outline.B)), 1.5);
+            var fill = new SolidColorBrush(Color.FromArgb(32, colors.Fill.R, colors.Fill.G, colors.Fill.B));
             switch (shape.Kind)
             {
                 case DrawingShapeKind.Rectangle:
@@ -1752,6 +1776,54 @@ public class GridView : FrameworkElement
             if (rotationPushed) dc.Pop();
         }
     }
+
+    private static void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookTheme theme)
+    {
+        var effect = WorkbookThemeEffectStyle.FromTheme(theme);
+        if (!effect.HasShadow)
+            return;
+
+        var shadowRect = rect;
+        shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
+        var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
+        dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(alpha, 0, 0, 0)), null, shadowRect);
+    }
+
+    private static void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookTheme theme)
+    {
+        var effect = WorkbookThemeEffectStyle.FromTheme(theme);
+        if (!effect.HasShadow)
+            return;
+
+        var shadowRect = rect;
+        shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
+        var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
+        var shadowBrush = new SolidColorBrush(Color.FromArgb(alpha, 0, 0, 0));
+        var shadowPen = new Pen(shadowBrush, 2);
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(shadowBrush, null, shadowRect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(shadowBrush, null, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
+                break;
+        }
+    }
+
+    public static DrawingObjectColors ResolveDrawingShapeColors(DrawingShapeModel shape, WorkbookTheme theme) =>
+        new(
+            shape.GetEffectiveFillColor(theme, new CellColor(31, 119, 180)),
+            shape.GetEffectiveOutlineColor(theme, new CellColor(68, 68, 68)));
+
+    public static DrawingObjectColors ResolveTextBoxColors(TextBoxModel textBox, WorkbookTheme theme) =>
+        new(
+            textBox.GetEffectiveFillColor(theme, CellColor.White),
+            textBox.GetEffectiveOutlineColor(theme, new CellColor(89, 89, 89)));
 
     private static bool PushRotation(DrawingContext dc, double rotationDegrees, Rect rect)
     {
