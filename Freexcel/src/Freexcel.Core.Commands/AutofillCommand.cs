@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Commands;
@@ -7,7 +7,7 @@ namespace Freexcel.Core.Commands;
 /// Fills a range by repeating the last cell of <paramref name="sourceRange"/>.
 /// Formulas have relative cell references incremented by the fill offset.
 /// </summary>
-public sealed partial class AutofillCommand : IWorkbookCommand
+public sealed class AutofillCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _sourceRange;
@@ -58,7 +58,9 @@ public sealed partial class AutofillCommand : IWorkbookCommand
             }
             else if (sourceCell.HasFormula && sourceCell.FormulaText is not null)
             {
-                var shifted = ShiftFormula(sourceCell.FormulaText, rowOffset, colOffset);
+                var shifted = FormulaRewriter.Rewrite(sourceCell.FormulaText,
+                    new PasteOffsetOp(rowOffset, colOffset), sheet.Name)
+                    ?? sourceCell.FormulaText;
                 newCell = Cell.FromFormula(shifted);
             }
             else
@@ -84,35 +86,6 @@ public sealed partial class AutofillCommand : IWorkbookCommand
         }
     }
 
-    /// <summary>
-    /// Shift relative cell references in a formula by rowOffset / colOffset.
-    /// Pattern: (\$?)([A-Z]{1,3})(\$?)(\d{1,7})
-    /// Group 1 = optional $ before column  (absolute col marker)
-    /// Group 2 = column letters
-    /// Group 3 = optional $ before row     (absolute row marker)
-    /// Group 4 = row digits
-    /// </summary>
-    private static string ShiftFormula(string formula, int rowOffset, int colOffset)
-    {
-        return CellRefPattern().Replace(formula, m =>
-        {
-            bool absCol = m.Groups[1].Value == "$";
-            bool absRow = m.Groups[3].Value == "$";
-            var colLetters = m.Groups[2].Value;
-            uint rowNum = uint.Parse(m.Groups[4].Value);
-            uint colNum = CellAddress.ColumnNameToNumber(colLetters);
-
-            if (!absCol && colOffset != 0)
-                colNum = (uint)Math.Max(1, (int)colNum + colOffset);
-            if (!absRow && rowOffset != 0)
-                rowNum = (uint)Math.Max(1, (int)rowNum + rowOffset);
-
-            return m.Groups[1].Value
-                 + CellAddress.NumberToColumnName(colNum)
-                 + m.Groups[3].Value
-                 + rowNum;
-        });
-    }
 
     private ScalarSeries? TryCreateScalarSeries(Sheet sheet)
     {
@@ -155,6 +128,4 @@ public sealed partial class AutofillCommand : IWorkbookCommand
         Right
     }
 
-    [GeneratedRegex(@"(\$?)([A-Z]{1,3})(\$?)(\d{1,7})")]
-    private static partial Regex CellRefPattern();
 }

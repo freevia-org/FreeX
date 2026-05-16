@@ -521,6 +521,16 @@ public class FormulaEvaluatorTests
         cell.IsColAbsolute.Should().BeFalse();
         cell.IsRowAbsolute.Should().BeFalse();
     }
+
+    [Fact]
+    public void Parse_CellRefBeyondWorksheetRows_ReturnsRefError()
+    {
+        var tokens = new Lexer("=A1048577").Tokenize();
+        var ast = new Parser(tokens).Parse();
+
+        var error = ast.Should().BeOfType<ErrorNode>().Subject;
+        error.Error.Should().Be(ErrorValue.Ref);
+    }
 }
 
 public class CrossSheetReferenceTests
@@ -810,5 +820,25 @@ public class ShortCircuitEvaluationTests
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
         var result = _evaluator.Evaluate("=SUM()", sheet, wb);
         result.Should().Be(ErrorValue.Value);
+    }
+
+    // ── Parser row-bounds protection ──────────────────────────────────────
+
+    [Fact]
+    public void CellRef_WithRowBeyondMaxRow_ReturnsRefError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        // Row 2000000 is beyond the 1048576 limit
+        var result = _evaluator.Evaluate("=A2000000", sheet, wb);
+        result.Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void CellRef_WithRowZero_ReturnsRefError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        // "A0" is not a valid cell reference
+        var result = _evaluator.Evaluate("=A0", sheet, wb);
+        result.Should().Be(ErrorValue.Ref);
     }
 }
