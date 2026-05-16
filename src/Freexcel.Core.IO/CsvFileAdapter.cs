@@ -17,14 +17,12 @@ public sealed class CsvFileAdapter : IFileAdapter
     public Workbook Load(Stream stream)
     {
         var workbook = new Workbook("Untitled");
-        var sheet = workbook.AddSheet("Sheet1");
+        var sheet    = workbook.AddSheet("Sheet1");
 
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         uint row = 1;
-        string? line;
-        while ((line = reader.ReadLine()) != null)
+        while (TryReadRecord(reader, out var fields))
         {
-            var fields = ParseCsvLine(line);
             for (int i = 0; i < fields.Count; i++)
             {
                 var field = fields[i];
@@ -40,6 +38,51 @@ public sealed class CsvFileAdapter : IFileAdapter
         }
 
         return workbook;
+    }
+
+    private static bool TryReadRecord(TextReader reader, out List<string> fields)
+    {
+        fields = [];
+        var current   = new StringBuilder();
+        bool inQuotes = false;
+
+        int ch;
+        while ((ch = reader.Read()) != -1)
+        {
+            char c = (char)ch;
+
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (reader.Peek() == '"') { reader.Read(); current.Append('"'); } // escaped ""
+                    else inQuotes = false;
+                }
+                else
+                {
+                    current.Append(c); // may be \n — allowed inside quoted fields (RFC 4180)
+                }
+            }
+            else
+            {
+                switch (c)
+                {
+                    case '"':  inQuotes = true;  break;
+                    case ',':  fields.Add(current.ToString()); current.Clear(); break;
+                    case '\r': break; // skip CR; LF below ends the record
+                    case '\n': fields.Add(current.ToString()); return true;
+                    default:   current.Append(c); break;
+                }
+            }
+        }
+
+        // End of stream — flush the last record if any data remains
+        if (current.Length > 0 || fields.Count > 0)
+        {
+            fields.Add(current.ToString());
+            return true;
+        }
+        return false;
     }
 
     public void Save(Workbook workbook, Stream stream)
@@ -65,54 +108,6 @@ public sealed class CsvFileAdapter : IFileAdapter
     }
 
     // ── RFC 4180 helpers ──────────────────────────────────────────────────────
-
-    private static List<string> ParseCsvLine(string line)
-    {
-        var fields = new List<string>();
-        int i = 0;
-        while (i <= line.Length)
-        {
-            if (i == line.Length) { fields.Add(""); break; }
-
-            if (line[i] == '"')
-            {
-                // Quoted field
-                var sb = new StringBuilder();
-                i++; // skip opening quote
-                while (i < line.Length)
-                {
-                    if (line[i] == '"')
-                    {
-                        if (i + 1 < line.Length && line[i + 1] == '"')
-                        {
-                            sb.Append('"'); // escaped quote
-                            i += 2;
-                        }
-                        else
-                        {
-                            i++; // closing quote
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        sb.Append(line[i++]);
-                    }
-                }
-                fields.Add(sb.ToString());
-                if (i < line.Length && line[i] == ',') i++;
-            }
-            else
-            {
-                // Unquoted field
-                int start = i;
-                while (i < line.Length && line[i] != ',') i++;
-                fields.Add(line[start..i]);
-                if (i < line.Length) i++; // skip comma
-            }
-        }
-        return fields;
-    }
 
     private static string EscapeCsvField(string value)
     {
