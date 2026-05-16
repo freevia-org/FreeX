@@ -62,7 +62,7 @@ public sealed class SortCommand : IWorkbookCommand
         _snapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
         _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
         _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
-        var rows = new List<(Cell?[] Cells, string?[] Comments, bool HasRowHeight, double RowHeight, bool IsHidden)>(rowCount);
+        var rows = new List<(Cell?[] Cells, string?[] Comments, bool HasRowHeight, double RowHeight, bool IsHidden, int OriginalIndex)>(rowCount);
 
         for (int ri = 0; ri < rowCount; ri++)
         {
@@ -85,7 +85,7 @@ public sealed class SortCommand : IWorkbookCommand
                 snapRow.Add((addr, cell?.Clone()));
             }
 
-            rows.Add((rowCells, rowComments, hasRowHeight, rowHeight, isHidden));
+            rows.Add((rowCells, rowComments, hasRowHeight, rowHeight, isHidden, ri));
             _snapshot.Add(snapRow);
         }
 
@@ -104,7 +104,7 @@ public sealed class SortCommand : IWorkbookCommand
                     return ascending ? cmp : -cmp;
             }
 
-            return 0;
+            return a.OriginalIndex.CompareTo(b.OriginalIndex); // stable tiebreaker
         });
 
         // Write sorted rows back

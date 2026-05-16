@@ -42,12 +42,17 @@ public sealed class Cell
     /// <summary>Creates a cell with a formula. The value will be computed by the calc engine.</summary>
     public static Cell FromFormula(string formulaText) => new() { FormulaText = formulaText };
 
-    /// <summary>Creates a deep copy of this cell.</summary>
-    public Cell Clone() => new()
+    /// <summary>Creates a deep copy of this cell. Preserves the cached AST to avoid re-parsing.</summary>
+    public Cell Clone()
     {
-        Value = Value,
-        FormulaText = FormulaText,
-        IgnoreFormulaError = IgnoreFormulaError,
-        StyleId = StyleId
-    };
+        var copy = new Cell
+        {
+            Value = Value,
+            IgnoreFormulaError = IgnoreFormulaError,
+            StyleId = StyleId
+        };
+        copy._formulaText = _formulaText;
+        copy.CachedAst = CachedAst;
+        return copy;
+    }
 }
