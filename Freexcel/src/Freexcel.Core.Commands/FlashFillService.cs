@@ -283,7 +283,7 @@ public static class FlashFillService
     private static string ToProperCase(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
-        var textInfo = CultureInfo.CurrentCulture.TextInfo;
+        var textInfo = CultureInfo.InvariantCulture.TextInfo;
         return textInfo.ToTitleCase(s.ToLowerInvariant());
     }
 }

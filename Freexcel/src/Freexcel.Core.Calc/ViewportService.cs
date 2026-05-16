@@ -530,6 +530,7 @@ public sealed class ViewportService : IViewportService
         Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         if (!TryGetDouble(value, out double cellVal)) return null;
+        if (!double.IsFinite(cellVal)) return null;
         if (!cfCache.TryGetValue(cf, out var cache)) return null;
 
         double min = cache.Min, max = cache.Max;
@@ -593,6 +594,7 @@ public sealed class ViewportService : IViewportService
     private static bool TryGetDouble(ScalarValue value, out double result)
     {
         if (value is NumberValue nv) { result = nv.Value; return true; }
+        if (value is DateTimeValue dv) { result = dv.Value; return true; }
         result = 0;
         return false;
     }

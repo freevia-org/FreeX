@@ -21,9 +21,8 @@ public static class GoToSpecialService
         {
             if (kind == GoToSpecialKind.VisibleCellsOnly)
             {
-                if (!sheet.HiddenRows.Contains(address.Row) &&
-                    !sheet.FilterHiddenRows.Contains(address.Row) &&
-                    !sheet.HiddenCols.Contains(address.Col))
+                if (!sheet.IsRowEffectivelyHidden(address.Row) &&
+                    !sheet.IsColEffectivelyHidden(address.Col))
                 {
                     result.Add(address);
                 }

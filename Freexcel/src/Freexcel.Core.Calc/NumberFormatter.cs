@@ -197,9 +197,9 @@ public static class NumberFormatter
             try
             {
                 return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt,
-                    CultureInfo.CurrentCulture) + "%";
+                    CultureInfo.InvariantCulture) + "%";
             }
-            catch { return pctValue.ToString("0", CultureInfo.CurrentCulture) + "%"; }
+            catch { return pctValue.ToString("0", CultureInfo.InvariantCulture) + "%"; }
         }
 
         // Date / time format
@@ -208,9 +208,9 @@ public static class NumberFormatter
             try
             {
                 var dt = DateTime.FromOADate(value);
-                return dt.ToString(ToNetDateFormat(format), CultureInfo.CurrentCulture);
+                return dt.ToString(ToNetDateFormat(format), CultureInfo.InvariantCulture);
             }
-            catch { return value.ToString(CultureInfo.CurrentCulture); }
+            catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
 
         // Accounting / text literals — strip quoted strings to expose the numeric pattern
@@ -251,8 +251,8 @@ public static class NumberFormatter
 
         // Pass the cleaned format to .NET — it understands #,##0.00, 0.00, 0, # etc.
         string numStr;
-        try   { numStr = value.ToString(format, CultureInfo.CurrentCulture); }
-        catch { numStr = value.ToString(CultureInfo.CurrentCulture); }
+        try   { numStr = value.ToString(format, CultureInfo.InvariantCulture); }
+        catch { numStr = value.ToString(CultureInfo.InvariantCulture); }
 
         return prefix + numStr + suffix;
     }
@@ -267,10 +267,10 @@ public static class NumberFormatter
         {
             var dt = DateTime.FromOADate(oaDate);
             if (IsDateTimeFormat(cleanFmt))
-                return dt.ToString(ToNetDateFormat(cleanFmt), CultureInfo.CurrentCulture);
-            return dt.ToString(cleanFmt, CultureInfo.CurrentCulture);
+                return dt.ToString(ToNetDateFormat(cleanFmt), CultureInfo.InvariantCulture);
+            return dt.ToString(cleanFmt, CultureInfo.InvariantCulture);
         }
-        catch { return oaDate.ToString(CultureInfo.CurrentCulture); }
+        catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
     }
 
     // Detect date/time format: has date/time tokens and no digit-only tokens
