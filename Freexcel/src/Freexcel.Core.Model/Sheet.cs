@@ -292,6 +292,7 @@ public sealed class Sheet
         {
             _cells[(address.Row, address.Col)] = Cell.FromValue(value);
         }
+        _styleOnly.Remove((address.Row, address.Col));
     }
 
     /// <summary>
