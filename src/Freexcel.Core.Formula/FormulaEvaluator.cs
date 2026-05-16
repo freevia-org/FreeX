@@ -206,6 +206,10 @@ public sealed class FormulaEvaluator
         if (!BuiltInFunctions.Exists(node.FunctionName))
             return ErrorValue.Name;
 
+        // Short-circuit functions evaluate arguments lazily to avoid propagating errors from untaken branches.
+        if (node.FunctionName is "IF" or "IFERROR" or "IFNA")
+            return EvaluateShortCircuit(node, context);
+
         var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
 
         bool isStructured = IsStructuredRangeFunction(node.FunctionName);
@@ -278,14 +282,12 @@ public sealed class FormulaEvaluator
             }
         }
 
-        // Validate arg count AFTER range expansion for most functions,
-        // but use original count for functions like IF where ranges aren't expanded
-        if (node.Arguments.Count < minArgs || node.Arguments.Count > maxArgs)
-        {
-            // Check original arg count for non-aggregate functions
-            if (!IsAggregateFunction(node.FunctionName))
-                return ErrorValue.Value;
-        }
+        // Always enforce minimum arg count for every function, including aggregates.
+        if (node.Arguments.Count < minArgs)
+            return ErrorValue.Value;
+        // Enforce maximum only for non-aggregate functions (aggregates accept unbounded ranges).
+        if (!IsAggregateFunction(node.FunctionName) && node.Arguments.Count > maxArgs)
+            return ErrorValue.Value;
 
         return func(expandedArgs, context);
     }
@@ -309,6 +311,47 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
         return new RangeValue(cells, r0, c0);
+    }
+
+    private ScalarValue EvaluateShortCircuit(FunctionCallNode node, IEvalContext context)
+    {
+        return node.FunctionName switch
+        {
+            "IF"      => EvaluateIf(node, context),
+            "IFERROR" => EvaluateIfError(node, context),
+            "IFNA"    => EvaluateIfNa(node, context),
+            _         => ErrorValue.Value
+        };
+    }
+
+    private ScalarValue EvaluateIf(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
+        var cond = EvaluateNode(node.Arguments[0], context);
+        if (cond is ErrorValue e) return e;
+        bool taken = cond switch
+        {
+            BoolValue b   => b.Value,
+            NumberValue n => n.Value != 0,
+            _             => false
+        };
+        if (taken)  return EvaluateNode(node.Arguments[1], context);
+        if (node.Arguments.Count == 3) return EvaluateNode(node.Arguments[2], context);
+        return new BoolValue(false);
+    }
+
+    private ScalarValue EvaluateIfError(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 2) return ErrorValue.Value;
+        var value = EvaluateNode(node.Arguments[0], context);
+        return value is ErrorValue ? EvaluateNode(node.Arguments[1], context) : value;
+    }
+
+    private ScalarValue EvaluateIfNa(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 2) return ErrorValue.Value;
+        var value = EvaluateNode(node.Arguments[0], context);
+        return value == ErrorValue.NA ? EvaluateNode(node.Arguments[1], context) : value;
     }
 
     private static bool IsAggregateFunction(string name) =>
