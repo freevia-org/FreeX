@@ -21,10 +21,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         packageStream.Position = 0;
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
+        packageStream.Position = 0;
+        var workbookTheme = LoadWorkbookTheme(packageStream);
 
         packageStream.Position = 0;
         using var xlWorkbook = new XLWorkbook(packageStream);
         var workbook = new Workbook("Untitled");
+        workbook.Theme = workbookTheme;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
@@ -58,7 +61,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     cell = Cell.FromValue(MapValue(xlCell.Value));
                 }
 
-                var style = MapStyle(xlCell.Style);
+                var style = MapStyle(xlCell.Style, workbook.Theme);
                 if (!style.Equals(CellStyle.Default))
                     cell.StyleId = workbook.RegisterStyle(style);
 
@@ -139,6 +142,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     sheet.ColOutlineLevels[colNum] = level;
                 sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
                 sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
+                foreach (var chartPart in layout.ChartParts)
+                {
+                    if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
+                    {
+                        ApplyChartAnchor(chart, chartPart.Anchor, sheet);
+                        sheet.Charts.Add(chart);
+                    }
+                }
             }
 
             if (layout?.PaneState is "frozen" or "frozenSplit")
@@ -283,7 +294,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
         HashSet<uint> GroupHiddenRows,
-        HashSet<uint> GroupHiddenCols);
+        HashSet<uint> GroupHiddenCols,
+        IReadOnlyList<XlsxChartPackagePart> ChartParts);
+
+    private sealed record XlsxChartPackagePart(XDocument Xml, XlsxDrawingAnchor? Anchor);
+
+    private sealed record XlsxDrawingAnchor(
+        uint FromRowZeroBased,
+        uint FromColumnZeroBased,
+        double FromRowOffset,
+        double FromColumnOffset,
+        double? AbsoluteLeft,
+        double? AbsoluteTop,
+        uint? ToRowZeroBased,
+        uint? ToColumnZeroBased,
+        double? ToRowOffset,
+        double? ToColumnOffset,
+        double? Width,
+        double? Height);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
     {
@@ -343,6 +371,108 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return XDocument.Load(stream);
     }
 
+    private static WorkbookTheme LoadWorkbookTheme(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
+            if (themeEntry is null)
+                return WorkbookTheme.Office;
+
+            var themeXml = LoadXml(themeEntry);
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+            var theme = WorkbookTheme.Office
+                .WithName(themeXml.Root?.Attribute("name")?.Value ?? WorkbookTheme.Office.Name);
+
+            var themeElements = themeXml.Root?.Element(drawingNs + "themeElements");
+            if (themeElements is null)
+                return theme;
+
+            var fontScheme = themeElements.Element(drawingNs + "fontScheme");
+            if (fontScheme is not null)
+            {
+                theme = theme.WithFonts(
+                    ReadThemeTypeface(fontScheme.Element(drawingNs + "majorFont"), drawingNs) ?? theme.MajorFontName,
+                    ReadThemeTypeface(fontScheme.Element(drawingNs + "minorFont"), drawingNs) ?? theme.MinorFontName);
+            }
+
+            var effectsName = themeElements.Element(drawingNs + "fmtScheme")?.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(effectsName))
+                theme = theme.WithEffects(effectsName);
+
+            var colorScheme = themeElements.Element(drawingNs + "clrScheme");
+            if (colorScheme is null)
+                return theme;
+
+            foreach (var (slot, elementName) in ThemeColorElements)
+            {
+                if (ReadThemeColor(colorScheme.Element(drawingNs + elementName), drawingNs) is { } color)
+                    theme = theme.WithColor(slot, color);
+            }
+
+            return theme;
+        }
+        catch
+        {
+            return WorkbookTheme.Office;
+        }
+    }
+
+    private static readonly (WorkbookThemeColorSlot Slot, string ElementName)[] ThemeColorElements =
+    [
+        (WorkbookThemeColorSlot.Dark1, "dk1"),
+        (WorkbookThemeColorSlot.Light1, "lt1"),
+        (WorkbookThemeColorSlot.Dark2, "dk2"),
+        (WorkbookThemeColorSlot.Light2, "lt2"),
+        (WorkbookThemeColorSlot.Accent1, "accent1"),
+        (WorkbookThemeColorSlot.Accent2, "accent2"),
+        (WorkbookThemeColorSlot.Accent3, "accent3"),
+        (WorkbookThemeColorSlot.Accent4, "accent4"),
+        (WorkbookThemeColorSlot.Accent5, "accent5"),
+        (WorkbookThemeColorSlot.Accent6, "accent6"),
+        (WorkbookThemeColorSlot.Hyperlink, "hlink"),
+        (WorkbookThemeColorSlot.FollowedHyperlink, "folHlink")
+    ];
+
+    private static string? ReadThemeTypeface(XElement? fontElement, XNamespace drawingNs) =>
+        fontElement?
+            .Element(drawingNs + "latin")?
+            .Attribute("typeface")?
+            .Value;
+
+    private static CellColor? ReadThemeColor(XElement? colorElement, XNamespace drawingNs)
+    {
+        var srgb = colorElement?.Element(drawingNs + "srgbClr")?.Attribute("val")?.Value;
+        if (TryParseHexColor(srgb, out var color))
+            return color;
+
+        var systemFallback = colorElement?.Element(drawingNs + "sysClr")?.Attribute("lastClr")?.Value;
+        return TryParseHexColor(systemFallback, out color)
+            ? color
+            : null;
+    }
+
+    private static bool TryParseHexColor(string? text, out CellColor color)
+    {
+        color = default;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var normalized = text.Trim().TrimStart('#');
+        if (normalized.Length != 6 ||
+            !byte.TryParse(normalized[..2], System.Globalization.NumberStyles.HexNumber, null, out var r) ||
+            !byte.TryParse(normalized[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g) ||
+            !byte.TryParse(normalized[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return false;
+        }
+
+        color = new CellColor(r, g, b);
+        return true;
+    }
+
     private static string NormalizeWorkbookTarget(string target)
     {
         target = target.Replace('\\', '/').TrimStart('/');
@@ -385,6 +515,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
         {
             return $"../media/{targetPath["xl/media/".Length..]}";
+        }
+
+        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../drawings/{targetPath["xl/drawings/".Length..]}";
+        }
+
+        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../charts/{targetPath["xl/charts/".Length..]}";
         }
 
         return targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
@@ -557,6 +699,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .FirstOrDefault();
         var pane = sheetView?.Element(worksheetNs + "pane");
         var background = ReadWorksheetBackground(archive, worksheetPath, worksheetXml);
+        var chartParts = ReadWorksheetChartParts(archive, worksheetPath, worksheetXml);
 
         return new SheetXmlLayout(
             hiddenRows,
@@ -575,7 +718,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             rowOutlineLevels,
             colOutlineLevels,
             groupHiddenRows,
-            groupHiddenCols);
+            groupHiddenCols,
+            chartParts);
     }
 
     private static uint? ParsePaneSplit(string? value)
@@ -643,6 +787,255 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ms.ToArray(),
             GetContentTypeFromPath(imagePath),
             Path.GetFileName(imagePath));
+    }
+
+    private static IReadOnlyList<XlsxChartPackagePart> ReadWorksheetChartParts(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml)
+    {
+        var charts = new List<XlsxChartPackagePart>();
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+        var drawingRelId = worksheetXml.Root?
+            .Element(worksheetNs + "drawing")?
+            .Attribute(relNs + "id")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(drawingRelId))
+            return charts;
+
+        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        if (worksheetRelsEntry is null)
+            return charts;
+
+        var worksheetRelsXml = LoadXml(worksheetRelsEntry);
+        var drawingTarget = worksheetRelsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, drawingRelId, StringComparison.Ordinal))?
+            .Attribute("Target")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(drawingTarget))
+            return charts;
+
+        var drawingPath = ResolveRelationshipTarget(worksheetPath, drawingTarget);
+        var drawingEntry = archive.GetEntry(drawingPath);
+        if (drawingEntry is null)
+            return charts;
+
+        var drawingXml = LoadXml(drawingEntry);
+        var chartElements = drawingXml
+            .Descendants(chartNs + "chart")
+            .ToList();
+        if (chartElements.Count == 0)
+            return charts;
+
+        var drawingRelsEntry = archive.GetEntry(GetWorksheetRelsPath(drawingPath));
+        if (drawingRelsEntry is null)
+            return charts;
+
+        var drawingRelsXml = LoadXml(drawingRelsEntry);
+        foreach (var chartElement in chartElements)
+        {
+            var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(chartRelId))
+                continue;
+
+            var chartTarget = drawingRelsXml.Root?
+                .Elements(packageRelNs + "Relationship")
+                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, chartRelId, StringComparison.Ordinal))?
+                .Attribute("Target")?
+                .Value;
+            if (string.IsNullOrWhiteSpace(chartTarget))
+                continue;
+
+            var chartPath = ResolveRelationshipTarget(drawingPath, chartTarget);
+            var chartEntry = archive.GetEntry(chartPath);
+            if (chartEntry is null)
+                continue;
+
+            var anchor = chartElement
+                .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
+                .Select(TryReadTwoCellAnchor)
+                .FirstOrDefault(candidate => candidate is not null)
+                ?? chartElement
+                    .Ancestors(spreadsheetDrawingNs + "oneCellAnchor")
+                    .Select(TryReadOneCellAnchor)
+                    .FirstOrDefault(candidate => candidate is not null)
+                ?? chartElement
+                    .Ancestors(spreadsheetDrawingNs + "absoluteAnchor")
+                    .Select(TryReadAbsoluteAnchor)
+                    .FirstOrDefault(candidate => candidate is not null);
+
+            charts.Add(new XlsxChartPackagePart(LoadXml(chartEntry), anchor));
+        }
+
+        return charts;
+    }
+
+    private static XlsxDrawingAnchor? TryReadTwoCellAnchor(XElement anchor)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var from = anchor.Element(spreadsheetDrawingNs + "from");
+        var to = anchor.Element(spreadsheetDrawingNs + "to");
+        if (from is null || to is null)
+            return null;
+
+        if (!TryReadAnchorCoordinate(from, spreadsheetDrawingNs, out var fromRow, out var fromCol, out var fromRowOffset, out var fromColOffset) ||
+            !TryReadAnchorCoordinate(to, spreadsheetDrawingNs, out var toRow, out var toCol, out var toRowOffset, out var toColOffset))
+        {
+            return null;
+        }
+
+        if (toRow <= fromRow || toCol <= fromCol)
+            return null;
+
+        return new XlsxDrawingAnchor(
+            fromRow,
+            fromCol,
+            fromRowOffset,
+            fromColOffset,
+            AbsoluteLeft: null,
+            AbsoluteTop: null,
+            toRow,
+            toCol,
+            toRowOffset,
+            toColOffset,
+            Width: null,
+            Height: null);
+    }
+
+    private static XlsxDrawingAnchor? TryReadOneCellAnchor(XElement anchor)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var from = anchor.Element(spreadsheetDrawingNs + "from");
+        var ext = anchor.Element(spreadsheetDrawingNs + "ext");
+        if (from is null || ext is null)
+            return null;
+
+        if (!TryReadAnchorCoordinate(from, spreadsheetDrawingNs, out var fromRow, out var fromCol, out var fromRowOffset, out var fromColOffset))
+            return null;
+
+        var width = EmusToPixels(ext.Attribute("cx")?.Value);
+        var height = EmusToPixels(ext.Attribute("cy")?.Value);
+        if (width <= 0 || height <= 0)
+            return null;
+
+        return new XlsxDrawingAnchor(
+            fromRow,
+            fromCol,
+            fromRowOffset,
+            fromColOffset,
+            AbsoluteLeft: null,
+            AbsoluteTop: null,
+            ToRowZeroBased: null,
+            ToColumnZeroBased: null,
+            ToRowOffset: null,
+            ToColumnOffset: null,
+            width,
+            height);
+    }
+
+    private static XlsxDrawingAnchor? TryReadAbsoluteAnchor(XElement anchor)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var pos = anchor.Element(spreadsheetDrawingNs + "pos");
+        var ext = anchor.Element(spreadsheetDrawingNs + "ext");
+        if (pos is null || ext is null)
+            return null;
+
+        var left = EmusToPixels(pos.Attribute("x")?.Value);
+        var top = EmusToPixels(pos.Attribute("y")?.Value);
+        var width = EmusToPixels(ext.Attribute("cx")?.Value);
+        var height = EmusToPixels(ext.Attribute("cy")?.Value);
+        if (width <= 0 || height <= 0)
+            return null;
+
+        return new XlsxDrawingAnchor(
+            FromRowZeroBased: 0,
+            FromColumnZeroBased: 0,
+            FromRowOffset: 0,
+            FromColumnOffset: 0,
+            left,
+            top,
+            ToRowZeroBased: null,
+            ToColumnZeroBased: null,
+            ToRowOffset: null,
+            ToColumnOffset: null,
+            width,
+            height);
+    }
+
+    private static bool TryReadAnchorCoordinate(
+        XElement marker,
+        XNamespace spreadsheetDrawingNs,
+        out uint rowZeroBased,
+        out uint columnZeroBased,
+        out double rowOffset,
+        out double columnOffset)
+    {
+        rowZeroBased = 0;
+        columnZeroBased = 0;
+        rowOffset = EmusToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
+        columnOffset = EmusToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
+        return uint.TryParse(marker.Element(spreadsheetDrawingNs + "row")?.Value, out rowZeroBased) &&
+               uint.TryParse(marker.Element(spreadsheetDrawingNs + "col")?.Value, out columnZeroBased);
+    }
+
+    private static double EmusToPixels(string? value) =>
+        double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var emus)
+            ? emus / 9525.0
+            : 0;
+
+    private static void ApplyChartAnchor(ChartModel chart, XlsxDrawingAnchor? anchor, Sheet sheet)
+    {
+        if (anchor is null)
+            return;
+
+        chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, anchor.FromColumnZeroBased) + anchor.FromColumnOffset);
+        chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, anchor.FromRowZeroBased) + anchor.FromRowOffset);
+
+        var width = anchor.Width ?? (
+            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
+            + anchor.ToColumnOffset!.Value
+            - anchor.FromColumnOffset);
+        var height = anchor.Height ?? (
+            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
+            + anchor.ToRowOffset!.Value
+            - anchor.FromRowOffset);
+        if (width > 0)
+            chart.Width = width;
+        if (height > 0)
+            chart.Height = height;
+    }
+
+    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
+    {
+        double width = 0;
+        for (var offset = 0u; offset < count; offset++)
+        {
+            var col = firstColumn + offset;
+            if (!sheet.IsColEffectivelyHidden(col))
+                width += sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+        }
+
+        return width;
+    }
+
+    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
+    {
+        double height = 0;
+        for (var offset = 0u; offset < count; offset++)
+        {
+            var row = firstRow + offset;
+            if (!sheet.IsRowEffectivelyHidden(row))
+                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+        }
+
+        return height;
     }
 
     private static void LoadNamedRanges(XLWorkbook xlWorkbook, Workbook workbook)
@@ -899,7 +1292,382 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         packageStream.Position = 0;
+        SaveWorkbookTheme(packageStream, workbook.Theme);
+
+        if (workbook.Sheets.Any(sheet => sheet.Charts.Any(chart => chart.Type == ChartType.Column)))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetCharts(packageStream, workbook);
+        }
+
+        packageStream.Position = 0;
         packageStream.CopyTo(stream);
+    }
+
+    private static void SaveWorkbookTheme(Stream xlsxStream, WorkbookTheme theme)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        const string themePath = "xl/theme/theme1.xml";
+        archive.GetEntry(themePath)?.Delete();
+        var themeEntry = archive.CreateEntry(themePath);
+        using var stream = themeEntry.Open();
+        ToThemeXml(theme).Save(stream);
+    }
+
+    private static XDocument ToThemeXml(WorkbookTheme theme)
+    {
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(drawingNs + "theme",
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XAttribute("name", theme.Name),
+                new XElement(drawingNs + "themeElements",
+                    new XElement(drawingNs + "clrScheme",
+                        new XAttribute("name", $"{theme.Name} Colors"),
+                        ThemeColorElements.Select(color =>
+                            new XElement(drawingNs + color.ElementName,
+                                new XElement(drawingNs + "srgbClr",
+                                    new XAttribute("val", FormatThemeColor(theme.GetColor(color.Slot))))))),
+                    new XElement(drawingNs + "fontScheme",
+                        new XAttribute("name", $"{theme.Name} Fonts"),
+                        new XElement(drawingNs + "majorFont",
+                            new XElement(drawingNs + "latin",
+                                new XAttribute("typeface", theme.MajorFontName))),
+                        new XElement(drawingNs + "minorFont",
+                            new XElement(drawingNs + "latin",
+                                new XAttribute("typeface", theme.MinorFontName)))),
+                    new XElement(drawingNs + "fmtScheme",
+                        new XAttribute("name", theme.EffectsName)))));
+    }
+
+    private static string FormatThemeColor(CellColor color) =>
+        $"{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static void SaveWorksheetCharts(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        var relsXml = LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relTargets = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
+            .ToDictionary(
+                e => e.Attribute("Id")!.Value,
+                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+        var drawingIndex = 1;
+        var chartIndex = 1;
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
+                continue;
+            if (!sheetsByName.TryGetValue(name, out var sheet))
+                continue;
+            var supportedCharts = sheet.Charts
+                .Where(chart => chart.Type == ChartType.Column)
+                .ToList();
+            if (supportedCharts.Count == 0)
+                continue;
+            if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                continue;
+
+            WriteWorksheetCharts(archive, worksheetPath, sheet, supportedCharts, drawingIndex++, ref chartIndex);
+        }
+    }
+
+    private static void WriteWorksheetCharts(
+        ZipArchive archive,
+        string worksheetPath,
+        Sheet sheet,
+        IReadOnlyList<ChartModel> charts,
+        int drawingIndex,
+        ref int chartIndex)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+        var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
+        var drawingRelsPath = GetWorksheetRelsPath(drawingPath);
+        archive.GetEntry(drawingPath)?.Delete();
+        archive.GetEntry(drawingRelsPath)?.Delete();
+
+        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        var anchors = new List<XElement>();
+        foreach (var chart in charts)
+        {
+            var currentChartIndex = chartIndex++;
+            var chartPath = $"xl/charts/chart{currentChartIndex}.xml";
+            archive.GetEntry(chartPath)?.Delete();
+            var chartEntry = archive.CreateEntry(chartPath);
+            using (var chartStream = chartEntry.Open())
+                ToChartXml(chart, sheet).Save(chartStream);
+
+            var chartRelId = $"rIdFreexcelChart{currentChartIndex}";
+            drawingRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", chartRelId),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
+                new XAttribute("Target", GetRelativeTarget(drawingPath, chartPath))));
+
+            anchors.Add(ToAbsoluteChartAnchor(chart, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
+        }
+
+        var drawingXml = new XDocument(
+            new XElement(spreadsheetDrawingNs + "wsDr",
+                new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                new XAttribute(XNamespace.Xmlns + "r", relNs),
+                anchors));
+        var drawingEntry = archive.CreateEntry(drawingPath);
+        using (var drawingStream = drawingEntry.Open())
+            drawingXml.Save(drawingStream);
+
+        var drawingRelsEntry = archive.CreateEntry(drawingRelsPath);
+        using (var drawingRelsStream = drawingRelsEntry.Open())
+            drawingRelsXml.Save(drawingRelsStream);
+
+        EnsureContentTypeOverride(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
+        for (var i = chartIndex - charts.Count; i < chartIndex; i++)
+            EnsureContentTypeOverride(archive, $"/xl/charts/chart{i}.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+
+        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsEntry = archive.GetEntry(relsPath);
+        XDocument worksheetRelsXml;
+        if (relsEntry is null)
+        {
+            worksheetRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        }
+        else
+        {
+            worksheetRelsXml = LoadXml(relsEntry);
+            relsEntry.Delete();
+        }
+
+        var drawingRelId = NextRelationshipId(worksheetRelsXml, packageRelNs);
+        worksheetRelsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", drawingRelId),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+            new XAttribute("Target", GetRelativeTarget(worksheetPath, drawingPath))));
+        var updatedRelsEntry = archive.CreateEntry(relsPath);
+        using (var relsStream = updatedRelsEntry.Open())
+            worksheetRelsXml.Save(relsStream);
+
+        var worksheetXml = LoadXml(worksheetEntry);
+        var root = worksheetXml.Root;
+        if (root is null)
+            return;
+
+        root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+        root.Elements(worksheetNs + "drawing").Remove();
+        root.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", drawingRelId)));
+
+        worksheetEntry.Delete();
+        var updatedWorksheetEntry = archive.CreateEntry(worksheetPath);
+        using var worksheetStream = updatedWorksheetEntry.Open();
+        worksheetXml.Save(worksheetStream);
+    }
+
+    private static XElement ToAbsoluteChartAnchor(
+        ChartModel chart,
+        int chartIndex,
+        string chartRelId,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs) =>
+        new(spreadsheetDrawingNs + "absoluteAnchor",
+            new XElement(spreadsheetDrawingNs + "pos",
+                new XAttribute("x", PixelsToEmus(chart.Left)),
+                new XAttribute("y", PixelsToEmus(chart.Top))),
+            new XElement(spreadsheetDrawingNs + "ext",
+                new XAttribute("cx", PixelsToEmus(chart.Width)),
+                new XAttribute("cy", PixelsToEmus(chart.Height))),
+            new XElement(spreadsheetDrawingNs + "graphicFrame",
+                new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
+                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                        new XAttribute("id", chartIndex + 1),
+                        new XAttribute("name", $"Chart {chartIndex}")),
+                    new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
+                new XElement(spreadsheetDrawingNs + "xfrm"),
+                new XElement(drawingNs + "graphic",
+                    new XElement(drawingNs + "graphicData",
+                        new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
+                        new XElement(chartNs + "chart", new XAttribute(relNs + "id", chartRelId))))),
+            new XElement(spreadsheetDrawingNs + "clientData"));
+
+    private static XDocument ToChartXml(ChartModel chart, Sheet sheet)
+    {
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var series = BuildColumnChartSeries(chart, sheet, chartNs, drawingNs).ToList();
+        return new XDocument(
+            new XElement(chartNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XElement(chartNs + "chart",
+                    string.IsNullOrWhiteSpace(chart.Title)
+                        ? null
+                        : new XElement(chartNs + "title",
+                            new XElement(chartNs + "tx",
+                                new XElement(chartNs + "rich",
+                                    new XElement(drawingNs + "p",
+                                        new XElement(drawingNs + "r",
+                                            new XElement(drawingNs + "t", chart.Title)))))),
+                    new XElement(chartNs + "plotArea",
+                        new XElement(chartNs + "barChart",
+                            new XElement(chartNs + "barDir", new XAttribute("val", "col")),
+                            series)))));
+    }
+
+    private static IEnumerable<XElement> BuildColumnChartSeries(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var headerRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row : chart.DataRange.Start.Row;
+        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        var categoryCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col : chart.DataRange.Start.Col;
+        var seriesStartCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        var categoryRange = FormatSheetRange(sheet.Name, dataStartRow, categoryCol, chart.DataRange.End.Row, categoryCol);
+
+        var seriesIndex = 0;
+        for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
+        {
+            var valueRange = FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+            var titleRange = FormatSheetRange(sheet.Name, headerRow, col, headerRow, col);
+            yield return new XElement(chartNs + "ser",
+                new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "tx",
+                    new XElement(chartNs + "strRef",
+                        new XElement(chartNs + "f", titleRange))),
+                ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                new XElement(chartNs + "cat",
+                    new XElement(chartNs + "strRef",
+                        new XElement(chartNs + "f", categoryRange))),
+                new XElement(chartNs + "val",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", valueRange))));
+            seriesIndex++;
+        }
+    }
+
+    private static XElement? ToSeriesShapeProperties(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var format = chart.SeriesFormats.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
+        if (format is null)
+            return null;
+
+        XElement? colorElement = null;
+        if (format.FillThemeColor is { } themeColor)
+        {
+            colorElement = new XElement(drawingNs + "schemeClr",
+                new XAttribute("val", ToDrawingSchemeColor(themeColor.Slot)));
+        }
+        else if (format.FillColor is { } fillColor)
+        {
+            colorElement = new XElement(drawingNs + "srgbClr",
+                new XAttribute("val", FormatThemeColor(fillColor)));
+        }
+
+        return colorElement is null
+            ? null
+            : new XElement(chartNs + "spPr",
+                new XElement(drawingNs + "solidFill", colorElement));
+    }
+
+    private static string ToDrawingSchemeColor(WorkbookThemeColorSlot slot) =>
+        slot switch
+        {
+            WorkbookThemeColorSlot.Dark1 => "dk1",
+            WorkbookThemeColorSlot.Light1 => "lt1",
+            WorkbookThemeColorSlot.Dark2 => "dk2",
+            WorkbookThemeColorSlot.Light2 => "lt2",
+            WorkbookThemeColorSlot.Accent1 => "accent1",
+            WorkbookThemeColorSlot.Accent2 => "accent2",
+            WorkbookThemeColorSlot.Accent3 => "accent3",
+            WorkbookThemeColorSlot.Accent4 => "accent4",
+            WorkbookThemeColorSlot.Accent5 => "accent5",
+            WorkbookThemeColorSlot.Accent6 => "accent6",
+            WorkbookThemeColorSlot.Hyperlink => "hlink",
+            WorkbookThemeColorSlot.FollowedHyperlink => "folHlink",
+            _ => "accent1"
+        };
+
+    private static string FormatSheetRange(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)
+    {
+        var quotedSheet = $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
+        var start = $"${CellAddress.NumberToColumnName(startCol)}${startRow}";
+        var end = $"${CellAddress.NumberToColumnName(endCol)}${endRow}";
+        return start == end
+            ? $"{quotedSheet}!{start}"
+            : $"{quotedSheet}!{start}:{end}";
+    }
+
+    private static long PixelsToEmus(double pixels) =>
+        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
+
+    private static void EnsureContentTypeOverride(ZipArchive archive, string partName, string contentType)
+    {
+        const string contentTypesPath = "[Content_Types].xml";
+        var entry = archive.GetEntry(contentTypesPath);
+        if (entry is null)
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var xml = LoadXml(entry);
+        var existing = xml.Root?
+            .Elements(contentTypeNs + "Override")
+            .FirstOrDefault(e => string.Equals(e.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            existing.SetAttributeValue("ContentType", contentType);
+        }
+        else
+        {
+            xml.Root?.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", partName),
+                new XAttribute("ContentType", contentType)));
+        }
+
+        entry.Delete();
+        var updatedEntry = archive.CreateEntry(contentTypesPath);
+        using var stream = updatedEntry.Open();
+        xml.Save(stream);
     }
 
     private static void SaveWorksheetBackgrounds(Stream xlsxStream, Workbook workbook)
@@ -1151,7 +1919,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         _ => XLError.NoValueAvailable
     };
 
-    private static CellStyle MapStyle(IXLStyle xlStyle)
+    private static CellStyle MapStyle(IXLStyle xlStyle, WorkbookTheme theme)
     {
         return new CellStyle
         {
@@ -1161,14 +1929,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             Italic = xlStyle.Font.Italic,
             Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
             Strikethrough = xlStyle.Font.Strikethrough,
-            FontColor = MapColor(xlStyle.Font.FontColor),
+            FontColor = MapColor(xlStyle.Font.FontColor, theme),
             FillColor = xlStyle.Fill.PatternType == XLFillPatternValues.Solid
-                ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor)
+                ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme)
                 : null,
-            BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor),
-            BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor),
-            BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor),
-            BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor),
+            BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor, theme),
+            BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme),
+            BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme),
+            BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor, theme),
             // ClosedXML returns empty string for built-in format ID 0 (General) and some
             // other built-in IDs. Phase 2 limitation: built-in IDs without an explicit
             // format string are treated as General.
@@ -1193,8 +1961,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         };
     }
 
-    private static CellColor MapColor(XLColor xlColor)
+    private static CellColor MapColor(XLColor xlColor, WorkbookTheme theme)
     {
+        if (xlColor.ColorType == XLColorType.Theme)
+            return theme.ResolveColor(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint);
+
         System.Drawing.Color c;
         try
         {
@@ -1208,7 +1979,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return new CellColor(c.R, c.G, c.B);
     }
 
-    private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color)
+    private static WorkbookThemeColorSlot ToWorkbookThemeColorSlot(XLThemeColor themeColor) => themeColor switch
+    {
+        XLThemeColor.Text1 => WorkbookThemeColorSlot.Dark1,
+        XLThemeColor.Background1 => WorkbookThemeColorSlot.Light1,
+        XLThemeColor.Text2 => WorkbookThemeColorSlot.Dark2,
+        XLThemeColor.Background2 => WorkbookThemeColorSlot.Light2,
+        XLThemeColor.Accent1 => WorkbookThemeColorSlot.Accent1,
+        XLThemeColor.Accent2 => WorkbookThemeColorSlot.Accent2,
+        XLThemeColor.Accent3 => WorkbookThemeColorSlot.Accent3,
+        XLThemeColor.Accent4 => WorkbookThemeColorSlot.Accent4,
+        XLThemeColor.Accent5 => WorkbookThemeColorSlot.Accent5,
+        XLThemeColor.Accent6 => WorkbookThemeColorSlot.Accent6,
+        XLThemeColor.Hyperlink => WorkbookThemeColorSlot.Hyperlink,
+        XLThemeColor.FollowedHyperlink => WorkbookThemeColorSlot.FollowedHyperlink,
+        _ => WorkbookThemeColorSlot.Dark1
+    };
+
+    private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color, WorkbookTheme theme)
     {
         var mapped = style switch
         {
@@ -1221,7 +2009,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             XLBorderStyleValues.Double => BorderStyle.Double,
             _ => BorderStyle.None,
         };
-        return new CellBorder(mapped, MapColor(color));
+        return new CellBorder(mapped, MapColor(color, theme));
     }
 
     private static void ApplyStyle(IXLCell xlCell, CellStyle style)
@@ -1371,7 +2159,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     Operator     = op.Value,
                     Value1       = v1,
                     Value2       = v2,
-                    FormatIfTrue = MapStyle(xlCf.Style)
+                    FormatIfTrue = MapStyle(xlCf.Style, workbook.Theme)
                 };
                 sheet.ConditionalFormats.Add(fmt);
             }
@@ -1390,7 +2178,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     Priority     = priority++,
                     RuleType     = CfRuleType.Formula,
                     FormulaText  = formula,
-                    FormatIfTrue = MapStyle(xlCf.Style)
+                    FormatIfTrue = MapStyle(xlCf.Style, workbook.Theme)
                 };
                 sheet.ConditionalFormats.Add(fmt);
             }
@@ -1788,5 +2576,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 (uint)xlMerge.RangeAddress.LastAddress.ColumnNumber);
             sheet.MergedRegions.Add(new GridRange(start, end));
         }
+        sheet.InvalidateMergeIndex();
     }
 }

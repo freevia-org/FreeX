@@ -382,6 +382,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             copy.SetCell(RemapAddress(address, copyId), cell.Clone());
         foreach (var range in source.MergedRegions)
             copy.MergedRegions.Add(RemapRange(range, copyId));
+        copy.InvalidateMergeIndex();
         foreach (var (address, comment) in source.Comments)
             copy.Comments[RemapAddress(address, copyId)] = comment;
         foreach (var (address, hyperlink) in source.Hyperlinks)
@@ -491,12 +492,18 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             AxisTitleTextColor = chart.AxisTitleTextColor,
             AxisTitleFontSize = chart.AxisTitleFontSize,
             ChartAreaFillColor = chart.ChartAreaFillColor,
+            ChartAreaFillThemeColor = chart.ChartAreaFillThemeColor,
             PlotAreaFillColor = chart.PlotAreaFillColor,
+            PlotAreaFillThemeColor = chart.PlotAreaFillThemeColor,
             PlotAreaBorderColor = chart.PlotAreaBorderColor,
+            PlotAreaBorderThemeColor = chart.PlotAreaBorderThemeColor,
             PlotAreaBorderThickness = chart.PlotAreaBorderThickness,
             LegendTextColor = chart.LegendTextColor,
+            LegendTextThemeColor = chart.LegendTextThemeColor,
             LegendFillColor = chart.LegendFillColor,
+            LegendFillThemeColor = chart.LegendFillThemeColor,
             LegendBorderColor = chart.LegendBorderColor,
+            LegendBorderThemeColor = chart.LegendBorderThemeColor,
             LegendBorderThickness = chart.LegendBorderThickness,
             LegendFontSize = chart.LegendFontSize,
             DoughnutHoleSize = chart.DoughnutHoleSize,
@@ -553,8 +560,11 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             DataLabelNumberFormat = chart.DataLabelNumberFormat,
             ShowDataLabelCallouts = chart.ShowDataLabelCallouts,
             DataLabelFillColor = chart.DataLabelFillColor,
+            DataLabelFillThemeColor = chart.DataLabelFillThemeColor,
             DataLabelBorderColor = chart.DataLabelBorderColor,
+            DataLabelBorderThemeColor = chart.DataLabelBorderThemeColor,
             DataLabelTextColor = chart.DataLabelTextColor,
+            DataLabelTextThemeColor = chart.DataLabelTextThemeColor,
             DataLabelBorderThickness = chart.DataLabelBorderThickness,
             DataLabelFontSize = chart.DataLabelFontSize,
             DataLabelAngle = chart.DataLabelAngle,
@@ -565,6 +575,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             ShowTrendlineEquation = chart.ShowTrendlineEquation,
             ShowTrendlineRSquared = chart.ShowTrendlineRSquared,
             TrendlineColor = chart.TrendlineColor,
+            TrendlineThemeColor = chart.TrendlineThemeColor,
             TrendlineThickness = chart.TrendlineThickness,
             TrendlineDashStyle = chart.TrendlineDashStyle,
             ShowSecondaryAxis = chart.ShowSecondaryAxis,

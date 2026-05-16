@@ -86,6 +86,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                     new CellAddress(m.End.Sheet, m.End.Row + _count, m.End.Col));
             }
         }
+        sheet.InvalidateMergeIndex();
 
         _formulaSnapshot.Clear();
         RewriteAllFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _formulaSnapshot);
@@ -118,6 +119,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         {
             sheet.MergedRegions.Clear();
             sheet.MergedRegions.AddRange(_mergeSnapshot);
+            sheet.InvalidateMergeIndex();
         }
 
         RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
@@ -596,6 +598,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
                     new CellAddress(m.End.Sheet,   m.End.Row   - _count, m.End.Col));
             }
         }
+        sheet.InvalidateMergeIndex();
 
         _formulaSnapshot.Clear();
         InsertRowsCommand.RewriteAllFormulas(
@@ -624,6 +627,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         {
             sheet.MergedRegions.Clear();
             sheet.MergedRegions.AddRange(_mergeSnapshot);
+            sheet.InvalidateMergeIndex();
         }
 
         InsertRowsCommand.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
