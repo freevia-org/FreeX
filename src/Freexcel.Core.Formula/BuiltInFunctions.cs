@@ -267,7 +267,7 @@ public static class BuiltInFunctions
         _ => throw new FormulaEvalException("#VALUE!", $"Cannot convert {v} to number")
     };
 
-    private static bool ToBool(ScalarValue v) => v switch
+    internal static bool ToBool(ScalarValue v) => v switch
     {
         BoolValue b => b.Value,
         NumberValue n => n.Value != 0.0,
@@ -1603,7 +1603,7 @@ public static class BuiltInFunctions
         return (a is NumberValue ? 0 : 1) - (b is NumberValue ? 0 : 1);
     }
 
-    private static bool ScalarEquals(ScalarValue a, ScalarValue b)
+    internal static bool ScalarEquals(ScalarValue a, ScalarValue b)
     {
         if (a is NumberValue na && b is NumberValue nb)
             return na.Value == nb.Value;

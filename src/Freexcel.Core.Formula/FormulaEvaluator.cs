@@ -207,7 +207,7 @@ public sealed class FormulaEvaluator
             return ErrorValue.Name;
 
         // Short-circuit functions evaluate arguments lazily to avoid propagating errors from untaken branches.
-        if (node.FunctionName is "IF" or "IFERROR" or "IFNA")
+        if (node.FunctionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
             return EvaluateShortCircuit(node, context);
 
         var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
@@ -320,6 +320,9 @@ public sealed class FormulaEvaluator
             "IF"      => EvaluateIf(node, context),
             "IFERROR" => EvaluateIfError(node, context),
             "IFNA"    => EvaluateIfNa(node, context),
+            "CHOOSE"  => EvaluateChoose(node, context),
+            "IFS"     => EvaluateIfs(node, context),
+            "SWITCH"  => EvaluateSwitch(node, context),
             _         => ErrorValue.Value
         };
     }
@@ -353,6 +356,53 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count != 2) return ErrorValue.Value;
         var value = EvaluateNode(node.Arguments[0], context);
         return value == ErrorValue.NA ? EvaluateNode(node.Arguments[1], context) : value;
+    }
+
+    private ScalarValue EvaluateChoose(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count < 2) return ErrorValue.Value;
+        var indexVal = EvaluateNode(node.Arguments[0], context);
+        if (indexVal is ErrorValue e) return e;
+        var coerced = CoerceToNumber(indexVal);
+        if (coerced is ErrorValue ec) return ec;
+        int idx = (int)((NumberValue)coerced).Value;
+        if (idx < 1 || idx >= node.Arguments.Count) return ErrorValue.Value;
+        return EvaluateNode(node.Arguments[idx], context);
+    }
+
+    private ScalarValue EvaluateIfs(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count < 2 || node.Arguments.Count % 2 != 0) return ErrorValue.Value;
+        for (int i = 0; i < node.Arguments.Count - 1; i += 2)
+        {
+            var cond = EvaluateNode(node.Arguments[i], context);
+            if (cond is ErrorValue e) return e;
+            bool? taken = cond switch
+            {
+                BoolValue b   => b.Value,
+                NumberValue n => n.Value != 0,
+                _             => null
+            };
+            if (taken is null) return ErrorValue.Value;
+            if (taken.Value) return EvaluateNode(node.Arguments[i + 1], context);
+        }
+        return ErrorValue.NA;
+    }
+
+    private ScalarValue EvaluateSwitch(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count < 3) return ErrorValue.Value;
+        var expr = EvaluateNode(node.Arguments[0], context);
+        if (expr is ErrorValue e) return e;
+        bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
+        int pairCount = (node.Arguments.Count - 1) / 2;
+        for (int i = 0; i < pairCount; i++)
+        {
+            var val = EvaluateNode(node.Arguments[1 + i * 2], context);
+            if (BuiltInFunctions.ScalarEquals(expr, val))
+                return EvaluateNode(node.Arguments[1 + i * 2 + 1], context);
+        }
+        return hasDefault ? EvaluateNode(node.Arguments[^1], context) : ErrorValue.NA;
     }
 
     private static bool IsAggregateFunction(string name) =>

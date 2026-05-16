@@ -724,6 +724,84 @@ public class ShortCircuitEvaluationTests
         result.Should().Be(new NumberValue(42), "IFNA must not intercept non-error values");
     }
 
+    // ── CHOOSE short-circuit ──────────────────────────────────────────────
+
+    [Fact]
+    public void CHOOSE_ErrorInUnselectedBranch_DoesNotPoison()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=CHOOSE(1,\"picked\",1/0)", sheet, wb);
+        result.Should().Be(new TextValue("picked"), "CHOOSE must not evaluate untaken branches");
+    }
+
+    [Fact]
+    public void CHOOSE_SelectsCorrectBranch()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=CHOOSE(2,\"a\",\"b\",\"c\")", sheet, wb)
+            .Should().Be(new TextValue("b"));
+    }
+
+    [Fact]
+    public void CHOOSE_OutOfRange_ReturnsValueError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=CHOOSE(5,\"a\",\"b\")", sheet, wb)
+            .Should().Be(ErrorValue.Value);
+    }
+
+    // ── IFS short-circuit ─────────────────────────────────────────────────
+
+    [Fact]
+    public void IFS_ErrorInUnreachedPair_DoesNotPoison()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=IFS(1>0,\"first\",1>0,1/0)", sheet, wb);
+        result.Should().Be(new TextValue("first"), "IFS must not evaluate pairs after the first true condition");
+    }
+
+    [Fact]
+    public void IFS_NoTrueCondition_ReturnsNA()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=IFS(1>2,\"no\")", sheet, wb)
+            .Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void IFS_ErrorCondition_Propagates()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=IFS(1/0,\"bad\")", sheet, wb)
+            .Should().Be(ErrorValue.DivByZero, "error in a condition propagates");
+    }
+
+    // ── SWITCH short-circuit ──────────────────────────────────────────────
+
+    [Fact]
+    public void SWITCH_ErrorInUnmatchedBranch_DoesNotPoison()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=SWITCH(1,1,\"one\",2,1/0)", sheet, wb);
+        result.Should().Be(new TextValue("one"), "SWITCH must not evaluate unmatched branches");
+    }
+
+    [Fact]
+    public void SWITCH_UsesDefault_WhenNoMatchFound()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=SWITCH(99,1,\"one\",2,\"two\",\"default\")", sheet, wb)
+            .Should().Be(new TextValue("default"));
+    }
+
+    [Fact]
+    public void SWITCH_NoMatchNoDefault_ReturnsNA()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        _evaluator.Evaluate("=SWITCH(99,1,\"one\",2,\"two\")", sheet, wb)
+            .Should().Be(ErrorValue.NA);
+    }
+
     // ── Argument-count validation ─────────────────────────────────────────
 
     [Fact]
