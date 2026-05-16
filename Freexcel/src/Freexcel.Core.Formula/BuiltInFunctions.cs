@@ -801,9 +801,9 @@ public static class BuiltInFunctions
 
     private static string FormatNumberInline(double value, string fmt)
     {
-        if (string.IsNullOrEmpty(fmt)) return value.ToString(System.Globalization.CultureInfo.CurrentCulture);
-        try { return value.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture); }
-        catch { return value.ToString(System.Globalization.CultureInfo.CurrentCulture); }
+        if (string.IsNullOrEmpty(fmt)) return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        try { return value.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture); }
+        catch { return value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
     }
 
     private static ScalarValue Trim(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1133,10 +1133,15 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        int bottom = (int)ToNumber(args[0]);
-        int top    = (int)ToNumber(args[1]);
+        double db = ToNumber(args[0]);
+        double dt = ToNumber(args[1]);
+        if (!double.IsFinite(db) || !double.IsFinite(dt)) return ErrorValue.Num;
+        long bottom = (long)Math.Truncate(db);
+        long top    = (long)Math.Truncate(dt);
         if (bottom > top) return ErrorValue.Num;
-        return new NumberValue(Random.Shared.Next(bottom, top + 1));
+        // Random.Shared.NextInt64 requires [minValue, maxValue) so add 1 safely
+        long range = top - bottom + 1;
+        return new NumberValue(bottom + (long)(Random.Shared.NextDouble() * range));
     }
 
     private static ScalarValue Sign(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1753,9 +1758,13 @@ public static class BuiltInFunctions
         foreach (var a in args)
         {
             if (a is ErrorValue e) return e;
-            long n = (long)Math.Abs(ToNumber(a));
+            double d = Math.Abs(ToNumber(a));
+            if (!double.IsFinite(d) || d > long.MaxValue) return ErrorValue.Num;
+            long n = (long)d;
             if (n == 0) return new NumberValue(0);
             long g = GcdCalc(result, n);
+            // Check overflow before multiplying
+            if (result / g > long.MaxValue / n) return ErrorValue.Num;
             result = result / g * n;
         }
         return new NumberValue(result);
@@ -1803,6 +1812,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         double n = ToNumber(args[0]);
+        if (!double.IsFinite(n) || Math.Abs(n) > int.MaxValue) return ErrorValue.Num;
         if (n == 0) return new NumberValue(1);
         int sign = n > 0 ? 1 : -1;
         int abs = (int)Math.Ceiling(Math.Abs(n));
@@ -1814,6 +1824,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         double n = ToNumber(args[0]);
+        if (!double.IsFinite(n) || Math.Abs(n) > int.MaxValue) return ErrorValue.Num;
         if (n == 0) return new NumberValue(0);
         int sign = n > 0 ? 1 : -1;
         int abs = (int)Math.Ceiling(Math.Abs(n));
@@ -1841,7 +1852,8 @@ public static class BuiltInFunctions
         var text = ToText(args[0]);
         if (TimeSpan.TryParse(text, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
-        if (DateTime.TryParse(text, out var dt))
+        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(dt.TimeOfDay.TotalDays);
         return ErrorValue.Value;
     }
@@ -2710,10 +2722,16 @@ public static class BuiltInFunctions
             var keyCounts = new List<int>();
             var colOfKey  = new List<int>();
 
+            var colKeySb = new System.Text.StringBuilder();
             for (int c = 0; c < arr.ColCount; c++)
             {
-                var key = string.Join("\0", Enumerable.Range(0, arr.RowCount)
-                              .Select(r => ToText(arr.Cells[r, c])));
+                colKeySb.Clear();
+                for (int r = 0; r < arr.RowCount; r++)
+                {
+                    if (r > 0) colKeySb.Append('\0');
+                    colKeySb.Append(ToText(arr.Cells[r, c]));
+                }
+                var key = colKeySb.ToString();
                 if (keyIndex.TryGetValue(key, out int idx))
                 {
                     keyCounts[idx]++;

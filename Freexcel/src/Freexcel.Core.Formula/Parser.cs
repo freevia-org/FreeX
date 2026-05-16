@@ -295,10 +295,17 @@ public sealed class Parser
         while (i < value.Length && char.IsLetter(value[i])) i++;
         var colName = value[colStart..i];
 
+        // No column letters parsed — not a valid cell reference
+        if (colStart == i) return new ErrorNode(Model.ErrorValue.Ref);
+
         bool isRowAbs = false;
         if (i < value.Length && value[i] == '$') { isRowAbs = true; i++; }
 
         if (!uint.TryParse(value[i..], out var row) || row == 0 || row > Model.CellAddress.MaxRow)
+            return new ErrorNode(Model.ErrorValue.Ref);
+
+        var colNum = Model.CellAddress.ColumnNameToNumber(colName);
+        if (colNum == 0 || colNum > Model.CellAddress.MaxCol)
             return new ErrorNode(Model.ErrorValue.Ref);
 
         return new CellRefNode(colName, row, isColAbs, isRowAbs);
