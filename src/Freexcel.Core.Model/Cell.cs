@@ -11,11 +11,24 @@ public sealed class Cell
 
     /// <summary>
     /// The formula text (without leading '='), or null if this cell has a literal value.
+    /// Setting this property automatically clears <see cref="CachedAst"/>.
     /// </summary>
-    public string? FormulaText { get; set; }
+    private string? _formulaText;
+    public string? FormulaText
+    {
+        get => _formulaText;
+        set { _formulaText = value; CachedAst = null; }
+    }
 
     /// <summary>Whether this cell contains a formula.</summary>
     public bool HasFormula => FormulaText is not null;
+
+    /// <summary>
+    /// Cached parsed AST for this cell's formula (stored as <see cref="object?"/> to avoid
+    /// a project-reference from Core.Model to Core.Formula). The calc engine casts it to
+    /// <c>FormulaNode</c> before use. Cleared automatically when <see cref="FormulaText"/> changes.
+    /// </summary>
+    public object? CachedAst { get; set; }
 
     /// <summary>Whether formula error checking should skip this cell.</summary>
     public bool IgnoreFormulaError { get; set; }
