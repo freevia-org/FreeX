@@ -244,6 +244,20 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
+    public void Sum_DirectNumericText_IncludesValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=SUM(\"4\",2)", sheet).Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void Sum_DirectNonNumericText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=SUM(\"hello\",2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Sum_IgnoresText()
     {
         var sheet = new Sheet(SheetId.New(), "S");
@@ -251,6 +265,15 @@ public class FormulaEvaluatorTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("hello"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(5));
         _evaluator.Evaluate("=SUM(A1:A3)", sheet).Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
+    public void Sum_RangeLogical_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(5));
+        _evaluator.Evaluate("=SUM(A1:A2)", sheet).Should().Be(new NumberValue(5));
     }
 
     // ── AVERAGE function ──
@@ -263,6 +286,22 @@ public class FormulaEvaluatorTests
         sheet.SetCell(a2, new NumberValue(4));
         sheet.SetCell(a3, new NumberValue(6));
         _evaluator.Evaluate("=AVERAGE(A1:A3)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Average_DirectNumericText_IncludesValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=AVERAGE(\"4\",2)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Average_RangeLogical_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(5));
+        _evaluator.Evaluate("=AVERAGE(A1:A2)", sheet).Should().Be(new NumberValue(5));
     }
 
     // ── MIN / MAX ──
@@ -287,6 +326,38 @@ public class FormulaEvaluatorTests
         _evaluator.Evaluate("=MAX(A1:A3)", sheet).Should().Be(new NumberValue(8));
     }
 
+    [Fact]
+    public void Min_DirectNumericText_IncludesValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=MIN(\"4\",2)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Max_DirectNumericText_IncludesValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=MAX(\"4\",2)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Min_RangeLogical_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(false));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        _evaluator.Evaluate("=MIN(A1:A2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Max_RangeLogical_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(0.5));
+        _evaluator.Evaluate("=MAX(A1:A2)", sheet).Should().Be(new NumberValue(0.5));
+    }
+
     // ── COUNT / COUNTA ──
 
     [Fact]
@@ -297,6 +368,36 @@ public class FormulaEvaluatorTests
         sheet.SetCell(a2, new TextValue("hi"));
         sheet.SetCell(a3, new NumberValue(3));
         _evaluator.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Count_RangeLogical_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(5));
+        _evaluator.Evaluate("=COUNT(A1:A2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Count_DirectNumericText_CountsValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=COUNT(\"4\",2)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Count_DirectNonNumericText_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=COUNT(\"hello\",2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Count_ErrorArgument_PropagatesError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=COUNT(NA())", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -347,6 +448,14 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
+    public void And_DirectTodayResult_TreatsDateSerialAsTrue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=AND(TODAY())", sheet)
+            .Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void And_OneFalse()
     {
         var sheet = new Sheet(SheetId.New(), "S");
@@ -355,11 +464,91 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
+    public void And_ReferencedText_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
+        _evaluator.Evaluate("=AND(A1:A2)", sheet).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void And_AllReferencedText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+        _evaluator.Evaluate("=AND(A1:A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void And_DirectText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=AND(\"TRUE\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Or_OneTrueIsSufficient()
     {
         var sheet = new Sheet(SheetId.New(), "S");
         _evaluator.Evaluate("=OR(FALSE,TRUE,FALSE)", sheet)
             .Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Or_DirectTodayResult_TreatsDateSerialAsTrue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=OR(TODAY())", sheet)
+            .Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Or_ReferencedText_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(false));
+        _evaluator.Evaluate("=OR(A1:A2)", sheet).Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
+    public void Or_AllReferencedText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+        _evaluator.Evaluate("=OR(A1:A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Or_DirectText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=OR(\"FALSE\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Xor_ReferencedText_IgnoresValue()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new BoolValue(true));
+        _evaluator.Evaluate("=XOR(A1:A2)", sheet).Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
+    public void Xor_AllReferencedText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("hello"));
+        _evaluator.Evaluate("=XOR(A1:A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Xor_DirectText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=XOR(\"TRUE\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -384,6 +573,13 @@ public class FormulaEvaluatorTests
     {
         var sheet = new Sheet(SheetId.New(), "S");
         _evaluator.Evaluate("=ABS(-42)", sheet).Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
+    public void Abs_InvalidText_ReturnsValueError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=ABS(\"x\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     // ── String functions ──
@@ -413,6 +609,14 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
+    public void Left_NumCharsError_PropagatesError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=LEFT(\"hello\",NA())", sheet)
+            .Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Right_ExtractsChars()
     {
         var sheet = new Sheet(SheetId.New(), "S");
@@ -421,6 +625,14 @@ public class FormulaEvaluatorTests
     }
 
     // ── Error propagation ──
+
+    [Fact]
+    public void Right_NumCharsError_PropagatesError()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=RIGHT(\"hello\",NA())", sheet)
+            .Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void UnknownFunction_ReturnsNameError()

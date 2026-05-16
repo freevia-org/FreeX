@@ -13,7 +13,7 @@ public class UndoRedoTests
     {
         var wb    = new Workbook("T");
         var sheet = wb.AddSheet("S");
-        var bus   = new CommandBus(_ => new SimpleContext(wb, sheet));
+        var bus   = new CommandBus(_ => new SimpleContext(wb));
         return (wb, sheet, bus);
     }
 
@@ -102,7 +102,7 @@ public class UndoRedoTests
         bus.CanRedo(wb.Id).Should().BeFalse("a new command must clear the redo stack");
     }
 
-    private sealed class SimpleContext(Workbook wb, Sheet sheet) : ICommandContext
+    private sealed class SimpleContext(Workbook wb) : ICommandContext
     {
         public Workbook Workbook => wb;
         public Sheet GetSheet(SheetId id) => wb.GetSheet(id) ?? throw new InvalidOperationException($"Sheet {id} not found");

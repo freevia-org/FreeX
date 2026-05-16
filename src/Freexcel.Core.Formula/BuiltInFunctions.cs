@@ -263,6 +263,7 @@ public static class BuiltInFunctions
     private static double ToNumber(ScalarValue v) => v switch
     {
         NumberValue n => n.Value,
+        DateTimeValue d => d.Value,
         BoolValue b => b.Value ? 1.0 : 0.0,
         BlankValue => 0.0,
         DirectTextLiteralValue t when double.TryParse(t.Value, System.Globalization.CultureInfo.InvariantCulture, out var d) => d,
@@ -274,6 +275,7 @@ public static class BuiltInFunctions
     {
         BoolValue b => b.Value,
         NumberValue n => n.Value != 0.0,
+        DateTimeValue d => d.Value != 0.0,
         BlankValue => false,
         _ => throw new FormulaEvalException("#VALUE!", $"Cannot convert {v} to boolean")
     };
@@ -291,6 +293,22 @@ public static class BuiltInFunctions
 
     private static bool TryDirectTextNumber(DirectTextLiteralValue value, out double number) =>
         double.TryParse(value.Value, System.Globalization.CultureInfo.InvariantCulture, out number);
+
+    private static bool TryCellNumber(ScalarValue value, out double number)
+    {
+        switch (value)
+        {
+            case NumberValue n:
+                number = n.Value;
+                return true;
+            case DateTimeValue d:
+                number = d.Value;
+                return true;
+            default:
+                number = 0;
+                return false;
+        }
+    }
 
     private static bool TryReferencedNumber(ReferencedScalarValue value, out double number, out ErrorValue? error)
     {
@@ -826,7 +844,7 @@ public static class BuiltInFunctions
             {
                 var sv = i < sumFlat.Count ? sumFlat[i] : BlankValue.Instance;
                 if (sv is ErrorValue e) return e;
-                if (sv is NumberValue nv) total += nv.Value;
+                if (TryCellNumber(sv, out double value)) total += value;
                 else if (sv is BlankValue) { /* skip */ }
             }
         }
@@ -864,7 +882,7 @@ public static class BuiltInFunctions
             {
                 var sv = i < avgFlat.Count ? avgFlat[i] : BlankValue.Instance;
                 if (sv is ErrorValue e) return e;
-                if (sv is NumberValue nv) { total += nv.Value; count++; }
+                if (TryCellNumber(sv, out double value)) { total += value; count++; }
             }
         }
         if (count == 0) return ErrorValue.DivByZero;
@@ -880,7 +898,10 @@ public static class BuiltInFunctions
     private static bool MatchesCriteria(ScalarValue cellValue, ScalarValue criteria)
     {
         if (criteria is NumberValue cn)
-            return cellValue is NumberValue cvn && cvn.Value == cn.Value;
+            return TryCellNumber(cellValue, out double cellNumber) && cellNumber == cn.Value;
+
+        if (criteria is DateTimeValue cdt)
+            return TryCellNumber(cellValue, out double cellDateNum) && cellDateNum == cdt.Value;
 
         if (criteria is BoolValue cb)
             return cellValue is BoolValue cvb && cvb.Value == cb.Value;
@@ -904,7 +925,7 @@ public static class BuiltInFunctions
 
         // Plain text (supports wildcards * and ?)
         var cellText = cellValue is TextValue tv ? tv.Value :
-                       cellValue is NumberValue nv ? nv.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) :
+                       TryCellNumber(cellValue, out double numericValue) ? numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture) :
                        cellValue is BoolValue bv ? (bv.Value ? "TRUE" : "FALSE") :
                        "";
         return WildcardMatch(cellText, crit, ignoreCase: true);
@@ -916,15 +937,15 @@ public static class BuiltInFunctions
         if (double.TryParse(rhs, System.Globalization.NumberStyles.Any,
                 System.Globalization.CultureInfo.InvariantCulture, out var rhsNum))
         {
-            if (cellValue is not NumberValue cv) return false;
+            if (!TryCellNumber(cellValue, out double value)) return false;
             return op switch
             {
-                ">"  => cv.Value > rhsNum,
-                ">=" => cv.Value >= rhsNum,
-                "<"  => cv.Value < rhsNum,
-                "<=" => cv.Value <= rhsNum,
-                "="  => cv.Value == rhsNum,
-                "<>" => cv.Value != rhsNum,
+                ">"  => value > rhsNum,
+                ">=" => value >= rhsNum,
+                "<"  => value < rhsNum,
+                "<=" => value <= rhsNum,
+                "="  => value == rhsNum,
+                "<>" => value != rhsNum,
                 _    => false
             };
         }
@@ -990,8 +1011,8 @@ public static class BuiltInFunctions
         var fmt = ToText(args[1]);
         // Simple inline formatter (avoids depending on Freexcel.Core.Calc)
         var val = args[0];
-        if (val is NumberValue nv)
-            return new TextValue(FormatNumberInline(nv.Value, fmt));
+        if (TryCellNumber(val, out double value))
+            return new TextValue(FormatNumberInline(value, fmt));
         return new TextValue(ToText(val));
     }
 
@@ -1140,7 +1161,9 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue repeatError) return repeatError;
         var text  = ToText(args[0]);
-        int times = (int)ToNumber(args[1]);
+        var timesD = ToNumber(args[1]);
+        if (!double.IsFinite(timesD)) return ErrorValue.Value;
+        int times = (int)timesD;
         if (times < 0) return ErrorValue.Value;
         if ((long)text.Length * times > 32767) return ErrorValue.Value;
         var sb = new System.Text.StringBuilder();
@@ -1264,14 +1287,24 @@ public static class BuiltInFunctions
         if (args[2] is ErrorValue e2) return e2;
         var start = OADateToDateTime(args[0]);
         var end   = OADateToDateTime(args[1]);
+        if (end < start) return ErrorValue.Num;
         var unit  = ToText(args[2]).ToUpperInvariant();
 
         return unit switch
         {
-            "D" => new NumberValue((end - start).Days),
-            "M" => new NumberValue(MonthDiff(start, end)),
-            "Y" => new NumberValue(YearDiff(start, end)),
-            _   => ErrorValue.Value
+            "D"  => new NumberValue((end - start).Days),
+            "M"  => new NumberValue(MonthDiff(start, end)),
+            "Y"  => new NumberValue(YearDiff(start, end)),
+            "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
+            "YD" => new NumberValue((end - new DateTime(end.Year, start.Month, start.Day)).Days < 0
+                        ? (end - new DateTime(end.Year - 1, start.Month, start.Day)).Days
+                        : (end - new DateTime(end.Year, start.Month, start.Day)).Days),
+            "MD" => new NumberValue(end.Day >= start.Day
+                        ? end.Day - start.Day
+                        : end.Day + DateTime.DaysInMonth(
+                            end.Month == 1 ? end.Year - 1 : end.Year,
+                            end.Month == 1 ? 12 : end.Month - 1) - start.Day),
+            _    => ErrorValue.Value
         };
     }
 
@@ -1413,7 +1446,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is not RangeValue range) return ErrorValue.Value;
         if (args[1] is ErrorValue e1) return e1;
-        int k = (int)ToNumber(args[1]);
+        var kD = ToNumber(args[1]);
+        if (!double.IsFinite(kD)) return ErrorValue.Num;
+        int k = (int)kD;
         var (values, err) = CollectRangeNumbers(range);
         if (err is not null) return err;
         var nums = values!.OrderByDescending(x => x).ToList();
@@ -1425,7 +1460,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is not RangeValue range) return ErrorValue.Value;
         if (args[1] is ErrorValue e1) return e1;
-        int k = (int)ToNumber(args[1]);
+        var kD = ToNumber(args[1]);
+        if (!double.IsFinite(kD)) return ErrorValue.Num;
+        int k = (int)kD;
         var (values, err) = CollectRangeNumbers(range);
         if (err is not null) return err;
         var nums = values!.OrderBy(x => x).ToList();
@@ -1510,7 +1547,7 @@ public static class BuiltInFunctions
             if (include)
             {
                 if (sumFlat[i] is ErrorValue e) return e;
-                if (sumFlat[i] is NumberValue nv) total += nv.Value;
+                if (TryCellNumber(sumFlat[i], out double value)) total += value;
             }
         }
         return new NumberValue(total);
@@ -1571,7 +1608,7 @@ public static class BuiltInFunctions
             if (include)
             {
                 if (avgFlat[i] is ErrorValue e) return e;
-                if (avgFlat[i] is NumberValue nv) { total += nv.Value; count++; }
+                if (TryCellNumber(avgFlat[i], out double value)) { total += value; count++; }
             }
         }
         if (count == 0) return ErrorValue.DivByZero;
@@ -1816,7 +1853,7 @@ public static class BuiltInFunctions
             {
                 var v = arrays[k][i];
                 if (v is ErrorValue ev) return ev;
-                product *= v is NumberValue n ? n.Value : 0;
+                product *= TryCellNumber(v, out double value) ? value : 0;
             }
             total += product;
         }
@@ -1869,18 +1906,20 @@ public static class BuiltInFunctions
 
     private static int CompareScalar(ScalarValue a, ScalarValue b)
     {
-        if (a is NumberValue na && b is NumberValue nb)
-            return na.Value.CompareTo(nb.Value);
+        var aIsNumber = TryCellNumber(a, out double aNumber);
+        var bIsNumber = TryCellNumber(b, out double bNumber);
+        if (aIsNumber && bIsNumber)
+            return aNumber.CompareTo(bNumber);
         if (a is TextValue ta && b is TextValue tb)
             return string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase);
         // Mixed: numbers < text
-        return (a is NumberValue ? 0 : 1) - (b is NumberValue ? 0 : 1);
+        return (aIsNumber ? 0 : 1) - (bIsNumber ? 0 : 1);
     }
 
     internal static bool ScalarEquals(ScalarValue a, ScalarValue b)
     {
-        if (a is NumberValue na && b is NumberValue nb)
-            return na.Value == nb.Value;
+        if (TryCellNumber(a, out double aNumber) && TryCellNumber(b, out double bNumber))
+            return aNumber == bNumber;
         if (a is TextValue ta && b is TextValue tb)
             return string.Equals(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase);
         if (a is BoolValue ba && b is BoolValue bb)
@@ -1972,7 +2011,7 @@ public static class BuiltInFunctions
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
                 result *= value;
             }
-            else if (a is NumberValue or BoolValue) result *= ToNumber(a);
+            else if (a is NumberValue or BoolValue or DateTimeValue) result *= ToNumber(a);
         }
         return new NumberValue(result);
     }
@@ -2135,7 +2174,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
-        if (TimeSpan.TryParse(text, out var ts) && ts.Days == 0)
+        if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
@@ -2192,8 +2231,8 @@ public static class BuiltInFunctions
         var holidays = new HashSet<DateTime>();
         if (args.Count > 2 && args[2] is RangeValue hRange)
             foreach (var v in hRange.Flatten())
-                if (v is NumberValue nv)
-                    holidays.Add(DateTime.FromOADate(nv.Value).Date);
+                if (TryCellNumber(v, out double holidaySerial))
+                    holidays.Add(DateTime.FromOADate(holidaySerial).Date);
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         while (remaining > 0)
@@ -2216,8 +2255,8 @@ public static class BuiltInFunctions
         var holidays = new HashSet<DateTime>();
         if (args.Count > 2 && args[2] is RangeValue hRange)
             foreach (var v in hRange.Flatten())
-                if (v is NumberValue nv)
-                    holidays.Add(DateTime.FromOADate(nv.Value).Date);
+                if (TryCellNumber(v, out double holidaySerial))
+                    holidays.Add(DateTime.FromOADate(holidaySerial).Date);
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
@@ -2903,6 +2942,7 @@ public static class BuiltInFunctions
         args[0] switch
         {
             NumberValue nv   => nv,
+            DateTimeValue dt => new NumberValue(dt.Value),
             BoolValue bv     => new NumberValue(bv.Value ? 1 : 0),
             ErrorValue ev    => ev,
             _                => new NumberValue(0)
@@ -2949,7 +2989,7 @@ public static class BuiltInFunctions
             var v = includeFlat[i];
             if (v is ErrorValue e) return e;
             bool matched = v is BoolValue { Value: true }
-                        || (v is NumberValue nv && nv.Value != 0);
+                        || (TryCellNumber(v, out double value) && value != 0);
             if (matched) matchedRows.Add(i);
         }
 
@@ -3112,7 +3152,9 @@ public static class BuiltInFunctions
     private static ScalarValue Subtotal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        int funcNum = (int)ToNumber(args[0]);
+        var funcNumD = ToNumber(args[0]);
+        if (!double.IsFinite(funcNumD)) return ErrorValue.Value;
+        int funcNum = (int)funcNumD;
         bool skipHidden = funcNum >= 101;
         int baseFunc = funcNum > 100 ? funcNum - 100 : funcNum;
 
@@ -3132,7 +3174,7 @@ public static class BuiltInFunctions
                     {
                         var cell = rv.Cells[r, c];
                         if (cell is ErrorValue err) return err;
-                        if (cell is NumberValue nv) nums.Add(nv.Value);
+                        if (TryCellNumber(cell, out double value)) nums.Add(value);
                         if (cell is not BlankValue) countaCount++;
                     }
                 }

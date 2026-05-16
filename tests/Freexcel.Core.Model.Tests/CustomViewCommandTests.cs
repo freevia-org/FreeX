@@ -28,16 +28,40 @@ public sealed class CustomViewCommandTests
         var view = workbook.CustomViews.Should().ContainSingle().Subject;
         view.Name.Should().Be("Audit View");
         var state = view.Sheets.Should().ContainSingle().Subject;
-        state.SplitColumn.Should().Be(3);
+        state.SplitColumn.Should().BeNull();
         state.ShowGridlines.Should().BeFalse();
         state.ShowHeadings.Should().BeFalse();
         state.ShowRulers.Should().BeFalse();
         state.ZoomPercent.Should().Be(125);
         state.ShowFormulas.Should().BeTrue();
+        state.SplitRow.Should().BeNull();
+        state.SplitColumn.Should().BeNull();
 
         command.Revert(ctx);
 
         workbook.CustomViews.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SaveCustomViewCommand_DropsSplitPaneStateWhenFrozenPanesArePresent()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 2;
+        sheet.SplitRow = 4;
+        sheet.SplitColumn = 5;
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new SaveCustomViewCommand("Sanitized");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var state = workbook.CustomViews.Should().ContainSingle().Subject.Sheets.Should().ContainSingle().Subject;
+        state.FrozenRows.Should().Be(1);
+        state.FrozenCols.Should().Be(2);
+        state.SplitRow.Should().BeNull();
+        state.SplitColumn.Should().BeNull();
     }
 
     [Fact]
@@ -79,7 +103,7 @@ public sealed class CustomViewCommandTests
         sheet.ZoomPercent.Should().Be(150);
         sheet.ShowFormulas.Should().BeTrue();
         sheet.FrozenRows.Should().Be(2);
-        sheet.SplitColumn.Should().Be(4);
+        sheet.SplitColumn.Should().BeNull();
 
         command.Revert(ctx);
 
@@ -90,6 +114,32 @@ public sealed class CustomViewCommandTests
         sheet.ZoomPercent.Should().Be(100);
         sheet.ShowFormulas.Should().BeFalse();
         sheet.FrozenRows.Should().Be(0);
+        sheet.SplitColumn.Should().BeNull();
+    }
+
+    [Fact]
+    public void ApplyCustomViewCommand_DropsSplitPaneStateWhenSavedViewHasFrozenPanes()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Saved",
+            [new WorksheetCustomViewState(
+                "Sheet1",
+                WorksheetViewMode.Normal,
+                FrozenRows: 2,
+                FrozenCols: 1,
+                SplitRow: 6,
+                SplitColumn: 4)]));
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ApplyCustomViewCommand("Saved");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.FrozenRows.Should().Be(2);
+        sheet.FrozenCols.Should().Be(1);
+        sheet.SplitRow.Should().BeNull();
         sheet.SplitColumn.Should().BeNull();
     }
 

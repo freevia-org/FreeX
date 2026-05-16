@@ -126,6 +126,27 @@ public class FunctionLibraryTests
         _eval.Evaluate("=VLOOKUP(\"b\",A1:B3,2,FALSE)", sheet).Should().Be(new NumberValue(2));
     }
 
+    [Fact]
+    public void Vlookup_RangeLookupError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")), (1, 2, new NumberValue(1)),
+            (2, 1, new TextValue("b")), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=VLOOKUP(\"b\",A1:B2,2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Vlookup_DateKey_ExactMatchesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date), (1, 2, new TextValue("match")),
+            (2, 1, new NumberValue(10)), (2, 2, new TextValue("other")));
+
+        _eval.Evaluate("=VLOOKUP(DATE(2026,5,16),A1:B2,2,FALSE)", sheet).Should().Be(new TextValue("match"));
+    }
+
     // ── HLOOKUP ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -144,6 +165,27 @@ public class FunctionLibraryTests
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)), (1, 2, new NumberValue(20)));
         _eval.Evaluate("=HLOOKUP(99,A1:B2,2,FALSE)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_RangeLookupError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")), (1, 2, new TextValue("b")),
+            (2, 1, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=HLOOKUP(\"b\",A1:B2,2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_DateKey_ExactMatchesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("match")), (2, 2, new TextValue("other")));
+
+        _eval.Evaluate("=HLOOKUP(DATE(2026,5,16),A1:B2,2,FALSE)", sheet).Should().Be(new TextValue("match"));
     }
 
     // ── INDEX ─────────────────────────────────────────────────────────────────
@@ -177,6 +219,15 @@ public class FunctionLibraryTests
         _eval.Evaluate("=INDEX(A1:A3,2)", sheet).Should().Be(new NumberValue(20));
     }
 
+    [Fact]
+    public void Index_ColumnError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)), (1, 2, new NumberValue(20)));
+
+        _eval.Evaluate("=INDEX(A1:B1,1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
     // ── MATCH ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -207,6 +258,49 @@ public class FunctionLibraryTests
             (3, 1, new NumberValue(10)));
         // lookup 7 with match_type=1 → position 2 (5 is largest <= 7)
         _eval.Evaluate("=MATCH(7,A1:A3,1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_ApproximateDescending_ReturnsBestFit()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(8)),
+            (3, 1, new NumberValue(5)));
+
+        _eval.Evaluate("=MATCH(7,A1:A3,-1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_MatchTypeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)));
+
+        _eval.Evaluate("=MATCH(20,A1:A2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Match_DateCell_ExactMatchesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, date));
+
+        _eval.Evaluate("=MATCH(DATE(2026,5,16),A1:A2,0)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_DateCell_ApproximateAscendingComparesAsSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, date));
+
+        _eval.Evaluate("=MATCH(DATE(2026,5,17),A1:A2,1)", sheet).Should().Be(new NumberValue(2));
     }
 
     // ── SUMIF ─────────────────────────────────────────────────────────────────
@@ -244,6 +338,42 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SUMIF(A1:A3,\"a\",B1:B3)", sheet).Should().Be(new NumberValue(40));
     }
 
+    [Fact]
+    public void Sumif_CriteriaError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)));
+        _eval.Evaluate("=SUMIF(A1:A1,NA(),B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sumif_MatchedSumRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)), (1, 2, ErrorValue.NA));
+        _eval.Evaluate("=SUMIF(A1:A1,1,B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sumif_MatchedDateSumRange_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, date),
+            (2, 1, new TextValue("B")), (2, 2, new NumberValue(10)));
+
+        _eval.Evaluate("=SUMIF(A1:A2,\"A\",B1:B2)", sheet).Should().Be(new NumberValue(date.Value));
+    }
+
+    [Fact]
+    public void Sumif_DateCriteriaRange_MatchesDateSerialCriteria()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date), (1, 2, new NumberValue(10)),
+            (2, 1, new NumberValue(5)), (2, 2, new NumberValue(20)));
+
+        _eval.Evaluate("=SUMIF(A1:A2,DATE(2026,5,16),B1:B2)", sheet).Should().Be(new NumberValue(10));
+    }
+
     // ── COUNTIF ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -277,6 +407,35 @@ public class FunctionLibraryTests
         _eval.Evaluate("=COUNTIF(A1:A3,\"apple\")", sheet).Should().Be(new NumberValue(2));
     }
 
+    [Fact]
+    public void Countif_CriteriaError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+        _eval.Evaluate("=COUNTIF(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Countif_DateCell_MatchesDateSerialCriteria()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date),
+            (2, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=COUNTIF(A1:A2,DATE(2026,5,16))", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Countif_DateCell_MatchesNumericComparisonCriteria()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date),
+            (2, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=COUNTIF(A1:A2,\">40000\")", sheet).Should().Be(new NumberValue(1));
+    }
+
     // ── AVERAGEIF ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -300,6 +459,31 @@ public class FunctionLibraryTests
         result.Should().Be(ErrorValue.DivByZero);
     }
 
+    [Fact]
+    public void Averageif_CriteriaError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)));
+        _eval.Evaluate("=AVERAGEIF(A1:A1,NA(),B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Averageif_MatchedAverageRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)), (1, 2, ErrorValue.NA));
+        _eval.Evaluate("=AVERAGEIF(A1:A1,1,B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Averageif_MatchedDateAverageRange_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (1, 2, date),
+            (2, 1, new TextValue("B")), (2, 2, new NumberValue(10)));
+
+        _eval.Evaluate("=AVERAGEIF(A1:A2,\"A\",B1:B2)", sheet).Should().Be(new NumberValue(date.Value));
+    }
+
     // ── TEXT ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -312,7 +496,22 @@ public class FunctionLibraryTests
         ((TextValue)result).Value.Should().Contain("3.14");
     }
 
+    [Fact]
+    public void Text_DirectTodayResult_FormatsDateSerial()
+    {
+        var expected = DateTime.Today.ToOADate().ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+
+        _eval.Evaluate("=TEXT(TODAY(),\"0\")", MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
     // ── TRIM ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Text_FormatTextError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=TEXT(1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Trim_RemovesLeadingTrailing()
@@ -371,6 +570,20 @@ public class FunctionLibraryTests
     // ── FIND ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Substitute_OldTextError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SUBSTITUTE(\"abc\",NA(),\"x\")", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Substitute_NewTextError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SUBSTITUTE(\"abc\",\"a\",NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Find_CaseSensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -394,6 +607,27 @@ public class FunctionLibraryTests
     // ── SEARCH ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Find_EmptyFindTextAtEndBoundary_ReturnsStartNum()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FIND(\"\",\"abc\",4)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Find_WithinTextError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FIND(\"x\",NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Find_StartNumError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FIND(\"x\",\"xyz\",NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Search_CaseInsensitive_ReturnsPosition()
     {
         var sheet = MakeSheet();
@@ -409,6 +643,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Search_TildeEscapesWildcard_MatchesLiteralQuestion()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SEARCH(\"~?\",\"a?b\")", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
     public void Search_NotFound_ReturnsValueError()
     {
         var sheet = MakeSheet();
@@ -416,6 +657,27 @@ public class FunctionLibraryTests
     }
 
     // ── MID ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Search_EmptyFindTextAtEndBoundary_ReturnsStartNum()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SEARCH(\"\",\"abc\",4)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Search_WithinTextError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SEARCH(\"x\",NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Search_StartNumError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SEARCH(\"x\",\"xyz\",NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Mid_ExtractsSubstring()
@@ -434,6 +696,20 @@ public class FunctionLibraryTests
     // ── REPT ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Mid_StartNumError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=MID(\"hello\",NA(),1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Mid_NumCharsError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=MID(\"hello\",1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Rept_RepeatsTimes()
     {
         var sheet = MakeSheet();
@@ -447,6 +723,13 @@ public class FunctionLibraryTests
         _eval.Evaluate("=REPT(\"x\",0)", sheet).Should().Be(new TextValue(""));
     }
 
+    [Fact]
+    public void Rept_ResultLongerThanExcelCellLimit_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPT(\"x\",32768)", sheet).Should().Be(ErrorValue.Value);
+    }
+
     // ── VALUE ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -454,6 +737,13 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=VALUE(\"42.5\")", sheet).Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
+    public void Value_ParsesPercentText()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=VALUE(\"50%\")", sheet).Should().Be(new NumberValue(0.5));
     }
 
     [Fact]
@@ -475,6 +765,42 @@ public class FunctionLibraryTests
         dt.Year.Should().Be(2024);
         dt.Month.Should().Be(1);
         dt.Day.Should().Be(15);
+    }
+
+    [Fact]
+    public void Date_NormalizesOverflowMonth()
+    {
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=DATE(2024,13,1)", sheet);
+        result.Should().BeOfType<NumberValue>();
+        var dt = DateTime.FromOADate(((NumberValue)result).Value);
+        dt.Year.Should().Be(2025);
+        dt.Month.Should().Be(1);
+        dt.Day.Should().Be(1);
+    }
+
+    [Fact]
+    public void Date_NormalizesDayZeroToPreviousMonth()
+    {
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=DATE(2024,3,0)", sheet);
+        result.Should().BeOfType<NumberValue>();
+        var dt = DateTime.FromOADate(((NumberValue)result).Value);
+        dt.Year.Should().Be(2024);
+        dt.Month.Should().Be(2);
+        dt.Day.Should().Be(29);
+    }
+
+    [Fact]
+    public void Date_YearLessThan1900_Adds1900()
+    {
+        var sheet = MakeSheet();
+        var result = _eval.Evaluate("=DATE(24,1,1)", sheet);
+        result.Should().BeOfType<NumberValue>();
+        var dt = DateTime.FromOADate(((NumberValue)result).Value);
+        dt.Year.Should().Be(1924);
+        dt.Month.Should().Be(1);
+        dt.Day.Should().Be(1);
     }
 
     // ── YEAR / MONTH / DAY ────────────────────────────────────────────────────
@@ -504,6 +830,18 @@ public class FunctionLibraryTests
         var serial = new DateTime(2024, 6, 15).ToOADate();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
         _eval.Evaluate("=DAY(A1)", sheet).Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
+    public void Year_DirectTodayResult_ExtractsCurrentYear()
+    {
+        _eval.Evaluate("=YEAR(TODAY())", MakeSheet()).Should().Be(new NumberValue(DateTime.Today.Year));
+    }
+
+    [Fact]
+    public void Int_DirectTodayResult_ReturnsDateSerial()
+    {
+        _eval.Evaluate("=INT(TODAY())", MakeSheet()).Should().Be(new NumberValue(Math.Floor(DateTime.Today.ToOADate())));
     }
 
     // ── HOUR / MINUTE / SECOND ────────────────────────────────────────────────
@@ -557,7 +895,34 @@ public class FunctionLibraryTests
         _eval.Evaluate("=WEEKDAY(A1,2)", sheet).Should().Be(new NumberValue(1)); // Monday=1
     }
 
+    [Fact]
+    public void Weekday_ReturnType11_MondayIs1()
+    {
+        var sheet = MakeSheet();
+        var serial = new DateTime(2024, 1, 14).ToOADate(); // Sunday
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
+        _eval.Evaluate("=WEEKDAY(A1,11)", sheet).Should().Be(new NumberValue(7));
+    }
+
+    [Fact]
+    public void Weekday_InvalidReturnType_ReturnsNumError()
+    {
+        var sheet = MakeSheet();
+        var serial = new DateTime(2024, 1, 14).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
+        _eval.Evaluate("=WEEKDAY(A1,99)", sheet).Should().Be(ErrorValue.Num);
+    }
+
     // ── EDATE ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Weekday_ReturnTypeError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        var serial = new DateTime(2024, 1, 14).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(serial));
+        _eval.Evaluate("=WEEKDAY(A1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Edate_AddMonths()
@@ -622,6 +987,17 @@ public class FunctionLibraryTests
     // ── MOD ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Datedif_UnitError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        var s1 = new DateTime(2024, 1, 1).ToOADate();
+        var s2 = new DateTime(2024, 4, 1).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(s1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(s2));
+        _eval.Evaluate("=DATEDIF(A1,B1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Mod_BasicModulo()
     {
         var sheet = MakeSheet();
@@ -674,6 +1050,13 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=INT(-3.1)", sheet).Should().Be(new NumberValue(-4));
+    }
+
+    [Fact]
+    public void Round_NegativeDigits_RoundsLeftOfDecimal()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=ROUND(1234,-2)", sheet).Should().Be(new NumberValue(1200));
     }
 
     // ── CEILING ───────────────────────────────────────────────────────────────
@@ -767,6 +1150,13 @@ public class FunctionLibraryTests
     // ── LN ────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Log_BaseError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=LOG(100,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Ln_NaturalLog()
     {
         var sheet = MakeSheet();
@@ -827,6 +1217,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Fact_Decimal_TruncatesArgument()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FACT(5.9)", sheet).Should().Be(new NumberValue(120));
+    }
+
+    [Fact]
     public void Fact_Negative_ReturnsNumError()
     {
         var sheet = MakeSheet();
@@ -865,6 +1262,27 @@ public class FunctionLibraryTests
         _eval.Evaluate("=LARGE(A1:A1,5)", sheet).Should().Be(ErrorValue.Num);
     }
 
+    [Fact]
+    public void Large_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(8)));
+        _eval.Evaluate("=LARGE(A1:A3,1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Large_DateTimeRange_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date),
+            (2, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=LARGE(A1:A2,1)", sheet).Should().Be(new NumberValue(date.Value));
+    }
+
     // ── SMALL ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -884,6 +1302,52 @@ public class FunctionLibraryTests
         var sheet = MakeSheet(
             (1, 1, new NumberValue(5)));
         _eval.Evaluate("=SMALL(A1:A1,5)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Small_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(8)));
+        _eval.Evaluate("=SMALL(A1:A3,1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sumproduct_DirectErrorArgument_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=SUMPRODUCT(NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sumproduct_NonnumericRangeEntries_AreTreatedAsZero()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("5")),
+            (2, 1, new TextValue("x")),
+            (1, 2, new NumberValue(10)),
+            (2, 2, new NumberValue(20)));
+
+        _eval.Evaluate("=SUMPRODUCT(A1:A2,B1:B2)", sheet).Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
+    public void Sumproduct_DirectTextEntry_IsTreatedAsZero()
+    {
+        _eval.Evaluate("=SUMPRODUCT(\"5\",2)", MakeSheet()).Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
+    public void Sumproduct_DateTimeRangeEntry_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date),
+            (1, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=SUMPRODUCT(A1:A1,B1:B1)", sheet).Should().Be(new NumberValue(date.Value * 2));
     }
 
     // ── RANK ──────────────────────────────────────────────────────────────────
@@ -912,6 +1376,25 @@ public class FunctionLibraryTests
         _eval.Evaluate("=RANK(5,A1:A4,1)", sheet).Should().Be(new NumberValue(3));
     }
 
+    [Fact]
+    public void Rank_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(8)));
+        _eval.Evaluate("=RANK(5,A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Rank_OrderError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)),
+            (2, 1, new NumberValue(8)));
+        _eval.Evaluate("=RANK(5,A1:A2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
     // ── STDEV ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -935,6 +1418,33 @@ public class FunctionLibraryTests
     // ── MEDIAN ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Stdev_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(6)));
+        _eval.Evaluate("=STDEV(A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Stdev_DirectLogical_IncludesValue()
+    {
+        ((NumberValue)_eval.Evaluate("=STDEV(TRUE,3)", MakeSheet())).Value
+            .Should().BeApproximately(Math.Sqrt(2), 1e-10);
+    }
+
+    [Fact]
+    public void Stdev_ReferencedLogical_IgnoresValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(true)),
+            (2, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=STDEV(A1:A2)", sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
     public void Median_OddCount()
     {
         var sheet = MakeSheet(
@@ -955,7 +1465,29 @@ public class FunctionLibraryTests
         _eval.Evaluate("=MEDIAN(A1:A4)", sheet).Should().Be(new NumberValue(2.5));
     }
 
+    [Fact]
+    public void Median_DirectLogical_IncludesValue()
+    {
+        _eval.Evaluate("=MEDIAN(TRUE,3)", MakeSheet()).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Median_DirectNumericText_IncludesValue()
+    {
+        _eval.Evaluate("=MEDIAN(\"4\",2)", MakeSheet()).Should().Be(new NumberValue(3));
+    }
+
     // ── Bug regression: SUMIFS must receive RangeValues ────────────────────────
+
+    [Fact]
+    public void Median_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(3)));
+        _eval.Evaluate("=MEDIAN(A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Sumifs_RangeArg_WorksCorrectly()
@@ -966,6 +1498,35 @@ public class FunctionLibraryTests
         // SUMIFS(A1:A3, B1:B3, "A") → 40
         var result = _eval.Evaluate("=SUMIFS(A1:A3,B1:B3,\"A\")", sheet);
         result.Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Sumifs_CriteriaError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("A")));
+        _eval.Evaluate("=SUMIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sumifs_MatchedSumRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA),
+            (1, 2, new TextValue("A")));
+        _eval.Evaluate("=SUMIFS(A1:A1,B1:B1,\"A\")", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sumifs_MatchedDateSumRange_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date), (1, 2, new TextValue("A")),
+            (2, 1, new NumberValue(10)), (2, 2, new TextValue("B")));
+
+        _eval.Evaluate("=SUMIFS(A1:A2,B1:B2,\"A\")", sheet).Should().Be(new NumberValue(date.Value));
     }
 
     [Fact]
@@ -980,6 +1541,69 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_WildcardMatchMode_MatchesTextPattern()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Alpha")), (2, 1, new TextValue("Beta")), (3, 1, new TextValue("Alpine")),
+            (1, 2, new NumberValue(10)),    (2, 2, new NumberValue(20)),   (3, 2, new NumberValue(30)));
+
+        var result = _eval.Evaluate("=XLOOKUP(\"?eta\",A1:A3,B1:B3,\"\",2)", sheet);
+
+        result.Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void Xlookup_InvalidMatchMode_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,\"\",99)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Xlookup_InvalidSearchMode_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,\"\",0,0)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Xlookup_MatchModeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,\"\",NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xlookup_SearchModeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"B\",A1:A2,B1:B2,\"\",0,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xlookup_DateKey_ExactMatchesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date), (2, 1, new NumberValue(10)),
+            (1, 2, new TextValue("match")), (2, 2, new TextValue("other")));
+
+        _eval.Evaluate("=XLOOKUP(DATE(2026,5,16),A1:A2,B1:B2)", sheet).Should().Be(new TextValue("match"));
+    }
+
+    [Fact]
     public void Countifs_RangeArg_WorksCorrectly()
     {
         var sheet = MakeSheet(
@@ -991,6 +1615,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Countifs_CriteriaError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new TextValue("A")));
+        _eval.Evaluate("=COUNTIFS(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Countifs_DateCell_MatchesDateSerialCriteria()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date),
+            (2, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=COUNTIFS(A1:A2,DATE(2026,5,16))", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Averageifs_RangeArg_WorksCorrectly()
     {
         var sheet = MakeSheet(
@@ -999,6 +1641,35 @@ public class FunctionLibraryTests
         // AVERAGEIFS(A1:A3, B1:B3, "A") → 20  (average of 10 and 30)
         var result = _eval.Evaluate("=AVERAGEIFS(A1:A3,B1:B3,\"A\")", sheet);
         result.Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void Averageifs_CriteriaError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new TextValue("A")));
+        _eval.Evaluate("=AVERAGEIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Averageifs_MatchedAverageRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA),
+            (1, 2, new TextValue("A")));
+        _eval.Evaluate("=AVERAGEIFS(A1:A1,B1:B1,\"A\")", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Averageifs_MatchedDateAverageRange_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date), (1, 2, new TextValue("A")),
+            (2, 1, new NumberValue(10)), (2, 2, new TextValue("B")));
+
+        _eval.Evaluate("=AVERAGEIFS(A1:A2,B1:B2,\"A\")", sheet).Should().Be(new NumberValue(date.Value));
     }
 
     // ── Math / Trig ─────────────────────────────────────────────────────────────
@@ -1042,17 +1713,71 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PRODUCT(A1:A3)", sheet).Should().Be(new NumberValue(24));
     }
 
+    [Fact] public void Product_DirectTrue_MultipliesAsOne() =>
+        _eval.Evaluate("=PRODUCT(TRUE,2)", MakeSheet()).Should().Be(new NumberValue(2));
+
+    [Fact] public void Product_DirectFalse_MultipliesAsZero() =>
+        _eval.Evaluate("=PRODUCT(FALSE,2)", MakeSheet()).Should().Be(new NumberValue(0));
+
+    [Fact]
+    public void Product_DirectTodayResult_MultipliesDateSerial()
+    {
+        _eval.Evaluate("=PRODUCT(TODAY(),2)", MakeSheet())
+            .Should().Be(new NumberValue(DateTime.Today.ToOADate() * 2));
+    }
+
+    [Fact] public void Product_RangeFalse_IgnoresLogicalValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(false)),
+            (2, 1, new NumberValue(2)));
+        _eval.Evaluate("=PRODUCT(A1:A2)", sheet).Should().Be(new NumberValue(2));
+    }
+
     [Fact] public void Quotient_5_2_Returns2() =>
         _eval.Evaluate("=QUOTIENT(5,2)", MakeSheet()).Should().Be(new NumberValue(2));
 
     [Fact] public void Gcd_12_8_Returns4() =>
         _eval.Evaluate("=GCD(12,8)", MakeSheet()).Should().Be(new NumberValue(4));
 
+    [Fact] public void Gcd_DirectNumericText_CoercesValue() =>
+        _eval.Evaluate("=GCD(\"6\",9)", MakeSheet()).Should().Be(new NumberValue(3));
+
+    [Fact] public void Gcd_ReferencedLogicalAndText_IgnoresValues()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(true)),
+            (2, 1, new TextValue("6")),
+            (3, 1, new NumberValue(9)));
+        _eval.Evaluate("=GCD(A1:A3)", sheet).Should().Be(new NumberValue(9));
+    }
+
+    [Fact] public void Gcd_NegativeArgument_ReturnsNumError() =>
+        _eval.Evaluate("=GCD(-12,8)", MakeSheet()).Should().Be(ErrorValue.Num);
+
     [Fact] public void Lcm_4_6_Returns12() =>
         _eval.Evaluate("=LCM(4,6)", MakeSheet()).Should().Be(new NumberValue(12));
 
+    [Fact] public void Lcm_DirectNumericText_CoercesValue() =>
+        _eval.Evaluate("=LCM(\"6\",8)", MakeSheet()).Should().Be(new NumberValue(24));
+
+    [Fact] public void Lcm_ReferencedLogicalAndText_IgnoresValues()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(true)),
+            (2, 1, new TextValue("6")),
+            (3, 1, new NumberValue(8)));
+        _eval.Evaluate("=LCM(A1:A3)", sheet).Should().Be(new NumberValue(8));
+    }
+
+    [Fact] public void Lcm_NegativeArgument_ReturnsNumError() =>
+        _eval.Evaluate("=LCM(-4,6)", MakeSheet()).Should().Be(ErrorValue.Num);
+
     [Fact] public void Mround_14_5_Returns15() =>
         _eval.Evaluate("=MROUND(14,5)", MakeSheet()).Should().Be(new NumberValue(15));
+
+    [Fact] public void Mround_ZeroMultiple_ReturnsZero() =>
+        _eval.Evaluate("=MROUND(14,0)", MakeSheet()).Should().Be(new NumberValue(0));
 
     [Fact] public void Combin_5_2_Returns10() =>
         _eval.Evaluate("=COMBIN(5,2)", MakeSheet()).Should().Be(new NumberValue(10));
@@ -1074,6 +1799,12 @@ public class FunctionLibraryTests
         ((NumberValue)_eval.Evaluate("=TIME(12,0,0)", MakeSheet())).Value
             .Should().BeApproximately(0.5, 1e-10);
     }
+
+    [Fact] public void Time_NegativeHour_ReturnsNumError() =>
+        _eval.Evaluate("=TIME(-1,0,0)", MakeSheet()).Should().Be(ErrorValue.Num);
+
+    [Fact] public void Time_ArgumentAboveExcelLimit_ReturnsNumError() =>
+        _eval.Evaluate("=TIME(32768,0,0)", MakeSheet()).Should().Be(ErrorValue.Num);
 
     [Fact] public void Timevalue_String_ReturnsFraction()
     {
@@ -1123,12 +1854,40 @@ public class FunctionLibraryTests
             .Should().BeApproximately(expected, 1);
     }
 
+    [Fact]
+    public void Workday_DateTimeHolidayRange_SkipsHoliday()
+    {
+        double mon = new DateTime(2024, 1, 8).ToOADate();
+        double expected = new DateTime(2024, 1, 16).ToOADate();
+        var holiday = DateTimeValue.FromDateTime(new DateTime(2024, 1, 15));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(mon)),
+            (1, 2, holiday));
+
+        ((NumberValue)_eval.Evaluate("=WORKDAY(A1,5,B1:B1)", sheet)).Value
+            .Should().BeApproximately(expected, 1);
+    }
+
     [Fact] public void Networkdays_MonToFri_Returns5()
     {
         double mon = new DateTime(2024, 1, 8).ToOADate();
         double fri = new DateTime(2024, 1, 12).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(mon)), (1, 2, new NumberValue(fri)));
         _eval.Evaluate("=NETWORKDAYS(A1,B1)", sheet).Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void Networkdays_DateTimeHolidayRange_ExcludesHoliday()
+    {
+        double mon = new DateTime(2024, 1, 8).ToOADate();
+        double fri = new DateTime(2024, 1, 12).ToOADate();
+        var holiday = DateTimeValue.FromDateTime(new DateTime(2024, 1, 10));
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(mon)),
+            (1, 2, new NumberValue(fri)),
+            (1, 3, holiday));
+
+        _eval.Evaluate("=NETWORKDAYS(A1,B1,C1:C1)", sheet).Should().Be(new NumberValue(4));
     }
 
     [Fact] public void Days_EndMinusStart_ReturnsDifference()
@@ -1165,6 +1924,12 @@ public class FunctionLibraryTests
             .Should().BeApproximately(8.0 / 3.0, 1e-10);
     }
 
+    [Fact] public void VarP_DirectLogical_IncludesValue()
+    {
+        ((NumberValue)_eval.Evaluate("=VAR.P(TRUE,3)", MakeSheet())).Value
+            .Should().BeApproximately(1.0, 1e-10);
+    }
+
     [Fact] public void StdevP_ThreeValues_ReturnsStdDev()
     {
         var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
@@ -1178,11 +1943,23 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTILE(A1:A3,0.5)", sheet).Should().Be(new NumberValue(4));
     }
 
+    [Fact] public void Percentile_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,ErrorValue.NA),(3,1,new NumberValue(6)));
+        _eval.Evaluate("=PERCENTILE(A1:A3,0.5)", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact] public void PercentileExc_Middle_ReturnsInterpolated()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
         // PERCENTILE.EXC([1,2,3,4], 0.4): rank = 0.4*5-1 = 1, index 1 → value 2
         _eval.Evaluate("=PERCENTILE.EXC(A1:A4,0.4)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void PercentileExc_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,ErrorValue.NA),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
+        _eval.Evaluate("=PERCENTILE.EXC(A1:A4,0.4)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact] public void Quartile_Q1_Returns25th()
@@ -1193,6 +1970,12 @@ public class FunctionLibraryTests
             .Should().BeApproximately(1.75, 1e-10);
     }
 
+    [Fact] public void Quartile_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,ErrorValue.NA),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)));
+        _eval.Evaluate("=QUARTILE(A1:A4,1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact] public void Geomean_TwoNumbers_ReturnsGeometricMean()
     {
         var sheet = MakeSheet((1,1,new NumberValue(4)),(2,1,new NumberValue(9)));
@@ -1200,11 +1983,28 @@ public class FunctionLibraryTests
         _eval.Evaluate("=GEOMEAN(A1:A2)", sheet).Should().Be(new NumberValue(6));
     }
 
+    [Fact] public void Geomean_DirectLogical_IncludesValue()
+    {
+        _eval.Evaluate("=GEOMEAN(TRUE,4)", MakeSheet()).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void Geomean_ReferencedLogical_IgnoresValue()
+    {
+        var sheet = MakeSheet((1,1,new BoolValue(true)),(2,1,new NumberValue(4)));
+        _eval.Evaluate("=GEOMEAN(A1:A2)", sheet).Should().Be(new NumberValue(4));
+    }
+
     [Fact] public void Harmean_TwoNumbers_ReturnsHarmonicMean()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(4)));
         // harmean(1,4) = 2/(1+0.25) = 1.6
         ((NumberValue)_eval.Evaluate("=HARMEAN(A1:A2)", sheet)).Value
+            .Should().BeApproximately(1.6, 1e-10);
+    }
+
+    [Fact] public void Harmean_DirectLogical_IncludesValue()
+    {
+        ((NumberValue)_eval.Evaluate("=HARMEAN(TRUE,4)", MakeSheet())).Value
             .Should().BeApproximately(1.6, 1e-10);
     }
 
@@ -1216,10 +2016,32 @@ public class FunctionLibraryTests
             .Should().BeApproximately(4.0 / 3.0, 1e-10);
     }
 
+    [Fact] public void Avedev_DirectNumericText_IncludesValue()
+    {
+        ((NumberValue)_eval.Evaluate("=AVEDEV(\"1\",3)", MakeSheet())).Value
+            .Should().BeApproximately(1, 1e-10);
+    }
+
+    [Fact] public void Avedev_ReferencedLogical_IgnoresValue()
+    {
+        var sheet = MakeSheet((1,1,new BoolValue(true)),(2,1,new NumberValue(3)));
+        _eval.Evaluate("=AVEDEV(A1:A2)", sheet).Should().Be(new NumberValue(0));
+    }
+
     [Fact] public void Mode_ReturnsValueWithHighestFrequency()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(2)),(4,1,new NumberValue(3)));
         _eval.Evaluate("=MODE(A1:A4)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact] public void Mode_DirectLogical_IncludesValue()
+    {
+        _eval.Evaluate("=MODE(TRUE,TRUE,2)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
+    [Fact] public void Mode_DirectNumericText_IncludesValue()
+    {
+        _eval.Evaluate("=MODE(\"2\",2,3)", MakeSheet()).Should().Be(new NumberValue(2));
     }
 
     [Fact] public void Mode_AllUnique_ReturnsNA()
@@ -1236,6 +2058,19 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTRANK(A1:A5,3)", sheet).Should().Be(new NumberValue(0.5));
     }
 
+    [Fact] public void Percentrank_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,ErrorValue.NA),(3,1,new NumberValue(3)),(4,1,new NumberValue(4)),(5,1,new NumberValue(5)));
+        _eval.Evaluate("=PERCENTRANK(A1:A5,3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact] public void Percentrank_SignificanceError_PropagatesError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)));
+        _eval.Evaluate("=PERCENTRANK(A1:A3,2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact] public void Correl_PerfectPositive_Returns1()
     {
         var sheet = MakeSheet(
@@ -1243,6 +2078,14 @@ public class FunctionLibraryTests
             (1,2,new NumberValue(2)),(2,2,new NumberValue(4)),(3,2,new NumberValue(6)));
         ((NumberValue)_eval.Evaluate("=CORREL(A1:A3,B1:B3)", sheet)).Value
             .Should().BeApproximately(1.0, 1e-10);
+    }
+
+    [Fact] public void Correl_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,ErrorValue.NA),(3,1,new NumberValue(3)),
+            (1,2,new NumberValue(2)),(2,2,new NumberValue(4)),(3,2,new NumberValue(6)));
+        _eval.Evaluate("=CORREL(A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact] public void Forecast_LinearTrend_PredictsCorrectly()
@@ -1255,6 +2098,22 @@ public class FunctionLibraryTests
             .Should().BeApproximately(4.0, 1e-10);
     }
 
+    [Fact] public void Forecast_KnownYRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,ErrorValue.NA),(3,1,new NumberValue(3)),
+            (1,2,new NumberValue(2)),(2,2,new NumberValue(4)),(3,2,new NumberValue(6)));
+        _eval.Evaluate("=FORECAST(8,A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact] public void Forecast_KnownXRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),
+            (1,2,new NumberValue(2)),(2,2,ErrorValue.NA),(3,2,new NumberValue(6)));
+        _eval.Evaluate("=FORECAST(8,A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
     // ── Financial ────────────────────────────────────────────────────────────────
 
     [Fact] public void Pmt_MonthlyPayment_ReturnsNegative()
@@ -1264,12 +2123,24 @@ public class FunctionLibraryTests
             .Should().BeApproximately(-188.71, 0.01);
     }
 
+    [Fact] public void Pmt_FutureValueError_PropagatesError() =>
+        _eval.Evaluate("=PMT(0.05/12,60,10000,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Pmt_TypeError_PropagatesError() =>
+        _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
     [Fact] public void Pv_FutureValue_ReturnsPresent()
     {
         // PV(5%/12, 60, 188.71) ≈ -10000
         ((NumberValue)_eval.Evaluate("=PV(0.05/12,60,188.71)", MakeSheet())).Value
             .Should().BeApproximately(-10000, 1.0);
     }
+
+    [Fact] public void Pv_FutureValueError_PropagatesError() =>
+        _eval.Evaluate("=PV(0.05/12,60,188.71,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Pv_TypeError_PropagatesError() =>
+        _eval.Evaluate("=PV(0.05/12,60,188.71,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact] public void Fv_Savings_ReturnsAccumulated()
     {
@@ -1278,11 +2149,23 @@ public class FunctionLibraryTests
             .Should().BeApproximately(1227.89, 0.1);
     }
 
+    [Fact] public void Fv_PresentValueError_PropagatesError() =>
+        _eval.Evaluate("=FV(0.05/12,12,-100,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Fv_TypeError_PropagatesError() =>
+        _eval.Evaluate("=FV(0.05/12,12,-100,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
     [Fact] public void Nper_CountPeriods_Returns60()
     {
         ((NumberValue)_eval.Evaluate("=NPER(0.05/12,-188.71,10000)", MakeSheet())).Value
             .Should().BeApproximately(60, 0.1);
     }
+
+    [Fact] public void Nper_FutureValueError_PropagatesError() =>
+        _eval.Evaluate("=NPER(0.05/12,-188.71,10000,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Nper_TypeError_PropagatesError() =>
+        _eval.Evaluate("=NPER(0.05/12,-188.71,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact] public void Rate_FindsInterestRate()
     {
@@ -1290,6 +2173,15 @@ public class FunctionLibraryTests
         ((NumberValue)_eval.Evaluate("=RATE(60,-188.71,10000)", MakeSheet())).Value
             .Should().BeApproximately(0.05 / 12, 1e-5);
     }
+
+    [Fact] public void Rate_FutureValueError_PropagatesError() =>
+        _eval.Evaluate("=RATE(60,-188.71,10000,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Rate_TypeError_PropagatesError() =>
+        _eval.Evaluate("=RATE(60,-188.71,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Rate_GuessError_PropagatesError() =>
+        _eval.Evaluate("=RATE(60,-188.71,10000,0,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact] public void Npv_BasicCashflow_ReturnsNpv()
     {
@@ -1302,6 +2194,22 @@ public class FunctionLibraryTests
             .Should().BeApproximately(-1000.0/1.1 + 400.0/1.21 + 400.0/1.331 + 400.0/1.4641, 0.01);
     }
 
+    [Fact] public void Npv_DirectLogical_IncludesValueArgument()
+    {
+        _eval.Evaluate("=NPV(0,TRUE,3)", MakeSheet()).Should().Be(new NumberValue(4));
+    }
+
+    [Fact] public void Npv_DirectNumericText_IncludesValueArgument()
+    {
+        _eval.Evaluate("=NPV(0,\"1\",3)", MakeSheet()).Should().Be(new NumberValue(4));
+    }
+
+    [Fact] public void Npv_ReferencedLogical_IgnoresValue()
+    {
+        var sheet = MakeSheet((1,1,new BoolValue(true)),(2,1,new NumberValue(3)));
+        _eval.Evaluate("=NPV(0,A1:A2)", sheet).Should().Be(new NumberValue(3));
+    }
+
     [Fact] public void Irr_CashflowSeries_ReturnsRate()
     {
         var sheet = MakeSheet(
@@ -1311,6 +2219,23 @@ public class FunctionLibraryTests
             (4,1,new NumberValue(500)));
         ((NumberValue)_eval.Evaluate("=IRR(A1:A4)", sheet)).Value
             .Should().BeApproximately(0.0890, 0.001);
+    }
+
+    [Fact] public void Irr_GuessError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(-1000)),
+            (2,1,new NumberValue(1100)));
+        _eval.Evaluate("=IRR(A1:A2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact] public void Irr_RangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(-1000)),
+            (2,1,ErrorValue.NA),
+            (3,1,new NumberValue(1100)));
+        _eval.Evaluate("=IRR(A1:A3)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact] public void Sln_StraightLine_ReturnsAnnualDep()
@@ -1343,9 +2268,51 @@ public class FunctionLibraryTests
         _eval.Evaluate("=REPLACE(\"Hello World\",7,5,\"Excel\")", MakeSheet())
             .Should().Be(new TextValue("Hello Excel"));
 
+    [Fact]
+    public void Replace_StartNumError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",NA(),1,\"x\")", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Replace_NumCharsError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",1,NA(),\"x\")", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Replace_NewTextError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",1,1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Replace_StartNumLessThanOne_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",0,1,\"x\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Replace_NumCharsNegative_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",1,-1,\"x\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
     [Fact] public void Concatenate_TwoStrings_JoinsThem() =>
         _eval.Evaluate("=CONCATENATE(\"Hello \",\"World\")", MakeSheet())
             .Should().Be(new TextValue("Hello World"));
+
+    [Fact]
+    public void Textjoin_TextArgumentError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=TEXTJOIN(\",\",TRUE,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact] public void T_Text_ReturnsText() =>
         _eval.Evaluate("=T(\"hello\")", MakeSheet()).Should().Be(new TextValue("hello"));
@@ -1363,6 +2330,27 @@ public class FunctionLibraryTests
         _eval.Evaluate("=FIXED(1234.567,2,TRUE)", MakeSheet())
             .Should().Be(new TextValue("1234.57"));
 
+    [Fact]
+    public void Fixed_NegativeDecimals_RoundsLeftOfDecimal()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FIXED(1234.567,-1,TRUE)", sheet).Should().Be(new TextValue("1230"));
+    }
+
+    [Fact]
+    public void Fixed_DecimalsError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FIXED(1234,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Fixed_NoCommasError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FIXED(1234,2,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact] public void Clean_RemovesControlChars()
     {
         var sheet = MakeSheet((1, 1, new TextValue("Hello\x01World")));
@@ -1372,6 +2360,20 @@ public class FunctionLibraryTests
     [Fact] public void Dollar_FormatsAsCurrency() =>
         _eval.Evaluate("=DOLLAR(1234.5,2)", MakeSheet())
             .Should().Be(new TextValue("$1,234.50"));
+
+    [Fact]
+    public void Dollar_NegativeDecimals_RoundsLeftOfDecimal()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=DOLLAR(1234.567,-1)", sheet).Should().Be(new TextValue("$1,230"));
+    }
+
+    [Fact]
+    public void Dollar_DecimalsError_PropagatesError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=DOLLAR(1234,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     // ── Reference ────────────────────────────────────────────────────────────────
 
@@ -1386,6 +2388,15 @@ public class FunctionLibraryTests
 
     [Fact] public void Address_RelativeRef_ReturnsString() =>
         _eval.Evaluate("=ADDRESS(2,3,4)", MakeSheet()).Should().Be(new TextValue("C2"));
+
+    [Fact] public void Address_AbsNumError_PropagatesError() =>
+        _eval.Evaluate("=ADDRESS(2,3,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Address_A1Error_PropagatesError() =>
+        _eval.Evaluate("=ADDRESS(2,3,1,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Address_SheetTextError_PropagatesError() =>
+        _eval.Evaluate("=ADDRESS(2,3,1,TRUE,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact] public void Lookup_FindsValueInVector()
     {
@@ -1403,6 +2414,15 @@ public class FunctionLibraryTests
 
     [Fact] public void N_True_ReturnsOne() =>
         _eval.Evaluate("=N(TRUE)", MakeSheet()).Should().Be(new NumberValue(1));
+
+    [Fact]
+    public void N_DateTimeCell_ReturnsDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet((1, 1, date));
+
+        _eval.Evaluate("=N(A1)", sheet).Should().Be(new NumberValue(date.Value));
+    }
 
     // ── SEQUENCE ──────────────────────────────────────────────────────────────────
 
@@ -1451,6 +2471,15 @@ public class FunctionLibraryTests
 
     // ── FILTER ────────────────────────────────────────────────────────────────────
 
+    [Fact] public void Sequence_ColumnsError_PropagatesError() =>
+        _eval.Evaluate("=SEQUENCE(2,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Sequence_StartError_PropagatesError() =>
+        _eval.Evaluate("=SEQUENCE(2,1,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    [Fact] public void Sequence_StepError_PropagatesError() =>
+        _eval.Evaluate("=SEQUENCE(2,1,1,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+
     [Fact]
     public void Filter_ByBoolArray_ReturnsMatchingRows()
     {
@@ -1491,7 +2520,31 @@ public class FunctionLibraryTests
         rv.Cells[1, 1].Should().Be(new TextValue("C"));
     }
 
+    [Fact]
+    public void Filter_DateTimeIncludeCell_TreatsDateSerialAsTrue()
+    {
+        var includeDate = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("keep")), (1, 2, includeDate),
+            (2, 1, new TextValue("drop")), (2, 2, new NumberValue(0)));
+
+        var result = _eval.Evaluate("=FILTER(A1:A2,B1:B2)", sheet);
+        var rv = (RangeValue)result;
+        rv.RowCount.Should().Be(1);
+        rv.Cells[0, 0].Should().Be(new TextValue("keep"));
+    }
+
     // ── SORT ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Filter_IncludeRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")),
+            (1, 2, ErrorValue.NA));
+
+        _eval.Evaluate("=FILTER(A1:A1,B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Sort_SingleColumn_SortsAscending()
@@ -1542,6 +2595,24 @@ public class FunctionLibraryTests
 
     // ── UNIQUE ────────────────────────────────────────────────────────────────────
 
+    [Fact] public void Sort_SortIndexError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+        _eval.Evaluate("=SORT(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact] public void Sort_SortOrderError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+        _eval.Evaluate("=SORT(A1:A1,1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact] public void Sort_ByColError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+        _eval.Evaluate("=SORT(A1:A1,1,1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact]
     public void Unique_SingleColumn_RemovesDuplicates()
     {
@@ -1583,6 +2654,18 @@ public class FunctionLibraryTests
     }
 
     // ── SUBTOTAL ─────────────────────────────────────────────────────────────
+
+    [Fact] public void Unique_ByColError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+        _eval.Evaluate("=UNIQUE(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact] public void Unique_ExactlyOnceError_PropagatesError()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+        _eval.Evaluate("=UNIQUE(A1:A1,FALSE,NA())", sheet).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Subtotal_FuncNum9_Sum_NoHiddenRows()
@@ -1672,5 +2755,49 @@ public class FunctionLibraryTests
         var sheet = MakeSheet();
         var result = _eval.Evaluate("=SUBTOTAL(4,B1:B3)", sheet);
         result.Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
+    public void Subtotal_SumRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(30)));
+
+        _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Subtotal_CountaRangeError_PropagatesError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("hello")),
+            (2, 1, ErrorValue.NA));
+
+        _eval.Evaluate("=SUBTOTAL(3,A1:A2)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Subtotal_ExcludedHiddenRowError_IsIgnored()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, ErrorValue.NA),
+            (3, 1, new NumberValue(30)));
+        sheet.GroupHiddenRows.Add(2);
+
+        _eval.Evaluate("=SUBTOTAL(109,A1:A3)", sheet).Should().Be(new NumberValue(40));
+    }
+
+    [Fact]
+    public void Subtotal_SumDateRange_IncludesDateSerial()
+    {
+        var date = DateTimeValue.FromDateTime(new DateTime(2026, 5, 16));
+        var sheet = MakeSheet(
+            (1, 1, date),
+            (2, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=SUBTOTAL(9,A1:A2)", sheet).Should().Be(new NumberValue(date.Value + 10));
     }
 }

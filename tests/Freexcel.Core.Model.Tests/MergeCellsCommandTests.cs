@@ -86,7 +86,7 @@ public class MergeCellsCommandTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 2, 2));
 
-        sheet.MergedRegions.Add(range);
+        sheet.AddMergedRegion(range);
         new UnmergeCellsCommand(sheet.Id, range).Apply(ctx);
 
         sheet.MergedRegions.Should().BeEmpty();
@@ -99,7 +99,7 @@ public class MergeCellsCommandTests
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 2, 2));
-        sheet.MergedRegions.Add(range);
+        sheet.AddMergedRegion(range);
 
         var cmd = new UnmergeCellsCommand(sheet.Id, range);
         cmd.Apply(ctx);

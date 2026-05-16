@@ -626,6 +626,50 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void BarRenderer_AppliesWorkbookThemeSeriesAndLegendColors()
+    {
+        var sheetId = SheetId.New();
+        var theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(20, 90, 160))
+            .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(40, 120, 80))
+            .WithColor(WorkbookThemeColorSlot.Dark1, new CellColor(30, 30, 30));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            LegendTextColor = new CellColor(200, 200, 200),
+            LegendTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(112, 173, 71),
+                    StrokeColor: new CellColor(55, 86, 35),
+                    FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+                    StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5))
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []),
+            theme);
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<BarSeries>().Subject;
+        series.FillColor.Should().Be(OxyColor.FromRgb(20, 90, 160));
+        series.StrokeColor.Should().Be(OxyColor.FromRgb(40, 120, 80));
+        model.Legends.Should().ContainSingle().Which.LegendTextColor.Should().Be(OxyColor.FromRgb(30, 30, 30));
+    }
+
+    [Fact]
     public void AreaRenderer_AppliesSeriesFormatToFillOutlineAndDash()
     {
         var sheetId = SheetId.New();
@@ -1257,6 +1301,52 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void BubbleRenderer_RendersMultipleYAndSizePairsAgainstSharedXValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bubble,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5)),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196)),
+                new ChartSeriesFormat(1, FillColor: new CellColor(112, 173, 71))
+            ]
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Margin A"),
+                Cell(1, 3, "Size A"),
+                Cell(1, 4, "Margin B"),
+                Cell(1, 5, "Size B"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "4"),
+                Cell(2, 4, "7"),
+                Cell(2, 5, "3"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "20"),
+                Cell(3, 3, "8"),
+                Cell(3, 4, "11"),
+                Cell(3, 5, "6")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().HaveCount(2).And.AllBeOfType<ScatterSeries>().Subject.Cast<ScatterSeries>().ToList();
+        series[0].Title.Should().Be("Margin A");
+        series[0].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 10, 4), (2, 20, 8));
+        series[0].MarkerFill.Should().Be(OxyColor.FromRgb(68, 114, 196));
+        series[1].Title.Should().Be("Margin B");
+        series[1].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal((1, 7, 3), (2, 11, 6));
+        series[1].MarkerFill.Should().Be(OxyColor.FromRgb(112, 173, 71));
+    }
+
+    [Fact]
     public void BubbleRenderer_AddsLinearTrendlineFromActualXValues()
     {
         var sheetId = SheetId.New();
@@ -1388,9 +1478,22 @@ public sealed class ChartRendererTests
 
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
-        var method = typeof(ChartRenderer).GetMethod("BuildPlotModel", BindingFlags.NonPublic | BindingFlags.Static);
+        var method = typeof(ChartRenderer).GetMethod(
+            "BuildPlotModel",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            [typeof(ChartModel), typeof(ViewportModel)]);
         method.Should().NotBeNull();
         return method!.Invoke(null, [chart, viewport]).Should().BeOfType<PlotModel>().Subject;
+    }
+
+    private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
+    {
+        var method = typeof(ChartRenderer).GetMethod(
+            "BuildPlotModel",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            [typeof(ChartModel), typeof(ViewportModel), typeof(WorkbookTheme)]);
+        method.Should().NotBeNull();
+        return method!.Invoke(null, [chart, viewport, theme]).Should().BeOfType<PlotModel>().Subject;
     }
 
     private static DisplayCell Cell(uint row, uint col, string text) =>

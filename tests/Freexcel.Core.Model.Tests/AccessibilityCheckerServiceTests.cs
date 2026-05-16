@@ -14,7 +14,7 @@ public sealed class AccessibilityCheckerServiceTests
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var b2 = new CellAddress(sheet.Id, 2, 2);
 
-        sheet.MergedRegions.Add(new GridRange(a1, b2));
+        sheet.AddMergedRegion(new GridRange(a1, b2));
         sheet.Pictures.Add(new PictureModel
         {
             Anchor = new CellAddress(sheet.Id, 4, 1),

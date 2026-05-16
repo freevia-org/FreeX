@@ -155,13 +155,29 @@ public class SheetTests
         {
             var start = new CellAddress(sheet.Id, r * 2, 1);
             var end   = new CellAddress(sheet.Id, r * 2, 2);
-            sheet.MergedRegions.Add(new GridRange(start, end));
-            sheet.InvalidateMergeIndex();
+            sheet.AddMergedRegion(new GridRange(start, end));
         }
         var target = new CellAddress(sheet.Id, 500, 1);
         var found  = sheet.GetMergeRegion(target);
         found.Should().NotBeNull("cell at row 500 col 1 is inside a merge region");
         found!.Value.Start.Row.Should().Be(500);
+    }
+
+    [Fact]
+    public void ReplaceMergedRegions_MaterializesLazyProjectionBeforeReplacing()
+    {
+        var sheet = new Sheet(SheetId.New(), "Test");
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 3, 2)));
+
+        sheet.ReplaceMergedRegions(sheet.MergedRegions.Select(region => new GridRange(
+            new CellAddress(region.Start.Sheet, region.Start.Row + 1, region.Start.Col),
+            new CellAddress(region.End.Sheet, region.End.Row + 1, region.End.Col))));
+
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 4, 2)));
     }
 }
 
