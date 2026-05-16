@@ -1195,11 +1195,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static CellColor MapColor(XLColor xlColor)
     {
-        if (xlColor.ColorType == XLColorType.Color)
-            return new CellColor(xlColor.Color.R, xlColor.Color.G, xlColor.Color.B);
-        // Theme and indexed colors require workbook theme context to resolve to RGB.
-        // Phase 2 limitation: flattened to black. Track as a known gap.
-        return CellColor.Black;
+        System.Drawing.Color c;
+        try
+        {
+            c = xlColor.Color;
+        }
+        catch (InvalidOperationException)
+        {
+            return new CellColor(0, 0, 0);
+        }
+
+        return new CellColor(c.R, c.G, c.B);
     }
 
     private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color)
