@@ -40,8 +40,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
             sheet.ClearCell(addr);
         }
 
-        sheet.MergedRegions.Add(_range);
-        sheet.InvalidateMergeIndex();
+        sheet.AddMergedRegion(_range);
         return new CommandOutcome(true);
     }
 
@@ -50,8 +49,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        sheet.MergedRegions.Remove(_range);
-        sheet.InvalidateMergeIndex();
+        sheet.RemoveMergedRegion(_range);
 
         foreach (var (addr, oldCell) in _snapshot)
         {
@@ -88,8 +86,7 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        _removed = sheet.MergedRegions.Remove(_range);
-        sheet.InvalidateMergeIndex();
+        _removed = sheet.RemoveMergedRegion(_range);
         return new CommandOutcome(true);
     }
 
@@ -100,8 +97,7 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         if (!sheet.MergedRegions.Contains(_range))
-            sheet.MergedRegions.Add(_range);
-        sheet.InvalidateMergeIndex();
+            sheet.AddMergedRegion(_range);
         _removed = false;
     }
 }

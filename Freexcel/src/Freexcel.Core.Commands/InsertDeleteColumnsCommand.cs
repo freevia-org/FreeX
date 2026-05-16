@@ -66,23 +66,19 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        for (int i = 0; i < sheet.MergedRegions.Count; i++)
+        var shiftedMerges = sheet.MergedRegions.Select(m =>
         {
-            var m = sheet.MergedRegions[i];
             if (m.Start.Col >= _beforeCol)
-            {
-                sheet.MergedRegions[i] = new GridRange(
+                return new GridRange(
                     new CellAddress(m.Start.Sheet, m.Start.Row, m.Start.Col + _count),
                     new CellAddress(m.End.Sheet,   m.End.Row,   m.End.Col   + _count));
-            }
-            else if (m.End.Col >= _beforeCol)
-            {
-                sheet.MergedRegions[i] = new GridRange(
+            if (m.End.Col >= _beforeCol)
+                return new GridRange(
                     m.Start,
                     new CellAddress(m.End.Sheet, m.End.Row, m.End.Col + _count));
-            }
-        }
-        sheet.InvalidateMergeIndex();
+            return m;
+        }).ToList();
+        sheet.ReplaceMergedRegions(shiftedMerges);
 
         _formulaSnapshot.Clear();
         InsertRowsCommand.RewriteAllFormulas(
@@ -109,11 +105,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         foreach (var c in shifted) sheet.HiddenCols.Add(c - _count);
 
         if (_mergeSnapshot is not null)
-        {
-            sheet.MergedRegions.Clear();
-            sheet.MergedRegions.AddRange(_mergeSnapshot);
-            sheet.InvalidateMergeIndex();
-        }
+            sheet.ReplaceMergedRegions(_mergeSnapshot);
 
         InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
@@ -198,18 +190,15 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        sheet.MergedRegions.RemoveAll(m => m.Start.Col <= endCol && m.End.Col >= _startCol);
-        for (int i = 0; i < sheet.MergedRegions.Count; i++)
-        {
-            var m = sheet.MergedRegions[i];
-            if (m.Start.Col > endCol)
-            {
-                sheet.MergedRegions[i] = new GridRange(
+        var adjustedMerges = sheet.MergedRegions
+            .Where(m => !(m.Start.Col <= endCol && m.End.Col >= _startCol))
+            .Select(m => m.Start.Col > endCol
+                ? new GridRange(
                     new CellAddress(m.Start.Sheet, m.Start.Row, m.Start.Col - _count),
-                    new CellAddress(m.End.Sheet,   m.End.Row,   m.End.Col   - _count));
-            }
-        }
-        sheet.InvalidateMergeIndex();
+                    new CellAddress(m.End.Sheet,   m.End.Row,   m.End.Col   - _count))
+                : m)
+            .ToList();
+        sheet.ReplaceMergedRegions(adjustedMerges);
 
         _formulaSnapshot.Clear();
         InsertRowsCommand.RewriteAllFormulas(
@@ -235,11 +224,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
             sheet.SetCell(addr, cell.Clone());
 
         if (_mergeSnapshot is not null)
-        {
-            sheet.MergedRegions.Clear();
-            sheet.MergedRegions.AddRange(_mergeSnapshot);
-            sheet.InvalidateMergeIndex();
-        }
+            sheet.ReplaceMergedRegions(_mergeSnapshot);
 
         InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         InsertRowsCommand.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
