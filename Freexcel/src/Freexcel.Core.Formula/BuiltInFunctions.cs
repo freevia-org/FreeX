@@ -49,6 +49,7 @@ public static class BuiltInFunctions
         ["HLOOKUP"]     = (Hlookup, 3, 4),
         ["INDEX"]       = (Index, 2, 3),
         ["MATCH"]       = (Match, 2, 3),
+        ["XMATCH"]      = (Xmatch, 2, 4),
 
         // ── Phase 4.2: Conditional aggregation ──────────────────────────────
         ["SUMIF"]       = (Sumif, 2, 3),
@@ -232,15 +233,28 @@ public static class BuiltInFunctions
 
         // ── Phase 4b: Dynamic arrays ─────────────────────────────────────────
         ["SEQUENCE"] = (Sequence, 1, 4),
+        ["RANDARRAY"] = (RandArray, 0, 5),
         ["FILTER"]   = (Filter, 2, 3),
         ["SORT"]     = (Sort, 1, 4),
+        ["SORTBY"]   = (SortBy, 2, 255),
+        ["TAKE"]     = (Take, 2, 3),
+        ["DROP"]     = (Drop, 2, 3),
+        ["CHOOSEROWS"] = (ChooseRows, 2, 255),
+        ["CHOOSECOLS"] = (ChooseCols, 2, 255),
+        ["VSTACK"]   = (VStack, 1, 255),
+        ["HSTACK"]   = (HStack, 1, 255),
+        ["TOROW"]    = (ToRow, 1, 3),
+        ["TOCOL"]    = (ToCol, 1, 3),
+        ["WRAPROWS"] = (WrapRows, 2, 3),
+        ["WRAPCOLS"] = (WrapCols, 2, 3),
+        ["EXPAND"]   = (Expand, 2, 4),
         ["UNIQUE"]   = (Unique, 1, 3),
 
         // ── Subtotal ─────────────────────────────────────────────────────────
         ["SUBTOTAL"] = (Subtotal, 2, 255),
     };
 
-    private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "INDIRECT"];
+    private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT"];
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);
@@ -311,6 +325,9 @@ public static class BuiltInFunctions
         }
     }
 
+    private static bool SameShape(RangeValue left, RangeValue right) =>
+        left.RowCount == right.RowCount && left.ColCount == right.ColCount;
+
     private static bool TryReferencedNumber(ReferencedScalarValue value, out double number, out ErrorValue? error)
     {
         number = 0;
@@ -378,13 +395,14 @@ public static class BuiltInFunctions
             if (arg is DirectTextLiteralValue direct)
             {
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
+                if (!double.IsFinite(value)) return ErrorValue.Num;
                 total += value;
                 continue;
             }
             if (arg is BlankValue or TextValue) continue; // SUM ignores text and blanks in ranges
             total += ToNumber(arg);
         }
-        return new NumberValue(total);
+        return NumberResult(total);
     }
 
     private static ScalarValue Average(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -407,6 +425,7 @@ public static class BuiltInFunctions
             if (arg is DirectTextLiteralValue direct)
             {
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
+                if (!double.IsFinite(value)) return ErrorValue.Num;
                 total += value;
                 count++;
                 continue;
@@ -415,7 +434,7 @@ public static class BuiltInFunctions
             total += ToNumber(arg);
             count++;
         }
-        return count == 0 ? ErrorValue.DivByZero : new NumberValue(total / count);
+        return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
     }
 
     private static ScalarValue Min(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -436,6 +455,7 @@ public static class BuiltInFunctions
             if (arg is DirectTextLiteralValue direct)
             {
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
+                if (!double.IsFinite(value)) return ErrorValue.Num;
                 if (min is null || value < min) min = value;
                 continue;
             }
@@ -443,7 +463,7 @@ public static class BuiltInFunctions
             var val = ToNumber(arg);
             if (min is null || val < min) min = val;
         }
-        return min.HasValue ? new NumberValue(min.Value) : new NumberValue(0);
+        return min.HasValue ? NumberResult(min.Value) : new NumberValue(0);
     }
 
     private static ScalarValue Max(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -464,6 +484,7 @@ public static class BuiltInFunctions
             if (arg is DirectTextLiteralValue direct)
             {
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
+                if (!double.IsFinite(value)) return ErrorValue.Num;
                 if (max is null || value > max) max = value;
                 continue;
             }
@@ -471,7 +492,7 @@ public static class BuiltInFunctions
             var val = ToNumber(arg);
             if (max is null || val > max) max = val;
         }
-        return max.HasValue ? new NumberValue(max.Value) : new NumberValue(0);
+        return max.HasValue ? NumberResult(max.Value) : new NumberValue(0);
     }
 
     private static ScalarValue Count(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -579,10 +600,22 @@ public static class BuiltInFunctions
         int digits = (int)Math.Truncate(rawDigits);
         if (digits < -15 || digits > 15) return ErrorValue.Num;
         if (digits >= 0)
-            return new NumberValue(Math.Round(number, digits, MidpointRounding.AwayFromZero));
+            return NumberResult(Math.Round(number, digits, MidpointRounding.AwayFromZero));
 
         double factor = Math.Pow(10, -digits);
-        return new NumberValue(Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor);
+        return NumberResult(Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor);
+    }
+
+    private static ScalarValue NumberResult(double value) =>
+        double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num;
+
+    private static bool TryTruncateToLong(double value, out long result)
+    {
+        result = 0;
+        if (!double.IsFinite(value) || value < long.MinValue || value >= 9223372036854775808.0)
+            return false;
+        result = (long)Math.Truncate(value);
+        return true;
     }
 
     private static double RoundWithExcelDigits(double number, int digits)
@@ -597,7 +630,9 @@ public static class BuiltInFunctions
     private static ScalarValue Abs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue err) return err;
-        return new NumberValue(Math.Abs(ToNumber(args[0])));
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(Math.Abs(n));
     }
 
     private static ScalarValue Concat(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -608,7 +643,7 @@ public static class BuiltInFunctions
             if (arg is ErrorValue err) return err;
             sb.Append(ToText(arg));
         }
-        return new TextValue(sb.ToString());
+        return TextResult(sb.ToString());
     }
 
     private static ScalarValue Len(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -622,10 +657,12 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var text  = ToText(args[0]);
-        var count = args.Count > 1 ? (int)ToNumber(args[1]) : 1;
+        var rawCount = args.Count > 1 ? ToNumber(args[1]) : 1;
+        if (!double.IsFinite(rawCount)) return ErrorValue.Value;
+        var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        return new TextValue(text[..count]);
+        return TextResult(text[..count]);
     }
 
     private static ScalarValue Right(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -633,10 +670,12 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue err) return err;
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var text  = ToText(args[0]);
-        var count = args.Count > 1 ? (int)ToNumber(args[1]) : 1;
+        var rawCount = args.Count > 1 ? ToNumber(args[1]) : 1;
+        if (!double.IsFinite(rawCount)) return ErrorValue.Value;
+        var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        return new TextValue(count == 0 ? "" : text[^count..]);
+        return TextResult(count == 0 ? "" : text[^count..]);
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -647,6 +686,51 @@ public static class BuiltInFunctions
 
     private static ScalarValue Rand(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         new NumberValue(Random.Shared.NextDouble());
+
+    private static ScalarValue RandArray(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        foreach (var arg in args)
+            if (arg is ErrorValue e) return e;
+
+        int rows = args.Count > 0 && args[0] is not BlankValue ? (int)ToNumber(args[0]) : 1;
+        int cols = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
+        double min = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
+        double max = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        bool wholeNumber = args.Count > 4 && args[4] is not BlankValue && ToBool(args[4]);
+
+        if (rows < 1 || cols < 1) return ErrorValue.Value;
+        if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
+        if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
+
+        if (wholeNumber)
+        {
+            if (!TryTruncateToLong(Math.Ceiling(min), out long bottom) ||
+                !TryTruncateToLong(Math.Floor(max), out long top))
+                return ErrorValue.Value;
+            if (bottom > top) return ErrorValue.Value;
+
+            long span;
+            try { span = checked(top - bottom + 1); }
+            catch (OverflowException) { return ErrorValue.Value; }
+            var integers = new ScalarValue[rows, cols];
+            for (int r = 0; r < rows; r++)
+                for (int c = 0; c < cols; c++)
+                    integers[r, c] = new NumberValue(Random.Shared.NextInt64(bottom, bottom + span));
+            return new RangeValue(integers);
+        }
+
+        double width = max - min;
+        if (!double.IsFinite(width)) return ErrorValue.Value;
+        var result = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                var value = min + Random.Shared.NextDouble() * width;
+                if (!double.IsFinite(value)) return ErrorValue.Value;
+                result[r, c] = new NumberValue(value);
+            }
+        return new RangeValue(result);
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Error handling
@@ -707,7 +791,7 @@ public static class BuiltInFunctions
             // Exact match
             for (int r = 1; r <= table.RowCount; r++)
             {
-                if (ScalarEquals(table.At(r, 1), lookupValue))
+                if (MatchExactValue(table.At(r, 1), lookupValue))
                     return table.At(r, colIndex);
             }
             return ErrorValue.NA;
@@ -747,7 +831,7 @@ public static class BuiltInFunctions
         {
             for (int c = 1; c <= table.ColCount; c++)
             {
-                if (ScalarEquals(table.At(1, c), lookupValue))
+                if (MatchExactValue(table.At(1, c), lookupValue))
                     return table.At(rowIndex, c);
             }
             return ErrorValue.NA;
@@ -767,8 +851,27 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawColNum)) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 
-        if (rowNum < 1 || rowNum > table.RowCount) return ErrorValue.Ref;
-        if (colNum < 1 || colNum > table.ColCount) return ErrorValue.Ref;
+        if (rowNum < 0 || rowNum > table.RowCount) return ErrorValue.Ref;
+        if (colNum < 0 || colNum > table.ColCount) return ErrorValue.Ref;
+
+        if (rowNum == 0 && colNum == 0)
+            return table;
+
+        if (rowNum == 0)
+        {
+            var col = new ScalarValue[table.RowCount, 1];
+            for (int r = 0; r < table.RowCount; r++)
+                col[r, 0] = table.Cells[r, colNum - 1];
+            return new RangeValue(col);
+        }
+
+        if (colNum == 0)
+        {
+            var row = new ScalarValue[1, table.ColCount];
+            for (int c = 0; c < table.ColCount; c++)
+                row[0, c] = table.Cells[rowNum - 1, c];
+            return new RangeValue(row);
+        }
 
         return table.At(rowNum, colNum);
     }
@@ -780,7 +883,10 @@ public static class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
         var lookupValue = args[0];
-        int matchType = args.Count > 2 ? (int)ToNumber(args[2]) : 1;
+        double rawMatchType = args.Count > 2 ? ToNumber(args[2]) : 1;
+        if (!double.IsFinite(rawMatchType)) return ErrorValue.NA;
+        int matchType = (int)rawMatchType;
+        if (matchType is not (-1 or 0 or 1)) return ErrorValue.NA;
 
         // Flatten to 1-D (single row or column expected)
         var flat = table.Flatten();
@@ -789,7 +895,7 @@ public static class BuiltInFunctions
         {
             // Exact match
             for (int i = 0; i < flat.Count; i++)
-                if (ScalarEquals(flat[i], lookupValue))
+                if (MatchExactValue(flat[i], lookupValue))
                     return new NumberValue(i + 1);
             return ErrorValue.NA;
         }
@@ -828,6 +934,64 @@ public static class BuiltInFunctions
     // Phase 4.2  –  Conditional aggregation
     // ═══════════════════════════════════════════════════════════════════
 
+    private static bool MatchExactValue(ScalarValue candidate, ScalarValue lookupValue)
+    {
+        if (lookupValue is TextValue pattern && candidate is TextValue text)
+            return WildcardMatch(text.Value, pattern.Value, ignoreCase: true);
+
+        return ScalarEquals(candidate, lookupValue);
+    }
+
+    private static ScalarValue Xmatch(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
+        if (lookupArr.RowCount != 1 && lookupArr.ColCount != 1) return ErrorValue.Value;
+
+        var lookupValue = args[0];
+        var lookupFlat = lookupArr.Flatten();
+        int matchMode = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 0;
+        int searchMode = args.Count > 3 && args[3] is not BlankValue ? (int)ToNumber(args[3]) : 1;
+        if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
+        if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
+
+        var indices = Enumerable.Range(0, lookupFlat.Count).ToList();
+        if (searchMode is -1 or -2) indices.Reverse();
+
+        if (matchMode == 0)
+        {
+            foreach (int i in indices)
+                if (ScalarEquals(lookupFlat[i], lookupValue))
+                    return new NumberValue(i + 1);
+            return ErrorValue.NA;
+        }
+
+        if (matchMode == 2)
+        {
+            string pattern = ToText(lookupValue);
+            foreach (int i in indices)
+                if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
+                    return new NumberValue(i + 1);
+            return ErrorValue.NA;
+        }
+
+        if (matchMode == -1)
+        {
+            int best = -1;
+            foreach (int i in indices)
+                if (CompareScalar(lookupFlat[i], lookupValue) <= 0)
+                    best = i;
+            return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
+        }
+
+        foreach (int i in indices)
+            if (CompareScalar(lookupFlat[i], lookupValue) >= 0)
+                return new NumberValue(i + 1);
+        return ErrorValue.NA;
+    }
+
     private static ScalarValue Sumif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
@@ -849,7 +1013,7 @@ public static class BuiltInFunctions
                 else if (sv is BlankValue) { /* skip */ }
             }
         }
-        return new NumberValue(total);
+        return NumberResult(total);
     }
 
     private static ScalarValue Countif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -887,7 +1051,7 @@ public static class BuiltInFunctions
             }
         }
         if (count == 0) return ErrorValue.DivByZero;
-        return new NumberValue(total / count);
+        return NumberResult(total / count);
     }
 
     /// <summary>
@@ -1016,8 +1180,8 @@ public static class BuiltInFunctions
         // Simple inline formatter (avoids depending on Freexcel.Core.Calc)
         var val = args[0];
         if (TryCellNumber(val, out double value))
-            return new TextValue(FormatNumberInline(value, fmt));
-        return new TextValue(ToText(val));
+            return TextResult(FormatNumberInline(value, fmt));
+        return TextResult(ToText(val));
     }
 
     private static string FormatNumberInline(double value, string fmt)
@@ -1033,19 +1197,19 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = MultiSpaceRegex.Replace(ToText(args[0]).Trim(), " ");
-        return new TextValue(text);
+        return TextResult(text);
     }
 
     private static ScalarValue Upper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new TextValue(ToText(args[0]).ToUpperInvariant());
+        return TextResult(ToText(args[0]).ToUpperInvariant());
     }
 
     private static ScalarValue Lower(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new TextValue(ToText(args[0]).ToLowerInvariant());
+        return TextResult(ToText(args[0]).ToLowerInvariant());
     }
 
     private static ScalarValue Proper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1061,7 +1225,7 @@ public static class BuiltInFunctions
             else if (capitaliseNext) { sb.Append(char.ToUpperInvariant(ch)); capitaliseNext = false; }
             else sb.Append(char.ToLowerInvariant(ch));
         }
-        return new TextValue(sb.ToString());
+        return TextResult(sb.ToString());
     }
 
     private static ScalarValue Substitute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1073,13 +1237,15 @@ public static class BuiltInFunctions
         var oldText = ToText(args[1]);
         var newText = ToText(args[2]);
 
-        if (oldText.Length == 0) return new TextValue(text);
+        if (oldText.Length == 0) return TextResult(text);
 
         if (args.Count > 3)
         {
             // Replace the Nth occurrence only
             if (args[3] is ErrorValue e3) return e3;
-            int instanceNum = (int)ToNumber(args[3]);
+            double rawInstanceNum = ToNumber(args[3]);
+            if (!double.IsFinite(rawInstanceNum)) return ErrorValue.Value;
+            int instanceNum = (int)rawInstanceNum;
             if (instanceNum < 1) return ErrorValue.Value;
             int count = 0;
             int pos = 0;
@@ -1089,16 +1255,19 @@ public static class BuiltInFunctions
                 if (idx < 0) break;
                 count++;
                 if (count == instanceNum)
-                    return new TextValue(text[..idx] + newText + text[(idx + oldText.Length)..]);
+                    return TextResult(text[..idx] + newText + text[(idx + oldText.Length)..]);
                 pos = idx + oldText.Length;
             }
-            return new TextValue(text); // instance not found
+            return TextResult(text); // instance not found
         }
         else
         {
-            return new TextValue(text.Replace(oldText, newText, StringComparison.Ordinal));
+            return TextResult(text.Replace(oldText, newText, StringComparison.Ordinal));
         }
     }
+
+    private static ScalarValue TextResult(string text) =>
+        text.Length > 32767 ? ErrorValue.Value : new TextValue(text);
 
     private static ScalarValue Find(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -1157,7 +1326,7 @@ public static class BuiltInFunctions
         if (start < 0 || numChars < 0) return ErrorValue.Value;
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
-        return new TextValue(text.Substring(start, actualLen));
+        return TextResult(text.Substring(start, actualLen));
     }
 
     private static ScalarValue Rept(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1199,9 +1368,14 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        int year  = (int)ToNumber(args[0]);
-        int month = (int)ToNumber(args[1]);
-        int day   = (int)ToNumber(args[2]);
+        double rawYear = ToNumber(args[0]);
+        double rawMonth = ToNumber(args[1]);
+        double rawDay = ToNumber(args[2]);
+        if (!double.IsFinite(rawYear) || !double.IsFinite(rawMonth) || !double.IsFinite(rawDay))
+            return ErrorValue.Num;
+        int year  = (int)rawYear;
+        int month = (int)rawMonth;
+        int day   = (int)rawDay;
         if (year >= 0 && year < 1900)
             year += 1900;
         if (year < 0 || year > 9999) return ErrorValue.Num;
@@ -1271,7 +1445,9 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
-        int returnType = args.Count > 1 ? (int)ToNumber(args[1]) : 1;
+        double rawReturnType = args.Count > 1 ? ToNumber(args[1]) : 1;
+        if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
+        int returnType = (int)rawReturnType;
         int dow = (int)dt.DayOfWeek; // 0=Sunday...6=Saturday
         return returnType switch
         {
@@ -1288,7 +1464,9 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
-        int months = (int)ToNumber(args[1]);
+        double rawMonths = ToNumber(args[1]);
+        if (!double.IsFinite(rawMonths)) return ErrorValue.Num;
+        int months = (int)rawMonths;
         try
         {
             var result = dt.AddMonths(months);
@@ -1313,16 +1491,10 @@ public static class BuiltInFunctions
             "M"  => new NumberValue(MonthDiff(start, end)),
             "Y"  => new NumberValue(YearDiff(start, end)),
             "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
-            "YD" => new NumberValue((end - new DateTime(end.Year, start.Month, start.Day)).Days < 0
-                        ? (end - new DateTime(end.Year - 1, start.Month, start.Day)).Days
-                        : (end - new DateTime(end.Year, start.Month, start.Day)).Days),
+            "YD" => DateDifYD(start, end),
             // Guard: DateTime.DaysInMonth(0, 12) throws when end.Year==1 && end.Month==1
             "MD" => end.Year == 1 && end.Month == 1 ? ErrorValue.Num
-                  : new NumberValue(end.Day >= start.Day
-                        ? end.Day - start.Day
-                        : end.Day + DateTime.DaysInMonth(
-                            end.Month == 1 ? end.Year - 1 : end.Year,
-                            end.Month == 1 ? 12 : end.Month - 1) - start.Day),
+                  : DateDifMD(start, end),
             _    => ErrorValue.Value
         };
     }
@@ -1342,6 +1514,31 @@ public static class BuiltInFunctions
         return years;
     }
 
+    // DATEDIF helpers that can throw ArgumentOutOfRangeException when start is a
+    // leap day (Feb 29) and end.Year is not a leap year — catch → #NUM!
+    private static ScalarValue DateDifYD(DateTime start, DateTime end)
+    {
+        try
+        {
+            var anchor = new DateTime(end.Year, start.Month, start.Day);
+            return new NumberValue((end - (anchor > end ? anchor.AddYears(-1) : anchor)).Days);
+        }
+        catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
+    }
+
+    private static ScalarValue DateDifMD(DateTime start, DateTime end)
+    {
+        try
+        {
+            if (end.Day >= start.Day)
+                return new NumberValue(end.Day - start.Day);
+            int prevYear  = end.Month == 1 ? end.Year - 1 : end.Year;
+            int prevMonth = end.Month == 1 ? 12 : end.Month - 1;
+            return new NumberValue(end.Day + DateTime.DaysInMonth(prevYear, prevMonth) - start.Day);
+        }
+        catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Math
     // ═══════════════════════════════════════════════════════════════════
@@ -1354,28 +1551,36 @@ public static class BuiltInFunctions
         var d = ToNumber(args[1]);
         if (!double.IsFinite(n) || !double.IsFinite(d)) return ErrorValue.Num;
         if (d == 0) return ErrorValue.DivByZero;
-        return new NumberValue(n - d * Math.Floor(n / d));
+        return NumberResult(n - d * Math.Floor(n / d));
     }
 
     private static ScalarValue Power(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        return new NumberValue(Math.Pow(ToNumber(args[0]), ToNumber(args[1])));
+        var number = ToNumber(args[0]);
+        var power = ToNumber(args[1]);
+        if (number == 0 && power < 0) return ErrorValue.DivByZero;
+        var result = Math.Pow(number, power);
+        if (double.IsNaN(result)) return ErrorValue.Num;
+        if (double.IsInfinity(result)) return ErrorValue.Num;
+        return new NumberValue(result);
     }
 
     private static ScalarValue Sqrt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
         var n = ToNumber(args[0]);
-        if (n < 0) return ErrorValue.Num;
+        if (!double.IsFinite(n) || n < 0) return ErrorValue.Num;
         return new NumberValue(Math.Sqrt(n));
     }
 
     private static ScalarValue IntFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(Math.Floor(ToNumber(args[0])));
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(Math.Floor(n));
     }
 
     private static ScalarValue Ceiling(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1385,7 +1590,9 @@ public static class BuiltInFunctions
         var n = ToNumber(args[0]);
         var sig = ToNumber(args[1]);
         if (sig == 0) return new NumberValue(0);
-        return new NumberValue(Math.Ceiling(n / sig) * sig);
+        if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
+        if (n > 0 && sig < 0) return ErrorValue.Num;
+        return NumberResult(Math.Ceiling(n / sig) * sig);
     }
 
     private static ScalarValue Floor(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1395,7 +1602,9 @@ public static class BuiltInFunctions
         var n = ToNumber(args[0]);
         var sig = ToNumber(args[1]);
         if (sig == 0) return new NumberValue(0);
-        return new NumberValue(Math.Floor(n / sig) * sig);
+        if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
+        if (n > 0 && sig < 0) return ErrorValue.Num;
+        return NumberResult(Math.Floor(n / sig) * sig);
     }
 
     private static ScalarValue Randbetween(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1405,18 +1614,21 @@ public static class BuiltInFunctions
         double db = ToNumber(args[0]);
         double dt = ToNumber(args[1]);
         if (!double.IsFinite(db) || !double.IsFinite(dt)) return ErrorValue.Num;
-        long bottom = (long)Math.Truncate(db);
-        long top    = (long)Math.Truncate(dt);
+        if (!TryTruncateToLong(db, out long bottom) || !TryTruncateToLong(dt, out long top))
+            return ErrorValue.Num;
         if (bottom > top) return ErrorValue.Num;
-        // Random.Shared.NextInt64 requires [minValue, maxValue) so add 1 safely
-        long range = top - bottom + 1;
-        return new NumberValue(bottom + (long)(Random.Shared.NextDouble() * range));
+        // NextInt64(min, max) is [min, max) — add 1 to make it inclusive
+        long range;
+        try { range = checked(top - bottom + 1); }
+        catch (OverflowException) { return ErrorValue.Num; }
+        return new NumberValue(Random.Shared.NextInt64(bottom, bottom + range));
     }
 
     private static ScalarValue Sign(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
         var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
         return new NumberValue(n > 0 ? 1 : n < 0 ? -1 : 0);
     }
 
@@ -1426,22 +1638,26 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         var n    = ToNumber(args[0]);
         var base_ = args.Count > 1 ? ToNumber(args[1]) : 10.0;
+        if (!double.IsFinite(n) || !double.IsFinite(base_)) return ErrorValue.Num;
         if (n <= 0 || base_ <= 0 || base_ == 1) return ErrorValue.Num;
-        return new NumberValue(Math.Log(n) / Math.Log(base_));
+        return NumberResult(Math.Log(n) / Math.Log(base_));
     }
 
     private static ScalarValue Ln(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
         var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
         if (n <= 0) return ErrorValue.Num;
-        return new NumberValue(Math.Log(n));
+        return NumberResult(Math.Log(n));
     }
 
     private static ScalarValue Exp(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(Math.Exp(ToNumber(args[0])));
+        var result = Math.Exp(ToNumber(args[0]));
+        if (double.IsNaN(result) || double.IsInfinity(result)) return ErrorValue.Num;
+        return new NumberValue(result);
     }
 
     private static ScalarValue Pi(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -1496,7 +1712,10 @@ public static class BuiltInFunctions
         if (args[1] is not RangeValue range) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var number = ToNumber(args[0]);
-        int order  = args.Count > 2 ? (int)ToNumber(args[2]) : 0;
+        if (!double.IsFinite(number)) return ErrorValue.Num;
+        double rawOrder = args.Count > 2 ? ToNumber(args[2]) : 0;
+        if (!double.IsFinite(rawOrder)) return ErrorValue.Num;
+        int order  = (int)rawOrder;
 
         var (nums, err) = CollectRangeNumbers(range);
         if (err is not null) return err;
@@ -1520,7 +1739,7 @@ public static class BuiltInFunctions
         if (nums.Count < 2) return ErrorValue.DivByZero;
         double mean = nums.Average();
         double variance = nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
-        return new NumberValue(Math.Sqrt(variance));
+        return NumberResult(Math.Sqrt(variance));
     }
 
     private static ScalarValue Median(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1532,8 +1751,8 @@ public static class BuiltInFunctions
         nums.Sort();
         int mid = nums.Count / 2;
         if (nums.Count % 2 == 1)
-            return new NumberValue(nums[mid]);
-        return new NumberValue((nums[mid - 1] + nums[mid]) / 2.0);
+            return NumberResult(nums[mid]);
+        return NumberResult((nums[mid - 1] + nums[mid]) / 2.0);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1552,6 +1771,7 @@ public static class BuiltInFunctions
         for (int p = 0; p < pairCount; p++)
         {
             if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
+            if (!SameShape(sumRange, cr)) return ErrorValue.Value;
             if (args[2 + p * 2] is ErrorValue criteriaError) return criteriaError;
             pairs[p] = (cr.Flatten(), args[2 + p * 2]);
         }
@@ -1570,7 +1790,7 @@ public static class BuiltInFunctions
                 if (TryCellNumber(sumFlat[i], out double value)) total += value;
             }
         }
-        return new NumberValue(total);
+        return NumberResult(total);
     }
 
     // COUNTIFS(criteria_range1, criteria1, ...)
@@ -1579,9 +1799,12 @@ public static class BuiltInFunctions
         if (args.Count < 2 || args.Count % 2 != 0) return ErrorValue.Value;
         int pairCount = args.Count / 2;
         var pairs = new (IReadOnlyList<ScalarValue> Flat, ScalarValue Criteria)[pairCount];
+        RangeValue? firstRange = null;
         for (int p = 0; p < pairCount; p++)
         {
             if (args[p * 2] is not RangeValue cr) return ErrorValue.Value;
+            firstRange ??= cr;
+            if (!SameShape(firstRange, cr)) return ErrorValue.Value;
             if (args[p * 2 + 1] is ErrorValue criteriaError) return criteriaError;
             pairs[p] = (cr.Flatten(), args[p * 2 + 1]);
         }
@@ -1612,6 +1835,7 @@ public static class BuiltInFunctions
         for (int p = 0; p < pairCount; p++)
         {
             if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
+            if (!SameShape(avgRange, cr)) return ErrorValue.Value;
             if (args[2 + p * 2] is ErrorValue criteriaError) return criteriaError;
             pairs[p] = (cr.Flatten(), args[2 + p * 2]);
         }
@@ -1632,7 +1856,7 @@ public static class BuiltInFunctions
             }
         }
         if (count == 0) return ErrorValue.DivByZero;
-        return new NumberValue(total / count);
+        return NumberResult(total / count);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1645,11 +1869,16 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
         if (args[2] is not RangeValue returnArr) return ErrorValue.Value;
+        var lookupIsVertical = lookupArr.ColCount == 1;
+        var lookupIsHorizontal = lookupArr.RowCount == 1;
+        if (!lookupIsVertical && !lookupIsHorizontal) return ErrorValue.Value;
+        if (lookupIsVertical && returnArr.RowCount != lookupArr.RowCount) return ErrorValue.Value;
+        if (lookupIsHorizontal && returnArr.ColCount != lookupArr.ColCount) return ErrorValue.Value;
 
         var lookupValue = args[0];
         var lookupFlat = lookupArr.Flatten();
-        var returnFlat = returnArr.Flatten();
 
+        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         ScalarValue ifNotFound = args.Count > 3 ? args[3] : ErrorValue.NA;
         if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
         if (args.Count > 5 && args[5] is ErrorValue e5) return e5;
@@ -1666,7 +1895,7 @@ public static class BuiltInFunctions
             // Exact match
             foreach (int i in indices)
                 if (ScalarEquals(lookupFlat[i], lookupValue))
-                    return i < returnFlat.Count ? returnFlat[i] : ErrorValue.NA;
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
             return ifNotFound;
         }
         else if (matchMode == 2)
@@ -1674,7 +1903,7 @@ public static class BuiltInFunctions
             string pattern = ToText(lookupValue);
             foreach (int i in indices)
                 if (lookupFlat[i] is TextValue tv && WildcardMatch(tv.Value, pattern, ignoreCase: true))
-                    return i < returnFlat.Count ? returnFlat[i] : ErrorValue.NA;
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
             return ifNotFound;
         }
         else if (matchMode == -1)
@@ -1684,16 +1913,34 @@ public static class BuiltInFunctions
             foreach (int i in indices)
                 if (CompareScalar(lookupFlat[i], lookupValue) <= 0)
                     best = i;
-            return best >= 0 && best < returnFlat.Count ? returnFlat[best] : ifNotFound;
+            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
         }
         else
         {
             // Exact or next larger: return first element >= lookupValue
             foreach (int i in indices)
                 if (CompareScalar(lookupFlat[i], lookupValue) >= 0)
-                    return i < returnFlat.Count ? returnFlat[i] : ifNotFound;
+                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
             return ifNotFound;
         }
+    }
+
+    private static ScalarValue XlookupReturnAt(RangeValue returnArr, int index, bool lookupIsVertical)
+    {
+        if (lookupIsVertical)
+        {
+            if (returnArr.ColCount == 1) return returnArr.Cells[index, 0];
+            var row = new ScalarValue[1, returnArr.ColCount];
+            for (int c = 0; c < returnArr.ColCount; c++)
+                row[0, c] = returnArr.Cells[index, c];
+            return new RangeValue(row);
+        }
+
+        if (returnArr.RowCount == 1) return returnArr.Cells[0, index];
+        var col = new ScalarValue[returnArr.RowCount, 1];
+        for (int r = 0; r < returnArr.RowCount; r++)
+            col[r, 0] = returnArr.Cells[r, index];
+        return new RangeValue(col);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1800,7 +2047,8 @@ public static class BuiltInFunctions
             if (ignoreEmpty && t.Length == 0) continue;
             parts.Add(t);
         }
-        return new TextValue(string.Join(delimiter, parts));
+        var result = string.Join(delimiter, parts);
+        return result.Length > 32767 ? ErrorValue.Value : new TextValue(result);
     }
 
     private static ScalarValue Exact(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1821,7 +2069,9 @@ public static class BuiltInFunctions
     private static ScalarValue Char(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        int code = (int)ToNumber(args[0]);
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Value;
+        int code = (int)n;
         if (code <= 0 || code > 255) return ErrorValue.Value;
         return new TextValue(((char)code).ToString());
     }
@@ -1833,7 +2083,7 @@ public static class BuiltInFunctions
     private static ScalarValue Countblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is not RangeValue range) return ErrorValue.Value;
-        int count = range.Flatten().Count(v => v is BlankValue);
+        int count = range.Flatten().Count(v => v is BlankValue || v is TextValue { Value.Length: 0 });
         return new NumberValue(count);
     }
 
@@ -1845,7 +2095,9 @@ public static class BuiltInFunctions
     private static ScalarValue Choose(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        int idx = (int)ToNumber(args[0]);
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Value;
+        int idx = (int)n;
         if (idx < 1 || idx >= args.Count) return ErrorValue.Value;
         return args[idx];
     }
@@ -1874,10 +2126,12 @@ public static class BuiltInFunctions
                 var v = arrays[k][i];
                 if (v is ErrorValue ev) return ev;
                 product *= TryCellNumber(v, out double value) ? value : 0;
+                if (!double.IsFinite(product)) return ErrorValue.Num;
             }
             total += product;
+            if (!double.IsFinite(total)) return ErrorValue.Num;
         }
-        return new NumberValue(total);
+        return NumberResult(total);
     }
 
     private static ScalarValue Rounddown(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1889,7 +2143,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
         double factor = Math.Pow(10, digits);
-        return new NumberValue((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
+        return NumberResult((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
     }
 
     private static ScalarValue Roundup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1901,7 +2155,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
         double factor = Math.Pow(10, digits);
-        return new NumberValue((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
+        return NumberResult((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
     }
 
     private static ScalarValue Trunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1917,7 +2171,7 @@ public static class BuiltInFunctions
             digits = (int)Math.Truncate(rawDigits);
         }
         double factor = Math.Pow(10, digits);
-        return new NumberValue(Math.Truncate(n * factor) / factor);
+        return NumberResult(Math.Truncate(n * factor) / factor);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1958,19 +2212,25 @@ public static class BuiltInFunctions
     private static ScalarValue Sin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(Math.Sin(ToNumber(args[0])));
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(Math.Sin(n));
     }
 
     private static ScalarValue Cos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(Math.Cos(ToNumber(args[0])));
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(Math.Cos(n));
     }
 
     private static ScalarValue Tan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(Math.Tan(ToNumber(args[0])));
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(Math.Tan(n));
     }
 
     private static ScalarValue Asin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1992,7 +2252,9 @@ public static class BuiltInFunctions
     private static ScalarValue Atan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(Math.Atan(ToNumber(args[0])));
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(Math.Atan(n));
     }
 
     // ATAN2(x_num, y_num) – matches Excel argument order (x first, then y)
@@ -2002,6 +2264,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         double x = ToNumber(args[0]);
         double y = ToNumber(args[1]);
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return ErrorValue.Num;
         if (x == 0 && y == 0) return ErrorValue.DivByZero;
         return new NumberValue(Math.Atan2(y, x));
     }
@@ -2009,13 +2272,17 @@ public static class BuiltInFunctions
     private static ScalarValue Degrees(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(ToNumber(args[0]) * 180.0 / Math.PI);
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(n * 180.0 / Math.PI);
     }
 
     private static ScalarValue Radians(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(ToNumber(args[0]) * Math.PI / 180.0);
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        return new NumberValue(n * Math.PI / 180.0);
     }
 
     private static ScalarValue Product(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2033,20 +2300,23 @@ public static class BuiltInFunctions
             if (a is DirectTextLiteralValue direct)
             {
                 if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
+                if (!double.IsFinite(value)) return ErrorValue.Num;
                 result *= value;
             }
             else if (a is NumberValue or BoolValue or DateTimeValue) result *= ToNumber(a);
         }
-        return new NumberValue(result);
+        return NumberResult(result);
     }
 
     private static ScalarValue Quotient(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        double n = ToNumber(args[0]);
         double d = ToNumber(args[1]);
+        if (!double.IsFinite(n) || !double.IsFinite(d)) return ErrorValue.Num;
         if (d == 0) return ErrorValue.DivByZero;
-        return new NumberValue(Math.Truncate(ToNumber(args[0]) / d));
+        return NumberResult(Math.Truncate(n / d));
     }
 
     private static ScalarValue Gcd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2117,9 +2387,10 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         double n = ToNumber(args[0]);
         double m = ToNumber(args[1]);
+        if (!double.IsFinite(n) || !double.IsFinite(m)) return ErrorValue.Num;
         if (m == 0) return new NumberValue(0);
         if (n != 0 && (n < 0) != (m < 0)) return ErrorValue.Num;
-        return new NumberValue(Math.Round(n / m, MidpointRounding.AwayFromZero) * m);
+        return NumberResult(Math.Round(n / m, MidpointRounding.AwayFromZero) * m);
     }
 
     private static ScalarValue Combin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2135,7 +2406,7 @@ public static class BuiltInFunctions
         double result = 1;
         for (int i = 0; i < k; i++)
             result = result * (n - i) / (i + 1);
-        return new NumberValue(Math.Round(result));
+        return NumberResult(Math.Round(result));
     }
 
     private static ScalarValue Permut(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2150,7 +2421,7 @@ public static class BuiltInFunctions
         double result = 1;
         for (int i = 0; i < k; i++)
             result *= (n - i);
-        return new NumberValue(result);
+        return NumberResult(result);
     }
 
     private static ScalarValue Odd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2221,7 +2492,9 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
-        int months = (int)ToNumber(args[1]);
+        double rawMonths = ToNumber(args[1]);
+        if (!double.IsFinite(rawMonths)) return ErrorValue.Num;
+        int months = (int)rawMonths;
         try
         {
             var target = dt.AddMonths(months + 1);
@@ -2234,9 +2507,26 @@ public static class BuiltInFunctions
     private static ScalarValue Weeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
-        int returnType = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
-        DayOfWeek firstDay = returnType == 2 ? DayOfWeek.Monday : DayOfWeek.Sunday;
+        double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
+        if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
+        int returnType = (int)rawReturnType;
+        if (returnType == 21)
+            return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
+
+        DayOfWeek firstDay = returnType switch
+        {
+            1 or 17 => DayOfWeek.Sunday,
+            2 or 11 => DayOfWeek.Monday,
+            12 => DayOfWeek.Tuesday,
+            13 => DayOfWeek.Wednesday,
+            14 => DayOfWeek.Thursday,
+            15 => DayOfWeek.Friday,
+            16 => DayOfWeek.Saturday,
+            _ => (DayOfWeek)(-1)
+        };
+        if ((int)firstDay < 0) return ErrorValue.Num;
         var jan1 = new DateTime(dt.Year, 1, 1);
         int jan1Dow = ((int)jan1.DayOfWeek - (int)firstDay + 7) % 7;
         int dayOfYear = (dt - jan1).Days;
@@ -2254,8 +2544,11 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (!TryOADateToDateTime(args[0], out var current)) return ErrorValue.Num;
-        int days = (int)ToNumber(args[1]);
+        double rawDays = ToNumber(args[1]);
+        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
+        int days = (int)rawDays;
         var holidays = new HashSet<DateTime>();
         if (args.Count > 2 && args[2] is RangeValue hRange)
             foreach (var v in hRange.Flatten())
@@ -2285,6 +2578,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
         if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
         var startDt = startRaw.Date;
@@ -2348,7 +2642,10 @@ public static class BuiltInFunctions
         if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        int basis = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 0;
+        double rawBasis = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
+        if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
+        int basis = (int)rawBasis;
+        if (basis < 0 || basis > 4) return ErrorValue.Num;
         double totalDays = (endDt - startDt).TotalDays;
         double result = basis switch
         {
@@ -2399,7 +2696,7 @@ public static class BuiltInFunctions
         if (err is not null) return err;
         if (list!.Count < 2) return ErrorValue.DivByZero;
         double mean = list.Average();
-        return new NumberValue(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
+        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
     }
 
     private static ScalarValue VarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2408,13 +2705,13 @@ public static class BuiltInFunctions
         if (err is not null) return err;
         if (list!.Count == 0) return ErrorValue.DivByZero;
         double mean = list.Average();
-        return new NumberValue(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
+        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
     }
 
     private static ScalarValue StdevP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var r = VarP(args, ctx);
-        return r is NumberValue nv ? new NumberValue(Math.Sqrt(nv.Value)) : r;
+        return r is NumberValue nv ? NumberResult(Math.Sqrt(nv.Value)) : r;
     }
 
     private static (List<double>? Nums, ErrorValue? Error) CollectNumbers(IReadOnlyList<ScalarValue> args, int start = 0)
@@ -2465,8 +2762,8 @@ public static class BuiltInFunctions
         if (sorted.Count == 0) return ErrorValue.Num;
         double rank = k * (sorted.Count - 1);
         int lo = (int)rank;
-        if (lo >= sorted.Count - 1) return new NumberValue(sorted[^1]);
-        return new NumberValue(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
+        if (lo >= sorted.Count - 1) return NumberResult(sorted[^1]);
+        return NumberResult(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
     }
 
     private static ScalarValue PercentileExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2483,8 +2780,8 @@ public static class BuiltInFunctions
         double rank = k * (n + 1) - 1;
         if (rank < 0 || rank >= n) return ErrorValue.Num;
         int lo = (int)rank;
-        if (lo >= n - 1) return new NumberValue(sorted[n - 1]);
-        return new NumberValue(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
+        if (lo >= n - 1) return NumberResult(sorted[n - 1]);
+        return NumberResult(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
     }
 
     private static ScalarValue QuartileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2497,12 +2794,12 @@ public static class BuiltInFunctions
         if (err is not null) return err;
         var sorted = nums!.OrderBy(x => x).ToList();
         if (sorted.Count == 0) return ErrorValue.Num;
-        if (quart == 0) return new NumberValue(sorted[0]);
-        if (quart == 4) return new NumberValue(sorted[^1]);
+        if (quart == 0) return NumberResult(sorted[0]);
+        if (quart == 4) return NumberResult(sorted[^1]);
         double rank = (quart / 4.0) * (sorted.Count - 1);
         int lo = (int)rank;
-        if (lo >= sorted.Count - 1) return new NumberValue(sorted[^1]);
-        return new NumberValue(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
+        if (lo >= sorted.Count - 1) return NumberResult(sorted[^1]);
+        return NumberResult(sorted[lo] + (rank - lo) * (sorted[lo + 1] - sorted[lo]));
     }
 
     private static ScalarValue Geomean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2517,7 +2814,7 @@ public static class BuiltInFunctions
             if (value <= 0) return ErrorValue.Num;
             logSum += Math.Log(value);
         }
-        return new NumberValue(Math.Exp(logSum / nums.Count));
+        return NumberResult(Math.Exp(logSum / nums.Count));
     }
 
     private static ScalarValue Harmean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2532,7 +2829,7 @@ public static class BuiltInFunctions
             if (value <= 0) return ErrorValue.Num;
             recSum += 1.0 / value;
         }
-        return new NumberValue(nums.Count / recSum);
+        return NumberResult(nums.Count / recSum);
     }
 
     private static ScalarValue Avedev(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2541,7 +2838,7 @@ public static class BuiltInFunctions
         if (err is not null) return err;
         if (nums!.Count == 0) return ErrorValue.DivByZero;
         double mean = nums.Average();
-        return new NumberValue(nums.Average(x => Math.Abs(x - mean)));
+        return NumberResult(nums.Average(x => Math.Abs(x - mean)));
     }
 
     private static ScalarValue ModeSngl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2558,7 +2855,7 @@ public static class BuiltInFunctions
         if (maxFreq < 2) return ErrorValue.NA;
         // Preserve first-occurrence order for tie-breaking (matches Excel)
         foreach (var key in freq.Keys)
-            if (freq[key] == maxFreq) return new NumberValue(key);
+            if (freq[key] == maxFreq) return NumberResult(key);
         return ErrorValue.NA;
     }
 
@@ -2568,7 +2865,10 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e) return e;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         double x = ToNumber(args[1]);
-        int sig = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 3;
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        double rawSig = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 3;
+        if (!double.IsFinite(rawSig)) return ErrorValue.Num;
+        int sig = (int)rawSig;
         if (sig < 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
@@ -2580,7 +2880,8 @@ public static class BuiltInFunctions
         if (equal == 0) return ErrorValue.NA;
         double pctRank = n == 1 ? 0.0 : (double)below / (n - 1);
         double factor = Math.Pow(10, sig);
-        return new NumberValue(Math.Floor(pctRank * factor) / factor);
+        if (!double.IsFinite(factor)) return ErrorValue.Num;
+        return NumberResult(Math.Floor(pctRank * factor) / factor);
     }
 
     private static ScalarValue Correl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2604,7 +2905,7 @@ public static class BuiltInFunctions
             varY += dy * dy;
         }
         if (varX == 0 || varY == 0) return ErrorValue.DivByZero;
-        return new NumberValue(cov / Math.Sqrt(varX * varY));
+        return NumberResult(cov / Math.Sqrt(varX * varY));
     }
 
     private static ScalarValue Forecast(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2613,6 +2914,7 @@ public static class BuiltInFunctions
         if (args[1] is not RangeValue knownY) return ErrorValue.Value;
         if (args[2] is not RangeValue knownX) return ErrorValue.Value;
         double x    = ToNumber(args[0]);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
         var (ys, yErr) = CollectRangeNumbers(knownY);
         if (yErr is not null) return yErr;
         var (xs, xErr) = CollectRangeNumbers(knownX);
@@ -2631,57 +2933,75 @@ public static class BuiltInFunctions
         if (sXX == 0) return ErrorValue.DivByZero;
         double b = sXY / sXX;
         double a = yMean - b * xMean;
-        return new NumberValue(a + b * x);
+        return NumberResult(a + b * x);
     }
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4a  –  Financial
     // ═══════════════════════════════════════════════════════════════════
 
+    private static bool IsValidPaymentType(double type) =>
+        double.IsFinite(type) && (type == 0 || type == 1);
+
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
         double rate = ToNumber(args[0]);
-        int    nper = (int)ToNumber(args[1]);
+        double nperValue = ToNumber(args[1]);
         double pv   = ToNumber(args[2]);
         double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
+            return ErrorValue.Num;
+        if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
+        int nper = (int)nperValue;
         if (nper == 0) return ErrorValue.DivByZero;
         if (Math.Abs(rate) < 1e-10)
-            return new NumberValue(-(pv + fv) / nper);
+            return NumberResult(-(pv + fv) / nper);
         double rn  = Math.Pow(1 + rate, nper);
         double pmt = -(pv * rn + fv) * rate / ((1 + rate * type) * (rn - 1));
-        return new NumberValue(pmt);
+        return NumberResult(pmt);
     }
 
     private static ScalarValue Pv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
         double rate = ToNumber(args[0]);
-        int    nper = (int)ToNumber(args[1]);
+        double nperValue = ToNumber(args[1]);
         double pmt  = ToNumber(args[2]);
         double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
+            return ErrorValue.Num;
+        if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
+        int nper = (int)nperValue;
         if (nper == 0) return ErrorValue.DivByZero;
         if (Math.Abs(rate) < 1e-10)
-            return new NumberValue(-pmt * nper - fv);
+            return NumberResult(-pmt * nper - fv);
         double rn = Math.Pow(1 + rate, nper);
         double pv = (-pmt * (1 + rate * type) * (rn - 1) / rate - fv) / rn;
-        return new NumberValue(pv);
+        return NumberResult(pv);
     }
 
     private static ScalarValue Fv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
         double rate = ToNumber(args[0]);
-        int    nper = (int)ToNumber(args[1]);
+        double nperValue = ToNumber(args[1]);
         double pmt  = ToNumber(args[2]);
         double pv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
+            return ErrorValue.Num;
+        if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
+        int nper = (int)nperValue;
         if (Math.Abs(rate) < 1e-10)
-            return new NumberValue(-pv - pmt * nper);
+            return NumberResult(-pv - pmt * nper);
         double rn = Math.Pow(1 + rate, nper);
-        return new NumberValue(-pv * rn - pmt * (1 + rate * type) * (rn - 1) / rate);
+        return NumberResult(-pv * rn - pmt * (1 + rate * type) * (rn - 1) / rate);
     }
 
     private static ScalarValue Nper(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2692,26 +3012,34 @@ public static class BuiltInFunctions
         double pv   = ToNumber(args[2]);
         double fv   = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
+        if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
+            return ErrorValue.Num;
+        if (!IsValidPaymentType(type)) return ErrorValue.Num;
         if (Math.Abs(rate) < 1e-10)
         {
             if (Math.Abs(pmt) < 1e-10) return ErrorValue.DivByZero;
-            return new NumberValue(-(pv + fv) / pmt);
+            return NumberResult(-(pv + fv) / pmt);
         }
         double pmtAdj = pmt * (1 + rate * type);
         double ratio  = (pmtAdj - fv * rate) / (pmtAdj + pv * rate);
         if (ratio <= 0) return ErrorValue.Num;
-        return new NumberValue(Math.Log(ratio) / Math.Log(1 + rate));
+        return NumberResult(Math.Log(ratio) / Math.Log(1 + rate));
     }
 
     private static ScalarValue Rate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        int    nper  = (int)ToNumber(args[0]);
+        double nperValue = ToNumber(args[0]);
         double pmt   = ToNumber(args[1]);
         double pv    = ToNumber(args[2]);
         double fv    = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 0;
         double type  = args.Count > 4 && args[4] is not BlankValue ? ToNumber(args[4]) : 0;
         double guess = args.Count > 5 && args[5] is not BlankValue ? ToNumber(args[5]) : 0.1;
+        if (!double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
+            return ErrorValue.Num;
+        if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
+        int nper = (int)nperValue;
         double r = guess;
         for (int i = 0; i < 100; i++)
         {
@@ -2742,13 +3070,14 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         double rate   = ToNumber(args[0]);
+        if (!double.IsFinite(rate)) return ErrorValue.Num;
         var (values, err) = CollectNumbers(args, start: 1);
         if (err is not null) return err;
 
         double result = 0;
         for (int i = 0; i < values!.Count; i++)
             result += values[i] / Math.Pow(1 + rate, i + 1);
-        return new NumberValue(result);
+        return NumberResult(result);
     }
 
     private static ScalarValue Irr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2787,8 +3116,10 @@ public static class BuiltInFunctions
         double cost    = ToNumber(args[0]);
         double salvage = ToNumber(args[1]);
         double life    = ToNumber(args[2]);
+        if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life))
+            return ErrorValue.Num;
         if (life == 0) return ErrorValue.DivByZero;
-        return new NumberValue((cost - salvage) / life);
+        return NumberResult((cost - salvage) / life);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -2860,7 +3191,7 @@ public static class BuiltInFunctions
         int start = Math.Min(startNum - 1, text.Length);
         var newText = ToText(args[3]);
         int end = Math.Min(start + numChars, text.Length);
-        return new TextValue(text[..start] + newText + text[end..]);
+        return TextResult(text[..start] + newText + text[end..]);
     }
 
     private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2871,13 +3202,13 @@ public static class BuiltInFunctions
             if (a is ErrorValue e) return e;
             sb.Append(ToText(a));
         }
-        return new TextValue(sb.ToString());
+        return TextResult(sb.ToString());
     }
 
     private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return args[0] is TextValue t ? t : new TextValue("");
+        return args[0] is TextValue t ? TextResult(t.Value) : new TextValue("");
     }
 
     private static ScalarValue Fixed(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2888,7 +3219,7 @@ public static class BuiltInFunctions
         double n = ToNumber(args[0]);
         int dec = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 2;
         bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
-        return new TextValue(FormatRoundedNumber(n, dec, useCommas: !noCommas));
+        return TextResult(FormatRoundedNumber(n, dec, useCommas: !noCommas));
     }
 
     private static ScalarValue Clean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2897,7 +3228,7 @@ public static class BuiltInFunctions
         var sb = new System.Text.StringBuilder();
         foreach (char c in ToText(args[0]))
             if (c >= 32) sb.Append(c);
-        return new TextValue(sb.ToString());
+        return TextResult(sb.ToString());
     }
 
     private static ScalarValue Dollar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2906,12 +3237,16 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         double n = ToNumber(args[0]);
         int dec = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 2;
-        return new TextValue("$" + FormatRoundedNumber(n, dec, useCommas: true));
+        return TextResult("$" + FormatRoundedNumber(n, dec, useCommas: true));
     }
 
     private static string FormatRoundedNumber(double value, int decimals, bool useCommas)
     {
-        double rounded = RoundWithExcelDigits(value, decimals);
+        if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
+        if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
+
+        double rounded = decimals is >= 0 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
+        if (decimals < 0) rounded = RoundWithExcelDigits(value, decimals);
         int displayDecimals = Math.Max(0, decimals);
         string format = (useCommas ? "N" : "F") + displayDecimals;
         return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
@@ -2924,7 +3259,9 @@ public static class BuiltInFunctions
     private static ScalarValue Indirect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         var refText = ToText(args[0]).Trim();
+        bool useA1 = args.Count < 2 || args[1] is BlankValue || ToBool(args[1]);
         string? sheetName = null;
         int bangIdx = refText.IndexOf('!');
         if (bangIdx >= 0)
@@ -2932,7 +3269,9 @@ public static class BuiltInFunctions
             sheetName = refText[..bangIdx].Trim('\'');
             refText   = refText[(bangIdx + 1)..];
         }
-        if (!TryParseA1Ref(refText, out uint row, out uint col))
+        if (useA1
+                ? !TryParseA1Ref(refText, out uint row, out uint col)
+                : !TryParseR1C1Ref(refText, out row, out col))
             return ErrorValue.Ref;
         return sheetName is not null
             ? ctx.GetCellValue(sheetName, row, col)
@@ -2951,6 +3290,16 @@ public static class BuiltInFunctions
         return row > 0 && col > 0;
     }
 
+    private static bool TryParseR1C1Ref(string cellRef, out uint row, out uint col)
+    {
+        row = 0; col = 0;
+        var match = Regex.Match(cellRef, @"^R(\d+)C(\d+)$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+        if (!uint.TryParse(match.Groups[1].Value, out row)) return false;
+        if (!uint.TryParse(match.Groups[2].Value, out col)) return false;
+        return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
+    }
+
     private static ScalarValue Address(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -2964,11 +3313,15 @@ public static class BuiltInFunctions
         if (rowNum < 1 || rowNum > (int)CellAddress.MaxRow ||
             colNum < 1 || colNum > (int)CellAddress.MaxCol) return ErrorValue.Value;
         int absNum = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
+        if (absNum is not (1 or 2 or 3 or 4)) return ErrorValue.Value;
+        bool useA1 = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]);
         string? sheetText = args.Count > 4 && args[4] is not BlankValue ? ToText(args[4]) : null;
         string colLetter = CellAddress.NumberToColumnName((uint)colNum);
         bool colAbs = absNum is 1 or 3;
         bool rowAbs = absNum is 1 or 2;
-        string addr = $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}";
+        string addr = useA1
+            ? $"{(colAbs ? "$" : "")}{colLetter}{(rowAbs ? "$" : "")}{rowNum}"
+            : $"{(rowAbs ? $"R{rowNum}" : $"R[{rowNum}]")}{(colAbs ? $"C{colNum}" : $"C[{colNum}]")}";
         if (!string.IsNullOrEmpty(sheetText))
             addr = $"'{sheetText}'!{addr}";
         return new TextValue(addr);
@@ -3011,10 +3364,14 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        int rows   = (int)ToNumber(args[0]);
-        int cols   = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
+        double rawRows = ToNumber(args[0]);
+        double rawCols = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         double start = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
         double step  = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        if (!double.IsFinite(rawRows) || !double.IsFinite(rawCols)) return ErrorValue.Value;
+        if (!double.IsFinite(start) || !double.IsFinite(step)) return ErrorValue.Num;
+        int rows = (int)rawRows;
+        int cols = (int)rawCols;
         if (rows < 1 || cols < 1) return ErrorValue.Value;
         if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
         var cells = new ScalarValue[rows, cols];
@@ -3022,6 +3379,7 @@ public static class BuiltInFunctions
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
             {
+                if (!double.IsFinite(val)) return ErrorValue.Num;
                 cells[r, c] = new NumberValue(val);
                 val += step;
             }
@@ -3030,27 +3388,33 @@ public static class BuiltInFunctions
 
     private static ScalarValue Filter(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue arrayError) return arrayError;
         if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (args[1] is ErrorValue includeError) return includeError;
         if (args[1] is not RangeValue include) return ErrorValue.Value;
         var ifEmpty = args.Count > 2 ? args[2] : new TextValue("");
 
-        var includeFlat = include.Flatten();
+        if (include.ColCount == 1 && include.RowCount == arr.RowCount)
+            return FilterRows(arr, include, ifEmpty);
+
+        if (include.RowCount == 1 && include.ColCount == arr.ColCount)
+            return FilterColumns(arr, include, ifEmpty);
+
+        return ErrorValue.Value;
+    }
+
+    private static ScalarValue FilterRows(RangeValue arr, RangeValue include, ScalarValue ifEmpty)
+    {
         var matchedRows = new List<int>();
-        int rowLimit = Math.Min(includeFlat.Count, arr.RowCount);
-        for (int i = 0; i < rowLimit; i++)
+        for (int i = 0; i < arr.RowCount; i++)
         {
-            var v = includeFlat[i];
+            var v = include.Cells[i, 0];
             if (v is ErrorValue e) return e;
-            bool matched = v is BoolValue { Value: true }
-                        || (TryCellNumber(v, out double value) && value != 0);
-            if (matched) matchedRows.Add(i);
+            if (IsFilterIncluded(v)) matchedRows.Add(i);
         }
 
         if (matchedRows.Count == 0)
-        {
-            if (ifEmpty is RangeValue rvEmpty) return rvEmpty;
-            return new RangeValue(new ScalarValue[1, 1] { { ifEmpty } });
-        }
+            return FilterEmptyResult(ifEmpty);
 
         var result = new ScalarValue[matchedRows.Count, arr.ColCount];
         for (int ri = 0; ri < matchedRows.Count; ri++)
@@ -3058,6 +3422,34 @@ public static class BuiltInFunctions
                 result[ri, c] = arr.Cells[matchedRows[ri], c];
         return new RangeValue(result);
     }
+
+    private static ScalarValue FilterColumns(RangeValue arr, RangeValue include, ScalarValue ifEmpty)
+    {
+        var matchedCols = new List<int>();
+        for (int c = 0; c < arr.ColCount; c++)
+        {
+            var v = include.Cells[0, c];
+            if (v is ErrorValue e) return e;
+            if (IsFilterIncluded(v)) matchedCols.Add(c);
+        }
+
+        if (matchedCols.Count == 0)
+            return FilterEmptyResult(ifEmpty);
+
+        var result = new ScalarValue[arr.RowCount, matchedCols.Count];
+        for (int r = 0; r < arr.RowCount; r++)
+            for (int ci = 0; ci < matchedCols.Count; ci++)
+                result[r, ci] = arr.Cells[r, matchedCols[ci]];
+        return new RangeValue(result);
+    }
+
+    private static bool IsFilterIncluded(ScalarValue value) =>
+        value is BoolValue { Value: true } || (TryCellNumber(value, out double number) && number != 0);
+
+    private static ScalarValue FilterEmptyResult(ScalarValue ifEmpty) =>
+        ifEmpty is RangeValue rvEmpty
+            ? rvEmpty
+            : new RangeValue(new ScalarValue[1, 1] { { ifEmpty } });
 
     private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -3068,7 +3460,10 @@ public static class BuiltInFunctions
         int sortIdx   = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) - 1 : 0;
         if (sortIdx < 0) return ErrorValue.Value;
         int sortOrder = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
+        if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
         bool byCol    = args.Count > 3 && args[3] is not BlankValue && ToBool(args[3]);
+        if (!byCol && sortIdx >= arr.ColCount) return ErrorValue.Value;
+        if (byCol && sortIdx >= arr.RowCount) return ErrorValue.Value;
 
         if (!byCol)
         {
@@ -3100,6 +3495,546 @@ public static class BuiltInFunctions
                     result[r, c] = arr.Cells[r, colIndices[c]];
             return new RangeValue(result);
         }
+    }
+
+    private static ScalarValue SortBy(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+
+        var keys = new List<(RangeValue Range, int Order)>();
+        bool? sortRows = null;
+
+        for (int i = 1; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue keyError) return keyError;
+            if (args[i] is not RangeValue byArray) return ErrorValue.Value;
+
+            if (!TryGetSortByOrientation(arr, byArray, out bool keySortsRows)) return ErrorValue.Value;
+            if (sortRows.HasValue && sortRows.Value != keySortsRows) return ErrorValue.Value;
+            sortRows ??= keySortsRows;
+
+            int sortOrder = 1;
+            if (i + 1 < args.Count && args[i + 1] is not RangeValue)
+            {
+                if (args[i + 1] is ErrorValue orderError) return orderError;
+                sortOrder = (int)ToNumber(args[i + 1]);
+                if (sortOrder != 1 && sortOrder != -1) return ErrorValue.Value;
+                i++;
+            }
+
+            keys.Add((byArray, sortOrder));
+        }
+
+        if (keys.Count == 0) return ErrorValue.Value;
+        return sortRows.GetValueOrDefault(true)
+            ? SortByRows(arr, keys)
+            : SortByColumns(arr, keys);
+    }
+
+    private static bool TryGetSortByOrientation(RangeValue arr, RangeValue byArray, out bool sortRows)
+    {
+        if (byArray.RowCount == arr.RowCount && byArray.ColCount == 1)
+        {
+            sortRows = true;
+            return true;
+        }
+
+        if (byArray.RowCount == 1 && byArray.ColCount == arr.ColCount)
+        {
+            sortRows = false;
+            return true;
+        }
+
+        sortRows = true;
+        return false;
+    }
+
+    private static ScalarValue SortByRows(RangeValue arr, IReadOnlyList<(RangeValue Range, int Order)> keys)
+    {
+        var rowIndices = Enumerable.Range(0, arr.RowCount).ToList();
+        rowIndices.Sort((a, b) =>
+        {
+            foreach (var key in keys)
+            {
+                int cmp = CompareScalar(key.Range.Cells[a, 0], key.Range.Cells[b, 0]);
+                if (cmp != 0) return key.Order * cmp;
+            }
+
+            return a.CompareTo(b);
+        });
+
+        var result = new ScalarValue[arr.RowCount, arr.ColCount];
+        for (int r = 0; r < arr.RowCount; r++)
+            for (int c = 0; c < arr.ColCount; c++)
+                result[r, c] = arr.Cells[rowIndices[r], c];
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue SortByColumns(RangeValue arr, IReadOnlyList<(RangeValue Range, int Order)> keys)
+    {
+        var colIndices = Enumerable.Range(0, arr.ColCount).ToList();
+        colIndices.Sort((a, b) =>
+        {
+            foreach (var key in keys)
+            {
+                int cmp = CompareScalar(key.Range.Cells[0, a], key.Range.Cells[0, b]);
+                if (cmp != 0) return key.Order * cmp;
+            }
+
+            return a.CompareTo(b);
+        });
+
+        var result = new ScalarValue[arr.RowCount, arr.ColCount];
+        for (int r = 0; r < arr.RowCount; r++)
+            for (int c = 0; c < arr.ColCount; c++)
+                result[r, c] = arr.Cells[r, colIndices[c]];
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue Take(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (args[1] is ErrorValue rowError) return rowError;
+        if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
+
+        if (!TryGetArraySliceCount(args[1], arr.RowCount, isTake: true, out int rowStart, out int rowCount))
+            return ErrorValue.Value;
+
+        int colStart = 0;
+        int colCount = arr.ColCount;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (!TryGetArraySliceCount(args[2], arr.ColCount, isTake: true, out colStart, out colCount))
+                return ErrorValue.Value;
+        }
+
+        return SliceRange(arr, rowStart, colStart, rowCount, colCount);
+    }
+
+    private static ScalarValue Drop(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (args[1] is ErrorValue rowError) return rowError;
+        if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
+
+        if (!TryGetArraySliceCount(args[1], arr.RowCount, isTake: false, out int rowStart, out int rowCount))
+            return ErrorValue.Value;
+
+        int colStart = 0;
+        int colCount = arr.ColCount;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (!TryGetArraySliceCount(args[2], arr.ColCount, isTake: false, out colStart, out colCount))
+                return ErrorValue.Value;
+        }
+
+        return SliceRange(arr, rowStart, colStart, rowCount, colCount);
+    }
+
+    private static bool TryGetArraySliceCount(
+        ScalarValue countValue,
+        int dimensionLength,
+        bool isTake,
+        out int start,
+        out int count)
+    {
+        double raw = ToNumber(countValue);
+        if (!double.IsFinite(raw))
+        {
+            start = 0;
+            count = 0;
+            return false;
+        }
+
+        int requested = (int)raw;
+        if (requested == 0)
+        {
+            start = 0;
+            count = 0;
+            return false;
+        }
+
+        if (isTake)
+        {
+            count = Math.Min(Math.Abs(requested), dimensionLength);
+            start = requested > 0 ? 0 : dimensionLength - count;
+            return count > 0;
+        }
+
+        if (Math.Abs(requested) >= dimensionLength)
+        {
+            start = 0;
+            count = 0;
+            return false;
+        }
+
+        if (requested > 0)
+        {
+            start = requested;
+            count = dimensionLength - requested;
+        }
+        else
+        {
+            start = 0;
+            count = dimensionLength + requested;
+        }
+
+        return count > 0;
+    }
+
+    private static RangeValue SliceRange(RangeValue arr, int rowStart, int colStart, int rowCount, int colCount)
+    {
+        var result = new ScalarValue[rowCount, colCount];
+        for (int r = 0; r < rowCount; r++)
+            for (int c = 0; c < colCount; c++)
+                result[r, c] = arr.Cells[rowStart + r, colStart + c];
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue ChooseRows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (!TryResolveChoiceIndexes(args, arr.RowCount, out var rowIndexes, out var error)) return error;
+
+        var result = new ScalarValue[rowIndexes.Count, arr.ColCount];
+        for (int r = 0; r < rowIndexes.Count; r++)
+            for (int c = 0; c < arr.ColCount; c++)
+                result[r, c] = arr.Cells[rowIndexes[r], c];
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue ChooseCols(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (!TryResolveChoiceIndexes(args, arr.ColCount, out var colIndexes, out var error)) return error;
+
+        var result = new ScalarValue[arr.RowCount, colIndexes.Count];
+        for (int r = 0; r < arr.RowCount; r++)
+            for (int c = 0; c < colIndexes.Count; c++)
+                result[r, c] = arr.Cells[r, colIndexes[c]];
+        return new RangeValue(result);
+    }
+
+    private static bool TryResolveChoiceIndexes(
+        IReadOnlyList<ScalarValue> args,
+        int dimensionLength,
+        out List<int> indexes,
+        out ScalarValue error)
+    {
+        indexes = new List<int>();
+        error = ErrorValue.Value;
+
+        for (int i = 1; i < args.Count; i++)
+        {
+            if (args[i] is ErrorValue e)
+            {
+                error = e;
+                return false;
+            }
+
+            double raw = ToNumber(args[i]);
+            if (!double.IsFinite(raw)) return false;
+
+            int requested = (int)raw;
+            if (requested == 0) return false;
+
+            int zeroBased = requested > 0
+                ? requested - 1
+                : dimensionLength + requested;
+            if (zeroBased < 0 || zeroBased >= dimensionLength) return false;
+
+            indexes.Add(zeroBased);
+        }
+
+        return indexes.Count > 0;
+    }
+
+    private static ScalarValue VStack(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryCollectStackArrays(args, out var arrays, out var error)) return error;
+
+        int rowCount = arrays.Sum(a => a.RowCount);
+        int colCount = arrays.Max(a => a.ColCount);
+        var result = CreateFilledRange(rowCount, colCount, ErrorValue.NA);
+
+        int rowOffset = 0;
+        foreach (var arr in arrays)
+        {
+            for (int r = 0; r < arr.RowCount; r++)
+                for (int c = 0; c < arr.ColCount; c++)
+                    result[rowOffset + r, c] = arr.Cells[r, c];
+            rowOffset += arr.RowCount;
+        }
+
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue HStack(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryCollectStackArrays(args, out var arrays, out var error)) return error;
+
+        int rowCount = arrays.Max(a => a.RowCount);
+        int colCount = arrays.Sum(a => a.ColCount);
+        var result = CreateFilledRange(rowCount, colCount, ErrorValue.NA);
+
+        int colOffset = 0;
+        foreach (var arr in arrays)
+        {
+            for (int r = 0; r < arr.RowCount; r++)
+                for (int c = 0; c < arr.ColCount; c++)
+                    result[r, colOffset + c] = arr.Cells[r, c];
+            colOffset += arr.ColCount;
+        }
+
+        return new RangeValue(result);
+    }
+
+    private static bool TryCollectStackArrays(
+        IReadOnlyList<ScalarValue> args,
+        out List<RangeValue> arrays,
+        out ScalarValue error)
+    {
+        arrays = new List<RangeValue>();
+        error = ErrorValue.Value;
+
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue e)
+            {
+                error = e;
+                return false;
+            }
+
+            if (arg is not RangeValue arr) return false;
+            arrays.Add(arr);
+        }
+
+        return arrays.Count > 0;
+    }
+
+    private static ScalarValue[,] CreateFilledRange(int rowCount, int colCount, ScalarValue value)
+    {
+        var result = new ScalarValue[rowCount, colCount];
+        for (int r = 0; r < rowCount; r++)
+            for (int c = 0; c < colCount; c++)
+                result[r, c] = value;
+        return result;
+    }
+
+    private static ScalarValue ToRow(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryFlattenArray(args, out var values, out var error)) return error;
+        if (values.Count == 0) return ErrorValue.Value;
+
+        var result = new ScalarValue[1, values.Count];
+        for (int c = 0; c < values.Count; c++)
+            result[0, c] = values[c];
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue ToCol(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryFlattenArray(args, out var values, out var error)) return error;
+        if (values.Count == 0) return ErrorValue.Value;
+
+        var result = new ScalarValue[values.Count, 1];
+        for (int r = 0; r < values.Count; r++)
+            result[r, 0] = values[r];
+        return new RangeValue(result);
+    }
+
+    private static bool TryFlattenArray(
+        IReadOnlyList<ScalarValue> args,
+        out List<ScalarValue> values,
+        out ScalarValue error)
+    {
+        values = new List<ScalarValue>();
+        error = ErrorValue.Value;
+
+        if (args[0] is ErrorValue arrayError)
+        {
+            error = arrayError;
+            return false;
+        }
+
+        if (args[0] is not RangeValue arr) return false;
+
+        int ignore = 0;
+        if (args.Count > 1 && args[1] is not BlankValue)
+        {
+            if (args[1] is ErrorValue ignoreError)
+            {
+                error = ignoreError;
+                return false;
+            }
+
+            double rawIgnore = ToNumber(args[1]);
+            if (!double.IsFinite(rawIgnore)) return false;
+            ignore = (int)rawIgnore;
+            if (ignore is < 0 or > 3) return false;
+        }
+
+        bool scanByColumn = false;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (args[2] is ErrorValue scanError)
+            {
+                error = scanError;
+                return false;
+            }
+
+            scanByColumn = ToBool(args[2]);
+        }
+
+        bool ignoreBlanks = (ignore & 1) != 0;
+        bool ignoreErrors = (ignore & 2) != 0;
+
+        if (scanByColumn)
+        {
+            for (int c = 0; c < arr.ColCount; c++)
+                for (int r = 0; r < arr.RowCount; r++)
+                    AddFlattenedValue(arr.Cells[r, c], ignoreBlanks, ignoreErrors, values);
+        }
+        else
+        {
+            for (int r = 0; r < arr.RowCount; r++)
+                for (int c = 0; c < arr.ColCount; c++)
+                    AddFlattenedValue(arr.Cells[r, c], ignoreBlanks, ignoreErrors, values);
+        }
+
+        return true;
+    }
+
+    private static void AddFlattenedValue(
+        ScalarValue value,
+        bool ignoreBlanks,
+        bool ignoreErrors,
+        List<ScalarValue> values)
+    {
+        if (ignoreBlanks && (value is BlankValue || value is TextValue { Value.Length: 0 })) return;
+        if (ignoreErrors && value is ErrorValue) return;
+        values.Add(value);
+    }
+
+    private static ScalarValue WrapRows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryGetWrapArgs(args, out var values, out int wrapCount, out var padWith, out var error)) return error;
+
+        int rowCount = (values.Count + wrapCount - 1) / wrapCount;
+        var result = CreateFilledRange(rowCount, wrapCount, padWith);
+        for (int i = 0; i < values.Count; i++)
+            result[i / wrapCount, i % wrapCount] = values[i];
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue WrapCols(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryGetWrapArgs(args, out var values, out int wrapCount, out var padWith, out var error)) return error;
+
+        int colCount = (values.Count + wrapCount - 1) / wrapCount;
+        var result = CreateFilledRange(wrapCount, colCount, padWith);
+        for (int i = 0; i < values.Count; i++)
+            result[i % wrapCount, i / wrapCount] = values[i];
+        return new RangeValue(result);
+    }
+
+    private static bool TryGetWrapArgs(
+        IReadOnlyList<ScalarValue> args,
+        out List<ScalarValue> values,
+        out int wrapCount,
+        out ScalarValue padWith,
+        out ScalarValue error)
+    {
+        values = new List<ScalarValue>();
+        wrapCount = 0;
+        padWith = ErrorValue.NA;
+        error = ErrorValue.Value;
+
+        if (args[0] is ErrorValue arrayError)
+        {
+            error = arrayError;
+            return false;
+        }
+
+        if (args[0] is not RangeValue arr) return false;
+        if (!TryReadVector(arr, values)) return false;
+
+        if (args[1] is ErrorValue countError)
+        {
+            error = countError;
+            return false;
+        }
+
+        double rawWrapCount = ToNumber(args[1]);
+        if (!double.IsFinite(rawWrapCount)) return false;
+        wrapCount = (int)rawWrapCount;
+        if (wrapCount < 1)
+        {
+            error = ErrorValue.Num;
+            return false;
+        }
+
+        if (args.Count > 2) padWith = args[2];
+        return values.Count > 0;
+    }
+
+    private static bool TryReadVector(RangeValue arr, List<ScalarValue> values)
+    {
+        if (arr.RowCount == 1)
+        {
+            for (int c = 0; c < arr.ColCount; c++)
+                values.Add(arr.Cells[0, c]);
+            return true;
+        }
+
+        if (arr.ColCount == 1)
+        {
+            for (int r = 0; r < arr.RowCount; r++)
+                values.Add(arr.Cells[r, 0]);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static ScalarValue Expand(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue arrayError) return arrayError;
+        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        if (args[1] is ErrorValue rowError) return rowError;
+        if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
+
+        if (!TryGetExpandDimension(args[1], arr.RowCount, out int rowCount)) return ErrorValue.Value;
+        int colCount = arr.ColCount;
+        if (args.Count > 2 && args[2] is not BlankValue)
+        {
+            if (!TryGetExpandDimension(args[2], arr.ColCount, out colCount)) return ErrorValue.Value;
+        }
+
+        if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
+
+        var padWith = args.Count > 3 ? args[3] : ErrorValue.NA;
+        var result = CreateFilledRange(rowCount, colCount, padWith);
+        for (int r = 0; r < arr.RowCount; r++)
+            for (int c = 0; c < arr.ColCount; c++)
+                result[r, c] = arr.Cells[r, c];
+        return new RangeValue(result);
+    }
+
+    private static bool TryGetExpandDimension(ScalarValue value, int originalLength, out int dimension)
+    {
+        dimension = originalLength;
+        if (value is BlankValue) return true;
+
+        double raw = ToNumber(value);
+        if (!double.IsFinite(raw)) return false;
+        dimension = (int)raw;
+        return dimension >= 1;
     }
 
     private static ScalarValue Unique(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -3244,17 +4179,17 @@ public static class BuiltInFunctions
 
         return baseFunc switch
         {
-            1  => new NumberValue(nums.Count == 0 ? 0 : nums.Average()),
+            1  => NumberResult(nums.Count == 0 ? 0 : nums.Average()),
             2  => new NumberValue(nums.Count),
             3  => new NumberValue(countaCount),
-            4  => new NumberValue(nums.Count == 0 ? 0 : nums.Max()),
-            5  => new NumberValue(nums.Count == 0 ? 0 : nums.Min()),
-            6  => new NumberValue(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (acc, x) => acc * x)),
-            7  => nums.Count < 2 ? ErrorValue.DivByZero : new NumberValue(SubtotalStdDevS(nums)),
-            8  => nums.Count == 0 ? new NumberValue(0) : new NumberValue(SubtotalStdDevP(nums)),
-            9  => new NumberValue(nums.Sum()),
-            10 => nums.Count < 2 ? ErrorValue.DivByZero : new NumberValue(SubtotalVarS(nums)),
-            11 => nums.Count == 0 ? new NumberValue(0) : new NumberValue(SubtotalVarP(nums)),
+            4  => NumberResult(nums.Count == 0 ? 0 : nums.Max()),
+            5  => NumberResult(nums.Count == 0 ? 0 : nums.Min()),
+            6  => NumberResult(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (acc, x) => acc * x)),
+            7  => nums.Count < 2 ? ErrorValue.DivByZero : NumberResult(SubtotalStdDevS(nums)),
+            8  => nums.Count == 0 ? new NumberValue(0) : NumberResult(SubtotalStdDevP(nums)),
+            9  => NumberResult(nums.Sum()),
+            10 => nums.Count < 2 ? ErrorValue.DivByZero : NumberResult(SubtotalVarS(nums)),
+            11 => nums.Count == 0 ? new NumberValue(0) : NumberResult(SubtotalVarP(nums)),
             _  => ErrorValue.Value
         };
     }

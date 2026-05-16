@@ -40,6 +40,7 @@ public sealed class FormulaEvaluator
             NumberNode n => new NumberValue(n.Value),
             StringNode s => new TextValue(s.Value),
             BooleanNode b => new BoolValue(b.Value),
+            OmittedArgumentNode => BlankValue.Instance,
             ErrorNode err => err.Error,
             CellRefNode cell when cell.SheetName is not null
                 => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
@@ -63,7 +64,10 @@ public sealed class FormulaEvaluator
         // For 2D named ranges this is intentionally lossy — full implicit-intersection
         // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
         var r = range.Value;
-        return context.GetCellValue(r.Start.Row, r.Start.Col);
+        var sheetName = context.TryGetSheetName(r.Start.Sheet);
+        return sheetName is not null
+            ? context.GetCellValue(sheetName, r.Start.Row, r.Start.Col)
+            : context.GetCellValue(r.Start.Row, r.Start.Col);
     }
 
     private static ScalarValue EvaluateRange(RangeRefNode range, IEvalContext context)
@@ -242,6 +246,10 @@ public sealed class FormulaEvaluator
             else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
+            }
+            else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(node.FunctionName))
+            {
+                expandedArgs.Add(BuildRangeValue(new RangeRefNode(cell, cell, cell.SheetName), context));
             }
             else if (arg is NamedRangeNode named)
             {
@@ -469,7 +477,7 @@ public sealed class FormulaEvaluator
              or "GCD" or "LCM";
 
     private static bool IsStructuredRangeFunction(string name) =>
-        name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH"
+        name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH" or "XMATCH"
              or "SUMIF" or "COUNTIF" or "AVERAGEIF"
              or "SUMPRODUCT"
              or "LARGE" or "SMALL" or "RANK"
@@ -482,8 +490,15 @@ public sealed class FormulaEvaluator
              or "PERCENTRANK" or "PERCENTRANK.INC"
              or "LOOKUP"
              or "IRR"
-             or "FILTER" or "SORT" or "UNIQUE"
-             or "SUBTOTAL";
+             or "RANDARRAY"
+             or "FILTER" or "SORT" or "SORTBY" or "TAKE" or "DROP"
+             or "CHOOSEROWS" or "CHOOSECOLS" or "VSTACK" or "HSTACK"
+             or "TOROW" or "TOCOL" or "WRAPROWS" or "WRAPCOLS" or "EXPAND" or "UNIQUE"
+             or "SUBTOTAL"
+             or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK";
+
+    private static bool IsSingleCellReferenceRangeFunction(string name) =>
+        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {

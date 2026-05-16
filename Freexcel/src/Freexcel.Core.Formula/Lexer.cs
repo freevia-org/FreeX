@@ -102,6 +102,12 @@ public sealed class Lexer
             }
             else if ((c == 'e' || c == 'E') && !hasExponent)
             {
+                // Only consume 'e' if at least one digit follows (optionally after a sign)
+                int lookahead = _pos + 1;
+                if (lookahead < _text.Length && (_text[lookahead] == '+' || _text[lookahead] == '-'))
+                    lookahead++;
+                if (lookahead >= _text.Length || !char.IsDigit(_text[lookahead]))
+                    break;
                 hasExponent = true;
                 _pos++;
                 if (_pos < _text.Length && (_text[_pos] == '+' || _text[_pos] == '-'))
