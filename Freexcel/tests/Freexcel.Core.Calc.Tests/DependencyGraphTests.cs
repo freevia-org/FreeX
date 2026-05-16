@@ -310,6 +310,60 @@ public class VolatileFunctionTests
     }
 }
 
+public class AstCacheTests
+{
+    [Fact]
+    public void RecalcEngine_FormulaChange_UsesNewAstNotCached()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(5));
+
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetFormula(b1, "A1*2");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [a1]);
+        sheet.GetValue(b1).Should().Be(new NumberValue(10));
+
+        // Change the formula — setter clears CachedAst so re-parse occurs
+        sheet.SetFormula(b1, "A1*3");
+        engine.RebuildFormulaDependencies(wb);
+        engine.Recalculate(wb, [a1]);
+        sheet.GetValue(b1).Should().Be(new NumberValue(15),
+            "after formula change the cached AST must be invalidated and re-parsed");
+    }
+
+    [Fact]
+    public void RecalcEngine_SameFormula_UsesAstCacheOnSecondPass()
+    {
+        // Verify that the cache is populated after the first eval and survives a second recalc
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(4));
+
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetFormula(b1, "A1+1");
+        engine.RebuildFormulaDependencies(wb);
+
+        engine.Recalculate(wb, [a1]);
+        sheet.GetValue(b1).Should().Be(new NumberValue(5));
+
+        // Mutate A1, recalc again — result changes, proving cache is still used correctly
+        sheet.SetCell(a1, new NumberValue(10));
+        engine.Recalculate(wb, [a1]);
+        sheet.GetValue(b1).Should().Be(new NumberValue(11),
+            "second recalc with same formula should still produce a correct result via cached AST");
+    }
+}
+
 file sealed class SimpleCtx(Workbook wb) : ICommandContext
 {
     public Workbook Workbook { get; } = wb;

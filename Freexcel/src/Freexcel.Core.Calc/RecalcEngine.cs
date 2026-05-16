@@ -72,7 +72,13 @@ public sealed class RecalcEngine
 
             try
             {
-                var result = _evaluator.Evaluate("=" + cell.FormulaText, sheet, workbook);
+                // Use cached AST to avoid re-running Lexer+Parser on every recalc pass.
+                if (cell.CachedAst is not FormulaNode cachedAst)
+                {
+                    cachedAst = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
+                    cell.CachedAst = cachedAst;
+                }
+                var result = _evaluator.Evaluate(cachedAst, sheet, workbook);
 
                 if (result is RangeValue rv)
                 {
