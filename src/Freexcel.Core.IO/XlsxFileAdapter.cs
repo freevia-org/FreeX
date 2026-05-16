@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using ClosedXML.Excel;
@@ -11,6 +12,10 @@ namespace Freexcel.Core.IO;
 /// </summary>
 public sealed class XlsxFileAdapter : IFileAdapter
 {
+    private const int CategoryAxisId = 48650112;
+    private const int ValueAxisId = 48672768;
+    private const int SecondaryValueAxisId = 48672769;
+
     public string Extension => ".xlsx";
     public string FormatName => "Excel Workbook";
 
@@ -129,6 +134,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sheet.HiddenCols.UnionWith(layout.HiddenCols);
                 sheet.IsProtected = layout.IsProtected;
                 sheet.ProtectionPassword = layout.ProtectionPasswordHash;
+                sheet.ViewMode = layout.ViewMode;
                 sheet.ShowGridlines = layout.ShowGridlines;
                 sheet.ShowHeadings = layout.ShowHeadings;
                 sheet.ShowRulers = layout.ShowRulers;
@@ -172,7 +178,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             }
 
             try { LoadPrintArea(xlSheet, sheet); }
-            catch { /* ignore print-area load failures */ }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
 
             sheet.PageOrientation = xlSheet.PageSetup.PageOrientation == XLPageOrientation.Landscape
                 ? WorksheetPageOrientation.Landscape
@@ -259,20 +265,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             // Load CellIs conditional format rules (best-effort; skip anything we can't map)
             try { LoadConditionalFormats(xlSheet, sheet, workbook); }
-            catch { /* ignore CF load failures */ }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] CF load failed: {ex.Message}"); }
 
             // Load data validation rules (best-effort)
             try { LoadDataValidations(xlSheet, sheet); }
-            catch { /* ignore DV load failures */ }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] DV load failed: {ex.Message}"); }
 
             // Load merged regions (best-effort)
             try { LoadMergedRegions(xlSheet, sheet); }
-            catch { /* ignore merge load failures */ }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Merge load failed: {ex.Message}"); }
         }
 
         // Load named ranges (best-effort; skip any we cannot map)
         try { LoadNamedRanges(xlWorkbook, workbook); }
-        catch { /* ignore named-range load failures */ }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Named-range load failed: {ex.Message}"); }
 
         return workbook;
     }
@@ -282,6 +288,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         HashSet<uint> HiddenCols,
         bool IsProtected,
         string? ProtectionPasswordHash,
+        WorksheetViewMode ViewMode,
         bool ShowGridlines,
         bool ShowHeadings,
         bool ShowRulers,
@@ -706,6 +713,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             hiddenCols,
             isProtected,
             passwordHash,
+            ParseWorksheetViewMode(sheetView?.Attribute("view")?.Value),
             !IsFalse(sheetView?.Attribute("showGridLines")?.Value),
             !IsFalse(sheetView?.Attribute("showRowColHeaders")?.Value),
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
@@ -746,6 +754,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static int ParseZoomPercent(string? value) =>
         int.TryParse(value, out var zoom) && zoom is >= 10 and <= 400 ? zoom : 100;
+
+    private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
+        value switch
+        {
+            "pageBreakPreview" => WorksheetViewMode.PageBreakPreview,
+            "pageLayout" => WorksheetViewMode.PageLayout,
+            _ => WorksheetViewMode.Normal
+        };
 
     private static WorksheetBackgroundImage? ReadWorksheetBackground(
         ZipArchive archive,
@@ -990,6 +1006,64 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ? emus / 9525.0
             : 0;
 
+    private static bool IsValidWorksheetRow(uint row) =>
+        row is >= 1 and <= CellAddress.MaxRow;
+
+    private static bool IsValidWorksheetColumn(uint column) =>
+        column is >= 1 and <= CellAddress.MaxCol;
+
+    private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
+        where TEnum : struct, Enum =>
+        Enum.IsDefined(value) ? value : defaultValue;
+
+    private static double NonNegativeFiniteOrDefault(double value, double defaultValue) =>
+        double.IsFinite(value) && value >= 0 ? value : defaultValue;
+
+    private static WorksheetPageMargins ValidPageMarginsOrDefault(
+        WorksheetPageMargins margins,
+        WorksheetPageMargins defaultValue) =>
+        IsNonNegativeFinite(margins.Left) &&
+        IsNonNegativeFinite(margins.Right) &&
+        IsNonNegativeFinite(margins.Top) &&
+        IsNonNegativeFinite(margins.Bottom)
+            ? margins
+            : defaultValue;
+
+    private static WorksheetScaleToFit ValidScaleToFitOrDefault(
+        WorksheetScaleToFit scaleToFit,
+        WorksheetScaleToFit defaultValue) =>
+        scaleToFit.ScalePercent is < 10 or > 400 ||
+        scaleToFit.FitToPagesWide is < 1 ||
+        scaleToFit.FitToPagesTall is < 1
+            ? defaultValue
+            : scaleToFit;
+
+    private static bool IsNonNegativeFinite(double value) =>
+        double.IsFinite(value) && value >= 0;
+
+    private static bool IsValidRepeatRange(WorksheetRepeatRange range, uint max) =>
+        range.Start >= 1 && range.End >= range.Start && range.End <= max;
+
+    private static bool IsSupportedTextRotation(int rotation) =>
+        rotation == 255 || rotation is >= -90 and <= 90;
+
+    private static uint ValidFrozenRowsOrZero(uint row) =>
+        row <= CellAddress.MaxRow ? row : 0;
+
+    private static uint ValidFrozenColumnsOrZero(uint column) =>
+        column <= CellAddress.MaxCol ? column : 0;
+
+    private static bool IsSupportedFontSize(double fontSize) =>
+        double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
+
+    private static string? ToXlsxWorksheetViewMode(WorksheetViewMode viewMode) =>
+        viewMode switch
+        {
+            WorksheetViewMode.PageBreakPreview => "pageBreakPreview",
+            WorksheetViewMode.PageLayout => "pageLayout",
+            _ => null
+        };
+
     private static void ApplyChartAnchor(ChartModel chart, XlsxDrawingAnchor? anchor, Sheet sheet)
     {
         if (anchor is null)
@@ -1110,28 +1184,52 @@ public sealed class XlsxFileAdapter : IFileAdapter
             }
 
             foreach (var (rowNum, height) in sheet.RowHeights)
-                xlSheet.Row((int)rowNum).Height = height * (72.0 / 96.0);
+            {
+                if (IsValidWorksheetRow(rowNum) && double.IsFinite(height) && height > 0)
+                    xlSheet.Row((int)rowNum).Height = height * (72.0 / 96.0);
+            }
 
             foreach (var rowNum in sheet.HiddenRows)
-                xlSheet.Row((int)rowNum).Hide();
+            {
+                if (IsValidWorksheetRow(rowNum))
+                    xlSheet.Row((int)rowNum).Hide();
+            }
 
             foreach (var (rowNum, level) in sheet.RowOutlineLevels)
-                xlSheet.Row((int)rowNum).OutlineLevel = level;
+            {
+                if (IsValidWorksheetRow(rowNum))
+                    xlSheet.Row((int)rowNum).OutlineLevel = level;
+            }
 
             foreach (var rowNum in sheet.GroupHiddenRows)
-                xlSheet.Row((int)rowNum).Collapse();
+            {
+                if (IsValidWorksheetRow(rowNum))
+                    xlSheet.Row((int)rowNum).Collapse();
+            }
 
             foreach (var (colNum, width) in sheet.ColumnWidths)
-                xlSheet.Column((int)colNum).Width = width;
+            {
+                if (IsValidWorksheetColumn(colNum) && double.IsFinite(width) && width > 0)
+                    xlSheet.Column((int)colNum).Width = width;
+            }
 
             foreach (var colNum in sheet.HiddenCols)
-                xlSheet.Column((int)colNum).Hide();
+            {
+                if (IsValidWorksheetColumn(colNum))
+                    xlSheet.Column((int)colNum).Hide();
+            }
 
             foreach (var (colNum, level) in sheet.ColOutlineLevels)
-                xlSheet.Column((int)colNum).OutlineLevel = level;
+            {
+                if (IsValidWorksheetColumn(colNum))
+                    xlSheet.Column((int)colNum).OutlineLevel = level;
+            }
 
             foreach (var colNum in sheet.GroupHiddenCols)
-                xlSheet.Column((int)colNum).Collapse();
+            {
+                if (IsValidWorksheetColumn(colNum))
+                    xlSheet.Column((int)colNum).Collapse();
+            }
 
             foreach (var (address, commentText) in sheet.Comments)
             {
@@ -1160,8 +1258,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 }
             }
 
-            if (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
-                xlSheet.SheetView.Freeze((int)sheet.FrozenRows, (int)sheet.FrozenCols);
+            var frozenRows = ValidFrozenRowsOrZero(sheet.FrozenRows);
+            var frozenCols = ValidFrozenColumnsOrZero(sheet.FrozenCols);
+            if (frozenRows > 0 || frozenCols > 0)
+                xlSheet.SheetView.Freeze((int)frozenRows, (int)frozenCols);
 
             if (sheet.PrintArea is { } printArea)
             {
@@ -1173,39 +1273,49 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     (int)printArea.End.Col);
             }
 
-            xlSheet.PageSetup.PageOrientation = sheet.PageOrientation == WorksheetPageOrientation.Landscape
+            var pageOrientation = ValidEnumOrDefault(sheet.PageOrientation, WorksheetPageOrientation.Portrait);
+            var paperSize = ValidEnumOrDefault(sheet.PaperSize, WorksheetPaperSize.A4);
+            var pageMargins = ValidPageMarginsOrDefault(sheet.PageMargins, WorksheetPageMargins.Narrow);
+            var headerMargin = NonNegativeFiniteOrDefault(sheet.HeaderMargin, 0.3);
+            var footerMargin = NonNegativeFiniteOrDefault(sheet.FooterMargin, 0.3);
+            var scaleToFit = ValidScaleToFitOrDefault(sheet.ScaleToFit, WorksheetScaleToFit.Default);
+            var pageOrder = ValidEnumOrDefault(sheet.PageOrder, WorksheetPageOrder.DownThenOver);
+            var printErrorValue = ValidEnumOrDefault(sheet.PrintErrorValue, WorksheetPrintErrorValue.Displayed);
+            var printComments = ValidEnumOrDefault(sheet.PrintComments, WorksheetPrintComments.None);
+
+            xlSheet.PageSetup.PageOrientation = pageOrientation == WorksheetPageOrientation.Landscape
                 ? XLPageOrientation.Landscape
                 : XLPageOrientation.Portrait;
-            xlSheet.PageSetup.PaperSize = sheet.PaperSize switch
+            xlSheet.PageSetup.PaperSize = paperSize switch
             {
                 WorksheetPaperSize.Letter => XLPaperSize.LetterPaper,
                 WorksheetPaperSize.Legal => XLPaperSize.LegalPaper,
                 _ => XLPaperSize.A4Paper
             };
-            xlSheet.PageSetup.Margins.Left = sheet.PageMargins.Left;
-            xlSheet.PageSetup.Margins.Right = sheet.PageMargins.Right;
-            xlSheet.PageSetup.Margins.Top = sheet.PageMargins.Top;
-            xlSheet.PageSetup.Margins.Bottom = sheet.PageMargins.Bottom;
-            xlSheet.PageSetup.Margins.Header = sheet.HeaderMargin;
-            xlSheet.PageSetup.Margins.Footer = sheet.FooterMargin;
+            xlSheet.PageSetup.Margins.Left = pageMargins.Left;
+            xlSheet.PageSetup.Margins.Right = pageMargins.Right;
+            xlSheet.PageSetup.Margins.Top = pageMargins.Top;
+            xlSheet.PageSetup.Margins.Bottom = pageMargins.Bottom;
+            xlSheet.PageSetup.Margins.Header = headerMargin;
+            xlSheet.PageSetup.Margins.Footer = footerMargin;
             xlSheet.PageSetup.ShowGridlines = sheet.PrintGridlines;
             xlSheet.PageSetup.ShowRowAndColumnHeadings = sheet.PrintHeadings;
             xlSheet.PageSetup.CenterHorizontally = sheet.CenterHorizontallyOnPage;
             xlSheet.PageSetup.CenterVertically = sheet.CenterVerticallyOnPage;
-            xlSheet.PageSetup.PageOrder = sheet.PageOrder == WorksheetPageOrder.OverThenDown
+            xlSheet.PageSetup.PageOrder = pageOrder == WorksheetPageOrder.OverThenDown
                 ? XLPageOrderValues.OverThenDown
                 : XLPageOrderValues.DownThenOver;
-            if (sheet.FirstPageNumber is { } firstPageNumber)
+            if (sheet.FirstPageNumber is { } firstPageNumber && firstPageNumber > 0)
                 xlSheet.PageSetup.FirstPageNumber = firstPageNumber;
             xlSheet.PageSetup.BlackAndWhite = sheet.PrintBlackAndWhite;
             xlSheet.PageSetup.DraftQuality = sheet.PrintDraftQuality;
-            if (sheet.PrintQualityDpi is { } printQualityDpi)
+            if (sheet.PrintQualityDpi is { } printQualityDpi && printQualityDpi > 0)
             {
                 xlSheet.PageSetup.HorizontalDpi = printQualityDpi;
                 xlSheet.PageSetup.VerticalDpi = printQualityDpi;
             }
-            xlSheet.PageSetup.PrintErrorValue = ToXlsxPrintErrorValue(sheet.PrintErrorValue);
-            xlSheet.PageSetup.ShowComments = ToXlsxPrintComments(sheet.PrintComments);
+            xlSheet.PageSetup.PrintErrorValue = ToXlsxPrintErrorValue(printErrorValue);
+            xlSheet.PageSetup.ShowComments = ToXlsxPrintComments(printComments);
             xlSheet.PageSetup.DifferentFirstPageOnHF = sheet.DifferentFirstPageHeaderFooter;
             xlSheet.PageSetup.DifferentOddEvenPagesOnHF = sheet.DifferentOddEvenHeaderFooter;
             xlSheet.PageSetup.ScaleHFWithDocument = sheet.HeaderFooterScaleWithDocument;
@@ -1224,18 +1334,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sheet.EvenPageFooter,
                 sheet.DifferentFirstPageHeaderFooter,
                 sheet.DifferentOddEvenHeaderFooter);
-            if (sheet.ScaleToFit.ScalePercent is { } scalePercent)
+            if (scaleToFit.ScalePercent is { } scalePercent)
                 xlSheet.PageSetup.Scale = scalePercent;
-            else if (sheet.ScaleToFit.FitToPagesWide.HasValue || sheet.ScaleToFit.FitToPagesTall.HasValue)
-                xlSheet.PageSetup.FitToPages(sheet.ScaleToFit.FitToPagesWide ?? 1, sheet.ScaleToFit.FitToPagesTall ?? 1);
-            if (sheet.PrintTitleRows is { } titleRows)
+            else if (scaleToFit.FitToPagesWide.HasValue || scaleToFit.FitToPagesTall.HasValue)
+                xlSheet.PageSetup.FitToPages(scaleToFit.FitToPagesWide ?? 1, scaleToFit.FitToPagesTall ?? 1);
+            if (sheet.PrintTitleRows is { } titleRows && IsValidRepeatRange(titleRows, CellAddress.MaxRow))
                 xlSheet.PageSetup.SetRowsToRepeatAtTop((int)titleRows.Start, (int)titleRows.End);
-            if (sheet.PrintTitleColumns is { } titleColumns)
+            if (sheet.PrintTitleColumns is { } titleColumns && IsValidRepeatRange(titleColumns, CellAddress.MaxCol))
                 xlSheet.PageSetup.SetColumnsToRepeatAtLeft((int)titleColumns.Start, (int)titleColumns.End);
             foreach (var rowBreak in sheet.RowPageBreaks)
-                xlSheet.PageSetup.AddHorizontalPageBreak((int)rowBreak);
+                if (rowBreak is >= 2 and <= CellAddress.MaxRow)
+                    xlSheet.PageSetup.AddHorizontalPageBreak((int)rowBreak);
             foreach (var columnBreak in sheet.ColumnPageBreaks)
-                xlSheet.PageSetup.AddVerticalPageBreak((int)columnBreak);
+                if (columnBreak is >= 2 and <= CellAddress.MaxCol)
+                    xlSheet.PageSetup.AddVerticalPageBreak((int)columnBreak);
 
             if (sheet.IsProtected)
             {
@@ -1282,6 +1394,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 !sheet.ShowGridlines ||
                 !sheet.ShowHeadings ||
                 !sheet.ShowRulers ||
+                ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
                 sheet.ZoomPercent != 100 ||
                 sheet.ShowFormulas ||
                 (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
@@ -1294,7 +1407,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         SaveWorkbookTheme(packageStream, workbook.Theme);
 
-        if (workbook.Sheets.Any(sheet => sheet.Charts.Any(chart => chart.Type == ChartType.Column)))
+        if (workbook.Sheets.Any(sheet => sheet.Charts.Any(IsSupportedXlsxChart)))
         {
             packageStream.Position = 0;
             SaveWorksheetCharts(packageStream, workbook);
@@ -1381,7 +1494,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (!sheetsByName.TryGetValue(name, out var sheet))
                 continue;
             var supportedCharts = sheet.Charts
-                .Where(chart => chart.Type == ChartType.Column)
+                .Where(IsSupportedXlsxChart)
                 .ToList();
             if (supportedCharts.Count == 0)
                 continue;
@@ -1527,58 +1640,1017 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
-        var series = BuildColumnChartSeries(chart, sheet, chartNs, drawingNs).ToList();
+        var plotCharts = ToPlotChartXml(chart, sheet, chartNs, drawingNs).ToList();
+
         return new XDocument(
             new XElement(chartNs + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "c", chartNs),
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 new XElement(chartNs + "chart",
                     string.IsNullOrWhiteSpace(chart.Title)
                         ? null
-                        : new XElement(chartNs + "title",
-                            new XElement(chartNs + "tx",
-                                new XElement(chartNs + "rich",
-                                    new XElement(drawingNs + "p",
-                                        new XElement(drawingNs + "r",
-                                            new XElement(drawingNs + "t", chart.Title)))))),
+                        : ToChartTitleXml(chart, chartNs, drawingNs),
                     new XElement(chartNs + "plotArea",
-                        new XElement(chartNs + "barChart",
-                            new XElement(chartNs + "barDir", new XAttribute("val", "col")),
-                            series)))));
+                        plotCharts,
+                        ShouldWriteChartAxes(chart.Type)
+                            ? ToChartAxesXml(chart, chartNs, drawingNs)
+                            : null,
+                        ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
+                    ToLegendXml(chart, chartNs, drawingNs))));
     }
 
-    private static IEnumerable<XElement> BuildColumnChartSeries(
+    private static bool ShouldWriteChartAxes(ChartType chartType) =>
+        chartType is not ChartType.Pie and not ChartType.Doughnut;
+
+    private static IEnumerable<XElement> ToPlotChartXml(
         ChartModel chart,
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        var headerRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row : chart.DataRange.Start.Row;
+        var dataLabelWritten = false;
+        foreach (var (plotChart, usesSecondaryAxis) in CreatePlotCharts(chart, sheet, chartNs, drawingNs))
+        {
+            AddPlotChartCommonElements(plotChart, chart, chartNs, drawingNs, usesSecondaryAxis, includeDataLabels: !dataLabelWritten);
+            dataLabelWritten = true;
+            yield return plotChart;
+        }
+    }
+
+    private static IEnumerable<(XElement PlotChart, bool UsesSecondaryAxis)> CreatePlotCharts(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
+        var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, seriesCount);
+        var comboLineIndexes = GetComboLineSeriesIndexes(chart, seriesCount);
+        if (secondaryIndexes.Count > 0 && chart.Type == ChartType.Scatter)
+        {
+            var primaryScatter = Enumerable.Range(0, seriesCount)
+                .Where(index => !secondaryIndexes.Contains(index))
+                .ToHashSet();
+            if (primaryScatter.Count > 0)
+                yield return (CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, primaryScatter.Contains), false);
+            yield return (CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, secondaryIndexes.Contains), true);
+            yield break;
+        }
+
+        if (secondaryIndexes.Count > 0 && chart.Type == ChartType.Line)
+        {
+            var primaryLine = Enumerable.Range(0, seriesCount)
+                .Where(index => !secondaryIndexes.Contains(index))
+                .ToHashSet();
+            if (primaryLine.Count > 0)
+                yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, primaryLine.Contains), false);
+            yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, secondaryIndexes.Contains), true);
+            yield break;
+        }
+
+        if ((secondaryIndexes.Count > 0 || comboLineIndexes.Count > 0) &&
+            chart.Type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area)
+        {
+            var primaryBase = Enumerable.Range(0, seriesCount)
+                .Where(index => !secondaryIndexes.Contains(index) && !comboLineIndexes.Contains(index))
+                .ToHashSet();
+            var secondaryBase = secondaryIndexes
+                .Where(index => !comboLineIndexes.Contains(index))
+                .ToHashSet();
+            var primaryLine = comboLineIndexes
+                .Where(index => !secondaryIndexes.Contains(index))
+                .ToHashSet();
+            var secondaryLine = comboLineIndexes
+                .Where(secondaryIndexes.Contains)
+                .ToHashSet();
+
+            if (primaryBase.Count > 0)
+                yield return (CreateNativePlotChart(chart, sheet, chartNs, drawingNs, primaryBase.Contains), false);
+            if (secondaryBase.Count > 0)
+                yield return (CreateNativePlotChart(chart, sheet, chartNs, drawingNs, secondaryBase.Contains), true);
+            if (primaryLine.Count > 0)
+                yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, primaryLine.Contains), false);
+            if (secondaryLine.Count > 0)
+                yield return (CreateLinePlotChart(chart, sheet, chartNs, drawingNs, secondaryLine.Contains), true);
+
+            yield break;
+        }
+
+        yield return (CreateNativePlotChart(chart, sheet, chartNs, drawingNs, _ => true), false);
+    }
+
+    private static XElement CreateNativePlotChart(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool> includeSeries) =>
+        chart.Type switch
+        {
+            ChartType.Line => CreateLinePlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Scatter => CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Area => new XElement(chartNs + "areaChart",
+                new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
+            ChartType.Bubble => new XElement(chartNs + "bubbleChart",
+                BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs)),
+            ChartType.Pie => new XElement(chartNs + "pieChart",
+                ToFirstSliceAngleXml(chart, chartNs),
+                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
+            ChartType.Doughnut => new XElement(chartNs + "doughnutChart",
+                ToFirstSliceAngleXml(chart, chartNs),
+                BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
+                new XElement(chartNs + "holeSize",
+                    new XAttribute("val", Math.Clamp((int)Math.Round(chart.DoughnutHoleSize * 100), 10, 90)))),
+            _ => new XElement(chartNs + "barChart",
+                new XElement(chartNs + "barDir", new XAttribute("val", ToXlsxBarDirection(chart.Type))),
+                new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxBarGrouping(chart.Type))),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries))
+        };
+
+    private static XElement CreateLinePlotChart(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool> includeSeries) =>
+        new(chartNs + "lineChart",
+            BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true));
+
+    private static XElement CreateScatterPlotChart(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool> includeSeries) =>
+        new(chartNs + "scatterChart",
+            new XElement(chartNs + "scatterStyle", new XAttribute("val", "lineMarker")),
+            BuildScatterChartSeries(chart, sheet, chartNs, drawingNs, includeSeries));
+
+    private static void AddPlotChartCommonElements(
+        XElement plotChart,
+        ChartModel chart,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        bool usesSecondaryAxis,
+        bool includeDataLabels)
+    {
+        if (includeDataLabels && ToDataLabelsXml(chart, chartNs, drawingNs) is { } dataLabels)
+            plotChart.Add(dataLabels);
+
+        if (!ShouldWriteChartAxes(chart.Type))
+            return;
+
+        plotChart.Add(
+            new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
+            new XElement(chartNs + "axId", new XAttribute("val", usesSecondaryAxis ? SecondaryValueAxisId : ValueAxisId)));
+    }
+
+    private static IEnumerable<XElement> ToChartAxesXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.Type is ChartType.Scatter or ChartType.Bubble)
+        {
+            yield return ToValueAxisXml(
+                chart.XAxisTitle,
+                CategoryAxisId,
+                ValueAxisId,
+                "b",
+                chart.XAxisMinimum,
+                chart.XAxisMaximum,
+                chart.XAxisMajorUnit,
+                chart.XAxisMinorUnit,
+                chart.XAxisLogScale,
+                chart.XAxisNumberFormat,
+                chart.ShowXAxisMajorGridlines,
+                chart.ShowXAxisMinorGridlines,
+                chart.XAxisMajorGridlineColor,
+                chart.XAxisMinorGridlineColor,
+                chart.XAxisGridlineThickness,
+                chart.XAxisMajorTickStyle,
+                chart.XAxisMinorTickStyle,
+                chart.XAxisLineColor,
+                chart.XAxisLineThickness,
+                chart.ShowXAxisLabels,
+                chart.AxisTitleTextColor,
+                chart.AxisTitleFontSize,
+                chartNs,
+                drawingNs);
+            yield return ToValueAxisXml(
+                chart.YAxisTitle,
+                ValueAxisId,
+                CategoryAxisId,
+                "l",
+                chart.YAxisMinimum,
+                chart.YAxisMaximum,
+                chart.YAxisMajorUnit,
+                chart.YAxisMinorUnit,
+                chart.YAxisLogScale,
+                chart.YAxisNumberFormat,
+                chart.ShowYAxisMajorGridlines,
+                chart.ShowYAxisMinorGridlines,
+                chart.YAxisMajorGridlineColor,
+                chart.YAxisMinorGridlineColor,
+                chart.YAxisGridlineThickness,
+                chart.YAxisMajorTickStyle,
+                chart.YAxisMinorTickStyle,
+                chart.YAxisLineColor,
+                chart.YAxisLineThickness,
+                chart.ShowYAxisLabels,
+                chart.AxisTitleTextColor,
+                chart.AxisTitleFontSize,
+                chartNs,
+                drawingNs);
+            var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
+            if (chart.Type == ChartType.Scatter && scatterSecondaryIndexes.Count > 0)
+            {
+                yield return ToValueAxisXml(
+                    null,
+                    SecondaryValueAxisId,
+                    CategoryAxisId,
+                    "r",
+                    chart.YAxisMinimum,
+                    chart.YAxisMaximum,
+                    chart.YAxisMajorUnit,
+                    chart.YAxisMinorUnit,
+                    chart.YAxisLogScale,
+                    chart.YAxisNumberFormat,
+                    false,
+                    false,
+                    null,
+                    null,
+                    chart.YAxisGridlineThickness,
+                    chart.YAxisMajorTickStyle,
+                    chart.YAxisMinorTickStyle,
+                    chart.YAxisLineColor,
+                    chart.YAxisLineThickness,
+                    chart.ShowYAxisLabels,
+                    chart.AxisTitleTextColor,
+                    chart.AxisTitleFontSize,
+                    chartNs,
+                    drawingNs);
+            }
+            yield break;
+        }
+
+        yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
+        yield return ToValueAxisXml(
+            chart.YAxisTitle,
+            ValueAxisId,
+            CategoryAxisId,
+            "l",
+            chart.YAxisMinimum,
+            chart.YAxisMaximum,
+            chart.YAxisMajorUnit,
+            chart.YAxisMinorUnit,
+            chart.YAxisLogScale,
+            chart.YAxisNumberFormat,
+            chart.ShowYAxisMajorGridlines,
+            chart.ShowYAxisMinorGridlines,
+            chart.YAxisMajorGridlineColor,
+            chart.YAxisMinorGridlineColor,
+            chart.YAxisGridlineThickness,
+            chart.YAxisMajorTickStyle,
+            chart.YAxisMinorTickStyle,
+            chart.YAxisLineColor,
+            chart.YAxisLineThickness,
+            chart.ShowYAxisLabels,
+            chart.AxisTitleTextColor,
+            chart.AxisTitleFontSize,
+            chartNs,
+            drawingNs);
+
+        var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
+        if (secondaryIndexes.Count > 0)
+        {
+            yield return ToValueAxisXml(
+                null,
+                SecondaryValueAxisId,
+                CategoryAxisId,
+                "r",
+                chart.YAxisMinimum,
+                chart.YAxisMaximum,
+                chart.YAxisMajorUnit,
+                chart.YAxisMinorUnit,
+                chart.YAxisLogScale,
+                chart.YAxisNumberFormat,
+                false,
+                false,
+                null,
+                null,
+                chart.YAxisGridlineThickness,
+                chart.YAxisMajorTickStyle,
+                chart.YAxisMinorTickStyle,
+                chart.YAxisLineColor,
+                chart.YAxisLineThickness,
+                chart.ShowYAxisLabels,
+                chart.AxisTitleTextColor,
+                chart.AxisTitleFontSize,
+                chartNs,
+                drawingNs);
+        }
+    }
+
+    private static XElement ToCategoryAxisXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
+        new(chartNs + "catAx",
+            new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
+            new XElement(chartNs + "scaling",
+                new XElement(chartNs + "orientation", new XAttribute("val", "minMax"))),
+            new XElement(chartNs + "delete", new XAttribute("val", "0")),
+            new XElement(chartNs + "axPos", new XAttribute("val", "b")),
+            ToAxisTitleXml(chart.XAxisTitle, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
+            ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
+            ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
+            new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
+            new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels))),
+            ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
+            new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
+            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
+
+    private static XElement ToValueAxisXml(
+        string? title,
+        int axisId,
+        int crossAxisId,
+        string axisPosition,
+        double? minimum,
+        double? maximum,
+        double? majorUnit,
+        double? minorUnit,
+        bool logScale,
+        ChartDataLabelNumberFormat numberFormat,
+        bool showMajorGridlines,
+        bool showMinorGridlines,
+        CellColor? majorGridlineColor,
+        CellColor? minorGridlineColor,
+        double gridlineThickness,
+        ChartAxisTickStyle majorTickStyle,
+        ChartAxisTickStyle minorTickStyle,
+        CellColor? lineColor,
+        double lineThickness,
+        bool showLabels,
+        CellColor? axisTitleTextColor,
+        double axisTitleFontSize,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        new(chartNs + "valAx",
+            new XElement(chartNs + "axId", new XAttribute("val", axisId)),
+            new XElement(chartNs + "scaling",
+                logScale ? new XElement(chartNs + "logBase", new XAttribute("val", "10")) : null,
+                new XElement(chartNs + "orientation", new XAttribute("val", "minMax")),
+                ToAxisBoundXml("max", maximum, chartNs),
+                ToAxisBoundXml("min", minimum, chartNs)),
+            new XElement(chartNs + "delete", new XAttribute("val", "0")),
+            new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
+            ToAxisTitleXml(title, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
+            new XElement(chartNs + "numFmt",
+                new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat)),
+                new XAttribute("sourceLinked", numberFormat == ChartDataLabelNumberFormat.General ? "1" : "0")),
+            ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs),
+            ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
+            ToAxisUnitXml("majorUnit", majorUnit, chartNs),
+            ToAxisUnitXml("minorUnit", minorUnit, chartNs),
+            new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
+            new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(minorTickStyle))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(showLabels))),
+            ToAxisLineShapeProperties(lineColor, lineThickness, chartNs, drawingNs),
+            new XElement(chartNs + "crossAx", new XAttribute("val", crossAxisId)),
+            new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
+
+    private static XElement? ToAxisGridlinesXml(
+        string elementName,
+        bool visible,
+        CellColor? color,
+        double thickness,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (!visible)
+            return null;
+
+        return new XElement(chartNs + elementName,
+            ToShapeProperties(
+                chartNs,
+                drawingNs,
+                fillThemeColor: null,
+                fillColor: null,
+                borderThemeColor: null,
+                borderColor: color,
+                borderThickness: Math.Clamp(thickness, 0.25, 10)));
+    }
+
+    private static XElement? ToAxisLineShapeProperties(
+        CellColor? lineColor,
+        double lineThickness,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        ToShapeProperties(
+            chartNs,
+            drawingNs,
+            fillThemeColor: null,
+            fillColor: null,
+            borderThemeColor: null,
+            borderColor: lineColor,
+            borderThickness: Math.Clamp(lineThickness, 0.5, 10));
+
+    private static string ToXlsxTickMark(ChartAxisTickStyle tickStyle) =>
+        tickStyle switch
+        {
+            ChartAxisTickStyle.None => "none",
+            ChartAxisTickStyle.Inside => "in",
+            ChartAxisTickStyle.Cross => "cross",
+            _ => "out"
+        };
+
+    private static string ToXlsxTickLabelPosition(bool showLabels) =>
+        showLabels ? "nextTo" : "none";
+
+    private static XElement? ToAxisBoundXml(string elementName, double? value, XNamespace chartNs) =>
+        value is { } numeric && double.IsFinite(numeric)
+            ? new XElement(chartNs + elementName, new XAttribute("val", numeric.ToString(CultureInfo.InvariantCulture)))
+            : null;
+
+    private static XElement? ToAxisUnitXml(string elementName, double? value, XNamespace chartNs) =>
+        value is { } numeric && double.IsFinite(numeric)
+            ? new XElement(chartNs + elementName, new XAttribute("val", Math.Max(numeric, double.Epsilon).ToString(CultureInfo.InvariantCulture)))
+            : null;
+
+    private static string ToXlsxNumberFormatCode(ChartDataLabelNumberFormat format) =>
+        format switch
+        {
+            ChartDataLabelNumberFormat.Number => "0.00",
+            ChartDataLabelNumberFormat.Currency => "$#,##0.00",
+            ChartDataLabelNumberFormat.Percent => "0%",
+            _ => "General"
+        };
+
+    private static XElement ToChartTitleXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
+        new(chartNs + "title",
+            new XElement(chartNs + "tx",
+                new XElement(chartNs + "rich",
+                    new XElement(drawingNs + "p",
+                        new XElement(drawingNs + "r",
+                            ToTextRunProperties(null, chart.ChartTitleTextColor, chart.ChartTitleFontSize, drawingNs),
+                            new XElement(drawingNs + "t", chart.Title))))));
+
+    private static XElement? ToAxisTitleXml(
+        string? title,
+        CellColor? textColor,
+        double fontSize,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        string.IsNullOrWhiteSpace(title)
+            ? null
+            : new XElement(chartNs + "title",
+                new XElement(chartNs + "tx",
+                    new XElement(chartNs + "rich",
+                        new XElement(drawingNs + "p",
+                            new XElement(drawingNs + "r",
+                                ToTextRunProperties(null, textColor, fontSize, drawingNs),
+                                new XElement(drawingNs + "t", title))))));
+
+    private static XElement? ToTextRunProperties(
+        WorkbookThemeColorReference? textThemeColor,
+        CellColor? textColor,
+        double fontSize,
+        XNamespace drawingNs)
+    {
+        var size = Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200);
+        return new XElement(drawingNs + "rPr",
+            new XAttribute("sz", size),
+            ToTextRunPropertiesContent(textThemeColor, textColor, fontSize, drawingNs));
+    }
+
+    private static IEnumerable<object> ToTextRunPropertiesContent(
+        WorkbookThemeColorReference? textThemeColor,
+        CellColor? textColor,
+        double fontSize,
+        XNamespace drawingNs)
+    {
+        var fill = ToSolidFill(textThemeColor, textColor, drawingNs);
+        if (fill is not null)
+        {
+            yield return fill;
+        }
+    }
+
+    private static XElement? ToChartAreaShapeProperties(
+        ChartModel chart,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        ToShapeProperties(
+            chartNs,
+            drawingNs,
+            chart.ChartAreaFillThemeColor,
+            chart.ChartAreaFillColor,
+            borderThemeColor: null,
+            borderColor: null,
+            borderThickness: null);
+
+    private static XElement? ToPlotAreaShapeProperties(
+        ChartModel chart,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        ToShapeProperties(
+            chartNs,
+            drawingNs,
+            chart.PlotAreaFillThemeColor,
+            chart.PlotAreaFillColor,
+            chart.PlotAreaBorderThemeColor,
+            chart.PlotAreaBorderColor,
+            chart.PlotAreaBorderThickness);
+
+    private static XElement? ToShapeProperties(
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        WorkbookThemeColorReference? fillThemeColor,
+        CellColor? fillColor,
+        WorkbookThemeColorReference? borderThemeColor,
+        CellColor? borderColor,
+        double? borderThickness)
+    {
+        var fill = ToSolidFill(fillThemeColor, fillColor, drawingNs);
+        var lineFill = ToSolidFill(borderThemeColor, borderColor, drawingNs);
+        var line = lineFill is null && borderThickness is null
+            ? null
+            : new XElement(drawingNs + "ln",
+                borderThickness is null
+                    ? null
+                    : new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(borderThickness.Value, 0, 10) * 12700))),
+                lineFill);
+
+        return fill is null && line is null
+            ? null
+            : new XElement(chartNs + "spPr", fill, line);
+    }
+
+    private static XElement? ToSolidFill(
+        WorkbookThemeColorReference? themeColor,
+        CellColor? color,
+        XNamespace drawingNs)
+    {
+        XElement? colorElement = null;
+        if (themeColor is { } theme)
+        {
+            colorElement = new XElement(drawingNs + "schemeClr",
+                new XAttribute("val", ToDrawingSchemeColor(theme.Slot)));
+            ApplyTint(colorElement, theme.Tint, drawingNs);
+        }
+        else if (color is { } concrete)
+        {
+            colorElement = new XElement(drawingNs + "srgbClr",
+                new XAttribute("val", FormatThemeColor(concrete)));
+        }
+
+        return colorElement is null
+            ? null
+            : new XElement(drawingNs + "solidFill", colorElement);
+    }
+
+    private static void ApplyTint(XElement colorElement, double tint, XNamespace drawingNs)
+    {
+        if (tint > 0)
+        {
+            colorElement.Add(
+                new XElement(drawingNs + "lumMod", new XAttribute("val", Math.Clamp((int)Math.Round((1 - tint) * 100000), 0, 100000))),
+                new XElement(drawingNs + "lumOff", new XAttribute("val", Math.Clamp((int)Math.Round(tint * 100000), 0, 100000))));
+        }
+        else if (tint < 0)
+        {
+            colorElement.Add(new XElement(drawingNs + "lumMod",
+                new XAttribute("val", Math.Clamp((int)Math.Round((1 + tint) * 100000), 0, 100000))));
+        }
+    }
+
+    private static XElement? ToLegendXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None)
+            return null;
+
+        return new XElement(chartNs + "legend",
+            new XElement(chartNs + "legendPos",
+                new XAttribute("val", ToXlsxLegendPosition(chart.LegendPosition))),
+            new XElement(chartNs + "overlay",
+                new XAttribute("val", chart.LegendOverlay ? "1" : "0")),
+            ToShapeProperties(
+                chartNs,
+                drawingNs,
+                chart.LegendFillThemeColor,
+                chart.LegendFillColor,
+                chart.LegendBorderThemeColor,
+                chart.LegendBorderColor,
+                chart.LegendBorderThickness),
+            ToLegendTextProperties(chart, chartNs, drawingNs));
+    }
+
+    private static XElement? ToLegendTextProperties(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.LegendTextColor is null && chart.LegendTextThemeColor is null && chart.LegendFontSize == 12)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        new XAttribute("sz", Math.Clamp((int)Math.Round(chart.LegendFontSize * 100), 600, 7200)),
+                        ToTextRunPropertiesContent(chart.LegendTextThemeColor, chart.LegendTextColor, chart.LegendFontSize, drawingNs)))));
+    }
+
+    private static XElement? ToDataLabelsXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (!chart.ShowDataLabels)
+            return null;
+
+        return new XElement(chartNs + "dLbls",
+            new XElement(chartNs + "dLblPos", new XAttribute("val", ToXlsxDataLabelPosition(chart.DataLabelPosition))),
+            new XElement(chartNs + "numFmt",
+                new XAttribute("formatCode", ToXlsxNumberFormatCode(chart.DataLabelNumberFormat)),
+                new XAttribute("sourceLinked", chart.DataLabelNumberFormat == ChartDataLabelNumberFormat.General ? "1" : "0")),
+            ToShapeProperties(
+                chartNs,
+                drawingNs,
+                chart.DataLabelFillThemeColor,
+                chart.DataLabelFillColor,
+                chart.DataLabelBorderThemeColor,
+                chart.DataLabelBorderColor,
+                chart.DataLabelBorderThickness),
+            ToDataLabelTextProperties(chart, chartNs, drawingNs),
+            new XElement(chartNs + "showLegendKey", new XAttribute("val", "0")),
+            new XElement(chartNs + "showVal", new XAttribute("val", "1")),
+            new XElement(chartNs + "showCatName", new XAttribute("val", chart.ShowDataLabelCategoryName ? "1" : "0")),
+            new XElement(chartNs + "showSerName", new XAttribute("val", chart.ShowDataLabelSeriesName ? "1" : "0")),
+            new XElement(chartNs + "showPercent", new XAttribute("val", chart.ShowDataLabelPercentage && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type) ? "1" : "0")),
+            new XElement(chartNs + "showBubbleSize", new XAttribute("val", "0")),
+            new XElement(chartNs + "separator",
+                chart.DataLabelSeparator == ChartDataLabelSeparator.NewLine
+                    ? new XAttribute(XNamespace.Xml + "space", "preserve")
+                    : null,
+                ToXlsxDataLabelSeparator(chart.DataLabelSeparator)),
+            new XElement(chartNs + "showLeaderLines", new XAttribute("val", chart.ShowDataLabelCallouts ? "1" : "0")));
+    }
+
+    private static XElement? ToDataLabelTextProperties(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.DataLabelTextColor is null && chart.DataLabelTextThemeColor is null && chart.DataLabelFontSize == 11 && chart.DataLabelAngle == 0)
+            return null;
+
+        var textFill = ToSolidFill(chart.DataLabelTextThemeColor, chart.DataLabelTextColor, drawingNs);
+        return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(chart.DataLabelAngle, drawingNs),
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        new XAttribute("sz", Math.Clamp((int)Math.Round(chart.DataLabelFontSize * 100), 600, 7200)),
+                        textFill))));
+    }
+
+    private static XElement? ToTextBodyProperties(double angle, XNamespace drawingNs) =>
+        angle == 0
+            ? null
+            : new XElement(drawingNs + "bodyPr",
+                new XAttribute("rot", Math.Clamp((int)Math.Round(angle * 60000), -5400000, 5400000)));
+
+    private static string ToXlsxDataLabelPosition(ChartDataLabelPosition position) =>
+        position switch
+        {
+            ChartDataLabelPosition.Center => "ctr",
+            ChartDataLabelPosition.InsideEnd => "inEnd",
+            ChartDataLabelPosition.OutsideEnd => "outEnd",
+            _ => "bestFit"
+        };
+
+    private static string ToXlsxDataLabelSeparator(ChartDataLabelSeparator separator) =>
+        separator switch
+        {
+            ChartDataLabelSeparator.Semicolon => "; ",
+            ChartDataLabelSeparator.NewLine => "\n",
+            ChartDataLabelSeparator.Space => " ",
+            _ => ", "
+        };
+
+    private static string ToXlsxLegendPosition(ChartLegendPosition position) =>
+        position switch
+        {
+            ChartLegendPosition.Left => "l",
+            ChartLegendPosition.Top => "t",
+            ChartLegendPosition.Bottom => "b",
+            _ => "r"
+        };
+
+    private static bool IsSupportedXlsxChart(ChartModel chart) =>
+        ChartTypeSupport.GetDataSeriesCount(chart) > 0 &&
+        ChartTypeSupport.GetDataPointCount(chart) > 0 &&
+        (!Enum.IsDefined(chart.Type) ||
+            chart.Type is ChartType.Column
+                or ChartType.StackedColumn
+                or ChartType.PercentStackedColumn
+                or ChartType.Bar
+                or ChartType.StackedBar
+                or ChartType.PercentStackedBar
+                or ChartType.Line
+                or ChartType.Scatter
+                or ChartType.Area
+                or ChartType.Bubble
+                or ChartType.Pie
+                or ChartType.Doughnut);
+
+    private static string ToXlsxBarDirection(ChartType chartType) =>
+        chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar
+            ? "bar"
+            : "col";
+
+    private static string ToXlsxBarGrouping(ChartType chartType) =>
+        chartType switch
+        {
+            ChartType.StackedColumn or ChartType.StackedBar => "stacked",
+            ChartType.PercentStackedColumn or ChartType.PercentStackedBar => "percentStacked",
+            _ => "clustered"
+        };
+
+    private static IEnumerable<XElement> BuildChartSeries(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool>? includeSeries = null,
+        bool forceLineShapeProperties = false)
+    {
         var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var categoryCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col : chart.DataRange.Start.Col;
         var seriesStartCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
-        var categoryRange = FormatSheetRange(sheet.Name, dataStartRow, categoryCol, chart.DataRange.End.Row, categoryCol);
+        var categoryRange = chart.FirstColIsCategories
+            ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
+            : null;
 
         var seriesIndex = 0;
         for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
         {
+            if (includeSeries is not null && !includeSeries(seriesIndex))
+            {
+                seriesIndex++;
+                continue;
+            }
+
             var valueRange = FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
-            var titleRange = FormatSheetRange(sheet.Name, headerRow, col, headerRow, col);
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
-                new XElement(chartNs + "tx",
-                    new XElement(chartNs + "strRef",
-                        new XElement(chartNs + "f", titleRange))),
-                ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
-                new XElement(chartNs + "cat",
-                    new XElement(chartNs + "strRef",
-                        new XElement(chartNs + "f", categoryRange))),
+                ToSeriesTitleXml(chart, sheet, col, chartNs),
+                chart.Type == ChartType.Line || forceLineShapeProperties
+                    ? ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs)
+                    : ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                chart.Type == ChartType.Line || forceLineShapeProperties
+                    ? ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs)
+                    : null,
+                ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToCategoryRangeXml(categoryRange, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange))));
             seriesIndex++;
         }
+    }
+
+    private static XElement? ToCategoryRangeXml(string? categoryRange, XNamespace chartNs) =>
+        string.IsNullOrWhiteSpace(categoryRange)
+            ? null
+            : new XElement(chartNs + "cat",
+                new XElement(chartNs + "strRef",
+                    new XElement(chartNs + "f", categoryRange)));
+
+    private static IEnumerable<XElement> BuildScatterChartSeries(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool>? includeSeries = null)
+    {
+        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        var xValueCol = chart.DataRange.Start.Col;
+        var seriesStartCol = chart.DataRange.Start.Col + 1;
+        var xValueRange = FormatSheetRange(sheet.Name, dataStartRow, xValueCol, chart.DataRange.End.Row, xValueCol);
+
+        var seriesIndex = 0;
+        for (var col = seriesStartCol; col <= chart.DataRange.End.Col; col++)
+        {
+            if (includeSeries is not null && !includeSeries(seriesIndex))
+            {
+                seriesIndex++;
+                continue;
+            }
+
+            var yValueRange = FormatSheetRange(sheet.Name, dataStartRow, col, chart.DataRange.End.Row, col);
+            yield return new XElement(chartNs + "ser",
+                new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                ToSeriesTitleXml(chart, sheet, col, chartNs),
+                ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
+                ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                new XElement(chartNs + "xVal",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", xValueRange))),
+                new XElement(chartNs + "yVal",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", yValueRange))));
+            seriesIndex++;
+        }
+    }
+
+    private static HashSet<int> GetSecondaryAxisSeriesIndexes(ChartModel chart, int seriesCount)
+    {
+        if (!chart.ShowSecondaryAxis || !ChartTypeSupport.SupportsSecondaryAxis(chart.Type) || seriesCount < 2)
+            return [];
+
+        if (chart.SecondaryAxisSeriesIndexes.Count == 0)
+            return Enumerable.Range(1, seriesCount - 1).ToHashSet();
+
+        return chart.SecondaryAxisSeriesIndexes
+            .Where(index => index > 0 && index < seriesCount)
+            .Distinct()
+            .ToHashSet();
+    }
+
+    private static HashSet<int> GetComboLineSeriesIndexes(ChartModel chart, int seriesCount)
+    {
+        if (!chart.UseComboLineForSecondarySeries || !ChartTypeSupport.SupportsComboLineOverlay(chart) || seriesCount < 2)
+            return [];
+
+        return chart.ComboLineSeriesIndexes
+            .Where(index => index > 0 && index < seriesCount)
+            .Distinct()
+            .ToHashSet();
+    }
+
+    private static IEnumerable<XElement> BuildBubbleChartSeries(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (chart.DataRange.End.Col - chart.DataRange.Start.Col < 2)
+            yield break;
+
+        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        var xValueCol = chart.DataRange.Start.Col;
+        var xValueRange = FormatSheetRange(sheet.Name, dataStartRow, xValueCol, chart.DataRange.End.Row, xValueCol);
+
+        var seriesIndex = 0;
+        for (var yValueCol = chart.DataRange.Start.Col + 1; yValueCol < chart.DataRange.End.Col; yValueCol += 2)
+        {
+            var sizeCol = yValueCol + 1;
+            var yValueRange = FormatSheetRange(sheet.Name, dataStartRow, yValueCol, chart.DataRange.End.Row, yValueCol);
+            var sizeRange = FormatSheetRange(sheet.Name, dataStartRow, sizeCol, chart.DataRange.End.Row, sizeCol);
+
+            yield return new XElement(chartNs + "ser",
+                new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                ToSeriesTitleXml(chart, sheet, yValueCol, chartNs),
+                ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                new XElement(chartNs + "xVal",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", xValueRange))),
+                new XElement(chartNs + "yVal",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", yValueRange))),
+                new XElement(chartNs + "bubbleSize",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", sizeRange))));
+            seriesIndex++;
+        }
+    }
+
+    private static IEnumerable<XElement> BuildPieFamilyChartSeries(
+        ChartModel chart,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (chart.FirstColIsCategories && chart.DataRange.End.Col <= chart.DataRange.Start.Col)
+            yield break;
+
+        var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        var firstValueCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        var categoryRange = chart.FirstColIsCategories
+            ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
+            : null;
+
+        var seriesIndex = 0;
+        for (var valueCol = firstValueCol; valueCol <= chart.DataRange.End.Col; valueCol++)
+        {
+            var valueRange = FormatSheetRange(sheet.Name, dataStartRow, valueCol, chart.DataRange.End.Row, valueCol);
+            yield return new XElement(chartNs + "ser",
+                new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
+                new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
+                ToSeriesTitleXml(chart, sheet, valueCol, chartNs),
+                ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                seriesIndex == 0 ? ToExplodedSliceXml(chart, chartNs) : null,
+                ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToCategoryRangeXml(categoryRange, chartNs),
+                new XElement(chartNs + "val",
+                    new XElement(chartNs + "numRef",
+                        new XElement(chartNs + "f", valueRange))));
+            seriesIndex++;
+        }
+    }
+
+    private static XElement? ToSeriesTitleXml(
+        ChartModel chart,
+        Sheet sheet,
+        uint seriesColumn,
+        XNamespace chartNs)
+    {
+        if (!chart.FirstRowIsHeader)
+            return null;
+
+        var titleRange = FormatSheetRange(sheet.Name, chart.DataRange.Start.Row, seriesColumn, chart.DataRange.Start.Row, seriesColumn);
+        return new XElement(chartNs + "tx",
+            new XElement(chartNs + "strRef",
+                new XElement(chartNs + "f", titleRange)));
+    }
+
+    private static XElement? ToFirstSliceAngleXml(ChartModel chart, XNamespace chartNs)
+    {
+        var normalized = chart.FirstSliceAngle % 360;
+        if (normalized < 0)
+            normalized += 360;
+
+        return normalized == 0
+            ? null
+            : new XElement(chartNs + "firstSliceAng",
+                new XAttribute("val", Math.Clamp((int)Math.Round(normalized), 0, 360)));
+    }
+
+    private static XElement? ToExplodedSliceXml(ChartModel chart, XNamespace chartNs)
+    {
+        var pointCount = ChartTypeSupport.GetDataPointCount(chart);
+        if (chart.ExplodedSliceIndex < 0 || chart.ExplodedSliceIndex >= pointCount || chart.ExplodedSliceDistance <= 0)
+            return null;
+
+        return new XElement(chartNs + "dPt",
+            new XElement(chartNs + "idx", new XAttribute("val", chart.ExplodedSliceIndex)),
+            new XElement(chartNs + "explosion",
+                new XAttribute("val", Math.Clamp((int)Math.Round(chart.ExplodedSliceDistance * 100), 0, 50))));
+    }
+
+    private static XElement? ToSeriesLineShapeProperties(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var format = GetSeriesFormat(chart, seriesIndex);
+        if (format is null)
+            return null;
+
+        var fill = ToSolidFill(format.StrokeThemeColor, format.StrokeColor, drawingNs);
+        var hasLineFormatting = fill is not null ||
+            format.StrokeThickness is not null ||
+            format.DashStyle is not null;
+
+        return !hasLineFormatting
+            ? null
+            : new XElement(chartNs + "spPr",
+                new XElement(drawingNs + "ln",
+                    format.StrokeThickness is { } strokeThickness
+                        ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * 12700)))
+                        : null,
+                    fill,
+                    format.DashStyle is { } dashStyle
+                        ? ToPresetDash(dashStyle, drawingNs)
+                        : null));
+    }
+
+    private static XElement? ToSeriesMarkerXml(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (!ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
+            return null;
+
+        var format = GetSeriesFormat(chart, seriesIndex);
+        if (format is null)
+            return null;
+
+        var fill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
+        if (format.MarkerStyle is null && format.MarkerSize is null && fill is null)
+            return null;
+
+        return new XElement(chartNs + "marker",
+            format.MarkerStyle is { } markerStyle
+                ? new XElement(chartNs + "symbol", new XAttribute("val", ToXlsxMarkerStyle(markerStyle)))
+                : null,
+            format.MarkerSize is { } markerSize
+                ? new XElement(chartNs + "size", new XAttribute("val", Math.Clamp((int)Math.Round(markerSize), 1, 30)))
+                : null,
+            fill is not null
+                ? new XElement(chartNs + "spPr", fill)
+                : null);
     }
 
     private static XElement? ToSeriesShapeProperties(
@@ -1587,27 +2659,179 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        var format = chart.SeriesFormats.FirstOrDefault(item => item.SeriesIndex == seriesIndex);
+        var format = GetSeriesFormat(chart, seriesIndex);
         if (format is null)
             return null;
 
-        XElement? colorElement = null;
-        if (format.FillThemeColor is { } themeColor)
-        {
-            colorElement = new XElement(drawingNs + "schemeClr",
-                new XAttribute("val", ToDrawingSchemeColor(themeColor.Slot)));
-        }
-        else if (format.FillColor is { } fillColor)
-        {
-            colorElement = new XElement(drawingNs + "srgbClr",
-                new XAttribute("val", FormatThemeColor(fillColor)));
-        }
+        var fill = ToSolidFill(format.FillThemeColor, format.FillColor, drawingNs);
+        var lineFill = ToSolidFill(format.StrokeThemeColor, format.StrokeColor, drawingNs);
+        var hasLineFormatting = lineFill is not null ||
+            format.StrokeThickness is not null ||
+            format.DashStyle is not null;
 
-        return colorElement is null
+        return fill is null && !hasLineFormatting
             ? null
             : new XElement(chartNs + "spPr",
-                new XElement(drawingNs + "solidFill", colorElement));
+                fill,
+                hasLineFormatting
+                    ? new XElement(drawingNs + "ln",
+                        format.StrokeThickness is { } strokeThickness
+                            ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * 12700)))
+                            : null,
+                        lineFill,
+                        format.DashStyle is { } dashStyle
+                            ? ToPresetDash(dashStyle, drawingNs)
+                            : null)
+                    : null);
     }
+
+    private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex)
+    {
+        var format = chart.SeriesFormats.LastOrDefault(item => item.SeriesIndex == seriesIndex);
+        return format is null
+            ? null
+            : format with
+            {
+                DashStyle = ValidNullableEnumOrNull(format.DashStyle),
+                MarkerStyle = ValidNullableEnumOrNull(format.MarkerStyle)
+            };
+    }
+
+    private static TEnum? ValidNullableEnumOrNull<TEnum>(TEnum? value)
+        where TEnum : struct, Enum =>
+        value is { } enumValue && Enum.IsDefined(enumValue) ? enumValue : null;
+
+    private static XElement? ToPointDataLabelsXml(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var pointCount = ChartTypeSupport.GetDataPointCount(chart);
+        var labels = chart.PointDataLabelFormats
+            .Where(format => format.SeriesIndex == seriesIndex && format.PointIndex >= 0 && format.PointIndex < pointCount)
+            .GroupBy(format => format.PointIndex)
+            .Select(group => group.Last())
+            .Where(HasPointDataLabelFormatting)
+            .OrderBy(format => format.PointIndex)
+            .Select(format => ToPointDataLabelXml(format, chartNs, drawingNs))
+            .ToArray();
+
+        return labels.Length == 0
+            ? null
+            : new XElement(chartNs + "dLbls", labels);
+    }
+
+    private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
+        format.FillColor is not null
+        || format.BorderColor is not null
+        || format.BorderThickness is not null
+        || format.TextColor is not null
+        || format.FontSize is not null
+        || format.FillThemeColor is not null
+        || format.BorderThemeColor is not null
+        || format.TextThemeColor is not null;
+
+    private static XElement ToPointDataLabelXml(
+        ChartPointDataLabelFormat format,
+        XNamespace chartNs,
+        XNamespace drawingNs) =>
+        new(chartNs + "dLbl",
+            new XElement(chartNs + "idx", new XAttribute("val", format.PointIndex)),
+            ToShapeProperties(
+                chartNs,
+                drawingNs,
+                format.FillThemeColor,
+                format.FillColor,
+                format.BorderThemeColor,
+                format.BorderColor,
+                format.BorderThickness),
+            ToPointDataLabelTextProperties(format, chartNs, drawingNs));
+
+    private static XElement? ToPointDataLabelTextProperties(
+        ChartPointDataLabelFormat format,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var textFill = ToSolidFill(format.TextThemeColor, format.TextColor, drawingNs);
+        if (textFill is null && format.FontSize is null)
+            return null;
+
+        return new XElement(chartNs + "txPr",
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        format.FontSize is { } fontSize
+                            ? new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200))
+                            : null,
+                        textFill))));
+    }
+
+    private static XElement? ToTrendlineXml(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (!chart.ShowLinearTrendline || seriesIndex != 0 || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return null;
+
+        return new XElement(chartNs + "trendline",
+            new XElement(chartNs + "trendlineType",
+                new XAttribute("val", ToXlsxTrendlineType(chart.TrendlineType))),
+            chart.TrendlineType == ChartTrendlineType.Polynomial
+                ? new XElement(chartNs + "order", new XAttribute("val", Math.Clamp(chart.TrendlineOrder, 2, 6)))
+                : null,
+            chart.TrendlineType == ChartTrendlineType.MovingAverage
+                ? new XElement(chartNs + "period", new XAttribute("val", Math.Max(2, chart.TrendlinePeriod)))
+                : null,
+            ToTrendlineShapeProperties(chart, chartNs, drawingNs),
+            new XElement(chartNs + "dispEq", new XAttribute("val", chart.ShowTrendlineEquation ? "1" : "0")),
+            new XElement(chartNs + "dispRSqr", new XAttribute("val", chart.ShowTrendlineRSquared ? "1" : "0")));
+    }
+
+    private static XElement? ToTrendlineShapeProperties(
+        ChartModel chart,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        var fill = ToSolidFill(chart.TrendlineThemeColor, chart.TrendlineColor, drawingNs);
+        if (fill is null && chart.TrendlineThickness == 1.5 && chart.TrendlineDashStyle == ChartLineDashStyle.Solid)
+            return null;
+
+        return new XElement(chartNs + "spPr",
+            new XElement(drawingNs + "ln",
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.TrendlineThickness, 0.5, 10) * 12700))),
+                fill,
+                ToPresetDash(chart.TrendlineDashStyle, drawingNs)));
+    }
+
+    private static XElement? ToPresetDash(ChartLineDashStyle dashStyle, XNamespace drawingNs) =>
+        dashStyle == ChartLineDashStyle.Solid
+            ? null
+            : new XElement(drawingNs + "prstDash",
+                new XAttribute("val", dashStyle == ChartLineDashStyle.Dot ? "dot" : "dash"));
+
+    private static string ToXlsxMarkerStyle(ChartMarkerStyle markerStyle) =>
+        markerStyle switch
+        {
+            ChartMarkerStyle.None => "none",
+            ChartMarkerStyle.Square => "square",
+            ChartMarkerStyle.Diamond => "diamond",
+            ChartMarkerStyle.Triangle => "triangle",
+            _ => "circle"
+        };
+
+    private static string ToXlsxTrendlineType(ChartTrendlineType type) =>
+        type switch
+        {
+            ChartTrendlineType.Exponential => "exp",
+            ChartTrendlineType.Logarithmic => "log",
+            ChartTrendlineType.Power => "power",
+            ChartTrendlineType.MovingAverage => "movingAvg",
+            ChartTrendlineType.Polynomial => "poly",
+            _ => "linear"
+        };
 
     private static string ToDrawingSchemeColor(WorkbookThemeColorSlot slot) =>
         slot switch
@@ -1804,6 +3028,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 !sheet.ShowGridlines ||
                 !sheet.ShowHeadings ||
                 !sheet.ShowRulers ||
+                ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
                 sheet.ZoomPercent != 100 ||
                 sheet.ShowFormulas ||
                 (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
@@ -1851,6 +3076,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sheetViews.Add(sheetView);
         }
 
+        sheetView.SetAttributeValue("view", ToXlsxWorksheetViewMode(
+            ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal)));
         sheetView.SetAttributeValue("showGridLines", sheet.ShowGridlines ? null : "0");
         sheetView.SetAttributeValue("showRowColHeaders", sheet.ShowHeadings ? null : "0");
         sheetView.SetAttributeValue("showRuler", sheet.ShowRulers ? null : "0");
@@ -1924,7 +3151,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return new CellStyle
         {
             FontName = xlStyle.Font.FontName,
-            FontSize = xlStyle.Font.FontSize,
+            FontSize = IsSupportedFontSize(xlStyle.Font.FontSize)
+                ? xlStyle.Font.FontSize
+                : CellStyle.Default.FontSize,
             Bold = xlStyle.Font.Bold,
             Italic = xlStyle.Font.Italic,
             Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
@@ -1957,6 +3186,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 _ => VerticalAlignment.Bottom,
             },
             WrapText = xlStyle.Alignment.WrapText,
+            TextRotation = IsSupportedTextRotation(xlStyle.Alignment.TextRotation)
+                ? xlStyle.Alignment.TextRotation
+                : 0,
             Locked = xlStyle.Protection.Locked,
         };
     }
@@ -2022,7 +3254,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             xlCell.Style.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
         if (style.Strikethrough != def.Strikethrough)
             xlCell.Style.Font.Strikethrough = style.Strikethrough;
-        if (style.FontSize != def.FontSize) xlCell.Style.Font.FontSize = style.FontSize;
+        if (style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize))
+            xlCell.Style.Font.FontSize = style.FontSize;
         if (style.FontName != def.FontName) xlCell.Style.Font.FontName = style.FontName;
         if (style.FontColor != def.FontColor)
             xlCell.Style.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
@@ -2073,6 +3306,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (style.WrapText != def.WrapText)
             xlCell.Style.Alignment.WrapText = style.WrapText;
+
+        if (style.TextRotation != def.TextRotation && IsSupportedTextRotation(style.TextRotation))
+            xlCell.Style.Alignment.TextRotation = style.TextRotation;
 
         if (style.NumberFormat != def.NumberFormat)
             xlCell.Style.NumberFormat.Format = style.NumberFormat;
@@ -2205,6 +3441,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         foreach (var cf in sheet.ConditionalFormats)
         {
+            if (!Enum.IsDefined(cf.RuleType) || !Enum.IsDefined(cf.Operator))
+                continue;
+            if (cf.RuleType is not (CfRuleType.CellValue or CfRuleType.Formula))
+                continue;
             if (cf.FormatIfTrue is null && cf.RuleType != CfRuleType.ColorScale && cf.RuleType != CfRuleType.DataBar)
                 continue;
 
@@ -2236,7 +3476,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         CfOperator.LessThanOrEqual    => xlCf.WhenEqualOrLessThan(v1),
                         CfOperator.Between            => xlCf.WhenBetween(v1, v2),
                         CfOperator.NotBetween         => xlCf.WhenNotBetween(v1, v2),
-                        _                             => xlCf.WhenEquals(v1)
+                        _                             => throw new InvalidOperationException("Unsupported conditional format operator.")
                     };
                     if (cf.FormatIfTrue is not null) ApplyCfStyle(xlStyle, cf.FormatIfTrue);
                 }
@@ -2368,6 +3608,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         foreach (var dv in sheet.DataValidations)
         {
+            if (!Enum.IsDefined(dv.Type) || !Enum.IsDefined(dv.Operator) || !Enum.IsDefined(dv.AlertStyle))
+                continue;
+
             try
             {
                 var rangeStr = $"{CellAddress.NumberToColumnName(dv.AppliesTo.Start.Col)}{dv.AppliesTo.Start.Row}" +
@@ -2574,8 +3817,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var end = new CellAddress(sheetId,
                 (uint)xlMerge.RangeAddress.LastAddress.RowNumber,
                 (uint)xlMerge.RangeAddress.LastAddress.ColumnNumber);
-            sheet.MergedRegions.Add(new GridRange(start, end));
+            sheet.AddMergedRegion(new GridRange(start, end));
         }
-        sheet.InvalidateMergeIndex();
     }
 }
