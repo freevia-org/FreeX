@@ -116,7 +116,7 @@ public readonly record struct GridRange
     public uint ColCount => End.Col - Start.Col + 1;
 
     /// <summary>Total number of cells in this range.</summary>
-    public uint CellCount => RowCount * ColCount;
+    public long CellCount => (long)RowCount * ColCount;
 
     /// <summary>
     /// Enumerate all cell addresses in this range, row by row.
