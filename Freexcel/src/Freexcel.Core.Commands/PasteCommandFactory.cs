@@ -122,7 +122,7 @@ public static class PasteCommandFactory
         double.TryParse(
             text,
             System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.CurrentCulture,
+            System.Globalization.CultureInfo.InvariantCulture,
             out var number)
             ? new NumberValue(number)
             : new TextValue(text);

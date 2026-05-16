@@ -2,7 +2,7 @@ namespace Freexcel.Core.Formula;
 
 /// <summary>
 /// Recursive descent parser that converts a token stream into an AST.
-/// Handles operator precedence: comparison &lt; concatenation &lt; addition &lt; multiplication &lt; unary &lt; power.
+/// Handles operator precedence: comparison &lt; concatenation &lt; addition &lt; multiplication &lt; power &lt; unary &lt; postfix.
 /// </summary>
 public sealed class Parser
 {
@@ -104,38 +104,39 @@ public sealed class Parser
         return left;
     }
 
-    // Multiplication → Unary ( ('*' | '/') Unary )*
+    // Multiplication -> Power ( ('*' | '/') Power )*
     private FormulaNode ParseMultiplication()
     {
-        var left = ParseUnary();
+        var left = ParsePower();
 
         while (Current.Type is TokenType.Multiply or TokenType.Divide)
         {
             var op = Current.Type == TokenType.Multiply ? BinaryOperator.Multiply : BinaryOperator.Divide;
             Advance();
-            var right = ParseUnary();
+            var right = ParsePower();
             left = new BinaryOpNode(left, op, right);
         }
 
         return left;
     }
 
-    // Power → Postfix ( '^' Unary )?   — right-associative: 2^3^2 = 2^(3^2) = 512
+    // Power -> Unary ( '^' Power )? - right-associative: 2^3^2 = 2^(3^2) = 512
+    // Excel gives unary signs higher precedence than exponentiation: -2^2 = (-2)^2.
     private FormulaNode ParsePower()
     {
-        var left = ParsePostfix();
+        var left = ParseUnary();
 
         if (Current.Type == TokenType.Power)
         {
             Advance();
-            var right = ParseUnary();
+            var right = ParsePower();
             return new BinaryOpNode(left, BinaryOperator.Power, right);
         }
 
         return left;
     }
 
-    // Unary → ('-' | '+') Unary | Power
+    // Unary -> ('-' | '+') Unary | Postfix
     private FormulaNode ParseUnary()
     {
         if (Current.Type == TokenType.Minus)
@@ -148,10 +149,10 @@ public sealed class Parser
         if (Current.Type == TokenType.Plus)
         {
             Advance();
-            return ParseUnary(); // unary plus is a no-op
+            return ParseUnary();
         }
 
-        return ParsePower();
+        return ParsePostfix();
     }
 
     // Postfix → Primary ( '%' )*

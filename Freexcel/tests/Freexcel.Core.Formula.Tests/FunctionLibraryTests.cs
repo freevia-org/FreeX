@@ -504,6 +504,14 @@ public class FunctionLibraryTests
         _eval.Evaluate("=TEXT(TODAY(),\"0\")", MakeSheet()).Should().Be(new TextValue(expected));
     }
 
+    [Fact]
+    public void Len_DirectTodayResult_UsesDateSerialText()
+    {
+        var expected = DateTime.Today.ToOADate().ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+
+        _eval.Evaluate("=LEN(TODAY())", MakeSheet()).Should().Be(new NumberValue(expected));
+    }
+
     // ── TRIM ──────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -2264,6 +2272,70 @@ public class FunctionLibraryTests
     [Fact] public void Isodd_3_ReturnsTrue() =>
         _eval.Evaluate("=ISODD(3)", MakeSheet()).Should().Be(new BoolValue(true));
 
+    [Fact]
+    public void Countblank_Range_CountsBlankCells()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)), (3, 1, new TextValue("x")));
+
+        _eval.Evaluate("=COUNTBLANK(A1:A3)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Countblank_SingleCellReference_CountsBlankCell()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=COUNTBLANK(A2)", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Rows_Range_ReturnsRangeHeight()
+    {
+        var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=ROWS(B2:C4)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Columns_Range_ReturnsRangeWidth()
+    {
+        var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 4, new NumberValue(2)));
+
+        _eval.Evaluate("=COLUMNS(B2:D4)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Row_Range_ReturnsFirstRow()
+    {
+        var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=ROW(B2:C4)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Row_SingleCellReference_ReturnsCellRow()
+    {
+        var sheet = MakeSheet((5, 2, new NumberValue(1)));
+
+        _eval.Evaluate("=ROW(B5)", sheet).Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void Column_Range_ReturnsFirstColumn()
+    {
+        var sheet = MakeSheet((2, 2, new NumberValue(1)), (4, 3, new NumberValue(2)));
+
+        _eval.Evaluate("=COLUMN(B2:C4)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Column_SingleCellReference_ReturnsCellColumn()
+    {
+        var sheet = MakeSheet((5, 2, new NumberValue(1)));
+
+        _eval.Evaluate("=COLUMN(B5)", sheet).Should().Be(new NumberValue(2));
+    }
+
     [Fact] public void Replace_Middle_ReplacesCorrectly() =>
         _eval.Evaluate("=REPLACE(\"Hello World\",7,5,\"Excel\")", MakeSheet())
             .Should().Be(new TextValue("Hello Excel"));
@@ -2306,6 +2378,14 @@ public class FunctionLibraryTests
     [Fact] public void Concatenate_TwoStrings_JoinsThem() =>
         _eval.Evaluate("=CONCATENATE(\"Hello \",\"World\")", MakeSheet())
             .Should().Be(new TextValue("Hello World"));
+
+    [Fact]
+    public void Concat_DirectTodayResult_UsesDateSerialText()
+    {
+        var expected = DateTime.Today.ToOADate().ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        _eval.Evaluate("=CONCAT(TODAY())", MakeSheet()).Should().Be(new TextValue(expected));
+    }
 
     [Fact]
     public void Textjoin_TextArgumentError_PropagatesError()
