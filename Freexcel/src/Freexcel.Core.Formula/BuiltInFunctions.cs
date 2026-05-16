@@ -1304,7 +1304,13 @@ public static class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
         var findText   = ToText(args[0]);
         var withinText = ToText(args[1]);
-        int startNum   = args.Count > 2 ? (int)ToNumber(args[2]) : 1;
+        int startNum = 1;
+        if (args.Count > 2)
+        {
+            double rawStart = ToNumber(args[2]);
+            if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+            startNum = (int)rawStart;
+        }
         if (startNum < 1) return ErrorValue.Value;
         int startIdx = startNum - 1;
         if (findText.Length == 0)
@@ -1324,7 +1330,13 @@ public static class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
         var findText   = ToText(args[0]);
         var withinText = ToText(args[1]);
-        int startNum   = args.Count > 2 ? (int)ToNumber(args[2]) : 1;
+        int startNum = 1;
+        if (args.Count > 2)
+        {
+            double rawStart = ToNumber(args[2]);
+            if (!double.IsFinite(rawStart) || rawStart > int.MaxValue) return ErrorValue.Value;
+            startNum = (int)rawStart;
+        }
         if (startNum < 1) return ErrorValue.Value;
         int startIdx = startNum - 1;
         if (findText.Length == 0)
@@ -1349,6 +1361,7 @@ public static class BuiltInFunctions
         double rawStart = ToNumber(args[1]);
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
+        if (rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
         if (start < 0 || numChars < 0) return ErrorValue.Value;
