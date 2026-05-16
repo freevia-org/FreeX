@@ -398,7 +398,7 @@ public sealed class Sheet
     {
         if (_cells.TryGetValue((row, col), out var cell)) return cell.Value;
         if (_spillValues.TryGetValue((row, col), out var spill)) return spill;
-        return new BlankValue();
+        return BlankValue.Instance;
     }
 
     /// <summary>Get the value at a cell address, returning BlankValue if no cell exists.</summary>

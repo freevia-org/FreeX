@@ -7,7 +7,7 @@ namespace Freexcel.Core.Model;
 public sealed class Cell
 {
     /// <summary>The computed or directly-entered value of the cell.</summary>
-    public ScalarValue Value { get; set; } = new BlankValue();
+    public ScalarValue Value { get; set; } = BlankValue.Instance;
 
     /// <summary>
     /// The formula text (without leading '='), or null if this cell has a literal value.

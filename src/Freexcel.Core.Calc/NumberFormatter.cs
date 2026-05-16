@@ -59,10 +59,10 @@ public static class NumberFormatter
     private static string FormatNumberGeneral(double value)
     {
         if (double.IsNaN(value) || double.IsInfinity(value))
-            return value.ToString(CultureInfo.CurrentCulture);
+            return value.ToString(CultureInfo.InvariantCulture);
         if (value == Math.Truncate(value) && Math.Abs(value) < 1e15)
-            return ((long)value).ToString(CultureInfo.CurrentCulture);
-        return value.ToString("G10", CultureInfo.CurrentCulture);
+            return ((long)value).ToString(CultureInfo.InvariantCulture);
+        return value.ToString("G10", CultureInfo.InvariantCulture);
     }
 
     // ── Section splitting ─────────────────────────────────────────────────────
@@ -286,6 +286,12 @@ public static class NumberFormatter
     // Map Excel date format tokens to .NET format string equivalents.
     private static string ToNetDateFormat(string excelFmt)
     {
+        // When AM/PM is present the hour token uses 12-hour lowercase (h/hh);
+        // without AM/PM use 24-hour uppercase (H/HH).
+        bool hasAmPm = excelFmt.IndexOf("AM/PM", StringComparison.OrdinalIgnoreCase) >= 0;
+        string hourToken2 = hasAmPm ? "hh" : "HH";
+        string hourToken1 = hasAmPm ? "h"  : "H";
+
         // Process token by token to avoid double-replacement issues
         var sb = new System.Text.StringBuilder();
         int i = 0;
@@ -314,8 +320,8 @@ public static class NumberFormatter
                 TryConsume(excelFmt, i, "ddd",  "ddd",  sb, out ni) ||
                 TryConsume(excelFmt, i, "dd",   "dd",   sb, out ni) ||
                 TryConsume(excelFmt, i, "d",    "d",    sb, out ni) ||
-                TryConsume(excelFmt, i, "hh",   "HH",   sb, out ni) ||
-                TryConsume(excelFmt, i, "h",    "H",    sb, out ni) ||
+                TryConsume(excelFmt, i, "hh",   hourToken2, sb, out ni) ||
+                TryConsume(excelFmt, i, "h",    hourToken1, sb, out ni) ||
                 TryConsume(excelFmt, i, "ss",   "ss",   sb, out ni) ||
                 TryConsume(excelFmt, i, "s",    "s",    sb, out ni))
             {
