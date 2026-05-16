@@ -195,4 +195,62 @@ public class ViewportLayoutTests
         viewport.Cells.Should().ContainSingle()
             .Which.DisplayText.Should().Be("3");
     }
+
+    [Fact]
+    public void HitTest_UniformRowAndColumnSizes_FastPathMatchesExpectedCell()
+    {
+        // DefaultRowHeight = 20.0 px, DefaultColumnWidth = 8.43 chars → 8.43*8 = 67.44 px.
+        // No custom heights/widths or hidden rows/cols → fast path is taken.
+        // y = 199.0 → row = floor(199/20)+1 = 9+1 = 10
+        // x = 135.0 → col = floor(135/67.44)+1 = 2+1 = 3  (2*67.44=134.88 < 135 < 3*67.44=202.32)
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("S");
+
+        var address = new ViewportService().HitTest(
+            workbook,
+            sheet.Id,
+            x: 135.0,
+            y: 199.0,
+            zoom: 1.0);
+
+        address.Should().NotBeNull();
+        address!.Value.Row.Should().Be(10);
+        address.Value.Col.Should().Be(3);
+    }
+
+    [Fact]
+    public void HitTest_UniformSizes_FastPathAgreesWithSlowPath()
+    {
+        // Verify fast and slow paths return the same row/col at many coordinates.
+        // Fast sheet: no custom heights/widths → fast path.
+        // Slow sheet: custom height/width at a far-away row/col (999) equal to the
+        // default → slow path, but same layout as the fast sheet for all reachable cells.
+        var workbook = new Workbook("test");
+        var fastSheet = workbook.AddSheet("Fast");
+        var slowSheet = workbook.AddSheet("Slow");
+        slowSheet.RowHeights[999] = slowSheet.DefaultRowHeight;
+        slowSheet.ColumnWidths[999] = slowSheet.DefaultColumnWidth;
+
+        var svc = new ViewportService();
+
+        for (double y = 0; y <= 400; y += 19.5)
+        {
+            for (double x = 0; x <= 400; x += 33.7)
+            {
+                var fast = svc.HitTest(workbook, fastSheet.Id, x, y, zoom: 1.0);
+                var slow = svc.HitTest(workbook, slowSheet.Id, x, y, zoom: 1.0);
+
+                // Compare only row/col (not sheet ID, which differs between the two sheets).
+                fast.HasValue.Should().Be(slow.HasValue,
+                    $"fast and slow paths should agree (null vs non-null) at x={x}, y={y}");
+                if (fast.HasValue && slow.HasValue)
+                {
+                    fast.Value.Row.Should().Be(slow.Value.Row,
+                        $"rows should agree at x={x}, y={y}");
+                    fast.Value.Col.Should().Be(slow.Value.Col,
+                        $"cols should agree at x={x}, y={y}");
+                }
+            }
+        }
+    }
 }
