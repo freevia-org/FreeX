@@ -609,6 +609,19 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                Close();
+                e.Handled = true;
+                return;
+            }
+            if ((e.Key == Key.F5 && Keyboard.Modifiers == ModifierKeys.None) ||
+                (e.Key == Key.G && Keyboard.Modifiers == ModifierKeys.Control))
+            {
+                FindGoToMenuItem_Click(sender, e);
+                e.Handled = true;
+                return;
+            }
         }
 
         if (IsBoldShortcut(e))
@@ -732,6 +745,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == Key.Back && Keyboard.FocusedElement is not TextBox)
+        {
+            ExecuteClearSelection();
+            EnterEditMode();
+            e.Handled = true;
+            return;
+        }
+
         if (SheetGrid.SelectedRange == null) return;
 
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
@@ -761,13 +782,18 @@ public partial class MainWindow : Window
             Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
             Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Row + (uint)pageSize), current.Col),
 
-            Key.Enter => new CellAddress(_currentSheetId, current.Row + 1, current.Col),
-            Key.Tab   => new CellAddress(_currentSheetId, current.Row, current.Col + 1),
+            Key.Enter => shiftHeld
+                ? new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)
+                : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
+            Key.Tab   => shiftHeld
+                ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
+                : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
             _         => null
         };
 
         if (target == null) return;
 
+        // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
         if (shiftHeld && !moveOnly && _selectionAnchor.HasValue)
             ExtendSelection(_selectionAnchor.Value, target.Value);
@@ -1135,6 +1161,7 @@ public partial class MainWindow : Window
         if (KeyTipOverlay == null || RootGrid == null)
             return;
 
+        RootGrid.UpdateLayout();
         KeyTipOverlay.Children.Clear();
 
         foreach (var element in EnumerateVisualDescendants(RootGrid).OfType<FrameworkElement>())
@@ -2057,6 +2084,8 @@ public partial class MainWindow : Window
         };
     }
 
+    private bool _showingPinnedList;
+
     private void UpdateSsRecentList(string filter = "")
     {
         _allRecentItems = _recentFiles.Entries
@@ -2064,11 +2093,58 @@ public partial class MainWindow : Window
             .Select(e => new RecentFileViewModel(e))
             .ToList();
 
+        var unpinned = _allRecentItems.Where(vm => !vm.IsPinned).ToList();
         SsRecentList.ItemsSource = string.IsNullOrEmpty(filter)
-            ? _allRecentItems
-            : _allRecentItems
+            ? unpinned
+            : unpinned
                 .Where(vm => vm.FileName.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
+        SsPinnedList.ItemsSource = _allRecentItems.Where(vm => vm.IsPinned).ToList();
+    }
+
+    private void SsRecentTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_showingPinnedList)
+            SwitchToRecentTab();
+    }
+
+    private void SsPinnedTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (!_showingPinnedList)
+            SwitchToPinnedTab();
+    }
+
+    private void SwitchToRecentTab()
+    {
+        _showingPinnedList = false;
+        SsRecentScroll.Visibility  = Visibility.Visible;
+        SsPinnedScroll.Visibility  = Visibility.Collapsed;
+        SsRecentTab.BorderBrush    = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
+        SsRecentTabText.FontWeight = FontWeights.SemiBold;
+        SsRecentTabText.Foreground = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
+        SsPinnedTab.BorderBrush    = System.Windows.Media.Brushes.Transparent;
+        SsPinnedTabText.FontWeight = FontWeights.Normal;
+        SsPinnedTabText.Foreground = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x88, 0x88, 0x88));
+    }
+
+    private void SwitchToPinnedTab()
+    {
+        _showingPinnedList = true;
+        SsRecentScroll.Visibility  = Visibility.Collapsed;
+        SsPinnedScroll.Visibility  = Visibility.Visible;
+        SsPinnedTab.BorderBrush    = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
+        SsPinnedTabText.FontWeight = FontWeights.SemiBold;
+        SsPinnedTabText.Foreground = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
+        SsRecentTab.BorderBrush    = System.Windows.Media.Brushes.Transparent;
+        SsRecentTabText.FontWeight = FontWeights.Normal;
+        SsRecentTabText.Foreground = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0x88, 0x88, 0x88));
     }
 
     private void CreateNewWorkbook()
@@ -2237,6 +2313,43 @@ public partial class MainWindow : Window
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is RecentFileViewModel vm)
             OpenFile(vm.Path);
+    }
+
+    private void SsPinItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetContextMenuViewModel(sender) is { } vm)
+        {
+            _recentFiles.Pin(vm.Path);
+            UpdateSsRecentList(SsSearchBox.Text);
+        }
+    }
+
+    private void SsUnpinItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetContextMenuViewModel(sender) is { } vm)
+        {
+            _recentFiles.Unpin(vm.Path);
+            UpdateSsRecentList(SsSearchBox.Text);
+        }
+    }
+
+    private void SsRemoveRecentItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (GetContextMenuViewModel(sender) is { } vm)
+        {
+            _recentFiles.Remove(vm.Path);
+            _allRecentItems.RemoveAll(x => x.Path == vm.Path);
+            UpdateSsRecentList(SsSearchBox.Text);
+        }
+    }
+
+    private static RecentFileViewModel? GetContextMenuViewModel(object menuItemSender)
+    {
+        if (menuItemSender is MenuItem mi &&
+            mi.Parent is ContextMenu cm &&
+            cm.PlacementTarget is FrameworkElement fe)
+            return fe.DataContext as RecentFileViewModel;
+        return null;
     }
 
     private void SsSearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -9117,6 +9230,7 @@ internal sealed class RecentFileViewModel
     public string FileName { get; }
     public string Directory { get; }
     public string LastOpenedText { get; }
+    public bool IsPinned { get; }
 
     public RecentFileViewModel(RecentFileEntry entry)
     {
@@ -9124,6 +9238,7 @@ internal sealed class RecentFileViewModel
         FileName = System.IO.Path.GetFileName(entry.Path);
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
         LastOpenedText = FormatDate(entry.LastOpened);
+        IsPinned = entry.IsPinned;
     }
 
     private static string FormatDate(DateTime dt)
