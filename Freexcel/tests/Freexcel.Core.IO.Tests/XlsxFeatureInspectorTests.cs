@@ -46,6 +46,33 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_SupportedNativeChartPackage_DoesNotReportUnsupportedChart()
+    {
+        using var package = CreatePackageWithContent(("xl/charts/chart1.xml", """
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
+    [Fact]
     public void Inspect_ExternalLinkEmbeddedObjectAndCustomXml_DetectsAllFeatures()
     {
         using var package = CreatePackage(
@@ -60,6 +87,18 @@ public class XlsxFeatureInspectorTests
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomXmlParts);
     }
 
+    [Fact]
+    public void Inspect_ThemePackage_DoesNotReportUnsupportedFeatures()
+    {
+        using var package = CreatePackage("xl/theme/theme1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.HasUnsupportedFeatures.Should().BeFalse(
+            "Freexcel now loads and saves the workbook theme part, so ordinary Excel files should not warn only because they contain xl/theme/theme1.xml");
+        report.Features.Should().BeEmpty();
+    }
+
     private static MemoryStream CreatePackage(params string[] entries)
     {
         var stream = new MemoryStream();
@@ -70,6 +109,23 @@ public class XlsxFeatureInspectorTests
                 var entry = archive.CreateEntry(entryName);
                 using var writer = new StreamWriter(entry.Open());
                 writer.Write("test");
+            }
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static MemoryStream CreatePackageWithContent(params (string Name, string Content)[] entries)
+    {
+        var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (entryName, content) in entries)
+            {
+                var entry = archive.CreateEntry(entryName);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(content);
             }
         }
 

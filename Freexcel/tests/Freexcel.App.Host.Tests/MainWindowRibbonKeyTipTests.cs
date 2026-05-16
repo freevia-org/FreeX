@@ -1,0 +1,238 @@
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using FluentAssertions;
+using Freexcel.Core.Calc;
+using Freexcel.Core.Commands;
+using Freexcel.Core.Formula;
+using Freexcel.Core.IO;
+using Freexcel.Core.Model;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace Freexcel.App.Host.Tests;
+
+public sealed class MainWindowRibbonKeyTipTests
+{
+    [Fact]
+    public void TopLevelAndCommandKeyTips_RouteThroughVisibleRibbonControls()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.OverlayBadgeTexts.Should().Contain(["H", "N", "1"]);
+            harness.OverlayBadgeTexts.Should().NotContain("B", "top-level Alt mode should show tabs and QAT, not active-tab command badges");
+            harness.HandleKeyTip(Key.N);
+            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Home");
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.OverlayBadgeTexts.Should().Contain(["B", "1"]);
+            harness.OverlayBadgeTexts.Should().NotContain("SC", "command-scope Alt mode should not show off-tab Insert chart badges");
+            harness.VisibleCommandKeyTips("B").Should().ContainSingle("Borders");
+            harness.HandleKeyTip(Key.B);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("All Borders").Should().Be("A");
+            harness.HandleKeyTip(Key.Escape);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+            harness.OverlayBadgeTexts.Should().BeEmpty("Escape should clear any visible keytip badges");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.B);
+
+            harness.HandleKeyTip(Key.A);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty("invoking a menu keytip should leave keytip mode fully closed");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.D1);
+
+            harness.IsToggleChecked("BoldButton").Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty("invoking a command keytip should leave keytip mode fully closed");
+        });
+    }
+
+    [Fact]
+    public void FileKeyTip_RoutesThroughBackstageCommandsOnly()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.F);
+
+            harness.StartScreenIsVisible.Should().BeTrue();
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.OverlayBadgeTexts.Should().Contain(["N", "O", "SH"]);
+            harness.OverlayBadgeTexts.Should().NotContain("FG", "covered Home ribbon controls should not participate while Backstage is open");
+            harness.VisibleCommandKeyTips("N").Should().ContainSingle().Which.Should().Be("New");
+        });
+    }
+
+    private sealed class MainWindowHarness : IDisposable
+    {
+        private readonly MainWindow _window;
+        private readonly MethodInfo _enterKeyTipMode;
+        private readonly MethodInfo _handleActiveRibbonKeyTip;
+        private readonly MethodInfo _getVisibleKeyTipElements;
+        private readonly Type _scopeType;
+        private readonly FieldInfo _scopeField;
+        private readonly FieldInfo _activeMenuField;
+
+        private MainWindowHarness(MainWindow window)
+        {
+            _window = window;
+            _enterKeyTipMode = typeof(MainWindow).GetMethod("EnterRibbonKeyTipMode", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnterRibbonKeyTipMode");
+            _handleActiveRibbonKeyTip = typeof(MainWindow).GetMethod("HandleActiveRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "HandleActiveRibbonKeyTip");
+            _getVisibleKeyTipElements = typeof(MainWindow).GetMethod("GetVisibleKeyTipElements", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
+            _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
+            _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_ribbonKeyTipScope");
+            _activeMenuField = typeof(MainWindow).GetField("_activeRibbonKeyTipMenu", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_activeRibbonKeyTipMenu");
+        }
+
+        public string? SelectedRibbonTabHeader =>
+            (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem is TabItem tab
+                ? tab.Header?.ToString()
+                : null;
+
+        public string KeyTipScope => _scopeField.GetValue(_window)?.ToString() ?? "";
+
+        public bool? IsToggleChecked(string name) =>
+            (_window.FindName(name) as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked;
+
+        public IReadOnlyList<string> OverlayBadgeTexts =>
+            (_window.FindName("KeyTipOverlay") as Canvas)?.Children
+                .OfType<Border>()
+                .Select(border => (border.Child as TextBlock)?.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .Cast<string>()
+                .ToList() ?? [];
+
+        public bool ActiveMenuIsOpen => ActiveMenu?.IsOpen == true;
+
+        public bool StartScreenIsVisible =>
+            (_window.FindName("StartScreenOverlay") as FrameworkElement)?.Visibility == Visibility.Visible;
+
+        public string? ActiveMenuItemGestureText(string header) =>
+            FindActiveMenuItem(header)?.InputGestureText;
+
+        public bool ActiveMenuItemSubmenuIsOpen(string header) =>
+            FindActiveMenuItem(header)?.IsSubmenuOpen == true;
+
+        public IReadOnlyList<string> VisibleCommandKeyTips(string keyTip)
+        {
+            var scope = Enum.Parse(_scopeType, "Commands");
+            var elements = ((System.Collections.IEnumerable)_getVisibleKeyTipElements.Invoke(_window, [scope])!)
+                .OfType<FrameworkElement>()
+                .Where(element => string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase))
+                .Select(element => RibbonTooltip.GetTitle(element) ?? element.Name ?? element.GetType().Name)
+                .ToList();
+            return elements;
+        }
+
+        private ContextMenu? ActiveMenu => _activeMenuField.GetValue(_window) as ContextMenu;
+
+        private MenuItem? FindActiveMenuItem(string header) =>
+            ActiveMenu is { } menu
+                ? EnumerateMenuItems(menu).FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
+                : null;
+
+        public static MainWindowHarness Create()
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var workbookRef = new WorkbookRef { Current = workbook };
+            var graph = new DependencyGraph();
+            var evaluator = new FormulaEvaluator();
+            var window = new MainWindow(
+                NullLogger<MainWindow>.Instance,
+                new ViewportService(),
+                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                new RecalcEngine(graph, evaluator),
+                [],
+                workbookRef,
+                workbook);
+
+            window.Width = 1280;
+            window.Height = 720;
+            window.Show();
+            PumpDispatcher();
+            return new MainWindowHarness(window);
+        }
+
+        public void EnterKeyTipScope(string scope)
+        {
+            var value = Enum.Parse(_scopeType, scope);
+            _enterKeyTipMode.Invoke(_window, [value]);
+            PumpDispatcher();
+        }
+
+        public void HandleKeyTip(Key key)
+        {
+            _handleActiveRibbonKeyTip.Invoke(_window, [key]);
+            PumpDispatcher();
+        }
+
+        public void Dispose()
+        {
+            _window.Close();
+            PumpDispatcher();
+        }
+
+        private static IEnumerable<MenuItem> EnumerateMenuItems(ItemsControl control)
+        {
+            foreach (var item in control.Items)
+            {
+                if (item is not MenuItem menuItem)
+                    continue;
+
+                yield return menuItem;
+
+                foreach (var child in EnumerateMenuItems(menuItem))
+                    yield return child;
+            }
+        }
+    }
+
+    private static void PumpDispatcher()
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
+    }
+
+    private static void RunSta(Action action)
+    {
+        StaTestRunner.Run(action);
+    }
+}

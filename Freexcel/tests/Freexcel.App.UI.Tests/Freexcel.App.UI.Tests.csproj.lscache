@@ -56,12 +56,14 @@ TemporaryDependencyNodeTargetIdentifier=net10.0-windows
 [sourceFiles]
 <NUGET>/microsoft.net.test.sdk/17.14.1/build/net8.0/Microsoft.NET.Test.Sdk.Program.cs
 ChartRendererTests.cs
+GridViewDrawingObjectThemeTests.cs
 GridViewPageLayoutTests.cs
 GridViewSplitPaneLayoutTests.cs
 obj/Debug/net10.0-windows/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  Freexcel.App.UI.Tests.AssemblyInfo.cs
  Freexcel.App.UI.Tests.GlobalUsings.g.cs
+WorkbookThemeEffectStyleTests.cs
 ZoomLevelMapperTests.cs
 
 [metadataReferences]

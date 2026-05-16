@@ -37,6 +37,77 @@ public sealed class PasteCellsCommandTests
         sheet.GetCell(addr)!.StyleId.Should().Be(oldStyle);
     }
 
+    [Fact]
+    public void PasteCommandFactory_AllModeBuildsCommandForCurrentDestinationAndAdjustsRelativeFormulas()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, Cell.FromFormula("B1+$C$1"));
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(source, source),
+            [(source, sheet.GetCell(source)!.Clone())],
+            new CellAddress(sheet.Id, 3, 2),
+            PasteCellsMode.All,
+            default);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.GetCell(new CellAddress(sheet.Id, 3, 2))!;
+        pasted.FormulaText.Should().Be("C3+$C$1");
+    }
+
+    [Fact]
+    public void PasteCommandFactory_ValuesModeBuildsValueOnlyCommand()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var sourceCell = Cell.FromFormula("B1+1");
+        sourceCell.Value = new NumberValue(42);
+        sheet.SetCell(source, sourceCell);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(source, source),
+            [(source, sourceCell.Clone())],
+            new CellAddress(sheet.Id, 2, 1),
+            PasteCellsMode.Values,
+            default);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.GetCell(new CellAddress(sheet.Id, 2, 1))!;
+        pasted.FormulaText.Should().BeNull();
+        pasted.Value.Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
+    public void PasteCommandFactory_ExternalTextBuildsCommandForCurrentDestination()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            new CellAddress(sheet.Id, 3, 2),
+            [["1", "Name"], ["2.5", "West"]]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 2)).Should().Be(new NumberValue(1));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 2)).Should().Be(new NumberValue(2.5));
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 3)).Should().Be(new TextValue("West"));
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

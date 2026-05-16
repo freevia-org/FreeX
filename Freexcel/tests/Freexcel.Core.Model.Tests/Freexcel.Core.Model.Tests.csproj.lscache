@@ -62,6 +62,9 @@ AutofillCommandTests.cs
 BorderShortcutServiceTests.cs
 CalculationOptionsCommandTests.cs
 ChartCommandTests.cs
+ChartThemeColorTests.cs
+ClearContentsCommandTests.cs
+CommandBusRepeatTests.cs
 CommentCommandTests.cs
 CompositeWorkbookCommandTests.cs
 ConditionalFormatCommandTests.cs
@@ -70,6 +73,8 @@ CustomViewCommandTests.cs
 DataTableCommandTests.cs
 DataValidationCommandTests.cs
 DateTimeEntryServiceTests.cs
+DrawingObjectThemeColorTests.cs
+FillCellsCommandTests.cs
 FilterInputParserTests.cs
 FlashFillServiceTests.cs
 FontToggleShortcutServiceTests.cs
@@ -123,6 +128,8 @@ TextBoxCommandTests.cs
 WatchWindowServiceTests.cs
 WorkbookProtectionCommandTests.cs
 WorkbookStatisticsServiceTests.cs
+WorkbookThemeCommandTests.cs
+WorkbookThemeTests.cs
 WorkbookWindowCommandTests.cs
 
 [metadataReferences]

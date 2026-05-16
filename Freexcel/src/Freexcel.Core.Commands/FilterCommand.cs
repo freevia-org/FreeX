@@ -91,9 +91,7 @@ internal static class FilterValueFormatter
     public static string ToText(ScalarValue value) => value switch
     {
         TextValue t => t.Value,
-        // Use CurrentCulture to match what NumberFormatter.Format produces, so filter
-        // comparisons work correctly regardless of the user's locale decimal separator.
-        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
+        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd"),
         BlankValue => "",

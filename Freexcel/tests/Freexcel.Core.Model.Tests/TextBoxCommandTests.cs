@@ -131,7 +131,9 @@ public sealed class TextBoxCommandTests
             Anchor = new CellAddress(sheet.Id, 1, 1),
             Text = "Note",
             FillColor = new CellColor(10, 20, 30),
-            OutlineColor = new CellColor(40, 50, 60)
+            OutlineColor = new CellColor(40, 50, 60),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25)
         };
         sheet.TextBoxes.Add(textBox);
 
@@ -144,11 +146,15 @@ public sealed class TextBoxCommandTests
         command.Apply(ctx).Success.Should().BeTrue();
         textBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         textBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
+        textBox.FillThemeColor.Should().BeNull();
+        textBox.OutlineThemeColor.Should().BeNull();
 
         command.Revert(ctx);
 
         textBox.FillColor.Should().Be(new CellColor(10, 20, 30));
         textBox.OutlineColor.Should().Be(new CellColor(40, 50, 60));
+        textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

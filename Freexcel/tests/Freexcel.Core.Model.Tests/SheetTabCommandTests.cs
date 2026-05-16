@@ -58,11 +58,20 @@ public class SheetTabCommandTests
             LegendPosition = ChartLegendPosition.Top,
             LegendOverlay = true,
             LegendTextColor = new CellColor(60, 60, 60),
+            LegendTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
             ShowLegend = false,
             ShowDataLabels = true,
             DataLabelAngle = 45,
             DataLabelTextColor = new CellColor(192, 0, 0),
-            SeriesFormats = [new ChartSeriesFormat(0, StrokeColor: new CellColor(0, 114, 178), StrokeThickness: 2.5)],
+            DataLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark2),
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    StrokeColor: new CellColor(0, 114, 178),
+                    StrokeThickness: 2.5,
+                    StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1))
+            ],
             Left = 10,
             Top = 20,
             Width = 300,
@@ -133,12 +142,18 @@ public class SheetTabCommandTests
         copiedChart.LegendPosition.Should().Be(ChartLegendPosition.Top);
         copiedChart.LegendOverlay.Should().BeTrue();
         copiedChart.LegendTextColor.Should().Be(new CellColor(60, 60, 60));
+        copiedChart.LegendTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1));
         copiedChart.ShowLegend.Should().BeFalse();
         copiedChart.ShowDataLabels.Should().BeTrue();
         copiedChart.DataLabelAngle.Should().Be(45);
         copiedChart.DataLabelTextColor.Should().Be(new CellColor(192, 0, 0));
+        copiedChart.DataLabelTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark2));
         copiedChart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
-            new ChartSeriesFormat(0, StrokeColor: new CellColor(0, 114, 178), StrokeThickness: 2.5));
+            new ChartSeriesFormat(
+                0,
+                StrokeColor: new CellColor(0, 114, 178),
+                StrokeThickness: 2.5,
+                StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)));
         copiedChart.Left.Should().Be(10);
         copiedChart.Top.Should().Be(20);
         copiedChart.Width.Should().Be(300);

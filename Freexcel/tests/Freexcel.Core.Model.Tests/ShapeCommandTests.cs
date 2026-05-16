@@ -194,7 +194,9 @@ public sealed class ShapeCommandTests
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
             FillColor = new CellColor(10, 20, 30),
-            OutlineColor = new CellColor(40, 50, 60)
+            OutlineColor = new CellColor(40, 50, 60),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25)
         };
         sheet.DrawingShapes.Add(shape);
 
@@ -207,11 +209,15 @@ public sealed class ShapeCommandTests
         command.Apply(ctx).Success.Should().BeTrue();
         shape.FillColor.Should().Be(new CellColor(200, 210, 220));
         shape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
+        shape.FillThemeColor.Should().BeNull();
+        shape.OutlineThemeColor.Should().BeNull();
 
         command.Revert(ctx);
 
         shape.FillColor.Should().Be(new CellColor(10, 20, 30));
         shape.OutlineColor.Should().Be(new CellColor(40, 50, 60));
+        shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

@@ -236,8 +236,12 @@ public sealed class FormulaEvaluator
                         : context.GetRangeValues(
                             range.Start.Row, range.Start.ColumnNumber,
                             range.End.Row, range.End.ColumnNumber);
-                    expandedArgs.AddRange(values);
+                    AddRangeValues(expandedArgs, values, node.FunctionName);
                 }
+            }
+            else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
+            {
+                expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
             }
             else if (arg is NamedRangeNode named)
             {
@@ -272,7 +276,7 @@ public sealed class FormulaEvaluator
                             : context.GetRangeValues(
                                 r.Start.Row, r.Start.Col,
                                 r.End.Row, r.End.Col);
-                        expandedArgs.AddRange(values);
+                        AddRangeValues(expandedArgs, values, node.FunctionName);
                     }
                 }
             }
@@ -289,7 +293,34 @@ public sealed class FormulaEvaluator
         if (!IsAggregateFunction(node.FunctionName) && node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
-        return func(expandedArgs, context);
+        try
+        {
+            return func(expandedArgs, context);
+        }
+        catch (FormulaEvalException ex)
+        {
+            return ErrorFromCode(ex.ErrorCode);
+        }
+    }
+
+    private static ErrorValue ErrorFromCode(string code) => code.ToUpperInvariant() switch
+    {
+        "#DIV/0!" => ErrorValue.DivByZero,
+        "#VALUE!" => ErrorValue.Value,
+        "#REF!" => ErrorValue.Ref,
+        "#NAME?" => ErrorValue.Name,
+        "#NULL!" => ErrorValue.Null,
+        "#N/A" => ErrorValue.NA,
+        "#NUM!" => ErrorValue.Num,
+        _ => ErrorValue.Value
+    };
+
+    private static void AddRangeValues(List<ScalarValue> expandedArgs, IReadOnlyList<ScalarValue> values, string functionName)
+    {
+        if (IsReferenceProvenanceAggregate(functionName))
+            expandedArgs.AddRange(values.Select(v => new ReferencedScalarValue(v)));
+        else
+            expandedArgs.AddRange(values);
     }
 
     private static RangeValue BuildRangeValue(RangeRefNode range, IEvalContext context)
@@ -417,9 +448,30 @@ public sealed class FormulaEvaluator
              or "CONCATENATE"
              or "NPV";
 
+    private static bool IsDirectTextCoercingAggregate(string name) =>
+        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "PRODUCT"
+             or "STDEV" or "STDEV.S" or "STDEV.P"
+             or "VAR" or "VAR.S" or "VAR.P"
+             or "MEDIAN"
+             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
+             or "MODE" or "MODE.SNGL"
+             or "NPV"
+             or "GCD" or "LCM";
+
+    private static bool IsReferenceProvenanceAggregate(string name) =>
+        name is "SUM" or "AVERAGE" or "MIN" or "MAX" or "COUNT" or "PRODUCT" or "AND" or "OR" or "XOR"
+             or "STDEV" or "STDEV.S" or "STDEV.P"
+             or "VAR" or "VAR.S" or "VAR.P"
+             or "MEDIAN"
+             or "GEOMEAN" or "HARMEAN" or "AVEDEV"
+             or "MODE" or "MODE.SNGL"
+             or "NPV"
+             or "GCD" or "LCM";
+
     private static bool IsStructuredRangeFunction(string name) =>
         name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH"
              or "SUMIF" or "COUNTIF" or "AVERAGEIF"
+             or "SUMPRODUCT"
              or "LARGE" or "SMALL" or "RANK"
              or "SUMIFS" or "COUNTIFS" or "AVERAGEIFS"
              or "XLOOKUP"
@@ -509,3 +561,6 @@ public sealed class FormulaEvaluator
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
     }
 }
+
+internal sealed record DirectTextLiteralValue(string Value) : ScalarValue;
+internal sealed record ReferencedScalarValue(ScalarValue Value) : ScalarValue;
