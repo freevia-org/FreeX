@@ -216,6 +216,8 @@ public sealed class Parser
                         $"Expected cell reference after '{sheetName}!' at position {Current.Position}");
 
                 var startRef = ParseCellRefWithSheet(Advance(), sheetName);
+                if (startRef is not CellRefNode rangeStartRef)
+                    return startRef;
 
                 if (Current.Type == TokenType.Colon)
                 {
@@ -231,7 +233,9 @@ public sealed class Parser
                         throw new FormulaParseException(
                             $"Expected cell reference after ':' at position {Current.Position}");
                     var endRef = ParseCellRef(Advance());
-                    return new RangeRefNode(startRef, endRef, sheetName);
+                    if (endRef is not CellRefNode rangeEndRef)
+                        return endRef;
+                    return new RangeRefNode(rangeStartRef, rangeEndRef, sheetName);
                 }
 
                 return startRef;
@@ -240,6 +244,8 @@ public sealed class Parser
             case TokenType.CellRef:
             {
                 var cellRef = ParseCellRef(Advance());
+                if (cellRef is not CellRefNode rangeStartRef)
+                    return cellRef;
 
                 // Check for range operator ':'
                 if (Current.Type == TokenType.Colon)
@@ -249,7 +255,9 @@ public sealed class Parser
                         throw new FormulaParseException(
                             $"Expected cell reference after ':' at position {Current.Position}");
                     var endRef = ParseCellRef(Advance());
-                    return new RangeRefNode(cellRef, endRef);
+                    if (endRef is not CellRefNode rangeEndRef)
+                        return endRef;
+                    return new RangeRefNode(rangeStartRef, rangeEndRef);
                 }
 
                 return cellRef;
@@ -275,7 +283,7 @@ public sealed class Parser
         }
     }
 
-    private static CellRefNode ParseCellRef(Token token)
+    private static FormulaNode ParseCellRef(Token token)
     {
         var value = token.Value;   // e.g. "$B$3", "$B3", "B$3", "B3"
         var i = 0;
@@ -290,15 +298,18 @@ public sealed class Parser
         bool isRowAbs = false;
         if (i < value.Length && value[i] == '$') { isRowAbs = true; i++; }
 
-        var row = uint.Parse(value[i..]);
+        if (!uint.TryParse(value[i..], out var row) || row == 0 || row > Model.CellAddress.MaxRow)
+            return new ErrorNode(Model.ErrorValue.Ref);
 
         return new CellRefNode(colName, row, isColAbs, isRowAbs);
     }
 
-    private static CellRefNode ParseCellRefWithSheet(Token token, string sheetName)
+    private static FormulaNode ParseCellRefWithSheet(Token token, string sheetName)
     {
         var node = ParseCellRef(token);
-        return node with { SheetName = sheetName };
+        return node is CellRefNode cellRef
+            ? cellRef with { SheetName = sheetName }
+            : node;
     }
 
     private static Model.ErrorValue ParseErrorValue(string code) => code.ToUpperInvariant() switch

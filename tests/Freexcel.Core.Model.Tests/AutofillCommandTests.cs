@@ -113,6 +113,25 @@ public class AutofillCommandTests
     }
 
     [Fact]
+    public void FillFormula_PreservesFunctionNames_WithDigitSuffix()
+    {
+        // Regression: regex shift incorrectly incremented digits inside function names
+        // e.g. =LOG10(A1) shifted down 1 row would become =LOG11(A2) with the old regex.
+        var (_, sheet, ctx) = Setup();
+        var source = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(source, Cell.FromFormula("LOG10(A1)"));
+
+        var sourceRange = new GridRange(source, source);
+        var fillRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 2, 1));
+
+        new AutofillCommand(sheet.Id, sourceRange, fillRange).Apply(ctx);
+
+        sheet.GetCell(2, 1)!.FormulaText.Should().Be("LOG10(A2)");
+    }
+
+    [Fact]
     public void FillFormula_PreservesAbsoluteRefs()
     {
         var (_, sheet, ctx) = Setup();
