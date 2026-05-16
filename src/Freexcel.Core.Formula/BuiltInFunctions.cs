@@ -1266,16 +1266,21 @@ public static class BuiltInFunctions
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
         var sumFlat = sumRange.Flatten();
         int len = sumFlat.Count;
+        int pairCount = (args.Count - 1) / 2;
+        var pairs = new (IReadOnlyList<ScalarValue> Flat, ScalarValue Criteria)[pairCount];
+        for (int p = 0; p < pairCount; p++)
+        {
+            if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
+            pairs[p] = (cr.Flatten(), args[2 + p * 2]);
+        }
         double total = 0;
         for (int i = 0; i < len; i++)
         {
             bool include = true;
-            for (int p = 1; p < args.Count - 1; p += 2)
+            foreach (var (cf, criteria) in pairs)
             {
-                if (args[p] is not RangeValue cr) { include = false; break; }
-                var cf = cr.Flatten();
-                var cv = i < cf.Count ? cf[i] : BlankValue.Instance;
-                if (!MatchesCriteria(cv, args[p + 1])) { include = false; break; }
+                if (!MatchesCriteria(i < cf.Count ? cf[i] : BlankValue.Instance, criteria))
+                    { include = false; break; }
             }
             if (include && sumFlat[i] is NumberValue nv)
                 total += nv.Value;
@@ -1287,18 +1292,22 @@ public static class BuiltInFunctions
     private static ScalarValue Countifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count < 2 || args.Count % 2 != 0) return ErrorValue.Value;
-        if (args[0] is not RangeValue firstRange) return ErrorValue.Value;
-        int len = firstRange.Flatten().Count;
+        int pairCount = args.Count / 2;
+        var pairs = new (IReadOnlyList<ScalarValue> Flat, ScalarValue Criteria)[pairCount];
+        for (int p = 0; p < pairCount; p++)
+        {
+            if (args[p * 2] is not RangeValue cr) return ErrorValue.Value;
+            pairs[p] = (cr.Flatten(), args[p * 2 + 1]);
+        }
+        int len = pairs[0].Flat.Count;
         int count = 0;
         for (int i = 0; i < len; i++)
         {
             bool include = true;
-            for (int p = 0; p < args.Count - 1; p += 2)
+            foreach (var (cf, criteria) in pairs)
             {
-                if (args[p] is not RangeValue cr) { include = false; break; }
-                var cf = cr.Flatten();
-                var cv = i < cf.Count ? cf[i] : BlankValue.Instance;
-                if (!MatchesCriteria(cv, args[p + 1])) { include = false; break; }
+                if (!MatchesCriteria(i < cf.Count ? cf[i] : BlankValue.Instance, criteria))
+                    { include = false; break; }
             }
             if (include) count++;
         }
@@ -1312,17 +1321,22 @@ public static class BuiltInFunctions
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
         var avgFlat = avgRange.Flatten();
         int len = avgFlat.Count;
+        int pairCount = (args.Count - 1) / 2;
+        var pairs = new (IReadOnlyList<ScalarValue> Flat, ScalarValue Criteria)[pairCount];
+        for (int p = 0; p < pairCount; p++)
+        {
+            if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
+            pairs[p] = (cr.Flatten(), args[2 + p * 2]);
+        }
         double total = 0;
         int count = 0;
         for (int i = 0; i < len; i++)
         {
             bool include = true;
-            for (int p = 1; p < args.Count - 1; p += 2)
+            foreach (var (cf, criteria) in pairs)
             {
-                if (args[p] is not RangeValue cr) { include = false; break; }
-                var cf = cr.Flatten();
-                var cv = i < cf.Count ? cf[i] : BlankValue.Instance;
-                if (!MatchesCriteria(cv, args[p + 1])) { include = false; break; }
+                if (!MatchesCriteria(i < cf.Count ? cf[i] : BlankValue.Instance, criteria))
+                    { include = false; break; }
             }
             if (include && avgFlat[i] is NumberValue nv) { total += nv.Value; count++; }
         }
