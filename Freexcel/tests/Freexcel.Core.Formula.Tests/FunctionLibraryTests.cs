@@ -1442,6 +1442,13 @@ public class FunctionLibraryTests
         rv.Cells[3, 0].Should().Be(new NumberValue(6));
     }
 
+    [Fact]
+    public void Sequence_HugeRowsCols_ReturnsValueError()
+    {
+        _eval.Evaluate("=SEQUENCE(1000,1001)", MakeSheet()).Should().Be(ErrorValue.Value,
+            "rows×cols > 1,000,000 must return #VALUE! rather than allocating a massive array");
+    }
+
     // ── FILTER ────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1523,6 +1530,14 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new TextValue("A"));
         rv.Cells[1, 0].Should().Be(new TextValue("B"));
         rv.Cells[2, 0].Should().Be(new TextValue("C"));
+    }
+
+    [Fact]
+    public void Sort_ZeroSortIndex_ReturnsValueError()
+    {
+        var sheet = MakeSheet((1,1,new NumberValue(1)), (2,1,new NumberValue(2)));
+        _eval.Evaluate("=SORT(A1:A2,0)", sheet).Should().Be(ErrorValue.Value,
+            "sort_index=0 is invalid (1-based) and must not cause an IndexOutOfRangeException");
     }
 
     // ── UNIQUE ────────────────────────────────────────────────────────────────────

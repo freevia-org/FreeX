@@ -2540,6 +2540,7 @@ public static class BuiltInFunctions
         double start = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
         double step  = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
         if (rows < 1 || cols < 1) return ErrorValue.Value;
+        if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
         var cells = new ScalarValue[rows, cols];
         double val = start;
         for (int r = 0; r < rows; r++)
@@ -2585,6 +2586,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is not RangeValue arr) return ErrorValue.Value;
         int sortIdx   = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) - 1 : 0;
+        if (sortIdx < 0) return ErrorValue.Value;
         int sortOrder = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
         bool byCol    = args.Count > 3 && args[3] is not BlankValue && ToBool(args[3]);
 
