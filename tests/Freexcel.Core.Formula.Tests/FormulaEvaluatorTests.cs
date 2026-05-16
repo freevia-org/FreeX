@@ -634,14 +634,23 @@ public class CrossSheetReferenceTests
         result.Should().NotBeNull();
     }
 
-    // ── Short-circuit evaluation (IF / IFERROR / IFNA) ────────────────────
+}
+
+/// <summary>
+/// Tests for short-circuit evaluation behaviour of IF, IFERROR, and IFNA,
+/// and for edge-case argument validation.
+/// </summary>
+public class ShortCircuitEvaluationTests
+{
+    private readonly FormulaEvaluator _evaluator = new();
+
+    // ── IF short-circuit ──────────────────────────────────────────────────
 
     [Fact]
     public void IF_ErrorInFalseBranch_DoesNotEvaluateFalseBranchWhenConditionIsTrue()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var evaluator = new FormulaEvaluator();
-        var result = evaluator.Evaluate("=IF(1>0,\"yes\",1/0)", sheet, wb);
+        var result = _evaluator.Evaluate("=IF(1>0,\"yes\",1/0)", sheet, wb);
         result.Should().Be(new TextValue("yes"));
     }
 
@@ -649,17 +658,41 @@ public class CrossSheetReferenceTests
     public void IF_ErrorInTrueBranch_DoesNotEvaluateTrueBranchWhenConditionIsFalse()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var evaluator = new FormulaEvaluator();
-        var result = evaluator.Evaluate("=IF(1>2,1/0,\"no\")", sheet, wb);
+        var result = _evaluator.Evaluate("=IF(1>2,1/0,\"no\")", sheet, wb);
         result.Should().Be(new TextValue("no"));
     }
+
+    [Fact]
+    public void IF_TextCondition_ReturnsValueError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=IF(\"TRUE\",\"yes\",\"no\")", sheet, wb);
+        result.Should().Be(ErrorValue.Value, "text condition should produce #VALUE! as in Excel");
+    }
+
+    [Fact]
+    public void IF_TwoArgs_FalseCondition_ReturnsFalse()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=IF(1>2,\"yes\")", sheet, wb);
+        result.Should().Be(new BoolValue(false), "IF with 2 args and false condition returns FALSE");
+    }
+
+    [Fact]
+    public void IF_ConditionIsError_PropagatesError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=IF(1/0,\"yes\",\"no\")", sheet, wb);
+        result.Should().Be(ErrorValue.DivByZero, "error in condition propagates to IF result");
+    }
+
+    // ── IFERROR ───────────────────────────────────────────────────────────
 
     [Fact]
     public void IFERROR_DoesNotEvaluateFallback_WhenValueSucceeds()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var evaluator = new FormulaEvaluator();
-        var result = evaluator.Evaluate("=IFERROR(42,1/0)", sheet, wb);
+        var result = _evaluator.Evaluate("=IFERROR(42,1/0)", sheet, wb);
         result.Should().Be(new NumberValue(42));
     }
 
@@ -667,28 +700,37 @@ public class CrossSheetReferenceTests
     public void IFERROR_ReturnsFallback_WhenValueErrors()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var evaluator = new FormulaEvaluator();
-        var result = evaluator.Evaluate("=IFERROR(1/0,\"err\")", sheet, wb);
+        var result = _evaluator.Evaluate("=IFERROR(1/0,\"err\")", sheet, wb);
         result.Should().Be(new TextValue("err"));
     }
+
+    // ── IFNA ──────────────────────────────────────────────────────────────
 
     [Fact]
     public void IFNA_ReturnsFallback_OnlyForNA()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var evaluator = new FormulaEvaluator();
-        evaluator.Evaluate("=IFNA(NA(),\"caught\")", sheet, wb)
+        _evaluator.Evaluate("=IFNA(NA(),\"caught\")", sheet, wb)
             .Should().Be(new TextValue("caught"));
-        evaluator.Evaluate("=IFNA(1/0,\"caught\")", sheet, wb)
+        _evaluator.Evaluate("=IFNA(1/0,\"caught\")", sheet, wb)
             .Should().Be(ErrorValue.DivByZero, "IFNA should only catch #N/A, not other errors");
     }
+
+    [Fact]
+    public void IFNA_CleanValue_PassesThrough()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var result = _evaluator.Evaluate("=IFNA(42,\"caught\")", sheet, wb);
+        result.Should().Be(new NumberValue(42), "IFNA must not intercept non-error values");
+    }
+
+    // ── Argument-count validation ─────────────────────────────────────────
 
     [Fact]
     public void SUM_WithZeroArguments_ReturnsValueError()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
-        var evaluator = new FormulaEvaluator();
-        var result = evaluator.Evaluate("=SUM()", sheet, wb);
+        var result = _evaluator.Evaluate("=SUM()", sheet, wb);
         result.Should().Be(ErrorValue.Value);
     }
 }

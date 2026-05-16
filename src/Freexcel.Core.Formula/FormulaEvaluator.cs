@@ -329,13 +329,14 @@ public sealed class FormulaEvaluator
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
         var cond = EvaluateNode(node.Arguments[0], context);
         if (cond is ErrorValue e) return e;
-        bool taken = cond switch
+        bool? taken = cond switch
         {
             BoolValue b   => b.Value,
             NumberValue n => n.Value != 0,
-            _             => false
+            _             => null   // text condition is #VALUE! in Excel
         };
-        if (taken)  return EvaluateNode(node.Arguments[1], context);
+        if (taken is null) return ErrorValue.Value;
+        if (taken.Value)  return EvaluateNode(node.Arguments[1], context);
         if (node.Arguments.Count == 3) return EvaluateNode(node.Arguments[2], context);
         return new BoolValue(false);
     }
