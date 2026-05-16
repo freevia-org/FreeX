@@ -283,7 +283,62 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             return new CommandOutcome(false, validationError);
 
         var copyId = SheetId.New();
-        var copy = CloneSheet(source, copyId, name);
+        var copy = source.Clone(copyId, name);
+
+        // Copy drawing collections that live only in the Commands layer
+        foreach (var chart in source.Charts)
+            copy.Charts.Add(CloneChart(chart, copyId));
+        foreach (var textBox in source.TextBoxes)
+            copy.TextBoxes.Add(new TextBoxModel
+            {
+                Anchor          = RemapAddress(textBox.Anchor, copyId),
+                Text            = textBox.Text,
+                Width           = textBox.Width,
+                Height          = textBox.Height,
+                RotationDegrees = textBox.RotationDegrees,
+                FillColor       = textBox.FillColor,
+                OutlineColor    = textBox.OutlineColor,
+                AltText         = textBox.AltText
+            });
+        foreach (var shape in source.DrawingShapes)
+            copy.DrawingShapes.Add(new DrawingShapeModel
+            {
+                Anchor          = RemapAddress(shape.Anchor, copyId),
+                Kind            = shape.Kind,
+                Width           = shape.Width,
+                Height          = shape.Height,
+                RotationDegrees = shape.RotationDegrees,
+                FillColor       = shape.FillColor,
+                OutlineColor    = shape.OutlineColor,
+                AltText         = shape.AltText
+            });
+        foreach (var picture in source.Pictures)
+        {
+            var copiedPicture = new PictureModel
+            {
+                Anchor            = RemapAddress(picture.Anchor, copyId),
+                Kind              = picture.Kind,
+                SourceRowCount    = picture.SourceRowCount,
+                SourceColumnCount = picture.SourceColumnCount,
+                ImageBytes        = picture.ImageBytes?.ToArray(),
+                ContentType       = picture.ContentType,
+                Width             = picture.Width,
+                Height            = picture.Height,
+                RotationDegrees   = picture.RotationDegrees,
+                AltText           = picture.AltText
+            };
+            foreach (var cell in picture.Cells)
+                copiedPicture.Cells.Add(cell);
+            copy.Pictures.Add(copiedPicture);
+        }
+        foreach (var sparkline in source.Sparklines)
+            copy.Sparklines.Add(new SparklineModel
+            {
+                DataRange = RemapRange(sparkline.DataRange, copyId),
+                Location  = RemapAddress(sparkline.Location, copyId),
+                Kind      = sparkline.Kind
+            });
+
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
@@ -310,171 +365,6 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         }
 
         return $"Sheet{Guid.NewGuid():N}"[..31];
-    }
-
-    private static Sheet CloneSheet(Sheet source, SheetId copyId, string name)
-    {
-        var copy = new Sheet(copyId, name)
-        {
-            DefaultColumnWidth = source.DefaultColumnWidth,
-            DefaultRowHeight = source.DefaultRowHeight,
-            FrozenRows = source.FrozenRows,
-            FrozenCols = source.FrozenCols,
-            SplitRow = source.SplitRow,
-            SplitColumn = source.SplitColumn,
-            ShowGridlines = source.ShowGridlines,
-            ShowHeadings = source.ShowHeadings,
-            ShowRulers = source.ShowRulers,
-            ZoomPercent = source.ZoomPercent,
-            ShowFormulas = source.ShowFormulas,
-            PrintArea = RemapRange(source.PrintArea, copyId),
-            PageOrientation = source.PageOrientation,
-            PaperSize = source.PaperSize,
-            PageMargins = source.PageMargins,
-            HeaderMargin = source.HeaderMargin,
-            FooterMargin = source.FooterMargin,
-            PrintGridlines = source.PrintGridlines,
-            PrintHeadings = source.PrintHeadings,
-            ScaleToFit = source.ScaleToFit,
-            PrintTitleRows = source.PrintTitleRows,
-            PrintTitleColumns = source.PrintTitleColumns,
-            PageHeader = source.PageHeader,
-            PageFooter = source.PageFooter,
-            FirstPageHeader = source.FirstPageHeader,
-            FirstPageFooter = source.FirstPageFooter,
-            EvenPageHeader = source.EvenPageHeader,
-            EvenPageFooter = source.EvenPageFooter,
-            DifferentFirstPageHeaderFooter = source.DifferentFirstPageHeaderFooter,
-            DifferentOddEvenHeaderFooter = source.DifferentOddEvenHeaderFooter,
-            HeaderFooterScaleWithDocument = source.HeaderFooterScaleWithDocument,
-            HeaderFooterAlignWithMargins = source.HeaderFooterAlignWithMargins,
-            CenterHorizontallyOnPage = source.CenterHorizontallyOnPage,
-            CenterVerticallyOnPage = source.CenterVerticallyOnPage,
-            PageOrder = source.PageOrder,
-            FirstPageNumber = source.FirstPageNumber,
-            PrintBlackAndWhite = source.PrintBlackAndWhite,
-            PrintDraftQuality = source.PrintDraftQuality,
-            PrintQualityDpi = source.PrintQualityDpi,
-            PrintErrorValue = source.PrintErrorValue,
-            PrintComments = source.PrintComments,
-            ViewMode = source.ViewMode,
-            IsHidden = false,
-            TabColor = source.TabColor,
-            IsProtected = source.IsProtected,
-            ProtectionPassword = source.ProtectionPassword
-        };
-
-        foreach (var (col, width) in source.ColumnWidths)
-            copy.ColumnWidths[col] = width;
-        foreach (var (row, height) in source.RowHeights)
-            copy.RowHeights[row] = height;
-        foreach (var row in source.HiddenRows)
-            copy.HiddenRows.Add(row);
-        foreach (var row in source.FilterHiddenRows)
-            copy.FilterHiddenRows.Add(row);
-        foreach (var col in source.HiddenCols)
-            copy.HiddenCols.Add(col);
-        foreach (var rowBreak in source.RowPageBreaks)
-            copy.RowPageBreaks.Add(rowBreak);
-        foreach (var columnBreak in source.ColumnPageBreaks)
-            copy.ColumnPageBreaks.Add(columnBreak);
-        foreach (var (address, cell) in source.EnumerateCells())
-            copy.SetCell(RemapAddress(address, copyId), cell.Clone());
-        foreach (var range in source.MergedRegions)
-            copy.MergedRegions.Add(RemapRange(range, copyId));
-        copy.InvalidateMergeIndex();
-        foreach (var (address, comment) in source.Comments)
-            copy.Comments[RemapAddress(address, copyId)] = comment;
-        foreach (var (address, hyperlink) in source.Hyperlinks)
-            copy.Hyperlinks[RemapAddress(address, copyId)] = hyperlink;
-        foreach (var range in source.AllowEditRanges)
-            copy.AllowEditRanges.Add(RemapRange(range, copyId));
-        foreach (var chart in source.Charts)
-            copy.Charts.Add(CloneChart(chart, copyId));
-        foreach (var textBox in source.TextBoxes)
-            copy.TextBoxes.Add(new TextBoxModel
-            {
-                Anchor = RemapAddress(textBox.Anchor, copyId),
-                Text = textBox.Text,
-                Width = textBox.Width,
-                Height = textBox.Height,
-                RotationDegrees = textBox.RotationDegrees,
-                FillColor = textBox.FillColor,
-                OutlineColor = textBox.OutlineColor,
-                AltText = textBox.AltText
-            });
-        foreach (var shape in source.DrawingShapes)
-            copy.DrawingShapes.Add(new DrawingShapeModel
-            {
-                Anchor = RemapAddress(shape.Anchor, copyId),
-                Kind = shape.Kind,
-                Width = shape.Width,
-                Height = shape.Height,
-                RotationDegrees = shape.RotationDegrees,
-                FillColor = shape.FillColor,
-                OutlineColor = shape.OutlineColor,
-                AltText = shape.AltText
-            });
-        foreach (var picture in source.Pictures)
-        {
-            var copiedPicture = new PictureModel
-            {
-                Anchor = RemapAddress(picture.Anchor, copyId),
-                Kind = picture.Kind,
-                SourceRowCount = picture.SourceRowCount,
-                SourceColumnCount = picture.SourceColumnCount,
-                ImageBytes = picture.ImageBytes?.ToArray(),
-                ContentType = picture.ContentType,
-                Width = picture.Width,
-                Height = picture.Height,
-                RotationDegrees = picture.RotationDegrees,
-                AltText = picture.AltText
-            };
-            foreach (var cell in picture.Cells)
-                copiedPicture.Cells.Add(cell);
-            copy.Pictures.Add(copiedPicture);
-        }
-        foreach (var sparkline in source.Sparklines)
-            copy.Sparklines.Add(new SparklineModel
-            {
-                DataRange = RemapRange(sparkline.DataRange, copyId),
-                Location = RemapAddress(sparkline.Location, copyId),
-                Kind = sparkline.Kind
-            });
-        foreach (var cf in source.ConditionalFormats)
-            copy.ConditionalFormats.Add(new ConditionalFormat
-            {
-                AppliesTo = RemapRange(cf.AppliesTo, copyId),
-                Priority = cf.Priority,
-                RuleType = cf.RuleType,
-                Operator = cf.Operator,
-                Value1 = cf.Value1,
-                Value2 = cf.Value2,
-                FormatIfTrue = cf.FormatIfTrue?.Clone(),
-                MinColor = cf.MinColor,
-                MidColor = cf.MidColor,
-                MaxColor = cf.MaxColor,
-                UseThreeColorScale = cf.UseThreeColorScale,
-                DataBarColor = cf.DataBarColor,
-                AboveAverage = cf.AboveAverage
-            });
-        foreach (var dv in source.DataValidations)
-            copy.DataValidations.Add(new DataValidation
-            {
-                AppliesTo = RemapRange(dv.AppliesTo, copyId),
-                Type = dv.Type,
-                Operator = dv.Operator,
-                Formula1 = dv.Formula1,
-                Formula2 = dv.Formula2,
-                AllowBlank = dv.AllowBlank,
-                ShowDropdown = dv.ShowDropdown,
-                ErrorTitle = dv.ErrorTitle,
-                ErrorMessage = dv.ErrorMessage,
-                PromptTitle = dv.PromptTitle,
-                PromptMessage = dv.PromptMessage
-            });
-
-        return copy;
     }
 
     private static ChartModel CloneChart(ChartModel chart, SheetId copyId) =>

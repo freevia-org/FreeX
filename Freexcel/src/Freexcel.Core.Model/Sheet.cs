@@ -455,6 +455,167 @@ public sealed class Sheet
             new CellAddress(Id, minRow, minCol),
             new CellAddress(Id, maxRow, maxCol));
     }
+
+    /// <summary>
+    /// Creates a deep copy of this sheet with a new <paramref name="newId"/> and <paramref name="newName"/>.
+    /// All model-layer properties are copied, including the previously missed fields:
+    /// <c>BackgroundImage</c>, <c>RowOutlineLevels</c>, <c>ColOutlineLevels</c>,
+    /// <c>GroupHiddenRows</c>, and <c>GroupHiddenCols</c>.
+    /// Drawing collections (Charts, TextBoxes, DrawingShapes, Pictures, Sparklines) are intentionally
+    /// left empty; the caller (e.g. <c>DuplicateSheetCommand</c>) is responsible for copying those.
+    /// </summary>
+    public Sheet Clone(SheetId newId, string newName)
+    {
+        var copy = new Sheet(newId, newName)
+        {
+            DefaultColumnWidth            = DefaultColumnWidth,
+            DefaultRowHeight              = DefaultRowHeight,
+            FrozenRows                    = FrozenRows,
+            FrozenCols                    = FrozenCols,
+            SplitRow                      = SplitRow,
+            SplitColumn                   = SplitColumn,
+            ShowGridlines                 = ShowGridlines,
+            ShowHeadings                  = ShowHeadings,
+            ShowRulers                    = ShowRulers,
+            ZoomPercent                   = ZoomPercent,
+            ShowFormulas                  = ShowFormulas,
+            PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
+            PageOrientation               = PageOrientation,
+            PaperSize                     = PaperSize,
+            PageMargins                   = PageMargins,
+            HeaderMargin                  = HeaderMargin,
+            FooterMargin                  = FooterMargin,
+            PrintGridlines                = PrintGridlines,
+            PrintHeadings                 = PrintHeadings,
+            ScaleToFit                    = ScaleToFit,
+            PrintTitleRows                = PrintTitleRows,
+            PrintTitleColumns             = PrintTitleColumns,
+            PageHeader                    = PageHeader,
+            PageFooter                    = PageFooter,
+            FirstPageHeader               = FirstPageHeader,
+            FirstPageFooter               = FirstPageFooter,
+            EvenPageHeader                = EvenPageHeader,
+            EvenPageFooter                = EvenPageFooter,
+            DifferentFirstPageHeaderFooter = DifferentFirstPageHeaderFooter,
+            DifferentOddEvenHeaderFooter  = DifferentOddEvenHeaderFooter,
+            HeaderFooterScaleWithDocument = HeaderFooterScaleWithDocument,
+            HeaderFooterAlignWithMargins  = HeaderFooterAlignWithMargins,
+            CenterHorizontallyOnPage      = CenterHorizontallyOnPage,
+            CenterVerticallyOnPage        = CenterVerticallyOnPage,
+            PageOrder                     = PageOrder,
+            FirstPageNumber               = FirstPageNumber,
+            PrintBlackAndWhite            = PrintBlackAndWhite,
+            PrintDraftQuality             = PrintDraftQuality,
+            PrintQualityDpi               = PrintQualityDpi,
+            PrintErrorValue               = PrintErrorValue,
+            PrintComments                 = PrintComments,
+            ViewMode                      = ViewMode,
+            IsHidden                      = false,
+            TabColor                      = TabColor,
+            IsProtected                   = IsProtected,
+            ProtectionPassword            = ProtectionPassword,
+            // Previously missed fields:
+            BackgroundImage               = BackgroundImage,
+        };
+
+        // Collections: column/row dimensions
+        foreach (var (col, width) in ColumnWidths)
+            copy.ColumnWidths[col] = width;
+        foreach (var (row, height) in RowHeights)
+            copy.RowHeights[row] = height;
+
+        // Hidden rows/cols
+        foreach (var row in HiddenRows)
+            copy.HiddenRows.Add(row);
+        foreach (var row in FilterHiddenRows)
+            copy.FilterHiddenRows.Add(row);
+        foreach (var col in HiddenCols)
+            copy.HiddenCols.Add(col);
+
+        // Page breaks
+        foreach (var rowBreak in RowPageBreaks)
+            copy.RowPageBreaks.Add(rowBreak);
+        foreach (var colBreak in ColumnPageBreaks)
+            copy.ColumnPageBreaks.Add(colBreak);
+
+        // Previously missed: outline levels and group-hidden rows/cols
+        foreach (var (row, level) in RowOutlineLevels)
+            copy.RowOutlineLevels[row] = level;
+        foreach (var (col, level) in ColOutlineLevels)
+            copy.ColOutlineLevels[col] = level;
+        foreach (var row in GroupHiddenRows)
+            copy.GroupHiddenRows.Add(row);
+        foreach (var col in GroupHiddenCols)
+            copy.GroupHiddenCols.Add(col);
+
+        // Cells (deep copy)
+        foreach (var (address, cell) in EnumerateCells())
+            copy.SetCell(RemapAddress(address, newId), cell.Clone());
+
+        // Style-only overrides for empty cells
+        foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
+            copy.SetStyleOnly(row, col, styleId);
+
+        // Merged regions
+        foreach (var range in MergedRegions)
+            copy.MergedRegions.Add(RemapRange(range, newId));
+        copy.InvalidateMergeIndex();
+
+        // Comments and hyperlinks
+        foreach (var (address, comment) in Comments)
+            copy.Comments[RemapAddress(address, newId)] = comment;
+        foreach (var (address, hyperlink) in Hyperlinks)
+            copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
+
+        // Allow-edit ranges (protection)
+        foreach (var range in AllowEditRanges)
+            copy.AllowEditRanges.Add(RemapRange(range, newId));
+
+        // Conditional formats
+        foreach (var cf in ConditionalFormats)
+            copy.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo            = RemapRange(cf.AppliesTo, newId),
+                Priority             = cf.Priority,
+                RuleType             = cf.RuleType,
+                Operator             = cf.Operator,
+                Value1               = cf.Value1,
+                Value2               = cf.Value2,
+                FormatIfTrue         = cf.FormatIfTrue?.Clone(),
+                MinColor             = cf.MinColor,
+                MidColor             = cf.MidColor,
+                MaxColor             = cf.MaxColor,
+                UseThreeColorScale   = cf.UseThreeColorScale,
+                DataBarColor         = cf.DataBarColor,
+                AboveAverage         = cf.AboveAverage
+            });
+
+        // Data validations
+        foreach (var dv in DataValidations)
+            copy.DataValidations.Add(new DataValidation
+            {
+                AppliesTo     = RemapRange(dv.AppliesTo, newId),
+                Type          = dv.Type,
+                Operator      = dv.Operator,
+                Formula1      = dv.Formula1,
+                Formula2      = dv.Formula2,
+                AllowBlank    = dv.AllowBlank,
+                ShowDropdown  = dv.ShowDropdown,
+                ErrorTitle    = dv.ErrorTitle,
+                ErrorMessage  = dv.ErrorMessage,
+                PromptTitle   = dv.PromptTitle,
+                PromptMessage = dv.PromptMessage
+            });
+
+        // Note: Charts, TextBoxes, DrawingShapes, Pictures, and Sparklines are intentionally
+        // left empty here. The caller must copy those drawing collections separately.
+
+        return copy;
+
+        static CellAddress RemapAddress       (CellAddress a, SheetId id) => new(id, a.Row, a.Col);
+        static GridRange   RemapRange         (GridRange   r, SheetId id) =>
+            new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
+    }
 }
 
 public enum WorksheetViewMode
