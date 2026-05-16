@@ -791,10 +791,12 @@ public static class BuiltInFunctions
         }
         else
         {
-            // Exact match
+            // Exact match — propagate errors encountered in the lookup column
             for (int r = 1; r <= table.RowCount; r++)
             {
-                if (MatchExactValue(table.At(r, 1), lookupValue))
+                var cv = table.At(r, 1);
+                if (cv is ErrorValue ev) return ev;
+                if (MatchExactValue(cv, lookupValue))
                     return table.At(r, colIndex);
             }
             return ErrorValue.NA;
@@ -832,9 +834,12 @@ public static class BuiltInFunctions
         }
         else
         {
+            // Exact match — propagate errors encountered in the lookup row
             for (int c = 1; c <= table.ColCount; c++)
             {
-                if (MatchExactValue(table.At(1, c), lookupValue))
+                var cv = table.At(1, c);
+                if (cv is ErrorValue ev) return ev;
+                if (MatchExactValue(cv, lookupValue))
                     return table.At(rowIndex, c);
             }
             return ErrorValue.NA;
@@ -854,8 +859,19 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawColNum)) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 
-        if (rowNum < 0 || rowNum > table.RowCount) return ErrorValue.Ref;
-        if (colNum < 0 || colNum > table.ColCount) return ErrorValue.Ref;
+        // For a 1-D range with a single index argument, the index selects along the
+        // only dimension (column for a 1-row range, row for a 1-column range).
+        if (args.Count == 2)
+        {
+            if (table.RowCount == 1) { colNum = rowNum; rowNum = 1; }
+            else if (table.ColCount == 1) { /* rowNum already correct, colNum = 1 */ }
+        }
+
+        // Negative indices → #VALUE! (out-of-range positive → #REF! per Excel)
+        if (rowNum < 0) return ErrorValue.Value;
+        if (colNum < 0) return ErrorValue.Value;
+        if (rowNum > table.RowCount) return ErrorValue.Ref;
+        if (colNum > table.ColCount) return ErrorValue.Ref;
 
         if (rowNum == 0 && colNum == 0)
             return table;
@@ -896,10 +912,13 @@ public static class BuiltInFunctions
 
         if (matchType == 0)
         {
-            // Exact match
+            // Exact match — propagate errors encountered in the lookup array
             for (int i = 0; i < flat.Count; i++)
+            {
+                if (flat[i] is ErrorValue ev) return ev;
                 if (MatchExactValue(flat[i], lookupValue))
                     return new NumberValue(i + 1);
+            }
             return ErrorValue.NA;
         }
         else if (matchType == 1)
@@ -948,6 +967,7 @@ public static class BuiltInFunctions
     private static ScalarValue Xmatch(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
@@ -997,9 +1017,11 @@ public static class BuiltInFunctions
 
     private static ScalarValue Sumif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue rangeError) return rangeError;
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
+        if (args.Count > 2 && args[2] is ErrorValue sumRangeError) return sumRangeError;
         RangeValue? sumRange = args.Count > 2 ? args[2] as RangeValue : null;
 
         var rangeFlat = rangeArg.Flatten();
@@ -1021,6 +1043,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue Countif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue rangeError) return rangeError;
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
@@ -1034,9 +1057,11 @@ public static class BuiltInFunctions
 
     private static ScalarValue Averageif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue rangeError) return rangeError;
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
+        if (args.Count > 2 && args[2] is ErrorValue avgRangeError) return avgRangeError;
         RangeValue? avgRange = args.Count > 2 ? args[2] as RangeValue : null;
 
         var rangeFlat = rangeArg.Flatten();
@@ -1765,6 +1790,7 @@ public static class BuiltInFunctions
     // SUMIFS(sum_range, criteria_range1, criteria1, [criteria_range2, criteria2, ...])
     private static ScalarValue Sumifs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue sumRangeError) return sumRangeError;
         if (args[0] is not RangeValue sumRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
         var sumFlat = sumRange.Flatten();
@@ -1773,6 +1799,7 @@ public static class BuiltInFunctions
         var pairs = new (IReadOnlyList<ScalarValue> Flat, ScalarValue Criteria)[pairCount];
         for (int p = 0; p < pairCount; p++)
         {
+            if (args[1 + p * 2] is ErrorValue rangeError) return rangeError;
             if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
             if (!SameShape(sumRange, cr)) return ErrorValue.Value;
             if (args[2 + p * 2] is ErrorValue criteriaError) return criteriaError;
@@ -1805,6 +1832,7 @@ public static class BuiltInFunctions
         RangeValue? firstRange = null;
         for (int p = 0; p < pairCount; p++)
         {
+            if (args[p * 2] is ErrorValue rangeError) return rangeError;
             if (args[p * 2] is not RangeValue cr) return ErrorValue.Value;
             firstRange ??= cr;
             if (!SameShape(firstRange, cr)) return ErrorValue.Value;
@@ -1829,6 +1857,7 @@ public static class BuiltInFunctions
     // AVERAGEIFS(avg_range, criteria_range1, criteria1, ...)
     private static ScalarValue Averageifs2(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue avgRangeError) return avgRangeError;
         if (args[0] is not RangeValue avgRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
         var avgFlat = avgRange.Flatten();
@@ -1837,6 +1866,7 @@ public static class BuiltInFunctions
         var pairs = new (IReadOnlyList<ScalarValue> Flat, ScalarValue Criteria)[pairCount];
         for (int p = 0; p < pairCount; p++)
         {
+            if (args[1 + p * 2] is ErrorValue rangeError) return rangeError;
             if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
             if (!SameShape(avgRange, cr)) return ErrorValue.Value;
             if (args[2 + p * 2] is ErrorValue criteriaError) return criteriaError;
@@ -1870,7 +1900,9 @@ public static class BuiltInFunctions
     private static ScalarValue Xlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        if (args[2] is ErrorValue e2) return e2;
         if (args[2] is not RangeValue returnArr) return ErrorValue.Value;
         var lookupIsVertical = lookupArr.ColCount == 1;
         var lookupIsHorizontal = lookupArr.RowCount == 1;
@@ -2551,6 +2583,7 @@ public static class BuiltInFunctions
         if (!TryOADateToDateTime(args[0], out var current)) return ErrorValue.Num;
         double rawDays = ToNumber(args[1]);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
+        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
         int days = (int)rawDays;
         var holidays = new HashSet<DateTime>();
         if (args.Count > 2 && args[2] is RangeValue hRange)
@@ -2758,6 +2791,7 @@ public static class BuiltInFunctions
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
+        if (!double.IsFinite(k)) return ErrorValue.Num;
         if (k < 0 || k > 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
@@ -2774,6 +2808,7 @@ public static class BuiltInFunctions
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
+        if (!double.IsFinite(k)) return ErrorValue.Num;
         if (k <= 0 || k >= 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
@@ -2791,7 +2826,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is not RangeValue rv) return ErrorValue.Value;
         if (args[1] is ErrorValue e) return e;
-        int quart = (int)ToNumber(args[1]);
+        double rawQuart = ToNumber(args[1]);
+        if (!double.IsFinite(rawQuart)) return ErrorValue.Num;
+        int quart = (int)rawQuart;
         if (quart < 0 || quart > 4) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
