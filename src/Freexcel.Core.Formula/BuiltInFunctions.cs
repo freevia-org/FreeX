@@ -285,6 +285,7 @@ public static class BuiltInFunctions
         DirectTextLiteralValue t => t.Value,
         TextValue t => t.Value,
         NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue d => d.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         BlankValue => "",
         ErrorValue e => e.Code,
@@ -897,6 +898,9 @@ public static class BuiltInFunctions
     /// </summary>
     private static bool MatchesCriteria(ScalarValue cellValue, ScalarValue criteria)
     {
+        if (criteria is BlankValue)
+            criteria = new TextValue("");
+
         if (criteria is NumberValue cn)
             return TryCellNumber(cellValue, out double cellNumber) && cellNumber == cn.Value;
 
@@ -1200,14 +1204,27 @@ public static class BuiltInFunctions
         int day   = (int)ToNumber(args[2]);
         if (year >= 0 && year < 1900)
             year += 1900;
+        if (year < 0 || year > 9999) return ErrorValue.Num;
         try
         {
             var dt = new DateTime(year, 1, 1)
                 .AddMonths(month - 1)
                 .AddDays(day - 1);
+            if (dt.ToOADate() < 0) return ErrorValue.Num;
             return new NumberValue(dt.ToOADate());
         }
-        catch { return ErrorValue.Value; }
+        catch { return ErrorValue.Num; }
+    }
+
+    // OADate range supported by DateTime.FromOADate: -657435.0 to 2958465.0
+    private static bool TryOADateToDateTime(ScalarValue v, out DateTime dt)
+    {
+        dt = default;
+        var num = ToNumber(v);
+        if (!double.IsFinite(num) || num < -657435.0 || num > 2958465.0)
+            return false;
+        dt = DateTime.FromOADate(num);
+        return true;
     }
 
     private static DateTime OADateToDateTime(ScalarValue v) =>
@@ -1216,44 +1233,44 @@ public static class BuiltInFunctions
     private static ScalarValue Year(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(OADateToDateTime(args[0]).Year);
+        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
     }
 
     private static ScalarValue Month(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(OADateToDateTime(args[0]).Month);
+        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
     }
 
     private static ScalarValue Day(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(OADateToDateTime(args[0]).Day);
+        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
     }
 
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(OADateToDateTime(args[0]).Hour);
+        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Hour) : ErrorValue.Num;
     }
 
     private static ScalarValue Minute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(OADateToDateTime(args[0]).Minute);
+        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Minute) : ErrorValue.Num;
     }
 
     private static ScalarValue Second(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return new NumberValue(OADateToDateTime(args[0]).Second);
+        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Second) : ErrorValue.Num;
     }
 
     private static ScalarValue Weekday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
-        var dt = OADateToDateTime(args[0]);
+        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         int returnType = args.Count > 1 ? (int)ToNumber(args[1]) : 1;
         int dow = (int)dt.DayOfWeek; // 0=Sunday...6=Saturday
         return returnType switch
@@ -1270,14 +1287,14 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var dt     = OADateToDateTime(args[0]);
+        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         int months = (int)ToNumber(args[1]);
         try
         {
             var result = dt.AddMonths(months);
             return new NumberValue(result.ToOADate());
         }
-        catch { return ErrorValue.Value; }
+        catch { return ErrorValue.Num; }
     }
 
     private static ScalarValue Datedif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1285,8 +1302,8 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        var start = OADateToDateTime(args[0]);
-        var end   = OADateToDateTime(args[1]);
+        if (!TryOADateToDateTime(args[0], out var start)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var end)) return ErrorValue.Num;
         if (end < start) return ErrorValue.Num;
         var unit  = ToText(args[2]).ToUpperInvariant();
 
@@ -1299,7 +1316,9 @@ public static class BuiltInFunctions
             "YD" => new NumberValue((end - new DateTime(end.Year, start.Month, start.Day)).Days < 0
                         ? (end - new DateTime(end.Year - 1, start.Month, start.Day)).Days
                         : (end - new DateTime(end.Year, start.Month, start.Day)).Days),
-            "MD" => new NumberValue(end.Day >= start.Day
+            // Guard: DateTime.DaysInMonth(0, 12) throws when end.Year==1 && end.Month==1
+            "MD" => end.Year == 1 && end.Month == 1 ? ErrorValue.Num
+                  : new NumberValue(end.Day >= start.Day
                         ? end.Day - start.Day
                         : end.Day + DateTime.DaysInMonth(
                             end.Month == 1 ? end.Year - 1 : end.Year,
@@ -1333,6 +1352,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         var n = ToNumber(args[0]);
         var d = ToNumber(args[1]);
+        if (!double.IsFinite(n) || !double.IsFinite(d)) return ErrorValue.Num;
         if (d == 0) return ErrorValue.DivByZero;
         return new NumberValue(n - d * Math.Floor(n / d));
     }
@@ -1918,6 +1938,10 @@ public static class BuiltInFunctions
 
     internal static bool ScalarEquals(ScalarValue a, ScalarValue b)
     {
+        if (a is BlankValue && b is BlankValue) return true;
+        // Blank coerces to 0 against numbers/dates, "" against text
+        if (a is BlankValue) a = b is TextValue ? new TextValue("") : (ScalarValue)new NumberValue(0);
+        if (b is BlankValue) b = a is TextValue ? new TextValue("") : (ScalarValue)new NumberValue(0);
         if (TryCellNumber(a, out double aNumber) && TryCellNumber(b, out double bNumber))
             return aNumber == bNumber;
         if (a is TextValue ta && b is TextValue tb)
@@ -2196,17 +2220,21 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var dt = DateTime.FromOADate(ToNumber(args[0]));
+        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         int months = (int)ToNumber(args[1]);
-        var target = dt.AddMonths(months + 1);
-        var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
-        return new NumberValue(eomonth.ToOADate());
+        try
+        {
+            var target = dt.AddMonths(months + 1);
+            var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
+            return new NumberValue(eomonth.ToOADate());
+        }
+        catch { return ErrorValue.Num; }
     }
 
     private static ScalarValue Weeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var dt = DateTime.FromOADate(ToNumber(args[0]));
+        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         int returnType = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 1;
         DayOfWeek firstDay = returnType == 2 ? DayOfWeek.Monday : DayOfWeek.Sunday;
         var jan1 = new DateTime(dt.Year, 1, 1);
@@ -2218,7 +2246,7 @@ public static class BuiltInFunctions
     private static ScalarValue Isoweeknum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var dt = DateTime.FromOADate(ToNumber(args[0]));
+        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
     }
 
@@ -2226,7 +2254,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var current = DateTime.FromOADate(ToNumber(args[0]));
+        if (!TryOADateToDateTime(args[0], out var current)) return ErrorValue.Num;
         int days = (int)ToNumber(args[1]);
         var holidays = new HashSet<DateTime>();
         if (args.Count > 2 && args[2] is RangeValue hRange)
@@ -2235,6 +2263,13 @@ public static class BuiltInFunctions
                     holidays.Add(DateTime.FromOADate(holidaySerial).Date);
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
+        // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
+        if (remaining > 5 && holidays.Count == 0)
+        {
+            int fullWeeks = (remaining - 1) / 5; // keep ≥5 left so day-of-week boundary is handled correctly
+            current = current.AddDays(sign * fullWeeks * 7);
+            remaining -= fullWeeks * 5;
+        }
         while (remaining > 0)
         {
             current = current.AddDays(sign);
@@ -2250,8 +2285,10 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var startDt = DateTime.FromOADate(ToNumber(args[0])).Date;
-        var endDt   = DateTime.FromOADate(ToNumber(args[1])).Date;
+        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
+        var startDt = startRaw.Date;
+        var endDt   = endRaw.Date;
         var holidays = new HashSet<DateTime>();
         if (args.Count > 2 && args[2] is RangeValue hRange)
             foreach (var v in hRange.Flatten())
@@ -2260,21 +2297,33 @@ public static class BuiltInFunctions
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
-        int count = 0;
-        for (var d = lo; d <= hi; d = d.AddDays(1))
-            if (d.DayOfWeek != DayOfWeek.Saturday &&
-                d.DayOfWeek != DayOfWeek.Sunday &&
-                !holidays.Contains(d))
-                count++;
+        int count = CountWeekdaysInclusive(lo, hi);
+        foreach (var h in holidays)
+            if (h >= lo && h <= hi && h.DayOfWeek != DayOfWeek.Saturday && h.DayOfWeek != DayOfWeek.Sunday)
+                count--;
         return new NumberValue(sign * count);
+    }
+
+    private static int CountWeekdaysInclusive(DateTime lo, DateTime hi)
+    {
+        int totalDays = (int)(hi - lo).TotalDays + 1;
+        int fullWeeks = totalDays / 7;
+        int count = fullWeeks * 5;
+        int startDow = (int)lo.DayOfWeek; // 0=Sun, 1=Mon, …, 6=Sat
+        for (int i = 0; i < totalDays % 7; i++)
+        {
+            int dow = (startDow + i) % 7;
+            if (dow != 0 && dow != 6) count++;
+        }
+        return count;
     }
 
     private static ScalarValue Days(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var endDt   = DateTime.FromOADate(ToNumber(args[0]));
-        var startDt = DateTime.FromOADate(ToNumber(args[1]));
+        if (!TryOADateToDateTime(args[0], out var endDt))   return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var startDt)) return ErrorValue.Num;
         return new NumberValue((endDt - startDt).Days);
     }
 
@@ -2282,8 +2331,10 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var startDt = DateTime.FromOADate(ToNumber(args[0])).Date;
-        var endDt   = DateTime.FromOADate(ToNumber(args[1])).Date;
+        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
+        var startDt = startRaw.Date;
+        var endDt   = endRaw.Date;
         bool european = args.Count > 2 && args[2] is not BlankValue && ToNumber(args[2]) != 0;
         double days = european ? Days30E360(startDt, endDt) : Days30US360(startDt, endDt);
         return new NumberValue(Math.Truncate(days));
@@ -2293,8 +2344,10 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        var startDt = DateTime.FromOADate(ToNumber(args[0])).Date;
-        var endDt   = DateTime.FromOADate(ToNumber(args[1])).Date;
+        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
+        var startDt = startRaw.Date;
+        var endDt   = endRaw.Date;
         int basis = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 0;
         double totalDays = (endDt - startDt).TotalDays;
         double result = basis switch

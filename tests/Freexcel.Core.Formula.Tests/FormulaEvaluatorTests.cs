@@ -147,10 +147,24 @@ public class FormulaEvaluatorTests
     }
 
     [Fact]
-    public void Precedence_PowerBeforeUnaryNegation()
+    public void Precedence_UnaryNegationBeforePower()
     {
         var sheet = new Sheet(SheetId.New(), "S");
-        _evaluator.Evaluate("=-2^2", sheet).Should().Be(new NumberValue(-4));
+        _evaluator.Evaluate("=-2^2", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Precedence_BinarySubtractionAfterPower()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=0-2^2", sheet).Should().Be(new NumberValue(-4));
+    }
+
+    [Fact]
+    public void Precedence_ParenthesesOverrideUnaryPower()
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=(-2)^2", sheet).Should().Be(new NumberValue(4));
     }
 
     // ── Cell references ──
