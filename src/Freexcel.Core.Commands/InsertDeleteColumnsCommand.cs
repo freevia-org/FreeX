@@ -35,6 +35,15 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        var maxOccupied = sheet.EnumerateCells()
+            .Where(p => p.Address.Col >= _beforeCol)
+            .Select(p => p.Address.Col)
+            .DefaultIfEmpty(0u)
+            .Max();
+        if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxCol)
+            return new CommandOutcome(false,
+                ErrorMessage: $"Cannot insert {_count} column(s): data would be pushed past the last column ({Model.CellAddress.MaxCol}).");
+
         _movedSnapshot = sheet.EnumerateCells()
             .Where(p => p.Address.Col >= _beforeCol)
             .Select(p => (p.Address, p.Cell.Clone()))
