@@ -8,6 +8,15 @@ namespace Freexcel.Core.Formula;
 /// </summary>
 public sealed class Lexer
 {
+    private static readonly string[] KnownErrors =
+        ["#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NULL!", "#N/A", "#NUM!"];
+
+    static Lexer()
+    {
+        // Sort once so ReadErrorLiteral can match longest first without re-sorting
+        Array.Sort(KnownErrors, (a, b) => b.Length.CompareTo(a.Length));
+    }
+
     private readonly string _text;
     private int _pos;
 
@@ -230,18 +239,8 @@ public sealed class Lexer
     private Token ReadErrorLiteral()
     {
         var start = _pos;
-        var knownErrors = new[]
-        {
-            "#DIV/0!",
-            "#VALUE!",
-            "#REF!",
-            "#NAME?",
-            "#NULL!",
-            "#N/A",
-            "#NUM!"
-        };
 
-        foreach (var error in knownErrors.OrderByDescending(e => e.Length))
+        foreach (var error in KnownErrors)
         {
             if (_text.AsSpan(_pos).StartsWith(error, StringComparison.OrdinalIgnoreCase))
             {
