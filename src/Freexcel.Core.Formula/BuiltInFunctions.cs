@@ -403,7 +403,10 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue err0) return err0;
         if (args[1] is ErrorValue err1) return err1;
         var number = ToNumber(args[0]);
-        var digits = (int)ToNumber(args[1]);
+        var rawDigits = ToNumber(args[1]);
+        if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
+        int digits = (int)Math.Truncate(rawDigits);
+        if (digits < -15 || digits > 15) return ErrorValue.Num;
         return new NumberValue(Math.Round(number, Math.Max(0, digits), MidpointRounding.AwayFromZero));
     }
 
@@ -608,17 +611,16 @@ public static class BuiltInFunctions
         }
         else // matchType == -1
         {
-            // Descending approximate: smallest value >= lookupValue
-            int best = -1;
+            // Descending approximate: first element >= lookupValue (assumes descending sort)
             for (int i = 0; i < flat.Count; i++)
             {
-                if (CompareScalar(flat[i], lookupValue) >= 0)
-                    best = i;
-                else
+                int cmp = CompareScalar(flat[i], lookupValue);
+                if (cmp >= 0)
+                    return new NumberValue(i + 1);
+                if (cmp < 0)
                     break;
             }
-            if (best < 0) return ErrorValue.NA;
-            return new NumberValue(best + 1);
+            return ErrorValue.NA;
         }
     }
 
@@ -806,13 +808,12 @@ public static class BuiltInFunctions
         catch { return value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
     }
 
+    private static readonly Regex MultiSpaceRegex = new(@" {2,}", RegexOptions.Compiled);
+
     private static ScalarValue Trim(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        var text = ToText(args[0]).Trim();
-        // Collapse interior multiple spaces to single space
-        while (text.Contains("  "))
-            text = text.Replace("  ", " ");
+        var text = MultiSpaceRegex.Replace(ToText(args[0]).Trim(), " ");
         return new TextValue(text);
     }
 
@@ -856,7 +857,9 @@ public static class BuiltInFunctions
         if (args.Count > 3)
         {
             // Replace the Nth occurrence only
+            if (args[3] is ErrorValue e3) return e3;
             int instanceNum = (int)ToNumber(args[3]);
+            if (instanceNum < 1) return ErrorValue.Value;
             int count = 0;
             int pos = 0;
             while (pos < text.Length)
@@ -1404,12 +1407,11 @@ public static class BuiltInFunctions
         }
         else
         {
-            // Exact or next larger
-            int best = -1;
+            // Exact or next larger: return first element >= lookupValue
             foreach (int i in indices)
                 if (CompareScalar(lookupFlat[i], lookupValue) >= 0)
-                    best = i;
-            return best >= 0 && best < returnFlat.Count ? returnFlat[best] : ifNotFound;
+                    return i < returnFlat.Count ? returnFlat[i] : ifNotFound;
+            return ifNotFound;
         }
     }
 
@@ -1505,6 +1507,8 @@ public static class BuiltInFunctions
     private static ScalarValue Textjoin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count < 3) return ErrorValue.Value;
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         var delimiter = ToText(args[0]);
         bool ignoreEmpty = ToBool(args[1]);
         var parts = new List<string>();
@@ -1598,7 +1602,9 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var n = ToNumber(args[0]);
-        int digits = (int)ToNumber(args[1]);
+        var rawDigits = ToNumber(args[1]);
+        if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
+        int digits = (int)Math.Truncate(rawDigits);
         double factor = Math.Pow(10, digits);
         return new NumberValue((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
     }
@@ -1608,7 +1614,9 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         var n = ToNumber(args[0]);
-        int digits = (int)ToNumber(args[1]);
+        var rawDigits = ToNumber(args[1]);
+        if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
+        int digits = (int)Math.Truncate(rawDigits);
         double factor = Math.Pow(10, digits);
         return new NumberValue((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
     }
@@ -1617,7 +1625,14 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var n = ToNumber(args[0]);
-        int digits = args.Count > 1 ? (int)ToNumber(args[1]) : 0;
+        int digits = 0;
+        if (args.Count > 1)
+        {
+            if (args[1] is ErrorValue e1) return e1;
+            var rawDigits = ToNumber(args[1]);
+            if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
+            digits = (int)Math.Truncate(rawDigits);
+        }
         double factor = Math.Pow(10, digits);
         return new NumberValue(Math.Truncate(n * factor) / factor);
     }
@@ -1785,8 +1800,10 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        int n = (int)ToNumber(args[0]);
-        int k = (int)ToNumber(args[1]);
+        double dn = ToNumber(args[0]); double dk = ToNumber(args[1]);
+        if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
+        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)dn; int k = (int)dk;
         if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
         if (k > n - k) k = n - k;
         double result = 1;
@@ -1799,8 +1816,10 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        int n = (int)ToNumber(args[0]);
-        int k = (int)ToNumber(args[1]);
+        double dn = ToNumber(args[0]); double dk = ToNumber(args[1]);
+        if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
+        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
+        int n = (int)dn; int k = (int)dk;
         if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
         double result = 1;
         for (int i = 0; i < k; i++)
@@ -2533,8 +2552,11 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        int rowNum = (int)ToNumber(args[0]);
-        int colNum = (int)ToNumber(args[1]);
+        double dRow = ToNumber(args[0]); double dCol = ToNumber(args[1]);
+        if (!double.IsFinite(dRow) || !double.IsFinite(dCol)) return ErrorValue.Num;
+        int rowNum = (int)dRow; int colNum = (int)dCol;
+        if (rowNum < 1 || rowNum > (int)CellAddress.MaxRow ||
+            colNum < 1 || colNum > (int)CellAddress.MaxCol) return ErrorValue.Value;
         int absNum = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
         string? sheetText = args.Count > 4 && args[4] is not BlankValue ? ToText(args[4]) : null;
         string colLetter = CellAddress.NumberToColumnName((uint)colNum);
