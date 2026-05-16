@@ -28,6 +28,10 @@ public partial class MainWindow : Window
     private readonly ICommandBus _commandBus;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
+    private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
+    private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
+    private string _ribbonKeyTipSequence = "";
+    private ContextMenu? _activeRibbonKeyTipMenu;
     private readonly WorkbookRef _workbookRef;
     private Workbook _workbook;
     private SheetId _currentSheetId;
@@ -62,12 +66,19 @@ public partial class MainWindow : Window
     private bool _suppressValidationDropdownCommit;
     private ColumnResizeSnapshot? _columnResizeSnapshot;
     private RowResizeSnapshot? _rowResizeSnapshot;
+    private Action<CommandOutcome>? _repeatPostAction;
 
     private enum PasteMode { All, Values, Formulas, Formats }
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells);
     private InternalClipboard? _internalClipboard;
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
+    private sealed class FailedWorkbookCommand(string message) : IWorkbookCommand
+    {
+        public string Label => "Unavailable";
+        public CommandOutcome Apply(ICommandContext ctx) => new(false, message);
+        public void Revert(ICommandContext ctx) { }
+    }
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -409,9 +420,35 @@ public partial class MainWindow : Window
     {
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
-            var keyTipKey = e.SystemKey == Key.None ? e.Key : e.SystemKey;
-            if (Keyboard.Modifiers == ModifierKeys.Alt && TryHandleRibbonKeyTip(keyTipKey))
+            var keyTipKey = GetEffectiveKey(e);
+            if (_ribbonKeyTipMode.IsActive && Keyboard.Modifiers == ModifierKeys.None)
             {
+                HandleActiveRibbonKeyTip(keyTipKey);
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Alt && IsStandaloneAltKey(keyTipKey))
+            {
+                EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Alt &&
+                RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
+                TryHandleTopLevelRibbonKeyTip(keyTip))
+            {
+                EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Alt &&
+                RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } qatKeyTip &&
+                TryInvokeTopLevelQatKeyTip(qatKeyTip))
+            {
+                ExitRibbonKeyTipMode();
                 e.Handled = true;
                 return;
             }
@@ -563,6 +600,12 @@ public partial class MainWindow : Window
             if (IsCtrlMinus(e))
             {
                 ExecuteKeyboardDelete();
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.F4 && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                ExecuteRepeatLast();
                 e.Handled = true;
                 return;
             }
@@ -1002,12 +1045,333 @@ public partial class MainWindow : Window
 
     private void ApplyStyleDiff(StyleDiff diff)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteApplyStyle(range, diff, "Apply Style"))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteRepeatableApplyStyle(diff, "Apply Style"))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
+    }
+
+    private static Key GetEffectiveKey(System.Windows.Input.KeyEventArgs e) =>
+        e.SystemKey == Key.None ? e.Key : e.SystemKey;
+
+    private static bool IsStandaloneAltKey(Key key) =>
+        key is Key.LeftAlt or Key.RightAlt or Key.System;
+
+    private void EnterRibbonKeyTipMode(RibbonKeyTipScope scope)
+    {
+        _ribbonKeyTipMode.Enter();
+        _ribbonKeyTipScope = scope;
+        _ribbonKeyTipSequence = "";
+        _activeRibbonKeyTipMenu = null;
+        ShowKeyTipOverlay(scope);
+    }
+
+    private void ExitRibbonKeyTipMode()
+    {
+        if (_activeRibbonKeyTipMenu is not null)
+            _activeRibbonKeyTipMenu.IsOpen = false;
+
+        _ribbonKeyTipMode.Cancel();
+        _ribbonKeyTipScope = RibbonKeyTipScope.None;
+        _ribbonKeyTipSequence = "";
+        _activeRibbonKeyTipMenu = null;
+        ClearKeyTipOverlay();
+    }
+
+    private void HandleActiveRibbonKeyTip(Key key)
+    {
+        if (key == Key.Escape)
+        {
+            ExitRibbonKeyTipMode();
+            return;
+        }
+
+        var token = RibbonKeyTipMode.ToKeyTipToken(key);
+        if (token is null)
+        {
+            ExitRibbonKeyTipMode();
+            return;
+        }
+
+        _ribbonKeyTipSequence += token;
+
+        if (_ribbonKeyTipScope == RibbonKeyTipScope.TopLevel)
+        {
+            if (TryHandleTopLevelRibbonKeyTip(_ribbonKeyTipSequence))
+                EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+            else if (TryInvokeTopLevelQatKeyTip(_ribbonKeyTipSequence))
+                ExitRibbonKeyTipMode();
+            else
+                ExitRibbonKeyTipMode();
+            return;
+        }
+
+        if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu)
+        {
+            if (TryInvokeActiveMenuItemKeyTip(_ribbonKeyTipSequence))
+                ExitRibbonKeyTipMode();
+            else if (RibbonTooltip.TryOpenSubmenuForKeyTip(_activeRibbonKeyTipMenu!, _ribbonKeyTipSequence))
+                return;
+            else if (!HasActiveMenuItemKeyTipPrefix(_ribbonKeyTipSequence))
+                ExitRibbonKeyTipMode();
+
+            return;
+        }
+
+        if (TryInvokeVisibleCommandKeyTip(_ribbonKeyTipSequence))
+        {
+            ExitRibbonKeyTipMode();
+            return;
+        }
+
+        if (!HasVisibleCommandKeyTipPrefix(_ribbonKeyTipSequence))
+            ExitRibbonKeyTipMode();
+    }
+
+    private void ShowKeyTipOverlay(RibbonKeyTipScope scope)
+    {
+        if (KeyTipOverlay == null || RootGrid == null)
+            return;
+
+        KeyTipOverlay.Children.Clear();
+
+        foreach (var element in EnumerateVisualDescendants(RootGrid).OfType<FrameworkElement>())
+        {
+            if (ReferenceEquals(element, KeyTipOverlay) ||
+                !element.IsVisible ||
+                element.ActualWidth <= 0 ||
+                element.ActualHeight <= 0 ||
+                (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)))
+            {
+                continue;
+            }
+
+            if (!ShouldShowKeyTipElement(element, scope))
+                continue;
+
+            var keyTip = RibbonTooltip.GetKeyTip(element);
+            if (string.IsNullOrWhiteSpace(keyTip))
+                continue;
+
+            Point origin;
+            try
+            {
+                origin = element.TransformToAncestor(RootGrid).Transform(new Point(0, 0));
+            }
+            catch (InvalidOperationException)
+            {
+                continue;
+            }
+
+            var badge = CreateKeyTipBadge(keyTip);
+            badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var badgeSize = badge.DesiredSize;
+            var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+                new Rect(origin, new Size(element.ActualWidth, element.ActualHeight)),
+                new Size(RootGrid.ActualWidth, RootGrid.ActualHeight),
+                badgeSize);
+
+            Canvas.SetLeft(badge, point.X);
+            Canvas.SetTop(badge, point.Y);
+            KeyTipOverlay.Children.Add(badge);
+        }
+
+        KeyTipOverlay.Visibility = KeyTipOverlay.Children.Count == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private static bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
+    {
+        var isQuickAccessButton =
+            element is Button button &&
+            button.ReadLocalValue(DockPanel.DockProperty) is Dock.Left;
+        if (scope == RibbonKeyTipScope.TopLevel)
+            return element is TabItem || isQuickAccessButton;
+
+        return element is not TabItem && !isQuickAccessButton;
+    }
+
+    private void ClearKeyTipOverlay()
+    {
+        if (KeyTipOverlay == null)
+            return;
+
+        KeyTipOverlay.Children.Clear();
+        KeyTipOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private static Border CreateKeyTipBadge(string keyTip) =>
+        new()
+        {
+            Background = System.Windows.Media.Brushes.White,
+            BorderBrush = System.Windows.Media.Brushes.Black,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
+            Padding = new Thickness(4, 1, 4, 1),
+            Child = new TextBlock
+            {
+                Text = keyTip,
+                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = System.Windows.Media.Brushes.Black
+            }
+        };
+
+    private static IEnumerable<DependencyObject> EnumerateVisualDescendants(DependencyObject root)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            yield return child;
+
+            foreach (var descendant in EnumerateVisualDescendants(child))
+                yield return descendant;
+        }
+    }
+
+    private bool TryInvokeVisibleCommandKeyTip(string keyTip)
+    {
+        var visibleKeyTipElements = GetVisibleKeyTipElements(RibbonKeyTipScope.Commands).ToList();
+        var match = RibbonKeyTipRouting.ResolveKeyTipElement(visibleKeyTipElements, keyTip);
+        if (match is null)
+            return false;
+
+        if (match is ButtonBase button)
+        {
+            if (TryEnterMenuKeyTipScope(button))
+                return false;
+
+            if (button is ToggleButton toggleButton)
+                toggleButton.IsChecked = toggleButton.IsChecked != true;
+
+            button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            return true;
+        }
+
+        if (match is ComboBox comboBox)
+        {
+            comboBox.IsDropDownOpen = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryEnterMenuKeyTipScope(ButtonBase button)
+    {
+        if (button.ContextMenu is not { } menu ||
+            !GetMenuItems(menu).Any(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item))))
+        {
+            return false;
+        }
+
+        _activeRibbonKeyTipMenu = menu;
+        _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
+        _ribbonKeyTipSequence = "";
+        menu.PlacementTarget = button;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+        ClearKeyTipOverlay();
+        return true;
+    }
+
+    private bool TryInvokeActiveMenuItemKeyTip(string keyTip)
+    {
+        if (_activeRibbonKeyTipMenu is null)
+            return false;
+
+        var match = RibbonKeyTipRouting.ResolveMenuItem(GetMenuItems(_activeRibbonKeyTipMenu), keyTip);
+        if (match is null)
+            return false;
+
+        match.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, match));
+        return true;
+    }
+
+    private bool HasActiveMenuItemKeyTipPrefix(string keyTipPrefix) =>
+        _activeRibbonKeyTipMenu is not null &&
+        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetMenuItems(_activeRibbonKeyTipMenu), keyTipPrefix);
+
+    private static IEnumerable<MenuItem> GetMenuItems(ItemsControl itemsControl)
+    {
+        foreach (var item in itemsControl.Items)
+        {
+            if (item is MenuItem menuItem)
+            {
+                yield return menuItem;
+
+                foreach (var child in GetMenuItems(menuItem))
+                    yield return child;
+            }
+        }
+    }
+
+    private bool TryInvokeTopLevelQatKeyTip(string keyTip)
+    {
+        var match = GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
+            .OfType<ButtonBase>()
+            .FirstOrDefault(element =>
+                string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase));
+
+        if (match is null)
+            return false;
+
+        match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));
+        return true;
+    }
+
+    private bool HasVisibleCommandKeyTipPrefix(string keyTipPrefix) =>
+        RibbonKeyTipRouting.HasKeyTipPrefix(GetVisibleKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
+
+    private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
+    {
+        if (RootGrid == null)
+            yield break;
+
+        foreach (var element in EnumerateVisualDescendants(RootGrid).OfType<FrameworkElement>())
+        {
+            if (ReferenceEquals(element, KeyTipOverlay) ||
+                !element.IsVisible ||
+                element.ActualWidth <= 0 ||
+                element.ActualHeight <= 0 ||
+                (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)) ||
+                !ShouldShowKeyTipElement(element, scope) ||
+                string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)))
+            {
+                continue;
+            }
+
+            yield return element;
+        }
+    }
+
+    private static bool IsInsideUnselectedTabItem(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null; current = GetTreeParent(current))
+        {
+            if (current is TabItem tabItem)
+                return !tabItem.IsSelected;
+        }
+
+        return false;
+    }
+
+    private static DependencyObject? GetTreeParent(DependencyObject element)
+    {
+        try
+        {
+            if (element is System.Windows.Media.Visual)
+                return System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return LogicalTreeHelper.GetParent(element);
     }
 
     private void EnterEditMode()
@@ -1533,7 +1897,7 @@ public partial class MainWindow : Window
         var request = new ViewportRequest(
             TopRow: topRow,
             LeftCol: leftCol,
-            AvailableHeight: (SheetGrid.ActualHeight - Freexcel.App.UI.GridView.ColHeaderHeight) / _zoomLevel,
+            AvailableHeight: (SheetGrid.ActualHeight - SheetGrid.EffectiveColHeaderHeight) / _zoomLevel,
             AvailableWidth:  (SheetGrid.ActualWidth  - SheetGrid.ActualRowHeaderWidth)  / _zoomLevel,
             SplitPaneOffsets: GetSplitPaneViewportOffsets(sheet, topRow, leftCol)
         );
@@ -1825,18 +2189,20 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool TryHandleRibbonKeyTip(Key key)
+    private bool TryHandleTopLevelRibbonKeyTip(string keyTip)
     {
-        return key switch
+        return keyTip.ToUpperInvariant() switch
         {
-            Key.F => OpenFileBackstageFromKeyTip(),
-            Key.H => SelectRibbonTabByHeader("Home"),
-            Key.N => SelectRibbonTabByHeader("Insert"),
-            Key.P => SelectRibbonTabByHeader("Page Layout"),
-            Key.M => SelectRibbonTabByHeader("Formulas"),
-            Key.A => SelectRibbonTabByHeader("Data"),
-            Key.R => SelectRibbonTabByHeader("Review"),
-            Key.W => SelectRibbonTabByHeader("View"),
+            "F" => OpenFileBackstageFromKeyTip(),
+            "H" => SelectRibbonTabByHeader("Home"),
+            "N" => SelectRibbonTabByHeader("Insert"),
+            "J" => SelectRibbonTabByHeader("Draw"),
+            "P" => SelectRibbonTabByHeader("Page Layout"),
+            "M" => SelectRibbonTabByHeader("Formulas"),
+            "A" => SelectRibbonTabByHeader("Data"),
+            "R" => SelectRibbonTabByHeader("Review"),
+            "W" => SelectRibbonTabByHeader("View"),
+            "Y" => SelectRibbonTabByHeader("Help"),
             _ => false
         };
     }
@@ -2006,7 +2372,10 @@ public partial class MainWindow : Window
     private void InsertChartOfType(ChartType type)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteCommand(new AddChartCommand(_currentSheetId, range, type, "Chart"), "Insert Chart"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Chart",
+                range,
+                currentRange => new AddChartCommand(_currentSheetId, currentRange, type, "Chart")))
             return;
 
         UpdateViewport();
@@ -2104,6 +2473,117 @@ public partial class MainWindow : Window
             ? new GroupedApplyStyleCommand(targetSheetIds, range, diff)
             : new ApplyStyleCommand(_currentSheetId, range, diff);
         return TryExecuteCommand(command, title);
+    }
+
+    private bool TryExecuteRepeatableApplyStyle(StyleDiff diff, string title)
+    {
+        IWorkbookCommand CreateCommand()
+        {
+            var range = SheetGrid.SelectedRange ?? new GridRange(
+                new CellAddress(_currentSheetId, 1, 1),
+                new CellAddress(_currentSheetId, 1, 1));
+            var targetSheetIds = CurrentGroupedEditSheetIds();
+            return targetSheetIds.Count > 1
+                ? new GroupedApplyStyleCommand(targetSheetIds, range, diff)
+                : new ApplyStyleCommand(_currentSheetId, range, diff);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (outcome.Success)
+        {
+            _repeatPostAction = null;
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    private bool TryExecuteRepeatableGroupedSheetCommand(
+        string title,
+        Func<SheetId, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var targetSheetIds = CurrentGroupedEditSheetIds();
+            return targetSheetIds.Count > 1
+                ? new CompositeWorkbookCommand(title, targetSheetIds.Select(createCommand).ToList())
+                : createCommand(_currentSheetId);
+        }
+
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (outcome.Success)
+        {
+            _repeatPostAction = null;
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    private bool TryExecuteRepeatableGroupedSheetCommand(
+        string title,
+        Func<SheetId, IWorkbookCommand> createCommand) =>
+        TryExecuteRepeatableGroupedSheetCommand(title, createCommand, out _);
+
+    private bool TryExecuteRepeatableCurrentRangeCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<GridRange, IWorkbookCommand> createCommand,
+        out CommandOutcome outcome)
+    {
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var range = SheetGrid.SelectedRange ?? fallbackRange;
+            return createCommand(range);
+        }
+
+        outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (outcome.Success)
+        {
+            _repeatPostAction = null;
+            return true;
+        }
+
+        ShowCommandError(outcome, title);
+        return false;
+    }
+
+    private bool TryExecuteRepeatableCurrentRangeCommand(
+        string title,
+        GridRange fallbackRange,
+        Func<GridRange, IWorkbookCommand> createCommand) =>
+        TryExecuteRepeatableCurrentRangeCommand(title, fallbackRange, createCommand, out _);
+
+    private bool TryExecuteRepeatableChartLayout(
+        string caption,
+        string missingMessage,
+        Func<ChartModel, bool>? canApply,
+        string? unsupportedMessage,
+        Func<ChartModel, ChartLayoutOptions> optionsFactory)
+    {
+        IWorkbookCommand CreateCommand()
+        {
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var chart = sheet?.Charts.FirstOrDefault();
+            if (chart is null)
+                return new FailedWorkbookCommand(missingMessage);
+            if (canApply is not null && !canApply(chart))
+                return new FailedWorkbookCommand(unsupportedMessage ?? "This chart command is not supported for the selected chart.");
+            return new SetChartLayoutCommand(_currentSheetId, chart.Id, optionsFactory(chart));
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (outcome.Success)
+        {
+            _repeatPostAction = null;
+            return true;
+        }
+
+        ShowCommandError(outcome, caption);
+        return false;
     }
 
     private bool TryExecuteGroupedSheetCommand(
@@ -2230,8 +2710,14 @@ public partial class MainWindow : Window
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
     {
-        var name = GenerateUniqueSheetName();
-        var outcome = _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
+        InsertNewSheet();
+    }
+
+    private void InsertNewSheet()
+    {
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => new AddSheetCommand(GenerateUniqueSheetName()));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Insert Sheet");
@@ -2296,8 +2782,10 @@ public partial class MainWindow : Window
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var cmd = new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending: true);
-        if (!TryExecuteCommand(cmd, "Sort"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Sort",
+                range,
+                currentRange => new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: true)))
             return;
         UpdateViewport();
     }
@@ -2305,8 +2793,10 @@ public partial class MainWindow : Window
     private void SortDescButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var cmd = new SortCommand(_currentSheetId, range, sortByColOffset: 0, ascending: false);
-        if (!TryExecuteCommand(cmd, "Sort"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Sort",
+                range,
+                currentRange => new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: false)))
             return;
         UpdateViewport();
     }
@@ -2324,8 +2814,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        var cmd = new SortCommand(_currentSheetId, range, keys);
-        if (!TryExecuteCommand(cmd, "Sort"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Sort",
+                range,
+                currentRange => new SortCommand(_currentSheetId, currentRange, keys)))
             return;
         UpdateViewport();
     }
@@ -2348,10 +2840,12 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var topBottomCommand = percent
-                ? TopBottomFilterCommand.Percent(_currentSheetId, range, filterColOffset: 0, count, top)
-                : new TopBottomFilterCommand(_currentSheetId, range, filterColOffset: 0, count, top);
-            if (!TryExecuteCommand(topBottomCommand, "Filter"))
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Filter",
+                    range,
+                    currentRange => percent
+                        ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset: 0, count, top)
+                        : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset: 0, count, top)))
                 return;
             UpdateViewport();
             return;
@@ -2359,8 +2853,10 @@ public partial class MainWindow : Window
 
         if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
         {
-            var averageCommand = new AverageFilterCommand(_currentSheetId, range, filterColOffset: 0, aboveAverage);
-            if (!TryExecuteCommand(averageCommand, "Filter"))
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Filter",
+                    range,
+                    currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset: 0, aboveAverage)))
                 return;
             UpdateViewport();
             return;
@@ -2391,16 +2887,20 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var conditionCommand = new FilterConditionCommand(_currentSheetId, range, filterColOffset: 0, criterion);
-            if (!TryExecuteCommand(conditionCommand, "Filter"))
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Filter",
+                    range,
+                    currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset: 0, criterion)))
                 return;
             UpdateViewport();
             return;
         }
 
         var allowedValues = FilterInputParser.ParseAllowedValues(value);
-        var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: allowedValues);
-        if (!TryExecuteCommand(cmd, "Filter"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Filter",
+                range,
+                currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset: 0, allowedValues: allowedValues)))
             return;
         UpdateViewport();
     }
@@ -2451,9 +2951,9 @@ public partial class MainWindow : Window
 
         if (dlg.ClearRequested)
         {
-            if (!TryExecuteGroupedSheetCommand(
+            if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Clear Data Validation",
-                    sheetId => new ClearDataValidationCommand(sheetId, RemapRangeToSheet(range, sheetId))))
+                    sheetId => new ClearDataValidationCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
                 return;
 
             UpdateViewport();
@@ -2465,9 +2965,14 @@ public partial class MainWindow : Window
         var dv = dlg.Result;
         dv.AppliesTo = range;
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Data Validation",
-                sheetId => new SetDataValidationCommand(sheetId, CloneDataValidationForSheet(dv, sheetId))))
+                sheetId =>
+                {
+                    var rule = CloneDataValidationForSheet(dv, sheetId);
+                    rule.AppliesTo = RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    return new SetDataValidationCommand(sheetId, rule);
+                }))
             return;
         UpdateViewport();
     }
@@ -2475,8 +2980,10 @@ public partial class MainWindow : Window
     private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var cmd = new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: []);
-        if (!TryExecuteCommand(cmd, "Filter"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Filter",
+                range,
+                currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset: 0, allowedValues: [])))
             return;
         UpdateViewport();
     }
@@ -2486,56 +2993,85 @@ public partial class MainWindow : Window
     private void GroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-
-        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
-        {
-            int newLevel = GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
-            if (TryExecuteCommand(new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel), "Group Columns"))
-                UpdateViewport();
+        if (!TryExecuteRepeatableCurrentRangeCommand("Group", range, CreateGroupCommand))
             return;
-        }
-
-        int rowLevel = GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
-        if (TryExecuteCommand(new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel), "Group Rows"))
-            UpdateViewport();
+        UpdateViewport();
     }
 
     private void UngroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Ungroup",
+                range,
+                currentRange => OutlineGroupingService.GetGroupingAxis(currentRange) == OutlineGroupingAxis.Columns
+                    ? new GroupColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.End.Col, 0)
+                    : new GroupRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.End.Row, 0)))
+            return;
 
-        IWorkbookCommand command = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns
-            ? new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, 0)
-            : new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 0);
-
-        if (TryExecuteCommand(command, "Ungroup"))
-            UpdateViewport();
+        UpdateViewport();
     }
 
     private void CollapseGroupBtn_Click(object sender, RoutedEventArgs e)
     {
-        var axis = SheetGrid.SelectedRange is { } range
-            ? OutlineGroupingService.GetGroupingAxis(range)
-            : OutlineGroupingAxis.Rows;
-        IWorkbookCommand cmd = axis == OutlineGroupingAxis.Columns
-            ? new CollapseColGroupCommand(_currentSheetId, 1)
-            : new CollapseRowGroupCommand(_currentSheetId, 1);
-        if (TryExecuteCommand(cmd, "Collapse Group"))
-            UpdateViewport();
+        IWorkbookCommand CreateCommand()
+        {
+            var axis = SheetGrid.SelectedRange is { } range
+                ? OutlineGroupingService.GetGroupingAxis(range)
+                : OutlineGroupingAxis.Rows;
+            return axis == OutlineGroupingAxis.Columns
+                ? new CollapseColGroupCommand(_currentSheetId, 1)
+                : new CollapseRowGroupCommand(_currentSheetId, 1);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Collapse Group");
+            return;
+        }
+
+        _repeatPostAction = null;
+        UpdateViewport();
     }
 
     private void ExpandGroupBtn_Click(object sender, RoutedEventArgs e)
     {
-        var axis = SheetGrid.SelectedRange is { } range
-            ? OutlineGroupingService.GetGroupingAxis(range)
-            : OutlineGroupingAxis.Rows;
-        IWorkbookCommand cmd = axis == OutlineGroupingAxis.Columns
-            ? new ExpandColGroupCommand(_currentSheetId, 1)
-            : new ExpandRowGroupCommand(_currentSheetId, 1);
-        if (TryExecuteCommand(cmd, "Expand Group"))
-            UpdateViewport();
+        IWorkbookCommand CreateCommand()
+        {
+            var axis = SheetGrid.SelectedRange is { } range
+                ? OutlineGroupingService.GetGroupingAxis(range)
+                : OutlineGroupingAxis.Rows;
+            return axis == OutlineGroupingAxis.Columns
+                ? new ExpandColGroupCommand(_currentSheetId, 1)
+                : new ExpandRowGroupCommand(_currentSheetId, 1);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Expand Group");
+            return;
+        }
+
+        _repeatPostAction = null;
+        UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateGroupCommand(GridRange range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 1);
+
+        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
+        {
+            int newLevel = GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
+            return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
+        }
+
+        int rowLevel = GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
+        return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
     }
 
     private static int GetNextOutlineLevel(uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
@@ -2620,15 +3156,41 @@ public partial class MainWindow : Window
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var outcome = _commandBus.Execute(_workbook.Id, new MergeCellsCommand(_currentSheetId, range));
-        if (!outcome.Success)
-        {
-            MessageBox.Show(outcome.ErrorMessage ?? "Cannot merge.", "Merge Cells",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Merge & Center",
+                range,
+                CreateMergeAndCenterCommand,
+                out _))
             return;
-        }
-        ApplyStyleDiff(new StyleDiff(HAlign: CellHAlign.Center));
+
         UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateMergeAndCenterCommand(GridRange range)
+    {
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        if (targetSheetIds.Count > 1)
+        {
+            var commands = targetSheetIds
+                .SelectMany(sheetId =>
+                {
+                    var sheetRange = RemapRangeToSheet(range, sheetId);
+                    return new IWorkbookCommand[]
+                    {
+                        new MergeCellsCommand(sheetId, sheetRange),
+                        new ApplyStyleCommand(sheetId, sheetRange, new StyleDiff(HAlign: CellHAlign.Center))
+                    };
+                })
+                .ToList();
+            return new CompositeWorkbookCommand("Merge & Center", commands);
+        }
+
+        return new CompositeWorkbookCommand(
+            "Merge & Center",
+            [
+                new MergeCellsCommand(_currentSheetId, range),
+                new ApplyStyleCommand(_currentSheetId, range, new StyleDiff(HAlign: CellHAlign.Center))
+            ]);
     }
 
     private void FontNameBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2689,6 +3251,18 @@ public partial class MainWindow : Window
     {
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success) return;
+        RecalculateWorkbook();
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void ExecuteRepeatLast()
+    {
+        var postAction = _repeatPostAction;
+        var outcome = _commandBus.RepeatLast(_workbook.Id);
+        if (!outcome.Success) return;
+        postAction?.Invoke(outcome);
         RecalculateWorkbook();
         UpdateViewport();
         RefreshToolbar();
@@ -2757,7 +3331,7 @@ public partial class MainWindow : Window
 
     private void InsertRows(uint beforeRow)
     {
-        if (!TryExecuteGroupedSheetCommand("Insert Row", sheetId => new InsertRowsCommand(sheetId, beforeRow)))
+        if (!TryExecuteRepeatableGroupedSheetCommand("Insert Row", sheetId => new InsertRowsCommand(sheetId, beforeRow)))
             return;
 
         RecalculateWorkbook();
@@ -2766,7 +3340,7 @@ public partial class MainWindow : Window
 
     private void InsertColumns(uint beforeCol)
     {
-        if (!TryExecuteGroupedSheetCommand("Insert Column", sheetId => new InsertColumnsCommand(sheetId, beforeCol)))
+        if (!TryExecuteRepeatableGroupedSheetCommand("Insert Column", sheetId => new InsertColumnsCommand(sheetId, beforeCol)))
             return;
 
         RecalculateWorkbook();
@@ -2776,8 +3350,14 @@ public partial class MainWindow : Window
     private void DeleteSelectedRows()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        uint count = range.End.Row - range.Start.Row + 1;
-        if (!TryExecuteGroupedSheetCommand("Delete Row", sheetId => new DeleteRowsCommand(sheetId, range.Start.Row, count)))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Delete Row",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var count = currentRange.End.Row - currentRange.Start.Row + 1;
+                    return new DeleteRowsCommand(sheetId, currentRange.Start.Row, count);
+                }))
             return;
 
         RecalculateWorkbook();
@@ -2787,8 +3367,14 @@ public partial class MainWindow : Window
     private void DeleteSelectedColumns()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        uint count = range.End.Col - range.Start.Col + 1;
-        if (!TryExecuteGroupedSheetCommand("Delete Column", sheetId => new DeleteColumnsCommand(sheetId, range.Start.Col, count)))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Delete Column",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var count = currentRange.End.Col - currentRange.Start.Col + 1;
+                    return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, count);
+                }))
             return;
 
         RecalculateWorkbook();
@@ -2887,17 +3473,32 @@ public partial class MainWindow : Window
 
         if (SelectionRangeService.IsWholeRowSelection(range))
         {
-            if (!TryExecuteGroupedSheetCommand("Insert Row", sheetId => new InsertRowsCommand(sheetId, range.Start.Row, range.RowCount)))
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Insert Row",
+                    sheetId =>
+                    {
+                        var currentRange = SheetGrid.SelectedRange ?? range;
+                        return new InsertRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
+                    }))
                 return;
         }
         else if (SelectionRangeService.IsWholeColumnSelection(range))
         {
-            if (!TryExecuteGroupedSheetCommand("Insert Column", sheetId => new InsertColumnsCommand(sheetId, range.Start.Col, range.ColCount)))
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Insert Column",
+                    sheetId =>
+                    {
+                        var currentRange = SheetGrid.SelectedRange ?? range;
+                        return new InsertColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
+                    }))
                 return;
         }
-        else if (!TryExecuteGroupedSheetCommand(
+        else if (!TryExecuteRepeatableGroupedSheetCommand(
                      "Insert Cells",
-                     sheetId => new InsertCellsCommand(sheetId, RemapRangeToSheet(range, sheetId), InsertCellsShiftDirection.Down)))
+                     sheetId => new InsertCellsCommand(
+                         sheetId,
+                         RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                         InsertCellsShiftDirection.Down)))
         {
             return;
         }
@@ -2912,17 +3513,32 @@ public partial class MainWindow : Window
 
         if (SelectionRangeService.IsWholeRowSelection(range))
         {
-            if (!TryExecuteGroupedSheetCommand("Delete Row", sheetId => new DeleteRowsCommand(sheetId, range.Start.Row, range.RowCount)))
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Delete Row",
+                    sheetId =>
+                    {
+                        var currentRange = SheetGrid.SelectedRange ?? range;
+                        return new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
+                    }))
                 return;
         }
         else if (SelectionRangeService.IsWholeColumnSelection(range))
         {
-            if (!TryExecuteGroupedSheetCommand("Delete Column", sheetId => new DeleteColumnsCommand(sheetId, range.Start.Col, range.ColCount)))
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Delete Column",
+                    sheetId =>
+                    {
+                        var currentRange = SheetGrid.SelectedRange ?? range;
+                        return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
+                    }))
                 return;
         }
-        else if (!TryExecuteGroupedSheetCommand(
+        else if (!TryExecuteRepeatableGroupedSheetCommand(
                      "Delete Cells",
-                     sheetId => new DeleteCellsCommand(sheetId, RemapRangeToSheet(range, sheetId), DeleteCellsShiftDirection.Up)))
+                     sheetId => new DeleteCellsCommand(
+                         sheetId,
+                         RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                         DeleteCellsShiftDirection.Up)))
         {
             return;
         }
@@ -2934,10 +3550,14 @@ public partial class MainWindow : Window
     private void ExecuteRowsHidden(bool hidden)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 hidden ? "Hide Row" : "Unhide Row",
-                sheetId => new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden)))
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var (startRow, endRow) = SelectionRangeService.GetRowSpan(currentRange);
+                    return new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden);
+                }))
             return;
 
         UpdateViewport();
@@ -2946,10 +3566,14 @@ public partial class MainWindow : Window
     private void ExecuteColumnsHidden(bool hidden)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 hidden ? "Hide Column" : "Unhide Column",
-                sheetId => new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden)))
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var (startCol, endCol) = SelectionRangeService.GetColumnSpan(currentRange);
+                    return new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden);
+                }))
             return;
 
         UpdateViewport();
@@ -3189,116 +3813,50 @@ public partial class MainWindow : Window
         _internalClipboard = new InternalClipboard(range, clipCells);
     }
 
-    private void ExecutePaste(PasteMode mode = PasteMode.All, PasteSpecialOptions options = default)
+    private void ExecutePaste(PasteMode mode = PasteMode.All, PasteSpecialOptions options = default, bool keepColumnWidths = false)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
         // If we have an internal clipboard (copied from within this app), use it with formula adjustment
         if (_internalClipboard is { } clip)
         {
-            if (options.Transpose || options.Operation != PasteSpecialOperation.None)
+            IWorkbookCommand CreatePasteCommand()
             {
-                var sourceCells = clip.Cells
-                    .Select(c => (c.Item1, mode == PasteMode.Values || options.Operation != PasteSpecialOperation.None
-                        ? Cell.FromValue(c.Item2.Value)
-                        : c.Item2.Clone()))
-                    .ToList();
-                var specialCommand = new PasteSpecialCellsCommand(
+                var currentRange = SheetGrid.SelectedRange ?? range;
+                var pasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
+                    _workbook,
                     _currentSheetId,
                     clip.SourceRange,
-                    sourceCells,
-                    range.Start,
+                    clip.Cells,
+                    currentRange.Start,
+                    ToCorePasteMode(mode),
                     options);
-                if (!TryExecuteCommand(specialCommand, "Paste Special", out var specialOutcome))
-                    return;
+                return keepColumnWidths
+                    ? new CompositeWorkbookCommand(
+                        "Paste Special",
+                        [
+                            pasteCommand,
+                            new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col)
+                        ])
+                    : pasteCommand;
+            }
 
-                RecalculateIfAutomatic(specialOutcome.AffectedCells ?? []);
-                var pastedRows = options.Transpose ? clip.SourceRange.ColCount : clip.SourceRange.RowCount;
-                var pastedCols = options.Transpose ? clip.SourceRange.RowCount : clip.SourceRange.ColCount;
-                var specialPastedEnd = new CellAddress(
-                    _currentSheetId,
-                    range.Start.Row + (uint)pastedRows - 1,
-                    range.Start.Col + (uint)pastedCols - 1);
-                _selectionAnchor = range.Start;
-                _selectionCursor = specialPastedEnd;
-                SheetGrid.SelectedRanges = null;
-                SheetGrid.SelectedRange = new GridRange(range.Start, specialPastedEnd);
-                SheetGrid.ClipboardRange = null;
-                UpdateViewport();
-                RefreshToolbar();
+            var title = mode == PasteMode.All && !options.Transpose && options.Operation == PasteSpecialOperation.None
+                ? "Paste"
+                : "Paste Special";
+
+            var pasteOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteCommand);
+            if (!pasteOutcome.Success)
+            {
+                ShowCommandError(pasteOutcome, title);
                 return;
             }
 
-            var edits = new List<(CellAddress, Cell)>();
-            var formats = new List<(CellAddress, StyleId)>();
-            int rowDelta = (int)range.Start.Row - (int)clip.SourceRange.Start.Row;
-            int colDelta = (int)range.Start.Col - (int)clip.SourceRange.Start.Col;
-            var pasteOp  = new Freexcel.Core.Formula.PasteOffsetOp(rowDelta, colDelta);
-            var activeSheetName = _workbook.GetSheet(_currentSheetId)?.Name ?? "";
+            _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, options);
+            if (mode != PasteMode.Formats)
+                RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? []);
 
-            foreach (var (sourceAddr, sourceCell) in clip.Cells)
-            {
-                var destAddr = new CellAddress(_currentSheetId,
-                    (uint)((int)sourceAddr.Row + rowDelta),
-                    (uint)((int)sourceAddr.Col + colDelta));
-
-                var destCell = sourceCell.Clone();
-
-                if (mode == PasteMode.Formats)
-                {
-                    formats.Add((destAddr, sourceCell.StyleId));
-                    continue;
-                }
-
-                if (mode == PasteMode.Values)
-                {
-                    edits.Add((destAddr, Cell.FromValue(sourceCell.Value)));
-                    continue;
-                }
-
-                if (destCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
-                {
-                    destCell.FormulaText =
-                        Freexcel.Core.Formula.FormulaRewriter.Rewrite(
-                            destCell.FormulaText, pasteOp, activeSheetName)
-                        ?? destCell.FormulaText;
-                }
-
-                if (mode == PasteMode.Formulas && !destCell.HasFormula)
-                    destCell = Cell.FromValue(sourceCell.Value);
-
-                edits.Add((destAddr, destCell));
-            }
-
-            if (formats.Count > 0)
-            {
-                var formatCommand = new PasteFormatsCommand(_currentSheetId, formats);
-                if (!TryExecuteCommand(formatCommand, "Paste Special"))
-                    return;
-            }
-
-            if (edits.Count > 0)
-            {
-                CommandOutcome pasteOutcome;
-                var pasted = mode == PasteMode.All
-                    ? TryExecuteCommand(new PasteCellsCommand(_currentSheetId, edits), "Paste", out pasteOutcome)
-                    : TryExecuteEditCells(edits, "Paste", out pasteOutcome);
-                if (!pasted)
-                    return;
-                if (mode != PasteMode.Formats)
-                    RecalculateIfAutomatic(pasteOutcome.AffectedCells ?? edits.Select(e => e.Item1).ToList());
-            }
-
-            var pastedRowSpan = (uint)(clip.SourceRange.RowCount - 1);
-            var pastedColSpan = (uint)(clip.SourceRange.ColCount - 1);
-            var pastedEnd     = new CellAddress(_currentSheetId,
-                range.Start.Row + pastedRowSpan,
-                range.Start.Col + pastedColSpan);
-            _selectionAnchor = range.Start;
-            _selectionCursor = pastedEnd;
-            SheetGrid.SelectedRanges = null;
-            SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
-            SheetGrid.ClipboardRange = null;
+            CompletePasteSelection(clip.SourceRange, options);
             UpdateViewport();
             RefreshToolbar();
             return;
@@ -3317,42 +3875,81 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(text)) return;
 
         var rows = ClipboardSerializer.Deserialize(text);
-        var fallbackEdits = new List<(CellAddress, Cell)>();
+        if (rows.Length == 0 || rows.All(r => r.Length == 0)) return;
+        var capturedRows = rows.Select(row => (IReadOnlyList<string>)row).ToList();
 
-        for (int ri = 0; ri < rows.Length; ri++)
+        IWorkbookCommand CreateExternalPasteCommand()
         {
-            for (int ci = 0; ci < rows[ri].Length; ci++)
-            {
-                var addr = new CellAddress(_currentSheetId,
-                    range.Start.Row + (uint)ri,
-                    range.Start.Col + (uint)ci);
-                ScalarValue val = double.TryParse(rows[ri][ci],
-                    System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.CurrentCulture, out var d)
-                    ? new NumberValue(d)
-                    : new TextValue(rows[ri][ci]);
-                fallbackEdits.Add((addr, Cell.FromValue(val)));
-            }
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            return PasteCommandFactory.CreateExternalTextPasteCommand(
+                _currentSheetId,
+                currentRange.Start,
+                capturedRows);
         }
 
-        if (fallbackEdits.Count == 0) return;
-
-        if (!TryExecuteEditCells(fallbackEdits, "Paste", out var fallbackOutcome))
+        var fallbackOutcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateExternalPasteCommand);
+        if (!fallbackOutcome.Success)
+        {
+            ShowCommandError(fallbackOutcome, "Paste");
             return;
-        RecalculateIfAutomatic(fallbackOutcome.AffectedCells ?? fallbackEdits.Select(e => e.Item1).ToList());
+        }
 
-        uint pastedRowSpanFallback = rows.Length > 0 ? (uint)(rows.Length - 1) : 0;
-        uint pastedColSpanFallback = rows.Length > 0 && rows[0].Length > 0 ? (uint)(rows[0].Length - 1) : 0;
-        var pastedEndFallback = new CellAddress(_currentSheetId,
-            range.Start.Row + pastedRowSpanFallback,
-            range.Start.Col + pastedColSpanFallback);
-        _selectionAnchor = range.Start;
-        _selectionCursor = pastedEndFallback;
-        SheetGrid.SelectedRanges = null;
-        SheetGrid.SelectedRange = new GridRange(range.Start, pastedEndFallback);
-        SheetGrid.ClipboardRange = null;
+        _repeatPostAction = _ => CompleteExternalPasteSelection(capturedRows);
+        RecalculateIfAutomatic(fallbackOutcome.AffectedCells ?? []);
+
+        CompleteExternalPasteSelection(capturedRows);
         UpdateViewport();
         RefreshToolbar();
+    }
+
+    private static PasteCellsMode ToCorePasteMode(PasteMode mode) =>
+        mode switch
+        {
+            PasteMode.All => PasteCellsMode.All,
+            PasteMode.Values => PasteCellsMode.Values,
+            PasteMode.Formulas => PasteCellsMode.Formulas,
+            PasteMode.Formats => PasteCellsMode.Formats,
+            _ => PasteCellsMode.All
+        };
+
+    private void CompletePasteSelection(GridRange sourceRange, PasteSpecialOptions options)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var pastedRows = options.Transpose ? sourceRange.ColCount : sourceRange.RowCount;
+        var pastedCols = options.Transpose ? sourceRange.RowCount : sourceRange.ColCount;
+        var pastedEnd = new CellAddress(
+            _currentSheetId,
+            range.Start.Row + (uint)pastedRows - 1,
+            range.Start.Col + (uint)pastedCols - 1);
+
+        _selectionAnchor = range.Start;
+        _selectionCursor = pastedEnd;
+        SheetGrid.SelectedRanges = null;
+        SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
+        SheetGrid.ClipboardRange = null;
+    }
+
+    private void CompleteExternalPasteSelection(IReadOnlyList<IReadOnlyList<string>> rows)
+    {
+        if (SheetGrid.SelectedRange is not { } range || rows.Count == 0)
+            return;
+
+        var pastedColCount = rows.Count == 0 ? 0 : rows.Max(row => row.Count);
+        if (pastedColCount == 0)
+            return;
+
+        var pastedEnd = new CellAddress(
+            _currentSheetId,
+            range.Start.Row + (uint)rows.Count - 1,
+            range.Start.Col + (uint)pastedColCount - 1);
+
+        _selectionAnchor = range.Start;
+        _selectionCursor = pastedEnd;
+        SheetGrid.SelectedRanges = null;
+        SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
+        SheetGrid.ClipboardRange = null;
     }
 
     private bool TryPasteClipboardImage(CellAddress anchor)
@@ -3370,15 +3967,22 @@ public partial class MainWindow : Window
             encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
             using var stream = new System.IO.MemoryStream();
             encoder.Save(stream);
+            var imageBytes = stream.ToArray();
+            var pixelWidth = image.PixelWidth;
+            var pixelHeight = image.PixelHeight;
 
-            if (!TryExecuteCommand(
-                    ClipboardPictureService.CreateInsertCommand(
-                        _currentSheetId,
-                        anchor,
-                        stream.ToArray(),
-                        image.PixelWidth,
-                        image.PixelHeight),
-                    "Paste Picture"))
+            if (!TryExecuteRepeatableGroupedSheetCommand(
+                    "Paste Picture",
+                    sheetId =>
+                    {
+                        var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
+                        return ClipboardPictureService.CreateInsertCommand(
+                            sheetId,
+                            new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col),
+                            imageBytes,
+                            pixelWidth,
+                            pixelHeight);
+                    }))
                 return true;
 
             SheetGrid.ClipboardRange = null;
@@ -3395,14 +3999,13 @@ public partial class MainWindow : Window
     private void ExecuteClearSelection()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
-                edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(BlankValue.Instance)));
-
-        if (!TryExecuteEditCells(edits, "Clear"))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Clear Contents",
+                sheetId => new ClearContentsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                out var outcome))
             return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 
@@ -3550,33 +4153,18 @@ public partial class MainWindow : Window
 
         if (dlg.PasteLink)
         {
-            ExecutePasteLink(options.Transpose);
-            if (keepColumnWidths && _internalClipboard is { } linkClip && SheetGrid.SelectedRange is { } linkTargetRange)
-            {
-                if (TryExecuteCommand(
-                        new PasteColumnWidthsCommand(_currentSheetId, linkClip.SourceRange, linkTargetRange.Start.Col),
-                        "Paste Column Widths"))
-                    UpdateViewport();
-            }
+            ExecutePasteLink(options.Transpose, keepColumnWidths);
             return;
         }
 
         if (dlg.PasteValues)
-            ExecutePaste(PasteMode.Values, options);
+            ExecutePaste(PasteMode.Values, options, keepColumnWidths);
         else if (dlg.PasteFormulas)
-            ExecutePaste(PasteMode.Formulas, options);
+            ExecutePaste(PasteMode.Formulas, options, keepColumnWidths);
         else if (dlg.PasteFormats)
-            ExecutePaste(PasteMode.Formats, options);
+            ExecutePaste(PasteMode.Formats, options, keepColumnWidths);
         else
-            ExecutePaste(PasteMode.All, options);
-
-        if (keepColumnWidths && _internalClipboard is { } clip && SheetGrid.SelectedRange is { } targetRange)
-        {
-            if (TryExecuteCommand(
-                    new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, targetRange.Start.Col),
-                    "Paste Column Widths"))
-                UpdateViewport();
-        }
+            ExecutePaste(PasteMode.All, options, keepColumnWidths);
     }
 
     private void ExecutePasteAsPicture()
@@ -3587,11 +4175,20 @@ public partial class MainWindow : Window
         var sourceCells = clip.Cells
             .Select(c => (c.Item1, FormatPictureCellText(c.Item2.Value)))
             .ToList();
-        if (!TryExecuteCommand(
-                new PasteRangeAsPictureCommand(_currentSheetId, clip.SourceRange, sourceCells, range.Start),
-                "Paste Picture"))
-            return;
+        IWorkbookCommand CreatePastePictureCommand()
+        {
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            return new PasteRangeAsPictureCommand(_currentSheetId, clip.SourceRange, sourceCells, currentRange.Start);
+        }
 
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePastePictureCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Paste Picture");
+            return;
+        }
+
+        _repeatPostAction = _ => { SheetGrid.ClipboardRange = null; };
         SheetGrid.ClipboardRange = null;
         UpdateViewport();
         RefreshToolbar();
@@ -3608,7 +4205,7 @@ public partial class MainWindow : Window
             _ => value.ToString() ?? ""
         };
 
-    private void ExecutePasteLink(bool transpose)
+    private void ExecutePasteLink(bool transpose, bool keepColumnWidths = false)
     {
         if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
@@ -3617,26 +4214,38 @@ public partial class MainWindow : Window
         if (sourceSheet is null)
             return;
 
-        var linkedCells = PasteLinkService.CreateLinkedCells(
-            clip.SourceRange,
-            range.Start,
-            sourceSheet.Name,
-            transpose);
-        if (!TryExecuteEditCells(linkedCells, "Paste Link", out var outcome))
-            return;
+        IWorkbookCommand CreatePasteLinkCommand()
+        {
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            var linkedCells = PasteLinkService.CreateLinkedCells(
+                clip.SourceRange,
+                currentRange.Start,
+                sourceSheet.Name,
+                transpose);
+            var targetSheetIds = CurrentGroupedEditSheetIds();
+            IWorkbookCommand linkCommand = targetSheetIds.Count > 1
+                ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, linkedCells)
+                : new EditCellsCommand(_currentSheetId, linkedCells);
+            return keepColumnWidths
+                ? new CompositeWorkbookCommand(
+                    "Paste Link",
+                    [
+                        linkCommand,
+                        new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col)
+                    ])
+                : linkCommand;
+        }
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? linkedCells.Select(c => c.Address).ToList());
-        var pastedRows = transpose ? clip.SourceRange.ColCount : clip.SourceRange.RowCount;
-        var pastedCols = transpose ? clip.SourceRange.RowCount : clip.SourceRange.ColCount;
-        var pastedEnd = new CellAddress(
-            _currentSheetId,
-            range.Start.Row + (uint)pastedRows - 1,
-            range.Start.Col + (uint)pastedCols - 1);
-        _selectionAnchor = range.Start;
-        _selectionCursor = pastedEnd;
-        SheetGrid.SelectedRanges = null;
-        SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
-        SheetGrid.ClipboardRange = null;
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreatePasteLinkCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Paste Link");
+            return;
+        }
+
+        _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
         UpdateViewport();
         RefreshToolbar();
     }
@@ -3647,8 +4256,10 @@ public partial class MainWindow : Window
         var value = insertTime
             ? DateTimeEntryService.CurrentTime(DateTime.Now)
             : DateTimeEntryService.CurrentDate(DateTime.Now);
-        if (!TryExecuteEditCells([(range.Start, Cell.FromValue(value))],
+        if (!TryExecuteRepeatableCurrentRangeCommand(
                 insertTime ? "Insert Time" : "Insert Date",
+                range,
+                currentRange => CreateSingleCellEditCommand(currentRange.Start, Cell.FromValue(value)),
                 out var outcome))
             return;
 
@@ -3929,7 +4540,11 @@ public partial class MainWindow : Window
         var direction = input.Trim().Equals("down", StringComparison.OrdinalIgnoreCase)
             ? InsertCellsShiftDirection.Down
             : InsertCellsShiftDirection.Right;
-        if (!TryExecuteCommand(new InsertCellsCommand(_currentSheetId, range, direction), "Insert Cells", out var outcome))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Cells",
+                range,
+                currentRange => new InsertCellsCommand(_currentSheetId, currentRange, direction),
+                out var outcome))
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
@@ -3946,7 +4561,11 @@ public partial class MainWindow : Window
         var direction = input.Trim().Equals("up", StringComparison.OrdinalIgnoreCase)
             ? DeleteCellsShiftDirection.Up
             : DeleteCellsShiftDirection.Left;
-        if (!TryExecuteCommand(new DeleteCellsCommand(_currentSheetId, range, direction), "Delete Cells", out var outcome))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Delete Cells",
+                range,
+                currentRange => new DeleteCellsCommand(_currentSheetId, currentRange, direction),
+                out var outcome))
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
@@ -4006,31 +4625,22 @@ public partial class MainWindow : Window
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
     private void FormatHideRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Hide Row", sheetId => new SetRowsHiddenCommand(sheetId, range.Start.Row, range.End.Row, hidden: true)))
-            return;
-        UpdateViewport();
+        ExecuteRowsHidden(hidden: true);
     }
+
     private void FormatUnhideRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Unhide Row", sheetId => new SetRowsHiddenCommand(sheetId, range.Start.Row, range.End.Row, hidden: false)))
-            return;
-        UpdateViewport();
+        ExecuteRowsHidden(hidden: false);
     }
+
     private void FormatHideColMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Hide Column", sheetId => new SetColumnsHiddenCommand(sheetId, range.Start.Col, range.End.Col, hidden: true)))
-            return;
-        UpdateViewport();
+        ExecuteColumnsHidden(hidden: true);
     }
+
     private void FormatUnhideColMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Unhide Column", sheetId => new SetColumnsHiddenCommand(sheetId, range.Start.Col, range.End.Col, hidden: false)))
-            return;
-        UpdateViewport();
+        ExecuteColumnsHidden(hidden: false);
     }
     private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }
     private void FormatLockCellMenuItem_Click(object sender, RoutedEventArgs e)
@@ -4055,37 +4665,50 @@ public partial class MainWindow : Window
     private void InsertAutoSumFormula(string func)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var addr = range.Start;
-        // Look above for a contiguous numeric range
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "AutoSum",
+                range,
+                currentRange =>
+                {
+                    var addr = currentRange.Start;
+                    var formula = BuildAutoSumFormula(func, addr);
+                    var edits = new List<(CellAddress Address, Cell NewCell)> { (addr, Cell.FromFormula(formula)) };
+                    var targetSheetIds = CurrentGroupedEditSheetIds();
+                    return targetSheetIds.Count > 1
+                        ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
+                        : new EditCellsCommand(_currentSheetId, edits);
+                },
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
+        SetActiveCell(new CellAddress(_currentSheetId, range.Start.Row + 1, range.Start.Col));
+        UpdateViewport();
+    }
+
+    private string BuildAutoSumFormula(string func, CellAddress addr)
+    {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
+        if (sheet is null)
+            return $"{func}({CellAddress.NumberToColumnName(addr.Col)}{Math.Max(1, addr.Row - 1)}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row})";
+
         uint topRow = addr.Row;
         while (topRow > 1 && sheet.GetValue(topRow - 1, addr.Col) is NumberValue) topRow--;
-        if (topRow == addr.Row) // try to the left
+        if (topRow == addr.Row)
         {
             uint leftCol = addr.Col;
             while (leftCol > 1 && sheet.GetValue(addr.Row, leftCol - 1) is NumberValue) leftCol--;
             if (leftCol < addr.Col)
             {
-                var rangeRef = $"{CellAddress.NumberToColumnName(leftCol)}{addr.Row}:{CellAddress.NumberToColumnName(addr.Col - 1)}{addr.Row}";
-                CommitFormulaAt(addr, $"{func}({rangeRef})");
-                return;
+                var leftRangeRef = $"{CellAddress.NumberToColumnName(leftCol)}{addr.Row}:{CellAddress.NumberToColumnName(addr.Col - 1)}{addr.Row}";
+                return $"{func}({leftRangeRef})";
             }
         }
+
         var rangeStr = topRow < addr.Row
             ? $"{CellAddress.NumberToColumnName(addr.Col)}{topRow}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row - 1}"
             : $"{CellAddress.NumberToColumnName(addr.Col)}{Math.Max(1, addr.Row - 1)}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row}";
-        CommitFormulaAt(addr, $"{func}({rangeStr})");
-    }
-
-    private void CommitFormulaAt(CellAddress addr, string formula)
-    {
-        if (!TryExecuteEditCells([(addr, Cell.FromFormula(formula))], "AutoSum", out var outcome))
-            return;
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? [addr]);
-        SetActiveCell(new CellAddress(_currentSheetId, addr.Row + 1, addr.Col));
-        UpdateViewport();
+        return $"{func}({rangeStr})";
     }
 
     private void AutoSumSumMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("SUM");
@@ -4101,69 +4724,46 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
     private void FillDownMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (SheetGrid.SelectedRange is not { } range || range.RowCount < 2) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint c = range.Start.Col; c <= range.End.Col; c++)
-        {
-            var srcCell = sheet.GetCell(new CellAddress(_currentSheetId, range.Start.Row, c));
-            for (uint r = range.Start.Row + 1; r <= range.End.Row; r++)
-                edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
-        }
-        if (!TryExecuteEditCells(edits, "Fill Down", out var outcome))
-            return;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
-        UpdateViewport();
-    }
+        => ExecuteFillCells(FillCellsDirection.Down);
+
     private void FillRightMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (SheetGrid.SelectedRange is not { } range || range.ColCount < 2) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            var srcCell = sheet.GetCell(new CellAddress(_currentSheetId, r, range.Start.Col));
-            for (uint c = range.Start.Col + 1; c <= range.End.Col; c++)
-                edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
-        }
-        if (!TryExecuteEditCells(edits, "Fill Right", out var outcome))
-            return;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
-        UpdateViewport();
-    }
+        => ExecuteFillCells(FillCellsDirection.Right);
+
     private void FillUpMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (SheetGrid.SelectedRange is not { } range || range.RowCount < 2) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint c = range.Start.Col; c <= range.End.Col; c++)
-        {
-            var srcCell = sheet.GetCell(new CellAddress(_currentSheetId, range.End.Row, c));
-            for (uint r = range.Start.Row; r < range.End.Row; r++)
-                edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
-        }
-        if (!TryExecuteEditCells(edits, "Fill Up", out var outcome))
-            return;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
-        UpdateViewport();
-    }
+        => ExecuteFillCells(FillCellsDirection.Up);
+
     private void FillLeftMenuItem_Click(object sender, RoutedEventArgs e)
+        => ExecuteFillCells(FillCellsDirection.Left);
+
+    private void ExecuteFillCells(FillCellsDirection direction)
     {
-        if (SheetGrid.SelectedRange is not { } range || range.ColCount < 2) return;
-        var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            var srcCell = sheet.GetCell(new CellAddress(_currentSheetId, r, range.End.Col));
-            for (uint c = range.Start.Col; c < range.End.Col; c++)
-                edits.Add((new CellAddress(_currentSheetId, r, c), srcCell?.Clone() ?? Cell.FromValue(BlankValue.Instance)));
-        }
-        if (!TryExecuteEditCells(edits, "Fill Left", out var outcome))
+        if (SheetGrid.SelectedRange is not { } range || !CanFill(range, direction))
             return;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
+
+        var title = direction switch
+        {
+            FillCellsDirection.Down => "Fill Down",
+            FillCellsDirection.Right => "Fill Right",
+            FillCellsDirection.Up => "Fill Up",
+            FillCellsDirection.Left => "Fill Left",
+            _ => "Fill"
+        };
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                title,
+                sheetId => new FillCellsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
+
+    private static bool CanFill(GridRange range, FillCellsDirection direction) =>
+        direction is FillCellsDirection.Down or FillCellsDirection.Up
+            ? range.RowCount >= 2
+            : range.ColCount >= 2;
+
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         // Basic: fill a linear series starting from selected cell
@@ -4173,19 +4773,50 @@ public partial class MainWindow : Window
         if (startVal is null) { MessageBox.Show("Select a cell with a numeric value to start a series."); return; }
         var stepInput = PromptForInput("Step value:", "1");
         if (stepInput is null || !double.TryParse(stepInput, out var step)) return;
+
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Fill Series",
+                range,
+                currentRange =>
+                {
+                    var edits = BuildFillSeriesEdits(currentRange, step);
+                    var targetSheetIds = CurrentGroupedEditSheetIds();
+                    return targetSheetIds.Count > 1
+                        ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
+                        : new EditCellsCommand(_currentSheetId, edits);
+                },
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+    }
+
+    private List<(CellAddress Address, Cell NewCell)> BuildFillSeriesEdits(GridRange range, double step)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var startValue = sheet?.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
+        if (startValue is null)
+            return [];
+
         var edits = new List<(CellAddress, Cell)>();
-        double val = startVal.Value;
+        var value = startValue.Value;
         for (uint r = range.Start.Row; r <= range.End.Row; r++)
+        {
             for (uint c = range.Start.Col; c <= range.End.Col; c++)
             {
-                if (r == range.Start.Row && c == range.Start.Col) { val += step; continue; }
-                edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(new NumberValue(val))));
-                val += step;
+                if (r == range.Start.Row && c == range.Start.Col)
+                {
+                    value += step;
+                    continue;
+                }
+
+                edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(new NumberValue(value))));
+                value += step;
             }
-        if (!TryExecuteEditCells(edits, "Fill Series", out var outcome))
-            return;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
-        UpdateViewport();
+        }
+
+        return edits;
     }
 
     private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();
@@ -4198,15 +4829,26 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        uint fillCol = range.Value.Start.Col;
-        uint sourceCol = fillCol > 1 ? fillCol - 1 : fillCol + 1;
-        uint startRow = range.Value.Start.Row;
-        uint endRow = range.Value.End.Row;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Flash Fill",
+                range.Value,
+                currentRange => CreateFlashFillCommand(sheet, currentRange),
+                out var outcome))
+            return;
 
-        // If selection is a single cell, auto-extend end row to the data region
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+    }
+
+    private FlashFillCommand CreateFlashFillCommand(Sheet sheet, GridRange range)
+    {
+        uint fillCol = range.Start.Col;
+        uint sourceCol = fillCol > 1 ? fillCol - 1 : fillCol + 1;
+        uint startRow = range.Start.Row;
+        uint endRow = range.End.Row;
+
         if (startRow == endRow)
         {
-            // Extend down to the last non-blank row in either the fill or source column
             uint maxRow = startRow;
             for (uint r = startRow + 1; r <= CellAddress.MaxRow; r++)
             {
@@ -4219,19 +4861,7 @@ public partial class MainWindow : Window
             endRow = maxRow;
         }
 
-        var cmd = new FlashFillCommand(_currentSheetId, fillCol, sourceCol, startRow, endRow);
-        if (!TryExecuteCommand(cmd, "Flash Fill", out var outcome))
-            return;
-
-        if (!outcome.Success)
-        {
-            MessageBox.Show(outcome.ErrorMessage ?? "Flash Fill could not detect a pattern.",
-                "Flash Fill", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        UpdateViewport();
+        return new FlashFillCommand(_currentSheetId, fillCol, sourceCol, startRow, endRow);
     }
 
     private void SortFilterPickerBtn_Click(object sender, RoutedEventArgs e)
@@ -4311,23 +4941,46 @@ public partial class MainWindow : Window
     }
     private void ClearAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        ClearValues();
-        ClearFormats();
+        if (SheetGrid.SelectedRange is not { } range) return;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Clear All",
+                sheetId =>
+                {
+                    var currentRange = RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    return new CompositeWorkbookCommand(
+                        "Clear All",
+                        [
+                            new ClearContentsCommand(sheetId, currentRange),
+                            new ApplyStyleCommand(sheetId, currentRange, ClearFormatsDiff())
+                        ]);
+                },
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
     }
     private void ClearFormatsMenuItem_Click(object sender, RoutedEventArgs e) => ClearFormats();
     private void ClearValuesMenuItem_Click(object sender, RoutedEventArgs e)  => ClearValues();
     private void ClearCommentsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteCommand(new ClearCommentsCommand(_currentSheetId, range), "Clear Comments"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Clear Comments",
+                range,
+                currentRange => new ClearCommentsCommand(_currentSheetId, currentRange)))
             return;
 
         UpdateViewport();
     }
+
     private void ClearHyperlinksMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteCommand(new ClearHyperlinksCommand(_currentSheetId, range), "Clear Hyperlinks"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Clear Hyperlinks",
+                range,
+                currentRange => new ClearHyperlinksCommand(_currentSheetId, currentRange)))
             return;
         UpdateViewport();
     }
@@ -4335,32 +4988,30 @@ public partial class MainWindow : Window
     private void ClearValues()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var edits = new List<(CellAddress, Cell)>();
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
-            {
-                var existing = sheet?.GetCell(new CellAddress(_currentSheetId, r, c));
-                var cleared = Cell.FromValue(BlankValue.Instance);
-                if (existing is not null) cleared.StyleId = existing.StyleId;
-                edits.Add((new CellAddress(_currentSheetId, r, c), cleared));
-            }
-        if (!TryExecuteEditCells(edits, "Clear Values"))
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Clear Contents",
+                sheetId => new ClearContentsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                out var outcome))
             return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
     private void ClearFormats()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        ApplyStyleDiff(new StyleDiff(
+        ApplyStyleDiff(ClearFormatsDiff());
+    }
+
+    private static StyleDiff ClearFormatsDiff() =>
+        new(
             Bold: false, Italic: false, Underline: false, DoubleUnderline: false, Strikethrough: false,
             FontName: "Calibri", FontSize: 11, ClearFill: true, NumberFormat: "General",
             HAlign: CellHAlign.General, VAlign: CellVAlign.Bottom, WrapText: false, IndentLevel: 0,
             BorderTop: new CellBorder(BorderStyle.None),
             BorderBottom: new CellBorder(BorderStyle.None),
             BorderLeft: new CellBorder(BorderStyle.None),
-            BorderRight: new CellBorder(BorderStyle.None)));
-    }
+            BorderRight: new CellBorder(BorderStyle.None));
 
     // ── Insert tab ────────────────────────────────────────────────────────────
 
@@ -4395,35 +5046,12 @@ public partial class MainWindow : Window
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "First Slice Angle",
                 "Insert or select a pie or doughnut chart before changing first-slice angle.",
-                "First Slice Angle",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (chart.Type is not (ChartType.Pie or ChartType.Doughnut))
-        {
-            MessageBox.Show(
+                chart => chart.Type is ChartType.Pie or ChartType.Doughnut,
                 "First-slice angle only applies to pie and doughnut charts.",
-                "First Slice Angle",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var nextAngle = chart.FirstSliceAngle >= 270 ? 0 : chart.FirstSliceAngle + 90;
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(FirstSliceAngle: nextAngle)),
-                "First Slice Angle"))
+                chart => new ChartLayoutOptions(FirstSliceAngle: chart.FirstSliceAngle >= 270 ? 0 : chart.FirstSliceAngle + 90)))
             return;
 
         UpdateViewport();
@@ -4431,40 +5059,18 @@ public partial class MainWindow : Window
 
     private void ChartDoughnutHoleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Doughnut Hole Size",
                 "Insert or select a doughnut chart before changing hole size.",
-                "Doughnut Hole Size",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (chart.Type != ChartType.Doughnut)
-        {
-            MessageBox.Show(
+                chart => chart.Type == ChartType.Doughnut,
                 "Doughnut hole size only applies to doughnut charts.",
-                "Doughnut Hole Size",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var nextSize = chart.DoughnutHoleSize switch
-        {
-            < 0.45 => 0.55,
-            < 0.7 => 0.75,
-            _ => 0.35
-        };
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(DoughnutHoleSize: nextSize)),
-                "Doughnut Hole Size"))
+                chart => new ChartLayoutOptions(
+                    DoughnutHoleSize: chart.DoughnutHoleSize switch
+                    {
+                        < 0.45 => 0.55,
+                        < 0.7 => 0.75,
+                        _ => 0.35
+                    })))
             return;
 
         UpdateViewport();
@@ -4472,51 +5078,22 @@ public partial class MainWindow : Window
 
     private void ChartExplodedSliceBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Explode Slice",
                 "Insert or select a pie or doughnut chart before exploding a slice.",
-                "Explode Slice",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (chart.Type is not (ChartType.Pie or ChartType.Doughnut))
-        {
-            MessageBox.Show(
-                "Exploded slices only apply to pie and doughnut charts.",
-                "Explode Slice",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var sliceCount = ChartTypeSupport.GetDataPointCount(chart);
-        if (sliceCount == 0)
-        {
-            MessageBox.Show(
-                "Add chart data before exploding a slice.",
-                "Explode Slice",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var nextIndex = chart.ExplodedSliceIndex < 0
-            ? 0
-            : chart.ExplodedSliceIndex + 1 >= sliceCount ? -1 : chart.ExplodedSliceIndex + 1;
-        var nextDistance = nextIndex < 0
-            ? 0.1
-            : chart.ExplodedSliceDistance >= 0.22 ? 0.1 : chart.ExplodedSliceDistance + 0.06;
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(ExplodedSliceIndex: nextIndex, ExplodedSliceDistance: nextDistance)),
-                "Explode Slice"))
+                chart => chart.Type is (ChartType.Pie or ChartType.Doughnut) && ChartTypeSupport.GetDataPointCount(chart) > 0,
+                "Exploded slices require a pie or doughnut chart with chart data.",
+                chart =>
+                {
+                    var sliceCount = ChartTypeSupport.GetDataPointCount(chart);
+                    var nextIndex = chart.ExplodedSliceIndex < 0
+                        ? 0
+                        : chart.ExplodedSliceIndex + 1 >= sliceCount ? -1 : chart.ExplodedSliceIndex + 1;
+                    var nextDistance = nextIndex < 0
+                        ? 0.1
+                        : chart.ExplodedSliceDistance >= 0.22 ? 0.1 : chart.ExplodedSliceDistance + 0.06;
+                    return new ChartLayoutOptions(ExplodedSliceIndex: nextIndex, ExplodedSliceDistance: nextDistance);
+                }))
             return;
 
         UpdateViewport();
@@ -4524,24 +5101,12 @@ public partial class MainWindow : Window
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing data labels.",
+        if (!TryExecuteRepeatableChartLayout(
                 "Data Labels",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(ShowDataLabels: !chart.ShowDataLabels)),
-                "Data Labels"))
+                "Insert or select a chart before changing data labels.",
+                null,
+                null,
+                chart => new ChartLayoutOptions(ShowDataLabels: !chart.ShowDataLabels)))
             return;
 
         UpdateViewport();
@@ -4549,26 +5114,14 @@ public partial class MainWindow : Window
 
     private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing data label positions.",
+        if (!TryExecuteRepeatableChartLayout(
                 "Data Label Position",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
-                        ShowDataLabels: true,
-                        DataLabelPosition: GetNextDataLabelPosition(chart.DataLabelPosition))),
-                "Data Label Position"))
+                "Insert or select a chart before changing data label positions.",
+                null,
+                null,
+                chart => new ChartLayoutOptions(
+                    ShowDataLabels: true,
+                    DataLabelPosition: GetNextDataLabelPosition(chart.DataLabelPosition))))
             return;
 
         UpdateViewport();
@@ -4697,53 +5250,33 @@ public partial class MainWindow : Window
 
     private void ChartPointDataLabelBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         const string caption = "Format Data Point Label";
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
                 "Insert or select a chart before changing point data-label formatting.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (GetChartSeriesCount(chart) == 0 || ChartTypeSupport.GetDataPointCount(chart) == 0)
-        {
-            MessageBox.Show(
+                chart => GetChartSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
                 "Add chart data points before changing point data-label formatting.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var formats = chart.PointDataLabelFormats.ToList();
-        var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0 && format.PointIndex == 0);
-        var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
-        var updated = current with
-        {
-            FillColor = GetNextSeriesColor(current.FillColor),
-            BorderColor = GetNextSeriesColor(current.BorderColor ?? current.FillColor),
-            BorderThickness = current.BorderThickness is null or >= 3 ? 0.75 : current.BorderThickness.Value + 0.75,
-            TextColor = GetNextSeriesColor(current.TextColor),
-            FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
-        };
-        if (existingIndex >= 0)
-            formats[existingIndex] = updated;
-        else
-            formats.Add(updated);
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
+                chart =>
+                {
+                    var formats = chart.PointDataLabelFormats.ToList();
+                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0 && format.PointIndex == 0);
+                    var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
+                    var updated = current with
+                    {
+                        FillColor = GetNextSeriesColor(current.FillColor),
+                        BorderColor = GetNextSeriesColor(current.BorderColor ?? current.FillColor),
+                        BorderThickness = current.BorderThickness is null or >= 3 ? 0.75 : current.BorderThickness.Value + 0.75,
+                        TextColor = GetNextSeriesColor(current.TextColor),
+                        FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
+                    };
+                    if (existingIndex >= 0)
+                        formats[existingIndex] = updated;
+                    else
+                        formats.Add(updated);
+                    return new ChartLayoutOptions(
                         ShowDataLabels: true,
-                        PointDataLabelFormats: formats)),
-                caption))
+                        PointDataLabelFormats: formats);
+                }))
             return;
 
         UpdateViewport();
@@ -4848,21 +5381,12 @@ public partial class MainWindow : Window
 
     private void ToggleDataLabelOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing data label options.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, optionsFactory(chart)),
-                caption))
+                "Insert or select a chart before changing data label options.",
+                null,
+                null,
+                optionsFactory))
             return;
 
         UpdateViewport();
@@ -4870,21 +5394,12 @@ public partial class MainWindow : Window
 
     private void ToggleChartAreaOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing chart area formatting.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, optionsFactory(chart)),
-                caption))
+                "Insert or select a chart before changing chart area formatting.",
+                null,
+                null,
+                optionsFactory))
             return;
 
         UpdateViewport();
@@ -4892,34 +5407,12 @@ public partial class MainWindow : Window
 
     private void ChartTrendlineBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Trendline",
                 "Insert or select a chart before changing trendlines.",
-                "Trendline",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            MessageBox.Show(
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
                 "Linear trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
-                "Trendline",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(ShowLinearTrendline: !chart.ShowLinearTrendline)),
-                "Trendline"))
+                chart => new ChartLayoutOptions(ShowLinearTrendline: !chart.ShowLinearTrendline)))
             return;
 
         UpdateViewport();
@@ -4927,36 +5420,14 @@ public partial class MainWindow : Window
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Trendline Type",
                 "Insert or select a chart before changing trendline type.",
-                "Trendline Type",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            MessageBox.Show(
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
                 "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
-                "Trendline Type",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
-                        ShowLinearTrendline: true,
-                        TrendlineType: GetNextTrendlineType(chart.TrendlineType))),
-                "Trendline Type"))
+                chart => new ChartLayoutOptions(
+                    ShowLinearTrendline: true,
+                    TrendlineType: GetNextTrendlineType(chart.TrendlineType))))
             return;
 
         UpdateViewport();
@@ -4975,37 +5446,15 @@ public partial class MainWindow : Window
 
     private void ChartTrendlinePeriodBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Moving Average Period",
                 "Insert or select a chart before changing moving-average period.",
-                "Moving Average Period",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            MessageBox.Show(
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
                 "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
-                "Moving Average Period",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
-                        ShowLinearTrendline: true,
-                        TrendlineType: ChartTrendlineType.MovingAverage,
-                        TrendlinePeriod: chart.TrendlinePeriod >= 6 ? 2 : chart.TrendlinePeriod + 1)),
-                "Moving Average Period"))
+                chart => new ChartLayoutOptions(
+                    ShowLinearTrendline: true,
+                    TrendlineType: ChartTrendlineType.MovingAverage,
+                    TrendlinePeriod: chart.TrendlinePeriod >= 6 ? 2 : chart.TrendlinePeriod + 1)))
             return;
 
         UpdateViewport();
@@ -5013,37 +5462,15 @@ public partial class MainWindow : Window
 
     private void ChartTrendlineOrderBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Polynomial Order",
                 "Insert or select a chart before changing polynomial order.",
-                "Polynomial Order",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            MessageBox.Show(
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
                 "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
-                "Polynomial Order",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
-                        ShowLinearTrendline: true,
-                        TrendlineType: ChartTrendlineType.Polynomial,
-                        TrendlineOrder: chart.TrendlineOrder >= 6 ? 2 : chart.TrendlineOrder + 1)),
-                "Polynomial Order"))
+                chart => new ChartLayoutOptions(
+                    ShowLinearTrendline: true,
+                    TrendlineType: ChartTrendlineType.Polynomial,
+                    TrendlineOrder: chart.TrendlineOrder >= 6 ? 2 : chart.TrendlineOrder + 1)))
             return;
 
         UpdateViewport();
@@ -5112,31 +5539,12 @@ public partial class MainWindow : Window
 
     private void ToggleTrendlineInfo(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                caption,
                 "Insert or select a chart before changing trendline information.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
-        {
-            MessageBox.Show(
+                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
                 "Trendline information is currently supported for column, line, bar, scatter, bubble, and area charts.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, optionsFactory(chart)),
-                caption))
+                optionsFactory))
             return;
 
         UpdateViewport();
@@ -5144,46 +5552,15 @@ public partial class MainWindow : Window
 
     private void ChartSecondaryAxisBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Secondary Axis",
                 "Insert or select a chart before changing secondary axes.",
-                "Secondary Axis",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsSecondaryAxis(chart.Type))
-        {
-            MessageBox.Show(
-                "Secondary value axes are currently supported for column, line, area, and scatter charts.",
-                "Secondary Axis",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!chart.ShowSecondaryAxis && GetChartSeriesCount(chart) < 2)
-        {
-            MessageBox.Show(
-                "Add at least two data series before adding a secondary axis.",
-                "Secondary Axis",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
-                        ShowSecondaryAxis: !chart.ShowSecondaryAxis,
-                        SecondaryAxisSeriesIndexes: [])),
-                "Secondary Axis"))
+                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) &&
+                         (chart.ShowSecondaryAxis || GetChartSeriesCount(chart) >= 2),
+                "Secondary value axes require a supported chart with at least two data series.",
+                chart => new ChartLayoutOptions(
+                    ShowSecondaryAxis: !chart.ShowSecondaryAxis,
+                    SecondaryAxisSeriesIndexes: [])))
             return;
 
         UpdateViewport();
@@ -5291,28 +5668,21 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisTicks(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Ticks" : "Y Axis Ticks";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis ticks.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var (major, minor) = useXAxis
-            ? GetNextAxisTickState(chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle)
-            : GetNextAxisTickState(chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle);
-        var options = useXAxis
-            ? new ChartLayoutOptions(XAxisMajorTickStyle: major, XAxisMinorTickStyle: minor)
-            : new ChartLayoutOptions(YAxisMajorTickStyle: major, YAxisMinorTickStyle: minor);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis ticks.",
+                null,
+                null,
+                chart =>
+                {
+                    var (major, minor) = useXAxis
+                        ? GetNextAxisTickState(chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle)
+                        : GetNextAxisTickState(chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle);
+                    return useXAxis
+                        ? new ChartLayoutOptions(XAxisMajorTickStyle: major, XAxisMinorTickStyle: minor)
+                        : new ChartLayoutOptions(YAxisMajorTickStyle: major, YAxisMinorTickStyle: minor);
+                }))
             return;
 
         UpdateViewport();
@@ -5320,25 +5690,15 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisLabels(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Labels" : "Y Axis Labels";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis labels.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var options = useXAxis
-            ? new ChartLayoutOptions(ShowXAxisLabels: !chart.ShowXAxisLabels)
-            : new ChartLayoutOptions(ShowYAxisLabels: !chart.ShowYAxisLabels);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis labels.",
+                null,
+                null,
+                chart => useXAxis
+                    ? new ChartLayoutOptions(ShowXAxisLabels: !chart.ShowXAxisLabels)
+                    : new ChartLayoutOptions(ShowYAxisLabels: !chart.ShowYAxisLabels)))
             return;
 
         UpdateViewport();
@@ -5346,29 +5706,22 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisLabelFont(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Label Font" : "Y Axis Label Font";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis label formatting.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var currentColor = useXAxis ? chart.XAxisLabelTextColor : chart.YAxisLabelTextColor;
-        var currentSize = useXAxis ? chart.XAxisLabelFontSize : chart.YAxisLabelFontSize;
-        var nextColor = GetNextSeriesColor(currentColor);
-        var nextSize = currentSize >= 14 ? 9 : currentSize + 1;
-        var options = useXAxis
-            ? new ChartLayoutOptions(XAxisLabelTextColor: nextColor, XAxisLabelFontSize: nextSize)
-            : new ChartLayoutOptions(YAxisLabelTextColor: nextColor, YAxisLabelFontSize: nextSize);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis label formatting.",
+                null,
+                null,
+                chart =>
+                {
+                    var currentColor = useXAxis ? chart.XAxisLabelTextColor : chart.YAxisLabelTextColor;
+                    var currentSize = useXAxis ? chart.XAxisLabelFontSize : chart.YAxisLabelFontSize;
+                    var nextColor = GetNextSeriesColor(currentColor);
+                    var nextSize = currentSize >= 14 ? 9 : currentSize + 1;
+                    return useXAxis
+                        ? new ChartLayoutOptions(XAxisLabelTextColor: nextColor, XAxisLabelFontSize: nextSize)
+                        : new ChartLayoutOptions(YAxisLabelTextColor: nextColor, YAxisLabelFontSize: nextSize);
+                }))
             return;
 
         UpdateViewport();
@@ -5376,27 +5729,20 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisLabelAngle(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Label Angle" : "Y Axis Label Angle";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis label rotation.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var currentAngle = useXAxis ? chart.XAxisLabelAngle : chart.YAxisLabelAngle;
-        var nextAngle = GetNextAxisLabelAngle(currentAngle);
-        var options = useXAxis
-            ? new ChartLayoutOptions(XAxisLabelAngle: nextAngle)
-            : new ChartLayoutOptions(YAxisLabelAngle: nextAngle);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis label rotation.",
+                null,
+                null,
+                chart =>
+                {
+                    var currentAngle = useXAxis ? chart.XAxisLabelAngle : chart.YAxisLabelAngle;
+                    var nextAngle = GetNextAxisLabelAngle(currentAngle);
+                    return useXAxis
+                        ? new ChartLayoutOptions(XAxisLabelAngle: nextAngle)
+                        : new ChartLayoutOptions(YAxisLabelAngle: nextAngle);
+                }))
             return;
 
         UpdateViewport();
@@ -5404,28 +5750,21 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisLine(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Line" : "Y Axis Line";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis line formatting.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var currentColor = useXAxis ? chart.XAxisLineColor : chart.YAxisLineColor;
-        var currentThickness = useXAxis ? chart.XAxisLineThickness : chart.YAxisLineThickness;
-        var (nextColor, nextThickness) = GetNextAxisLineState(currentColor, currentThickness);
-        var options = useXAxis
-            ? new ChartLayoutOptions(XAxisLineColor: nextColor, XAxisLineThickness: nextThickness)
-            : new ChartLayoutOptions(YAxisLineColor: nextColor, YAxisLineThickness: nextThickness);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis line formatting.",
+                null,
+                null,
+                chart =>
+                {
+                    var currentColor = useXAxis ? chart.XAxisLineColor : chart.YAxisLineColor;
+                    var currentThickness = useXAxis ? chart.XAxisLineThickness : chart.YAxisLineThickness;
+                    var (nextColor, nextThickness) = GetNextAxisLineState(currentColor, currentThickness);
+                    return useXAxis
+                        ? new ChartLayoutOptions(XAxisLineColor: nextColor, XAxisLineThickness: nextThickness)
+                        : new ChartLayoutOptions(YAxisLineColor: nextColor, YAxisLineThickness: nextThickness);
+                }))
             return;
 
         UpdateViewport();
@@ -5468,28 +5807,21 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisGridlines(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Gridlines" : "Y Axis Gridlines";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis gridlines.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var (showMajor, showMinor) = useXAxis
-            ? GetNextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
-            : GetNextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
-        var options = useXAxis
-            ? new ChartLayoutOptions(ShowXAxisMajorGridlines: showMajor, ShowXAxisMinorGridlines: showMinor)
-            : new ChartLayoutOptions(ShowYAxisMajorGridlines: showMajor, ShowYAxisMinorGridlines: showMinor);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis gridlines.",
+                null,
+                null,
+                chart =>
+                {
+                    var (showMajor, showMinor) = useXAxis
+                        ? GetNextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
+                        : GetNextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
+                    return useXAxis
+                        ? new ChartLayoutOptions(ShowXAxisMajorGridlines: showMajor, ShowXAxisMinorGridlines: showMinor)
+                        : new ChartLayoutOptions(ShowYAxisMajorGridlines: showMajor, ShowYAxisMinorGridlines: showMinor);
+                }))
             return;
 
         UpdateViewport();
@@ -5506,39 +5838,32 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisGridlineStyle(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Gridline Style" : "Y Gridline Style";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing gridline formatting.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var currentMajorColor = useXAxis ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
-        var currentMinorColor = useXAxis ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
-        var currentThickness = useXAxis ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
-        var nextMajorColor = GetNextSeriesColor(currentMajorColor);
-        var nextMinorColor = GetNextSeriesColor(currentMinorColor ?? currentMajorColor);
-        var nextThickness = currentThickness >= 3 ? 1 : currentThickness + 0.5;
-        var options = useXAxis
-            ? new ChartLayoutOptions(
-                XAxisMajorGridlineColor: nextMajorColor,
-                XAxisMinorGridlineColor: nextMinorColor,
-                XAxisGridlineThickness: nextThickness,
-                ShowXAxisMajorGridlines: true)
-            : new ChartLayoutOptions(
-                YAxisMajorGridlineColor: nextMajorColor,
-                YAxisMinorGridlineColor: nextMinorColor,
-                YAxisGridlineThickness: nextThickness,
-                ShowYAxisMajorGridlines: true);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing gridline formatting.",
+                null,
+                null,
+                chart =>
+                {
+                    var currentMajorColor = useXAxis ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
+                    var currentMinorColor = useXAxis ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
+                    var currentThickness = useXAxis ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
+                    var nextMajorColor = GetNextSeriesColor(currentMajorColor);
+                    var nextMinorColor = GetNextSeriesColor(currentMinorColor ?? currentMajorColor);
+                    var nextThickness = currentThickness >= 3 ? 1 : currentThickness + 0.5;
+                    return useXAxis
+                        ? new ChartLayoutOptions(
+                            XAxisMajorGridlineColor: nextMajorColor,
+                            XAxisMinorGridlineColor: nextMinorColor,
+                            XAxisGridlineThickness: nextThickness,
+                            ShowXAxisMajorGridlines: true)
+                        : new ChartLayoutOptions(
+                            YAxisMajorGridlineColor: nextMajorColor,
+                            YAxisMinorGridlineColor: nextMinorColor,
+                            YAxisGridlineThickness: nextThickness,
+                            ShowYAxisMajorGridlines: true);
+                }))
             return;
 
         UpdateViewport();
@@ -5546,26 +5871,19 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisNumberFormat(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Number Format" : "Y Axis Number Format";
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis number formats.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var next = GetNextDataLabelNumberFormat(useXAxis ? chart.XAxisNumberFormat : chart.YAxisNumberFormat);
-        var options = useXAxis
-            ? new ChartLayoutOptions(XAxisNumberFormat: next)
-            : new ChartLayoutOptions(YAxisNumberFormat: next);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
+                "Insert or select a chart before changing axis number formats.",
+                null,
+                null,
+                chart =>
+                {
+                    var next = GetNextDataLabelNumberFormat(useXAxis ? chart.XAxisNumberFormat : chart.YAxisNumberFormat);
+                    return useXAxis
+                        ? new ChartLayoutOptions(XAxisNumberFormat: next)
+                        : new ChartLayoutOptions(YAxisNumberFormat: next);
+                }))
             return;
 
         UpdateViewport();
@@ -5573,122 +5891,98 @@ public partial class MainWindow : Window
 
     private void ToggleChartAxisLogScale(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Log Scale" : "Y Log Scale";
-        if (sheet is null || chart is null)
+        IWorkbookCommand CreateCommand()
         {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis scale.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var chart = sheet?.Charts.FirstOrDefault();
+            if (sheet is null || chart is null)
+                return new FailedWorkbookCommand("Insert or select a chart before changing axis scale.");
+
+            if (useXAxis && !ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
+                return new FailedWorkbookCommand("X-axis log scale is currently supported for bar, scatter, and bubble charts with value X axes.");
+
+            if (!useXAxis && !ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
+                return new FailedWorkbookCommand("Y-axis log scale is currently supported for column, line, area, scatter, and bubble charts with value Y axes.");
+
+            var enableLog = useXAxis ? !chart.XAxisLogScale : !chart.YAxisLogScale;
+            var options = useXAxis
+                ? new ChartLayoutOptions(XAxisLogScale: enableLog)
+                : new ChartLayoutOptions(YAxisLogScale: enableLog);
+
+            if (enableLog && TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            {
+                var positiveMinimum = minimum > 0 ? minimum : 1;
+                var positiveMaximum = maximum > positiveMinimum ? maximum : positiveMinimum * 10;
+                options = useXAxis
+                    ? options with { XAxisMinimum = positiveMinimum, XAxisMaximum = positiveMaximum }
+                    : options with { YAxisMinimum = positiveMinimum, YAxisMaximum = positiveMaximum };
+            }
+
+            return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, caption);
             return;
         }
 
-        if (useXAxis && !ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
-        {
-            MessageBox.Show(
-                "X-axis log scale is currently supported for bar, scatter, and bubble charts with value X axes.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!useXAxis && !ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
-        {
-            MessageBox.Show(
-                "Y-axis log scale is currently supported for column, line, area, scatter, and bubble charts with value Y axes.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var enableLog = useXAxis ? !chart.XAxisLogScale : !chart.YAxisLogScale;
-        var options = useXAxis
-            ? new ChartLayoutOptions(XAxisLogScale: enableLog)
-            : new ChartLayoutOptions(YAxisLogScale: enableLog);
-
-        if (enableLog && TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
-        {
-            var positiveMinimum = minimum > 0 ? minimum : 1;
-            var positiveMaximum = maximum > positiveMinimum ? maximum : positiveMinimum * 10;
-            options = useXAxis
-                ? options with { XAxisMinimum = positiveMinimum, XAxisMaximum = positiveMaximum }
-                : options with { YAxisMinimum = positiveMinimum, YAxisMaximum = positiveMaximum };
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
-            return;
-
+        _repeatPostAction = null;
         UpdateViewport();
     }
 
     private void ToggleChartAxisBounds(bool useXAxis)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
         var caption = useXAxis ? "X Axis Bounds" : "Y Axis Bounds";
-        if (sheet is null || chart is null)
+        IWorkbookCommand CreateCommand()
         {
-            MessageBox.Show(
-                "Insert or select a chart before changing axis bounds.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var chart = sheet?.Charts.FirstOrDefault();
+            if (sheet is null || chart is null)
+                return new FailedWorkbookCommand("Insert or select a chart before changing axis bounds.");
+
+            var hasBounds = useXAxis
+                ? chart.XAxisMinimum is not null || chart.XAxisMaximum is not null
+                : chart.YAxisMinimum is not null || chart.YAxisMaximum is not null;
+            if (!hasBounds &&
+                (useXAxis
+                    ? !ChartTypeSupport.SupportsXAxisBounds(chart.Type)
+                    : !ChartTypeSupport.SupportsYAxisBounds(chart.Type)))
+                return new FailedWorkbookCommand("Axis bounds are currently supported for chart value axes only.");
+
+            ChartLayoutOptions options;
+            if (hasBounds)
+            {
+                options = useXAxis
+                    ? new ChartLayoutOptions(ClearXAxisBounds: true)
+                    : new ChartLayoutOptions(ClearYAxisBounds: true);
+            }
+            else if (TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            {
+                var majorUnit = Math.Max(double.Epsilon, (maximum - minimum) / 5);
+                var minorUnit = Math.Max(double.Epsilon, majorUnit / 2);
+                options = useXAxis
+                    ? new ChartLayoutOptions(XAxisMinimum: minimum, XAxisMaximum: maximum, XAxisMajorUnit: majorUnit, XAxisMinorUnit: minorUnit)
+                    : new ChartLayoutOptions(YAxisMinimum: minimum, YAxisMaximum: maximum, YAxisMajorUnit: majorUnit, YAxisMinorUnit: minorUnit);
+            }
+            else
+            {
+                return new FailedWorkbookCommand("Add numeric chart data before setting axis bounds.");
+            }
+
+            return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, caption);
             return;
         }
 
-        var hasBounds = useXAxis
-            ? chart.XAxisMinimum is not null || chart.XAxisMaximum is not null
-            : chart.YAxisMinimum is not null || chart.YAxisMaximum is not null;
-        if (!hasBounds &&
-            (useXAxis
-                ? !ChartTypeSupport.SupportsXAxisBounds(chart.Type)
-                : !ChartTypeSupport.SupportsYAxisBounds(chart.Type)))
-        {
-            MessageBox.Show(
-                "Axis bounds are currently supported for chart value axes only.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        ChartLayoutOptions options;
-        if (hasBounds)
-        {
-            options = useXAxis
-                ? new ChartLayoutOptions(ClearXAxisBounds: true)
-                : new ChartLayoutOptions(ClearYAxisBounds: true);
-        }
-        else if (TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
-        {
-            var majorUnit = Math.Max(double.Epsilon, (maximum - minimum) / 5);
-            var minorUnit = Math.Max(double.Epsilon, majorUnit / 2);
-            options = useXAxis
-                ? new ChartLayoutOptions(XAxisMinimum: minimum, XAxisMaximum: maximum, XAxisMajorUnit: majorUnit, XAxisMinorUnit: minorUnit)
-                : new ChartLayoutOptions(YAxisMinimum: minimum, YAxisMaximum: maximum, YAxisMajorUnit: majorUnit, YAxisMinorUnit: minorUnit);
-        }
-        else
-        {
-            MessageBox.Show(
-                "Add numeric chart data before setting axis bounds.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-                caption))
-            return;
-
+        _repeatPostAction = null;
         UpdateViewport();
     }
 
@@ -5742,48 +6036,18 @@ public partial class MainWindow : Window
 
     private void ChartSecondaryAxisSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Secondary Axis Series",
                 "Insert or select a chart before changing secondary-axis series.",
-                "Secondary Axis Series",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsSecondaryAxis(chart.Type))
-        {
-            MessageBox.Show(
-                "Secondary value axes are currently supported for column, line, area, and scatter charts.",
-                "Secondary Axis Series",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var seriesCount = GetChartSeriesCount(chart);
-        if (seriesCount < 2)
-        {
-            MessageBox.Show(
-                "Add at least two data series before assigning a secondary axis.",
-                "Secondary Axis Series",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var next = GetNextSecondaryAxisSeries(chart, seriesCount);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
+                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && GetChartSeriesCount(chart) >= 2,
+                "Secondary value axes require a supported chart with at least two data series.",
+                chart =>
+                {
+                    var next = GetNextSecondaryAxisSeries(chart, GetChartSeriesCount(chart));
+                    return new ChartLayoutOptions(
                         ShowSecondaryAxis: next.ShowSecondaryAxis,
-                        SecondaryAxisSeriesIndexes: next.SeriesIndexes)),
-                "Secondary Axis Series"))
+                        SecondaryAxisSeriesIndexes: next.SeriesIndexes);
+                }))
             return;
 
         UpdateViewport();
@@ -5823,46 +6087,15 @@ public partial class MainWindow : Window
 
     private void ChartComboBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Combo Chart",
                 "Insert or select a chart before changing combo chart options.",
-                "Combo Chart",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type))
-        {
-            MessageBox.Show(
-                "Combo line overlays are currently supported for column and area charts.",
-                "Combo Chart",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!chart.UseComboLineForSecondarySeries && !ChartTypeSupport.SupportsComboLineOverlay(chart))
-        {
-            MessageBox.Show(
-                "Add at least two data series before enabling a combo line overlay.",
-                "Combo Chart",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
-                        UseComboLineForSecondarySeries: !chart.UseComboLineForSecondarySeries,
-                        ComboLineSeriesIndexes: !chart.UseComboLineForSecondarySeries ? chart.ComboLineSeriesIndexes : [])),
-                "Combo Chart"))
+                chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) &&
+                         (chart.UseComboLineForSecondarySeries || ChartTypeSupport.SupportsComboLineOverlay(chart)),
+                "Combo line overlays require a supported chart with at least two data series.",
+                chart => new ChartLayoutOptions(
+                    UseComboLineForSecondarySeries: !chart.UseComboLineForSecondarySeries,
+                    ComboLineSeriesIndexes: !chart.UseComboLineForSecondarySeries ? chart.ComboLineSeriesIndexes : [])))
             return;
 
         UpdateViewport();
@@ -5870,48 +6103,18 @@ public partial class MainWindow : Window
 
     private void ChartComboSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
+        if (!TryExecuteRepeatableChartLayout(
+                "Combo Chart Series",
                 "Insert or select a chart before changing combo chart series.",
-                "Combo Chart Series",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type))
-        {
-            MessageBox.Show(
-                "Combo line overlays are currently supported for column and area charts.",
-                "Combo Chart Series",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart))
-        {
-            MessageBox.Show(
-                "Add at least two data series before choosing a combo chart line series.",
-                "Combo Chart Series",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var seriesCount = GetChartSeriesCount(chart);
-        var nextIndexes = GetNextComboLineSeries(chart, seriesCount);
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(
+                chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) && ChartTypeSupport.SupportsComboLineOverlay(chart),
+                "Combo line overlays require a supported chart with at least two data series.",
+                chart =>
+                {
+                    var nextIndexes = GetNextComboLineSeries(chart, GetChartSeriesCount(chart));
+                    return new ChartLayoutOptions(
                         UseComboLineForSecondarySeries: nextIndexes.Length > 0,
-                        ComboLineSeriesIndexes: nextIndexes)),
-                "Combo Chart Series"))
+                        ComboLineSeriesIndexes: nextIndexes);
+                }))
             return;
 
         UpdateViewport();
@@ -5956,9 +6159,6 @@ public partial class MainWindow : Window
 
     private void ChartSeriesMarkerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanChangeSeriesMarkers("Series Marker"))
-            return;
-
         ToggleSeriesFormat(
             "Series Marker",
             format => format with
@@ -5972,86 +6172,46 @@ public partial class MainWindow : Window
                     ChartMarkerStyle.Triangle => ChartMarkerStyle.None,
                     _ => null
                 }
-            });
+            },
+            chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
+            "Series marker shape and size are currently supported for line and scatter charts.");
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanChangeSeriesMarkers("Marker Size"))
-            return;
-
         ToggleSeriesFormat(
             "Marker Size",
             format => format with
             {
                 MarkerSize = format.MarkerSize is null or >= 12 ? 5 : format.MarkerSize.Value + 2
-            });
+            },
+            chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
+            "Series marker shape and size are currently supported for line and scatter charts.");
     }
 
-    private bool CanChangeSeriesMarkers(string caption)
+    private void ToggleSeriesFormat(
+        string caption,
+        Func<ChartSeriesFormat, ChartSeriesFormat> update,
+        Func<ChartModel, bool>? canApply = null,
+        string? unsupportedMessage = null)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
-                "Insert or select a chart before changing series markers.",
+        if (!TryExecuteRepeatableChartLayout(
                 caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return false;
-        }
-
-        if (ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
-            return true;
-
-        MessageBox.Show(
-            "Series marker shape and size are currently supported for line and scatter charts.",
-            caption,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-        return false;
-    }
-
-    private void ToggleSeriesFormat(string caption, Func<ChartSeriesFormat, ChartSeriesFormat> update)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var chart = sheet?.Charts.FirstOrDefault();
-        if (chart is null)
-        {
-            MessageBox.Show(
                 "Insert or select a chart before changing series formatting.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        if (GetChartSeriesCount(chart) == 0)
-        {
-            MessageBox.Show(
-                "Add data series before changing series formatting.",
-                caption,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var formats = chart.SeriesFormats.ToList();
-        var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0);
-        var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(0);
-        var updated = update(current);
-        if (existingIndex >= 0)
-            formats[existingIndex] = updated;
-        else
-            formats.Add(updated);
-
-        if (!TryExecuteCommand(
-                new SetChartLayoutCommand(
-                    _currentSheetId,
-                    chart.Id,
-                    new ChartLayoutOptions(SeriesFormats: formats)),
-                caption))
+                chart => GetChartSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
+                unsupportedMessage ?? "Add data series before changing series formatting.",
+                chart =>
+                {
+                    var formats = chart.SeriesFormats.ToList();
+                    var existingIndex = formats.FindIndex(format => format.SeriesIndex == 0);
+                    var current = existingIndex >= 0 ? formats[existingIndex] : new ChartSeriesFormat(0);
+                    var updated = update(current);
+                    if (existingIndex >= 0)
+                        formats[existingIndex] = updated;
+                    else
+                        formats.Add(updated);
+                    return new ChartLayoutOptions(SeriesFormats: formats);
+                }))
             return;
 
         UpdateViewport();
@@ -6124,7 +6284,11 @@ public partial class MainWindow : Window
             _ => SparklineKind.Line
         };
 
-        if (!TryExecuteCommand(new AddSparklineCommand(_currentSheetId, dataRange, location, kind), "Insert Sparkline"))
+        var fallbackLocationRange = new GridRange(location, location);
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Sparkline",
+                fallbackLocationRange,
+                currentRange => new AddSparklineCommand(_currentSheetId, dataRange, currentRange.Start, kind)))
             return;
 
         SetActiveCell(location);
@@ -6170,9 +6334,10 @@ public partial class MainWindow : Window
         if (url is null) return;
         var label = PromptForInput("Display text (leave blank to use URL):", "");
         var text = string.IsNullOrWhiteSpace(label) ? url : label;
-        var addr = SheetGrid.SelectedRange.Value.Start;
-        var cmd = new SetHyperlinkCommand(_currentSheetId, addr, url, text);
-        if (!TryExecuteCommand(cmd, "Insert Link"))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Link",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new SetHyperlinkCommand(_currentSheetId, currentRange.Start, url, text)))
             return;
         UpdateViewport();
     }
@@ -6248,7 +6413,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Picture Size",
                 sheetId => new ResizePictureCommand(sheetId, GetTargetPicture(sheetId)?.Id ?? Guid.Empty, width, height)))
             return;
@@ -6274,7 +6439,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Rotate Picture",
                 sheetId => new RotatePictureCommand(sheetId, GetTargetPicture(sheetId)?.Id ?? Guid.Empty, rotation)))
             return;
@@ -6333,13 +6498,29 @@ public partial class MainWindow : Window
         var dlg = new SymbolPickerDialog { Owner = this };
         if (dlg.ShowDialog() != true || dlg.SelectedChar == '\0') return;
         if (SheetGrid.SelectedRange is null) return;
-        var addr = SheetGrid.SelectedRange.Value.Start;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var existing = sheet?.GetCell(addr)?.Value as TextValue;
-        var newText = (existing?.Value ?? "") + dlg.SelectedChar;
-        if (!TryExecuteEditCells([(addr, Cell.FromValue(new TextValue(newText)))], "Insert Symbol"))
+        var selectedChar = dlg.SelectedChar;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Symbol",
+                SheetGrid.SelectedRange.Value,
+                currentRange =>
+                {
+                    var currentAddress = currentRange.Start;
+                    var currentSheet = _workbook.GetSheet(_currentSheetId);
+                    var currentExisting = currentSheet?.GetCell(currentAddress)?.Value as TextValue;
+                    var currentText = (currentExisting?.Value ?? "") + selectedChar;
+                    return CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)));
+                }))
             return;
         UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateSingleCellEditCommand(CellAddress address, Cell cell)
+    {
+        var edits = new List<(CellAddress Address, Cell NewCell)> { (address, cell) };
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        return targetSheetIds.Count > 1
+            ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
+            : new EditCellsCommand(_currentSheetId, edits);
     }
 
     // ── Draw tab stubs ────────────────────────────────────────────────────────
@@ -6363,9 +6544,13 @@ public partial class MainWindow : Window
         var text = PromptForInput("Text box text:", "");
         if (text is null) return;
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Text Box",
-                sheetId => new AddTextBoxCommand(sheetId, new CellAddress(sheetId, anchor.Row, anchor.Col), text)))
+                sheetId =>
+                {
+                    var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
+                    return new AddTextBoxCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), text);
+                }))
             return;
 
         SetActiveCell(anchor);
@@ -6376,9 +6561,13 @@ public partial class MainWindow : Window
     private void InsertDrawingShape(DrawingShapeKind kind)
     {
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Shape",
-                sheetId => new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, anchor.Row, anchor.Col), kind)))
+                sheetId =>
+                {
+                    var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
+                    return new AddDrawingShapeCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), kind);
+                }))
             return;
 
         SetActiveCell(anchor);
@@ -6397,7 +6586,7 @@ public partial class MainWindow : Window
         }
 
         var title = forward ? "Bring Forward" : "Send Backward";
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 title,
                 sheetId =>
                 {
@@ -6434,7 +6623,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Object Size",
                 sheetId =>
                 {
@@ -6468,7 +6657,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Rotate Object",
                 sheetId =>
                 {
@@ -6509,7 +6698,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 isFill ? "Object Fill" : "Object Outline",
                 sheetId =>
                 {
@@ -6651,6 +6840,14 @@ public partial class MainWindow : Window
         CellColor? FillColor,
         CellColor? OutlineColor);
 
+    private enum RibbonKeyTipScope
+    {
+        None,
+        TopLevel,
+        Commands,
+        Menu
+    }
+
     private enum AltTextTargetKind
     {
         Picture,
@@ -6667,9 +6864,10 @@ public partial class MainWindow : Window
     private void PageLayoutDeferredBtn_Click(object sender, RoutedEventArgs e)
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
+        var message = DeferredCommandMessages.WorkbookTheme(commandName);
         MessageBox.Show(
-            $"{commandName} is deferred until Freexcel has a workbook theme model. It is tracked as a documented parity gap, not a silent partial implementation.",
-            commandName,
+            message.Body,
+            message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
@@ -7291,10 +7489,12 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
-        var removed = WatchWindowService.RemoveWatch(_workbook, range.Start);
+        var removed = WatchWindowService.RemoveWatches(_workbook, range);
         _watchWindowDialog?.Refresh();
         MessageBox.Show(
-            removed ? $"{FormatAuditAddress(range.Start)} removed from Watch Window." : $"{FormatAuditAddress(range.Start)} is not watched.",
+            removed > 0
+                ? $"{removed} cell{(removed == 1 ? "" : "s")} removed from Watch Window."
+                : $"{FormatRangeReference(range.Start, range.End)} is not watched.",
             "Watch Window",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -7476,14 +7676,29 @@ public partial class MainWindow : Window
         var delimInput = PromptForInput("Delimiter (e.g. , or ;):", ",");
         if (delimInput is null || delimInput.Length == 0) return;
         char delim = delimInput[0];
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Text to Columns",
+                range,
+                currentRange => CreateTextToColumnsCommand(currentRange, delim),
+                out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, char delimiter)
+    {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
+        if (sheet is null)
+            return new EditCellsCommand(_currentSheetId, []);
+
         var edits = new List<(CellAddress, Cell)>();
         for (uint r = range.Start.Row; r <= range.End.Row; r++)
         {
             var cellVal = sheet.GetValue(r, range.Start.Col) as TextValue;
             if (cellVal is null) continue;
-            var parts = cellVal.Value.Split(delim);
+            var parts = cellVal.Value.Split(delimiter);
             for (int i = 0; i < parts.Length; i++)
             {
                 var addr = new CellAddress(_currentSheetId, r, range.Start.Col + (uint)i);
@@ -7491,20 +7706,28 @@ public partial class MainWindow : Window
                 edits.Add((addr, Cell.FromValue(val)));
             }
         }
-        if (!TryExecuteEditCells(edits, "Text to Columns", out var outcome))
-            return;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? edits.Select(x => x.Item1).ToList());
-        UpdateViewport();
+
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        return targetSheetIds.Count > 1
+            ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
+            : new EditCellsCommand(_currentSheetId, edits);
     }
 
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var command = new RemoveDuplicateRowsCommand(_currentSheetId, range);
-        if (!TryExecuteCommand(command, "Remove Duplicates"))
+        RemoveDuplicateRowsCommand? command = null;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Remove Duplicates",
+                range,
+                currentRange =>
+                {
+                    command = new RemoveDuplicateRowsCommand(_currentSheetId, currentRange);
+                    return command;
+                }))
             return;
 
-        MessageBox.Show($"Removed {command.RemovedRowCount} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
         UpdateViewport();
     }
 
@@ -7539,9 +7762,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var command = new ConsolidateCommand(ranges, destination);
-        if (!TryExecuteCommand(command, "Consolidate", out var outcome))
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => new ConsolidateCommand(ranges, destination));
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Consolidate");
             return;
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         SetActiveCell(destination);
@@ -7569,18 +7797,24 @@ public partial class MainWindow : Window
             return;
         }
 
-        var subtotalCommand = new SubtotalCommand(
-            _currentSheetId,
-            range,
-            groupByColumnOffset: options.GroupColumnOffset,
-            subtotalColumnOffsets: options.SubtotalColumnOffsets,
-            functionNumber: options.FunctionNumber,
-            pageBreakBetweenGroups: options.PageBreakBetweenGroups,
-            summaryBelowData: options.SummaryBelowData);
-        IWorkbookCommand command = options.ReplaceExisting
-            ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(_currentSheetId, range), subtotalCommand])
-            : subtotalCommand;
-        if (!TryExecuteCommand(command, "Subtotal", out var outcome))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Subtotal",
+                range,
+                currentRange =>
+                {
+                    var subtotalCommand = new SubtotalCommand(
+                        _currentSheetId,
+                        currentRange,
+                        groupByColumnOffset: options.GroupColumnOffset,
+                        subtotalColumnOffsets: options.SubtotalColumnOffsets,
+                        functionNumber: options.FunctionNumber,
+                        pageBreakBetweenGroups: options.PageBreakBetweenGroups,
+                        summaryBelowData: options.SummaryBelowData);
+                    return options.ReplaceExisting
+                        ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(_currentSheetId, currentRange), subtotalCommand])
+                        : subtotalCommand;
+                },
+                out var outcome))
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
@@ -7799,7 +8033,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        IWorkbookCommand command;
+        Func<GridRange, IWorkbookCommand> createCommand;
         if (twoVariable)
         {
             var rowInputText = PromptForInput("Row input cell:", formulaCell.ToA1());
@@ -7820,7 +8054,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            command = new TwoVariableDataTableCommand(range, formulaCell, rowInputCell, columnInputCell);
+            createCommand = currentRange => new TwoVariableDataTableCommand(currentRange, formulaCell, rowInputCell, columnInputCell);
         }
         else
         {
@@ -7833,10 +8067,14 @@ public partial class MainWindow : Window
                 return;
             }
 
-            command = new OneVariableDataTableCommand(range, formulaCell, inputCell);
+            createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell);
         }
 
-        if (!TryExecuteCommand(command, "Data Table", out var outcome))
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Data Table",
+                range,
+                createCommand,
+                out var outcome))
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
@@ -7916,7 +8154,7 @@ public partial class MainWindow : Window
         if (input is null)
             return;
 
-        if (!TryExecuteGroupedSheetCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Alt Text",
                 sheetId =>
                 {
@@ -7997,12 +8235,11 @@ public partial class MainWindow : Window
         var addr = SheetGrid.SelectedRange.Value.Start;
         var text = PromptForInput($"Add comment to {addr.ToA1()}:", "");
         if (text is null) return;
-        var outcome = _commandBus.Execute(_workbook.Id, new SetCommentCommand(_currentSheetId, addr, text));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Comment");
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Comment",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new SetCommentCommand(_currentSheetId, currentRange.Start, text)))
             return;
-        }
 
         UpdateViewport();
         MessageBox.Show($"Comment added to {addr.ToA1()}.", "Comment", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -8011,13 +8248,11 @@ public partial class MainWindow : Window
     private void ReviewDeleteCommentBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
-        var addr = SheetGrid.SelectedRange.Value.Start;
-        var outcome = _commandBus.Execute(_workbook.Id, new DeleteCommentCommand(_currentSheetId, addr));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Comment");
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Comment",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new DeleteCommentCommand(_currentSheetId, currentRange.Start)))
             return;
-        }
 
         UpdateViewport();
     }
@@ -8132,9 +8367,10 @@ public partial class MainWindow : Window
 
     private static void ShowExcludedShareMessage()
     {
+        var message = DeferredCommandMessages.ShareExcluded();
         MessageBox.Show(
-            "Microsoft 365 Share and cloud co-authoring are excluded from Freexcel. Save the workbook and share the file through your normal file system or source-control workflow.",
-            "Share Workbook",
+            message.Body,
+            message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
@@ -8249,9 +8485,10 @@ public partial class MainWindow : Window
     private void ViewWindowDeferredBtn_Click(object sender, RoutedEventArgs e)
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
+        var message = DeferredCommandMessages.MultiWindow(commandName);
         MessageBox.Show(
-            $"{commandName} is deferred until Freexcel has multi-window workbook hosting. It is tracked as a documented parity gap, not a silent partial implementation.",
-            commandName,
+            message.Body,
+            message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
@@ -8291,6 +8528,13 @@ public partial class MainWindow : Window
             ShowCommandError(outcome, "Freeze Panes");
             return;
         }
+
+        // Keep the scrollbar position past the frozen area to avoid desync.
+        // If the user was already scrolled past the freeze point, nothing moves.
+        if (frozenRows > 0 && VerticalScroll.Value <= frozenRows)
+            VerticalScroll.Value = frozenRows + 1;
+        if (frozenCols > 0 && HorizontalScroll.Value <= frozenCols)
+            HorizontalScroll.Value = frozenCols + 1;
 
         UpdateViewport();
     }
@@ -8553,20 +8797,7 @@ public partial class MainWindow : Window
 
     private void SheetCtxInsert_Click(object sender, RoutedEventArgs e)
     {
-        var name = GenerateUniqueSheetName();
-        var outcome = _commandBus.Execute(_workbook.Id, new AddSheetCommand(name));
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Insert Sheet");
-            return;
-        }
-
-        _currentSheetId = _workbook.Sheets[^1].Id;
-        _groupedSheetIds.Clear();
-        _groupedSheetIds.Add(_currentSheetId);
-        _sheetGroupAnchor = _currentSheetId;
-        UpdateViewport();
-        RefreshSheetTabs();
+        InsertNewSheet();
     }
 
     private void SheetCtxDelete_Click(object sender, RoutedEventArgs e)
