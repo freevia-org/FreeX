@@ -1,5 +1,7 @@
 using System.Text;
 using System.IO.Compression;
+using System.Xml.Linq;
+using ClosedXML.Excel;
 using FluentAssertions;
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
@@ -189,12 +191,18 @@ public class FileAdapterSmokeTests
             AxisTitleTextColor = new CellColor(89, 89, 89),
             AxisTitleFontSize = 12,
             ChartAreaFillColor = new CellColor(245, 245, 245),
+            ChartAreaFillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2),
             PlotAreaFillColor = new CellColor(250, 252, 255),
+            PlotAreaFillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light1),
             PlotAreaBorderColor = new CellColor(120, 120, 120),
+            PlotAreaBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
             PlotAreaBorderThickness = 2.25,
             LegendTextColor = new CellColor(40, 40, 40),
+            LegendTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
             LegendFillColor = new CellColor(248, 248, 248),
+            LegendFillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2),
             LegendBorderColor = new CellColor(180, 180, 180),
+            LegendBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3),
             LegendBorderThickness = 1.25,
             LegendFontSize = 11,
             DoughnutHoleSize = 0.72,
@@ -251,8 +259,11 @@ public class FileAdapterSmokeTests
             DataLabelNumberFormat = ChartDataLabelNumberFormat.Currency,
             ShowDataLabelCallouts = true,
             DataLabelFillColor = new CellColor(255, 255, 225),
+            DataLabelFillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, 0.4),
             DataLabelBorderColor = new CellColor(128, 128, 128),
+            DataLabelBorderThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5),
             DataLabelTextColor = new CellColor(30, 30, 30),
+            DataLabelTextThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark2),
             DataLabelBorderThickness = 1.5,
             DataLabelFontSize = 13,
             DataLabelAngle = -35,
@@ -263,6 +274,7 @@ public class FileAdapterSmokeTests
             ShowTrendlineEquation = true,
             ShowTrendlineRSquared = true,
             TrendlineColor = new CellColor(217, 83, 25),
+            TrendlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6),
             TrendlineThickness = 2.5,
             TrendlineDashStyle = ChartLineDashStyle.Solid,
             ShowSecondaryAxis = true,
@@ -277,7 +289,9 @@ public class FileAdapterSmokeTests
                     StrokeThickness: 2.5,
                     DashStyle: ChartLineDashStyle.Dot,
                     MarkerStyle: ChartMarkerStyle.Diamond,
-                    MarkerSize: 7)
+                    MarkerSize: 7,
+                    FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+                    StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2))
             ],
             PointDataLabelFormats =
             [
@@ -288,7 +302,10 @@ public class FileAdapterSmokeTests
                     BorderColor: new CellColor(112, 173, 71),
                     BorderThickness: 2,
                     TextColor: new CellColor(0, 97, 0),
-                    FontSize: 14)
+                    FontSize: 14,
+                    FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5),
+                    BorderThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+                    TextThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1))
             ],
             UseComboLineForSecondarySeries = true,
             Left = 12,
@@ -316,12 +333,18 @@ public class FileAdapterSmokeTests
         chart.AxisTitleTextColor.Should().Be(new CellColor(89, 89, 89));
         chart.AxisTitleFontSize.Should().Be(12);
         chart.ChartAreaFillColor.Should().Be(new CellColor(245, 245, 245));
+        chart.ChartAreaFillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2));
         chart.PlotAreaFillColor.Should().Be(new CellColor(250, 252, 255));
+        chart.PlotAreaFillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light1));
         chart.PlotAreaBorderColor.Should().Be(new CellColor(120, 120, 120));
+        chart.PlotAreaBorderThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
         chart.PlotAreaBorderThickness.Should().Be(2.25);
         chart.LegendTextColor.Should().Be(new CellColor(40, 40, 40));
+        chart.LegendTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1));
         chart.LegendFillColor.Should().Be(new CellColor(248, 248, 248));
+        chart.LegendFillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light2));
         chart.LegendBorderColor.Should().Be(new CellColor(180, 180, 180));
+        chart.LegendBorderThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3));
         chart.LegendBorderThickness.Should().Be(1.25);
         chart.LegendFontSize.Should().Be(11);
         chart.DoughnutHoleSize.Should().Be(0.72);
@@ -378,8 +401,11 @@ public class FileAdapterSmokeTests
         chart.DataLabelNumberFormat.Should().Be(ChartDataLabelNumberFormat.Currency);
         chart.ShowDataLabelCallouts.Should().BeTrue();
         chart.DataLabelFillColor.Should().Be(new CellColor(255, 255, 225));
+        chart.DataLabelFillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, 0.4));
         chart.DataLabelBorderColor.Should().Be(new CellColor(128, 128, 128));
+        chart.DataLabelBorderThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5));
         chart.DataLabelTextColor.Should().Be(new CellColor(30, 30, 30));
+        chart.DataLabelTextThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark2));
         chart.DataLabelBorderThickness.Should().Be(1.5);
         chart.DataLabelFontSize.Should().Be(13);
         chart.DataLabelAngle.Should().Be(-35);
@@ -390,6 +416,7 @@ public class FileAdapterSmokeTests
         chart.ShowTrendlineEquation.Should().BeTrue();
         chart.ShowTrendlineRSquared.Should().BeTrue();
         chart.TrendlineColor.Should().Be(new CellColor(217, 83, 25));
+        chart.TrendlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent6));
         chart.TrendlineThickness.Should().Be(2.5);
         chart.TrendlineDashStyle.Should().Be(ChartLineDashStyle.Solid);
         chart.ShowSecondaryAxis.Should().BeTrue();
@@ -403,7 +430,9 @@ public class FileAdapterSmokeTests
                 StrokeThickness: 2.5,
                 DashStyle: ChartLineDashStyle.Dot,
                 MarkerStyle: ChartMarkerStyle.Diamond,
-                MarkerSize: 7));
+                MarkerSize: 7,
+                FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+                StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)));
         chart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
             new ChartPointDataLabelFormat(
                 1,
@@ -412,7 +441,10 @@ public class FileAdapterSmokeTests
                 BorderColor: new CellColor(112, 173, 71),
                 BorderThickness: 2,
                 TextColor: new CellColor(0, 97, 0),
-                FontSize: 14));
+                FontSize: 14,
+                FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5),
+                BorderThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+                TextThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1)));
         chart.UseComboLineForSecondarySeries.Should().BeTrue();
         chart.Left.Should().Be(12);
         chart.Top.Should().Be(34);
@@ -721,6 +753,33 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.WindowArrangement.Should().Be(WorkbookWindowArrangement.Cascade);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorkbookTheme()
+    {
+        var workbook = new Workbook("ThemeTest");
+        workbook.AddSheet("Sheet1");
+        workbook.Theme = WorkbookTheme.Office
+            .WithName("Freexcel Test Theme")
+            .WithFonts("Aptos Display", "Aptos")
+            .WithEffects("FreexcelEffects")
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(12, 34, 56))
+            .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(1, 99, 193));
+
+        var adapter = new NativeJsonAdapter();
+        using var ms = new MemoryStream();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.Theme.Name.Should().Be("Freexcel Test Theme");
+        loaded.Theme.MajorFontName.Should().Be("Aptos Display");
+        loaded.Theme.MinorFontName.Should().Be("Aptos");
+        loaded.Theme.EffectsName.Should().Be("FreexcelEffects");
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Hyperlink).Should().Be(new CellColor(1, 99, 193));
     }
 
     [Fact]
@@ -1101,6 +1160,8 @@ public class FileAdapterSmokeTests
             RotationDegrees = 20,
             FillColor = new CellColor(240, 250, 255),
             OutlineColor = new CellColor(70, 80, 90),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
             AltText = "Review note callout"
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
@@ -1112,6 +1173,8 @@ public class FileAdapterSmokeTests
             RotationDegrees = 45,
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
             AltText = "Approval marker"
         });
 
@@ -1131,6 +1194,8 @@ public class FileAdapterSmokeTests
         textBox.RotationDegrees.Should().Be(20);
         textBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         textBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
+        textBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        textBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
         textBox.AltText.Should().Be("Review note callout");
         var shape = loaded.GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
         shape.Anchor.Row.Should().Be(4);
@@ -1141,6 +1206,8 @@ public class FileAdapterSmokeTests
         shape.RotationDegrees.Should().Be(45);
         shape.FillColor.Should().Be(new CellColor(200, 210, 220));
         shape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
+        shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5));
+        shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5));
         shape.AltText.Should().Be("Approval marker");
     }
 
@@ -1949,7 +2016,512 @@ public class FileAdapterSmokeTests
         loadedSheet.MergedRegions[0].End.Col.Should().Be(3);
     }
 
+    [Fact]
+    public void XlsxAdapter_Load_ReadsWorkbookThemePart()
+    {
+        var workbook = new Workbook("ThemeLoadTest");
+        workbook.AddSheet("S1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnknownPackagePart(source, "xl/theme/theme1.xml", TestThemeXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.Theme.Name.Should().Be("Freexcel Test Theme");
+        loaded.Theme.MajorFontName.Should().Be("Major Test");
+        loaded.Theme.MinorFontName.Should().Be("Minor Test");
+        loaded.Theme.EffectsName.Should().Be("Effects Test");
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Dark1).Should().Be(new CellColor(1, 2, 3));
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Light1).Should().Be(new CellColor(250, 251, 252));
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
+        loaded.Theme.GetColor(WorkbookThemeColorSlot.Hyperlink).Should().Be(new CellColor(5, 99, 193));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesWorkbookThemePart()
+    {
+        var workbook = new Workbook("ThemeSaveTest");
+        workbook.AddSheet("S1");
+        workbook.Theme = WorkbookTheme.Office
+            .WithName("Saved Freexcel Theme")
+            .WithFonts("Saved Major", "Saved Minor")
+            .WithEffects("Saved Effects")
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(12, 34, 56));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
+        themeEntry.Should().NotBeNull();
+        using var reader = new StreamReader(themeEntry!.Open(), Encoding.UTF8);
+        var themeXml = reader.ReadToEnd();
+
+        themeXml.Should().Contain("Saved Freexcel Theme");
+        themeXml.Should().Contain("Saved Major");
+        themeXml.Should().Contain("Saved Minor");
+        themeXml.Should().Contain("Saved Effects");
+        themeXml.Should().Contain("0C2238");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ResolvesThemeFontColorAgainstWorkbookTheme()
+    {
+        var source = new MemoryStream();
+        using (var xlWorkbook = new XLWorkbook())
+        {
+            var sheet = xlWorkbook.Worksheets.Add("S1");
+            sheet.Cell("A1").Value = "themed";
+            sheet.Cell("A1").Style.Font.FontColor = XLColor.FromTheme(XLThemeColor.Accent1);
+            xlWorkbook.SaveAs(source);
+        }
+
+        source.Position = 0;
+        AddUnknownPackagePart(source, "xl/theme/theme1.xml", TestThemeXml);
+
+        source.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(source);
+
+        var cell = loaded.GetSheetAt(0).GetCell(1, 1);
+        cell.Should().NotBeNull();
+        loaded.GetStyle(cell!.StyleId).FontColor.Should().Be(new CellColor(12, 34, 56));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ReadsEmbeddedColumnChartPackagePart()
+    {
+        var workbook = new Workbook("ChartPackageLoad");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Column);
+        loadedChart.Title.Should().Be("Sales");
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 2)));
+        loadedChart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)));
+        loadedChart.Left.Should().BeApproximately(3 * loadedSheet.DefaultColumnWidth * 8 + 10, 0.01);
+        loadedChart.Top.Should().BeApproximately(loadedSheet.DefaultRowHeight + 20, 0.01);
+        loadedChart.Width.Should().BeApproximately(5 * loadedSheet.DefaultColumnWidth * 8 - 5, 0.01);
+        loadedChart.Height.Should().BeApproximately(15 * loadedSheet.DefaultRowHeight - 10, 0.01);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ReadsEmbeddedColumnChartOneCellAnchorPackagePart()
+    {
+        var workbook = new Workbook("ChartPackageLoad");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, useOneCellAnchor: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Column);
+        loadedChart.Left.Should().BeApproximately(4 * loadedSheet.DefaultColumnWidth * 8 + 10, 0.01);
+        loadedChart.Top.Should().BeApproximately(2 * loadedSheet.DefaultRowHeight + 20, 0.01);
+        loadedChart.Width.Should().BeApproximately(200, 0.01);
+        loadedChart.Height.Should().BeApproximately(120, 0.01);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ReadsEmbeddedColumnChartAbsoluteAnchorPackagePart()
+    {
+        var workbook = new Workbook("ChartPackageLoad");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalColumnChartPackage(source, useAbsoluteAnchor: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Column);
+        loadedChart.Left.Should().BeApproximately(100, 0.01);
+        loadedChart.Top.Should().BeApproximately(80, 0.01);
+        loadedChart.Width.Should().BeApproximately(220, 0.01);
+        loadedChart.Height.Should().BeApproximately(140, 0.01);
+    }
+
     // ── CSV ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedColumnChartPackagePart()
+    {
+        var workbook = new Workbook("ChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            Title = "Sales",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            Left = 100,
+            Top = 80,
+            Width = 220,
+            Height = 140,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2))
+            ]
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().NotBeNull();
+            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Column);
+        loadedChart.Title.Should().Be("Sales");
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 2)));
+        loadedChart.Left.Should().BeApproximately(100, 0.01);
+        loadedChart.Top.Should().BeApproximately(80, 0.01);
+        loadedChart.Width.Should().BeApproximately(220, 0.01);
+        loadedChart.Height.Should().BeApproximately(140, 0.01);
+        loadedChart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)));
+    }
+
+    [Theory]
+    [InlineData(ChartType.StackedColumn)]
+    [InlineData(ChartType.PercentStackedColumn)]
+    public void XlsxAdapter_Save_WritesEmbeddedStackedColumnChartPackagePart(ChartType chartType)
+    {
+        var workbook = new Workbook("StackedChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Expenses"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(14));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = chartType,
+            Title = chartType.ToString(),
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)),
+            Left = 120,
+            Top = 90,
+            Width = 260,
+            Height = 160,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)),
+                new ChartSeriesFormat(1, FillColor: new CellColor(12, 34, 56))
+            ]
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(chartType);
+        loadedChart.Title.Should().Be(chartType.ToString());
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 3)));
+        loadedChart.Left.Should().BeApproximately(120, 0.01);
+        loadedChart.Top.Should().BeApproximately(90, 0.01);
+        loadedChart.Width.Should().BeApproximately(260, 0.01);
+        loadedChart.Height.Should().BeApproximately(160, 0.01);
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2)));
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(1, FillColor: new CellColor(12, 34, 56)));
+    }
+
+    [Theory]
+    [InlineData(ChartType.Bar)]
+    [InlineData(ChartType.StackedBar)]
+    [InlineData(ChartType.PercentStackedBar)]
+    public void XlsxAdapter_Save_WritesEmbeddedBarChartPackagePart(ChartType chartType)
+    {
+        var workbook = new Workbook("BarChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Expenses"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(14));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = chartType,
+            Title = chartType.ToString(),
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)),
+            Left = 130,
+            Top = 95,
+            Width = 280,
+            Height = 170,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3)),
+                new ChartSeriesFormat(1, FillColor: new CellColor(56, 34, 12))
+            ]
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(chartType);
+        loadedChart.Title.Should().Be(chartType.ToString());
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 3)));
+        loadedChart.Left.Should().BeApproximately(130, 0.01);
+        loadedChart.Top.Should().BeApproximately(95, 0.01);
+        loadedChart.Width.Should().BeApproximately(280, 0.01);
+        loadedChart.Height.Should().BeApproximately(170, 0.01);
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(0, FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3)));
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(1, FillColor: new CellColor(56, 34, 12)));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedLineChartPackagePart()
+    {
+        var workbook = new Workbook("LineChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Expenses"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(14));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            Title = "Line",
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)),
+            Left = 140,
+            Top = 100,
+            Width = 300,
+            Height = 180,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4)),
+                new ChartSeriesFormat(1, StrokeColor: new CellColor(90, 80, 70))
+            ]
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Line);
+        loadedChart.Title.Should().Be("Line");
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 3)));
+        loadedChart.Left.Should().BeApproximately(140, 0.01);
+        loadedChart.Top.Should().BeApproximately(100, 0.01);
+        loadedChart.Width.Should().BeApproximately(300, 0.01);
+        loadedChart.Height.Should().BeApproximately(180, 0.01);
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(0, StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4)));
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(1, StrokeColor: new CellColor(90, 80, 70)));
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesEmbeddedScatterChartPackagePart()
+    {
+        var workbook = new Workbook("ScatterChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Dose"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Response A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Response B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(18));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(31));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(29));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Scatter,
+            Title = "Dose Response",
+            FirstColIsCategories = false,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)),
+            Left = 150,
+            Top = 110,
+            Width = 320,
+            Height = 190,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(0, StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5)),
+                new ChartSeriesFormat(1, StrokeColor: new CellColor(20, 110, 180))
+            ]
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(ChartType.Scatter);
+        loadedChart.Title.Should().Be("Dose Response");
+        loadedChart.FirstColIsCategories.Should().BeFalse();
+        loadedChart.DataRange.Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 3)));
+        loadedChart.Left.Should().BeApproximately(150, 0.01);
+        loadedChart.Top.Should().BeApproximately(110, 0.01);
+        loadedChart.Width.Should().BeApproximately(320, 0.01);
+        loadedChart.Height.Should().BeApproximately(190, 0.01);
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(0, StrokeThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent5)));
+        loadedChart.SeriesFormats.Should().Contain(
+            new ChartSeriesFormat(1, StrokeColor: new CellColor(20, 110, 180)));
+    }
 
     [Fact]
     public void XlsxAdapter_SaveFromModel_DoesNotPreserveUnknownPackageParts()
@@ -1987,6 +2559,191 @@ public class FileAdapterSmokeTests
 
         packageStream.Position = 0;
     }
+
+    private static void AddMinimalColumnChartPackage(
+        MemoryStream packageStream,
+        bool useOneCellAnchor = false,
+        bool useAbsoluteAnchor = false)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/charts/chart1.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            var worksheetXml = LoadPackageXml(worksheetEntry);
+            worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
+            worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdFreexcelChartDrawing")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelChartDrawing"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                new XAttribute("Target", "../drawings/drawing1.xml")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var anchorXml = useAbsoluteAnchor
+                ? new XElement(spreadsheetDrawingNs + "absoluteAnchor",
+                    new XElement(spreadsheetDrawingNs + "pos",
+                        new XAttribute("x", "952500"),
+                        new XAttribute("y", "762000")),
+                    new XElement(spreadsheetDrawingNs + "ext",
+                        new XAttribute("cx", "2095500"),
+                        new XAttribute("cy", "1333500")),
+                    CreateMinimalChartGraphicFrame(spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+                    new XElement(spreadsheetDrawingNs + "clientData"))
+                : useOneCellAnchor
+                ? new XElement(spreadsheetDrawingNs + "oneCellAnchor",
+                    new XElement(spreadsheetDrawingNs + "from",
+                        new XElement(spreadsheetDrawingNs + "col", "4"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "95250"),
+                        new XElement(spreadsheetDrawingNs + "row", "2"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "190500")),
+                    new XElement(spreadsheetDrawingNs + "ext",
+                        new XAttribute("cx", "1905000"),
+                        new XAttribute("cy", "1143000")),
+                    CreateMinimalChartGraphicFrame(spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+                    new XElement(spreadsheetDrawingNs + "clientData"))
+                : new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                    new XElement(spreadsheetDrawingNs + "from",
+                        new XElement(spreadsheetDrawingNs + "col", "3"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "95250"),
+                        new XElement(spreadsheetDrawingNs + "row", "1"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "190500")),
+                    new XElement(spreadsheetDrawingNs + "to",
+                        new XElement(spreadsheetDrawingNs + "col", "8"),
+                        new XElement(spreadsheetDrawingNs + "colOff", "47625"),
+                        new XElement(spreadsheetDrawingNs + "row", "16"),
+                        new XElement(spreadsheetDrawingNs + "rowOff", "95250")),
+                    CreateMinimalChartGraphicFrame(spreadsheetDrawingNs, drawingNs, chartNs, relNs),
+                    new XElement(spreadsheetDrawingNs + "clientData"));
+
+            var drawingXml = new XDocument(
+                new XElement(spreadsheetDrawingNs + "wsDr",
+                    new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                    new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                    new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                    new XAttribute(XNamespace.Xmlns + "r", relNs),
+                    anchorXml));
+            ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+
+            var drawingRelsXml = new XDocument(
+                new XElement(packageRelNs + "Relationships",
+                    new XElement(packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdFreexcelChart"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
+                        new XAttribute("Target", "../charts/chart1.xml"))));
+            ReplacePackageXml(archive, "xl/drawings/_rels/drawing1.xml.rels", drawingRelsXml);
+            ReplacePackageXml(archive, "xl/charts/chart1.xml", XDocument.Parse(MinimalColumnChartXml));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static XElement CreateMinimalChartGraphicFrame(
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace relNs) =>
+        new(spreadsheetDrawingNs + "graphicFrame",
+            new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
+                new XElement(spreadsheetDrawingNs + "cNvPr",
+                    new XAttribute("id", "2"),
+                    new XAttribute("name", "Chart 1")),
+                new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
+            new XElement(spreadsheetDrawingNs + "xfrm"),
+            new XElement(drawingNs + "graphic",
+                new XElement(drawingNs + "graphicData",
+                    new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/chart"),
+                    new XElement(chartNs + "chart", new XAttribute(relNs + "id", "rIdFreexcelChart")))));
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        document.Save(stream);
+    }
+
+    private static void AddContentTypeOverride(XDocument contentTypesXml, XNamespace contentTypeNs, string partName, string contentType)
+    {
+        contentTypesXml.Root!
+            .Elements(contentTypeNs + "Override")
+            .Where(element => string.Equals(element.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        contentTypesXml.Root!.Add(new XElement(
+            contentTypeNs + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+    }
+
+    private const string TestThemeXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Freexcel Test Theme">
+          <a:themeElements>
+            <a:clrScheme name="Freexcel Colors">
+              <a:dk1><a:srgbClr val="010203"/></a:dk1>
+              <a:lt1><a:srgbClr val="FAFBFC"/></a:lt1>
+              <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+              <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+              <a:accent1><a:srgbClr val="0C2238"/></a:accent1>
+              <a:accent2><a:srgbClr val="E97132"/></a:accent2>
+              <a:accent3><a:srgbClr val="196B24"/></a:accent3>
+              <a:accent4><a:srgbClr val="0F9ED5"/></a:accent4>
+              <a:accent5><a:srgbClr val="A02B93"/></a:accent5>
+              <a:accent6><a:srgbClr val="4EA72E"/></a:accent6>
+              <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+              <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+            </a:clrScheme>
+            <a:fontScheme name="Freexcel Fonts">
+              <a:majorFont><a:latin typeface="Major Test"/></a:majorFont>
+              <a:minorFont><a:latin typeface="Minor Test"/></a:minorFont>
+            </a:fontScheme>
+            <a:fmtScheme name="Effects Test"/>
+          </a:themeElements>
+        </a:theme>
+        """;
+
+    private const string MinimalColumnChartXml = """
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <c:chart>
+            <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
+            <c:plotArea>
+              <c:barChart>
+                <c:barDir val="col"/>
+                <c:ser>
+                  <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                  <c:spPr><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></c:spPr>
+                  <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                  <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                </c:ser>
+              </c:barChart>
+            </c:plotArea>
+          </c:chart>
+        </c:chartSpace>
+        """;
 
     [Fact]
     public void CsvAdapter_RoundTrip()
@@ -2029,5 +2786,41 @@ public class FileAdapterSmokeTests
         sheet.GetValue(1, 1).Should().BeOfType<NumberValue>().Which.Value.Should().Be(1);
         sheet.GetValue(1, 2).Should().BeOfType<NumberValue>().Which.Value.Should().Be(2);
         sheet.GetValue(1, 3).Should().BeOfType<TextValue>().Which.Value.Should().Be("hello");
+    }
+
+    [Fact]
+    public void CsvLoad_MultilineQuotedField_IsReadAsOneCell()
+    {
+        var csv = "\"line1\nline2\",second\r\nrow2a,row2b\r\n";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(csv));
+        var adapter  = new CsvFileAdapter();
+        var workbook = adapter.Load(stream);
+        var sheet    = workbook.Sheets[0];
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(new TextValue("line1\nline2"),
+                "RFC 4180 allows newlines inside quoted fields");
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+            .Should().Be(new TextValue("second"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1))
+            .Should().Be(new TextValue("row2a"));
+    }
+
+    [Fact]
+    public void CsvRoundTrip_MultilineField_PreservesContent()
+    {
+        var wb    = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("a\nb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("c"));
+
+        var adapter = new CsvFileAdapter();
+        using var ms = new MemoryStream();
+        adapter.Save(wb, ms);
+        ms.Position = 0;
+        var wb2    = adapter.Load(ms);
+        var sheet2 = wb2.Sheets[0];
+        sheet2.GetValue(new CellAddress(sheet2.Id, 1, 1)).Should().Be(new TextValue("a\nb"));
+        sheet2.GetValue(new CellAddress(sheet2.Id, 1, 2)).Should().Be(new TextValue("c"));
     }
 }
