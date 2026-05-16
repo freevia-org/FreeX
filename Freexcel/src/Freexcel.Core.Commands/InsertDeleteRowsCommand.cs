@@ -606,8 +606,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             {
                 // overlapping — shrink
                 uint newStart = m.Start.Row < _startRow ? m.Start.Row : _startRow;
-                uint newEnd   = m.End.Row   > endRow    ? m.End.Row - _count : _startRow - 1;
-                if (newEnd >= newStart)
+                uint newEnd   = m.End.Row   > endRow    ? m.End.Row - _count
+                              : _startRow > 1           ? _startRow - 1 : 0;
+                if (newEnd > 0 && newEnd >= newStart)
                 {
                     adjustedMerges.Add(new GridRange(
                         new CellAddress(m.Start.Sheet, newStart, m.Start.Col),

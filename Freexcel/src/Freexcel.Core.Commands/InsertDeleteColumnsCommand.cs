@@ -217,8 +217,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
             {
                 // overlapping — shrink
                 uint newStart = m.Start.Col < _startCol ? m.Start.Col : _startCol;
-                uint newEnd   = m.End.Col   > endCol    ? m.End.Col - _count : _startCol - 1;
-                if (newEnd >= newStart)
+                uint newEnd   = m.End.Col   > endCol    ? m.End.Col - _count
+                              : _startCol > 1           ? _startCol - 1 : 0;
+                if (newEnd > 0 && newEnd >= newStart)
                 {
                     adjustedMerges.Add(new GridRange(
                         new CellAddress(m.Start.Sheet, m.Start.Row, newStart),
