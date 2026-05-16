@@ -588,14 +588,34 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
-        var adjustedMerges = sheet.MergedRegions
-            .Where(m => !(m.Start.Row <= endRow && m.End.Row >= _startRow))
-            .Select(m => m.Start.Row > endRow
-                ? new GridRange(
+        var adjustedMerges = new List<GridRange>();
+        foreach (var m in sheet.MergedRegions)
+        {
+            if (m.End.Row < _startRow)
+            {
+                adjustedMerges.Add(m); // entirely above
+            }
+            else if (m.Start.Row > endRow)
+            {
+                // entirely below — shift up
+                adjustedMerges.Add(new GridRange(
                     new CellAddress(m.Start.Sheet, m.Start.Row - _count, m.Start.Col),
-                    new CellAddress(m.End.Sheet,   m.End.Row   - _count, m.End.Col))
-                : m)
-            .ToList();
+                    new CellAddress(m.End.Sheet,   m.End.Row   - _count, m.End.Col)));
+            }
+            else
+            {
+                // overlapping — shrink
+                uint newStart = m.Start.Row < _startRow ? m.Start.Row : _startRow;
+                uint newEnd   = m.End.Row   > endRow    ? m.End.Row - _count : _startRow - 1;
+                if (newEnd >= newStart)
+                {
+                    adjustedMerges.Add(new GridRange(
+                        new CellAddress(m.Start.Sheet, newStart, m.Start.Col),
+                        new CellAddress(m.End.Sheet,   newEnd,   m.End.Col)));
+                }
+                // if newEnd < newStart the merge was entirely deleted — drop it
+            }
+        }
         sheet.ReplaceMergedRegions(adjustedMerges);
 
         _formulaSnapshot.Clear();
