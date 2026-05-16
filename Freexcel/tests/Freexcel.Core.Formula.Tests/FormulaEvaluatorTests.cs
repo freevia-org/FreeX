@@ -633,4 +633,62 @@ public class CrossSheetReferenceTests
 
         result.Should().NotBeNull();
     }
+
+    // ── Short-circuit evaluation (IF / IFERROR / IFNA) ────────────────────
+
+    [Fact]
+    public void IF_ErrorInFalseBranch_DoesNotEvaluateFalseBranchWhenConditionIsTrue()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var evaluator = new FormulaEvaluator();
+        var result = evaluator.Evaluate("=IF(1>0,\"yes\",1/0)", sheet, wb);
+        result.Should().Be(new TextValue("yes"));
+    }
+
+    [Fact]
+    public void IF_ErrorInTrueBranch_DoesNotEvaluateTrueBranchWhenConditionIsFalse()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var evaluator = new FormulaEvaluator();
+        var result = evaluator.Evaluate("=IF(1>2,1/0,\"no\")", sheet, wb);
+        result.Should().Be(new TextValue("no"));
+    }
+
+    [Fact]
+    public void IFERROR_DoesNotEvaluateFallback_WhenValueSucceeds()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var evaluator = new FormulaEvaluator();
+        var result = evaluator.Evaluate("=IFERROR(42,1/0)", sheet, wb);
+        result.Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
+    public void IFERROR_ReturnsFallback_WhenValueErrors()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var evaluator = new FormulaEvaluator();
+        var result = evaluator.Evaluate("=IFERROR(1/0,\"err\")", sheet, wb);
+        result.Should().Be(new TextValue("err"));
+    }
+
+    [Fact]
+    public void IFNA_ReturnsFallback_OnlyForNA()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var evaluator = new FormulaEvaluator();
+        evaluator.Evaluate("=IFNA(NA(),\"caught\")", sheet, wb)
+            .Should().Be(new TextValue("caught"));
+        evaluator.Evaluate("=IFNA(1/0,\"caught\")", sheet, wb)
+            .Should().Be(ErrorValue.DivByZero, "IFNA should only catch #N/A, not other errors");
+    }
+
+    [Fact]
+    public void SUM_WithZeroArguments_ReturnsValueError()
+    {
+        var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
+        var evaluator = new FormulaEvaluator();
+        var result = evaluator.Evaluate("=SUM()", sheet, wb);
+        result.Should().Be(ErrorValue.Value);
+    }
 }
