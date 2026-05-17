@@ -18,7 +18,10 @@ public enum XlsxUnsupportedFeatureKind
     DrawingObjects,
     Sparklines,
     PowerQuery,
-    DataModel
+    DataModel,
+    LinkedDataTypes,
+    ThreadedComments,
+    TrackChanges
 }
 
 public sealed record XlsxUnsupportedFeature(
@@ -89,6 +92,26 @@ public static class XlsxFeatureInspector
             normalized.StartsWith("xl/powerpivot/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.DataModel);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/richdata/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/threadedcomments/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/persons/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.ThreadedComments);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/revisionheaders/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/revisions/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.TrackChanges);
             yield break;
         }
 

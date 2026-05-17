@@ -152,7 +152,10 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
             [XlsxUnsupportedFeatureKind.Sparklines] = "unsupported sparkline disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
-            [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed"
+            [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
+            [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
+            [XlsxUnsupportedFeatureKind.ThreadedComments] = "unsupported threaded comment disclosed",
+            [XlsxUnsupportedFeatureKind.TrackChanges] = "unsupported track changes disclosed"
         };
 
     private static XlsxUnsupportedFeatureKind[] ExpectedFeatureKindsFor(ManifestRow row)
@@ -183,6 +186,15 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("data-model") || tags.Contains("power-pivot"))
             expected.Add(XlsxUnsupportedFeatureKind.DataModel);
+
+        if (tags.Contains("linked-data-types") || tags.Contains("rich-data"))
+            expected.Add(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+
+        if (tags.Contains("threaded-comments"))
+            expected.Add(XlsxUnsupportedFeatureKind.ThreadedComments);
+
+        if (tags.Contains("track-changes") || tags.Contains("revision-history"))
+            expected.Add(XlsxUnsupportedFeatureKind.TrackChanges);
 
         if (tags.Contains("embedded-objects"))
             expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);

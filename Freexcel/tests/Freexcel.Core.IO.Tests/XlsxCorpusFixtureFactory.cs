@@ -27,11 +27,14 @@ internal static class XlsxCorpusFixtureFactory
         "generated-data-bars-001" => true,
         "generated-text-boxes-shapes-001" => true,
         "generated-images-sparklines-001" => true,
+        "generated-threaded-comments-001" => true,
+        "generated-track-changes-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
         "generated-pivots-001" => true,
         "generated-power-query-001" => true,
         "generated-data-model-001" => true,
+        "generated-linked-data-types-001" => true,
         "generated-slicers-001" => true,
         "generated-timelines-001" => true,
         "generated-external-links-001" => true,
@@ -100,6 +103,12 @@ internal static class XlsxCorpusFixtureFactory
                   </extLst>
                 </worksheet>
                 """)),
+        "generated-threaded-comments-001" => CreatePackage(
+            ("xl/threadedComments/threadedComment1.xml", "<threadedComments/>"),
+            ("xl/persons/person.xml", "<persons/>")),
+        "generated-track-changes-001" => CreatePackage(
+            ("xl/revisionHeaders/revisionHeader1.xml", "<revisionHeader/>"),
+            ("xl/revisions/revisionLog1.xml", "<revisionLog/>")),
         "generated-unsupported-chart-001" => CreatePackage(("xl/charts/chart1.xml", """
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
@@ -120,6 +129,10 @@ internal static class XlsxCorpusFixtureFactory
         "generated-data-model-001" => CreatePackage(
             ("xl/model/item.data", "Freexcel generated data model placeholder"),
             ("xl/model/item.xml", "<dataModel/>")),
+        "generated-linked-data-types-001" => CreatePackage(
+            ("xl/richData/rdrichvalue.xml", "<rvData/>"),
+            ("xl/richData/rdRichValueTypes.xml", "<rvTypes/>"),
+            ("xl/richData/richValueRel.xml", "<richValueRels/>")),
         "generated-slicers-001" => CreatePackage(
             ("xl/slicers/slicer1.xml", "<slicer/>"),
             ("xl/slicerCaches/slicerCache1.xml", "<slicerCacheDefinition/>")),
