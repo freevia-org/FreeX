@@ -1,6 +1,7 @@
 # Build outputs
 bin/
 obj/
+.tmp-*/
 
 # Logs
 logs/

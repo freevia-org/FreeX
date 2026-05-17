@@ -78,6 +78,7 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.LinkedDataTypes => "Microsoft linked data types (excluded)",
         XlsxUnsupportedFeatureKind.ThreadedComments => "threaded comments",
         XlsxUnsupportedFeatureKind.TrackChanges => "track changes / revision history",
+        XlsxUnsupportedFeatureKind.FormControls => "form controls / ActiveX controls",
         _ => kind.ToString()
     };
 
