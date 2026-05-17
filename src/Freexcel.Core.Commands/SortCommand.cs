@@ -179,18 +179,28 @@ public sealed class SortCommand : IWorkbookCommand
     }
 
     /// <summary>
-    /// Three-tier comparison: numbers first, then text (case-insensitive), then blank/other.
+    /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, blanks/errors last.
     /// </summary>
     private static int CompareScalar(ScalarValue a, ScalarValue b)
     {
+        bool aNum = a is NumberValue or DateTimeValue;
+        bool bNum = b is NumberValue or DateTimeValue;
+        if (aNum && bNum)
+        {
+            double av = a is DateTimeValue da ? da.Value : ((NumberValue)a).Value;
+            double bv = b is DateTimeValue db ? db.Value : ((NumberValue)b).Value;
+            return av.CompareTo(bv);
+        }
+        if (aNum) return -1;  // numbers/dates before text/bool/blank
+        if (bNum) return  1;
         return (a, b) switch
         {
-            (NumberValue na, NumberValue nb) => na.Value.CompareTo(nb.Value),
-            (NumberValue,    _             ) => -1,  // numbers before text/blank
-            (_,              NumberValue   ) =>  1,
             (TextValue ta,   TextValue tb  ) => string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase),
-            (TextValue,      _             ) => -1,  // text before blank/error
+            (TextValue,      _             ) => -1,  // text before bool/blank
             (_,              TextValue     ) =>  1,
+            (BoolValue ba,   BoolValue bb  ) => ba.Value.CompareTo(bb.Value),
+            (BoolValue,      _             ) => -1,  // bools before blank/error
+            (_,              BoolValue     ) =>  1,
             (BlankValue,     BlankValue    ) =>  0,
             (BlankValue,     _             ) =>  1,  // blanks last
             (_,              BlankValue    ) => -1,

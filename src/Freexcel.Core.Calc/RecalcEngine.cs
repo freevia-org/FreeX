@@ -261,6 +261,22 @@ public sealed class RecalcEngine
                 break;
             }
 
+            case NamedRangeNode named:
+            {
+                if (workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
+                {
+                    var nr0 = Math.Min(namedRange.Start.Row, namedRange.End.Row);
+                    var nr1 = Math.Max(namedRange.Start.Row, namedRange.End.Row);
+                    var nc0 = Math.Min(namedRange.Start.Col, namedRange.End.Col);
+                    var nc1 = Math.Max(namedRange.Start.Col, namedRange.End.Col);
+                    var nSheetId = namedRange.Start.Sheet;
+                    for (var r = nr0; r <= nr1; r++)
+                        for (var c = nc0; c <= nc1; c++)
+                            refs.Add(new CellAddress(nSheetId, r, c));
+                }
+                break;
+            }
+
             case BinaryOpNode binary:
                 CollectReferences(binary.Left, defaultSheetId, workbook, refs);
                 CollectReferences(binary.Right, defaultSheetId, workbook, refs);

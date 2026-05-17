@@ -159,22 +159,28 @@ public sealed class FormulaEvaluator
 
     private static int CompareValues(ScalarValue left, ScalarValue right)
     {
-        // Numbers compare as numbers, text as case-insensitive text
-        if (left is NumberValue ln && right is NumberValue rn)
-            return ln.Value.CompareTo(rn.Value);
+        // Numbers and dates compare as numbers (dates are OADate serial numbers)
+        bool lNum = left is NumberValue or DateTimeValue;
+        bool rNum = right is NumberValue or DateTimeValue;
+        if (lNum && rNum)
+        {
+            double lv = left is DateTimeValue ld ? ld.Value : ((NumberValue)left).Value;
+            double rv = right is DateTimeValue rd ? rd.Value : ((NumberValue)right).Value;
+            return lv.CompareTo(rv);
+        }
         if (left is TextValue lt && right is TextValue rt)
             return string.Compare(lt.Value, rt.Value, StringComparison.OrdinalIgnoreCase);
         if (left is BoolValue lb && right is BoolValue rb)
             return lb.Value.CompareTo(rb.Value);
 
-        // Mixed types: numbers < text < booleans (Excel convention)
+        // Mixed types: numbers/dates < text < booleans (Excel convention)
         return TypeOrder(left).CompareTo(TypeOrder(right));
     }
 
     private static int TypeOrder(ScalarValue v) => v switch
     {
         BlankValue => 0,
-        NumberValue => 1,
+        NumberValue or DateTimeValue => 1,
         TextValue => 2,
         BoolValue => 3,
         _ => 4
@@ -364,7 +370,7 @@ public sealed class FormulaEvaluator
         long rows = r1 - r0 + 1;
         long cols = c1 - c0 + 1;
         if (rows * cols > 1_000_000L)
-            return new RangeValue(new ScalarValue[0, 0], r0, c0); // guard against whole-column refs
+            throw new FormulaEvalException("#REF!", "Range contains more than 1,000,000 cells");
         var cells = new ScalarValue[(int)rows, (int)cols];
         for (int ri = 0; ri < rows; ri++)
             for (int ci = 0; ci < cols; ci++)

@@ -1284,7 +1284,7 @@ public static class BuiltInFunctions
             // Replace the Nth occurrence only
             if (args[3] is ErrorValue e3) return e3;
             double rawInstanceNum = ToNumber(args[3]);
-            if (!double.IsFinite(rawInstanceNum)) return ErrorValue.Value;
+            if (!double.IsFinite(rawInstanceNum) || rawInstanceNum > int.MaxValue) return ErrorValue.Value;
             int instanceNum = (int)rawInstanceNum;
             if (instanceNum < 1) return ErrorValue.Value;
             int count = 0;
@@ -1614,6 +1614,7 @@ public static class BuiltInFunctions
         var number = ToNumber(args[0]);
         var power = ToNumber(args[1]);
         if (number == 0 && power < 0) return ErrorValue.DivByZero;
+        if (number == 0 && power == 0) return ErrorValue.Num;
         var result = Math.Pow(number, power);
         if (double.IsNaN(result)) return ErrorValue.Num;
         if (double.IsInfinity(result)) return ErrorValue.Num;
@@ -2248,6 +2249,7 @@ public static class BuiltInFunctions
             var rawDigits = ToNumber(args[1]);
             if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
             digits = (int)Math.Truncate(rawDigits);
+            if (digits < -15 || digits > 15) return ErrorValue.Num;
         }
         double factor = Math.Pow(10, digits);
         return NumberResult(Math.Truncate(n * factor) / factor);
@@ -2259,6 +2261,10 @@ public static class BuiltInFunctions
 
     private static int CompareScalar(ScalarValue a, ScalarValue b)
     {
+        // Blank coerces to 0 when compared against numbers (Excel convention)
+        if (a is BlankValue && TryCellNumber(b, out _)) a = new NumberValue(0);
+        if (b is BlankValue && TryCellNumber(a, out _)) b = new NumberValue(0);
+
         var aIsNumber = TryCellNumber(a, out double aNumber);
         var bIsNumber = TryCellNumber(b, out double bNumber);
         if (aIsNumber && bIsNumber)
@@ -3356,8 +3362,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
         if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
 
-        double rounded = decimals is >= 0 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
-        if (decimals < 0) rounded = RoundWithExcelDigits(value, decimals);
+        double rounded = decimals is >= -15 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
         return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
