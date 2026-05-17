@@ -24,6 +24,8 @@ public class GridView : FrameworkElement
         FocusVisualStyle = null;
         UseLayoutRounding = true;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
+        TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
     }
 
     // Column header strip height (horizontal row of A, B, C â€¦ letters)
@@ -50,6 +52,7 @@ public class GridView : FrameworkElement
     private const double SplitScrollbarThickness = 10;
     private const double SplitScrollbarMinThumb = 24;
     private const double MinCellSize   = 5;
+    private const double DefaultCellFontSizePoints = 11.0;
     private const double PageMarginGuideHitZone = 5;
     private const double PageMarginRulerHandleLength = 12;
     private const double PageMarginRulerHandleThickness = 8;
@@ -76,6 +79,9 @@ public class GridView : FrameworkElement
     private static readonly Pen      SplitScrollbarPen        = new(MakeBrush(196, 196, 196), 1);
     private static readonly Brush    FormulaTraceArrowBrush   = MakeBrush(0, 102, 204);
     private static readonly Pen      FormulaTraceArrowPen     = MakeFormulaTraceArrowPen();
+
+    private static double ToDisplayFontSize(double pointSize) =>
+        Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
 
     private static Pen MakeResizeLinePen()
     {
@@ -2639,7 +2645,7 @@ public class GridView : FrameworkElement
                 (false, true)  => new Typeface(new FontFamily("Calibri"), FontStyles.Italic,  FontWeights.Normal, FontStretches.Normal),
                 _              => DefaultTypeface
             };
-            var fontSize = ((style?.FontSize > 0) ? style!.FontSize : 11.0) * (96.0 / 72.0);
+            var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
                 textBrush = new SolidColorBrush(Color.FromRgb(fontColor.R, fontColor.G, fontColor.B));
@@ -2851,8 +2857,8 @@ public class GridView : FrameworkElement
             };
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
-            // Multiply by 96/72 so an Excel 11pt font renders at the correct visual size.
-            double fontSize = ((style?.FontSize > 0) ? style!.FontSize : 11.0) * (96.0 / 72.0);
+            // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
+            double fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
 
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fc && !fc.IsBlack)

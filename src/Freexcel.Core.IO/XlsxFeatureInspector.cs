@@ -22,7 +22,16 @@ public enum XlsxUnsupportedFeatureKind
     LinkedDataTypes,
     ThreadedComments,
     TrackChanges,
-    FormControls
+    FormControls,
+    DigitalSignatures,
+    CustomRibbonUi,
+    OfficeAddIns,
+    LiveWebQueries,
+    SensitivityLabels,
+    SmartArtDiagrams,
+    PrinterSettings,
+    StructuredTables,
+    UnsupportedSheetTypes
 }
 
 public sealed record XlsxUnsupportedFeature(
@@ -120,6 +129,63 @@ public static class XlsxFeatureInspector
             normalized.StartsWith("xl/ctrlprops/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
+            yield break;
+        }
+
+        if (normalized.StartsWith("_xmlsignatures/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.DigitalSignatures);
+            yield break;
+        }
+
+        if (normalized.StartsWith("customui/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.CustomRibbonUi);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/webextensions/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.OfficeAddIns);
+            yield break;
+        }
+
+        if (normalized is "xl/webpublishitems.xml")
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.LiveWebQueries);
+            yield break;
+        }
+
+        if (normalized is "docprops/custom.xml" &&
+            CustomPropertiesHaveSensitivityLabels(entry))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.SensitivityLabels);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/diagrams/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/printersettings/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.PrinterSettings);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/tables/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.StructuredTables);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/chartsheets/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/dialogsheets/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/macrosheets/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
             yield break;
         }
 
@@ -255,6 +321,28 @@ public static class XlsxFeatureInspector
                 .Any(element =>
                     element.Name.Namespace == spreadsheetDrawingNs &&
                     element.Name.LocalName is "sp" or "pic" or "cxnSp" or "grpSp");
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool CustomPropertiesHaveSensitivityLabels(ZipArchiveEntry entry)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            var propertiesXml = XDocument.Load(stream);
+            XNamespace customPropertiesNs = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+
+            return propertiesXml
+                .Descendants(customPropertiesNs + "property")
+                .Select(property => property.Attribute("name")?.Value)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Any(name =>
+                    name!.StartsWith("MSIP_Label_", StringComparison.OrdinalIgnoreCase) ||
+                    name.StartsWith("Sensitivity", StringComparison.OrdinalIgnoreCase));
         }
         catch
         {

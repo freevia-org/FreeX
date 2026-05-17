@@ -156,7 +156,16 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
             [XlsxUnsupportedFeatureKind.ThreadedComments] = "unsupported threaded comment disclosed",
             [XlsxUnsupportedFeatureKind.TrackChanges] = "unsupported track changes disclosed",
-            [XlsxUnsupportedFeatureKind.FormControls] = "unsupported form control disclosed"
+            [XlsxUnsupportedFeatureKind.FormControls] = "unsupported form control disclosed",
+            [XlsxUnsupportedFeatureKind.DigitalSignatures] = "unsupported digital signature disclosed",
+            [XlsxUnsupportedFeatureKind.CustomRibbonUi] = "unsupported custom ribbon UI disclosed",
+            [XlsxUnsupportedFeatureKind.OfficeAddIns] = "unsupported Office add-in disclosed",
+            [XlsxUnsupportedFeatureKind.LiveWebQueries] = "unsupported live web query disclosed",
+            [XlsxUnsupportedFeatureKind.SensitivityLabels] = "unsupported sensitivity label disclosed",
+            [XlsxUnsupportedFeatureKind.SmartArtDiagrams] = "unsupported SmartArt diagram disclosed",
+            [XlsxUnsupportedFeatureKind.PrinterSettings] = "unsupported printer settings disclosed",
+            [XlsxUnsupportedFeatureKind.StructuredTables] = "unsupported structured table disclosed",
+            [XlsxUnsupportedFeatureKind.UnsupportedSheetTypes] = "unsupported sheet type disclosed"
         };
 
     private static XlsxUnsupportedFeatureKind[] ExpectedFeatureKindsFor(ManifestRow row)
@@ -199,6 +208,33 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("form-controls") || tags.Contains("activex"))
             expected.Add(XlsxUnsupportedFeatureKind.FormControls);
+
+        if (tags.Contains("digital-signatures"))
+            expected.Add(XlsxUnsupportedFeatureKind.DigitalSignatures);
+
+        if (tags.Contains("custom-ribbon-ui"))
+            expected.Add(XlsxUnsupportedFeatureKind.CustomRibbonUi);
+
+        if (tags.Contains("office-addins") || tags.Contains("webextensions"))
+            expected.Add(XlsxUnsupportedFeatureKind.OfficeAddIns);
+
+        if (tags.Contains("live-web-queries") || tags.Contains("web-publish"))
+            expected.Add(XlsxUnsupportedFeatureKind.LiveWebQueries);
+
+        if (tags.Contains("sensitivity-labels") || tags.Contains("irm"))
+            expected.Add(XlsxUnsupportedFeatureKind.SensitivityLabels);
+
+        if (tags.Contains("smartart") || tags.Contains("diagrams"))
+            expected.Add(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
+
+        if (tags.Contains("printer-settings"))
+            expected.Add(XlsxUnsupportedFeatureKind.PrinterSettings);
+
+        if (tags.Contains("structured-tables") || tags.Contains("listobjects"))
+            expected.Add(XlsxUnsupportedFeatureKind.StructuredTables);
+
+        if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets"))
+            expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
 
         if (tags.Contains("embedded-objects"))
             expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);

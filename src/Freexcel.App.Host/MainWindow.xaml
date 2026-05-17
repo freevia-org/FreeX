@@ -9,7 +9,12 @@
         Title="Freexcel"
         Height="720" Width="1280"
         WindowState="Maximized"
-        Background="#F0F0F0">
+        Background="#F0F0F0"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="34" ResizeBorderThickness="5"/>
@@ -20,12 +25,12 @@
         <!-- ── Ribbon button styles ─────────────────────────────────────── -->
 
         <Style x:Key="RibbonBtn" TargetType="Button">
-            <Setter Property="Padding" Value="5,2"/>
+            <Setter Property="Padding" Value="4,2"/>
             <Setter Property="Margin" Value="1,1"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Style.Triggers>
@@ -41,12 +46,12 @@
         </Style>
 
         <Style x:Key="RibbonToggleBtn" TargetType="ToggleButton">
-            <Setter Property="Padding" Value="3,2"/>
+            <Setter Property="Padding" Value="3,1"/>
             <Setter Property="Margin" Value="1,1"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Style.Triggers>
@@ -75,6 +80,61 @@
             <Setter Property="Foreground" Value="#555555"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="RibbonGroupPanel" TargetType="Grid">
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="MinHeight" Value="84"/>
+        </Style>
+
+        <Style x:Key="RibbonGroupLabelBorder" TargetType="Border">
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="MinHeight" Value="18"/>
+        </Style>
+
+        <Style x:Key="RibbonGroupDivider" TargetType="Rectangle">
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Fill" Value="#D0D0D0"/>
+            <Setter Property="Margin" Value="4,5,6,18"/>
+        </Style>
+
+        <Style x:Key="RibbonLargeButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Height" Value="64"/>
+            <Setter Property="Padding" Value="3,2"/>
+        </Style>
+
+        <Style x:Key="RibbonTallButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+            <Setter Property="Width" Value="58"/>
+            <Setter Property="Height" Value="64"/>
+            <Setter Property="Padding" Value="3,2"/>
+        </Style>
+
+        <Style x:Key="RibbonCommandButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+            <Setter Property="Width" Value="92"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+
+        <Style x:Key="RibbonIconButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="2"/>
+        </Style>
+
+        <Style x:Key="RibbonIconToggleButton" BasedOn="{StaticResource RibbonToggleBtn}" TargetType="ToggleButton">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="2"/>
+        </Style>
+
+        <Style x:Key="RibbonIconGlyph" TargetType="TextBlock">
+            <Setter Property="Tag" Value="RibbonIcon"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
         </Style>
 
         <!-- Ribbon tab item style — flat, green underline when selected -->
@@ -146,6 +206,148 @@
         <!-- ComboBox: keep background white to match Excel toolbar -->
         <Style TargetType="ComboBox">
             <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111"/>
+            <Setter Property="BorderBrush" Value="#A6A6A6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4,1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid SnapsToDevicePixels="True">
+                            <ToggleButton x:Name="DropDownToggle"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Background="White"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="ToggleBorder"
+                                                Background="White"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="18"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter Grid.Column="0"
+                                                                  Margin="4,1,2,1"
+                                                                  VerticalAlignment="Center"
+                                                                  HorizontalAlignment="Left"
+                                                                  RecognizesAccessKey="True"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentStringFormat="{Binding SelectionBoxItemStringFormat, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
+                                                <Path Grid.Column="1"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z"
+                                                      Width="8" Height="4"
+                                                      Fill="#333"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="#7A9CC6"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="ToggleBorder" Property="Background" Value="White"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <TextBox x:Name="PART_EditableTextBox"
+                                     Margin="4,1,20,1"
+                                     Background="White"
+                                     BorderThickness="0"
+                                     Visibility="Hidden"
+                                     IsReadOnly="{TemplateBinding IsReadOnly}"
+                                     HorizontalContentAlignment="Left"
+                                     VerticalContentAlignment="Center"/>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Fade">
+                                <Grid x:Name="DropDown"
+                                      MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                      Background="White">
+                                    <Border Background="White"
+                                            BorderBrush="#A6A6A6"
+                                            BorderThickness="1"/>
+                                    <ScrollViewer Margin="1"
+                                                  Background="White"
+                                                  SnapsToDevicePixels="True"
+                                                  KeyboardNavigation.DirectionalNavigation="Contained">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#777"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#EAF3EA"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#DDEDDD"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ContextMenu">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#C8C8C8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="White"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ItemsPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#111"/>
         </Style>
 
         <!-- ── Start-screen sidebar buttons ─────────────────────────────── -->
@@ -255,7 +457,7 @@
              ═══════════════════════════════════════════════════════════════ -->
         <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="White"
                     BorderThickness="0,0,0,1" BorderBrush="#D0D0D0"
-                    Padding="0" TabStripPlacement="Top" SelectedIndex="1" Height="106"
+                    Padding="0" TabStripPlacement="Top" SelectedIndex="1" MinHeight="132"
                     SelectionChanged="RibbonTabs_SelectionChanged">
 
             <!-- ── FILE — clicking opens the overlay; handler immediately switches back to Home -->
@@ -263,33 +465,37 @@
 
             <!-- ── HOME ──────────────────────────────────────────────── -->
             <TabItem Header="Home" local:RibbonTooltip.KeyTip="H">
-                <Border Background="White" Padding="4,3,4,0">
+                <Border Background="White" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel x:Name="HomeRibbonPanel" Orientation="Horizontal" MinHeight="88">
 
                         <!-- ▌Clipboard ▌ -->
-                        <Grid>
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="2,2,2,0">
-                                <Button Click="PasteBtn_Click" Width="54" Height="46" Margin="1"
-                                        Style="{StaticResource RibbonBtn}"
+                            <Grid Grid.Row="0" Margin="0,0,2,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Click="PasteBtn_Click"
+                                        Style="{StaticResource RibbonLargeButton}"
                                         local:RibbonTooltip.Title="Paste"
                                         local:RibbonTooltip.KeyTip="V"
                                         local:RibbonTooltip.Description="Paste the contents of the Clipboard (Ctrl+V).">
                                     <StackPanel>
                                         <TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" FontSize="22"
                                                    HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Paste" FontSize="10" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Paste" Tag="RibbonLabel" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Button>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Click="CutBtn_Click" Width="40" Height="14" Margin="1,0"
-                                            Style="{StaticResource RibbonBtn}"
+                                <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="2,1,0,0">
+                                    <Button Click="CutBtn_Click" Width="54" Height="20" Margin="1,0"
+                                            Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Cut"
                                             local:RibbonTooltip.KeyTip="X"
                                             local:RibbonTooltip.Description="Cut the selection and put it on the Clipboard (Ctrl+X).">
@@ -299,8 +505,8 @@
                                             <TextBlock Text="Cut" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Click="CopyBtn_Click" Width="46" Height="14" Margin="1,0"
-                                            Style="{StaticResource RibbonBtn}"
+                                    <Button Click="CopyBtn_Click" Width="54" Height="20" Margin="1,1,0,0"
+                                            Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Copy"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Copy the selection and put it on the Clipboard (Ctrl+C).">
@@ -310,28 +516,31 @@
                                             <TextBlock Text="Copy" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Click="FormatPainterBtn_Click" Width="22" Height="14" Margin="1,0"
-                                            Style="{StaticResource RibbonBtn}"
+                                    <Button Click="FormatPainterBtn_Click" Width="86" Height="20" Margin="1,1,0,0"
+                                            Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Format Painter"
                                             local:RibbonTooltip.KeyTip="FP"
                                             local:RibbonTooltip.Description="Copy formatting from one place and apply it to another.">
-                                        <TextBlock Text="&#xF0E3;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xF0E3;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <TextBlock Text="Format Painter" Tag="RibbonLabel" VerticalAlignment="Center" FontSize="10"/>
+                                        </StackPanel>
                                     </Button>
                                 </StackPanel>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            </Grid>
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Clipboard" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                        <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
                         <!-- ▌Font ▌ -->
-                        <Grid>
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
@@ -347,46 +556,56 @@
                                               local:RibbonTooltip.Title="Font Size"
                                               local:RibbonTooltip.KeyTip="FS"
                                               local:RibbonTooltip.Description="Change the font size of the selected cells."/>
-                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="IncreaseFontSizeBtn_Click"
                                             local:RibbonTooltip.Title="Increase Font Size"
                                             local:RibbonTooltip.KeyTip="FG"
                                             local:RibbonTooltip.Description="Make the font larger.">
-                                        <TextBlock Text="&#xE8DF;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="18" Height="16">
+                                            <TextBlock Text="A" FontSize="13" FontWeight="SemiBold" Margin="0,0,5,0"
+                                                       Style="{StaticResource RibbonIconGlyph}"/>
+                                            <TextBlock Text="A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                                            <Path Data="M 0 5 L 4 0 L 8 5" Stroke="#111" StrokeThickness="1.2"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Top" Width="8" Height="6"/>
+                                        </Grid>
                                     </Button>
-                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="DecreaseFontSizeBtn_Click"
                                             local:RibbonTooltip.Title="Decrease Font Size"
                                             local:RibbonTooltip.KeyTip="FK"
                                             local:RibbonTooltip.Description="Make the font smaller.">
-                                        <TextBlock Text="&#xE8E0;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="18" Height="16">
+                                            <TextBlock Text="A" FontSize="13" FontWeight="SemiBold" Margin="0,0,5,0"
+                                                       Style="{StaticResource RibbonIconGlyph}"/>
+                                            <TextBlock Text="A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                            <Path Data="M 0 0 L 4 5 L 8 0" Stroke="#111" StrokeThickness="1.2"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="8" Height="6"/>
+                                        </Grid>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                    <ToggleButton x:Name="BoldButton"      Width="24" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}" FontWeight="Bold"
+                                    <ToggleButton x:Name="BoldButton"
+                                                  Style="{StaticResource RibbonIconToggleButton}" FontWeight="Bold"
                                                   Click="BoldButton_Click"
                                                   local:RibbonTooltip.Title="Bold"
                                                   local:RibbonTooltip.KeyTip="1"
                                                   local:RibbonTooltip.Description="Make the selected text bold (Ctrl+B).">B</ToggleButton>
-                                    <ToggleButton x:Name="ItalicButton"    Width="24" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}" FontStyle="Italic"
+                                    <ToggleButton x:Name="ItalicButton"
+                                                  Style="{StaticResource RibbonIconToggleButton}" FontStyle="Italic"
                                                   Click="ItalicButton_Click"
                                                   local:RibbonTooltip.Title="Italic"
                                                   local:RibbonTooltip.KeyTip="2"
                                                   local:RibbonTooltip.Description="Italicize the selected text (Ctrl+I).">I</ToggleButton>
-                                    <ToggleButton x:Name="UnderlineButton" Width="24" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="UnderlineButton"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="UnderlineButton_Click"
                                                   local:RibbonTooltip.Title="Underline"
                                                   local:RibbonTooltip.KeyTip="3"
                                                   local:RibbonTooltip.Description="Underline the selected text (Ctrl+U).">
                                         <TextBlock Text="U" TextDecorations="Underline"/>
                                     </ToggleButton>
-                                    <ToggleButton x:Name="StrikeButton"    Width="24" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="StrikeButton"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="StrikeButton_Click"
                                                   local:RibbonTooltip.Title="Strikethrough"
                                                   local:RibbonTooltip.KeyTip="4"
@@ -394,7 +613,7 @@
                                         <TextBlock Text="S" TextDecorations="Strikethrough"/>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button Width="30" Height="22" Style="{StaticResource RibbonBtn}"
+                                    <Button Width="30" Height="22" Style="{StaticResource RibbonIconButton}"
                                             Click="BorderPickerBtn_Click"
                                             local:RibbonTooltip.Title="Borders"
                                             local:RibbonTooltip.KeyTip="B"
@@ -413,12 +632,23 @@
                                                 <MenuItem Header="Thick Bottom Border"  local:RibbonTooltip.KeyTip="K" Click="BorderThickBottomMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
-                                        <TextBlock Text="&#xE91C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="15" Height="15" SnapsToDevicePixels="True">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition/><RowDefinition/><RowDefinition/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.RowSpan="3" Grid.ColumnSpan="3" BorderBrush="#111" BorderThickness="1"/>
+                                            <Border Grid.Column="1" Grid.RowSpan="3" BorderBrush="#111" BorderThickness="1,0,0,0"/>
+                                            <Border Grid.Column="2" Grid.RowSpan="3" BorderBrush="#111" BorderThickness="1,0,0,0"/>
+                                            <Border Grid.Row="1" Grid.ColumnSpan="3" BorderBrush="#111" BorderThickness="0,1,0,0"/>
+                                            <Border Grid.Row="2" Grid.ColumnSpan="3" BorderBrush="#111" BorderThickness="0,1,0,0"/>
+                                        </Grid>
                                     </Button>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
                                     <Button x:Name="FontColorBtn" Width="28" Height="22"
-                                            Style="{StaticResource RibbonBtn}"
+                                            Style="{StaticResource RibbonIconButton}"
                                             Click="FontColorBtn_Click"
                                             local:RibbonTooltip.Title="Font Color"
                                             local:RibbonTooltip.KeyTip="FC"
@@ -429,7 +659,7 @@
                                         </StackPanel>
                                     </Button>
                                     <Button x:Name="FillColorBtn" Width="28" Height="22"
-                                            Style="{StaticResource RibbonBtn}"
+                                            Style="{StaticResource RibbonIconButton}"
                                             Click="FillColorBtn_Click"
                                             local:RibbonTooltip.Title="Fill Color"
                                             local:RibbonTooltip.KeyTip="H"
@@ -442,51 +672,66 @@
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Font" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                        <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
                         <!-- ▌Alignment ▌ -->
-                        <Grid>
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <!-- Vertical align + Orientation + Wrap -->
                                 <StackPanel Orientation="Horizontal">
-                                    <ToggleButton x:Name="AlignTopBtn" Width="26" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="AlignTopBtn"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="AlignTopBtn_Click"
                                                   local:RibbonTooltip.Title="Top Align"
                                                   local:RibbonTooltip.KeyTip="AT"
                                                   local:RibbonTooltip.Description="Align the contents to the top of the cell.">
-                                        <TextBlock Text="&#xE1D3;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="16" Height="16">
+                                            <Border BorderBrush="#111" BorderThickness="1"/>
+                                            <StackPanel Margin="3,2,3,0" VerticalAlignment="Top">
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,2"/>
+                                                <Rectangle Height="1" Fill="#111" Margin="2,0,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
                                     </ToggleButton>
-                                    <ToggleButton x:Name="AlignMiddleBtn" Width="26" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="AlignMiddleBtn"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="AlignMiddleBtn_Click"
                                                   local:RibbonTooltip.Title="Middle Align"
                                                   local:RibbonTooltip.KeyTip="AM"
                                                   local:RibbonTooltip.Description="Align the contents between the top and bottom of the cell.">
-                                        <TextBlock Text="&#xE1D5;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="16" Height="16">
+                                            <Border BorderBrush="#111" BorderThickness="1"/>
+                                            <StackPanel Margin="3,0" VerticalAlignment="Center">
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,2"/>
+                                                <Rectangle Height="1" Fill="#111" Margin="2,0,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
                                     </ToggleButton>
-                                    <ToggleButton x:Name="AlignBottomBtn" Width="26" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="AlignBottomBtn"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="AlignBottomBtn_Click"
                                                   local:RibbonTooltip.Title="Bottom Align"
                                                   local:RibbonTooltip.KeyTip="AB"
                                                   local:RibbonTooltip.Description="Align the contents to the bottom of the cell.">
-                                        <TextBlock Text="&#xE1D4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="16" Height="16">
+                                            <Border BorderBrush="#111" BorderThickness="1"/>
+                                            <StackPanel Margin="3,0,3,2" VerticalAlignment="Bottom">
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,2"/>
+                                                <Rectangle Height="1" Fill="#111" Margin="2,0,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button Width="36" Height="22" Style="{StaticResource RibbonBtn}"
+                                    <Button Width="40" Height="22" Style="{StaticResource RibbonBtn}"
                                             Click="OrientationPickerBtn_Click"
                                             local:RibbonTooltip.Title="Orientation"
                                             local:RibbonTooltip.KeyTip="RO"
@@ -518,8 +763,8 @@
                                 </StackPanel>
                                 <!-- Horizontal align + indent + merge -->
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                    <ToggleButton x:Name="AlignLeftBtn"   Width="26" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="AlignLeftBtn"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="AlignLeftBtn_Click"
                                                   local:RibbonTooltip.Title="Align Left"
                                                   local:RibbonTooltip.KeyTip="AL"
@@ -527,8 +772,8 @@
                                         <TextBlock Text="&#xE8E4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
-                                    <ToggleButton x:Name="AlignCenterBtn" Width="26" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="AlignCenterBtn"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="AlignCenterBtn_Click"
                                                   local:RibbonTooltip.Title="Center"
                                                   local:RibbonTooltip.KeyTip="AC"
@@ -536,8 +781,8 @@
                                         <TextBlock Text="&#xE8E3;" FontFamily="Segoe MDL2 Assets" FontSize="13"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
-                                    <ToggleButton x:Name="AlignRightBtn"  Width="26" Height="22"
-                                                  Style="{StaticResource RibbonToggleBtn}"
+                                    <ToggleButton x:Name="AlignRightBtn"
+                                                  Style="{StaticResource RibbonIconToggleButton}"
                                                   Click="AlignRightBtn_Click"
                                                   local:RibbonTooltip.Title="Align Right"
                                                   local:RibbonTooltip.KeyTip="AR"
@@ -546,43 +791,65 @@
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
-                                    <Button Width="24" Height="22" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="IndentDecBtn_Click"
                                             local:RibbonTooltip.Title="Decrease Indent"
                                             local:RibbonTooltip.KeyTip="AO"
                                             local:RibbonTooltip.Description="Decrease the indent level of the cell contents.">
-                                        <TextBlock Text="&#xE8AC;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="17" Height="15">
+                                            <StackPanel Margin="6,2,0,0">
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,3"/>
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,3"/>
+                                                <Rectangle Height="1" Fill="#111"/>
+                                            </StackPanel>
+                                            <Path Data="M 6 2 L 1 7 L 6 12" Stroke="#111" StrokeThickness="1.2"
+                                                  HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                        </Grid>
                                     </Button>
-                                    <Button Width="24" Height="22" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="IndentIncBtn_Click"
                                             local:RibbonTooltip.Title="Increase Indent"
                                             local:RibbonTooltip.KeyTip="AI"
                                             local:RibbonTooltip.Description="Increase the indent level of the cell contents.">
-                                        <TextBlock Text="&#xE8AB;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Grid Width="17" Height="15">
+                                            <StackPanel Margin="0,2,6,0">
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,3"/>
+                                                <Rectangle Height="1" Fill="#111" Margin="0,0,0,3"/>
+                                                <Rectangle Height="1" Fill="#111"/>
+                                            </StackPanel>
+                                            <Path Data="M 11 2 L 16 7 L 11 12" Stroke="#111" StrokeThickness="1.2"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                        </Grid>
                                     </Button>
-                                    <Button Width="90" Height="22" Margin="2,0,0,0" Style="{StaticResource RibbonBtn}"
+                                    <Button Width="106" Height="22" Margin="2,0,0,0" Style="{StaticResource RibbonBtn}"
                                             Click="MergeCenterBtn_Click"
                                             local:RibbonTooltip.Title="Merge &amp; Center"
                                             local:RibbonTooltip.KeyTip="M"
                                             local:RibbonTooltip.Description="Join the selected cells into one larger cell and center the contents.">
-                                        <TextBlock Text="Merge &amp; Center" FontSize="10"/>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Grid Width="20" Height="14" Margin="0,0,4,0">
+                                                <Border BorderBrush="#111" BorderThickness="1"/>
+                                                <Rectangle Height="1" Fill="#111" VerticalAlignment="Center"/>
+                                                <Path Data="M 2 7 L 7 3 M 2 7 L 7 11 M 18 7 L 13 3 M 18 7 L 13 11"
+                                                      Stroke="#111" StrokeThickness="1"/>
+                                            </Grid>
+                                            <TextBlock Text="Merge &amp; Center" Tag="RibbonLabel" FontSize="10"/>
+                                        </StackPanel>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Alignment" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                        <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
                         <!-- ▌Number ▌ -->
-                        <Grid>
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <ComboBox x:Name="NumberFormatBox" Width="116" Height="22" Margin="1,4,1,2" Background="White"
@@ -592,35 +859,35 @@
                                           local:RibbonTooltip.KeyTip="N"
                                           local:RibbonTooltip.Description="Choose how to display values in the selected cells."/>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="CurrencyBtn_Click"
                                             local:RibbonTooltip.Title="Accounting Number Format"
                                             local:RibbonTooltip.KeyTip="AN"
                                             local:RibbonTooltip.Description="Choose the currency format for selected cells.">
                                         <TextBlock Text="$" FontSize="11" FontWeight="Bold"/>
                                     </Button>
-                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="PercentBtn_Click"
                                             local:RibbonTooltip.Title="Percent Style"
                                             local:RibbonTooltip.KeyTip="P"
                                             local:RibbonTooltip.Description="Display values as a percentage (Ctrl+Shift+%).">
                                         <TextBlock Text="%" FontSize="11" FontWeight="Bold"/>
                                     </Button>
-                                    <Button Width="22" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="CommaStyleBtn_Click"
                                             local:RibbonTooltip.Title="Comma Style"
                                             local:RibbonTooltip.KeyTip="K"
                                             local:RibbonTooltip.Description="Display values with a thousands separator.">
                                         <TextBlock Text="," FontSize="11" FontWeight="Bold"/>
                                     </Button>
-                                    <Button Width="24" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="IncDecimalBtn_Click"
                                             local:RibbonTooltip.Title="Increase Decimal Places"
                                             local:RibbonTooltip.KeyTip="QI"
                                             local:RibbonTooltip.Description="Show more decimal places.">
                                         <TextBlock Text=".0+" FontSize="9"/>
                                     </Button>
-                                    <Button Width="24" Height="22" Margin="1" Style="{StaticResource RibbonBtn}"
+                                    <Button Style="{StaticResource RibbonIconButton}"
                                             Click="DecDecimalBtn_Click"
                                             local:RibbonTooltip.Title="Decrease Decimal Places"
                                             local:RibbonTooltip.KeyTip="QD"
@@ -629,23 +896,23 @@
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Number" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                        <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
                         <!-- ▌Styles ▌ -->
-                        <Grid>
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <!-- Conditional Formatting -->
-                                <Button Width="62" Height="60" Margin="1,0"
-                                        Style="{StaticResource RibbonBtn}" Click="CfPickerBtn_Click"
+                                <Button Width="94" Height="64" Margin="1,0" Tag="RibbonCompact:94:36"
+                                        Style="{StaticResource RibbonTallButton}" Click="CfPickerBtn_Click"
                                         local:RibbonTooltip.Title="Conditional Formatting"
                                         local:RibbonTooltip.KeyTip="L"
                                         local:RibbonTooltip.Description="Highlight cells based on their values using rules, color scales, or data bars.">
@@ -678,13 +945,13 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="20"
                                                    HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Conditional" FontSize="8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Formatting" FontSize="8" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Conditional" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Formatting" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Format as Table -->
-                                <Button Width="58" Height="60" Margin="1,0"
-                                        Style="{StaticResource RibbonBtn}" Click="FormatTableBtn_Click"
+                                <Button Width="78" Height="64" Margin="1,0" Tag="RibbonCompact:78:36"
+                                        Style="{StaticResource RibbonTallButton}" Click="FormatTableBtn_Click"
                                         local:RibbonTooltip.Title="Format as Table"
                                         local:RibbonTooltip.KeyTip="T"
                                         local:RibbonTooltip.Description="Quickly format a range as a styled table.">
@@ -698,13 +965,13 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <TextBlock Text="&#xE8A9;" FontFamily="Segoe MDL2 Assets" FontSize="20"
                                                    HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Format as" FontSize="8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Table" FontSize="8" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Format as" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Table" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Cell Styles -->
-                                <Button Width="52" Height="60" Margin="1,0"
-                                        Style="{StaticResource RibbonBtn}" Click="CellStylesBtn_Click"
+                                <Button Width="66" Height="64" Margin="1,0" Tag="RibbonCompact:66:36"
+                                        Style="{StaticResource RibbonTallButton}" Click="CellStylesBtn_Click"
                                         local:RibbonTooltip.Title="Cell Styles"
                                         local:RibbonTooltip.KeyTip="J"
                                         local:RibbonTooltip.Description="Apply a predefined cell style.">
@@ -724,24 +991,26 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <TextBlock Text="&#xE91C;" FontFamily="Segoe MDL2 Assets" FontSize="20"
                                                    HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Cell" FontSize="8" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Styles" FontSize="8" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Cell" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Styles" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Styles" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>                        <!-- ▌Cells ▌ -->
-                        <Grid>
+                        <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
+                        
+                        <!-- ▌Cells ▌ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}"
+                                <Button Style="{StaticResource RibbonCommandButton}" Tag="RibbonCompact:92:28"
                                         Click="InsertPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert"
                                         local:RibbonTooltip.KeyTip="I"
@@ -757,10 +1026,10 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="11"
                                                    VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Insert" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Insert" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}"
+                                <Button Style="{StaticResource RibbonCommandButton}" Tag="RibbonCompact:92:28"
                                         Click="DeletePickerBtn_Click"
                                         local:RibbonTooltip.Title="Delete"
                                         local:RibbonTooltip.KeyTip="D"
@@ -776,10 +1045,10 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <TextBlock Text="&#xE738;" FontFamily="Segoe MDL2 Assets" FontSize="11"
                                                    VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Delete" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Delete" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}"
+                                <Button Style="{StaticResource RibbonCommandButton}" Tag="RibbonCompact:92:28"
                                         Click="FormatPickerBtn_Click"
                                         local:RibbonTooltip.Title="Format"
                                         local:RibbonTooltip.KeyTip="O"
@@ -804,23 +1073,23 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="11"
                                                    VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Format" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Format" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Cells" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
 
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                        <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
 
                         <!-- ▌Editing ▌ -->
-                        <Grid>
+                        <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <Grid.ColumnDefinitions>
@@ -828,8 +1097,8 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- AutoSum: tall left button -->
-                                <Button Grid.Column="0" Width="54" Height="60" Margin="1,0,3,0"
-                                        Style="{StaticResource RibbonBtn}" Click="AutoSumPickerBtn_Click"
+                                <Button Grid.Column="0" Width="64" Height="64" Margin="1,0,3,0" Tag="RibbonCompact:64:36"
+                                        Style="{StaticResource RibbonTallButton}" Click="AutoSumPickerBtn_Click"
                                         local:RibbonTooltip.Title="AutoSum"
                                         local:RibbonTooltip.KeyTip="U"
                                         local:RibbonTooltip.Description="Automatically insert a SUM, AVERAGE, COUNT, MAX, or MIN formula.">
@@ -846,7 +1115,7 @@
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock Text="&#x03A3;" FontSize="22" HorizontalAlignment="Center" Margin="0,4,0,1"/>
-                                        <TextBlock Text="AutoSum" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="AutoSum" Tag="RibbonLabel" FontSize="10" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Right: 2×2 grid of Fill/Clear/Sort&Filter/Find&Select -->
@@ -860,7 +1129,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <!-- Fill -->
-                                    <Button Grid.Row="0" Grid.Column="0" Width="46" Height="28" Margin="1,1"
+                                    <Button Grid.Row="0" Grid.Column="0" Width="74" Height="30" Margin="1,1" Tag="RibbonCompact:74:30"
                                             Style="{StaticResource RibbonBtn}" Click="FillPickerBtn_Click"
                                             local:RibbonTooltip.Title="Fill"
                                             local:RibbonTooltip.KeyTip="FI"
@@ -876,14 +1145,14 @@
                                                 <MenuItem Header="Flash Fill"   local:RibbonTooltip.KeyTip="F" Click="FlashFillMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
-                                        <StackPanel HorizontalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
-                                            <TextBlock Text="Fill" FontSize="8" HorizontalAlignment="Center"/>
+                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <TextBlock Text="Fill" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Clear -->
-                                    <Button Grid.Row="0" Grid.Column="1" Width="46" Height="28" Margin="1,1"
+                                    <Button Grid.Row="0" Grid.Column="1" Width="74" Height="30" Margin="1,1" Tag="RibbonCompact:74:30"
                                             Style="{StaticResource RibbonBtn}" Click="ClearPickerBtn_Click"
                                             local:RibbonTooltip.Title="Clear"
                                             local:RibbonTooltip.KeyTip="E"
@@ -897,14 +1166,14 @@
                                                 <MenuItem Header="Clear Hyperlinks" local:RibbonTooltip.KeyTip="H" Click="ClearHyperlinksMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
-                                        <StackPanel HorizontalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
-                                            <TextBlock Text="Clear" FontSize="8" HorizontalAlignment="Center"/>
+                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <TextBlock Text="Clear" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Sort & Filter -->
-                                    <Button Grid.Row="1" Grid.Column="0" Width="46" Height="28" Margin="1,1"
+                                    <Button Grid.Row="1" Grid.Column="0" Width="74" Height="30" Margin="1,1" Tag="RibbonCompact:74:30"
                                             Style="{StaticResource RibbonBtn}" Click="SortFilterPickerBtn_Click"
                                             local:RibbonTooltip.Title="Sort &amp; Filter"
                                             local:RibbonTooltip.KeyTip="S"
@@ -920,15 +1189,14 @@
                                                 <MenuItem Header="Reapply"         local:RibbonTooltip.KeyTip="R" Click="FilterReapplyMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
-                                        <StackPanel HorizontalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
-                                            <TextBlock Text="Sort &amp;" FontSize="8" HorizontalAlignment="Center"/>
-                                            <TextBlock Text="Filter" FontSize="8" HorizontalAlignment="Center"/>
+                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <TextBlock Text="Sort &amp; Filter" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Find & Select -->
-                                    <Button Grid.Row="1" Grid.Column="1" Width="46" Height="28" Margin="1,1"
+                                    <Button Grid.Row="1" Grid.Column="1" Width="82" Height="30" Margin="1,1" Tag="RibbonCompact:82:30"
                                             Style="{StaticResource RibbonBtn}" Click="FindSelectPickerBtn_Click"
                                             local:RibbonTooltip.Title="Find &amp; Select"
                                             local:RibbonTooltip.KeyTip="FD"
@@ -942,16 +1210,15 @@
                                                 <MenuItem Header="Go To Special..."   local:RibbonTooltip.KeyTip="S" Click="FindGoToSpecialMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
-                                        <StackPanel HorizontalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       HorizontalAlignment="Center" Margin="0,2,0,1"/>
-                                            <TextBlock Text="Find &amp;" FontSize="8" HorizontalAlignment="Center"/>
-                                            <TextBlock Text="Select" FontSize="8" HorizontalAlignment="Center"/>
+                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <TextBlock Text="Find &amp; Select" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </Grid>
                             </Grid>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0">
+                            <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
                                 <TextBlock Text="Editing" Style="{StaticResource GroupLbl}"/>
                             </Border>
                         </Grid>
@@ -2301,7 +2568,11 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
-                         FontFamily="Consolas" FontSize="13" VerticalContentAlignment="Center"
+                         FontFamily="Consolas" FontSize="13"
+                         TextOptions.TextFormattingMode="Display"
+                         TextOptions.TextRenderingMode="ClearType"
+                         TextOptions.TextHintingMode="Fixed"
+                         VerticalContentAlignment="Center"
                          BorderBrush="#C0C0C0" Padding="4,2"
                          AutomationProperties.Name="Name Box"
                          AutomationProperties.HelpText="Go to a cell or named range"/>
@@ -2316,7 +2587,10 @@
                         local:RibbonTooltip.KeyTip="FX"
                         local:RibbonTooltip.Description="Search for and insert a function into the selected cell."/>
 
-                <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Calibri" FontSize="14.667" TextOptions.TextFormattingMode="Display"
+                <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Calibri" FontSize="15"
+                         TextOptions.TextFormattingMode="Display"
+                         TextOptions.TextRenderingMode="ClearType"
+                         TextOptions.TextHintingMode="Fixed"
                          AcceptsReturn="True"
                          VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
                          AutomationProperties.Name="Formula Bar"
@@ -2359,7 +2633,7 @@
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
         <Border Grid.Row="4" Background="#E8E8E8" BorderBrush="#D0D0D0"
-                BorderThickness="0,1,0,0" Padding="0,2,0,0">
+                BorderThickness="0" Padding="0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>   <!-- Nav arrows -->
@@ -2397,8 +2671,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border x:Name="TabBorder"
-                                            CornerRadius="3,3,0,0" Padding="10,3"
-                                            Background="{Binding TabBrush}"
+                                            CornerRadius="3,3,0,0" Padding="10,3,10,1"
                                             Cursor="Hand"
                                             MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                             MouseMove="SheetTab_MouseMove"
@@ -2406,19 +2679,22 @@
                                             MouseRightButtonDown="SheetTab_MouseRightButtonDown">
                                         <Border.Style>
                                             <Style TargetType="Border">
+                                                <Setter Property="Background"       Value="{Binding TabBrush}"/>
                                                 <Setter Property="BorderBrush"      Value="#D0D0D0"/>
                                                 <Setter Property="BorderThickness"  Value="1"/>
                                                 <Setter Property="Margin"           Value="2,0,0,0"/>
                                                 <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                        <Setter Property="Background"      Value="White"/>
+                                                        <Setter Property="BorderBrush"     Value="White"/>
+                                                        <Setter Property="BorderThickness" Value="0"/>
+                                                        <Setter Property="Margin"          Value="2,-1,0,0"/>
+                                                    </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="Background"      Value="White"/>
-                                                        <Setter Property="BorderBrush"     Value="#217346"/>
-                                                        <Setter Property="BorderThickness" Value="1,3,1,0"/>
-                                                        <Setter Property="Margin"          Value="2,-3,0,-1"/>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                        <Setter Property="BorderBrush"     Value="#217346"/>
-                                                        <Setter Property="Background"      Value="#E8F5EC"/>
+                                                        <Setter Property="BorderBrush"     Value="White"/>
+                                                        <Setter Property="BorderThickness" Value="0"/>
+                                                        <Setter Property="Margin"          Value="2,-1,0,0"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -2441,19 +2717,43 @@
                                                 <MenuItem Header="Move Right"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveRight_Click"/>
                                             </ContextMenu>
                                         </Border.ContextMenu>
-                                        <TextBlock Text="{Binding Name}" FontSize="12"
-                                                   MouseDown="SheetTab_LabelMouseDown">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="FontWeight" Value="Normal"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                        <Grid MouseDown="SheetTab_LabelMouseDown">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="2"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="{Binding Name}" FontSize="12">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <Border Grid.Row="1" Height="2" Margin="0,1,0,0"
+                                                    Background="#217346">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsGrouped}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+                                        </Grid>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

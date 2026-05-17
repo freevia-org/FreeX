@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
 using CellVAlign = Freexcel.Core.Model.VerticalAlignment;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,8 @@ namespace Freexcel.App.Host;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private const double MaximizedSafeInsetDip = 8.0;
+
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
     private readonly ICommandBus _commandBus;
@@ -32,6 +35,7 @@ public partial class MainWindow : Window
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
     private ContextMenu? _activeRibbonKeyTipMenu;
+    private bool _pendingStandaloneAltKeyTip;
     private readonly WorkbookRef _workbookRef;
     private Workbook _workbook;
     private SheetId _currentSheetId;
@@ -60,6 +64,7 @@ public partial class MainWindow : Window
     private bool _snapInProgress;
     private bool _suppressZoomSync;
     private bool _formulaBarExpanded;
+    private bool _ribbonCompact;
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private WatchWindowDialog? _watchWindowDialog;
@@ -122,12 +127,15 @@ public partial class MainWindow : Window
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.MouseWheel += SheetGrid_MouseWheel;
         this.KeyDown += MainWindow_KeyDown;
+        this.KeyUp += MainWindow_KeyUp;
+        this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;
         StateChanged += (_, _) =>
         {
+            UpdateMaximizedContentInset();
             if (MaxRestoreBtn != null)
                 MaxRestoreBtn.Content = WindowState == WindowState.Maximized ? "" : "";
         };
@@ -137,6 +145,8 @@ public partial class MainWindow : Window
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateMaximizedContentInset();
+
         // Populate from installed Windows fonts
         var fonts = System.Windows.Media.Fonts.SystemFontFamilies
             .Select(f => f.Source)
@@ -154,6 +164,7 @@ public partial class MainWindow : Window
         NumberFormatBox.SelectedIndex = 0;
 
         ApplyOptionsToView();
+        NormalizeRibbonSurface(forceCompact: true);
         CreateNewWorkbook();
         UpdateViewport();
         RefreshSheetTabs();
@@ -199,7 +210,731 @@ public partial class MainWindow : Window
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        UpdateRibbonCompactMode();
         UpdateViewport();
+    }
+
+    private void UpdateRibbonCompactMode(bool force = false)
+    {
+        if (RibbonTabs is null)
+            return;
+
+        var activePanel = GetActiveRibbonPanel();
+        if (activePanel is null)
+            return;
+
+        var groups = activePanel.Children
+            .OfType<FrameworkElement>()
+            .Where(e => e is not System.Windows.Shapes.Rectangle)
+            .ToList();
+
+        foreach (var group in groups)
+            SetRibbonGroupCompact(group, RibbonCompactLevel.Full);
+
+        activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var availableWidth = FindVisualAncestor<ScrollViewer>(activePanel)?.ViewportWidth;
+        if (availableWidth is null or <= 0)
+            availableWidth = activePanel.ActualWidth > 0 ? activePanel.ActualWidth : RibbonTabs.ActualWidth;
+
+        var compacted = false;
+        if (activePanel.DesiredSize.Width > availableWidth.Value)
+        {
+            foreach (var group in groups.AsEnumerable().Reverse())
+            {
+                SetRibbonGroupCompact(group, RibbonCompactLevel.SmallWithLabels);
+                compacted = true;
+                activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                if (activePanel.DesiredSize.Width <= availableWidth.Value)
+                    break;
+            }
+        }
+
+        if (activePanel.DesiredSize.Width > availableWidth.Value)
+        {
+            foreach (var group in groups.AsEnumerable().Reverse())
+            {
+                SetRibbonGroupCompact(group, RibbonCompactLevel.IconOnly);
+                compacted = true;
+                activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                if (activePanel.DesiredSize.Width <= availableWidth.Value)
+                    break;
+            }
+        }
+
+        _ribbonCompact = compacted;
+    }
+
+    private StackPanel? GetActiveRibbonPanel()
+    {
+        if (RibbonTabs.SelectedItem is not TabItem tabItem)
+            return null;
+
+        return EnumerateVisualDescendants(tabItem)
+            .OfType<StackPanel>()
+            .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
+                                     panel.Children.OfType<FrameworkElement>().Any(e => e is Grid));
+    }
+
+    private enum RibbonCompactLevel
+    {
+        Full,
+        SmallWithLabels,
+        IconOnly
+    }
+
+    private static void SetRibbonGroupCompact(FrameworkElement group, RibbonCompactLevel level)
+    {
+        foreach (var element in EnumerateVisualDescendants(group).OfType<FrameworkElement>())
+        {
+            if (element is TextBlock { Tag: string labelTag } label &&
+                string.Equals(labelTag, "RibbonLabel", StringComparison.Ordinal))
+            {
+                label.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
+                continue;
+            }
+
+            if (element is ButtonBase button)
+            {
+                if (button.Tag is string tag &&
+                    TryParseRibbonCompactWidths(tag, out var fullWidth, out var compactWidth))
+                {
+                    button.Width = level switch
+                    {
+                        RibbonCompactLevel.Full => fullWidth,
+                        RibbonCompactLevel.SmallWithLabels => Math.Max(compactWidth + 28, Math.Ceiling(fullWidth * 0.72)),
+                        _ => compactWidth
+                    };
+                }
+
+                SetRibbonButtonCompact(button, level);
+            }
+        }
+    }
+
+    private static void SetRibbonButtonCompact(ButtonBase button, RibbonCompactLevel level)
+    {
+        foreach (var textBlock in EnumerateVisualDescendants(button).OfType<TextBlock>())
+        {
+            if (IsRibbonButtonLabel(textBlock))
+                textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        button.HorizontalContentAlignment = level == RibbonCompactLevel.IconOnly
+            ? System.Windows.HorizontalAlignment.Right
+            : System.Windows.HorizontalAlignment.Center;
+
+        if (button.Content is FrameworkElement content)
+            content.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
+                ? System.Windows.HorizontalAlignment.Right
+                : System.Windows.HorizontalAlignment.Center;
+
+        foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
+        {
+            if (stack.Orientation == Orientation.Horizontal)
+                stack.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
+                    ? System.Windows.HorizontalAlignment.Right
+                    : System.Windows.HorizontalAlignment.Center;
+        }
+    }
+
+    private static bool IsRibbonButtonLabel(TextBlock textBlock)
+    {
+        if (textBlock.Tag is string tag)
+        {
+            if (string.Equals(tag, "RibbonLabel", StringComparison.Ordinal))
+                return true;
+            if (string.Equals(tag, "RibbonIcon", StringComparison.Ordinal))
+                return false;
+        }
+
+        var text = textBlock.Text?.Trim();
+        if (string.IsNullOrEmpty(text) || text.Length <= 1)
+            return false;
+
+        var fontFamily = textBlock.FontFamily?.Source ?? "";
+        if (fontFamily.Contains("MDL2", StringComparison.OrdinalIgnoreCase) ||
+            fontFamily.Contains("Symbol", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return FindVisualAncestor<ButtonBase>(textBlock) is not null;
+    }
+
+    private static T? FindVisualAncestor<T>(DependencyObject element)
+        where T : DependencyObject
+    {
+        var current = VisualTreeHelper.GetParent(element);
+        while (current is not null)
+        {
+            if (current is T match)
+                return match;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private void NormalizeRibbonCommandButtons()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<Button>())
+        {
+            if (button.Content is not string label || string.IsNullOrWhiteSpace(label))
+                continue;
+
+            var title = RibbonTooltip.GetTitle(button);
+            var commandName = string.IsNullOrWhiteSpace(title) ? label : title;
+            var layoutKind = GetRibbonCommandLayoutKind(commandName, label);
+            ApplyRibbonCommandSize(button, layoutKind);
+            var fullWidth = button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64);
+            var compactWidth = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 30;
+            button.Tag ??= $"RibbonCompact:{fullWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{compactWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+            button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+        }
+
+        NormalizeRibbonCommandGroups();
+    }
+
+    private void NormalizeRibbonSurface(bool forceCompact = false)
+    {
+        NormalizeRibbonCommandButtons();
+        ConfigureInsertRibbonSurface();
+        AlignRibbonIconColumns();
+        ApplyToolbarDropdownWhiteBackgrounds();
+        UpdateRibbonCompactMode(force: forceCompact);
+    }
+
+    private void NormalizeRibbonSurfaceAfterTabSelection()
+    {
+        Dispatcher.BeginInvoke((Action)(() => NormalizeRibbonSurface(forceCompact: true)));
+    }
+
+    private void ConfigureInsertRibbonSurface()
+    {
+        var insertTab = RibbonTabs?.Items
+            .OfType<TabItem>()
+            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), "Insert", StringComparison.Ordinal));
+
+        if (insertTab is null)
+            return;
+
+        foreach (var button in EnumerateVisualDescendants(insertTab).OfType<Button>())
+        {
+            var title = RibbonTooltip.GetTitle(button) ?? "";
+            if (ShouldHideFromInsertRibbon(title))
+                button.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private static bool ShouldHideFromInsertRibbon(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return false;
+
+        var name = title.ToLowerInvariant();
+        if (!name.Contains("chart") &&
+            !name.Contains("axis") &&
+            !name.Contains("legend") &&
+            !name.Contains("trendline") &&
+            !name.Contains("series") &&
+            !name.Contains("plot") &&
+            !name.Contains("label") &&
+            !name.Contains("slice") &&
+            !name.Contains("doughnut hole") &&
+            !name.Contains("secondary"))
+        {
+            return false;
+        }
+
+        return !IsInsertChartType(name) &&
+               !name.Contains("sparkline") &&
+               !name.Contains("recommended chart");
+    }
+
+    private static bool IsInsertChartType(string name) =>
+        name is "column chart" or
+                "stacked column chart" or
+                "100% stacked column chart" or
+                "line chart" or
+                "pie chart" or
+                "doughnut chart" or
+                "bar chart" or
+                "stacked bar chart" or
+                "100% stacked bar chart" or
+                "scatter chart" or
+                "bubble chart" or
+                "area chart";
+
+    private void AlignRibbonIconColumns()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var stack in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
+        {
+            if (stack.Orientation != Orientation.Horizontal || stack.Children.Count < 2)
+                continue;
+
+            if (stack.Children[0] is not FrameworkElement icon || stack.Children[1] is not TextBlock)
+                continue;
+
+            if (FindVisualAncestor<ButtonBase>(stack) is null)
+                continue;
+
+            icon.Width = Math.Max(icon.Width is > 0 ? icon.Width : 0, 18);
+            icon.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+            icon.Margin = new Thickness(0, icon.Margin.Top, 4, icon.Margin.Bottom);
+            stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+        }
+    }
+
+    private void ApplyToolbarDropdownWhiteBackgrounds()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var comboBox in EnumerateVisualDescendants(RibbonTabs).OfType<ComboBox>())
+        {
+            comboBox.Background = Brushes.White;
+            comboBox.Foreground = Brushes.Black;
+            comboBox.Resources[SystemColors.WindowBrushKey] = Brushes.White;
+            comboBox.Resources[SystemColors.ControlBrushKey] = Brushes.White;
+            comboBox.Resources[SystemColors.MenuBrushKey] = Brushes.White;
+            comboBox.DropDownOpened -= ToolbarComboBox_DropDownOpened;
+            comboBox.DropDownOpened += ToolbarComboBox_DropDownOpened;
+        }
+    }
+
+    private static void ToolbarComboBox_DropDownOpened(object? sender, EventArgs e)
+    {
+        if (sender is not ComboBox comboBox)
+            return;
+
+        comboBox.Dispatcher.BeginInvoke((Action)(() =>
+        {
+            comboBox.ApplyTemplate();
+            if (comboBox.Template.FindName("PART_Popup", comboBox) is not Popup popup ||
+                popup.Child is not DependencyObject popupRoot)
+            {
+                return;
+            }
+
+            ForceDropdownWhite(popupRoot);
+        }));
+    }
+
+    private static void ForceDropdownWhite(DependencyObject root)
+    {
+        if (root is Control control)
+        {
+            control.Background = Brushes.White;
+            control.Foreground = Brushes.Black;
+        }
+        else if (root is Border border)
+        {
+            border.Background = Brushes.White;
+        }
+        else if (root is Panel panel)
+        {
+            panel.Background = Brushes.White;
+        }
+
+        if (root is ComboBoxItem item)
+        {
+            item.Background = Brushes.White;
+            item.Foreground = Brushes.Black;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+            ForceDropdownWhite(VisualTreeHelper.GetChild(root, i));
+    }
+
+    private static FrameworkElement CreateRibbonCommandContent(string commandName, string label, RibbonCommandLayoutKind layoutKind)
+    {
+        var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
+        var icon = GetRibbonIcon(commandName);
+        var iconBlock = new TextBlock
+        {
+            Text = icon.Glyph,
+            Tag = "RibbonIcon",
+            FontFamily = icon.FontFamily,
+            FontSize = layoutKind switch
+            {
+                RibbonCommandLayoutKind.Large => 24,
+                RibbonCommandLayoutKind.Medium => 20,
+                _ => 12
+            },
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = tall ? new Thickness(0, 2, 0, 2) : new Thickness(0, 0, 3, 0)
+        };
+
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            Tag = "RibbonLabel",
+            FontSize = 10,
+            TextWrapping = tall ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            MaxWidth = tall ? 72 : double.PositiveInfinity,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center
+        };
+
+        if (tall)
+        {
+            return new StackPanel
+            {
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Children =
+                {
+                    iconBlock,
+                    labelBlock
+                }
+            };
+        }
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Children =
+            {
+                iconBlock,
+                labelBlock
+            }
+        };
+    }
+
+    private enum RibbonCommandLayoutKind
+    {
+        Small,
+        Medium,
+        Large
+    }
+
+    private static void ApplyRibbonCommandSize(Button button, RibbonCommandLayoutKind layoutKind)
+    {
+        switch (layoutKind)
+        {
+            case RibbonCommandLayoutKind.Large:
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, 74);
+                button.Height = 64;
+                button.Padding = new Thickness(3, 2, 3, 2);
+                button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                break;
+            case RibbonCommandLayoutKind.Medium:
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, 58);
+                button.Height = 50;
+                button.Padding = new Thickness(3, 2, 3, 2);
+                button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                break;
+            default:
+                button.Height = button.Height is > 0 ? button.Height : 22;
+                button.Padding = new Thickness(3, 1, 3, 1);
+                break;
+        }
+    }
+
+    private void NormalizeRibbonCommandGroups()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var panel in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
+        {
+            if (panel == HomeRibbonPanel)
+                continue;
+
+            var directButtons = panel.Children.OfType<Button>().ToList();
+            if (directButtons.Count == 0)
+                continue;
+
+            var tallButtonCount = directButtons.Count(b => b.Height >= 46);
+            if (tallButtonCount == 0)
+                continue;
+
+            panel.Orientation = Orientation.Horizontal;
+            panel.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        }
+
+        foreach (var grid in EnumerateVisualDescendants(RibbonTabs).OfType<UniformGrid>())
+        {
+            var directButtons = grid.Children.OfType<Button>().ToList();
+            if (directButtons.Count == 0 || directButtons.All(b => b.Height < 46))
+                continue;
+
+            grid.Rows = 1;
+            grid.Columns = directButtons.Count;
+        }
+    }
+
+    private static RibbonCommandLayoutKind GetRibbonCommandLayoutKind(string commandName, string label)
+    {
+        var name = commandName.ToLowerInvariant();
+        var text = label.ToLowerInvariant();
+
+        if (name.Contains("excluded") || text.Contains("excluded"))
+            return RibbonCommandLayoutKind.Large;
+
+        if (IsLargeRibbonCommand(name))
+            return RibbonCommandLayoutKind.Large;
+
+        if (IsMediumRibbonCommand(name))
+            return RibbonCommandLayoutKind.Medium;
+
+        return RibbonCommandLayoutKind.Small;
+    }
+
+    private static bool IsLargeRibbonCommand(string name) =>
+        name.Contains("pivottable") ||
+        name is "table" ||
+        name.Contains("recommended chart") ||
+        name.Contains("picture") ||
+        name.Contains("link") ||
+        name.Contains("new note") ||
+        name.Contains("insert symbol") ||
+        name.Contains("text box") ||
+        name.Contains("rectangle") ||
+        name.Contains("ellipse") ||
+        name == "line" ||
+        name.Contains("themes") ||
+        name.Contains("margins") ||
+        name.Contains("orientation") ||
+        name.Contains("paper size") ||
+        name.Contains("print area") ||
+        name.Contains("breaks") ||
+        name.Contains("background") ||
+        name.Contains("print titles") ||
+        name.Contains("insert function") ||
+        name.Contains("autosum") ||
+        name.Contains("recently used") ||
+        name.Contains("financial") ||
+        name.Contains("logical") ||
+        name.Contains("text functions") ||
+        name.Contains("date") ||
+        name.Contains("lookup") ||
+        name.Contains("math") ||
+        name.Contains("more functions") ||
+        name.Contains("name manager") ||
+        name.Contains("watch window") ||
+        name.Contains("calculation options") ||
+        name.Contains("get data") ||
+        name.Contains("refresh all") ||
+        name == "sort ascending" ||
+        name == "sort descending" ||
+        name == "filter" ||
+        name.Contains("text to columns") ||
+        name.Contains("flash fill") ||
+        name.Contains("remove duplicates") ||
+        name.Contains("data validation") ||
+        name.Contains("consolidate") ||
+        name.Contains("data model") ||
+        name.Contains("analyze data") ||
+        name.Contains("what-if") ||
+        name.Contains("forecast sheet") ||
+        name == "group" ||
+        name == "ungroup" ||
+        name.Contains("subtotal") ||
+        name.Contains("spelling") ||
+        name.Contains("workbook statistics") ||
+        name.Contains("check accessibility") ||
+        name.Contains("show changes") ||
+        name.Contains("new comment") ||
+        name.Contains("show comments") ||
+        name.Contains("notes") ||
+        name.Contains("protect sheet") ||
+        name.Contains("protect workbook") ||
+        name.Contains("allow edit") ||
+        name.Contains("normal") ||
+        name.Contains("page break preview") ||
+        name.Contains("page layout") ||
+        name.Contains("custom views") ||
+        name == "zoom" ||
+        name.Contains("zoom to 100") ||
+        name.Contains("zoom to selection") ||
+        name.Contains("new window") ||
+        name.Contains("arrange all") ||
+        name.Contains("freeze panes") ||
+        name.Contains("switch windows") ||
+        name.Contains("help online") ||
+        name.Contains("about") ||
+        name.Contains("feedback");
+
+    private static bool IsMediumRibbonCommand(string name) =>
+        name.Contains("theme colors") ||
+        name.Contains("theme fonts") ||
+        name.Contains("theme effects") ||
+        name.Contains("line sparkline") ||
+        name.Contains("column sparkline") ||
+        name.Contains("win/loss") ||
+        name.Contains("column chart") ||
+        name.Contains("line chart") ||
+        name.Contains("pie chart") ||
+        name.Contains("bar chart") ||
+        name.Contains("scatter chart") ||
+        name.Contains("area chart") ||
+        name.Contains("doughnut chart");
+
+    private static (string Glyph, FontFamily FontFamily) GetRibbonIcon(string commandName)
+    {
+        var name = commandName.ToLowerInvariant();
+        var segoe = new FontFamily("Segoe UI Symbol");
+        var mdl2 = new FontFamily("Segoe MDL2 Assets");
+
+        if (name.Contains("pivottable")) return ("\uE9D2", mdl2);
+        if (name == "table") return ("\uE8A9", mdl2);
+        if (name.Contains("column chart") || name.Contains("bar chart")) return ("\uE9D2", mdl2);
+        if (name.Contains("line chart") || name.Contains("trendline")) return ("\uE9D9", mdl2);
+        if (name.Contains("pie chart") || name.Contains("doughnut")) return ("\u25D4", segoe);
+        if (name.Contains("scatter") || name.Contains("bubble")) return ("\u2219", segoe);
+        if (name.Contains("area chart")) return ("\u25F0", segoe);
+        if (name.Contains("data label")) return ("\uE8D2", mdl2);
+        if (name.Contains("axis") || name.Contains("legend") || name.Contains("plot") || name.Contains("series")) return ("\uE9D2", mdl2);
+        if (name.Contains("chart")) return ("\uE9D2", mdl2);
+        if (name.Contains("sparkline")) return ("\uE9D9", mdl2);
+        if (name.Contains("link")) return ("\uE71B", mdl2);
+        if (name.Contains("delete note") || name.Contains("delete comment")) return ("\uE74D", mdl2);
+        if (name.Contains("previous comment") || name.Contains("previous note")) return ("\uE76B", mdl2);
+        if (name.Contains("next comment") || name.Contains("next note")) return ("\uE76C", mdl2);
+        if (name.Contains("note") || name.Contains("comment")) return ("\uE90A", mdl2);
+        if (name.Contains("symbol")) return ("\u03A9", segoe);
+        if (name.Contains("picture")) return ("\uEB9F", mdl2);
+        if (name.Contains("rectangle")) return ("\u25AD", segoe);
+        if (name.Contains("ellipse")) return ("\u25EF", segoe);
+        if (name == "line") return ("\u2571", segoe);
+        if (name.Contains("text box")) return ("\uE8D2", mdl2);
+        if (name.Contains("bring forward")) return ("\uE74A", mdl2);
+        if (name.Contains("send backward")) return ("\uE74B", mdl2);
+        if (name.Contains("size")) return ("\uE922", mdl2);
+        if (name.Contains("rotate")) return ("\uE7AD", mdl2);
+        if (name.Contains("fill")) return ("\uE771", mdl2);
+        if (name.Contains("outline") || name.Contains("border")) return ("\uE76F", mdl2);
+
+        if (name.Contains("theme")) return ("\uE790", mdl2);
+        if (name.Contains("color")) return ("\uE790", mdl2);
+        if (name.Contains("font")) return ("A", segoe);
+        if (name.Contains("effect")) return ("\u2728", segoe);
+        if (name.Contains("background")) return ("\uE91B", mdl2);
+        if (name.Contains("margin")) return ("\uE8A9", mdl2);
+        if (name.Contains("orientation")) return ("\uE8AB", mdl2);
+        if (name.Contains("paper") || name.Contains("page setup")) return ("\uE7C3", mdl2);
+        if (name.Contains("scale to fit")) return ("\uE8A3", mdl2);
+        if (name.Contains("print area")) return ("\uE8A9", mdl2);
+        if (name.Contains("print title")) return ("\uE8EC", mdl2);
+        if (name.Contains("print")) return ("\uE749", mdl2);
+        if (name.Contains("break")) return ("\uE8A6", mdl2);
+        if (name.Contains("header") || name.Contains("footer")) return ("\uE8C1", mdl2);
+        if (name.Contains("gridlines")) return ("\uE80A", mdl2);
+        if (name.Contains("headings")) return ("\uE8EC", mdl2);
+
+        if (name.Contains("insert function")) return ("fx", segoe);
+        if (name.Contains("autosum")) return ("\u03A3", segoe);
+        if (name.Contains("recent")) return ("\uE823", mdl2);
+        if (name.Contains("financial")) return ("\uE8A6", mdl2);
+        if (name.Contains("math")) return ("\u221A", segoe);
+        if (name.Contains("text function")) return ("T", segoe);
+        if (name.Contains("date")) return ("\uE787", mdl2);
+        if (name.Contains("logical")) return ("\uE8AB", mdl2);
+        if (name.Contains("lookup")) return ("\uE721", mdl2);
+        if (name.Contains("more function")) return ("\uE712", mdl2);
+        if (name.Contains("define name")) return ("\uE8EC", mdl2);
+        if (name.Contains("name manager")) return ("\uE8FD", mdl2);
+        if (name.Contains("use in formula")) return ("\uE8EC", mdl2);
+        if (name.Contains("create from selection")) return ("\uE8EC", mdl2);
+        if (name.Contains("trace precedent")) return ("\u2190", segoe);
+        if (name.Contains("trace dependent")) return ("\u2192", segoe);
+        if (name.Contains("remove arrow")) return ("\uE74D", mdl2);
+        if (name.Contains("show formula")) return ("\uE8D2", mdl2);
+        if (name.Contains("error checking")) return ("\uE783", mdl2);
+        if (name.Contains("evaluate formula")) return ("\uE9D9", mdl2);
+        if (name.Contains("watch")) return ("\uE7B3", mdl2);
+        if (name.Contains("calculate")) return ("\uE895", mdl2);
+
+        if (name.Contains("get data")) return ("\uE8D4", mdl2);
+        if (name.Contains("refresh")) return ("\uE72C", mdl2);
+        if (name.Contains("sort ascending")) return ("A\u2193Z", segoe);
+        if (name.Contains("sort descending")) return ("Z\u2193A", segoe);
+        if (name.Contains("sort")) return ("\uE8CB", mdl2);
+        if (name.Contains("filter")) return ("\uE71C", mdl2);
+        if (name.Contains("text to columns")) return ("\uE8EC", mdl2);
+        if (name.Contains("flash fill")) return ("\uE945", mdl2);
+        if (name.Contains("remove duplicate")) return ("\uE74D", mdl2);
+        if (name.Contains("validation")) return ("\uE73E", mdl2);
+        if (name.Contains("consolidate")) return ("\uE8B7", mdl2);
+        if (name.Contains("data table")) return ("\uE8A9", mdl2);
+        if (name.Contains("analyze data")) return ("\uE9D2", mdl2);
+        if (name.Contains("data model")) return ("\uE8B7", mdl2);
+        if (name.Contains("subtotal")) return ("\u03A3", segoe);
+        if (name.Contains("goal seek") || name.Contains("scenario") || name.Contains("what-if")) return ("\uE9CE", mdl2);
+        if (name.Contains("forecast")) return ("\uE9D2", mdl2);
+        if (name.Contains("group")) return ("\uE9D5", mdl2);
+        if (name.Contains("ungroup")) return ("\uE9D6", mdl2);
+        if (name.Contains("collapse")) return ("\uE70D", mdl2);
+        if (name.Contains("expand")) return ("\uE70E", mdl2);
+
+        if (name.Contains("spelling")) return ("abc\u2713", segoe);
+        if (name.Contains("thesaurus")) return ("\uE82D", mdl2);
+        if (name.Contains("translate")) return ("\uE8C1", mdl2);
+        if (name.Contains("show changes")) return ("\uE8A7", mdl2);
+        if (name.Contains("workbook statistics")) return ("\uE9D2", mdl2);
+        if (name.Contains("accessibility")) return ("\uE776", mdl2);
+        if (name.Contains("alt text")) return ("\uE8D2", mdl2);
+        if (name.Contains("previous")) return ("\uE76B", mdl2);
+        if (name.Contains("next")) return ("\uE76C", mdl2);
+        if (name.Contains("protect")) return ("\uE72E", mdl2);
+        if (name.Contains("share")) return ("\uE72D", mdl2);
+        if (name.Contains("hide ink")) return ("\uE76B", mdl2);
+
+        if (name.Contains("normal")) return ("\uE80A", mdl2);
+        if (name.Contains("page break")) return ("\uE8A6", mdl2);
+        if (name.Contains("page layout")) return ("\uE7C3", mdl2);
+        if (name.Contains("custom view")) return ("\uE890", mdl2);
+        if (name.Contains("sheet view")) return ("\uE8A9", mdl2);
+        if (name.Contains("ruler")) return ("\uE7F7", mdl2);
+        if (name.Contains("formula bar")) return ("fx", segoe);
+        if (name.Contains("freeze")) return ("\uE8A9", mdl2);
+        if (name.Contains("split")) return ("\uE8A6", mdl2);
+        if (name.Contains("zoom")) return ("\uE8A3", mdl2);
+        if (name.Contains("new window")) return ("\uE78B", mdl2);
+        if (name.Contains("arrange")) return ("\uE8A6", mdl2);
+        if (name.Contains("side by side") || name.Contains("synchronous") || name.Contains("reset window") || name.Contains("switch window")) return ("\uE8A7", mdl2);
+        if (name.Contains("macro")) return ("\uE8D4", mdl2);
+
+        if (name.Contains("contact support")) return ("\uE8F2", mdl2);
+        if (name.Contains("training")) return ("\uE82D", mdl2);
+        if (name.Contains("community")) return ("\uE716", mdl2);
+        if (name.Contains("blog")) return ("\uE8A5", mdl2);
+        if (name.Contains("mobile")) return ("\uE8EA", mdl2);
+        if (name.Contains("help")) return ("\uE897", mdl2);
+        if (name.Contains("about")) return ("\uE946", mdl2);
+        if (name.Contains("feedback")) return ("\uE939", mdl2);
+
+        return ("\uE8A5", mdl2);
+    }
+
+    private static bool TryParseRibbonCompactWidths(string tag, out double fullWidth, out double compactWidth)
+    {
+        fullWidth = 0;
+        compactWidth = 0;
+        const string prefix = "RibbonCompact:";
+        if (!tag.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+
+        var parts = tag[prefix.Length..].Split(':');
+        return parts.Length == 2 &&
+               double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out fullWidth) &&
+               double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out compactWidth);
     }
 
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -421,6 +1156,13 @@ public partial class MainWindow : Window
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
             var keyTipKey = GetEffectiveKey(e);
+            if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipMode.IsActive)
+            {
+                _pendingStandaloneAltKeyTip = true;
+                e.Handled = true;
+                return;
+            }
+
             if (_ribbonKeyTipMode.IsActive && Keyboard.Modifiers == ModifierKeys.None)
             {
                 HandleActiveRibbonKeyTip(keyTipKey);
@@ -430,10 +1172,12 @@ public partial class MainWindow : Window
 
             if (Keyboard.Modifiers == ModifierKeys.Alt && IsStandaloneAltKey(keyTipKey))
             {
-                EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+                _pendingStandaloneAltKeyTip = true;
                 e.Handled = true;
                 return;
             }
+
+            _pendingStandaloneAltKeyTip = false;
 
             if (Keyboard.Modifiers == ModifierKeys.Alt &&
                 RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
@@ -804,6 +1548,27 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (!_pendingStandaloneAltKeyTip)
+            return;
+
+        var keyTipKey = GetEffectiveKey(e);
+        if (!IsStandaloneAltKey(keyTipKey))
+            return;
+
+        _pendingStandaloneAltKeyTip = false;
+        if (Keyboard.FocusedElement is TextBox or ComboBox)
+            return;
+
+        if (_ribbonKeyTipMode.IsActive)
+            ExitRibbonKeyTipMode();
+        else
+            EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+
+        e.Handled = true;
+    }
+
     private void SetActiveCell(CellAddress addr)
     {
         // If the cell belongs to a merged region, select the whole region
@@ -1043,6 +1808,13 @@ public partial class MainWindow : Window
             _splitPaneViewportOffsets[_currentSheetId] = offsets with { BottomLeftTopRow = target.Index };
             UpdateViewport();
         }
+    }
+
+    private void MainWindow_Deactivated(object? sender, EventArgs e)
+    {
+        _pendingStandaloneAltKeyTip = false;
+        if (_ribbonKeyTipMode.IsActive)
+            ExitRibbonKeyTipMode();
     }
 
     private void RefreshToolbar()
@@ -1450,10 +2222,13 @@ public partial class MainWindow : Window
                     System.Windows.Media.Color.FromRgb(33, 115, 70)),
                 Padding         = new System.Windows.Thickness(1),
                 FontFamily      = new System.Windows.Media.FontFamily("Calibri"),
-                FontSize        = 11.0 * (96.0 / 72.0),
+                FontSize        = 15.0,
                 Background      = System.Windows.Media.Brushes.White,
                 AcceptsReturn   = false,
             };
+            TextOptions.SetTextFormattingMode(_inlineEditor, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(_inlineEditor, TextRenderingMode.ClearType);
+            TextOptions.SetTextHintingMode(_inlineEditor, TextHintingMode.Fixed);
             _inlineEditor.KeyDown    += InlineEditor_KeyDown;
             _inlineEditor.LostFocus  += InlineEditor_LostFocus;
             _inlineEditor.TextChanged += (_, _) => FormulaBar.Text = _inlineEditor.Text;
@@ -1619,23 +2394,53 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        if (e.Key is Key.Enter or Key.Tab)
+        if (TryGetInlineEditorNavigationTarget(e, out var next))
         {
             var text = _inlineEditor!.Text;
-            HideInlineEditor(commit: true);
             FormulaBar.Text = text;
-            CommitEdit();
-            var current = SheetGrid.SelectedRange?.Start;
-            if (current.HasValue)
+            if (CommitEdit())
             {
-                var next = e.Key == Key.Tab
-                    ? new CellAddress(_currentSheetId, current.Value.Row, current.Value.Col + 1)
-                    : new CellAddress(_currentSheetId, current.Value.Row + 1, current.Value.Col);
+                HideInlineEditor(commit: false);
                 SetActiveCell(next);
                 EnsureCellVisible(next);
             }
             e.Handled = true;
         }
+    }
+
+    private bool TryGetInlineEditorNavigationTarget(System.Windows.Input.KeyEventArgs e, out CellAddress target)
+    {
+        target = default;
+        if (SheetGrid.SelectedRange?.Start is not { } current)
+            return false;
+
+        bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        bool altHeld = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
+
+        if (ctrlHeld || altHeld)
+            return false;
+
+        var next = e.Key switch
+        {
+            Key.Up when !shiftHeld => new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+            Key.Down when !shiftHeld => new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
+            Key.Left when !shiftHeld => new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+            Key.Right when !shiftHeld => new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
+            Key.Enter => shiftHeld
+                ? new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)
+                : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
+            Key.Tab => shiftHeld
+                ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
+                : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
+            _ => (CellAddress?)null
+        };
+
+        if (next is null)
+            return false;
+
+        target = next.Value;
+        return true;
     }
 
     private void InlineEditor_LostFocus(object sender, RoutedEventArgs e)
@@ -1819,9 +2624,9 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void CommitEdit()
+    private bool CommitEdit()
     {
-        if (SheetGrid.SelectedRange == null) return;
+        if (SheetGrid.SelectedRange == null) return false;
         var addr = SheetGrid.SelectedRange.Value.Start;
         var text = FormulaBar.Text;
 
@@ -1868,7 +2673,7 @@ public partial class MainWindow : Window
                         MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
                             MessageBoxButton.OK, icon);
                         RefreshValidationDropdown();
-                        return;
+                        return false;
                     }
 
                     if (action == DataValidationInvalidEntryAction.AskToContinue)
@@ -1887,7 +2692,7 @@ public partial class MainWindow : Window
                         if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
                         {
                             RefreshValidationDropdown();
-                            return;
+                            return false;
                         }
                     }
                 }
@@ -1897,7 +2702,7 @@ public partial class MainWindow : Window
         }
 
         if (!TryExecuteEditCells([(addr, newCell)], "Edit Cell", out var outcome))
-            return;
+            return false;
 
         var affectedCells = outcome.AffectedCells ?? [addr];
         if (text.StartsWith("="))
@@ -1923,6 +2728,7 @@ public partial class MainWindow : Window
         UpdateViewport();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        return true;
     }
 
     private void UpdateViewport()
@@ -2239,7 +3045,11 @@ public partial class MainWindow : Window
             // Switch back to Home immediately so the tab never stays selected
             RibbonTabs.SelectedIndex = 1;
             ShowStartScreen();
+            NormalizeRibbonSurfaceAfterTabSelection();
+            return;
         }
+
+        NormalizeRibbonSurfaceAfterTabSelection();
     }
     private void SsShareBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -2336,6 +3146,8 @@ public partial class MainWindow : Window
                 string.Equals(tabHeader, header, StringComparison.OrdinalIgnoreCase))
             {
                 RibbonTabs.SelectedItem = item;
+                RibbonTabs.UpdateLayout();
+                NormalizeRibbonSurface(forceCompact: true);
                 return true;
             }
         }
@@ -4071,6 +4883,28 @@ public partial class MainWindow : Window
         CompleteExternalPasteSelection(capturedRows);
         UpdateViewport();
         RefreshToolbar();
+    }
+
+    private void UpdateMaximizedContentInset()
+    {
+        if (RootGrid is null)
+            return;
+
+        RootGrid.Margin = WindowState == WindowState.Maximized
+            ? GetMaximizedSafeInset()
+            : new Thickness(0);
+    }
+
+    private static Thickness GetMaximizedSafeInset()
+    {
+        var resize = SystemParameters.WindowResizeBorderThickness;
+        var inset = Math.Ceiling(Math.Max(
+            MaximizedSafeInsetDip,
+            Math.Max(
+                Math.Max(resize.Left, resize.Right),
+                Math.Max(resize.Top, resize.Bottom))));
+
+        return new Thickness(inset);
     }
 
     private static PasteCellsMode ToCorePasteMode(PasteMode mode) =>

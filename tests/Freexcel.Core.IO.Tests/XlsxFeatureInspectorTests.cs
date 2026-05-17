@@ -153,6 +153,130 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_DigitalSignaturePackage_DetectsDigitalSignatures()
+    {
+        using var package = CreatePackage(
+            "_xmlsignatures/origin.sigs",
+            "_xmlsignatures/sig1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.DigitalSignatures);
+    }
+
+    [Fact]
+    public void Inspect_CustomRibbonUiPackage_DetectsCustomRibbonUi()
+    {
+        using var package = CreatePackage("customUI/customUI.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomRibbonUi);
+    }
+
+    [Fact]
+    public void Inspect_OfficeAddInPackage_DetectsOfficeAddIns()
+    {
+        using var package = CreatePackage(
+            "xl/webextensions/taskpanes.xml",
+            "xl/webextensions/webextension1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.OfficeAddIns);
+    }
+
+    [Fact]
+    public void Inspect_WebPublishItemsPackage_DetectsLiveWebQueries()
+    {
+        using var package = CreatePackage("xl/webPublishItems.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LiveWebQueries);
+    }
+
+    [Fact]
+    public void Inspect_CustomPropertiesWithSensitivityLabel_DetectsSensitivityLabels()
+    {
+        using var package = CreatePackageWithContent(("docProps/custom.xml", """
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property name="MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled">
+                <vt:lpwstr>true</vt:lpwstr>
+              </property>
+            </Properties>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.SensitivityLabels);
+    }
+
+    [Fact]
+    public void Inspect_CustomPropertiesWithoutSensitivityLabel_DoesNotWarn()
+    {
+        using var package = CreatePackageWithContent(("docProps/custom.xml", """
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property name="Department">
+                <vt:lpwstr>Finance</vt:lpwstr>
+              </property>
+            </Properties>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Inspect_SmartArtDiagramPackage_DetectsSmartArtDiagrams()
+    {
+        using var package = CreatePackage(
+            "xl/diagrams/data1.xml",
+            "xl/diagrams/layout1.xml",
+            "xl/diagrams/quickStyle1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
+    }
+
+    [Fact]
+    public void Inspect_PrinterSettingsPackage_DetectsPrinterSettings()
+    {
+        using var package = CreatePackage("xl/printerSettings/printerSettings1.bin");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.PrinterSettings);
+    }
+
+    [Fact]
+    public void Inspect_StructuredTablePackage_DetectsStructuredTables()
+    {
+        using var package = CreatePackage("xl/tables/table1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.StructuredTables);
+    }
+
+    [Fact]
+    public void Inspect_NonWorksheetSheetPackages_DetectsUnsupportedSheetTypes()
+    {
+        using var package = CreatePackage(
+            "xl/chartsheets/sheet1.xml",
+            "xl/dialogSheets/sheet2.xml",
+            "xl/macroSheets/sheet3.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
+    }
+
+    [Fact]
     public void Inspect_ThemePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/theme/theme1.xml");

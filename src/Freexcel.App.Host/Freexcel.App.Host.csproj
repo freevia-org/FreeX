@@ -24,6 +24,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- ReachFramework provides System.Windows.Xps.* and System.Printing -->
     <UseReachFramework>true</UseReachFramework>
   </PropertyGroup>
