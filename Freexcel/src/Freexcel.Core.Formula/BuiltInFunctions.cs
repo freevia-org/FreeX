@@ -1370,10 +1370,9 @@ public static class BuiltInFunctions
         double rawStart = ToNumber(args[1]);
         double rawLen   = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawLen)) return ErrorValue.Value;
-        if (rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
+        if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
-        if (start < 0 || numChars < 0) return ErrorValue.Value;
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
         return TextResult(text.Substring(start, actualLen));
