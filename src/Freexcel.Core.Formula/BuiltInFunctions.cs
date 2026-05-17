@@ -2921,14 +2921,17 @@ public static class BuiltInFunctions
         if (err is not null) return err;
 
         var freq = new Dictionary<double, int>();
+        var order = new List<double>();
         foreach (var value in nums!)
+        {
+            if (!freq.ContainsKey(value)) order.Add(value);
             freq[value] = freq.GetValueOrDefault(value) + 1;
+        }
 
         if (freq.Count == 0) return ErrorValue.NA;
         int maxFreq = freq.Values.Max();
         if (maxFreq < 2) return ErrorValue.NA;
-        // Preserve first-occurrence order for tie-breaking (matches Excel)
-        foreach (var key in freq.Keys)
+        foreach (var key in order)
             if (freq[key] == maxFreq) return NumberResult(key);
         return ErrorValue.NA;
     }
