@@ -311,6 +311,7 @@ public sealed class Sheet
     /// </summary>
     public void SetCell(CellAddress address, ScalarValue value)
     {
+        ClearSpillRange(address);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.Value = value;
@@ -345,6 +346,7 @@ public sealed class Sheet
     /// <summary>Set a cell directly.</summary>
     public void SetCell(CellAddress address, Cell cell)
     {
+        ClearSpillRange(address);
         _cells[(address.Row, address.Col)] = cell;
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -352,12 +354,14 @@ public sealed class Sheet
     /// <summary>Remove a cell (clear its contents).</summary>
     public void ClearCell(uint row, uint col)
     {
+        ClearSpillRange(new CellAddress(Id, row, col));
         _cells.Remove((row, col));
     }
 
     /// <summary>Remove a cell at the given address.</summary>
     public void ClearCell(CellAddress address)
     {
+        ClearSpillRange(address);
         _cells.Remove((address.Row, address.Col));
     }
 
