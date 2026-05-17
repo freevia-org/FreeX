@@ -2978,12 +2978,29 @@ public static class BuiltInFunctions
         var sorted = nums!.OrderBy(v => v).ToList();
         int n = sorted.Count;
         if (n == 0 || x < sorted[0] || x > sorted[^1]) return ErrorValue.NA;
-        int below = sorted.Count(v => v < x);
-        int equal = sorted.Count(v => v == x);
-        if (equal == 0) return ErrorValue.NA;
-        double pctRank = n == 1 ? 0.0 : (double)below / (n - 1);
         double factor = Math.Pow(10, sig);
         if (!double.IsFinite(factor)) return ErrorValue.Num;
+
+        int below = sorted.Count(v => v < x);
+        int equal = sorted.Count(v => v == x);
+        double pctRank;
+        if (equal > 0)
+        {
+            pctRank = n == 1 ? 0.0 : (double)below / (n - 1);
+        }
+        else
+        {
+            // Excel interpolates between adjacent values when x is not in the array
+            // but lies between sorted[0] and sorted[^1]. Find the largest index where
+            // sorted[i] < x, then interpolate the rank between i and i+1.
+            int lo = below - 1;
+            if (lo < 0 || lo >= n - 1) return ErrorValue.NA;
+            double lower = sorted[lo];
+            double upper = sorted[lo + 1];
+            double frac = upper > lower ? (x - lower) / (upper - lower) : 0.0;
+            pctRank = ((double)lo + frac) / (n - 1);
+        }
+
         return NumberResult(Math.Floor(pctRank * factor) / factor);
     }
 
