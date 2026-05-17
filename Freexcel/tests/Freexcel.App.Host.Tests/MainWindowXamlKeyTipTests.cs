@@ -780,7 +780,7 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void PivotTableEntryPoint_DisclosesExcludedStatusBeforeClick()
+    public void PivotTableEntryPoint_DisclosesModelFirstDeferredStatusBeforeClick()
     {
         var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
@@ -790,17 +790,22 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(element => element.Attribute("Click")?.Value == "PivotTableBtn_Click")
             .Where(element =>
-                !ContainsExcludedStatus(element.Attribute("Content")?.Value) &&
-                !ContainsExcludedStatus(element.Attribute(local + "RibbonTooltip.Title")?.Value) &&
-                !ContainsExcludedStatus(element.Attribute(local + "RibbonTooltip.Description")?.Value))
+                !ContainsModelFirstPivotStatus(element.Attribute("Content")?.Value) &&
+                !ContainsModelFirstPivotStatus(element.Attribute(local + "RibbonTooltip.Title")?.Value) &&
+                !ContainsModelFirstPivotStatus(element.Attribute(local + "RibbonTooltip.Description")?.Value))
             .Select(element => element.Attribute("Content")?.Value ?? element.Name.LocalName)
             .ToList();
 
-        missing.Should().BeEmpty("PivotTables are an explicit v1 exclusion and should not look like a normal supported Insert command");
+        missing.Should().BeEmpty("PivotTable creation is deferred even though existing PivotTables now have model-first XLSX load/save support");
     }
 
     private static bool ContainsExcludedStatus(string? value) =>
         value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool ContainsModelFirstPivotStatus(string? value) =>
+        value?.Contains("deferred", StringComparison.OrdinalIgnoreCase) == true ||
+        value?.Contains("retained", StringComparison.OrdinalIgnoreCase) == true ||
+        value?.Contains("model-first", StringComparison.OrdinalIgnoreCase) == true;
 
     private static string FindWorkspaceFile(params string[] relativeParts)
     {

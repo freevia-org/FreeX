@@ -62,15 +62,15 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
-    public void PivotTableMessage_NamesPivotSubsystemExclusion()
+    public void PivotTableMessage_NamesModelFirstPivotSupport()
     {
-        var message = DeferredCommandMessages.PivotTableExcluded();
+        var message = DeferredCommandMessages.PivotTableModelFirst();
 
         message.Title.Should().Be("PivotTable");
-        message.Body.Should().Contain("excluded");
+        message.Body.Should().Contain("loads PivotTable");
         message.Body.Should().Contain("pivot caches");
-        message.Body.Should().Contain("slicers");
-        message.Body.Should().Contain("supported local analysis workflows");
+        message.Body.Should().Contain("preserves native PivotTable package parts");
+        message.Body.Should().Contain("deferred");
     }
 
     [Fact]
@@ -78,9 +78,7 @@ public sealed class DeferredCommandMessageTests
     {
         var report = new XlsxFeatureReport([
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.PivotTables, "xl/pivotTables/pivotTable1.xml"),
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Slicers, "xl/slicers/slicer1.xml"),
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.PivotTables, "xl/pivotCache/pivotCacheDefinition1.xml")
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Slicers, "xl/slicers/slicer1.xml")
         ]);
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(report);
@@ -88,10 +86,8 @@ public sealed class DeferredCommandMessageTests
         message.Title.Should().Be("Unsupported XLSX Features");
         message.Body.Should().Contain("does not preserve yet");
         message.Body.Should().Contain("VBA macros (excluded)");
-        message.Body.Should().Contain("PivotTables/pivot caches (excluded)");
-        message.Body.Should().Contain("slicers (excluded with PivotTables)");
+        message.Body.Should().Contain("slicers");
         message.Body.Should().Contain("Continue saving?");
-        message.Body.Should().NotContain("PivotTables/pivot caches (excluded), PivotTables/pivot caches (excluded)");
     }
 
     [Fact]
@@ -107,7 +103,7 @@ public sealed class DeferredCommandMessageTests
         message.Title.Should().Be("Unsupported XLSX Features Detected");
         message.Body.Should().Contain("opened this workbook");
         message.Body.Should().Contain("VBA macros (excluded)");
-        message.Body.Should().Contain("timelines (excluded with PivotTables)");
+        message.Body.Should().Contain("timelines");
         message.Body.Should().Contain("may be removed if you save");
     }
 

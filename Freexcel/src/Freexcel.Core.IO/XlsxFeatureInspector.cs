@@ -228,9 +228,6 @@ public static class XlsxFeatureInspector
             if (WorksheetHasUnsupportedConditionalFormats(entry))
                 yield return Feature(XlsxUnsupportedFeatureKind.ConditionalFormats);
 
-            if (WorksheetHasSparklines(entry))
-                yield return Feature(XlsxUnsupportedFeatureKind.Sparklines);
-
             yield break;
         }
 
@@ -279,7 +276,20 @@ public static class XlsxFeatureInspector
                            !string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase) &&
                            !string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) &&
                            !string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase);
+                           !string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "aboveAverage", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "top10", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "uniqueValues", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "duplicateValues", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "containsText", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "notContainsText", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "beginsWith", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "endsWith", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "timePeriod", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "containsBlanks", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "notContainsBlanks", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "containsErrors", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "notContainsErrors", StringComparison.OrdinalIgnoreCase);
                 });
         }
         catch
@@ -316,7 +326,7 @@ public static class XlsxFeatureInspector
                 .Descendants()
                 .Any(element =>
                     element.Name.Namespace == spreadsheetDrawingNs &&
-                    element.Name.LocalName is "sp" or "pic" or "cxnSp" or "grpSp");
+                    element.Name.LocalName is "cxnSp" or "grpSp");
         }
         catch
         {

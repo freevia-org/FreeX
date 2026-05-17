@@ -29,10 +29,10 @@ public static class DeferredCommandMessages
             "Account",
             "Microsoft account integration is not implemented in Freexcel. Workbooks are local files; use Options for local app settings and your normal file-system workflow for identity, storage, and sharing.");
 
-    public static DeferredCommandMessage PivotTableExcluded() =>
+    public static DeferredCommandMessage PivotTableModelFirst() =>
         new(
             "PivotTable",
-            "PivotTables, pivot caches, slicers, and timelines are excluded from Freexcel v1. Use Sort, Filter, Remove Duplicates, Consolidate, and formulas for supported local analysis workflows.");
+            "Freexcel now loads PivotTable and pivot caches metadata and preserves native PivotTable package parts on save. PivotTable creation, refresh, layout editing, slicers, and timelines are still deferred to the next PivotTable phases.");
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
     {
@@ -63,10 +63,10 @@ public static class DeferredCommandMessages
     public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
     {
         XlsxUnsupportedFeatureKind.Macros => "VBA macros (excluded)",
-        XlsxUnsupportedFeatureKind.PivotTables => "PivotTables/pivot caches (excluded)",
+        XlsxUnsupportedFeatureKind.PivotTables => "PivotTables/pivot caches",
         XlsxUnsupportedFeatureKind.Charts => "XLSX chart package parts",
-        XlsxUnsupportedFeatureKind.Slicers => "slicers (excluded with PivotTables)",
-        XlsxUnsupportedFeatureKind.Timelines => "timelines (excluded with PivotTables)",
+        XlsxUnsupportedFeatureKind.Slicers => "slicers",
+        XlsxUnsupportedFeatureKind.Timelines => "timelines",
         XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
         XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
         XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",

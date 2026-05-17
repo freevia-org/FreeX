@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO.Tests;
@@ -14,8 +15,13 @@ internal static class XlsxCorpusFixtureFactory
         "generated-structure-001",
         "generated-validation-001",
         "generated-conditional-formatting-001",
+        "generated-color-scales-001",
+        "generated-data-bars-001",
+        "generated-text-boxes-shapes-001",
+        "generated-images-sparklines-001",
         "generated-objects-001",
         "generated-charts-001",
+        "generated-structured-tables-001",
         "generated-protection-page-setup-001"
     };
 
@@ -23,10 +29,6 @@ internal static class XlsxCorpusFixtureFactory
 
     public static bool CanCreateKnownGapPackage(string id) => id switch
     {
-        "generated-color-scales-001" => true,
-        "generated-data-bars-001" => true,
-        "generated-text-boxes-shapes-001" => true,
-        "generated-images-sparklines-001" => true,
         "generated-threaded-comments-001" => true,
         "generated-track-changes-001" => true,
         "generated-form-controls-001" => true,
@@ -37,7 +39,6 @@ internal static class XlsxCorpusFixtureFactory
         "generated-sensitivity-labels-001" => true,
         "generated-smartart-diagrams-001" => true,
         "generated-printer-settings-001" => true,
-        "generated-structured-tables-001" => true,
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
@@ -53,6 +54,8 @@ internal static class XlsxCorpusFixtureFactory
         _ => false
     };
 
+    public static bool CanCreateKnownGapRetentionPackage(string id) => CanCreateKnownGapPackage(id);
+
     public static Workbook Create(string id) => id switch
     {
         "generated-grid-basic-001" => CreateGridBasic(),
@@ -62,32 +65,19 @@ internal static class XlsxCorpusFixtureFactory
         "generated-structure-001" => CreateStructure(),
         "generated-validation-001" => CreateValidation(),
         "generated-conditional-formatting-001" => CreateConditionalFormatting(),
+        "generated-color-scales-001" => CreateColorScales(),
+        "generated-data-bars-001" => CreateDataBars(),
+        "generated-text-boxes-shapes-001" => CreateTextBoxesAndShapes(),
+        "generated-images-sparklines-001" => CreateImagesAndSparklines(),
         "generated-objects-001" => CreateObjects(),
         "generated-charts-001" => CreateCharts(),
+        "generated-structured-tables-001" => CreateStructuredTables(),
         "generated-protection-page-setup-001" => CreateProtectionAndPageSetup(),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated XLSX corpus fixture exists for this id.")
     };
 
     public static MemoryStream CreateKnownGapPackage(string id) => id switch
     {
-        "generated-color-scales-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <conditionalFormatting sqref="A1:A5">
-                <cfRule type="colorScale" priority="1">
-                  <colorScale/>
-                </cfRule>
-              </conditionalFormatting>
-            </worksheet>
-            """)),
-        "generated-data-bars-001" => CreatePackage(("xl/worksheets/sheet1.xml", """
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-              <conditionalFormatting sqref="A1:A5">
-                <cfRule type="dataBar" priority="1">
-                  <dataBar/>
-                </cfRule>
-              </conditionalFormatting>
-            </worksheet>
-            """)),
         "generated-text-boxes-shapes-001" => CreatePackage(("xl/drawings/drawing1.xml", """
             <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">
               <xdr:twoCellAnchor>
@@ -95,24 +85,6 @@ internal static class XlsxCorpusFixtureFactory
               </xdr:twoCellAnchor>
             </xdr:wsDr>
             """)),
-        "generated-images-sparklines-001" => CreatePackage(
-            ("xl/drawings/drawing1.xml", """
-                <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">
-                  <xdr:twoCellAnchor>
-                    <xdr:pic/>
-                  </xdr:twoCellAnchor>
-                </xdr:wsDr>
-                """),
-            ("xl/worksheets/sheet1.xml", """
-                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                           xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">
-                  <extLst>
-                    <ext>
-                      <x14:sparklineGroups/>
-                    </ext>
-                  </extLst>
-                </worksheet>
-                """)),
         "generated-threaded-comments-001" => CreatePackage(
             ("xl/threadedComments/threadedComment1.xml", "<threadedComments/>"),
             ("xl/persons/person.xml", "<persons/>")),
@@ -148,10 +120,6 @@ internal static class XlsxCorpusFixtureFactory
             ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
             ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
         "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", "Freexcel generated printer settings placeholder")),
-        "generated-structured-tables-001" => CreatePackage(("xl/tables/table1.xml", """
-            <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-                   id="1" name="Table1" displayName="Table1" ref="A1:B3"/>
-            """)),
         "generated-unsupported-sheet-types-001" => CreatePackage(
             ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
             ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
@@ -191,6 +159,35 @@ internal static class XlsxCorpusFixtureFactory
         "generated-custom-xml-001" => CreatePackage(("customXml/item1.xml", "<freexcelGeneratedCustomXml/>")),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
     };
+
+    public static MemoryStream CreateKnownGapRetentionPackage(string id)
+    {
+        using var knownGapPackage = CreateKnownGapPackage(id);
+        var workbook = NewWorkbook($"retention-{id}");
+        var sheet = workbook.AddSheet("Sheet1");
+        Set(sheet, "A1", new TextValue(id));
+        Set(sheet, "B1", new NumberValue(1));
+
+        var stream = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using (var sourceArchive = new ZipArchive(knownGapPackage, ZipArchiveMode.Read, leaveOpen: true))
+        using (var targetArchive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            foreach (var sourceEntry in sourceArchive.Entries)
+            {
+                targetArchive.GetEntry(sourceEntry.FullName)?.Delete();
+                var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName);
+                using var sourceStream = sourceEntry.Open();
+                using var targetStream = targetEntry.Open();
+                sourceStream.CopyTo(targetStream);
+            }
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
 
     private static Workbook CreateGridBasic()
     {
@@ -336,6 +333,122 @@ internal static class XlsxCorpusFixtureFactory
             FormulaText = "A1>25",
             FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 235, 156), FontColor = new CellColor(156, 87, 0) }
         });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "B1", "B5"),
+            Priority = 3,
+            RuleType = CfRuleType.Top10,
+            TopBottomRank = 3,
+            AboveAverage = true
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "C1", "C5"),
+            Priority = 4,
+            RuleType = CfRuleType.ContainsText,
+            TextRuleText = "review",
+            FormulaText = "NOT(ISERROR(SEARCH(\"review\",C1)))"
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "D1", "D5"),
+            Priority = 5,
+            RuleType = CfRuleType.DuplicateValues
+        });
+        return workbook;
+    }
+
+    private static Workbook CreateColorScales()
+    {
+        var workbook = NewWorkbook("generated-color-scales-001");
+        var sheet = workbook.AddSheet("Color Scales");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 10));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "A1", "A5"),
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "0",
+            MidThresholdType = CfThresholdType.Percentile,
+            MidThresholdValue = "50",
+            MaxThresholdType = CfThresholdType.Number,
+            MaxThresholdValue = "100"
+        });
+        return workbook;
+    }
+
+    private static Workbook CreateDataBars()
+    {
+        var workbook = NewWorkbook("generated-data-bars-001");
+        var sheet = workbook.AddSheet("Data Bars");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 10));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = Range(sheet, "A1", "A5"),
+            RuleType = CfRuleType.DataBar,
+            DataBarMinThresholdType = CfThresholdType.Number,
+            DataBarMinThresholdValue = "0",
+            DataBarMaxThresholdType = CfThresholdType.Number,
+            DataBarMaxThresholdValue = "100",
+            DataBarShowValue = false
+        });
+        return workbook;
+    }
+
+    private static Workbook CreateImagesAndSparklines()
+    {
+        var workbook = NewWorkbook("generated-images-sparklines-001");
+        var sheet = workbook.AddSheet("Images Sparklines");
+        Set(sheet, "A1", new NumberValue(1));
+        Set(sheet, "B1", new NumberValue(2));
+        Set(sheet, "C1", new NumberValue(3));
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = Addr(sheet, "E2"),
+            Kind = PictureKind.Image,
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png",
+            Width = 120,
+            Height = 80,
+            AltText = "Corpus image"
+        });
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = Range(sheet, "A1", "C1"),
+            Location = Addr(sheet, "D1"),
+            Kind = SparklineKind.Line
+        });
+        return workbook;
+    }
+
+    private static Workbook CreateTextBoxesAndShapes()
+    {
+        var workbook = NewWorkbook("generated-text-boxes-shapes-001");
+        var sheet = workbook.AddSheet("Text Shapes");
+        Set(sheet, "A1", new TextValue("Drawing objects"));
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = Addr(sheet, "B2"),
+            Text = "Corpus note",
+            Width = 200,
+            Height = 90,
+            FillColor = new CellColor(255, 242, 204),
+            OutlineColor = new CellColor(112, 48, 160),
+            AltText = "Corpus text box"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = Addr(sheet, "D5"),
+            Kind = DrawingShapeKind.Ellipse,
+            Width = 140,
+            Height = 90,
+            FillColor = new CellColor(221, 235, 247),
+            OutlineColor = new CellColor(31, 78, 121),
+            AltText = "Corpus ellipse"
+        });
         return workbook;
     }
 
@@ -381,6 +494,35 @@ internal static class XlsxCorpusFixtureFactory
         return workbook;
     }
 
+    private static Workbook CreateStructuredTables()
+    {
+        var workbook = NewWorkbook("generated-structured-tables-001");
+        var sheet = workbook.AddSheet("Tables");
+        Set(sheet, "A1", new TextValue("Category"));
+        Set(sheet, "B1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("A"));
+        Set(sheet, "B2", new NumberValue(10));
+        Set(sheet, "A3", new TextValue("B"));
+        Set(sheet, "B3", new NumberValue(20));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = Range(sheet, "A1", "B3"),
+            HasAutoFilter = true,
+            TotalsRowShown = false,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            PackagePart = "xl/tables/table1.xml"
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
     private static Workbook CreateProtectionAndPageSetup()
     {
         var workbook = NewWorkbook("generated-protection-page-setup-001");
@@ -423,6 +565,19 @@ internal static class XlsxCorpusFixtureFactory
 
     private static void Formula(Sheet sheet, string a1, string formula) =>
         sheet.SetFormula(Addr(sheet, a1), formula);
+
+    private static byte[] MinimalPngBytes() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
 
     private static MemoryStream CreatePackage(params (string Name, string Content)[] entries)
     {

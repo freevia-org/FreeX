@@ -32,7 +32,7 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_PivotAndChartPackage_DetectsBothFeatures()
+    public void Inspect_PivotAndChartPackage_DoesNotReportModelFirstPivotParts()
     {
         using var package = CreatePackage(
             "xl/pivotTables/pivotTable1.xml",
@@ -41,7 +41,7 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.PivotTables);
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.PivotTables);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.Charts);
     }
 
@@ -254,13 +254,14 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_StructuredTablePackage_DetectsStructuredTables()
+    public void Inspect_StructuredTablePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/tables/table1.xml");
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.StructuredTables);
+        report.HasUnsupportedFeatures.Should().BeFalse(
+            "structured tables are now model-first XLSX metadata and package-reference preserved");
     }
 
     [Fact]
@@ -294,8 +295,8 @@ public class XlsxFeatureInspectorTests
         using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
               <conditionalFormatting sqref="A1:A5">
-                <cfRule type="colorScale" priority="1">
-                  <colorScale/>
+                <cfRule type="containsDates" priority="1">
+                  <formula>TODAY()</formula>
                 </cfRule>
               </conditionalFormatting>
             </worksheet>
@@ -309,7 +310,7 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_WorksheetWithSparklineGroups_DetectsSparklines()
+    public void Inspect_WorksheetWithSparklineGroups_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -324,13 +325,11 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f =>
-            f.Kind == XlsxUnsupportedFeatureKind.Sparklines &&
-            f.PackagePart == "xl/worksheets/sheet1.xml");
+        report.HasUnsupportedFeatures.Should().BeFalse();
     }
 
     [Fact]
-    public void Inspect_WorksheetWithUnsupportedConditionalFormattingAndSparklines_DetectsBothFeatures()
+    public void Inspect_WorksheetWithSupportedDataBarAndSparklines_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -350,16 +349,11 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f =>
-            f.Kind == XlsxUnsupportedFeatureKind.ConditionalFormats &&
-            f.PackagePart == "xl/worksheets/sheet1.xml");
-        report.Features.Should().Contain(f =>
-            f.Kind == XlsxUnsupportedFeatureKind.Sparklines &&
-            f.PackagePart == "xl/worksheets/sheet1.xml");
+        report.HasUnsupportedFeatures.Should().BeFalse();
     }
 
     [Fact]
-    public void Inspect_DrawingWithShapeAndPicture_DetectsDrawingObjects()
+    public void Inspect_DrawingWithShapeAndPicture_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackageWithContent(("xl/drawings/drawing1.xml", """
             <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
@@ -367,6 +361,23 @@ public class XlsxFeatureInspectorTests
               <xdr:twoCellAnchor>
                 <xdr:sp/>
                 <xdr:pic/>
+              </xdr:twoCellAnchor>
+            </xdr:wsDr>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.HasUnsupportedFeatures.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Inspect_DrawingWithConnectorAndGroupShape_DetectsUnsupportedDrawingObjects()
+    {
+        using var package = CreatePackageWithContent(("xl/drawings/drawing1.xml", """
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">
+              <xdr:twoCellAnchor>
+                <xdr:cxnSp/>
+                <xdr:grpSp/>
               </xdr:twoCellAnchor>
             </xdr:wsDr>
             """));

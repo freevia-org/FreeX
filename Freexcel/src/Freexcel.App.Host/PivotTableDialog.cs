@@ -23,8 +23,8 @@ public sealed class PivotTableDialog : Window
         });
         stack.Children.Add(new TextBlock
         {
-            Text = "PivotTable will be created on a new sheet.\n\n" +
-                   "(PivotTable creation is excluded from Freexcel v1.)",
+            Text = "Freexcel loads existing PivotTable metadata and preserves native PivotTable package parts on save.\n\n" +
+                   "PivotTable creation, refresh, and layout editing are deferred to the next PivotTable phases.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
