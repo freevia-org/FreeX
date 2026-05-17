@@ -2638,7 +2638,7 @@ public static class BuiltInFunctions
         if (remaining > 5 && holidays.Count == 0)
         {
             int fullWeeks = (remaining - 1) / 5; // keep ≥5 left so day-of-week boundary is handled correctly
-            current = current.AddDays(sign * fullWeeks * 7);
+            current = current.AddDays((long)sign * fullWeeks * 7);
             remaining -= fullWeeks * 5;
         }
         while (remaining > 0)
@@ -2985,10 +2985,11 @@ public static class BuiltInFunctions
         if (xErr is not null) return xErr;
         var (ys, yErr) = CollectRangeNumbers(rv2);
         if (yErr is not null) return yErr;
-        int n = Math.Min(xs!.Count, ys!.Count);
+        if (xs!.Count != ys!.Count) return ErrorValue.NA;
+        int n = xs.Count;
         if (n < 2) return ErrorValue.DivByZero;
-        double xMean = xs.Take(n).Average();
-        double yMean = ys.Take(n).Average();
+        double xMean = xs.Average();
+        double yMean = ys.Average();
         double cov = 0, varX = 0, varY = 0;
         for (int i = 0; i < n; i++)
         {
@@ -3014,10 +3015,11 @@ public static class BuiltInFunctions
         if (yErr is not null) return yErr;
         var (xs, xErr) = CollectRangeNumbers(knownX);
         if (xErr is not null) return xErr;
-        int n = Math.Min(xs!.Count, ys!.Count);
+        if (xs!.Count != ys!.Count) return ErrorValue.NA;
+        int n = xs.Count;
         if (n < 2) return ErrorValue.NA;
-        double xMean = xs.Take(n).Average();
-        double yMean = ys.Take(n).Average();
+        double xMean = xs.Average();
+        double yMean = ys.Average();
         double sXX = 0, sXY = 0;
         for (int i = 0; i < n; i++)
         {
@@ -3353,7 +3355,7 @@ public static class BuiltInFunctions
 
         double rounded = decimals is >= 0 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         if (decimals < 0) rounded = RoundWithExcelDigits(value, decimals);
-        int displayDecimals = Math.Max(0, decimals);
+        int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
         return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
     }
