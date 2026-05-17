@@ -2642,7 +2642,9 @@ public partial class MainWindow : Window
         {
             ScalarValue value;
             if (double.TryParse(text, out var d)) value = new NumberValue(d);
-            else if (bool.TryParse(text, out var b)) value = new BoolValue(b);
+            else if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
+                     text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+                value = new BoolValue(text.Equals("TRUE", StringComparison.OrdinalIgnoreCase));
             else value = new TextValue(text);
 
             // Soft validation: check data validation rules and warn but still apply
