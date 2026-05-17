@@ -29,6 +29,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-images-sparklines-001" => true,
         "generated-threaded-comments-001" => true,
         "generated-track-changes-001" => true,
+        "generated-form-controls-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
         "generated-pivots-001" => true,
@@ -109,6 +110,10 @@ internal static class XlsxCorpusFixtureFactory
         "generated-track-changes-001" => CreatePackage(
             ("xl/revisionHeaders/revisionHeader1.xml", "<revisionHeader/>"),
             ("xl/revisions/revisionLog1.xml", "<revisionLog/>")),
+        "generated-form-controls-001" => CreatePackage(
+            ("xl/activeX/activeX1.xml", "<activeX/>"),
+            ("xl/activeX/activeX1.bin", "Freexcel generated ActiveX placeholder"),
+            ("xl/ctrlProps/ctrlProp1.xml", "<controlProperties/>")),
         "generated-unsupported-chart-001" => CreatePackage(("xl/charts/chart1.xml", """
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>

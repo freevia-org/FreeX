@@ -21,7 +21,8 @@ public enum XlsxUnsupportedFeatureKind
     DataModel,
     LinkedDataTypes,
     ThreadedComments,
-    TrackChanges
+    TrackChanges,
+    FormControls
 }
 
 public sealed record XlsxUnsupportedFeature(
@@ -112,6 +113,13 @@ public static class XlsxFeatureInspector
             normalized.StartsWith("xl/revisions/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.TrackChanges);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/activex/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/ctrlprops/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
             yield break;
         }
 

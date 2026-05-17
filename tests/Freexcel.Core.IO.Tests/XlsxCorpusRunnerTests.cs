@@ -155,7 +155,8 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
             [XlsxUnsupportedFeatureKind.ThreadedComments] = "unsupported threaded comment disclosed",
-            [XlsxUnsupportedFeatureKind.TrackChanges] = "unsupported track changes disclosed"
+            [XlsxUnsupportedFeatureKind.TrackChanges] = "unsupported track changes disclosed",
+            [XlsxUnsupportedFeatureKind.FormControls] = "unsupported form control disclosed"
         };
 
     private static XlsxUnsupportedFeatureKind[] ExpectedFeatureKindsFor(ManifestRow row)
@@ -195,6 +196,9 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("track-changes") || tags.Contains("revision-history"))
             expected.Add(XlsxUnsupportedFeatureKind.TrackChanges);
+
+        if (tags.Contains("form-controls") || tags.Contains("activex"))
+            expected.Add(XlsxUnsupportedFeatureKind.FormControls);
 
         if (tags.Contains("embedded-objects"))
             expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);
