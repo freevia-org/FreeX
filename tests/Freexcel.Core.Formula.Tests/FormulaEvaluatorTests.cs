@@ -818,12 +818,99 @@ public class CrossSheetReferenceTests
     }
 
     [Fact]
+    public void CrossSheetCellRef_RowReturnsReferencedRow()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        sheet2.SetCell(new CellAddress(sheet2.Id, 5, 2), new NumberValue(42));
+
+        var result = _evaluator.Evaluate("=ROW(Sheet2!B5)", sheet1, workbook);
+
+        result.Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void CrossSheetCellRef_ColumnReturnsReferencedColumn()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        sheet2.SetCell(new CellAddress(sheet2.Id, 5, 2), new NumberValue(42));
+
+        var result = _evaluator.Evaluate("=COLUMN(Sheet2!B5)", sheet1, workbook);
+
+        result.Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void NamedSingleCellReference_RowReturnsReferencedRow()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.DefineNamedRange("Target", new GridRange(
+            new CellAddress(sheet.Id, 5, 2),
+            new CellAddress(sheet.Id, 5, 2)));
+
+        var result = _evaluator.Evaluate("=ROW(Target)", sheet, workbook);
+
+        result.Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
+    public void NamedRangeReference_RowsReturnsRangeHeight()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.DefineNamedRange("Block", new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 4, 3)));
+
+        var result = _evaluator.Evaluate("=ROWS(Block)", sheet, workbook);
+
+        result.Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void CrossSheetRef_UnknownSheet_ReturnsRefError()
     {
         var workbook = new Workbook("Test");
         var sheet1 = workbook.AddSheet("Sheet1");
 
         var result = _evaluator.Evaluate("=NonExistent!A1", sheet1, workbook);
+
+        result.Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void CrossSheetRange_UnknownSheetInAggregate_ReturnsRefError()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+
+        var result = _evaluator.Evaluate("=SUM(NonExistent!A1:A2)", sheet1, workbook);
+
+        result.Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void CrossSheetRef_UnknownSheetInRow_ReturnsRefError()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+
+        var result = _evaluator.Evaluate("=ROW(NonExistent!B5)", sheet1, workbook);
+
+        result.Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void CrossSheetRef_UnknownSheetInCountblank_ReturnsRefError()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+
+        var result = _evaluator.Evaluate("=COUNTBLANK(NonExistent!B5)", sheet1, workbook);
 
         result.Should().Be(ErrorValue.Ref);
     }

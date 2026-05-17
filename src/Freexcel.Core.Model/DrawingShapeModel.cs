@@ -18,4 +18,12 @@ public sealed class DrawingShapeModel
     public string? AltText { get; set; }
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }
+    public WorkbookThemeColorReference? FillThemeColor { get; set; }
+    public WorkbookThemeColorReference? OutlineThemeColor { get; set; }
+
+    public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;
+
+    public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
+        OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;
 }

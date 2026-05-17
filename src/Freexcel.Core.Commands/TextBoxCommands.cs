@@ -156,6 +156,8 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     private readonly CellColor? _outlineColor;
     private CellColor? _previousFillColor;
     private CellColor? _previousOutlineColor;
+    private WorkbookThemeColorReference? _previousFillThemeColor;
+    private WorkbookThemeColorReference? _previousOutlineThemeColor;
     private bool _applied;
 
     public string Label => "Text Box Colors";
@@ -181,8 +183,12 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
 
         _previousFillColor = textBox.FillColor;
         _previousOutlineColor = textBox.OutlineColor;
+        _previousFillThemeColor = textBox.FillThemeColor;
+        _previousOutlineThemeColor = textBox.OutlineThemeColor;
         textBox.FillColor = _fillColor;
         textBox.OutlineColor = _outlineColor;
+        textBox.FillThemeColor = null;
+        textBox.OutlineThemeColor = null;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [textBox.Anchor]);
     }
@@ -194,6 +200,8 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
         if (textBox is null) return;
         textBox.FillColor = _previousFillColor;
         textBox.OutlineColor = _previousOutlineColor;
+        textBox.FillThemeColor = _previousFillThemeColor;
+        textBox.OutlineThemeColor = _previousOutlineThemeColor;
         _applied = false;
     }
 }

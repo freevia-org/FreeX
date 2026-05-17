@@ -8,6 +8,9 @@ public static class ChartTypeSupport
     public static bool SupportsSecondaryAxis(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.Area or ChartType.Scatter;
 
+    public static bool SupportsAxes(ChartType type) =>
+        type is not ChartType.Pie and not ChartType.Doughnut;
+
     public static bool SupportsComboLineOverlay(ChartType type) =>
         type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.Area;
 
@@ -27,10 +30,22 @@ public static class ChartTypeSupport
     public static bool SupportsSeriesMarkers(ChartType type) =>
         type is ChartType.Line or ChartType.Scatter;
 
+    public static bool SupportsPercentageDataLabels(ChartType type) =>
+        type is ChartType.Pie or ChartType.Doughnut or ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
+
+    public static bool SupportsFirstSliceAngle(ChartType type) =>
+        type is ChartType.Pie or ChartType.Doughnut;
+
+    public static bool SupportsExplodedSlices(ChartType type) =>
+        type is ChartType.Pie or ChartType.Doughnut;
+
+    public static bool SupportsDoughnutHoleSize(ChartType type) =>
+        type is ChartType.Doughnut;
+
     public static int GetDataSeriesCount(ChartModel chart)
     {
         if (chart.Type == ChartType.Bubble)
-            return chart.DataRange.End.Col - chart.DataRange.Start.Col >= 1 ? 1 : 0;
+            return Math.Max(0, (int)(chart.DataRange.End.Col - chart.DataRange.Start.Col) / 2);
 
         var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
         if (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories)
@@ -71,9 +86,12 @@ public static class ChartTypeSupport
     public static IReadOnlyList<uint> GetYAxisValueColumns(ChartModel chart)
     {
         if (chart.Type == ChartType.Bubble)
-            return chart.DataRange.Start.Col + 1 <= chart.DataRange.End.Col
-                ? [chart.DataRange.Start.Col + 1]
-                : [];
+        {
+            var columns = new List<uint>();
+            for (var col = chart.DataRange.Start.Col + 1; col < chart.DataRange.End.Col; col += 2)
+                columns.Add(col);
+            return columns;
+        }
 
         return GetSeriesValueColumns(chart);
     }

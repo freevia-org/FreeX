@@ -761,6 +761,7 @@ public static class BuiltInFunctions
     private static ScalarValue Vlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue table) return ErrorValue.Value;
         if (args[2] is ErrorValue e2) return e2;
 
@@ -806,6 +807,7 @@ public static class BuiltInFunctions
     private static ScalarValue Hlookup(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue table) return ErrorValue.Value;
         if (args[2] is ErrorValue e2) return e2;
 
@@ -848,6 +850,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue Index(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e0) return e0;
         if (args[0] is not RangeValue table) return ErrorValue.Value;
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
@@ -898,6 +901,7 @@ public static class BuiltInFunctions
     private static ScalarValue Match(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue table) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
@@ -2055,6 +2059,7 @@ public static class BuiltInFunctions
     private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count == 0) return ErrorValue.Value; // no cell reference available without context
+        if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.StartRow);
         return ErrorValue.Value;
     }
@@ -2062,18 +2067,21 @@ public static class BuiltInFunctions
     private static ScalarValue Column(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count == 0) return ErrorValue.Value;
+        if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.StartCol);
         return ErrorValue.Value;
     }
 
     private static ScalarValue Rows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.RowCount);
         return new NumberValue(1);
     }
 
     private static ScalarValue Columns(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e) return e;
         if (args[0] is RangeValue rv) return new NumberValue(rv.ColCount);
         return new NumberValue(1);
     }
@@ -2133,6 +2141,7 @@ public static class BuiltInFunctions
 
     private static ScalarValue Countblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        if (args[0] is ErrorValue e) return e;
         if (args[0] is not RangeValue range) return ErrorValue.Value;
         int count = range.Flatten().Count(v => v is BlankValue || v is TextValue { Value.Length: 0 });
         return new NumberValue(count);
@@ -2677,6 +2686,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
         if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
         var startDt = startRaw.Date;
@@ -2690,6 +2700,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
         if (!TryOADateToDateTime(args[1], out var endRaw))   return ErrorValue.Num;
         var startDt = startRaw.Date;
@@ -4304,6 +4315,9 @@ public interface IEvalContext
     /// Used by the evaluator to expand cross-sheet named ranges.
     /// </summary>
     string? TryGetSheetName(Model.SheetId sheetId);
+
+    /// <summary>Returns true when the named sheet can be resolved in the current workbook context.</summary>
+    bool SheetExists(string sheetName);
 
     /// <summary>Returns true if the row is hidden (filter, manual, or group collapse).</summary>
     bool IsRowHidden(uint row);

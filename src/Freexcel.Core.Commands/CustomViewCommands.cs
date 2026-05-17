@@ -27,18 +27,7 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
 
         var view = new WorkbookCustomView(
             _name,
-            workbook.Sheets.Select(sheet => new WorksheetCustomViewState(
-                sheet.Name,
-                sheet.ViewMode,
-                sheet.FrozenRows,
-                sheet.FrozenCols,
-                sheet.SplitRow,
-                sheet.SplitColumn,
-                sheet.ShowGridlines,
-                sheet.ShowHeadings,
-                sheet.ShowRulers,
-                sheet.ZoomPercent,
-                sheet.ShowFormulas)).ToList());
+            workbook.Sheets.Select(CaptureSheetState).ToList());
 
         if (_hadPreviousView)
             workbook.CustomViews[index] = view;
@@ -71,6 +60,32 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
             if (string.Equals(workbook.CustomViews[i].Name, name, StringComparison.OrdinalIgnoreCase))
                 return i;
         return -1;
+    }
+
+    internal static WorksheetCustomViewState CaptureSheetState(Sheet sheet) =>
+        SanitizePaneState(new WorksheetCustomViewState(
+            sheet.Name,
+            sheet.ViewMode,
+            sheet.FrozenRows,
+            sheet.FrozenCols,
+            sheet.SplitRow,
+            sheet.SplitColumn,
+            sheet.ShowGridlines,
+            sheet.ShowHeadings,
+            sheet.ShowRulers,
+            sheet.ZoomPercent,
+            sheet.ShowFormulas));
+
+    internal static WorksheetCustomViewState SanitizePaneState(WorksheetCustomViewState state)
+    {
+        if (state.FrozenRows == 0 && state.FrozenCols == 0)
+            return state;
+
+        return state with
+        {
+            SplitRow = null,
+            SplitColumn = null
+        };
     }
 }
 
@@ -115,21 +130,11 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
     }
 
     private static List<WorksheetCustomViewState> Capture(Workbook workbook) =>
-        workbook.Sheets.Select(sheet => new WorksheetCustomViewState(
-            sheet.Name,
-            sheet.ViewMode,
-            sheet.FrozenRows,
-            sheet.FrozenCols,
-            sheet.SplitRow,
-            sheet.SplitColumn,
-            sheet.ShowGridlines,
-            sheet.ShowHeadings,
-            sheet.ShowRulers,
-            sheet.ZoomPercent,
-            sheet.ShowFormulas)).ToList();
+        workbook.Sheets.Select(SaveCustomViewCommand.CaptureSheetState).ToList();
 
     private static void ApplyState(Sheet sheet, WorksheetCustomViewState state)
     {
+        state = SaveCustomViewCommand.SanitizePaneState(state);
         sheet.ViewMode = state.ViewMode;
         sheet.FrozenRows = state.FrozenRows;
         sheet.FrozenCols = state.FrozenCols;

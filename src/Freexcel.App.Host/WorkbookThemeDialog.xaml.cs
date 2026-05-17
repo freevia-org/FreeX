@@ -1,0 +1,83 @@
+using System.Windows;
+using Freexcel.Core.Model;
+
+namespace Freexcel.App.Host;
+
+public partial class WorkbookThemeDialog : Window
+{
+    private readonly WorkbookTheme _initialTheme;
+
+    public WorkbookThemeDialog(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        _initialTheme = theme;
+        InitializeComponent();
+        PopulateOptions();
+        LoadTheme(theme);
+    }
+
+    public WorkbookTheme ResultTheme { get; private set; } = WorkbookTheme.Office;
+
+    private void PopulateOptions()
+    {
+        var fonts = new[] { "Aptos Display", "Aptos", "Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana" };
+        HeadingFontBox.ItemsSource = fonts;
+        BodyFontBox.ItemsSource = fonts;
+        EffectsBox.ItemsSource = new[] { "Office", "Subtle", "Refined" };
+    }
+
+    private void LoadTheme(WorkbookTheme theme)
+    {
+        ThemeNameBox.Text = theme.Name;
+        HeadingFontBox.Text = theme.MajorFontName;
+        BodyFontBox.Text = theme.MinorFontName;
+        EffectsBox.Text = theme.EffectsName;
+
+        Dark1ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Dark1));
+        Light1ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Light1));
+        Dark2ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Dark2));
+        Light2ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Light2));
+        Accent1ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent1));
+        Accent2ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent2));
+        Accent3ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent3));
+        Accent4ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent4));
+        Accent5ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent5));
+        Accent6ColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Accent6));
+        HyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.Hyperlink));
+        FollowedHyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.FollowedHyperlink));
+    }
+
+    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ResultTheme = WorkbookThemeWorkflow.CreateCustomTheme(
+                    _initialTheme,
+                    ThemeNameBox.Text,
+                    HeadingFontBox.Text,
+                    BodyFontBox.Text,
+                    EffectsBox.Text)
+                .WithColor(WorkbookThemeColorSlot.Dark1, WorkbookThemeDialogColorCodec.ParseColor(Dark1ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Light1, WorkbookThemeDialogColorCodec.ParseColor(Light1ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Dark2, WorkbookThemeDialogColorCodec.ParseColor(Dark2ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Light2, WorkbookThemeDialogColorCodec.ParseColor(Light2ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Accent1, WorkbookThemeDialogColorCodec.ParseColor(Accent1ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Accent2, WorkbookThemeDialogColorCodec.ParseColor(Accent2ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Accent3, WorkbookThemeDialogColorCodec.ParseColor(Accent3ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Accent4, WorkbookThemeDialogColorCodec.ParseColor(Accent4ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Accent5, WorkbookThemeDialogColorCodec.ParseColor(Accent5ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Accent6, WorkbookThemeDialogColorCodec.ParseColor(Accent6ColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.Hyperlink, WorkbookThemeDialogColorCodec.ParseColor(HyperlinkColorBox.Text))
+                .WithColor(WorkbookThemeColorSlot.FollowedHyperlink, WorkbookThemeDialogColorCodec.ParseColor(FollowedHyperlinkColorBox.Text));
+        }
+        catch (FormatException ex)
+        {
+            MessageBox.Show(ex.Message, "Customize Theme", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        DialogResult = true;
+    }
+
+}

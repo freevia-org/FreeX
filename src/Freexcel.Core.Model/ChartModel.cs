@@ -25,7 +25,16 @@ public sealed record ChartSeriesFormat(
     double? StrokeThickness = null,
     ChartLineDashStyle? DashStyle = null,
     ChartMarkerStyle? MarkerStyle = null,
-    double? MarkerSize = null);
+    double? MarkerSize = null,
+    WorkbookThemeColorReference? FillThemeColor = null,
+    WorkbookThemeColorReference? StrokeThemeColor = null)
+{
+    public CellColor? ResolveFillColor(WorkbookTheme theme) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor;
+
+    public CellColor? ResolveStrokeColor(WorkbookTheme theme) =>
+        StrokeThemeColor?.Resolve(theme) ?? StrokeColor;
+}
 
 public sealed record ChartPointDataLabelFormat(
     int SeriesIndex,
@@ -34,7 +43,20 @@ public sealed record ChartPointDataLabelFormat(
     CellColor? BorderColor = null,
     double? BorderThickness = null,
     CellColor? TextColor = null,
-    double? FontSize = null);
+    double? FontSize = null,
+    WorkbookThemeColorReference? FillThemeColor = null,
+    WorkbookThemeColorReference? BorderThemeColor = null,
+    WorkbookThemeColorReference? TextThemeColor = null)
+{
+    public CellColor? ResolveFillColor(WorkbookTheme theme) =>
+        FillThemeColor?.Resolve(theme) ?? FillColor;
+
+    public CellColor? ResolveBorderColor(WorkbookTheme theme) =>
+        BorderThemeColor?.Resolve(theme) ?? BorderColor;
+
+    public CellColor? ResolveTextColor(WorkbookTheme theme) =>
+        TextThemeColor?.Resolve(theme) ?? TextColor;
+}
 
 /// <summary>Lightweight chart definition stored on a Sheet.</summary>
 public sealed class ChartModel
@@ -52,12 +74,18 @@ public sealed class ChartModel
     public CellColor? AxisTitleTextColor { get; set; }
     public double AxisTitleFontSize { get; set; } = 12;
     public CellColor? ChartAreaFillColor { get; set; }
+    public WorkbookThemeColorReference? ChartAreaFillThemeColor { get; set; }
     public CellColor? PlotAreaFillColor { get; set; }
+    public WorkbookThemeColorReference? PlotAreaFillThemeColor { get; set; }
     public CellColor? PlotAreaBorderColor { get; set; }
+    public WorkbookThemeColorReference? PlotAreaBorderThemeColor { get; set; }
     public double PlotAreaBorderThickness { get; set; } = 1;
     public CellColor? LegendTextColor { get; set; }
+    public WorkbookThemeColorReference? LegendTextThemeColor { get; set; }
     public CellColor? LegendFillColor { get; set; }
+    public WorkbookThemeColorReference? LegendFillThemeColor { get; set; }
     public CellColor? LegendBorderColor { get; set; }
+    public WorkbookThemeColorReference? LegendBorderThemeColor { get; set; }
     public double LegendBorderThickness { get; set; }
     public double LegendFontSize { get; set; } = 12;
     public double DoughnutHoleSize { get; set; } = 0.55;
@@ -114,8 +142,11 @@ public sealed class ChartModel
     public ChartDataLabelNumberFormat DataLabelNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public bool ShowDataLabelCallouts { get; set; }
     public CellColor? DataLabelFillColor { get; set; }
+    public WorkbookThemeColorReference? DataLabelFillThemeColor { get; set; }
     public CellColor? DataLabelBorderColor { get; set; }
+    public WorkbookThemeColorReference? DataLabelBorderThemeColor { get; set; }
     public CellColor? DataLabelTextColor { get; set; }
+    public WorkbookThemeColorReference? DataLabelTextThemeColor { get; set; }
     public double DataLabelBorderThickness { get; set; }
     public double DataLabelFontSize { get; set; } = 11;
     public double DataLabelAngle { get; set; }
@@ -126,6 +157,7 @@ public sealed class ChartModel
     public bool ShowTrendlineEquation { get; set; }
     public bool ShowTrendlineRSquared { get; set; }
     public CellColor? TrendlineColor { get; set; }
+    public WorkbookThemeColorReference? TrendlineThemeColor { get; set; }
     public double TrendlineThickness { get; set; } = 1.5;
     public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
     public bool ShowSecondaryAxis { get; set; }
@@ -138,4 +170,34 @@ public sealed class ChartModel
     public double Top    { get; set; } = 50;
     public double Width  { get; set; } = 400;
     public double Height { get; set; } = 300;
+
+    public CellColor? ResolveChartAreaFillColor(WorkbookTheme theme) =>
+        ChartAreaFillThemeColor?.Resolve(theme) ?? ChartAreaFillColor;
+
+    public CellColor? ResolvePlotAreaFillColor(WorkbookTheme theme) =>
+        PlotAreaFillThemeColor?.Resolve(theme) ?? PlotAreaFillColor;
+
+    public CellColor? ResolvePlotAreaBorderColor(WorkbookTheme theme) =>
+        PlotAreaBorderThemeColor?.Resolve(theme) ?? PlotAreaBorderColor;
+
+    public CellColor? ResolveLegendTextColor(WorkbookTheme theme) =>
+        LegendTextThemeColor?.Resolve(theme) ?? LegendTextColor;
+
+    public CellColor? ResolveLegendFillColor(WorkbookTheme theme) =>
+        LegendFillThemeColor?.Resolve(theme) ?? LegendFillColor;
+
+    public CellColor? ResolveLegendBorderColor(WorkbookTheme theme) =>
+        LegendBorderThemeColor?.Resolve(theme) ?? LegendBorderColor;
+
+    public CellColor? ResolveDataLabelFillColor(WorkbookTheme theme) =>
+        DataLabelFillThemeColor?.Resolve(theme) ?? DataLabelFillColor;
+
+    public CellColor? ResolveDataLabelBorderColor(WorkbookTheme theme) =>
+        DataLabelBorderThemeColor?.Resolve(theme) ?? DataLabelBorderColor;
+
+    public CellColor? ResolveDataLabelTextColor(WorkbookTheme theme) =>
+        DataLabelTextThemeColor?.Resolve(theme) ?? DataLabelTextColor;
+
+    public CellColor? ResolveTrendlineColor(WorkbookTheme theme) =>
+        TrendlineThemeColor?.Resolve(theme) ?? TrendlineColor;
 }

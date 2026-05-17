@@ -11,6 +11,9 @@ public interface ICommandBus
     /// <summary>Execute a command and push it onto the undo stack.</summary>
     CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command);
 
+    /// <summary>Execute a command that can be repeated with F4-style semantics.</summary>
+    CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory);
+
     /// <summary>Undo the last command.</summary>
     CommandOutcome Undo(WorkbookId workbookId);
 
@@ -22,6 +25,12 @@ public interface ICommandBus
 
     /// <summary>Check if redo is available.</summary>
     bool CanRedo(WorkbookId workbookId);
+
+    /// <summary>Repeat the last repeatable command.</summary>
+    CommandOutcome RepeatLast(WorkbookId workbookId);
+
+    /// <summary>Check if a repeatable command is available.</summary>
+    bool CanRepeat(WorkbookId workbookId);
 }
 
 /// <summary>A command that can be applied and reverted on a workbook.</summary>

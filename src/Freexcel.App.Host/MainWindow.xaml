@@ -235,11 +235,14 @@
                 <!-- System buttons — must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
                 <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right" Content="&#xE8BB;"
-                        Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"/>
+                        Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"
+                        AutomationProperties.Name="Close"/>
                 <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right" Content="&#xE739;"
-                        Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"/>
+                        Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
+                        AutomationProperties.Name="Maximize or Restore"/>
                 <Button                         DockPanel.Dock="Right" Content="&#xE949;"
-                        Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"/>
+                        Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"
+                        AutomationProperties.Name="Minimize"/>
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -334,11 +337,13 @@
                                 <StackPanel Orientation="Horizontal">
                                     <ComboBox x:Name="FontNameBox" Width="110" Height="22" Margin="1" Background="White"
                                               SelectionChanged="FontNameBox_SelectionChanged"
+                                              AutomationProperties.Name="Font"
                                               local:RibbonTooltip.Title="Font"
                                               local:RibbonTooltip.KeyTip="FF"
                                               local:RibbonTooltip.Description="Change the font of the selected cells."/>
                                     <ComboBox x:Name="FontSizeBox" Width="40" Height="22" Margin="1" IsEditable="True" Background="White"
                                               SelectionChanged="FontSizeBox_SelectionChanged"
+                                              AutomationProperties.Name="Font Size"
                                               local:RibbonTooltip.Title="Font Size"
                                               local:RibbonTooltip.KeyTip="FS"
                                               local:RibbonTooltip.Description="Change the font size of the selected cells."/>
@@ -582,6 +587,7 @@
                             <StackPanel Grid.Row="0" VerticalAlignment="Top" Margin="0,2,2,0">
                                 <ComboBox x:Name="NumberFormatBox" Width="116" Height="22" Margin="1,4,1,2" Background="White"
                                           SelectionChanged="NumberFormatBox_SelectionChanged"
+                                          AutomationProperties.Name="Number Format"
                                           local:RibbonTooltip.Title="Number Format"
                                           local:RibbonTooltip.KeyTip="N"
                                           local:RibbonTooltip.Description="Choose how to display values in the selected cells."/>
@@ -967,10 +973,10 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="PivotTable" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
-                                        local:RibbonTooltip.Title="PivotTable"
+                                <Button Content="PivotTable (Excluded)" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
+                                        local:RibbonTooltip.Title="PivotTable Excluded"
                                         local:RibbonTooltip.KeyTip="P"
-                                        local:RibbonTooltip.Description="Analyze data by inserting a PivotTable to summarize, group, and filter your data."/>
+                                        local:RibbonTooltip.Description="PivotTables, pivot caches, slicers, and timelines are excluded from Freexcel v1."/>
                                 <Button Content="Table"      Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"
@@ -1335,9 +1341,9 @@
                                         local:RibbonTooltip.KeyTip="K"
                                         local:RibbonTooltip.Description="Insert a hyperlink to a web page, file, or location in the workbook."/>
                                 <Button Content="Comment"   Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
-                                        local:RibbonTooltip.Title="New Comment"
+                                        local:RibbonTooltip.Title="New Note"
                                         local:RibbonTooltip.KeyTip="NC"
-                                        local:RibbonTooltip.Description="Add a note or annotation to the selected cell."/>
+                                        local:RibbonTooltip.Description="Add a simple cell note to the selected cell; threaded comments are not implemented."/>
                                 <Button Content="Symbol"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert Symbol"
                                         local:RibbonTooltip.KeyTip="SY"
@@ -1454,22 +1460,55 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeBtn_Click"
                                         local:RibbonTooltip.Title="Themes"
                                         local:RibbonTooltip.KeyTip="TH"
-                                        local:RibbonTooltip.Description="Deferred: full workbook theme colors, fonts, and effects require a theme model."/>
-                                <Button Content="Colors" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Description="Change the workbook theme colors and fonts.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeOfficeMenuItem_Click"/>
+                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorfulMenuItem_Click"/>
+                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeGrayscaleMenuItem_Click"/>
+                                            <MenuItem Header="Customize..." local:RibbonTooltip.KeyTip="U" Click="ThemeCustomizeMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button Content="Colors" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeColorsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Colors"
                                         local:RibbonTooltip.KeyTip="TC"
-                                        local:RibbonTooltip.Description="Deferred: theme palette editing is not implemented yet."/>
-                                <Button Content="Fonts" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Description="Change the workbook theme color palette.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeColorsOfficeMenuItem_Click"/>
+                                            <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorsColorfulMenuItem_Click"/>
+                                            <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeColorsGrayscaleMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button Content="Fonts" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeFontsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Fonts"
                                         local:RibbonTooltip.KeyTip="TF"
-                                        local:RibbonTooltip.Description="Deferred: theme font pairs are not implemented yet."/>
-                                <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageLayoutDeferredBtn_Click"
+                                        local:RibbonTooltip.Description="Change the workbook theme heading and body fonts.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeFontsOfficeMenuItem_Click"/>
+                                            <MenuItem Header="Arial" local:RibbonTooltip.KeyTip="A" Click="ThemeFontsArialMenuItem_Click"/>
+                                            <MenuItem Header="Times New Roman" local:RibbonTooltip.KeyTip="T" Click="ThemeFontsTimesMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                                <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeEffectsBtn_Click"
                                         local:RibbonTooltip.Title="Theme Effects"
                                         local:RibbonTooltip.KeyTip="TE"
-                                        local:RibbonTooltip.Description="Deferred: theme effect sets are not implemented yet."/>
+                                        local:RibbonTooltip.Description="Change the workbook theme effect set name.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeEffectsOfficeMenuItem_Click"/>
+                                            <MenuItem Header="Subtle" local:RibbonTooltip.KeyTip="S" Click="ThemeEffectsSubtleMenuItem_Click"/>
+                                            <MenuItem Header="Refined" local:RibbonTooltip.KeyTip="R" Click="ThemeEffectsRefinedMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="Background" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="BackgroundBtn_Click"
                                         local:RibbonTooltip.Title="Background"
                                         local:RibbonTooltip.KeyTip="BG"
@@ -1566,8 +1605,14 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
-                                <CheckBox Content="Print Gridlines" Margin="4,3" Click="PrintGridlinesChk_Click"/>
-                                <CheckBox Content="Print Headings"  Margin="4,3" Click="PrintHeadingsChk_Click"/>
+                                <CheckBox Content="Print Gridlines" Margin="4,3" Click="PrintGridlinesChk_Click"
+                                          local:RibbonTooltip.Title="Print Gridlines"
+                                          local:RibbonTooltip.KeyTip="PG"
+                                          local:RibbonTooltip.Description="Print worksheet gridlines on each page."/>
+                                <CheckBox Content="Print Headings"  Margin="4,3" Click="PrintHeadingsChk_Click"
+                                          local:RibbonTooltip.Title="Print Headings"
+                                          local:RibbonTooltip.KeyTip="PH"
+                                          local:RibbonTooltip.Description="Print row and column headings on each page."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sheet Options" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1938,7 +1983,7 @@
                                         Click="SpellCheckBtn_Click"
                                         local:RibbonTooltip.Title="Spelling"
                                         local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Check the spelling of text in the active sheet."/>
+                                        local:RibbonTooltip.Description="Find known misspellings in text cells on the active sheet."/>
                                 <Button Content="Workbook Stats" Width="104" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -1967,7 +2012,7 @@
                                         Click="SetAltTextBtn_Click"
                                         local:RibbonTooltip.Title="Alt Text"
                                         local:RibbonTooltip.KeyTip="T"
-                                        local:RibbonTooltip.Description="Add or edit alternate text for the selected picture, shape, or text box."/>
+                                        local:RibbonTooltip.Description="Add or edit alternate text for the picture, shape, or text box anchored at the selected cell."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Accessibility" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1979,13 +2024,13 @@
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="New"    Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
-                                            local:RibbonTooltip.Title="New Comment"
+                                            local:RibbonTooltip.Title="New Note"
                                             local:RibbonTooltip.KeyTip="C"
-                                            local:RibbonTooltip.Description="Add a note or annotation to the selected cell."/>
+                                            local:RibbonTooltip.Description="Add a simple cell note to the selected cell; threaded comments are not implemented."/>
                                     <Button Content="Delete" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteCommentBtn_Click"
-                                            local:RibbonTooltip.Title="Delete Comment"
+                                            local:RibbonTooltip.Title="Delete Note"
                                             local:RibbonTooltip.KeyTip="D"
-                                            local:RibbonTooltip.Description="Remove the comment from the selected cell."/>
+                                            local:RibbonTooltip.Description="Remove the simple cell note from the selected cell."/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Prev"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
@@ -1998,9 +2043,9 @@
                                             local:RibbonTooltip.Description="Navigate to the next comment in the sheet."/>
                                 </StackPanel>
                                 <Button Content="Show Comments" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
-                                        local:RibbonTooltip.Title="Show All Comments"
+                                        local:RibbonTooltip.Title="Show Notes"
                                         local:RibbonTooltip.KeyTip="H"
-                                        local:RibbonTooltip.Description="Show or hide all comment indicators in the sheet."/>
+                                        local:RibbonTooltip.Description="Open a list of simple cell notes on the active sheet."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Comments" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2010,18 +2055,18 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Protect Sheet"    Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectSheetBtn_Click"
+                                <Button x:Name="ProtectSheetButton" Content="Protect Sheet"    Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectSheetBtn_Click"
                                         local:RibbonTooltip.Title="Protect Sheet"
                                         local:RibbonTooltip.KeyTip="PS"
-                                        local:RibbonTooltip.Description="Prevent unwanted changes to this sheet by locking it with an optional password."/>
-                                <Button Content="Protect Workbook"  Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectWorkbookBtn_Click"
+                                        local:RibbonTooltip.Description="Set sheet protection for locked cells with an optional password."/>
+                                <Button x:Name="ProtectWorkbookButton" Content="Protect Workbook"  Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectWorkbookBtn_Click"
                                         local:RibbonTooltip.Title="Protect Workbook"
                                         local:RibbonTooltip.KeyTip="PW"
                                         local:RibbonTooltip.Description="Prevent structural changes to the workbook such as adding, deleting, or renaming sheets."/>
                                 <Button Content="Allow Edit Ranges" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
                                         local:RibbonTooltip.Title="Allow Edit Ranges"
                                         local:RibbonTooltip.KeyTip="AR"
-                                        local:RibbonTooltip.Description="Allow specific ranges to remain editable when the sheet is protected."/>
+                                        local:RibbonTooltip.Description="Add a range that remains editable when the sheet is protected."/>
                                 <Button Content="Share (Excluded)" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
                                         local:RibbonTooltip.Title="Share Excluded"
                                         local:RibbonTooltip.KeyTip="SH"
@@ -2072,13 +2117,21 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
                                 <CheckBox x:Name="ViewGridlinesChk" Content="Gridlines"              Margin="4,3" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
-                                          local:RibbonTooltip.KeyTip="G"/>
+                                          local:RibbonTooltip.Title="Gridlines"
+                                          local:RibbonTooltip.KeyTip="G"
+                                          local:RibbonTooltip.Description="Show or hide worksheet gridlines."/>
                                 <CheckBox x:Name="ViewHeadersChk"   Content="Row and Column Headers" Margin="4,3" IsChecked="True" Checked="ViewHeadersChk_Changed"   Unchecked="ViewHeadersChk_Changed"
-                                          local:RibbonTooltip.KeyTip="H"/>
+                                          local:RibbonTooltip.Title="Headings"
+                                          local:RibbonTooltip.KeyTip="H"
+                                          local:RibbonTooltip.Description="Show or hide row numbers and column letters."/>
                                 <CheckBox x:Name="ViewRulerChk"     Content="Ruler"                  Margin="4,3" IsChecked="True" Checked="ViewRulerChk_Changed"     Unchecked="ViewRulerChk_Changed"
-                                          local:RibbonTooltip.KeyTip="R"/>
+                                          local:RibbonTooltip.Title="Ruler"
+                                          local:RibbonTooltip.KeyTip="R"
+                                          local:RibbonTooltip.Description="Show or hide rulers in Page Layout view."/>
                                 <CheckBox x:Name="ViewFormulaBarChk" Content="Formula Bar" Margin="4,3" IsChecked="True" Checked="ViewFormulaBarChk_Changed" Unchecked="ViewFormulaBarChk_Changed"
-                                          local:RibbonTooltip.KeyTip="FB"/>
+                                          local:RibbonTooltip.Title="Formula Bar"
+                                          local:RibbonTooltip.KeyTip="FB"
+                                          local:RibbonTooltip.Description="Show or hide the formula bar."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Show" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2091,7 +2144,7 @@
                                 <Button Content="Freeze Panes" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
                                         local:RibbonTooltip.Title="Freeze Panes"
                                         local:RibbonTooltip.KeyTip="F"
-                                        local:RibbonTooltip.Description="Keep rows or columns visible while scrolling through the rest of the sheet.">
+                                        local:RibbonTooltip.Description="Keep rows or columns visible while scrolling; creating frozen panes clears split panes.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Freeze Panes"         local:RibbonTooltip.KeyTip="F" Click="FreezeAtSelectionMenuItem_Click"/>
@@ -2105,7 +2158,7 @@
                                 <Button Content="Split" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SplitViewBtn_Click"
                                         local:RibbonTooltip.Title="Split"
                                         local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split."/>
+                                        local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Freeze Panes" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2148,7 +2201,7 @@
                                 <Button Content="Zoom to Selection" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomSelectionBtn_Click"
                                         local:RibbonTooltip.Title="Zoom to Selection"
                                         local:RibbonTooltip.KeyTip="ZS"
-                                        local:RibbonTooltip.Description="Zoom in so the selected cells fill the screen."/>
+                                        local:RibbonTooltip.Description="Fit the selected cells within the visible grid viewport."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Zoom" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2165,7 +2218,7 @@
                                 <Button Content="Arrange All" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
                                         local:RibbonTooltip.Title="Arrange All"
                                         local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Choose the workbook-window arrangement to use when multiple Freexcel windows are available.">
+                                        local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Tiled"      Tag="Tiled"      local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
@@ -2249,7 +2302,9 @@
 
                 <TextBox x:Name="CellAddressBox" Grid.Column="0" Text="A1"
                          FontFamily="Consolas" FontSize="13" VerticalContentAlignment="Center"
-                         BorderBrush="#C0C0C0" Padding="4,2"/>
+                         BorderBrush="#C0C0C0" Padding="4,2"
+                         AutomationProperties.Name="Name Box"
+                         AutomationProperties.HelpText="Go to a cell or named range"/>
 
                 <!-- fx button opens Insert Function dialog -->
                 <Button Grid.Column="1" Content=" fx " FontWeight="Bold" Foreground="#444"
@@ -2264,6 +2319,8 @@
                 <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Calibri" FontSize="14.667" TextOptions.TextFormattingMode="Display"
                          AcceptsReturn="True"
                          VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
+                         AutomationProperties.Name="Formula Bar"
+                         AutomationProperties.HelpText="Edit the active cell value or formula"
                          PreviewKeyDown="FormulaBar_KeyDown"/>
 
                 <!-- Expand/collapse chevron -->
@@ -2293,7 +2350,9 @@
                     IsHitTestVisible="False" Panel.ZIndex="20"/>
 
             <ScrollBar x:Name="VerticalScroll" Grid.Column="1"
-                       Orientation="Vertical" Minimum="1" Maximum="1000000" Value="1" SmallChange="1"/>
+                       Orientation="Vertical" Minimum="1" Maximum="1000000" Value="1" SmallChange="1"
+                       AutomationProperties.Name="Vertical Worksheet Scroll Bar"
+                       AutomationProperties.HelpText="Scroll worksheet rows"/>
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════════════════
@@ -2366,20 +2425,20 @@
                                         </Border.Style>
                                         <Border.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Rename…"         Click="SheetCtxRename_Click"/>
-                                                <MenuItem Header="Insert Sheet"    Click="SheetCtxInsert_Click"/>
-                                                <MenuItem Header="Duplicate"       Click="SheetCtxDuplicate_Click"/>
-                                                <MenuItem Header="Delete Sheet"    Click="SheetCtxDelete_Click"/>
+                                                <MenuItem Header="Rename…"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click"/>
+                                                <MenuItem Header="Insert Sheet"    local:RibbonTooltip.KeyTip="I" Click="SheetCtxInsert_Click"/>
+                                                <MenuItem Header="Duplicate"       local:RibbonTooltip.KeyTip="D" Click="SheetCtxDuplicate_Click"/>
+                                                <MenuItem Header="Delete Sheet"    local:RibbonTooltip.KeyTip="E" Click="SheetCtxDelete_Click"/>
                                                 <Separator/>
-                                                <MenuItem Header="Hide"            Click="SheetCtxHide_Click"/>
-                                                <MenuItem Header="Unhide…"         Click="SheetCtxUnhide_Click"/>
-                                                <MenuItem Header="Tab Color…"      Click="SheetCtxTabColor_Click"/>
+                                                <MenuItem Header="Hide"            local:RibbonTooltip.KeyTip="H" Click="SheetCtxHide_Click"/>
+                                                <MenuItem Header="Unhide…"         local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click"/>
+                                                <MenuItem Header="Tab Color…"      local:RibbonTooltip.KeyTip="T" Click="SheetCtxTabColor_Click"/>
                                                 <Separator/>
-                                                <MenuItem Header="Select All Sheets" Click="SheetCtxSelectAllSheets_Click"/>
-                                                <MenuItem Header="Ungroup Sheets"    Click="SheetCtxUngroupSheets_Click"/>
+                                                <MenuItem Header="Select All Sheets" local:RibbonTooltip.KeyTip="A" Click="SheetCtxSelectAllSheets_Click"/>
+                                                <MenuItem Header="Ungroup Sheets"    local:RibbonTooltip.KeyTip="G" Click="SheetCtxUngroupSheets_Click"/>
                                                 <Separator/>
-                                                <MenuItem Header="Move Left"       Click="SheetCtxMoveLeft_Click"/>
-                                                <MenuItem Header="Move Right"      Click="SheetCtxMoveRight_Click"/>
+                                                <MenuItem Header="Move Left"       local:RibbonTooltip.KeyTip="L" Click="SheetCtxMoveLeft_Click"/>
+                                                <MenuItem Header="Move Right"      local:RibbonTooltip.KeyTip="M" Click="SheetCtxMoveRight_Click"/>
                                             </ContextMenu>
                                         </Border.ContextMenu>
                                         <TextBlock Text="{Binding Name}" FontSize="12"
@@ -2414,7 +2473,9 @@
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
                 <ScrollBar x:Name="HorizontalScroll" Grid.Column="2"
                            Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
-                           SmallChange="1" VerticalAlignment="Center" Margin="2,0"/>
+                           SmallChange="1" VerticalAlignment="Center" Margin="2,0"
+                           AutomationProperties.Name="Horizontal Worksheet Scroll Bar"
+                           AutomationProperties.HelpText="Scroll worksheet columns"/>
             </Grid>
         </Border>
 
@@ -2439,16 +2500,23 @@
                     <Button Content="−" Width="18" Height="18" Margin="0,0,2,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
-                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"/>
+                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
+                            local:RibbonTooltip.Title="Zoom Out"
+                            local:RibbonTooltip.KeyTip="SZ"/>
                     <Slider x:Name="ZoomSlider" Width="120" Minimum="0" Maximum="200" Value="100"
                             VerticalAlignment="Center" Margin="0,0,2,0"
+                            AutomationProperties.Name="Zoom Slider"
+                            AutomationProperties.HelpText="Adjust worksheet zoom from 10% to 400%"
+                            ToolTip="Zoom"
                             SmallChange="5" LargeChange="10"
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
                     <Button Content="+" Width="18" Height="18" Margin="0,0,6,0"
                             Background="Transparent" BorderThickness="0"
                             Foreground="White" FontSize="14" Padding="0"
-                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"/>
+                            VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
+                            local:RibbonTooltip.Title="Zoom In"
+                            local:RibbonTooltip.KeyTip="SX"/>
                     <TextBlock x:Name="StatusZoomText" Text="100%" Foreground="White" FontSize="12"
                                VerticalAlignment="Center" Width="38"/>
                 </StackPanel>
@@ -2476,57 +2544,87 @@
                         Style="{StaticResource SsNavBtn}"
                         Padding="18,11" FontSize="18"
                         Click="SsBackBtn_Click"
-                        ToolTip="Back to workbook"/>
+                        ToolTip="Back to workbook"
+                        local:RibbonTooltip.Title="Back"
+                        local:RibbonTooltip.KeyTip="B"/>
 
                 <!-- Home (active/selected when showing home view) -->
                 <Button x:Name="SsHomeNavBtn" DockPanel.Dock="Top"
                         Content="Home" HorizontalAlignment="Stretch"
                         Style="{StaticResource SsNavBtnActive}"
-                        Click="SsHomeNavBtn_Click"/>
+                        Click="SsHomeNavBtn_Click"
+                        local:RibbonTooltip.Title="Home"
+                        local:RibbonTooltip.KeyTip="H"/>
 
                 <!-- Account / Options pinned to bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
                     <Rectangle Height="1" Fill="#2C5C40" Margin="0,0,0,6"/>
                     <Button Content="Account" HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"/>
+                            Style="{StaticResource SsNavBtn}"
+                            Click="SsAccountBtn_Click"
+                            local:RibbonTooltip.Title="Local Account"
+                            local:RibbonTooltip.KeyTip="AC"
+                            local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options."/>
                     <Button Content="Options" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SsOptionsBtn_Click"/>
+                            Click="SsOptionsBtn_Click"
+                            local:RibbonTooltip.Title="Options"
+                            local:RibbonTooltip.KeyTip="T"/>
                 </StackPanel>
 
                 <!-- Navigation items -->
                 <StackPanel>
                     <Button Content="New" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SsNewBtn_Click"/>
+                            Click="SsNewBtn_Click"
+                            local:RibbonTooltip.Title="New"
+                            local:RibbonTooltip.KeyTip="N"/>
                     <Button Content="Open" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SsOpenBtn_Click"/>
+                            Click="SsOpenBtn_Click"
+                            local:RibbonTooltip.Title="Open"
+                            local:RibbonTooltip.KeyTip="O"/>
                     <Button Content="Share (Excluded)" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SsShareBtn_Click"/>
+                            Click="SsShareBtn_Click"
+                            local:RibbonTooltip.Title="Share Excluded"
+                            local:RibbonTooltip.KeyTip="SH"
+                            local:RibbonTooltip.Description="Microsoft 365 Share and cloud co-authoring are excluded; save the file and share it outside Freexcel."/>
 
                     <Rectangle Height="1" Fill="#2C5C40" Margin="0,6"/>
 
                     <Button x:Name="SsInfoNavBtn" Content="Info"
                             HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SsInfoBtn_Click"/>
+                            Click="SsInfoBtn_Click"
+                            local:RibbonTooltip.Title="Info"
+                            local:RibbonTooltip.KeyTip="I"/>
                     <Button Content="Save" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SaveButton_Click"/>
+                            Click="SaveButton_Click"
+                            local:RibbonTooltip.Title="Save"
+                            local:RibbonTooltip.KeyTip="S"/>
                     <Button Content="Save As" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SaveButton_Click"/>
+                            Click="SaveButton_Click"
+                            local:RibbonTooltip.Title="Save As"
+                            local:RibbonTooltip.KeyTip="A"/>
                     <Button Content="Print" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="PrintButton_Click"/>
+                            Click="PrintButton_Click"
+                            local:RibbonTooltip.Title="Print"
+                            local:RibbonTooltip.KeyTip="P"/>
                     <Button Content="Export" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="ExportPdfButton_Click"/>
+                            Click="ExportPdfButton_Click"
+                            local:RibbonTooltip.Title="Export PDF/XPS"
+                            local:RibbonTooltip.KeyTip="E"
+                            local:RibbonTooltip.Description="Save an XPS file directly, or use a Windows PDF printer from Print to create a PDF."/>
                     <Button Content="Close" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SsCloseBtn_Click"/>
+                            Click="SsCloseBtn_Click"
+                            local:RibbonTooltip.Title="Close"
+                            local:RibbonTooltip.KeyTip="C"/>
                 </StackPanel>
             </DockPanel>
 
@@ -2552,15 +2650,21 @@
                         <DockPanel LastChildFill="False" Margin="0,0,0,10">
                             <TextBlock DockPanel.Dock="Left" Text="New"
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
-                            <TextBlock DockPanel.Dock="Right" Text="More templates &#x2192;"
-                                       FontSize="12" Foreground="#217346"
-                                       VerticalAlignment="Center" Cursor="Hand"
-                                       MouseDown="SsMoreTemplates_MouseDown"/>
+                            <Button DockPanel.Dock="Right" Content="More templates (Excluded) →"
+                                    Background="Transparent" BorderThickness="0" Padding="0"
+                                    FontSize="12" Foreground="#217346"
+                                    VerticalAlignment="Center" Cursor="Hand"
+                                    Click="SsMoreTemplatesBtn_Click"
+                                    local:RibbonTooltip.Title="More Templates Excluded"
+                                    local:RibbonTooltip.KeyTip="MT"
+                                    local:RibbonTooltip.Description="Online template discovery depends on an external Microsoft template service and is excluded."/>
                         </DockPanel>
 
                         <StackPanel Orientation="Horizontal">
                             <!-- Blank workbook card -->
-                            <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,16,0">
+                            <Button Click="SsBlankWorkbook_Click" Cursor="Hand" Margin="0,0,16,0"
+                                    local:RibbonTooltip.Title="Blank Workbook"
+                                    local:RibbonTooltip.KeyTip="B1">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="cardBg" Background="Transparent" Padding="4">
@@ -2632,18 +2736,26 @@
                     <!-- Tabs row + search box -->
                     <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,0">
                         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                            <Border x:Name="SsRecentTab" Padding="0,8,22,8"
-                                    BorderThickness="0,0,0,2" BorderBrush="#217346"
-                                    Cursor="Hand" MouseDown="SsRecentTab_MouseDown">
+                            <Button Background="Transparent" BorderThickness="0" Padding="0"
+                                    Cursor="Hand" Click="SsRecentTab_Click"
+                                    local:RibbonTooltip.Title="Recent"
+                                    local:RibbonTooltip.KeyTip="RC">
+                                <Border x:Name="SsRecentTab" Padding="0,8,22,8"
+                                        BorderThickness="0,0,0,2" BorderBrush="#217346">
                                 <TextBlock x:Name="SsRecentTabText" Text="Recent" FontSize="13"
                                            FontWeight="SemiBold" Foreground="#217346"/>
-                            </Border>
-                            <Border x:Name="SsPinnedTab" Padding="0,8,22,8"
-                                    BorderThickness="0,0,0,2" BorderBrush="Transparent"
-                                    Cursor="Hand" MouseDown="SsPinnedTab_MouseDown">
+                                </Border>
+                            </Button>
+                            <Button Background="Transparent" BorderThickness="0" Padding="0"
+                                    Cursor="Hand" Click="SsPinnedTab_Click"
+                                    local:RibbonTooltip.Title="Pinned"
+                                    local:RibbonTooltip.KeyTip="PN">
+                                <Border x:Name="SsPinnedTab" Padding="0,8,22,8"
+                                        BorderThickness="0,0,0,2" BorderBrush="Transparent">
                                 <TextBlock x:Name="SsPinnedTabText" Text="Pinned" FontSize="13"
                                            Foreground="#888"/>
-                            </Border>
+                                </Border>
+                            </Button>
                         </StackPanel>
                         <Border DockPanel.Dock="Right"
                                 Background="#F5F5F5" BorderBrush="#D8D8D8" BorderThickness="1"
@@ -2651,6 +2763,8 @@
                             <TextBox x:Name="SsSearchBox" Width="180" FontSize="12"
                                      BorderThickness="0" Background="Transparent"
                                      VerticalContentAlignment="Center"
+                                     AutomationProperties.Name="Search Recent Files"
+                                     AutomationProperties.HelpText="Filter recent and pinned files"
                                      TextChanged="SsSearchBox_TextChanged"/>
                         </Border>
                     </DockPanel>
@@ -2676,7 +2790,8 @@
                                     <Button HorizontalContentAlignment="Stretch"
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
-                                            Cursor="Hand">
+                                            Cursor="Hand"
+                                            AutomationProperties.Name="{Binding FileName}">
                                         <Button.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Pin to list" local:RibbonTooltip.KeyTip="P" Click="SsPinItem_Click"/>
@@ -2739,7 +2854,8 @@
                                     <Button HorizontalContentAlignment="Stretch"
                                             BorderThickness="0" Padding="0,7"
                                             Click="SsRecentItem_Click"
-                                            Cursor="Hand">
+                                            Cursor="Hand"
+                                            AutomationProperties.Name="{Binding FileName}">
                                         <Button.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Unpin from list" local:RibbonTooltip.KeyTip="U" Click="SsUnpinItem_Click"/>
@@ -2820,14 +2936,14 @@
                                 <TextBlock Text="Control what types of changes others can make."
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"
                                            Margin="0,0,0,20"/>
-                                <TextBlock Text="Inspect Workbook"
+                                <TextBlock Text="Check Accessibility"
                                            FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Check for hidden properties or personal information."
+                                <TextBlock Text="Find merged cells and objects missing alt text."
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"
                                            Margin="0,0,0,20"/>
                                 <TextBlock Text="Manage Workbook"
                                            FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Check in, check out, or discard unsaved changes."
+                                <TextBlock Text="Review local file status and unsupported workbook feature warnings."
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"/>
                             </StackPanel>
 
@@ -2861,7 +2977,7 @@
                                     <TextBlock FontSize="12" Foreground="#555"
                                                TextWrapping="Wrap" LineHeight="20"
                                                Margin="0,0,0,6">Freexcel is a lightweight, open-format spreadsheet built on .NET 10 and WPF. Supports XLSX, formula calculation, cell styling, charts, and freeze panes.</TextBlock>
-                                    <TextBlock Text="Version 0.1 · Phase 3"
+                                    <TextBlock Text="Version 0.5 (Phase 5)"
                                                FontSize="11" Foreground="#888"/>
                                 </StackPanel>
                             </Border>

@@ -54,11 +54,14 @@ TemporaryDependencyNodeTargetIdentifier=net10.0-windows
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
+AltTextTargetResolver.cs
 App.xaml.cs
+AppInfo.cs
 AssemblyInfo.cs
 ConditionalFormatDialog.cs
 CustomViewsDialog.xaml.cs
 DataValidationDialog.xaml.cs
+DeferredCommandMessages.cs
 ErrorCheckingDialog.cs
 EvaluateFormulaDialog.cs
 FindReplaceDialog.xaml.cs
@@ -69,6 +72,7 @@ HeaderFooterDialog.xaml.cs
 InsertFunctionDialog.cs
 MainWindow.xaml.cs
 ManageConditionalFormatsDialog.cs
+MenuKeyTipAssigner.cs
 NamedRangeDialog.xaml.cs
 obj/Debug/net10.0-windows/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
@@ -86,16 +90,25 @@ obj/Debug/net10.0-windows/
  NamedRangeDialog.g.cs
  OptionsDialog.g.cs
  PageSetupDialog.g.cs
+ WorkbookThemeDialog.g.cs
 OptionsDialog.xaml.cs
 PageSetupDialog.xaml.cs
 PasteSpecialDialog.cs
 PivotTableDialog.cs
 PrintRenderer.cs
 RecentFilesStore.cs
+RibbonKeyTipMode.cs
+RibbonKeyTipOverlayPlacement.cs
+RibbonKeyTipRouting.cs
 RibbonTooltip.cs
+SheetProtectionWorkflow.cs
 StatusBarCalculator.cs
 SymbolPickerDialog.cs
 WatchWindowDialog.cs
+WorkbookProtectionWorkflow.cs
+WorkbookThemeDialog.xaml.cs
+WorkbookThemeDialogColorCodec.cs
+WorkbookThemeWorkflow.cs
 
 [metadataReferences]
 ../

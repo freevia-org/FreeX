@@ -17,3 +17,6 @@ packages/
 # OS
 .DS_Store
 Thumbs.db
+
+# XLSX corpus private samples
+test-corpus/local-private/

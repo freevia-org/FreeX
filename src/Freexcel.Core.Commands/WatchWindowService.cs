@@ -36,10 +36,48 @@ public static class WatchWindowService
     public static bool RemoveWatch(Workbook workbook, CellAddress address) =>
         workbook.WatchedCells.Remove(address);
 
+    public static int RemoveWatches(Workbook workbook, GridRange range)
+    {
+        var removed = 0;
+        foreach (var address in range.AllCells())
+        {
+            if (RemoveWatch(workbook, address))
+                removed++;
+        }
+
+        return removed;
+    }
+
+    public static IReadOnlyList<CellAddress> GetDeleteTargets(
+        IEnumerable<CellAddress> selectedAddresses,
+        CellAddress? fallbackAddress)
+    {
+        var targets = new List<CellAddress>();
+        var seen = new HashSet<CellAddress>();
+
+        foreach (var address in selectedAddresses)
+        {
+            if (seen.Add(address))
+                targets.Add(address);
+        }
+
+        if (targets.Count == 0 && fallbackAddress is { } fallback)
+            targets.Add(fallback);
+
+        return targets;
+    }
+
     public static IReadOnlyList<WatchWindowEntry> GetEntries(Workbook workbook)
     {
         var entries = new List<WatchWindowEntry>();
-        foreach (var address in workbook.WatchedCells)
+        var sheetOrder = workbook.Sheets
+            .Select((sheet, index) => (sheet.Id, index))
+            .ToDictionary(item => item.Id, item => item.index);
+
+        foreach (var address in workbook.WatchedCells
+                     .OrderBy(address => sheetOrder.GetValueOrDefault(address.Sheet, int.MaxValue))
+                     .ThenBy(address => address.Row)
+                     .ThenBy(address => address.Col))
         {
             var sheet = workbook.GetSheet(address.Sheet);
             if (sheet is null)

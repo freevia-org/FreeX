@@ -18,26 +18,25 @@ public class PerformanceBenchmarkTests
     [Fact]
     public void Benchmark_10kCellRecalc()
     {
-        // Arrange: Create workbook with 10k cells, 10% formulas
+        // Arrange: Create workbook with 10k populated cells, 10% formulas
         var workbook = new Workbook();
         var sheet = workbook.AddSheet("Sheet1");
         
         Console.WriteLine($"Building 10k-cell test workbook...");
         var buildSw = Stopwatch.StartNew();
         
-        for (uint row = 1; row <= 10000; row++)
+        for (uint row = 1; row <= 4500; row++)
         {
             // Column A: raw values
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue((double)row));
             
             // Column B: raw values
             sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue((double)row * 2));
-            
-            // Column C: formula every 10 cells (10% density)
-            if (row % 10 == 0)
-            {
-                sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
-            }
+        }
+
+        for (uint row = 1; row <= 1000; row++)
+        {
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
         }
         buildSw.Stop();
         Console.WriteLine($"  Built in {buildSw.ElapsedMilliseconds}ms");
@@ -47,12 +46,9 @@ public class PerformanceBenchmarkTests
         var evaluator = new FormulaEvaluator();
         var engine = new RecalcEngine(graph, evaluator);
         var changedCells = new List<CellAddress>();
-        for (uint row = 1; row <= 10000; row++)
+        for (uint row = 1; row <= 1000; row++)
         {
-            if (row % 10 == 0)
-            {
-                changedCells.Add(new CellAddress(sheet.Id, row, 3)); // Add formula cells to changed list
-            }
+            changedCells.Add(new CellAddress(sheet.Id, row, 3)); // Add formula cells to changed list
         }
 
         // Act: Recalc all cells
@@ -79,23 +75,22 @@ public class PerformanceBenchmarkTests
     [Fact]
     public void Benchmark_100kCellRecalc()
     {
-        // Arrange: Create workbook with 100k cells, 1% formulas
+        // Arrange: Create workbook with 100k populated cells, 1% formulas
         var workbook = new Workbook();
         var sheet = workbook.AddSheet("Sheet1");
 
         Console.WriteLine($"Building 100k-cell test workbook...");
         var buildSw = Stopwatch.StartNew();
 
-        for (uint row = 1; row <= 100000; row++)
+        for (uint row = 1; row <= 49500; row++)
         {
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue((double)row));
             sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue((double)row * 2));
-            
-            // 1% formula density
-            if (row % 100 == 0)
-            {
-                sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
-            }
+        }
+
+        for (uint row = 1; row <= 1000; row++)
+        {
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), $"A{row}+B{row}");
         }
         buildSw.Stop();
         Console.WriteLine($"  Built in {buildSw.ElapsedMilliseconds}ms");
@@ -104,12 +99,9 @@ public class PerformanceBenchmarkTests
         var evaluator = new FormulaEvaluator();
         var engine = new RecalcEngine(graph, evaluator);
         var changedCells = new List<CellAddress>();
-        for (uint row = 1; row <= 100000; row++)
+        for (uint row = 1; row <= 1000; row++)
         {
-            if (row % 100 == 0)
-            {
-                changedCells.Add(new CellAddress(sheet.Id, row, 3)); // Add formula cells to changed list
-            }
+            changedCells.Add(new CellAddress(sheet.Id, row, 3)); // Add formula cells to changed list
         }
 
         // Act: Recalc
@@ -154,7 +146,6 @@ public class PerformanceBenchmarkTests
                 Console.WriteLine($"  {row}...");
 
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue((double)row));
-            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue((double)row * 2));
         }
         sw.Stop();
 
