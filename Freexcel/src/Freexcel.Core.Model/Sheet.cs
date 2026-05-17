@@ -608,24 +608,29 @@ public sealed class Sheet
                 MaxColor             = cf.MaxColor,
                 UseThreeColorScale   = cf.UseThreeColorScale,
                 DataBarColor         = cf.DataBarColor,
-                AboveAverage         = cf.AboveAverage
+                AboveAverage         = cf.AboveAverage,
+                FormulaText          = cf.FormulaText,
+                StopIfTrue           = cf.StopIfTrue
             });
 
         // Data validations
         foreach (var dv in DataValidations)
             copy.DataValidations.Add(new DataValidation
             {
-                AppliesTo     = RemapRange(dv.AppliesTo, newId),
-                Type          = dv.Type,
-                Operator      = dv.Operator,
-                Formula1      = dv.Formula1,
-                Formula2      = dv.Formula2,
-                AllowBlank    = dv.AllowBlank,
-                ShowDropdown  = dv.ShowDropdown,
-                ErrorTitle    = dv.ErrorTitle,
-                ErrorMessage  = dv.ErrorMessage,
-                PromptTitle   = dv.PromptTitle,
-                PromptMessage = dv.PromptMessage
+                AppliesTo         = RemapRange(dv.AppliesTo, newId),
+                Type              = dv.Type,
+                Operator          = dv.Operator,
+                Formula1          = dv.Formula1,
+                Formula2          = dv.Formula2,
+                AllowBlank        = dv.AllowBlank,
+                ShowDropdown      = dv.ShowDropdown,
+                AlertStyle        = dv.AlertStyle,
+                ShowInputMessage  = dv.ShowInputMessage,
+                ShowErrorMessage  = dv.ShowErrorMessage,
+                ErrorTitle        = dv.ErrorTitle,
+                ErrorMessage      = dv.ErrorMessage,
+                PromptTitle       = dv.PromptTitle,
+                PromptMessage     = dv.PromptMessage
             });
 
         // Note: Charts, TextBoxes, DrawingShapes, Pictures, and Sparklines are intentionally
