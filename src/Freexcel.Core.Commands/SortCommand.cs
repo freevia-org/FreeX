@@ -55,8 +55,11 @@ public sealed class SortCommand : IWorkbookCommand
         uint endRow   = _range.End.Row;
         uint startCol = _range.Start.Col;
         uint endCol   = _range.End.Col;
+        uint colCount32 = endCol - startCol + 1;
+        if (_sortKeys.Any(key => key.ColumnOffset >= colCount32))
+            return new CommandOutcome(false, "Sort key column offset is outside the sort range.");
         var keyColIndexes = _sortKeys
-            .Select(key => (Index: (int)((startCol + key.ColumnOffset > endCol ? startCol : startCol + key.ColumnOffset) - startCol), key.Ascending))
+            .Select(key => ((int)key.ColumnOffset, key.Ascending))
             .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);

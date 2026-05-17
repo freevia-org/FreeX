@@ -13,6 +13,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
+    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
@@ -69,6 +70,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
         ShiftCommentRowsUp(sheet.Comments, _beforeRow, _count);
+        _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
+        ShiftCommentRowsUp(sheet.Hyperlinks, _beforeRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = CaptureRuleRanges(sheet);
         ShiftRuleRowsUp(sheet, _beforeRow, _count);
@@ -128,6 +131,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
         RestoreDictionary(sheet.Comments, _commentSnapshot);
+        RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
         RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
@@ -617,6 +621,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private HashSet<uint>? _hiddenRowsSnapshot;
     private HashSet<uint>? _filterHiddenRowsSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
+    private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
@@ -676,6 +681,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         _commentSnapshot = new Dictionary<CellAddress, string>(sheet.Comments);
         InsertRowsCommand.ShiftCommentRowsDown(sheet.Comments, _startRow, _count);
+        _hyperlinkSnapshot = new Dictionary<CellAddress, string>(sheet.Hyperlinks);
+        InsertRowsCommand.ShiftCommentRowsDown(sheet.Hyperlinks, _startRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = InsertRowsCommand.CaptureRuleRanges(sheet);
         InsertRowsCommand.ShiftRuleRowsDown(sheet, _startRow, _count);
@@ -750,6 +757,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         InsertRowsCommand.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
+        InsertRowsCommand.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         InsertRowsCommand.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
