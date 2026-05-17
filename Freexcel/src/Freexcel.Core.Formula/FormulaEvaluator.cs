@@ -468,6 +468,7 @@ public sealed class FormulaEvaluator
         for (int i = 0; i < pairCount; i++)
         {
             var val = EvaluateNode(node.Arguments[1 + i * 2], context);
+            if (val is ErrorValue ve) return ve;
             if (BuiltInFunctions.ScalarEquals(expr, val))
                 return EvaluateNode(node.Arguments[1 + i * 2 + 1], context);
         }
