@@ -18,6 +18,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
+    private List<GridRange>? _chartSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Column(s)";
@@ -73,6 +74,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftPrintAreaColumnsUp(sheet, _beforeCol, _count);
         _columnPageBreakSnapshot = sheet.ColumnPageBreaks.ToList();
         InsertRowsCommand.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
+        _chartSnapshot = InsertRowsCommand.CaptureChartDataRanges(sheet);
+        InsertRowsCommand.ShiftChartColumnsUp(sheet, _sheetId, _beforeCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var shiftedMerges = sheet.MergedRegions.Select(m =>
@@ -122,6 +125,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         InsertRowsCommand.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
+        InsertRowsCommand.RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 }
 
@@ -142,6 +146,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
+    private List<GridRange>? _chartSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Column(s)";
@@ -197,6 +202,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftPrintAreaColumnsDown(sheet, _startCol, _count);
         _columnPageBreakSnapshot = sheet.ColumnPageBreaks.ToList();
         InsertRowsCommand.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
+        _chartSnapshot = InsertRowsCommand.CaptureChartDataRanges(sheet);
+        InsertRowsCommand.ShiftChartColumnsDown(sheet, _sheetId, _startCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var adjustedMerges = new List<GridRange>();
@@ -259,9 +266,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreDictionary(sheet.ColumnWidths, _columnWidthSnapshot);
         InsertRowsCommand.RestoreSet(sheet.HiddenCols, _hiddenColsSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        InsertRowsCommand.RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
+        // Full-rebuild overload: rules removed during deletion must be re-added here.
+        InsertRowsCommand.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         InsertRowsCommand.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
+        InsertRowsCommand.RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 }
