@@ -25,6 +25,9 @@ public sealed class Workbook
     public Dictionary<string, GridRange> NamedRanges { get; } =
         new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Pivot cache metadata loaded from XLSX packages.</summary>
+    public List<PivotCacheModel> PivotCaches { get; } = [];
+
     /// <summary>Saved workbook view snapshots, similar to Excel Custom Views.</summary>
     public List<WorkbookCustomView> CustomViews { get; } = [];
 

@@ -460,6 +460,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         DataBarColor = formatDto.DataBarColor,
                         AboveAverage = formatDto.AboveAverage,
                         FormulaText = formatDto.FormulaText,
+                        TopBottomRank = formatDto.TopBottomRank,
+                        TopBottomPercent = formatDto.TopBottomPercent,
+                        TextRuleText = formatDto.TextRuleText,
+                        DateOccurringPeriod = formatDto.DateOccurringPeriod,
                         StopIfTrue = formatDto.StopIfTrue
                     });
                 }
@@ -957,6 +961,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         DataBarColor = format.DataBarColor,
                         AboveAverage = format.AboveAverage,
                         FormulaText = format.FormulaText,
+                        TopBottomRank = format.TopBottomRank,
+                        TopBottomPercent = format.TopBottomPercent,
+                        TextRuleText = format.TextRuleText,
+                        DateOccurringPeriod = format.DateOccurringPeriod,
                         StopIfTrue = format.StopIfTrue
                     }).ToList(),
                 Cells = s.GetUsedCells().Select(pair => new CellDto
@@ -1764,6 +1772,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
         public bool AboveAverage { get; set; } = true;
         public string? FormulaText { get; set; }
+        public int TopBottomRank { get; set; } = 10;
+        public bool TopBottomPercent { get; set; }
+        public string? TextRuleText { get; set; }
+        public string? DateOccurringPeriod { get; set; }
         public bool StopIfTrue { get; set; }
     }
 

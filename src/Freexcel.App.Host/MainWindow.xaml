@@ -1240,10 +1240,10 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="PivotTable (Excluded)" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
-                                        local:RibbonTooltip.Title="PivotTable Excluded"
+                                <Button Content="PivotTable" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
+                                        local:RibbonTooltip.Title="PivotTable"
                                         local:RibbonTooltip.KeyTip="P"
-                                        local:RibbonTooltip.Description="PivotTables, pivot caches, slicers, and timelines are excluded from Freexcel v1."/>
+                                        local:RibbonTooltip.Description="Loaded PivotTables are retained on XLSX save; creation and refresh are deferred."/>
                                 <Button Content="Table"      Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"

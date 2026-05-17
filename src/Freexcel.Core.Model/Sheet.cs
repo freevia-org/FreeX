@@ -672,6 +672,10 @@ public sealed class Sheet
                 IconSetStyle         = cf.IconSetStyle,
                 IconSetShowValue     = cf.IconSetShowValue,
                 IconSetReverse       = cf.IconSetReverse,
+                TopBottomRank        = cf.TopBottomRank,
+                TopBottomPercent     = cf.TopBottomPercent,
+                TextRuleText         = cf.TextRuleText,
+                DateOccurringPeriod  = cf.DateOccurringPeriod,
                 StopIfTrue           = cf.StopIfTrue
             });
 

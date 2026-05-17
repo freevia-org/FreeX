@@ -15,7 +15,37 @@ public readonly record struct RgbColor(byte R, byte G, byte B)
 }
 
 /// <summary>Rule type for a conditional format.</summary>
-public enum CfRuleType { CellValue, ColorScale, DataBar, AboveAverage, Top10, Formula }
+public enum CfRuleType
+{
+    CellValue,
+    ColorScale,
+    DataBar,
+    AboveAverage,
+    Top10,
+    Formula,
+    IconSet,
+    UniqueValues,
+    DuplicateValues,
+    ContainsText,
+    NotContainsText,
+    BeginsWith,
+    EndsWith,
+    DateOccurring,
+    Blanks,
+    NoBlanks,
+    Errors,
+    NoErrors
+}
+
+public enum CfThresholdType
+{
+    Min,
+    Max,
+    Number,
+    Percent,
+    Percentile,
+    Formula
+}
 
 /// <summary>Comparison operator used in CellValue rules.</summary>
 public enum CfOperator
@@ -66,10 +96,23 @@ public sealed class ConditionalFormat
 
     /// <summary>When true, interpolate through MidColor at the 50 % point.</summary>
     public bool UseThreeColorScale { get; set; } = false;
+    public CfThresholdType MinThresholdType { get; set; } = CfThresholdType.Min;
+    public string? MinThresholdValue { get; set; }
+    public CfThresholdType MidThresholdType { get; set; } = CfThresholdType.Percentile;
+    public string? MidThresholdValue { get; set; } = "50";
+    public CfThresholdType MaxThresholdType { get; set; } = CfThresholdType.Max;
+    public string? MaxThresholdValue { get; set; }
 
     // ── DataBar rule ────────────────────────────────────────────────────────
 
     public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
+    public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
+    public string? DataBarMinThresholdValue { get; set; }
+    public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.Max;
+    public string? DataBarMaxThresholdValue { get; set; }
+    public bool DataBarShowValue { get; set; } = true;
+    public int? DataBarMinLength { get; set; }
+    public int? DataBarMaxLength { get; set; }
 
     // ── AboveAverage rule ───────────────────────────────────────────────────
 
@@ -80,6 +123,15 @@ public sealed class ConditionalFormat
 
     /// <summary>Formula text (without leading =) evaluated per cell; truthy result triggers the format.</summary>
     public string? FormulaText { get; set; }
+
+    public string? IconSetStyle { get; set; }
+    public bool IconSetShowValue { get; set; } = true;
+    public bool IconSetReverse { get; set; }
+
+    public int TopBottomRank { get; set; } = 10;
+    public bool TopBottomPercent { get; set; }
+    public string? TextRuleText { get; set; }
+    public string? DateOccurringPeriod { get; set; }
 
     // ── Rule control ────────────────────────────────────────────────────────
 

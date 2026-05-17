@@ -1,6 +1,7 @@
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.IO.Compression;
 
 namespace Freexcel.Core.IO.Tests;
 
@@ -78,6 +79,38 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedKnownGapRows_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-known-gap")
+            .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("known-gap retention packages catch XLSX package loss during ordinary model edits");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+            var before = CapturePackageSummary(source);
+            before.CriticalParts.Should().NotBeEmpty(row.Id);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("freexcel-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            var after = CapturePackageSummary(saved);
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
+        }
+    }
+
+    [Fact]
     public void LocalPrivateCorpusRows_AreSkippedWhenFilesAreAbsent()
     {
         var workspace = FindWorkspaceRoot();
@@ -141,7 +174,6 @@ public class XlsxCorpusRunnerTests
         new Dictionary<XlsxUnsupportedFeatureKind, string>
         {
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
-            [XlsxUnsupportedFeatureKind.PivotTables] = "excluded PivotTable disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
             [XlsxUnsupportedFeatureKind.Slicers] = "excluded slicer disclosed",
             [XlsxUnsupportedFeatureKind.Timelines] = "excluded timeline disclosed",
@@ -164,7 +196,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.SensitivityLabels] = "unsupported sensitivity label disclosed",
             [XlsxUnsupportedFeatureKind.SmartArtDiagrams] = "unsupported SmartArt diagram disclosed",
             [XlsxUnsupportedFeatureKind.PrinterSettings] = "unsupported printer settings disclosed",
-            [XlsxUnsupportedFeatureKind.StructuredTables] = "unsupported structured table disclosed",
             [XlsxUnsupportedFeatureKind.UnsupportedSheetTypes] = "unsupported sheet type disclosed"
         };
 
@@ -175,9 +206,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("macros"))
             expected.Add(XlsxUnsupportedFeatureKind.Macros);
-
-        if (tags.Contains("pivottables") || tags.Contains("pivot-caches"))
-            expected.Add(XlsxUnsupportedFeatureKind.PivotTables);
 
         if (tags.Contains("unsupported-chart-family"))
             expected.Add(XlsxUnsupportedFeatureKind.Charts);
@@ -230,9 +258,6 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("printer-settings"))
             expected.Add(XlsxUnsupportedFeatureKind.PrinterSettings);
 
-        if (tags.Contains("structured-tables") || tags.Contains("listobjects"))
-            expected.Add(XlsxUnsupportedFeatureKind.StructuredTables);
-
         if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets"))
             expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);
 
@@ -242,14 +267,8 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("custom-xml"))
             expected.Add(XlsxUnsupportedFeatureKind.CustomXmlParts);
 
-        if (tags.Contains("color-scales") || tags.Contains("data-bars"))
-            expected.Add(XlsxUnsupportedFeatureKind.ConditionalFormats);
-
-        if (tags.Contains("text-boxes") || tags.Contains("shapes") || tags.Contains("images"))
+        if (tags.Contains("connectors") || tags.Contains("group-shapes"))
             expected.Add(XlsxUnsupportedFeatureKind.DrawingObjects);
-
-        if (tags.Contains("sparklines"))
-            expected.Add(XlsxUnsupportedFeatureKind.Sparklines);
 
         return expected.Distinct().ToArray();
     }
@@ -259,6 +278,8 @@ public class XlsxCorpusRunnerTests
             workbook.SheetCount,
             workbook.NamedRanges.Count,
             workbook.IsStructureProtected,
+            workbook.PivotCaches.Count,
+            workbook.PivotCaches.Sum(cache => cache.Fields.Count),
             workbook.Sheets.Select(CaptureSheetSummary).ToArray());
 
     private static SheetSummary CaptureSheetSummary(Sheet sheet) =>
@@ -272,19 +293,94 @@ public class XlsxCorpusRunnerTests
             sheet.Comments.Count,
             sheet.Hyperlinks.Count,
             sheet.Charts.Count,
+            sheet.PivotTables.Count,
+            sheet.PivotTables.Sum(pivot => pivot.RowFields.Count + pivot.ColumnFields.Count + pivot.PageFields.Count + pivot.DataFields.Count),
+            sheet.StructuredTables.Count,
+            sheet.StructuredTables.Sum(table => table.Columns.Count),
+            sheet.Sparklines.Count,
             sheet.TextBoxes.Count,
             sheet.DrawingShapes.Count,
+            sheet.Pictures.Count,
+            sheet.BackgroundImage is not null,
             sheet.IsProtected,
+            sheet.AllowEditRanges.Count,
             sheet.PrintArea is not null,
+            sheet.PrintTitleRows is not null,
+            sheet.PrintTitleColumns is not null,
+            sheet.RowPageBreaks.Count,
+            sheet.ColumnPageBreaks.Count,
             sheet.FrozenRows,
             sheet.FrozenCols,
+            sheet.SplitRow,
+            sheet.SplitColumn,
+            sheet.ShowGridlines,
+            sheet.ShowHeadings,
+            sheet.ShowRulers,
+            sheet.ZoomPercent,
+            sheet.ShowFormulas,
             sheet.HiddenRows.Count,
-            sheet.HiddenCols.Count);
+            sheet.HiddenCols.Count,
+            sheet.RowOutlineLevels.Count,
+            sheet.ColOutlineLevels.Count,
+            sheet.GroupHiddenRows.Count,
+            sheet.GroupHiddenCols.Count,
+            sheet.GetStyleOnlyEntries().Count());
+
+    private static PackagePartSummary CapturePackageSummary(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            return new PackagePartSummary(
+                archive.Entries
+                    .Select(entry => entry.FullName.Replace('\\', '/'))
+                    .Where(IsFidelityCriticalPart)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static bool IsFidelityCriticalPart(string path) =>
+        path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/pivot", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/slicer", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/timeline", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/query", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/model/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/datamodel/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/powerpivot/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/richData/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/persons/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/revisionHeaders/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/activeX/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("_xmlsignatures/", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
 
     private sealed record WorkbookSummary(
         int SheetCount,
         int NamedRangeCount,
         bool IsStructureProtected,
+        int PivotCacheCount,
+        int PivotCacheFieldCount,
         IReadOnlyList<SheetSummary> Sheets);
 
     private sealed record SheetSummary(
@@ -297,12 +393,38 @@ public class XlsxCorpusRunnerTests
         int CommentCount,
         int HyperlinkCount,
         int ChartCount,
+        int PivotTableCount,
+        int PivotTableFieldCount,
+        int StructuredTableCount,
+        int StructuredTableColumnCount,
+        int SparklineCount,
         int TextBoxCount,
         int DrawingShapeCount,
+        int PictureCount,
+        bool HasBackgroundImage,
         bool IsProtected,
+        int AllowEditRangeCount,
         bool HasPrintArea,
+        bool HasPrintTitleRows,
+        bool HasPrintTitleColumns,
+        int RowPageBreakCount,
+        int ColumnPageBreakCount,
         uint FrozenRows,
         uint FrozenCols,
+        uint? SplitRow,
+        uint? SplitColumn,
+        bool ShowGridlines,
+        bool ShowHeadings,
+        bool ShowRulers,
+        int ZoomPercent,
+        bool ShowFormulas,
         int HiddenRowCount,
-        int HiddenColumnCount);
+        int HiddenColumnCount,
+        int RowOutlineLevelCount,
+        int ColumnOutlineLevelCount,
+        int GroupHiddenRowCount,
+        int GroupHiddenColumnCount,
+        int StyleOnlyCellCount);
+
+    private sealed record PackagePartSummary(IReadOnlyList<string> CriticalParts);
 }
