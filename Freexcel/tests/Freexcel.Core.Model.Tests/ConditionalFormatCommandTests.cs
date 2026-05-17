@@ -79,6 +79,33 @@ public sealed class ConditionalFormatCommandTests
         sheet.ConditionalFormats.Should().ContainSingle().Which.Should().BeSameAs(original);
     }
 
+    [Fact]
+    public void ClearConditionalFormats_RuleStartsOutsideClearRange_ButOverlaps_IsRemoved()
+    {
+        // Rule applies to A1:Z100; clear B2:Y50 — start (A1) is outside but range overlaps
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var rule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 100, 26)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { Bold = true }
+        };
+        sheet.ConditionalFormats.Add(rule);
+
+        var clearRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 50, 25));
+        new ClearConditionalFormatsCommand(sheet.Id, clearRange).Apply(ctx);
+
+        sheet.ConditionalFormats.Should().BeEmpty();
+    }
+
     private static ConditionalFormat NewRule(SheetId sheetId) =>
         new()
         {
