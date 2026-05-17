@@ -1387,7 +1387,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue repeatError) return repeatError;
         var text  = ToText(args[0]);
         var timesD = ToNumber(args[1]);
-        if (!double.IsFinite(timesD)) return ErrorValue.Value;
+        if (!double.IsFinite(timesD) || timesD > int.MaxValue) return ErrorValue.Value;
         int times = (int)timesD;
         if (times < 0) return ErrorValue.Value;
         if ((long)text.Length * times > 32767) return ErrorValue.Value;
@@ -2505,24 +2505,28 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         double n = ToNumber(args[0]);
-        if (!double.IsFinite(n) || Math.Abs(n) > int.MaxValue) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
         if (n == 0) return new NumberValue(1);
-        int sign = n > 0 ? 1 : -1;
-        int abs = (int)Math.Ceiling(Math.Abs(n));
-        if (abs % 2 == 0) abs++;
-        return new NumberValue(sign * abs);
+        double sign = n > 0 ? 1 : -1;
+        double abs = Math.Ceiling(Math.Abs(n));
+        if (abs > int.MaxValue) return ErrorValue.Num;
+        int iabs = (int)abs;
+        if (iabs % 2 == 0) iabs++;
+        return new NumberValue(sign * iabs);
     }
 
     private static ScalarValue Even(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
         double n = ToNumber(args[0]);
-        if (!double.IsFinite(n) || Math.Abs(n) > int.MaxValue) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
         if (n == 0) return new NumberValue(0);
-        int sign = n > 0 ? 1 : -1;
-        int abs = (int)Math.Ceiling(Math.Abs(n));
-        if (abs % 2 != 0) abs++;
-        return new NumberValue(sign * abs);
+        double sign = n > 0 ? 1 : -1;
+        double abs = Math.Ceiling(Math.Abs(n));
+        if (abs > int.MaxValue - 1) return ErrorValue.Num;
+        int iabs = (int)abs;
+        if (iabs % 2 != 0) iabs++;
+        return new NumberValue(sign * iabs);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -3051,8 +3055,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
-        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
-        int nper = (int)nperValue;
+        double nper = nperValue;
         if (nper == 0) return ErrorValue.DivByZero;
         if (Math.Abs(rate) < 1e-10)
             return NumberResult(-(pv + fv) / nper);
@@ -3072,8 +3075,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
-        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
-        int nper = (int)nperValue;
+        double nper = nperValue;
         if (nper == 0) return ErrorValue.DivByZero;
         if (Math.Abs(rate) < 1e-10)
             return NumberResult(-pmt * nper - fv);
@@ -3093,8 +3095,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
-        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
-        int nper = (int)nperValue;
+        double nper = nperValue;
         if (Math.Abs(rate) < 1e-10)
             return NumberResult(-pv - pmt * nper);
         double rn = Math.Pow(1 + rate, nper);
@@ -3135,8 +3136,8 @@ public static class BuiltInFunctions
         if (!double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
-        if (nperValue < int.MinValue || nperValue > int.MaxValue) return ErrorValue.Num;
-        int nper = (int)nperValue;
+        if (nperValue == 0) return ErrorValue.DivByZero;
+        double nper = nperValue;
         double r = guess;
         for (int i = 0; i < 100; i++)
         {
@@ -4318,22 +4319,19 @@ public static class BuiltInFunctions
             }
         }
 
-        if (nums.Count == 0 && baseFunc != 2 && baseFunc != 3)
-            return new NumberValue(0);
-
         return baseFunc switch
         {
-            1  => NumberResult(nums.Count == 0 ? 0 : nums.Average()),
+            1  => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Average()),
             2  => new NumberValue(nums.Count),
             3  => new NumberValue(countaCount),
-            4  => NumberResult(nums.Count == 0 ? 0 : nums.Max()),
-            5  => NumberResult(nums.Count == 0 ? 0 : nums.Min()),
+            4  => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Max()),
+            5  => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Min()),
             6  => NumberResult(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (acc, x) => acc * x)),
             7  => nums.Count < 2 ? ErrorValue.DivByZero : NumberResult(SubtotalStdDevS(nums)),
-            8  => nums.Count == 0 ? new NumberValue(0) : NumberResult(SubtotalStdDevP(nums)),
+            8  => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(SubtotalStdDevP(nums)),
             9  => NumberResult(nums.Sum()),
             10 => nums.Count < 2 ? ErrorValue.DivByZero : NumberResult(SubtotalVarS(nums)),
-            11 => nums.Count == 0 ? new NumberValue(0) : NumberResult(SubtotalVarP(nums)),
+            11 => nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(SubtotalVarP(nums)),
             _  => ErrorValue.Value
         };
     }

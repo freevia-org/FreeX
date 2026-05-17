@@ -238,16 +238,28 @@ public sealed class RecalcEngine
             {
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
-                    for (var r = range.Start.Row; r <= range.End.Row; r++)
-                        for (var c = range.Start.ColumnNumber; c <= range.End.ColumnNumber; c++)
+                {
+                    var r0 = Math.Min(range.Start.Row, range.End.Row);
+                    var r1 = Math.Max(range.Start.Row, range.End.Row);
+                    var c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+                    var c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+                    for (var r = r0; r <= r1; r++)
+                        for (var c = c0; c <= c1; c++)
                             refs.Add(new CellAddress(targetSheet.Id, r, c));
+                }
                 break;
             }
             case RangeRefNode range:
-                for (var r = range.Start.Row; r <= range.End.Row; r++)
-                    for (var c = range.Start.ColumnNumber; c <= range.End.ColumnNumber; c++)
+            {
+                var r0 = Math.Min(range.Start.Row, range.End.Row);
+                var r1 = Math.Max(range.Start.Row, range.End.Row);
+                var c0 = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+                var c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+                for (var r = r0; r <= r1; r++)
+                    for (var c = c0; c <= c1; c++)
                         refs.Add(new CellAddress(defaultSheetId, r, c));
                 break;
+            }
 
             case BinaryOpNode binary:
                 CollectReferences(binary.Left, defaultSheetId, workbook, refs);

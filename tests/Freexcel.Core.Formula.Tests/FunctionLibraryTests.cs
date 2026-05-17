@@ -4935,11 +4935,11 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Subtotal_FuncNum4_EmptyRange_ReturnsZero()
+    public void Subtotal_FuncNum4_EmptyRange_ReturnsDivByZero()
     {
         var sheet = MakeSheet();
         var result = _eval.Evaluate("=SUBTOTAL(4,B1:B3)", sheet);
-        result.Should().Be(new NumberValue(0));
+        result.Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact]
