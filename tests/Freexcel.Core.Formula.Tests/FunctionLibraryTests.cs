@@ -3266,6 +3266,25 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTRANK(A1:A5,3)", sheet).Should().Be(new NumberValue(0.5));
     }
 
+    [Fact] public void Percentrank_InterpolatesWhenValueNotInArray()
+    {
+        // Excel PERCENTRANK interpolates between adjacent values when x is not an
+        // exact array member but falls between min and max. For [1,2,3,4,5], the rank
+        // of 3.5 is halfway between rank(3)=0.5 and rank(4)=0.75, i.e. 0.625
+        // (truncated to 3 significant digits → 0.625).
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)),
+            (4,1,new NumberValue(4)),(5,1,new NumberValue(5)));
+        _eval.Evaluate("=PERCENTRANK(A1:A5,3.5)", sheet).Should().Be(new NumberValue(0.625));
+    }
+
+    [Fact] public void Percentrank_OutsideRange_ReturnsNA()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)),(2,1,new NumberValue(2)),(3,1,new NumberValue(3)));
+        _eval.Evaluate("=PERCENTRANK(A1:A3,10)", sheet).Should().Be(ErrorValue.NA);
+    }
+
     [Fact] public void Percentrank_RangeError_PropagatesError()
     {
         var sheet = MakeSheet(
