@@ -70,6 +70,11 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
         XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
         XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
+        XlsxUnsupportedFeatureKind.ConditionalFormats => "unsupported conditional formatting",
+        XlsxUnsupportedFeatureKind.DrawingObjects => "drawing objects",
+        XlsxUnsupportedFeatureKind.Sparklines => "sparklines",
+        XlsxUnsupportedFeatureKind.PowerQuery => "Power Query queries (excluded)",
+        XlsxUnsupportedFeatureKind.DataModel => "Data Model / Power Pivot (excluded)",
         _ => kind.ToString()
     };
 

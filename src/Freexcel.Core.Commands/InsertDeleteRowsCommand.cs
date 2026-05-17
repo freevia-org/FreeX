@@ -18,6 +18,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
+    private List<GridRange>? _chartSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
@@ -77,6 +78,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
         _rowPageBreakSnapshot = sheet.RowPageBreaks.ToList();
         ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
+        _chartSnapshot = CaptureChartDataRanges(sheet);
+        ShiftChartRowsUp(sheet, _sheetId, _beforeRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var shiftedMerges = sheet.MergedRegions.Select(m =>
@@ -129,6 +132,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
+        RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 
     internal static void RewriteAllFormulas(
@@ -338,6 +342,32 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                 rule.AppliesTo = appliesTo;
     }
 
+    // Full rebuild variant: used when rules may have been removed (e.g. DeleteRows/DeleteColumns).
+    internal static void RestoreRuleRanges(
+        Sheet sheet,
+        List<(DataValidation Rule, GridRange AppliesTo)>? dataValidations,
+        List<(ConditionalFormat Rule, GridRange AppliesTo)>? conditionalFormats)
+    {
+        if (dataValidations is not null)
+        {
+            sheet.DataValidations.Clear();
+            foreach (var (rule, appliesTo) in dataValidations)
+            {
+                rule.AppliesTo = appliesTo;
+                sheet.DataValidations.Add(rule);
+            }
+        }
+        if (conditionalFormats is not null)
+        {
+            sheet.ConditionalFormats.Clear();
+            foreach (var (rule, appliesTo) in conditionalFormats)
+            {
+                rule.AppliesTo = appliesTo;
+                sheet.ConditionalFormats.Add(rule);
+            }
+        }
+    }
+
     internal static void ShiftRuleRowsUp(Sheet sheet, uint start, uint count)
     {
         foreach (var rule in sheet.DataValidations)
@@ -463,6 +493,46 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             sheet.PrintArea = ShiftRangeColumnsDown(printArea, start, count);  // null clears the print area
     }
 
+    // ── Chart data range helpers ──────────────────────────────────────────────
+
+    internal static List<GridRange> CaptureChartDataRanges(Sheet sheet) =>
+        sheet.Charts.Select(c => c.DataRange).ToList();
+
+    internal static void RestoreChartDataRanges(Sheet sheet, List<GridRange>? snapshot)
+    {
+        if (snapshot is null) return;
+        for (int i = 0; i < sheet.Charts.Count && i < snapshot.Count; i++)
+            sheet.Charts[i].DataRange = snapshot[i];
+    }
+
+    internal static void ShiftChartRowsUp(Sheet sheet, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var chart in sheet.Charts)
+            if (chart.DataRange.Start.Sheet == sheetId)
+                chart.DataRange = ShiftRangeRowsUp(chart.DataRange, start, count);
+    }
+
+    internal static void ShiftChartRowsDown(Sheet sheet, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var chart in sheet.Charts)
+            if (chart.DataRange.Start.Sheet == sheetId)
+                chart.DataRange = ShiftRangeRowsDown(chart.DataRange, start, count) ?? chart.DataRange;
+    }
+
+    internal static void ShiftChartColumnsUp(Sheet sheet, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var chart in sheet.Charts)
+            if (chart.DataRange.Start.Sheet == sheetId)
+                chart.DataRange = ShiftRangeColumnsUp(chart.DataRange, start, count);
+    }
+
+    internal static void ShiftChartColumnsDown(Sheet sheet, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var chart in sheet.Charts)
+            if (chart.DataRange.Start.Sheet == sheetId)
+                chart.DataRange = ShiftRangeColumnsDown(chart.DataRange, start, count) ?? chart.DataRange;
+    }
+
     private static GridRange ShiftRangeRowsUp(GridRange range, uint start, uint count)
     {
         if (range.End.Row < start)
@@ -552,6 +622,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private Dictionary<string, GridRange>? _namedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
+    private List<GridRange>? _chartSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
@@ -614,6 +685,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
         _rowPageBreakSnapshot = sheet.RowPageBreaks.ToList();
         InsertRowsCommand.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
+        _chartSnapshot = InsertRowsCommand.CaptureChartDataRanges(sheet);
+        InsertRowsCommand.ShiftChartRowsDown(sheet, _sheetId, _startRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var adjustedMerges = new List<GridRange>();
@@ -677,9 +750,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         InsertRowsCommand.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
         InsertRowsCommand.RestoreSet(sheet.FilterHiddenRows, _filterHiddenRowsSnapshot);
         InsertRowsCommand.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        InsertRowsCommand.RestoreRuleRanges(_dataValidationSnapshot, _conditionalFormatSnapshot);
+        // Full-rebuild overload: rules removed during deletion must be re-added here.
+        InsertRowsCommand.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         InsertRowsCommand.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         InsertRowsCommand.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
+        InsertRowsCommand.RestoreChartDataRanges(sheet, _chartSnapshot);
     }
 }
