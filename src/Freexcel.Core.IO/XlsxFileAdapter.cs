@@ -36,6 +36,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var pivotMetadata = LoadPivotMetadata(packageStream);
         packageStream.Position = 0;
+        var slicerTimelineMetadata = LoadSlicerTimelineMetadata(packageStream);
+        packageStream.Position = 0;
+        var externalLinkMetadata = LoadExternalLinkMetadata(packageStream);
+        packageStream.Position = 0;
         var structuredTableMetadata = LoadStructuredTableMetadata(packageStream);
 
         packageStream.Position = 0;
@@ -52,6 +56,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             : WorkbookCalculationMode.Automatic;
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
+        foreach (var slicer in slicerTimelineMetadata.Slicers)
+            workbook.Slicers.Add(slicer);
+        foreach (var timeline in slicerTimelineMetadata.Timelines)
+            workbook.Timelines.Add(timeline);
+        foreach (var externalLink in externalLinkMetadata)
+            workbook.ExternalLinks.Add(externalLink);
 
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
@@ -469,6 +479,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     StringComparer.OrdinalIgnoreCase)
                 ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+            var differentialStyles = ReadDifferentialStyles(archive, workbookNs);
+
             foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
             {
                 var name = sheetElement.Attribute("name")?.Value;
@@ -482,7 +494,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (worksheetEntry is null)
                     continue;
 
-                result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry);
+                result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles);
             }
         }
         catch
@@ -505,6 +517,97 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
         using var stream = entry.Open();
         document.Save(stream);
+    }
+
+    private static IReadOnlyList<CellStyle> ReadDifferentialStyles(ZipArchive archive, XNamespace workbookNs)
+    {
+        var stylesEntry = archive.GetEntry("xl/styles.xml");
+        if (stylesEntry is null)
+            return [];
+
+        try
+        {
+            var stylesXml = LoadXml(stylesEntry);
+            return stylesXml.Root?
+                .Element(workbookNs + "dxfs")?
+                .Elements(workbookNs + "dxf")
+                .Select(dxf => ReadDifferentialStyle(dxf, workbookNs))
+                .ToList()
+                ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static CellStyle ReadDifferentialStyle(XElement dxf, XNamespace workbookNs)
+    {
+        var style = new CellStyle();
+        var font = dxf.Element(workbookNs + "font");
+        if (font is not null)
+        {
+            style.Bold = font.Element(workbookNs + "b") is not null;
+            style.Italic = font.Element(workbookNs + "i") is not null;
+            style.Underline = font.Element(workbookNs + "u") is not null;
+            style.Strikethrough = font.Element(workbookNs + "strike") is not null;
+            if (double.TryParse(font.Element(workbookNs + "sz")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var size) &&
+                IsSupportedFontSize(size))
+            {
+                style.FontSize = size;
+            }
+
+            var fontName = font.Element(workbookNs + "name")?.Attribute("val")?.Value;
+            if (!string.IsNullOrWhiteSpace(fontName))
+                style.FontName = fontName;
+
+            if (TryReadCellColor(font.Element(workbookNs + "color"), out var fontColor))
+                style.FontColor = fontColor;
+        }
+
+        var patternFill = dxf
+            .Element(workbookNs + "fill")?
+            .Element(workbookNs + "patternFill");
+        if (TryReadCellColor(patternFill?.Element(workbookNs + "fgColor"), out var fillColor))
+            style.FillColor = fillColor;
+
+        var border = dxf.Element(workbookNs + "border");
+        if (border is not null)
+        {
+            style.BorderTop = ReadDifferentialBorder(border.Element(workbookNs + "top"), workbookNs);
+            style.BorderRight = ReadDifferentialBorder(border.Element(workbookNs + "right"), workbookNs);
+            style.BorderBottom = ReadDifferentialBorder(border.Element(workbookNs + "bottom"), workbookNs);
+            style.BorderLeft = ReadDifferentialBorder(border.Element(workbookNs + "left"), workbookNs);
+        }
+
+        var numberFormat = dxf.Element(workbookNs + "numFmt")?.Attribute("formatCode")?.Value;
+        if (!string.IsNullOrWhiteSpace(numberFormat))
+            style.NumberFormat = numberFormat;
+
+        return style;
+    }
+
+    private static CellBorder ReadDifferentialBorder(XElement? edge, XNamespace workbookNs)
+    {
+        if (edge is null)
+            return default;
+
+        var style = edge.Attribute("style")?.Value switch
+        {
+            "thin" => BorderStyle.Thin,
+            "medium" => BorderStyle.Medium,
+            "thick" => BorderStyle.Thick,
+            "dashed" => BorderStyle.Dashed,
+            "dotted" => BorderStyle.Dotted,
+            "double" => BorderStyle.Double,
+            _ => BorderStyle.None
+        };
+        if (style == BorderStyle.None)
+            return default;
+
+        return new CellBorder(
+            style,
+            TryReadCellColor(edge.Element(workbookNs + "color"), out var color) ? color : CellColor.Black);
     }
 
     private static PivotPackageMetadata LoadPivotMetadata(Stream xlsxStream)
@@ -609,6 +712,148 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("ref")?.Value))
             return PivotCacheSourceType.WorksheetRange;
         return PivotCacheSourceType.Unknown;
+    }
+
+    private static SlicerTimelinePackageMetadata LoadSlicerTimelineMetadata(Stream xlsxStream)
+    {
+        var slicers = new List<SlicerModel>();
+        var timelines = new List<TimelineModel>();
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var slicerCaches = archive.Entries
+                .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
+                .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
+                .Select(item => (item.Path, Cache: ReadSlicerCache(item.Xml)))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
+                .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var slicerEntry in archive.Entries.Where(entry =>
+                         entry.FullName.Replace('\\', '/').StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+            {
+                var slicerXml = LoadXml(slicerEntry);
+                var root = slicerXml.Root;
+                var cacheName = root?.Attribute("cache")?.Value ?? "";
+                slicerCaches.TryGetValue(cacheName, out var cache);
+                slicers.Add(new SlicerModel
+                {
+                    Name = root?.Attribute("name")?.Value ?? "",
+                    CacheName = cacheName,
+                    SourcePivotTableName = cache?.PivotTableName,
+                    SourceFieldName = cache?.SourceFieldName,
+                    PackagePart = slicerEntry.FullName.Replace('\\', '/')
+                });
+            }
+
+            var timelineCaches = archive.Entries
+                .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
+                .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
+                .Select(item => (item.Path, Cache: ReadTimelineCache(item.Xml)))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
+                .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var timelineEntry in archive.Entries.Where(entry =>
+                         entry.FullName.Replace('\\', '/').StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+            {
+                var timelineXml = LoadXml(timelineEntry);
+                var root = timelineXml.Root;
+                var cacheName = root?.Attribute("cache")?.Value ?? "";
+                timelineCaches.TryGetValue(cacheName, out var cache);
+                timelines.Add(new TimelineModel
+                {
+                    Name = root?.Attribute("name")?.Value ?? "",
+                    CacheName = cacheName,
+                    SourcePivotTableName = cache?.PivotTableName,
+                    SourceFieldName = cache?.SourceFieldName,
+                    StartDate = cache?.StartDate,
+                    EndDate = cache?.EndDate,
+                    PackagePart = timelineEntry.FullName.Replace('\\', '/')
+                });
+            }
+        }
+        catch
+        {
+            // Slicer/timeline metadata should never block loading ordinary workbook content.
+        }
+
+        return new SlicerTimelinePackageMetadata(slicers, timelines);
+    }
+
+    private static SlicerCacheMetadata ReadSlicerCache(XDocument xml)
+    {
+        var root = xml.Root;
+        return new SlicerCacheMetadata(
+            root?.Attribute("name")?.Value ?? "",
+            root?.Attribute("sourceName")?.Value,
+            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value);
+    }
+
+    private static TimelineCacheMetadata ReadTimelineCache(XDocument xml)
+    {
+        var root = xml.Root;
+        return new TimelineCacheMetadata(
+            root?.Attribute("name")?.Value ?? "",
+            root?.Attribute("sourceName")?.Value,
+            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
+            root?.Attribute("startDate")?.Value,
+            root?.Attribute("endDate")?.Value);
+    }
+
+    private static IReadOnlyList<ExternalLinkModel> LoadExternalLinkMetadata(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return [];
+
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var workbookXml = LoadXml(workbookEntry);
+            var workbookRels = LoadRelationshipTargets(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "xl/workbook.xml",
+                packageRelNs);
+            var result = new List<ExternalLinkModel>();
+            foreach (var externalReference in workbookXml.Root?
+                         .Element(workbookNs + "externalReferences")?
+                         .Elements(workbookNs + "externalReference") ?? [])
+            {
+                var relId = externalReference.Attribute(relNs + "id")?.Value;
+                if (string.IsNullOrWhiteSpace(relId) ||
+                    !workbookRels.TryGetValue(relId, out var externalLinkPath))
+                {
+                    continue;
+                }
+
+                var model = new ExternalLinkModel { PackagePart = externalLinkPath };
+                var externalLinkRelsEntry = archive.GetEntry(GetWorksheetRelsPath(externalLinkPath));
+                if (externalLinkRelsEntry is not null)
+                {
+                    var externalLinkRelsXml = LoadXml(externalLinkRelsEntry);
+                    var pathRelationship = externalLinkRelsXml.Root?
+                        .Elements(packageRelNs + "Relationship")
+                        .FirstOrDefault(relationship =>
+                            (relationship.Attribute("Type")?.Value ?? "").EndsWith("/externalLinkPath", StringComparison.OrdinalIgnoreCase));
+                    model.TargetUri = pathRelationship?.Attribute("Target")?.Value;
+                    model.TargetMode = pathRelationship?.Attribute("TargetMode")?.Value;
+                }
+
+                result.Add(model);
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static StructuredTablePackageMetadata LoadStructuredTableMetadata(Stream xlsxStream)
@@ -959,6 +1204,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             RemoveWorksheetPivotTableReferences(archive);
             RemovePivotRelationships(archive);
             RemovePivotPackageParts(archive);
+            RemoveUnsupportedConditionalFormattingBlocks(archive);
         }
 
         sanitized.Position = 0;
@@ -1064,6 +1310,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         pivotOverrides.Remove();
         ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+    }
+
+    private static void RemoveUnsupportedConditionalFormattingBlocks(ZipArchive archive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var worksheetEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var unsupportedBlocks = root
+                .Elements(worksheetNs + "conditionalFormatting")
+                .Where(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs))
+                .ToList();
+            if (unsupportedBlocks.Count == 0)
+                continue;
+
+            unsupportedBlocks.Remove();
+            ReplacePackageXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
     }
 
     private static WorkbookTheme LoadWorkbookTheme(Stream xlsxStream)
@@ -1222,6 +1494,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return true;
     }
 
+    private static bool TryReadCellColor(XElement? element, out CellColor color)
+    {
+        color = default;
+        var rgb = element?.Attribute("rgb")?.Value;
+        if (string.IsNullOrWhiteSpace(rgb))
+            return false;
+
+        var normalized = rgb.Trim().TrimStart('#');
+        if (normalized.Length == 8)
+            normalized = normalized[2..];
+        return TryParseHexColor(normalized, out color);
+    }
+
     private static CfThresholdType FromCfvoType(string? type) =>
         type?.ToLowerInvariant() switch
         {
@@ -1298,6 +1583,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
         {
             return $"../tables/{targetPath["xl/tables/".Length..]}";
+        }
+
+        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
+        }
+
+        if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
         }
 
         if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
@@ -1441,7 +1738,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ReplacePackageXml(archive, contentTypesPath, xml);
     }
 
-    private static SheetXmlLayout ReadHiddenSheetLayout(ZipArchive archive, string worksheetPath, ZipArchiveEntry worksheetEntry)
+    private static SheetXmlLayout ReadHiddenSheetLayout(
+        ZipArchive archive,
+        string worksheetPath,
+        ZipArchiveEntry worksheetEntry,
+        IReadOnlyList<CellStyle> differentialStyles)
     {
         var hiddenRows = new HashSet<uint>();
         var hiddenCols = new HashSet<uint>();
@@ -1512,7 +1813,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var pictureParts = ReadWorksheetPictureParts(archive, worksheetPath, worksheetXml);
         var (textBoxParts, shapeParts) = ReadWorksheetShapeParts(archive, worksheetPath, worksheetXml);
         var sparklines = ReadWorksheetSparklines(worksheetXml);
-        var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs);
+        var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
 
         return new SheetXmlLayout(
             hiddenRows,
@@ -1572,7 +1873,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return ranges;
     }
 
-    private static IReadOnlyList<ConditionalFormat> ReadAdvancedConditionalFormats(XDocument worksheetXml, XNamespace worksheetNs)
+    private static IReadOnlyList<ConditionalFormat> ReadAdvancedConditionalFormats(
+        XDocument worksheetXml,
+        XNamespace worksheetNs,
+        IReadOnlyList<CellStyle> differentialStyles)
     {
         var result = new List<ConditionalFormat>();
         var tempSheet = SheetId.New();
@@ -1599,15 +1903,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
             {
                 var type = rule.Attribute("type")?.Value;
                 var priority = ReadIntAttribute(rule, "priority") ?? 1;
+                var formatIfTrue = ReadIntAttribute(rule, "dxfId") is { } dxfId &&
+                    dxfId >= 0 &&
+                    dxfId < differentialStyles.Count
+                    ? differentialStyles[dxfId].Clone()
+                    : null;
                 if (string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) &&
                     rule.Element(worksheetNs + "colorScale") is { } colorScale)
                 {
-                    result.Add(ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs));
+                    var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs);
+                    format.FormatIfTrue = formatIfTrue;
+                    result.Add(format);
                 }
                 else if (string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
                          rule.Element(worksheetNs + "dataBar") is { } dataBar)
                 {
-                    result.Add(ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs));
+                    var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs);
+                    format.FormatIfTrue = formatIfTrue;
+                    result.Add(format);
                 }
                 else if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
                          rule.Element(worksheetNs + "iconSet") is { } iconSet)
@@ -1619,7 +1932,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         RuleType = CfRuleType.IconSet,
                         IconSetStyle = iconSet.Attribute("iconSet")?.Value,
                         IconSetShowValue = !IsFalse(iconSet.Attribute("showValue")?.Value),
-                        IconSetReverse = IsTruthy(iconSet.Attribute("reverse")?.Value)
+                        IconSetReverse = IsTruthy(iconSet.Attribute("reverse")?.Value),
+                        FormatIfTrue = formatIfTrue
                     });
                 }
                 else if (TryMapLongTailConditionalFormatRule(type, out var mappedType))
@@ -1637,7 +1951,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         TextRuleText = rule.Attribute("text")?.Value,
                         DateOccurringPeriod = rule.Attribute("timePeriod")?.Value,
                         StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value),
-                        FormulaText = rule.Element(worksheetNs + "formula")?.Value
+                        FormulaText = rule.Element(worksheetNs + "formula")?.Value,
+                        FormatIfTrue = formatIfTrue
                     });
                 }
             }
@@ -1669,6 +1984,31 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "containsText" or "notContainsText" or "beginsWith" or "endsWith" or "timePeriod" or
             "containsBlanks" or "notContainsBlanks" or "containsErrors" or "notContainsErrors";
     }
+
+    private static bool ConditionalFormattingHasUnsupportedRule(XElement block, XNamespace worksheetNs) =>
+        block
+            .Elements(worksheetNs + "cfRule")
+            .Any(rule => !IsSupportedConditionalFormatRuleType(rule.Attribute("type")?.Value));
+
+    private static bool IsSupportedConditionalFormatRuleType(string? type) =>
+        string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "aboveAverage", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "top10", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "uniqueValues", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "duplicateValues", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "containsText", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "notContainsText", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "beginsWith", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "endsWith", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "timePeriod", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "containsBlanks", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "notContainsBlanks", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "containsErrors", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(type, "notContainsErrors", StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyList<SparklineModel> ReadWorksheetSparklines(XDocument worksheetXml)
     {
@@ -2846,6 +3186,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveStructuredTables(packageStream, workbook);
         }
 
+        if (!SourcePackages.TryGetValue(workbook, out _) &&
+            workbook.PivotCaches.Count > 0 &&
+            workbook.Sheets.Any(sheet => sheet.PivotTables.Count > 0))
+        {
+            packageStream.Position = 0;
+            SavePivotTables(packageStream, workbook);
+        }
+
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
 
@@ -2879,7 +3227,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         PreservePivotXmlReferences(sourceArchive, generatedArchive);
         PreserveStructuredTableXmlReferences(sourceArchive, generatedArchive);
+        PreserveExternalLinkReferences(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
+        PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
     }
 
     private static bool IsPackageMetadataEntry(string entryName) =>
@@ -3286,6 +3636,77 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return id;
     }
 
+    private static void PreserveExternalLinkReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (sourceWorkbookEntry is null || targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+            return;
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var sourceExternalReferences = sourceWorkbookXml.Root?
+            .Element(workbookNs + "externalReferences")?
+            .Elements(workbookNs + "externalReference")
+            .ToList()
+            ?? [];
+        if (sourceExternalReferences.Count == 0)
+            return;
+
+        var sourceWorkbookRels = LoadRelationshipTargets(
+            sourceArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var targetWorkbookRelsXml = LoadXml(targetWorkbookRelsEntry);
+        var targetRoot = targetWorkbookXml.Root;
+        if (targetRoot is null)
+            return;
+
+        var targetExternalReferences = targetRoot.Element(workbookNs + "externalReferences");
+        if (targetExternalReferences is null)
+        {
+            targetExternalReferences = new XElement(workbookNs + "externalReferences");
+            targetRoot.Add(targetExternalReferences);
+        }
+
+        foreach (var sourceReference in sourceExternalReferences)
+        {
+            var sourceRelId = sourceReference.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(sourceRelId) ||
+                !sourceWorkbookRels.TryGetValue(sourceRelId, out var externalLinkPath))
+            {
+                continue;
+            }
+
+            var targetRelId = EnsureRelationshipForPackagePart(
+                targetWorkbookRelsXml,
+                packageRelNs,
+                "xl/workbook.xml",
+                externalLinkPath,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink");
+            if (!targetExternalReferences
+                    .Elements(workbookNs + "externalReference")
+                    .Any(reference => string.Equals(reference.Attribute(relNs + "id")?.Value, targetRelId, StringComparison.OrdinalIgnoreCase)))
+            {
+                targetExternalReferences.Add(new XElement(
+                    workbookNs + "externalReference",
+                    new XAttribute(relNs + "id", targetRelId)));
+            }
+        }
+
+        if (!targetExternalReferences.HasElements)
+            targetExternalReferences.Remove();
+
+        ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+        ReplacePackageXml(targetArchive, "xl/_rels/workbook.xml.rels", targetWorkbookRelsXml);
+    }
+
     private static void PreserveWorksheetDrawingReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -3364,6 +3785,47 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             targetRoot.Add(new XElement(workbookNs + "drawing", new XAttribute(relNs + "id", targetRelId)));
             ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
+
+    private static void PreserveUnsupportedConditionalFormatting(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var sourceWorksheetEntry in sourceArchive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var targetWorksheetEntry = targetArchive.GetEntry(sourceWorksheetEntry.FullName);
+            if (targetWorksheetEntry is null)
+                continue;
+
+            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
+            var unsupportedBlocks = sourceWorksheetXml.Root?
+                .Elements(worksheetNs + "conditionalFormatting")
+                .Where(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs))
+                .ToList()
+                ?? [];
+            if (unsupportedBlocks.Count == 0)
+                continue;
+
+            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null)
+                continue;
+
+            var existing = targetRoot
+                .Elements(worksheetNs + "conditionalFormatting")
+                .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var block in unsupportedBlocks)
+            {
+                var raw = block.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+                if (!existing.Contains(raw))
+                    targetRoot.Add(new XElement(block));
+            }
+
+            ReplacePackageXml(targetArchive, sourceWorksheetEntry.FullName, targetWorksheetXml);
         }
     }
 
@@ -3621,6 +4083,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var dxfIds = SaveDifferentialStyles(archive, workbook, workbookNs);
 
         var relTargets = relsXml.Root?
             .Elements(packageRelNs + "Relationship")
@@ -3658,11 +4121,139 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
 
             foreach (var cf in advancedRules)
-                root.Add(ToAdvancedConditionalFormattingXml(cf, workbookNs));
+                root.Add(ToAdvancedConditionalFormattingXml(cf, workbookNs, dxfIds));
 
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
     }
+
+    private static IReadOnlyDictionary<Guid, int> SaveDifferentialStyles(
+        ZipArchive archive,
+        Workbook workbook,
+        XNamespace workbookNs)
+    {
+        var rules = workbook.Sheets
+            .SelectMany(sheet => sheet.ConditionalFormats)
+            .Where(cf => IsAdvancedConditionalFormat(cf) && cf.FormatIfTrue is not null)
+            .ToList();
+        if (rules.Count == 0)
+            return new Dictionary<Guid, int>();
+
+        var stylesEntry = archive.GetEntry("xl/styles.xml");
+        var stylesXml = stylesEntry is not null
+            ? LoadXml(stylesEntry)
+            : new XDocument(new XElement(workbookNs + "styleSheet"));
+        var root = stylesXml.Root;
+        if (root is null)
+            return new Dictionary<Guid, int>();
+
+        var dxfs = root.Element(workbookNs + "dxfs");
+        if (dxfs is null)
+        {
+            dxfs = new XElement(workbookNs + "dxfs");
+            root.Add(dxfs);
+        }
+
+        var result = new Dictionary<Guid, int>();
+        var nextIndex = dxfs.Elements(workbookNs + "dxf").Count();
+        foreach (var rule in rules)
+        {
+            if (rule.FormatIfTrue is null)
+                continue;
+
+            result[rule.Id] = nextIndex++;
+            dxfs.Add(ToDifferentialStyleXml(rule.FormatIfTrue, workbookNs, nextIndex));
+        }
+
+        dxfs.SetAttributeValue("count", dxfs.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
+        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+        return result;
+    }
+
+    private static XElement ToDifferentialStyleXml(CellStyle style, XNamespace workbookNs, int numberFormatId)
+    {
+        var def = CellStyle.Default;
+        return new XElement(
+            workbookNs + "dxf",
+            style.NumberFormat != def.NumberFormat
+                ? new XElement(
+                    workbookNs + "numFmt",
+                    new XAttribute("numFmtId", (164 + numberFormatId).ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("formatCode", style.NumberFormat))
+                : null,
+            HasDifferentialFont(style)
+                ? new XElement(
+                    workbookNs + "font",
+                    style.Bold != def.Bold ? new XElement(workbookNs + "b") : null,
+                    style.Italic != def.Italic ? new XElement(workbookNs + "i") : null,
+                    style.Underline != def.Underline ? new XElement(workbookNs + "u") : null,
+                    style.Strikethrough != def.Strikethrough ? new XElement(workbookNs + "strike") : null,
+                    style.FontColor != def.FontColor ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(style.FontColor))) : null,
+                    style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize)
+                        ? new XElement(workbookNs + "sz", new XAttribute("val", style.FontSize.ToString(CultureInfo.InvariantCulture)))
+                        : null,
+                    style.FontName != def.FontName ? new XElement(workbookNs + "name", new XAttribute("val", style.FontName)) : null)
+                : null,
+            style.FillColor is { } fill
+                ? new XElement(
+                    workbookNs + "fill",
+                    new XElement(
+                        workbookNs + "patternFill",
+                        new XAttribute("patternType", "solid"),
+                        new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(fill))),
+                        new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))
+                : null,
+            HasDifferentialBorder(style)
+                ? new XElement(
+                    workbookNs + "border",
+                    ToDifferentialBorderXml("left", style.BorderLeft, workbookNs),
+                    ToDifferentialBorderXml("right", style.BorderRight, workbookNs),
+                    ToDifferentialBorderXml("top", style.BorderTop, workbookNs),
+                    ToDifferentialBorderXml("bottom", style.BorderBottom, workbookNs))
+                : null);
+    }
+
+    private static bool HasDifferentialFont(CellStyle style)
+    {
+        var def = CellStyle.Default;
+        return style.Bold != def.Bold ||
+            style.Italic != def.Italic ||
+            style.Underline != def.Underline ||
+            style.Strikethrough != def.Strikethrough ||
+            style.FontColor != def.FontColor ||
+            style.FontSize != def.FontSize ||
+            style.FontName != def.FontName;
+    }
+
+    private static bool HasDifferentialBorder(CellStyle style) =>
+        style.BorderLeft.Style != BorderStyle.None ||
+        style.BorderRight.Style != BorderStyle.None ||
+        style.BorderTop.Style != BorderStyle.None ||
+        style.BorderBottom.Style != BorderStyle.None;
+
+    private static XElement ToDifferentialBorderXml(string edgeName, CellBorder border, XNamespace workbookNs)
+    {
+        var element = new XElement(workbookNs + edgeName);
+        if (border.Style != BorderStyle.None)
+        {
+            element.SetAttributeValue("style", ToDifferentialBorderStyle(border.Style));
+            element.Add(new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(border.Color))));
+        }
+
+        return element;
+    }
+
+    private static string ToDifferentialBorderStyle(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.Thin => "thin",
+            BorderStyle.Medium => "medium",
+            BorderStyle.Thick => "thick",
+            BorderStyle.Dashed => "dashed",
+            BorderStyle.Dotted => "dotted",
+            BorderStyle.Double => "double",
+            _ => "none"
+        };
 
     private static void SaveWorksheetSparklines(Stream xlsxStream, Workbook workbook)
     {
@@ -3735,6 +4326,256 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
+    private static void SavePivotTables(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRelsXml = LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var cachePartById = new Dictionary<int, string>();
+        var pivotCacheElements = new List<XElement>();
+        var cacheIndex = 1;
+        foreach (var cache in workbook.PivotCaches.OrderBy(cache => cache.CacheId))
+        {
+            if (cache.CacheId <= 0)
+                continue;
+
+            var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheIndex++}.xml";
+            ReplacePackageXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, workbookNs, relNs));
+            ReplacePackageXml(archive, GetWorksheetRelsPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs));
+            EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
+
+            var cacheRelId = EnsureRelationshipForPackagePart(
+                workbookRelsXml,
+                packageRelNs,
+                "xl/workbook.xml",
+                cachePath,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition");
+            pivotCacheElements.Add(new XElement(
+                workbookNs + "pivotCache",
+                new XAttribute("cacheId", cache.CacheId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute(relNs + "id", cacheRelId)));
+            cachePartById[cache.CacheId] = cachePath;
+        }
+
+        var workbookRoot = workbookXml.Root;
+        if (workbookRoot is not null && pivotCacheElements.Count > 0)
+        {
+            workbookRoot.Elements(workbookNs + "pivotCaches").Remove();
+            var sheetsElement = workbookRoot.Element(workbookNs + "sheets");
+            var pivotCachesElement = new XElement(
+                workbookNs + "pivotCaches",
+                new XAttribute("count", pivotCacheElements.Count.ToString(CultureInfo.InvariantCulture)),
+                pivotCacheElements);
+            if (sheetsElement is not null)
+                sheetsElement.AddBeforeSelf(pivotCachesElement);
+            else
+                workbookRoot.Add(pivotCachesElement);
+        }
+
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        ReplacePackageXml(archive, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+
+        var relTargets = workbookRelsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
+            .ToDictionary(
+                e => e.Attribute("Id")!.Value,
+                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+
+        var pivotIndex = 1;
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(name) ||
+                string.IsNullOrWhiteSpace(relId) ||
+                !sheetsByName.TryGetValue(name, out var sheet) ||
+                sheet.PivotTables.Count == 0 ||
+                !relTargets.TryGetValue(relId, out var worksheetPath))
+            {
+                continue;
+            }
+
+            WriteWorksheetPivotTables(archive, worksheetPath, sheet, cachePartById, ref pivotIndex, workbookNs, relNs, packageRelNs);
+        }
+    }
+
+    private static void WriteWorksheetPivotTables(
+        ZipArchive archive,
+        string worksheetPath,
+        Sheet sheet,
+        IReadOnlyDictionary<int, string> cachePartById,
+        ref int pivotIndex,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return;
+
+        var worksheetXml = LoadXml(worksheetEntry);
+        var worksheetRelsPath = GetWorksheetRelsPath(worksheetPath);
+        var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+            ? LoadXml(worksheetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+
+        var references = new List<XElement>();
+        foreach (var pivot in sheet.PivotTables)
+        {
+            if (!cachePartById.TryGetValue(pivot.CacheId, out var cachePath))
+                continue;
+
+            var pivotPath = $"xl/pivotTables/pivotTable{pivotIndex++}.xml";
+            var cacheRelId = "rIdPivotCache";
+            ReplacePackageXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, workbookNs, cacheRelId));
+            ReplacePackageXml(archive, GetWorksheetRelsPath(pivotPath), new XDocument(
+                new XElement(packageRelNs + "Relationships",
+                    new XElement(packageRelNs + "Relationship",
+                        new XAttribute("Id", cacheRelId),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"),
+                        new XAttribute("Target", GetRelativeTarget(pivotPath, cachePath))))));
+            EnsureSpecificContentType(archive, $"/{pivotPath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml");
+
+            var pivotRelId = EnsureRelationshipForPackagePart(
+                worksheetRelsXml,
+                packageRelNs,
+                worksheetPath,
+                pivotPath,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable");
+            references.Add(new XElement(workbookNs + "pivotTableDefinition", new XAttribute(relNs + "id", pivotRelId)));
+        }
+
+        if (references.Count == 0)
+            return;
+
+        worksheetXml.Root?.Elements(workbookNs + "pivotTableDefinition").Remove();
+        worksheetXml.Root?.Add(references);
+        ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+    }
+
+    private static XDocument ToPivotCacheDefinitionXml(PivotCacheModel cache, XNamespace workbookNs, XNamespace relNs)
+    {
+        var source = new XElement(workbookNs + "worksheetSource");
+        if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
+            source.SetAttributeValue("name", cache.SourceTableName);
+        if (!string.IsNullOrWhiteSpace(cache.SourceSheetName))
+            source.SetAttributeValue("sheet", cache.SourceSheetName);
+        if (!string.IsNullOrWhiteSpace(cache.SourceReference))
+            source.SetAttributeValue("ref", cache.SourceReference);
+
+        return new XDocument(new XElement(
+            workbookNs + "pivotCacheDefinition",
+            new XAttribute(XNamespace.Xmlns + "r", relNs),
+            new XAttribute("refreshOnLoad", "1"),
+            new XAttribute("recordCount", "0"),
+            new XElement(
+                workbookNs + "cacheSource",
+                new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
+                source),
+            new XElement(
+                workbookNs + "cacheFields",
+                new XAttribute("count", cache.Fields.Count.ToString(CultureInfo.InvariantCulture)),
+                cache.Fields.Select(field => new XElement(
+                    workbookNs + "cacheField",
+                    new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Field" : field.Name),
+                    field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
+                    new XElement(workbookNs + "sharedItems"))))));
+    }
+
+    private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
+        new(new XElement(packageRelNs + "Relationships"));
+
+    private static XDocument ToPivotTableDefinitionXml(PivotTableModel pivot, XNamespace workbookNs, string cacheRelId) =>
+        new(new XElement(
+            workbookNs + "pivotTableDefinition",
+            new XAttribute("name", string.IsNullOrWhiteSpace(pivot.Name) ? "PivotTable" : pivot.Name),
+            new XAttribute("cacheId", pivot.CacheId.ToString(CultureInfo.InvariantCulture)),
+            new XAttribute("dataOnRows", "1"),
+            new XAttribute("applyNumberFormats", "1"),
+            new XAttribute("applyBorderFormats", "1"),
+            new XAttribute("applyFontFormats", "1"),
+            new XAttribute("applyPatternFormats", "1"),
+            new XAttribute("updatedVersion", "8"),
+            new XAttribute("minRefreshableVersion", "3"),
+            new XElement(
+                workbookNs + "location",
+                new XAttribute("ref", pivot.TargetRange.ToString()),
+                new XAttribute("firstDataCol", "1"),
+                new XAttribute("firstDataRow", "1"),
+                new XAttribute("firstHeaderRow", "1")),
+            ToPivotFieldsXml(pivot, workbookNs),
+            ToPivotFieldCollectionXml("rowFields", pivot.RowFields, workbookNs),
+            ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs),
+            ToPivotFieldCollectionXml("pageFields", pivot.PageFields, workbookNs),
+            ToPivotDataFieldsXml(pivot.DataFields, workbookNs),
+            new XElement(workbookNs + "pivotTableStyleInfo",
+                new XAttribute("name", "PivotStyleLight16"),
+                new XAttribute("showRowHeaders", "1"),
+                new XAttribute("showColHeaders", "1"),
+                new XAttribute("showRowStripes", "0"),
+                new XAttribute("showColStripes", "0"),
+                new XAttribute("showLastColumn", "1"))));
+
+    private static XElement ToPivotFieldsXml(PivotTableModel pivot, XNamespace workbookNs)
+    {
+        var maxFieldIndex = pivot.RowFields
+            .Concat(pivot.ColumnFields)
+            .Concat(pivot.PageFields)
+            .Select(field => field.SourceFieldIndex)
+            .Concat(pivot.DataFields.Select(field => field.SourceFieldIndex))
+            .DefaultIfEmpty(-1)
+            .Max();
+
+        return new XElement(
+            workbookNs + "pivotFields",
+            new XAttribute("count", Math.Max(0, maxFieldIndex + 1).ToString(CultureInfo.InvariantCulture)),
+            Enumerable.Range(0, Math.Max(0, maxFieldIndex + 1)).Select(index => new XElement(
+                workbookNs + "pivotField",
+                pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisRow") : null,
+                pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
+                pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
+                new XAttribute("showAll", "0"),
+                new XElement(workbookNs + "items",
+                    new XAttribute("count", "1"),
+                    new XElement(workbookNs + "item", new XAttribute("t", "default"))))));
+    }
+
+    private static XElement? ToPivotFieldCollectionXml(string elementName, IReadOnlyList<PivotFieldModel> fields, XNamespace workbookNs) =>
+        fields.Count == 0
+            ? null
+            : new XElement(
+                workbookNs + elementName,
+                new XAttribute("count", fields.Count.ToString(CultureInfo.InvariantCulture)),
+                fields.Select(field => new XElement(workbookNs + "field", new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)))));
+
+    private static XElement? ToPivotDataFieldsXml(IReadOnlyList<PivotDataFieldModel> fields, XNamespace workbookNs) =>
+        fields.Count == 0
+            ? null
+            : new XElement(
+                workbookNs + "dataFields",
+                new XAttribute("count", fields.Count.ToString(CultureInfo.InvariantCulture)),
+                fields.Select(field => new XElement(
+                    workbookNs + "dataField",
+                    new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Values" : field.Name),
+                    new XAttribute("fld", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("subtotal", string.IsNullOrWhiteSpace(field.SummaryFunction) ? "sum" : field.SummaryFunction),
+                    field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null)));
+
     private static XElement ToSparklineGroupXml(
         Sheet sheet,
         SparklineKind kind,
@@ -3763,17 +4604,25 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ? $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'"
             : sheetName;
 
-    private static XElement ToAdvancedConditionalFormattingXml(ConditionalFormat cf, XNamespace worksheetNs) =>
+    private static XElement ToAdvancedConditionalFormattingXml(
+        ConditionalFormat cf,
+        XNamespace worksheetNs,
+        IReadOnlyDictionary<Guid, int> differentialStyleIds) =>
         new(worksheetNs + "conditionalFormatting",
             new XAttribute("sqref", cf.AppliesTo.ToString()),
-            ToAdvancedCfRuleXml(cf, worksheetNs));
+            ToAdvancedCfRuleXml(cf, worksheetNs, differentialStyleIds));
 
-    private static XElement ToAdvancedCfRuleXml(ConditionalFormat cf, XNamespace worksheetNs)
+    private static XElement ToAdvancedCfRuleXml(
+        ConditionalFormat cf,
+        XNamespace worksheetNs,
+        IReadOnlyDictionary<Guid, int> differentialStyleIds)
     {
         var rule = new XElement(
             worksheetNs + "cfRule",
             new XAttribute("type", ToAdvancedCfRuleType(cf.RuleType)),
             new XAttribute("priority", cf.Priority));
+        if (differentialStyleIds.TryGetValue(cf.Id, out var dxfId))
+            rule.SetAttributeValue("dxfId", dxfId.ToString(CultureInfo.InvariantCulture));
         if (cf.StopIfTrue)
             rule.SetAttributeValue("stopIfTrue", "1");
         switch (cf.RuleType)
@@ -3857,6 +4706,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static XElement ToColorXml(XNamespace worksheetNs, RgbColor color) =>
         new(worksheetNs + "color", new XAttribute("rgb", $"FF{color.R:X2}{color.G:X2}{color.B:X2}"));
+
+    private static string ToArgb(CellColor color) =>
+        $"FF{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static bool IsAdvancedConditionalFormat(ConditionalFormat cf) =>
         cf.RuleType is CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet or
@@ -4557,6 +5409,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             ChartType.Line => CreateLinePlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Scatter => CreateScatterPlotChart(chart, sheet, chartNs, drawingNs, includeSeries),
+            ChartType.Radar => new XElement(chartNs + "radarChart",
+                new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
+            ChartType.Stock => new XElement(chartNs + "stockChart",
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
@@ -5159,7 +6016,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 or ChartType.Area
                 or ChartType.Bubble
                 or ChartType.Pie
-                or ChartType.Doughnut);
+                or ChartType.Doughnut
+                or ChartType.Radar
+                or ChartType.Stock);
 
     private static string ToXlsxBarDirection(ChartType chartType) =>
         chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar
@@ -6638,6 +7497,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
             [],
             new Dictionary<string, List<PendingPivotTableModel>>(StringComparer.OrdinalIgnoreCase));
     }
+
+    private sealed record SlicerTimelinePackageMetadata(
+        IReadOnlyList<SlicerModel> Slicers,
+        IReadOnlyList<TimelineModel> Timelines);
+
+    private sealed record SlicerCacheMetadata(
+        string Name,
+        string? SourceFieldName,
+        string? PivotTableName);
+
+    private sealed record TimelineCacheMetadata(
+        string Name,
+        string? SourceFieldName,
+        string? PivotTableName,
+        string? StartDate,
+        string? EndDate);
 
     private sealed record PendingPivotTableModel(
         string Name,

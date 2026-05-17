@@ -3309,6 +3309,45 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_ConditionalFormat_LongTailDifferentialStyle_Survives()
+    {
+        var workbook = new Workbook("LongTailCfDxfXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("urgent"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.ContainsText,
+            Priority = 1,
+            TextRuleText = "urgent",
+            FormulaText = "NOT(ISERROR(SEARCH(\"urgent\",A1)))",
+            FormatIfTrue = new CellStyle
+            {
+                Bold = true,
+                FontColor = new CellColor(255, 255, 255),
+                FillColor = new CellColor(192, 0, 0),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(0, 0, 0)),
+                NumberFormat = "0.00"
+            }
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var style = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject.FormatIfTrue;
+        style.Should().NotBeNull();
+        style!.Bold.Should().BeTrue();
+        style.FontColor.Should().Be(new CellColor(255, 255, 255));
+        style.FillColor.Should().Be(new CellColor(192, 0, 0));
+        style.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(0, 0, 0)));
+        style.NumberFormat.Should().Be("0.00");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_DataValidation_ListRule_Survives()
     {
         var workbook = new Workbook("DvTest");
@@ -5322,6 +5361,54 @@ public class FileAdapterSmokeTests
     }
 
     [Theory]
+    [InlineData(ChartType.Radar, "radarChart")]
+    [InlineData(ChartType.Stock, "stockChart")]
+    public void XlsxAdapter_Save_WritesEmbeddedRadarAndStockChartPackagePart(ChartType chartType, string expectedElementName)
+    {
+        var workbook = new Workbook("RadarStockChartPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Series A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Series B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(18));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(27));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = chartType,
+            Title = chartType.ToString(),
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3))
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Descendants(chartNs + expectedElementName).Should().ContainSingle();
+            chartXml.Descendants(chartNs + "ser").Should().HaveCount(2);
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.Type.Should().Be(chartType);
+        loadedChart.Title.Should().Be(chartType.ToString());
+    }
+
+    [Theory]
     [InlineData(ChartType.Pie)]
     [InlineData(ChartType.Doughnut)]
     public void XlsxAdapter_Save_WritesEmbeddedPieFamilyChartPackagePart(ChartType chartType)
@@ -6952,6 +7039,68 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnknownConditionalFormattingAlongsideModelEdits()
+    {
+        var workbook = new Workbook("UnknownCfRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("urgent"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnknownConditionalFormatting(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString().Should().Contain("freexcelFutureRule");
+        worksheetXml.ToString().Should().Contain("UNKNOWN_CF_SENTINEL");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_LoadsAndPreservesExternalLinkMetadata()
+    {
+        var workbook = new Workbook("ExternalLinksRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Linked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalExternalLinkPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.ExternalLinks.Should().ContainSingle(link =>
+            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
+            link.TargetUri == "linked-workbook.xlsx");
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/externalLinks/externalLink1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/externalLinks/_rels/externalLink1.xml.rels").Should().NotBeNull();
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString().Should().Contain("externalReferences");
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString().Should().Contain("externalLink1.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -7052,6 +7201,108 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredPivotTablePackageParts()
+    {
+        var workbook = new Workbook("AuthoredPivotXlsxTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B3"
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/pivotTables/pivotTable1.xml").Should().NotBeNull();
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.ToString().Should().Contain("pivotCaches");
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.ToString().Should().Contain("pivotTableDefinition");
+            var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+            pivotXml.ToString().Should().Contain("rowFields");
+            pivotXml.ToString().Should().Contain("dataFields");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        loaded.PivotCaches.Should().ContainSingle().Which.Fields.Select(field => field.Name)
+            .Should().Equal("Category", "Amount");
+        loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Which.DataFields
+            .Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsSlicerAndTimelineMetadataAndPreservesPackageParts()
+    {
+        var workbook = new Workbook("SlicerTimelineMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalSlicerTimelinePackage(source);
+
+        var loaded = adapter.Load(source);
+
+        loaded.Slicers.Should().ContainSingle().Which.Should().BeEquivalentTo(new SlicerModel
+        {
+            Name = "Region Slicer",
+            CacheName = "Slicer_Region",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Region",
+            PackagePart = "xl/slicers/slicer1.xml"
+        });
+        loaded.Timelines.Should().ContainSingle().Which.Should().BeEquivalentTo(new TimelineModel
+        {
+            Name = "Date Timeline",
+            CacheName = "Timeline_Date",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Date",
+            StartDate = "2026-01-01",
+            EndDate = "2026-03-31",
+            PackagePart = "xl/timelines/timeline1.xml"
+        });
+
+        var saved = new MemoryStream();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edit"));
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        archive.GetEntry("xl/slicers/slicer1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/slicerCaches/slicerCache1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsStructuredTableMetadata()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableMetadataTest");
@@ -7142,6 +7393,82 @@ public class FileAdapterSmokeTests
             var entry = archive.CreateEntry(entryName);
             using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
             writer.Write(content);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnknownConditionalFormatting(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "conditionalFormatting",
+                new XAttribute("sqref", "A2:A10"),
+                new XElement(
+                    worksheetNs + "cfRule",
+                    new XAttribute("type", "freexcelFutureRule"),
+                    new XAttribute("priority", "1"),
+                    new XElement(worksheetNs + "formula", "UNKNOWN_CF_SENTINEL"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalExternalLinkPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/externalLinks/externalLink1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Elements(workbookNs + "externalReferences").Remove();
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "externalReferences",
+                new XElement(workbookNs + "externalReference", new XAttribute(relNs + "id", "rIdFreexcelExternalLink"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelExternalLink"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink"),
+                new XAttribute("Target", "externalLinks/externalLink1.xml")));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+            ReplacePackageXml(archive, "xl/externalLinks/externalLink1.xml", new XDocument(
+                new XElement(
+                    workbookNs + "externalLink",
+                    new XAttribute(XNamespace.Xmlns + "r", relNs),
+                    new XElement(
+                        workbookNs + "externalBook",
+                        new XAttribute(relNs + "id", "rIdFreexcelExternalBook"),
+                        new XElement(workbookNs + "sheetNames",
+                            new XElement(workbookNs + "sheetName", new XAttribute("val", "Sheet1")))))));
+            ReplacePackageXml(archive, "xl/externalLinks/_rels/externalLink1.xml.rels", new XDocument(
+                new XElement(
+                    packageRelNs + "Relationships",
+                    new XElement(
+                        packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdFreexcelExternalBook"),
+                        new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"),
+                        new XAttribute("Target", "linked-workbook.xlsx"),
+                        new XAttribute("TargetMode", "External")))));
         }
 
         packageStream.Position = 0;
@@ -7466,6 +7793,45 @@ public class FileAdapterSmokeTests
 
             ReplacePackageXml(archive, "xl/pivotCache/pivotCacheDefinition1.xml", XDocument.Parse(MinimalPivotCacheDefinitionXml));
             ReplacePackageXml(archive, "xl/pivotTables/pivotTable1.xml", XDocument.Parse(MinimalPivotTableDefinitionXml));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalSlicerTimelinePackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
+                <slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                        name="Region Slicer"
+                        cache="Slicer_Region"/>
+                """));
+            ReplacePackageXml(archive, "xl/slicerCaches/slicerCache1.xml", XDocument.Parse("""
+                <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                       name="Slicer_Region"
+                                       sourceName="Region">
+                  <pivotTables>
+                    <pivotTable name="PivotTable1"/>
+                  </pivotTables>
+                </slicerCacheDefinition>
+                """));
+            ReplacePackageXml(archive, "xl/timelines/timeline1.xml", XDocument.Parse("""
+                <timeline xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                          name="Date Timeline"
+                          cache="Timeline_Date"/>
+                """));
+            ReplacePackageXml(archive, "xl/timelineCaches/timelineCache1.xml", XDocument.Parse("""
+                <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                         name="Timeline_Date"
+                                         sourceName="Date"
+                                         startDate="2026-01-01"
+                                         endDate="2026-03-31">
+                  <pivotTables>
+                    <pivotTable name="PivotTable1"/>
+                  </pivotTables>
+                </timelineCacheDefinition>
+                """));
         }
 
         packageStream.Position = 0;

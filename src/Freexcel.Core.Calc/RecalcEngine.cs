@@ -164,6 +164,7 @@ public sealed class RecalcEngine
                 try
                 {
                     var ast = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
+                    cell.CachedAst = ast;
                     RegisterFormulaDependencies(addr, ast, sheet.Id, workbook);
                 }
                 catch (FormulaParseException)

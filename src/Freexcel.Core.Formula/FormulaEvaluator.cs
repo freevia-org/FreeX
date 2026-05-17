@@ -94,7 +94,7 @@ public sealed class FormulaEvaluator
             BinaryOperator.Subtract => ArithOp(left, right, (a, b) => a - b),
             BinaryOperator.Multiply => ArithOp(left, right, (a, b) => a * b),
             BinaryOperator.Divide => DivideOp(left, right),
-            BinaryOperator.Power => ArithOp(left, right, Math.Pow),
+            BinaryOperator.Power => PowerOp(left, right),
             BinaryOperator.Concatenate => ConcatOp(left, right),
             BinaryOperator.Equal => CompareOp(left, right, 0),
             BinaryOperator.NotEqual => CompareOpNot(left, right, 0),
@@ -104,6 +104,19 @@ public sealed class FormulaEvaluator
             BinaryOperator.GreaterOrEqual => CompareOpGreaterOrEqual(left, right),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown operator: {node.Operator}")
         };
+    }
+
+    private static ScalarValue PowerOp(ScalarValue left, ScalarValue right)
+    {
+        var a = CoerceToNumber(left);
+        var b = CoerceToNumber(right);
+        if (a is ErrorValue errA) return errA;
+        if (b is ErrorValue errB) return errB;
+        double baseVal = ((NumberValue)a).Value;
+        double exp = ((NumberValue)b).Value;
+        if (baseVal == 0 && exp <= 0) return exp == 0 ? ErrorValue.Num : ErrorValue.DivByZero;
+        double result = Math.Pow(baseVal, exp);
+        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
     private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
@@ -336,6 +349,10 @@ public sealed class FormulaEvaluator
         catch (ArgumentOutOfRangeException)
         {
             return ErrorValue.Num;
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return ErrorValue.Ref;
         }
     }
 

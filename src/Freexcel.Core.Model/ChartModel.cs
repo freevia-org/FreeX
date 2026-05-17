@@ -1,6 +1,22 @@
 namespace Freexcel.Core.Model;
 
-public enum ChartType { Column, StackedColumn, PercentStackedColumn, Line, Pie, Doughnut, Bar, StackedBar, PercentStackedBar, Scatter, Bubble, Area }
+public enum ChartType
+{
+    Column,
+    StackedColumn,
+    PercentStackedColumn,
+    Line,
+    Pie,
+    Doughnut,
+    Bar,
+    StackedBar,
+    PercentStackedBar,
+    Scatter,
+    Bubble,
+    Area,
+    Radar,
+    Stock
+}
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
 

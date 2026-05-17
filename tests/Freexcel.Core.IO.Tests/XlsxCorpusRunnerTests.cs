@@ -177,7 +177,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
             [XlsxUnsupportedFeatureKind.Slicers] = "excluded slicer disclosed",
             [XlsxUnsupportedFeatureKind.Timelines] = "excluded timeline disclosed",
-            [XlsxUnsupportedFeatureKind.ExternalLinks] = "unsupported external link disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
             [XlsxUnsupportedFeatureKind.CustomXmlParts] = "unsupported custom XML disclosed",
             [XlsxUnsupportedFeatureKind.ConditionalFormats] = "unsupported conditional-format rule disclosed",
@@ -215,9 +214,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("timelines"))
             expected.Add(XlsxUnsupportedFeatureKind.Timelines);
-
-        if (tags.Contains("external-links"))
-            expected.Add(XlsxUnsupportedFeatureKind.ExternalLinks);
 
         if (tags.Contains("power-query") || tags.Contains("connections"))
             expected.Add(XlsxUnsupportedFeatureKind.PowerQuery);
