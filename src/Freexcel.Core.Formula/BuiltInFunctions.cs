@@ -659,7 +659,7 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var text  = ToText(args[0]);
         var rawCount = args.Count > 1 ? ToNumber(args[1]) : 1;
-        if (!double.IsFinite(rawCount)) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
@@ -672,7 +672,7 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue countError) return countError;
         var text  = ToText(args[0]);
         var rawCount = args.Count > 1 ? ToNumber(args[1]) : 1;
-        if (!double.IsFinite(rawCount)) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
@@ -713,13 +713,13 @@ public static class BuiltInFunctions
                 return ErrorValue.Value;
             if (bottom > top) return ErrorValue.Value;
 
-            long span;
-            try { span = checked(top - bottom + 1); }
+            long randExclusiveTop;
+            try { randExclusiveTop = checked(top + 1); }
             catch (OverflowException) { return ErrorValue.Value; }
             var integers = new ScalarValue[rows, cols];
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < cols; c++)
-                    integers[r, c] = new NumberValue(Random.Shared.NextInt64(bottom, bottom + span));
+                    integers[r, c] = new NumberValue(Random.Shared.NextInt64(bottom, randExclusiveTop));
             return new RangeValue(integers);
         }
 
@@ -984,8 +984,11 @@ public static class BuiltInFunctions
 
         var lookupValue = args[0];
         var lookupFlat = lookupArr.Flatten();
-        int matchMode = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 0;
-        int searchMode = args.Count > 3 && args[3] is not BlankValue ? (int)ToNumber(args[3]) : 1;
+        double rawMatchMode  = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0;
+        double rawSearchMode = args.Count > 3 && args[3] is not BlankValue ? ToNumber(args[3]) : 1;
+        if (!double.IsFinite(rawMatchMode) || !double.IsFinite(rawSearchMode)) return ErrorValue.Value;
+        int matchMode  = (int)rawMatchMode;
+        int searchMode = (int)rawSearchMode;
         if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
         if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
 
@@ -1666,11 +1669,11 @@ public static class BuiltInFunctions
         if (!TryTruncateToLong(db, out long bottom) || !TryTruncateToLong(dt, out long top))
             return ErrorValue.Num;
         if (bottom > top) return ErrorValue.Num;
-        // NextInt64(min, max) is [min, max) — add 1 to make it inclusive
-        long range;
-        try { range = checked(top - bottom + 1); }
+        // NextInt64(min, max) is [min, max) — add 1 to make top inclusive
+        long exclusiveTop;
+        try { exclusiveTop = checked(top + 1); }
         catch (OverflowException) { return ErrorValue.Num; }
-        return new NumberValue(Random.Shared.NextInt64(bottom, bottom + range));
+        return new NumberValue(Random.Shared.NextInt64(bottom, exclusiveTop));
     }
 
     private static ScalarValue Sign(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1941,8 +1944,11 @@ public static class BuiltInFunctions
         ScalarValue ifNotFound = args.Count > 3 ? args[3] : ErrorValue.NA;
         if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
         if (args.Count > 5 && args[5] is ErrorValue e5) return e5;
-        int matchMode = args.Count > 4 ? (int)ToNumber(args[4]) : 0; // 0=exact
-        int searchMode = args.Count > 5 ? (int)ToNumber(args[5]) : 1; // 1=first-to-last
+        double rawXMatchMode  = args.Count > 4 ? ToNumber(args[4]) : 0;
+        double rawXSearchMode = args.Count > 5 ? ToNumber(args[5]) : 1;
+        if (!double.IsFinite(rawXMatchMode) || !double.IsFinite(rawXSearchMode)) return ErrorValue.Value;
+        int matchMode  = (int)rawXMatchMode;  // 0=exact
+        int searchMode = (int)rawXSearchMode; // 1=first-to-last
         if (matchMode is not (-1 or 0 or 1 or 2)) return ErrorValue.Value;
         if (searchMode is not (-2 or -1 or 1 or 2)) return ErrorValue.Value;
 
@@ -2170,10 +2176,16 @@ public static class BuiltInFunctions
     private static ScalarValue Sumproduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var arrays = new List<IReadOnlyList<ScalarValue>>();
+        int firstRows = -1, firstCols = -1;
         foreach (var a in args)
         {
             if (a is ErrorValue e) return e;
-            if (a is RangeValue rv) arrays.Add(rv.Flatten());
+            if (a is RangeValue rv)
+            {
+                if (firstRows == -1) { firstRows = rv.RowCount; firstCols = rv.ColCount; }
+                else if (rv.RowCount != firstRows || rv.ColCount != firstCols) return ErrorValue.Value;
+                arrays.Add(rv.Flatten());
+            }
             else if (a is NumberValue nv) arrays.Add([nv]);
             else arrays.Add([a]);
         }
@@ -3410,7 +3422,9 @@ public static class BuiltInFunctions
         int rowNum = (int)dRow; int colNum = (int)dCol;
         if (rowNum < 1 || rowNum > (int)CellAddress.MaxRow ||
             colNum < 1 || colNum > (int)CellAddress.MaxCol) return ErrorValue.Value;
-        int absNum = args.Count > 2 && args[2] is not BlankValue ? (int)ToNumber(args[2]) : 1;
+        double rawAbsNum = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
+        if (!double.IsFinite(rawAbsNum)) return ErrorValue.Value;
+        int absNum = (int)rawAbsNum;
         if (absNum is not (1 or 2 or 3 or 4)) return ErrorValue.Value;
         bool useA1 = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]);
         string? sheetText = args.Count > 4 && args[4] is not BlankValue ? ToText(args[4]) : null;
