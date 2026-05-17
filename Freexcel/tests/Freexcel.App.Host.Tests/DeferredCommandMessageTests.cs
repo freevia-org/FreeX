@@ -189,4 +189,16 @@ public sealed class DeferredCommandMessageTests
 
         message.Body.Should().Contain("track changes / revision history");
     }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesFormControls()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.FormControls, "xl/activeX/activeX1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("form controls / ActiveX controls");
+    }
 }

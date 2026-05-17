@@ -140,6 +140,19 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_ActiveXAndFormControlPackage_DetectsControls()
+    {
+        using var package = CreatePackage(
+            "xl/activeX/activeX1.xml",
+            "xl/activeX/activeX1.bin",
+            "xl/ctrlProps/ctrlProp1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+    [Fact]
     public void Inspect_ThemePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/theme/theme1.xml");
