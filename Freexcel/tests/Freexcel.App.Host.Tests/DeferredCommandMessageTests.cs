@@ -123,4 +123,34 @@ public sealed class DeferredCommandMessageTests
         message.Body.Should().Contain("XLSX chart package parts");
         message.Body.Should().NotContain("charts.");
     }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesKnownGapPackageFeatures()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.ConditionalFormats, "xl/worksheets/sheet1.xml"),
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DrawingObjects, "xl/drawings/drawing1.xml"),
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Sparklines, "xl/worksheets/sheet1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("unsupported conditional formatting");
+        message.Body.Should().Contain("drawing objects");
+        message.Body.Should().Contain("sparklines");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesPowerQueryAndDataModel()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.PowerQuery, "xl/queries/query1.xml"),
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DataModel, "xl/model/item.data")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("Power Query queries (excluded)");
+        message.Body.Should().Contain("Data Model / Power Pivot (excluded)");
+    }
 }

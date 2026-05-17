@@ -28,11 +28,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
         packageStream.Position = 0;
         var workbookTheme = LoadWorkbookTheme(packageStream);
+        packageStream.Position = 0;
+        var workbookProtection = LoadWorkbookProtection(packageStream);
 
         packageStream.Position = 0;
         using var xlWorkbook = new XLWorkbook(packageStream);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
+        workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
+        workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
@@ -425,6 +429,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             return WorkbookTheme.Office;
         }
+    }
+
+    private static WorkbookProtectionState LoadWorkbookProtection(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookProtectionState.None;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var protection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
+            if (protection is null)
+                return WorkbookProtectionState.None;
+
+            var isStructureProtected =
+                IsTruthy(protection.Attribute("lockStructure")?.Value) ||
+                IsTruthy(protection.Attribute("lockWindows")?.Value);
+
+            if (!isStructureProtected)
+                return WorkbookProtectionState.None;
+
+            var passwordHash =
+                protection.Attribute("workbookPassword")?.Value ??
+                protection.Attribute("revisionsPassword")?.Value;
+
+            return new WorkbookProtectionState(true, passwordHash);
+        }
+        catch
+        {
+            return WorkbookProtectionState.None;
+        }
+    }
+
+    private sealed record WorkbookProtectionState(bool IsStructureProtected, string? PasswordHash)
+    {
+        public static WorkbookProtectionState None { get; } = new(false, null);
     }
 
     private static readonly (WorkbookThemeColorSlot Slot, string ElementName)[] ThemeColorElements =
@@ -1384,6 +1427,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var packageStream = new MemoryStream();
         xlWorkbook.SaveAs(packageStream);
 
+        if (workbook.IsStructureProtected)
+        {
+            packageStream.Position = 0;
+            SaveWorkbookProtection(packageStream, workbook);
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.BackgroundImage is not null))
         {
             packageStream.Position = 0;
@@ -1426,6 +1475,63 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var stream = themeEntry.Open();
         ToThemeXml(theme).Save(stream);
     }
+
+    private static void SaveWorkbookProtection(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        root.Element(workbookNs + "workbookProtection")?.Remove();
+        var protection = new XElement(workbookNs + "workbookProtection",
+            new XAttribute("lockStructure", "1"));
+        if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
+            protection.SetAttributeValue("workbookPassword", ToLegacyPasswordHash(workbook.StructureProtectionPassword));
+
+        var sheets = root.Element(workbookNs + "sheets");
+        if (sheets is not null)
+            sheets.AddBeforeSelf(protection);
+        else
+            root.Add(protection);
+
+        workbookEntry.Delete();
+        var replacement = archive.CreateEntry("xl/workbook.xml");
+        using var stream = replacement.Open();
+        workbookXml.Save(stream);
+    }
+
+    private static string ToLegacyPasswordHash(string passwordOrHash)
+    {
+        if (IsLegacyPasswordHash(passwordOrHash))
+            return passwordOrHash.ToUpperInvariant();
+
+        var hash = 0;
+        for (var i = 0; i < passwordOrHash.Length; i++)
+        {
+            var value = passwordOrHash[i] << (i + 1);
+            var rotatedBits = value >> 15;
+            value &= 0x7fff;
+            hash ^= value | rotatedBits;
+        }
+
+        hash ^= passwordOrHash.Length;
+        hash ^= 0xCE4B;
+        return hash.ToString("X4", CultureInfo.InvariantCulture);
+    }
+
+    private static bool IsLegacyPasswordHash(string value) =>
+        value.Length is > 0 and <= 4 &&
+        value.All(ch =>
+            ch is >= '0' and <= '9' ||
+            ch is >= 'A' and <= 'F' ||
+            ch is >= 'a' and <= 'f');
 
     private static XDocument ToThemeXml(WorkbookTheme theme)
     {

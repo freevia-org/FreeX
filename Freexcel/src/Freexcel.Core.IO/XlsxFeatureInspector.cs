@@ -13,7 +13,12 @@ public enum XlsxUnsupportedFeatureKind
     Timelines,
     ExternalLinks,
     EmbeddedObjects,
-    CustomXmlParts
+    CustomXmlParts,
+    ConditionalFormats,
+    DrawingObjects,
+    Sparklines,
+    PowerQuery,
+    DataModel
 }
 
 public sealed record XlsxUnsupportedFeature(
@@ -40,9 +45,7 @@ public static class XlsxFeatureInspector
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
             var features = archive.Entries
-                .Select(InspectEntry)
-                .Where(feature => feature is not null)
-                .Cast<XlsxUnsupportedFeature>()
+                .SelectMany(InspectEntry)
                 .Distinct()
                 .ToList();
 
@@ -55,33 +58,98 @@ public static class XlsxFeatureInspector
         }
     }
 
-    private static XlsxUnsupportedFeature? InspectEntry(ZipArchiveEntry entry)
+    private static IEnumerable<XlsxUnsupportedFeature> InspectEntry(ZipArchiveEntry entry)
     {
         var packagePart = entry.FullName;
         var normalized = packagePart.Replace('\\', '/').TrimStart('/').ToLowerInvariant();
 
-        return normalized switch
+        if (normalized is "xl/vbaproject.bin")
         {
-            "xl/vbaproject.bin" => Feature(XlsxUnsupportedFeatureKind.Macros),
-            _ when normalized.StartsWith("xl/pivottables/", StringComparison.Ordinal)
-                || normalized.StartsWith("xl/pivotcache/", StringComparison.Ordinal)
-                => Feature(XlsxUnsupportedFeatureKind.PivotTables),
-            _ when IsChartPart(normalized) && !IsSupportedChartPart(entry)
-                => Feature(XlsxUnsupportedFeatureKind.Charts),
-            _ when normalized.StartsWith("xl/slicers/", StringComparison.Ordinal)
-                || normalized.StartsWith("xl/slicercaches/", StringComparison.Ordinal)
-                => Feature(XlsxUnsupportedFeatureKind.Slicers),
-            _ when normalized.StartsWith("xl/timelines/", StringComparison.Ordinal)
-                || normalized.StartsWith("xl/timelinecaches/", StringComparison.Ordinal)
-                => Feature(XlsxUnsupportedFeatureKind.Timelines),
-            _ when normalized.StartsWith("xl/externallinks/", StringComparison.Ordinal)
-                => Feature(XlsxUnsupportedFeatureKind.ExternalLinks),
-            _ when normalized.StartsWith("xl/embeddings/", StringComparison.Ordinal)
-                => Feature(XlsxUnsupportedFeatureKind.EmbeddedObjects),
-            _ when normalized.StartsWith("customxml/", StringComparison.Ordinal)
-                => Feature(XlsxUnsupportedFeatureKind.CustomXmlParts),
-            _ => null
-        };
+            yield return Feature(XlsxUnsupportedFeatureKind.Macros);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/pivottables/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/pivotcache/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.PivotTables);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/queries/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/querytables/", StringComparison.Ordinal) ||
+            normalized is "xl/connections.xml")
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.PowerQuery);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/model/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/datamodel/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/powerpivot/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.DataModel);
+            yield break;
+        }
+
+        if (IsChartPart(normalized))
+        {
+            if (!IsSupportedChartPart(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.Charts);
+
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/slicers/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/slicercaches/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.Slicers);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/timelines/", StringComparison.Ordinal) ||
+            normalized.StartsWith("xl/timelinecaches/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.Timelines);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/externallinks/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.ExternalLinks);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/embeddings/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.EmbeddedObjects);
+            yield break;
+        }
+
+        if (normalized.StartsWith("customxml/", StringComparison.Ordinal))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.CustomXmlParts);
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
+            normalized.EndsWith(".xml", StringComparison.Ordinal))
+        {
+            if (WorksheetHasUnsupportedConditionalFormats(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.ConditionalFormats);
+
+            if (WorksheetHasSparklines(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.Sparklines);
+
+            yield break;
+        }
+
+        if (normalized.StartsWith("xl/drawings/", StringComparison.Ordinal) &&
+            normalized.EndsWith(".xml", StringComparison.Ordinal) &&
+            DrawingHasUnsupportedObjects(entry))
+        {
+            yield return Feature(XlsxUnsupportedFeatureKind.DrawingObjects);
+        }
 
         XlsxUnsupportedFeature Feature(XlsxUnsupportedFeatureKind kind) => new(kind, packagePart);
     }
@@ -97,6 +165,65 @@ public static class XlsxFeatureInspector
             using var stream = entry.Open();
             var chartXml = XDocument.Load(stream);
             return XlsxChartPartReader.TryReadSupportedChart(chartXml, SheetId.New(), out _);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool WorksheetHasUnsupportedConditionalFormats(ZipArchiveEntry entry)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            var worksheetXml = XDocument.Load(stream);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            return worksheetXml
+                .Descendants(worksheetNs + "cfRule")
+                .Any(rule =>
+                {
+                    var type = rule.Attribute("type")?.Value;
+                    return !string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase);
+                });
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool WorksheetHasSparklines(ZipArchiveEntry entry)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            var worksheetXml = XDocument.Load(stream);
+            return worksheetXml
+                .Descendants()
+                .Any(element => string.Equals(element.Name.LocalName, "sparklineGroups", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool DrawingHasUnsupportedObjects(ZipArchiveEntry entry)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            var drawingXml = XDocument.Load(stream);
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+            return drawingXml
+                .Descendants()
+                .Any(element =>
+                    element.Name.Namespace == spreadsheetDrawingNs &&
+                    element.Name.LocalName is "sp" or "pic" or "cxnSp" or "grpSp");
         }
         catch
         {

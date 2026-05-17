@@ -2714,6 +2714,37 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_WorkbookStructureProtection()
+    {
+        var workbook = new Workbook("WorkbookProtectionTest");
+        workbook.IsStructureProtected = true;
+        workbook.StructureProtectionPassword = "password";
+        workbook.AddSheet("S1");
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var protection = workbookXml.Root!.Element(ns + "workbookProtection");
+            protection.Should().NotBeNull();
+            protection!.Attribute("lockStructure")!.Value.Should().Be("1");
+            protection.Attribute("workbookPassword")!.Value.Should().Be("83AF");
+            protection.Attribute("workbookPassword")!.Value.Should().NotBe("password");
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        loaded.IsStructureProtected.Should().BeTrue();
+        loaded.StructureProtectionPassword.Should().Be("83AF");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_UnlockedCellStyle()
     {
         var workbook = new Workbook("UnlockedStyleTest");
