@@ -43,9 +43,27 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
         _snapshot = CaptureCells(sheet);
         if (_direction == InsertCellsShiftDirection.Right)
+        {
+            uint width = _range.ColCount;
+            var maxOccupied = sheet.EnumerateCells()
+                .Where(p => p.Address.Row >= _range.Start.Row && p.Address.Row <= _range.End.Row && p.Address.Col >= _range.Start.Col)
+                .Select(p => p.Address.Col)
+                .DefaultIfEmpty(0u).Max();
+            if (maxOccupied > 0 && maxOccupied + width > CellAddress.MaxCol)
+                return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
             InsertShiftRight(sheet);
+        }
         else
+        {
+            uint height = _range.RowCount;
+            var maxOccupied = sheet.EnumerateCells()
+                .Where(p => p.Address.Col >= _range.Start.Col && p.Address.Col <= _range.End.Col && p.Address.Row >= _range.Start.Row)
+                .Select(p => p.Address.Row)
+                .DefaultIfEmpty(0u).Max();
+            if (maxOccupied > 0 && maxOccupied + height > CellAddress.MaxRow)
+                return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
             InsertShiftDown(sheet);
+        }
 
         return new CommandOutcome(true, AffectedCells: _range.AllCells().ToList());
     }
