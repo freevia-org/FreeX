@@ -168,6 +168,12 @@ public sealed class Sheet
     /// <summary>Charts embedded in this sheet.</summary>
     public List<ChartModel> Charts { get; } = [];
 
+    /// <summary>PivotTable metadata loaded from XLSX packages.</summary>
+    public List<PivotTableModel> PivotTables { get; } = [];
+
+    /// <summary>Structured Excel table metadata loaded from XLSX packages.</summary>
+    public List<StructuredTableModel> StructuredTables { get; } = [];
+
     /// <summary>Text boxes embedded in this sheet.</summary>
     public List<TextBoxModel> TextBoxes { get; } = [];
 
@@ -592,6 +598,46 @@ public sealed class Sheet
         foreach (var range in AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, newId));
 
+        // Pivot tables
+        foreach (var pt in PivotTables)
+        {
+            var clonedPt = new PivotTableModel
+            {
+                Name        = pt.Name,
+                CacheId     = pt.CacheId,
+                SourceRange = RemapRange(pt.SourceRange, newId),
+                TargetRange = RemapRange(pt.TargetRange, newId),
+                PackagePart = pt.PackagePart
+            };
+            clonedPt.RowFields.AddRange(pt.RowFields);
+            clonedPt.ColumnFields.AddRange(pt.ColumnFields);
+            clonedPt.PageFields.AddRange(pt.PageFields);
+            clonedPt.DataFields.AddRange(pt.DataFields);
+            copy.PivotTables.Add(clonedPt);
+        }
+
+        // Structured tables
+        foreach (var table in StructuredTables)
+        {
+            var clonedTable = new StructuredTableModel
+            {
+                Id = table.Id,
+                Name = table.Name,
+                DisplayName = table.DisplayName,
+                Range = RemapRange(table.Range, newId),
+                HasAutoFilter = table.HasAutoFilter,
+                TotalsRowShown = table.TotalsRowShown,
+                StyleName = table.StyleName,
+                ShowFirstColumn = table.ShowFirstColumn,
+                ShowLastColumn = table.ShowLastColumn,
+                ShowRowStripes = table.ShowRowStripes,
+                ShowColumnStripes = table.ShowColumnStripes,
+                PackagePart = table.PackagePart
+            };
+            clonedTable.Columns.AddRange(table.Columns);
+            copy.StructuredTables.Add(clonedTable);
+        }
+
         // Conditional formats
         foreach (var cf in ConditionalFormats)
             copy.ConditionalFormats.Add(new ConditionalFormat
@@ -607,9 +653,25 @@ public sealed class Sheet
                 MidColor             = cf.MidColor,
                 MaxColor             = cf.MaxColor,
                 UseThreeColorScale   = cf.UseThreeColorScale,
+                MinThresholdType     = cf.MinThresholdType,
+                MinThresholdValue    = cf.MinThresholdValue,
+                MidThresholdType     = cf.MidThresholdType,
+                MidThresholdValue    = cf.MidThresholdValue,
+                MaxThresholdType     = cf.MaxThresholdType,
+                MaxThresholdValue    = cf.MaxThresholdValue,
                 DataBarColor         = cf.DataBarColor,
+                DataBarMinThresholdType = cf.DataBarMinThresholdType,
+                DataBarMinThresholdValue = cf.DataBarMinThresholdValue,
+                DataBarMaxThresholdType = cf.DataBarMaxThresholdType,
+                DataBarMaxThresholdValue = cf.DataBarMaxThresholdValue,
+                DataBarShowValue     = cf.DataBarShowValue,
+                DataBarMinLength     = cf.DataBarMinLength,
+                DataBarMaxLength     = cf.DataBarMaxLength,
                 AboveAverage         = cf.AboveAverage,
                 FormulaText          = cf.FormulaText,
+                IconSetStyle         = cf.IconSetStyle,
+                IconSetShowValue     = cf.IconSetShowValue,
+                IconSetReverse       = cf.IconSetReverse,
                 StopIfTrue           = cf.StopIfTrue
             });
 

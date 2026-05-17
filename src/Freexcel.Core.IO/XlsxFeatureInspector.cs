@@ -85,7 +85,6 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/pivottables/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/pivotcache/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.PivotTables);
             yield break;
         }
 
@@ -172,12 +171,6 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/printersettings/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.PrinterSettings);
-            yield break;
-        }
-
-        if (normalized.StartsWith("xl/tables/", StringComparison.Ordinal))
-        {
-            yield return Feature(XlsxUnsupportedFeatureKind.StructuredTables);
             yield break;
         }
 
@@ -283,7 +276,10 @@ public static class XlsxFeatureInspector
                 {
                     var type = rule.Attribute("type")?.Value;
                     return !string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase);
+                           !string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase);
                 });
         }
         catch

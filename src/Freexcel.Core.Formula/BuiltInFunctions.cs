@@ -2219,6 +2219,7 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
+        if (digits < -15 || digits > 15) return ErrorValue.Num;
         double factor = Math.Pow(10, digits);
         return NumberResult((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
     }
@@ -2231,6 +2232,7 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
+        if (digits < -15 || digits > 15) return ErrorValue.Num;
         double factor = Math.Pow(10, digits);
         return NumberResult((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
     }
@@ -2476,7 +2478,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         double dn = ToNumber(args[0]); double dk = ToNumber(args[1]);
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
-        if (dn < 0 || dn > int.MaxValue || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
+        if (dn < 0 || dn > 1029 || dk < 0 || dk > int.MaxValue) return ErrorValue.Num;
         int n = (int)dn; int k = (int)dk;
         if (n < 0 || k < 0 || k > n) return ErrorValue.Num;
         if (k > n - k) k = n - k;
@@ -3021,7 +3023,7 @@ public static class BuiltInFunctions
         if (xErr is not null) return xErr;
         if (xs!.Count != ys!.Count) return ErrorValue.NA;
         int n = xs.Count;
-        if (n < 2) return ErrorValue.NA;
+        if (n < 2) return ErrorValue.DivByZero;
         double xMean = xs.Average();
         double yMean = ys.Average();
         double sXX = 0, sXY = 0;
@@ -4312,9 +4314,13 @@ public static class BuiltInFunctions
                     }
                 }
             }
-            else if (args[i] is NumberValue nv2)
+            else if (TryCellNumber(args[i], out double scalarNum))
             {
-                nums.Add(nv2.Value);
+                nums.Add(scalarNum);
+                countaCount++;
+            }
+            else if (args[i] is not BlankValue)
+            {
                 countaCount++;
             }
         }

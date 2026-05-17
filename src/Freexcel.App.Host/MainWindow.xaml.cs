@@ -2710,13 +2710,22 @@ public partial class MainWindow : Window
             // For now, we manually register dependencies because we haven't automated this in the command yet.
             try
             {
-                var lexer = new Lexer(text);
+                var formulaA1 = _options.UseR1C1ReferenceStyle
+                    ? FormulaReferenceStyleService.ToA1(text.Substring(1), addr)
+                    : text.Substring(1);
+                var lexer = new Lexer("=" + formulaA1);
                 var parser = new Parser(lexer.Tokenize());
                 var ast = parser.Parse();
                 foreach (var affected in affectedCells)
                     _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, _workbook);
             }
-            catch { /* ignore parse errors for now */ }
+            catch
+            {
+                // Formula syntax is invalid; clear stale dependencies so this cell
+                // does not incorrectly depend on previously-referenced cells.
+                foreach (var affected in affectedCells)
+                    _recalcEngine.ClearFormulaDependencies(affected);
+            }
         }
         else
         {
@@ -6022,7 +6031,7 @@ public partial class MainWindow : Window
 
     private void PivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
-        var message = DeferredCommandMessages.PivotTableExcluded();
+        var message = DeferredCommandMessages.PivotTableModelFirst();
         MessageBox.Show(
             message.Body,
             message.Title,
