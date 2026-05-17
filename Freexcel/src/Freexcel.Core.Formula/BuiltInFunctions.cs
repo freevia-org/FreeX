@@ -3865,8 +3865,11 @@ public static class BuiltInFunctions
     {
         if (!TryCollectStackArrays(args, out var arrays, out var error)) return error;
 
-        int rowCount = arrays.Sum(a => a.RowCount);
+        long rowCountL = 0;
+        foreach (var a in arrays) rowCountL += a.RowCount;
         int colCount = arrays.Max(a => a.ColCount);
+        if (rowCountL * colCount > 1_000_000) return ErrorValue.Value;
+        int rowCount = (int)rowCountL;
         var result = CreateFilledRange(rowCount, colCount, ErrorValue.NA);
 
         int rowOffset = 0;
@@ -3886,7 +3889,10 @@ public static class BuiltInFunctions
         if (!TryCollectStackArrays(args, out var arrays, out var error)) return error;
 
         int rowCount = arrays.Max(a => a.RowCount);
-        int colCount = arrays.Sum(a => a.ColCount);
+        long colCountL = 0;
+        foreach (var a in arrays) colCountL += a.ColCount;
+        if ((long)rowCount * colCountL > 1_000_000) return ErrorValue.Value;
+        int colCount = (int)colCountL;
         var result = CreateFilledRange(rowCount, colCount, ErrorValue.NA);
 
         int colOffset = 0;
@@ -3937,6 +3943,7 @@ public static class BuiltInFunctions
     {
         if (!TryFlattenArray(args, out var values, out var error)) return error;
         if (values.Count == 0) return ErrorValue.Value;
+        if (values.Count > 1_000_000) return ErrorValue.Value;
 
         var result = new ScalarValue[1, values.Count];
         for (int c = 0; c < values.Count; c++)
@@ -3948,6 +3955,7 @@ public static class BuiltInFunctions
     {
         if (!TryFlattenArray(args, out var values, out var error)) return error;
         if (values.Count == 0) return ErrorValue.Value;
+        if (values.Count > 1_000_000) return ErrorValue.Value;
 
         var result = new ScalarValue[values.Count, 1];
         for (int r = 0; r < values.Count; r++)
@@ -4033,6 +4041,7 @@ public static class BuiltInFunctions
         if (!TryGetWrapArgs(args, out var values, out int wrapCount, out var padWith, out var error)) return error;
 
         int rowCount = (values.Count + wrapCount - 1) / wrapCount;
+        if ((long)rowCount * wrapCount > 1_000_000) return ErrorValue.Value;
         var result = CreateFilledRange(rowCount, wrapCount, padWith);
         for (int i = 0; i < values.Count; i++)
             result[i / wrapCount, i % wrapCount] = values[i];
@@ -4044,6 +4053,7 @@ public static class BuiltInFunctions
         if (!TryGetWrapArgs(args, out var values, out int wrapCount, out var padWith, out var error)) return error;
 
         int colCount = (values.Count + wrapCount - 1) / wrapCount;
+        if ((long)wrapCount * colCount > 1_000_000) return ErrorValue.Value;
         var result = CreateFilledRange(wrapCount, colCount, padWith);
         for (int i = 0; i < values.Count; i++)
             result[i % wrapCount, i / wrapCount] = values[i];
@@ -4139,7 +4149,7 @@ public static class BuiltInFunctions
         if (value is BlankValue) return true;
 
         double raw = ToNumber(value);
-        if (!double.IsFinite(raw)) return false;
+        if (!double.IsFinite(raw) || raw > int.MaxValue) return false;
         dimension = (int)raw;
         return dimension >= 1;
     }
