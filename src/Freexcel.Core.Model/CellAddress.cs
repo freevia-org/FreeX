@@ -139,6 +139,12 @@ public readonly record struct GridRange
         addr.Row >= Start.Row && addr.Row <= End.Row &&
         addr.Col >= Start.Col && addr.Col <= End.Col;
 
+    /// <summary>Check if this range overlaps (shares at least one cell with) another range on the same sheet.</summary>
+    public bool Overlaps(GridRange other) =>
+        Start.Sheet == other.Start.Sheet &&
+        Start.Row <= other.End.Row && End.Row >= other.Start.Row &&
+        Start.Col <= other.End.Col && End.Col >= other.Start.Col;
+
     /// <summary>Parse a range string like "A1:C10" into a GridRange.</summary>
     public static GridRange Parse(string rangeText, SheetId sheet)
     {

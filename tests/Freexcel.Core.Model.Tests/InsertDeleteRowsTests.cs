@@ -503,6 +503,35 @@ public class InsertDeleteRowsTests
         result.ErrorMessage.Should().Contain("pushed past the last row");
     }
 
+    [Fact]
+    public void DeleteRow_NamedRangeOverlapsDeletion_ShrinksToSurvivingRows()
+    {
+        // Named range A1:A5, delete rows 3–5 → surviving part A1:A2
+        var (wb, sheet, ctx) = Setup();
+        wb.DefineNamedRange("Sales", new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1)));
+
+        new DeleteRowsCommand(sheet.Id, startRow: 3, count: 3).Apply(ctx);
+
+        wb.NamedRanges["Sales"].Start.Row.Should().Be(1);
+        wb.NamedRanges["Sales"].End.Row.Should().Be(2);
+    }
+
+    [Fact]
+    public void DeleteRow_NamedRangeEntirelyDeleted_RemovesNamedRange()
+    {
+        // Named range A3:A5, delete rows 3–5 → named range should be removed
+        var (wb, sheet, ctx) = Setup();
+        wb.DefineNamedRange("Sales", new GridRange(
+            new CellAddress(sheet.Id, 3, 1),
+            new CellAddress(sheet.Id, 5, 1)));
+
+        new DeleteRowsCommand(sheet.Id, startRow: 3, count: 3).Apply(ctx);
+
+        wb.NamedRanges.Should().NotContainKey("Sales");
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

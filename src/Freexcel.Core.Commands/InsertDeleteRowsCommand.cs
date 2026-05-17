@@ -348,10 +348,18 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
     internal static void ShiftRuleRowsDown(Sheet sheet, uint start, uint count)
     {
-        foreach (var rule in sheet.DataValidations)
-            rule.AppliesTo = ShiftRangeRowsDown(rule.AppliesTo, start, count);
-        foreach (var rule in sheet.ConditionalFormats)
-            rule.AppliesTo = ShiftRangeRowsDown(rule.AppliesTo, start, count);
+        for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
+        {
+            var shifted = ShiftRangeRowsDown(sheet.DataValidations[i].AppliesTo, start, count);
+            if (shifted is null) sheet.DataValidations.RemoveAt(i);
+            else sheet.DataValidations[i].AppliesTo = shifted.Value;
+        }
+        for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
+        {
+            var shifted = ShiftRangeRowsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
+            if (shifted is null) sheet.ConditionalFormats.RemoveAt(i);
+            else sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
+        }
     }
 
     internal static void ShiftRuleColumnsUp(Sheet sheet, uint start, uint count)
@@ -364,10 +372,18 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
     internal static void ShiftRuleColumnsDown(Sheet sheet, uint start, uint count)
     {
-        foreach (var rule in sheet.DataValidations)
-            rule.AppliesTo = ShiftRangeColumnsDown(rule.AppliesTo, start, count);
-        foreach (var rule in sheet.ConditionalFormats)
-            rule.AppliesTo = ShiftRangeColumnsDown(rule.AppliesTo, start, count);
+        for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
+        {
+            var shifted = ShiftRangeColumnsDown(sheet.DataValidations[i].AppliesTo, start, count);
+            if (shifted is null) sheet.DataValidations.RemoveAt(i);
+            else sheet.DataValidations[i].AppliesTo = shifted.Value;
+        }
+        for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
+        {
+            var shifted = ShiftRangeColumnsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
+            if (shifted is null) sheet.ConditionalFormats.RemoveAt(i);
+            else sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
+        }
     }
 
     internal static Dictionary<string, GridRange> CaptureNamedRanges(Workbook workbook) =>
@@ -396,8 +412,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     {
         foreach (var (name, range) in workbook.NamedRanges.ToList())
         {
-            if (range.Start.Sheet == sheetId)
-                workbook.NamedRanges[name] = ShiftRangeRowsDown(range, start, count);
+            if (range.Start.Sheet != sheetId) continue;
+            var shifted = ShiftRangeRowsDown(range, start, count);
+            if (shifted is null) workbook.NamedRanges.Remove(name);
+            else workbook.NamedRanges[name] = shifted.Value;
         }
     }
 
@@ -414,8 +432,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     {
         foreach (var (name, range) in workbook.NamedRanges.ToList())
         {
-            if (range.Start.Sheet == sheetId)
-                workbook.NamedRanges[name] = ShiftRangeColumnsDown(range, start, count);
+            if (range.Start.Sheet != sheetId) continue;
+            var shifted = ShiftRangeColumnsDown(range, start, count);
+            if (shifted is null) workbook.NamedRanges.Remove(name);
+            else workbook.NamedRanges[name] = shifted.Value;
         }
     }
 
@@ -428,7 +448,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     internal static void ShiftPrintAreaRowsDown(Sheet sheet, uint start, uint count)
     {
         if (sheet.PrintArea is { } printArea)
-            sheet.PrintArea = ShiftRangeRowsDown(printArea, start, count);
+            sheet.PrintArea = ShiftRangeRowsDown(printArea, start, count);  // null clears the print area
     }
 
     internal static void ShiftPrintAreaColumnsUp(Sheet sheet, uint start, uint count)
@@ -440,7 +460,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     internal static void ShiftPrintAreaColumnsDown(Sheet sheet, uint start, uint count)
     {
         if (sheet.PrintArea is { } printArea)
-            sheet.PrintArea = ShiftRangeColumnsDown(printArea, start, count);
+            sheet.PrintArea = ShiftRangeColumnsDown(printArea, start, count);  // null clears the print area
     }
 
     private static GridRange ShiftRangeRowsUp(GridRange range, uint start, uint count)
@@ -455,11 +475,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             new CellAddress(range.End.Sheet, newEndRow, range.End.Col));
     }
 
-    private static GridRange ShiftRangeRowsDown(GridRange range, uint start, uint count)
+    private static GridRange? ShiftRangeRowsDown(GridRange range, uint start, uint count)
     {
         var end = start + count - 1;
         if (range.End.Row < start)
-            return range;
+            return range;    // entirely above: unchanged
         if (range.Start.Row > end)
         {
             return new GridRange(
@@ -467,8 +487,13 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                 new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col));
         }
 
+        // overlapping — compute surviving portion
         var newStartRow = range.Start.Row < start ? range.Start.Row : start;
-        var newEndRow = range.End.Row > end ? range.End.Row - count : newStartRow;
+        // If the range end is inside the deletion zone, the last surviving row is start-1.
+        // If entirely within the deletion zone (start == newStartRow), nothing survives.
+        var newEndRow = range.End.Row > end ? range.End.Row - count : start - 1;
+        if (newStartRow == start && newEndRow < start)
+            return null;   // range was entirely within the deleted rows
         return new GridRange(
             new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
             new CellAddress(range.End.Sheet, newEndRow, range.End.Col));
@@ -486,11 +511,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
     }
 
-    private static GridRange ShiftRangeColumnsDown(GridRange range, uint start, uint count)
+    private static GridRange? ShiftRangeColumnsDown(GridRange range, uint start, uint count)
     {
         var end = start + count - 1;
         if (range.End.Col < start)
-            return range;
+            return range;    // entirely left: unchanged
         if (range.Start.Col > end)
         {
             return new GridRange(
@@ -498,8 +523,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
                 new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count));
         }
 
+        // overlapping — compute surviving portion
         var newStartCol = range.Start.Col < start ? range.Start.Col : start;
-        var newEndCol = range.End.Col > end ? range.End.Col - count : newStartCol;
+        var newEndCol = range.End.Col > end ? range.End.Col - count : start - 1;
+        if (newStartCol == start && newEndCol < start)
+            return null;   // range was entirely within the deleted columns
         return new GridRange(
             new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
             new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
