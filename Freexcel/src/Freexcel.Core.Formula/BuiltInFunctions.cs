@@ -1544,9 +1544,7 @@ public static class BuiltInFunctions
             "Y"  => new NumberValue(YearDiff(start, end)),
             "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
             "YD" => DateDifYD(start, end),
-            // Guard: DateTime.DaysInMonth(0, 12) throws when end.Year==1 && end.Month==1
-            "MD" => end.Year == 1 && end.Month == 1 ? ErrorValue.Num
-                  : DateDifMD(start, end),
+            "MD" => DateDifMD(start, end),
             _    => ErrorValue.Value
         };
     }
@@ -3253,17 +3251,15 @@ public static class BuiltInFunctions
     private static ScalarValue Iseven(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        double d = Math.Truncate(ToNumber(args[0]));
-        if (!double.IsFinite(d) || d > long.MaxValue || d < long.MinValue) return ErrorValue.Num;
-        return new BoolValue((long)d % 2 == 0);
+        if (!TryTruncateToLong(ToNumber(args[0]), out long n)) return ErrorValue.Num;
+        return new BoolValue(n % 2 == 0);
     }
 
     private static ScalarValue Isodd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        double d = Math.Truncate(ToNumber(args[0]));
-        if (!double.IsFinite(d) || d > long.MaxValue || d < long.MinValue) return ErrorValue.Num;
-        return new BoolValue((long)d % 2 != 0);
+        if (!TryTruncateToLong(ToNumber(args[0]), out long n)) return ErrorValue.Num;
+        return new BoolValue(n % 2 != 0);
     }
 
     private static ScalarValue Replace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
