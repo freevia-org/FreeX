@@ -55,7 +55,7 @@ public sealed class WatchWindowDialog : Window
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
-        _listView = new ListView { ItemsSource = _rows };
+        _listView = new ListView { ItemsSource = _rows, SelectionMode = SelectionMode.Extended };
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
         _listView.View = new System.Windows.Controls.GridView
         {
@@ -90,11 +90,20 @@ public sealed class WatchWindowDialog : Window
 
     private void DeleteSelectedWatch()
     {
-        if (_listView.SelectedItem is not WatchWindowRow row)
+        var selectedIndex = _listView.SelectedIndex;
+        var fallbackAddress = (_listView.SelectedItem as WatchWindowRow)?.Address;
+        var targets = WatchWindowService.GetDeleteTargets(
+            _listView.SelectedItems.OfType<WatchWindowRow>().Select(row => row.Address),
+            fallbackAddress);
+        if (targets.Count == 0)
             return;
 
-        _removeWatch(row.Address);
+        foreach (var address in targets)
+            _removeWatch(address);
+
         Refresh();
+        if (_rows.Count > 0)
+            _listView.SelectedIndex = Math.Min(Math.Max(0, selectedIndex), _rows.Count - 1);
     }
 
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)

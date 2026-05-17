@@ -339,12 +339,16 @@ public sealed class Parser
         if (Current.Type == TokenType.CloseParen)
             return args;
 
-        args.Add(ParseExpression());
+        args.Add(Current.Type == TokenType.Comma
+            ? new OmittedArgumentNode()
+            : ParseExpression());
 
         while (Current.Type == TokenType.Comma)
         {
             Advance();
-            args.Add(ParseExpression());
+            args.Add(Current.Type is TokenType.Comma or TokenType.CloseParen
+                ? new OmittedArgumentNode()
+                : ParseExpression());
         }
 
         return args;

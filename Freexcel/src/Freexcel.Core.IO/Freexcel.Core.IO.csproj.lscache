@@ -62,6 +62,8 @@ obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  Freexcel.Core.IO.AssemblyInfo.cs
  Freexcel.Core.IO.GlobalUsings.g.cs
+XlsxChartPartReader.cs
+XlsxDrawingColorReader.cs
 XlsxFeatureInspector.cs
 XlsxFileAdapter.cs
 

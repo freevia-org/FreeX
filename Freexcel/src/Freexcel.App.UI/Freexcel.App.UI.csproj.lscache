@@ -60,6 +60,7 @@ obj/Debug/net10.0-windows/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  Freexcel.App.UI.AssemblyInfo.cs
  Freexcel.App.UI.GlobalUsings.g.cs
+WorkbookThemeEffectStyle.cs
 ZoomLevelMapper.cs
 
 [metadataReferences]

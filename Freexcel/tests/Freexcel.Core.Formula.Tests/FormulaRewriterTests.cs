@@ -23,11 +23,11 @@ public class FormulaRewriterTests
     }
 
     [Fact]
-    public void InsertRows_AbsoluteRowRef_Unchanged()
+    public void InsertRows_AbsoluteRowRef_Shifts()
     {
-        // $A$3 — row is absolute, must not shift
+        // Excel adjusts absolute references for structural row inserts.
         var result = FormulaRewriter.Rewrite("$A$3", new InsertRowsOp("Sheet1", 3, 1), "Sheet1");
-        result.Should().BeNull();
+        result.Should().Be("$A$4");
     }
 
     [Fact]
@@ -108,11 +108,11 @@ public class FormulaRewriterTests
     }
 
     [Fact]
-    public void DeleteRows_AbsoluteRowRef_BelowDeleted_Unchanged()
+    public void DeleteRows_AbsoluteRowRef_BelowDeleted_Shifts()
     {
-        // $A$5 — row absolute, must not shift even though it's below deleted range
+        // Excel adjusts absolute references for structural row deletes.
         var result = FormulaRewriter.Rewrite("$A$5", new DeleteRowsOp("Sheet1", 3, 1), "Sheet1");
-        result.Should().BeNull();
+        result.Should().Be("$A$4");
     }
 
     [Fact]
@@ -133,10 +133,10 @@ public class FormulaRewriterTests
     }
 
     [Fact]
-    public void InsertCols_AbsoluteColRef_Unchanged()
+    public void InsertCols_AbsoluteColRef_Shifts()
     {
         var result = FormulaRewriter.Rewrite("$B1", new InsertColsOp("Sheet1", 2, 1), "Sheet1");
-        result.Should().BeNull();
+        result.Should().Be("$C1");
     }
 
     // ── DeleteColsOp ─────────────────────────────────────────────────────────

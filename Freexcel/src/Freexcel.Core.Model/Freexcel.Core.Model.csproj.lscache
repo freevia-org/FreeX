@@ -79,6 +79,7 @@ Sheet.cs
 SparklineModel.cs
 TextBoxModel.cs
 Workbook.cs
+WorkbookTheme.cs
 WorkbookWindowOptions.cs
 
 [metadataReferences]

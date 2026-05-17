@@ -10,6 +10,7 @@ public sealed class CommandBus : ICommandBus
     private const int MaxUndoDepth = 100;
 
     private readonly Dictionary<WorkbookId, CommandStack> _stacks = [];
+    private readonly Dictionary<WorkbookId, Func<IWorkbookCommand>> _repeatableCommandFactories = [];
     private readonly Func<WorkbookId, ICommandContext> _contextFactory;
 
     public CommandBus(Func<WorkbookId, ICommandContext> contextFactory)
@@ -27,6 +28,16 @@ public sealed class CommandBus : ICommandBus
             var stack = GetOrCreateStack(workbookId);
             stack.Push(command);
         }
+
+        return outcome;
+    }
+
+    public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory)
+    {
+        var command = commandFactory();
+        var outcome = Execute(workbookId, command);
+        if (outcome.Success)
+            _repeatableCommandFactories[workbookId] = commandFactory;
 
         return outcome;
     }
@@ -67,6 +78,17 @@ public sealed class CommandBus : ICommandBus
 
     public bool CanRedo(WorkbookId workbookId) =>
         _stacks.TryGetValue(workbookId, out var stack) && stack.CanRedo;
+
+    public CommandOutcome RepeatLast(WorkbookId workbookId)
+    {
+        if (!_repeatableCommandFactories.TryGetValue(workbookId, out var commandFactory))
+            return new CommandOutcome(false, "Nothing to repeat");
+
+        return ExecuteRepeatable(workbookId, commandFactory);
+    }
+
+    public bool CanRepeat(WorkbookId workbookId) =>
+        _repeatableCommandFactories.ContainsKey(workbookId);
 
     private CommandStack GetOrCreateStack(WorkbookId id)
     {

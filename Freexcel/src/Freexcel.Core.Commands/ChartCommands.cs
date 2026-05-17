@@ -41,6 +41,10 @@ public sealed class AddChartCommand : IWorkbookCommand
             return new CommandOutcome(false, "Chart data range must be on the target sheet.");
         if (!double.IsFinite(_chart.Width) || !double.IsFinite(_chart.Height) || _chart.Width <= 0 || _chart.Height <= 0)
             return new CommandOutcome(false, "Chart size must be positive.");
+        if (ChartTypeSupport.GetDataSeriesCount(_chart) <= 0)
+            return new CommandOutcome(false, "Chart data range must include at least one data series.");
+        if (ChartTypeSupport.GetDataPointCount(_chart) <= 0)
+            return new CommandOutcome(false, "Chart data range must include at least one data point.");
 
         var sheet = ctx.GetSheet(_sheetId);
         sheet.Charts.Add(_chart);
@@ -154,7 +158,17 @@ public sealed record ChartLayoutOptions(
     IReadOnlyList<int>? ComboLineSeriesIndexes = null,
     IReadOnlyList<ChartSeriesFormat>? SeriesFormats = null,
     IReadOnlyList<ChartPointDataLabelFormat>? PointDataLabelFormats = null,
-    bool? UseComboLineForSecondarySeries = null);
+    bool? UseComboLineForSecondarySeries = null,
+    WorkbookThemeColorReference? ChartAreaFillThemeColor = null,
+    WorkbookThemeColorReference? PlotAreaFillThemeColor = null,
+    WorkbookThemeColorReference? PlotAreaBorderThemeColor = null,
+    WorkbookThemeColorReference? LegendTextThemeColor = null,
+    WorkbookThemeColorReference? LegendFillThemeColor = null,
+    WorkbookThemeColorReference? LegendBorderThemeColor = null,
+    WorkbookThemeColorReference? DataLabelFillThemeColor = null,
+    WorkbookThemeColorReference? DataLabelBorderThemeColor = null,
+    WorkbookThemeColorReference? DataLabelTextThemeColor = null,
+    WorkbookThemeColorReference? TrendlineThemeColor = null);
 
 public sealed class SetChartLayoutCommand : IWorkbookCommand
 {
@@ -286,7 +300,17 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
             chart.ComboLineSeriesIndexes.ToArray(),
             chart.SeriesFormats.ToArray(),
             chart.PointDataLabelFormats.ToArray(),
-            chart.UseComboLineForSecondarySeries);
+            chart.UseComboLineForSecondarySeries,
+            ChartAreaFillThemeColor: chart.ChartAreaFillThemeColor,
+            PlotAreaFillThemeColor: chart.PlotAreaFillThemeColor,
+            PlotAreaBorderThemeColor: chart.PlotAreaBorderThemeColor,
+            LegendTextThemeColor: chart.LegendTextThemeColor,
+            LegendFillThemeColor: chart.LegendFillThemeColor,
+            LegendBorderThemeColor: chart.LegendBorderThemeColor,
+            DataLabelFillThemeColor: chart.DataLabelFillThemeColor,
+            DataLabelBorderThemeColor: chart.DataLabelBorderThemeColor,
+            DataLabelTextThemeColor: chart.DataLabelTextThemeColor,
+            TrendlineThemeColor: chart.TrendlineThemeColor);
 
     private static void ApplyOptions(ChartModel chart, ChartLayoutOptions options)
     {
@@ -305,19 +329,37 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         if (options.AxisTitleFontSize is not null)
             chart.AxisTitleFontSize = ClampFinite(options.AxisTitleFontSize.Value, 6, 72);
         if (options.ChartAreaFillColor is not null)
+        {
             chart.ChartAreaFillColor = options.ChartAreaFillColor;
+            chart.ChartAreaFillThemeColor = null;
+        }
         if (options.PlotAreaFillColor is not null)
+        {
             chart.PlotAreaFillColor = options.PlotAreaFillColor;
+            chart.PlotAreaFillThemeColor = null;
+        }
         if (options.PlotAreaBorderColor is not null)
+        {
             chart.PlotAreaBorderColor = options.PlotAreaBorderColor;
+            chart.PlotAreaBorderThemeColor = null;
+        }
         if (options.PlotAreaBorderThickness is not null)
             chart.PlotAreaBorderThickness = ClampFinite(options.PlotAreaBorderThickness.Value, 0, 10);
         if (options.LegendTextColor is not null)
+        {
             chart.LegendTextColor = options.LegendTextColor;
+            chart.LegendTextThemeColor = null;
+        }
         if (options.LegendFillColor is not null)
+        {
             chart.LegendFillColor = options.LegendFillColor;
+            chart.LegendFillThemeColor = null;
+        }
         if (options.LegendBorderColor is not null)
+        {
             chart.LegendBorderColor = options.LegendBorderColor;
+            chart.LegendBorderThemeColor = null;
+        }
         if (options.LegendBorderThickness is not null)
             chart.LegendBorderThickness = ClampFinite(options.LegendBorderThickness.Value, 0, 10);
         if (options.LegendFontSize is not null)
@@ -337,23 +379,9 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         if (options.ExplodedSliceDistance is not null)
             chart.ExplodedSliceDistance = ClampFinite(options.ExplodedSliceDistance.Value, 0, 0.5);
         if (options.ClearXAxisBounds)
-        {
-            chart.XAxisMinimum = null;
-            chart.XAxisMaximum = null;
-            chart.XAxisMajorUnit = null;
-            chart.XAxisMinorUnit = null;
-            chart.XAxisLogScale = false;
-            chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
-        }
+            ClearXAxisBounds(chart);
         if (options.ClearYAxisBounds)
-        {
-            chart.YAxisMinimum = null;
-            chart.YAxisMaximum = null;
-            chart.YAxisMajorUnit = null;
-            chart.YAxisMinorUnit = null;
-            chart.YAxisLogScale = false;
-            chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
-        }
+            ClearYAxisBounds(chart);
         if (options.XAxisMinimum is not null)
             chart.XAxisMinimum = FiniteOrNull(options.XAxisMinimum.Value);
         if (options.XAxisMaximum is not null)
@@ -453,11 +481,20 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         if (options.ShowDataLabelCallouts is not null)
             chart.ShowDataLabelCallouts = options.ShowDataLabelCallouts.Value;
         if (options.DataLabelFillColor is not null)
+        {
             chart.DataLabelFillColor = options.DataLabelFillColor;
+            chart.DataLabelFillThemeColor = null;
+        }
         if (options.DataLabelBorderColor is not null)
+        {
             chart.DataLabelBorderColor = options.DataLabelBorderColor;
+            chart.DataLabelBorderThemeColor = null;
+        }
         if (options.DataLabelTextColor is not null)
+        {
             chart.DataLabelTextColor = options.DataLabelTextColor;
+            chart.DataLabelTextThemeColor = null;
+        }
         if (options.DataLabelBorderThickness is not null)
             chart.DataLabelBorderThickness = ClampFinite(options.DataLabelBorderThickness.Value, 0, 10);
         if (options.DataLabelFontSize is not null)
@@ -477,7 +514,10 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         if (options.ShowTrendlineRSquared is not null)
             chart.ShowTrendlineRSquared = options.ShowTrendlineRSquared.Value;
         if (options.TrendlineColor is not null)
+        {
             chart.TrendlineColor = options.TrendlineColor;
+            chart.TrendlineThemeColor = null;
+        }
         if (options.TrendlineThickness is not null)
             chart.TrendlineThickness = ClampFinite(options.TrendlineThickness.Value, 0.5, 10);
         if (options.TrendlineDashStyle is not null)
@@ -500,7 +540,8 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
             chart.SeriesFormats = options.SeriesFormats
                 .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
                 .GroupBy(format => format.SeriesIndex)
-                .Select(group => ClampSeriesFormat(group.Last()))
+                .Select(group => ClampSeriesFormat(chart.Type, group.Last()))
+                .Where(HasSeriesFormatting)
                 .OrderBy(format => format.SeriesIndex)
                 .ToList();
         }
@@ -515,18 +556,139 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
                     && format.PointIndex < pointCount)
                 .GroupBy(format => (format.SeriesIndex, format.PointIndex))
                 .Select(group => ClampPointDataLabelFormat(group.Last()))
+                .Where(HasPointDataLabelFormatting)
                 .OrderBy(format => format.SeriesIndex)
                 .ThenBy(format => format.PointIndex)
                 .ToList();
         }
         if (options.UseComboLineForSecondarySeries is not null)
             chart.UseComboLineForSecondarySeries = options.UseComboLineForSecondarySeries.Value;
+        EnforceAxisTitleSupport(chart);
+        EnforceAxisBoundsSupport(chart);
+        EnforcePieAndDoughnutSupport(chart);
+        EnforcePercentageDataLabelSupport(chart);
+        EnforceTrendlineSupport(chart);
+        EnforceSecondaryAxisSupport(chart);
         EnforceComboLineOverlaySupport(chart);
+    }
+
+    private static void EnforceAxisTitleSupport(ChartModel chart)
+    {
+        if (ChartTypeSupport.SupportsAxes(chart.Type))
+            return;
+
+        chart.XAxisTitle = null;
+        chart.YAxisTitle = null;
+        chart.AxisTitleTextColor = null;
+        chart.AxisTitleFontSize = 12;
+    }
+
+    private static void EnforceAxisBoundsSupport(ChartModel chart)
+    {
+        if (!ChartTypeSupport.SupportsXAxisBounds(chart.Type))
+            ClearXAxisBounds(chart);
+        if (!ChartTypeSupport.SupportsYAxisBounds(chart.Type))
+            ClearYAxisBounds(chart);
+    }
+
+    private static void ClearXAxisBounds(ChartModel chart)
+    {
+        chart.XAxisMinimum = null;
+        chart.XAxisMaximum = null;
+        chart.XAxisMajorUnit = null;
+        chart.XAxisMinorUnit = null;
+        chart.XAxisLogScale = false;
+        chart.XAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.ShowXAxisMajorGridlines = false;
+        chart.ShowXAxisMinorGridlines = false;
+        chart.XAxisMajorGridlineColor = null;
+        chart.XAxisMinorGridlineColor = null;
+        chart.XAxisGridlineThickness = 1;
+        chart.XAxisMajorTickStyle = ChartAxisTickStyle.Outside;
+        chart.XAxisMinorTickStyle = ChartAxisTickStyle.None;
+        chart.ShowXAxisLabels = true;
+        chart.XAxisLabelTextColor = null;
+        chart.XAxisLabelFontSize = 11;
+        chart.XAxisLabelAngle = 0;
+        chart.XAxisLineColor = null;
+        chart.XAxisLineThickness = 1;
+    }
+
+    private static void ClearYAxisBounds(ChartModel chart)
+    {
+        chart.YAxisMinimum = null;
+        chart.YAxisMaximum = null;
+        chart.YAxisMajorUnit = null;
+        chart.YAxisMinorUnit = null;
+        chart.YAxisLogScale = false;
+        chart.YAxisNumberFormat = ChartDataLabelNumberFormat.General;
+        chart.ShowYAxisMajorGridlines = false;
+        chart.ShowYAxisMinorGridlines = false;
+        chart.YAxisMajorGridlineColor = null;
+        chart.YAxisMinorGridlineColor = null;
+        chart.YAxisGridlineThickness = 1;
+        chart.YAxisMajorTickStyle = ChartAxisTickStyle.Outside;
+        chart.YAxisMinorTickStyle = ChartAxisTickStyle.None;
+        chart.ShowYAxisLabels = true;
+        chart.YAxisLabelTextColor = null;
+        chart.YAxisLabelFontSize = 11;
+        chart.YAxisLabelAngle = 0;
+        chart.YAxisLineColor = null;
+        chart.YAxisLineThickness = 1;
+    }
+
+    private static void EnforcePieAndDoughnutSupport(ChartModel chart)
+    {
+        if (!ChartTypeSupport.SupportsDoughnutHoleSize(chart.Type))
+            chart.DoughnutHoleSize = 0.55;
+        if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
+            chart.FirstSliceAngle = 0;
+        if (!ChartTypeSupport.SupportsExplodedSlices(chart.Type))
+        {
+            chart.ExplodedSliceIndex = -1;
+            chart.ExplodedSliceDistance = 0.1;
+        }
+    }
+
+    private static void EnforcePercentageDataLabelSupport(ChartModel chart)
+    {
+        if (ChartTypeSupport.SupportsPercentageDataLabels(chart.Type))
+            return;
+
+        chart.ShowDataLabelPercentage = false;
+    }
+
+    private static void EnforceTrendlineSupport(ChartModel chart)
+    {
+        if (ChartTypeSupport.SupportsTrendlines(chart.Type))
+            return;
+
+        chart.ShowLinearTrendline = false;
+        chart.TrendlineType = ChartTrendlineType.Linear;
+        chart.TrendlinePeriod = 2;
+        chart.TrendlineOrder = 2;
+        chart.ShowTrendlineEquation = false;
+        chart.ShowTrendlineRSquared = false;
+        chart.TrendlineColor = null;
+        chart.TrendlineThemeColor = null;
+        chart.TrendlineThickness = 1.5;
+        chart.TrendlineDashStyle = ChartLineDashStyle.Dash;
+    }
+
+    private static void EnforceSecondaryAxisSupport(ChartModel chart)
+    {
+        if (ChartTypeSupport.SupportsSecondaryAxis(chart.Type)
+            && (!chart.ShowSecondaryAxis || chart.SecondaryAxisSeriesIndexes.Count > 0))
+            return;
+
+        chart.ShowSecondaryAxis = false;
+        chart.SecondaryAxisSeriesIndexes = [];
     }
 
     private static void EnforceComboLineOverlaySupport(ChartModel chart)
     {
-        if (ChartTypeSupport.SupportsComboLineOverlay(chart))
+        if (ChartTypeSupport.SupportsComboLineOverlay(chart)
+            && (!chart.UseComboLineForSecondarySeries || chart.ComboLineSeriesIndexes.Count > 0))
             return;
 
         chart.UseComboLineForSecondarySeries = false;
@@ -544,18 +706,41 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
                 : null
         };
 
-    private static ChartSeriesFormat ClampSeriesFormat(ChartSeriesFormat format) =>
-        format with
+    private static bool HasPointDataLabelFormatting(ChartPointDataLabelFormat format) =>
+        format.FillColor is not null
+        || format.BorderColor is not null
+        || format.BorderThickness is not null
+        || format.TextColor is not null
+        || format.FontSize is not null
+        || format.FillThemeColor is not null
+        || format.BorderThemeColor is not null
+        || format.TextThemeColor is not null;
+
+    private static ChartSeriesFormat ClampSeriesFormat(ChartType chartType, ChartSeriesFormat format)
+    {
+        var supportsMarkers = ChartTypeSupport.SupportsSeriesMarkers(chartType);
+        return format with
         {
             StrokeThickness = format.StrokeThickness is { } strokeThickness
                 ? ClampFinite(strokeThickness, 0.5, 10)
                 : null,
-            MarkerSize = format.MarkerSize is { } markerSize
+            MarkerSize = supportsMarkers && format.MarkerSize is { } markerSize
                 ? ClampFinite(markerSize, 1, 30)
                 : null,
             DashStyle = ValidNullableEnumOrNull(format.DashStyle),
-            MarkerStyle = ValidNullableEnumOrNull(format.MarkerStyle)
+            MarkerStyle = supportsMarkers ? ValidNullableEnumOrNull(format.MarkerStyle) : null
         };
+    }
+
+    private static bool HasSeriesFormatting(ChartSeriesFormat format) =>
+        format.FillColor is not null
+        || format.StrokeColor is not null
+        || format.StrokeThickness is not null
+        || format.DashStyle is not null
+        || format.MarkerStyle is not null
+        || format.MarkerSize is not null
+        || format.FillThemeColor is not null
+        || format.StrokeThemeColor is not null;
 
     private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
         where TEnum : struct, Enum =>
@@ -584,12 +769,18 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         chart.AxisTitleTextColor = snapshot.AxisTitleTextColor;
         chart.AxisTitleFontSize = snapshot.AxisTitleFontSize ?? 12;
         chart.ChartAreaFillColor = snapshot.ChartAreaFillColor;
+        chart.ChartAreaFillThemeColor = snapshot.ChartAreaFillThemeColor;
         chart.PlotAreaFillColor = snapshot.PlotAreaFillColor;
+        chart.PlotAreaFillThemeColor = snapshot.PlotAreaFillThemeColor;
         chart.PlotAreaBorderColor = snapshot.PlotAreaBorderColor;
+        chart.PlotAreaBorderThemeColor = snapshot.PlotAreaBorderThemeColor;
         chart.PlotAreaBorderThickness = snapshot.PlotAreaBorderThickness ?? 1;
         chart.LegendTextColor = snapshot.LegendTextColor;
+        chart.LegendTextThemeColor = snapshot.LegendTextThemeColor;
         chart.LegendFillColor = snapshot.LegendFillColor;
+        chart.LegendFillThemeColor = snapshot.LegendFillThemeColor;
         chart.LegendBorderColor = snapshot.LegendBorderColor;
+        chart.LegendBorderThemeColor = snapshot.LegendBorderThemeColor;
         chart.LegendBorderThickness = snapshot.LegendBorderThickness ?? 0;
         chart.LegendFontSize = snapshot.LegendFontSize ?? 12;
         chart.DoughnutHoleSize = snapshot.DoughnutHoleSize ?? 0.55;
@@ -646,8 +837,11 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         chart.DataLabelNumberFormat = snapshot.DataLabelNumberFormat ?? ChartDataLabelNumberFormat.General;
         chart.ShowDataLabelCallouts = snapshot.ShowDataLabelCallouts ?? false;
         chart.DataLabelFillColor = snapshot.DataLabelFillColor;
+        chart.DataLabelFillThemeColor = snapshot.DataLabelFillThemeColor;
         chart.DataLabelBorderColor = snapshot.DataLabelBorderColor;
+        chart.DataLabelBorderThemeColor = snapshot.DataLabelBorderThemeColor;
         chart.DataLabelTextColor = snapshot.DataLabelTextColor;
+        chart.DataLabelTextThemeColor = snapshot.DataLabelTextThemeColor;
         chart.DataLabelBorderThickness = snapshot.DataLabelBorderThickness ?? 0;
         chart.DataLabelFontSize = snapshot.DataLabelFontSize ?? 11;
         chart.DataLabelAngle = snapshot.DataLabelAngle ?? 0;
@@ -658,6 +852,7 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         chart.ShowTrendlineEquation = snapshot.ShowTrendlineEquation ?? false;
         chart.ShowTrendlineRSquared = snapshot.ShowTrendlineRSquared ?? false;
         chart.TrendlineColor = snapshot.TrendlineColor;
+        chart.TrendlineThemeColor = snapshot.TrendlineThemeColor;
         chart.TrendlineThickness = snapshot.TrendlineThickness ?? 1.5;
         chart.TrendlineDashStyle = snapshot.TrendlineDashStyle ?? ChartLineDashStyle.Dash;
         chart.ShowSecondaryAxis = snapshot.ShowSecondaryAxis ?? false;

@@ -18,6 +18,10 @@ public static partial class FormulaReferenceCycler
 
         foreach (Match match in A1ReferenceRegex().Matches(text))
         {
+            var cellIndex = match.Groups["cell"].Index;
+            if (IsInsideStructuredReference(text, cellIndex) || IsInsideStringLiteral(text, cellIndex))
+                continue;
+
             if (!CaretTouchesMatch(caretIndex, match))
                 continue;
 
@@ -39,6 +43,39 @@ public static partial class FormulaReferenceCycler
 
     private static bool CaretTouchesMatch(int caretIndex, Match match) =>
         caretIndex >= match.Index && caretIndex <= match.Index + match.Length;
+
+    private static bool IsInsideStructuredReference(string text, int index)
+    {
+        var open = text.LastIndexOf('[', Math.Clamp(index, 0, text.Length - 1));
+        if (open < 0)
+            return false;
+
+        var close = text.IndexOf(']', open);
+        return close >= index;
+    }
+
+    private static bool IsInsideStringLiteral(string text, int index)
+    {
+        var inString = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '"')
+                continue;
+
+            if (inString && i + 1 < text.Length && text[i + 1] == '"')
+            {
+                i++;
+                continue;
+            }
+
+            if (i >= index)
+                return inString;
+
+            inString = !inString;
+        }
+
+        return false;
+    }
 
     private static bool TryCycleReference(string reference, out string cycled)
     {
@@ -80,7 +117,7 @@ public static partial class FormulaReferenceCycler
         }
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:'[^']+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)!)?(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?![A-Za-z0-9_])", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?![A-Za-z0-9_])", RegexOptions.Compiled)]
     private static partial Regex A1ReferenceRegex();
 
     [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})\$?(?<row>[1-9][0-9]{0,6})$", RegexOptions.Compiled)]

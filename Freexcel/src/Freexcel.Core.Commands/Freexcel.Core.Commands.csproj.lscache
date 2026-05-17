@@ -63,6 +63,7 @@ AverageFilterCommand.cs
 BorderShortcutService.cs
 CalculationOptionsCommand.cs
 ChartCommands.cs
+ClearContentsCommand.cs
 ClipboardSerializer.cs
 CommandBus.cs
 CommandGuards.cs
@@ -76,6 +77,7 @@ DataValidationService.cs
 DateTimeEntryService.cs
 DefineNamedRangeCommand.cs
 DrawingShapeCommands.cs
+FillCellsCommand.cs
 FilterCommand.cs
 FilterConditionCommand.cs
 FilterInputParser.cs
@@ -111,6 +113,7 @@ obj/Debug/net10.0/
 OutlineGroupingService.cs
 PageLayoutCommands.cs
 PasteCellsCommand.cs
+PasteCommandFactory.cs
 PasteFormatsCommand.cs
 PasteSpecialCommand.cs
 PictureCommands.cs
@@ -132,6 +135,7 @@ TextBoxCommands.cs
 TopBottomFilterCommand.cs
 WatchWindowService.cs
 WorkbookStatisticsService.cs
+WorkbookThemeCommands.cs
 WorkbookWindowCommands.cs
 
 [metadataReferences]

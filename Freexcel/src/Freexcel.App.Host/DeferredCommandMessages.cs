@@ -1,0 +1,83 @@
+using Freexcel.Core.IO;
+
+namespace Freexcel.App.Host;
+
+public static class DeferredCommandMessages
+{
+    public static DeferredCommandMessage WorkbookTheme(string commandName) =>
+        new(
+            commandName,
+            $"{commandName} is deferred until Freexcel has a workbook theme model. It is tracked as a documented parity gap, not a silent partial implementation.");
+
+    public static DeferredCommandMessage MultiWindow(string commandName) =>
+        new(
+            commandName,
+            $"{commandName} is deferred until Freexcel has multi-window workbook hosting. It is tracked as a documented parity gap, not a silent partial implementation.");
+
+    public static DeferredCommandMessage ShareExcluded() =>
+        new(
+            "Share Workbook",
+            "Microsoft 365 Share and cloud co-authoring are excluded from Freexcel. Save the workbook and share the file through your normal file system or source-control workflow.");
+
+    public static DeferredCommandMessage OnlineTemplatesExcluded() =>
+        new(
+            "Online Templates",
+            "Online template discovery depends on an external Microsoft template service and is excluded from Freexcel. Create a blank workbook or open a local template file instead.");
+
+    public static DeferredCommandMessage LocalAccountInfo() =>
+        new(
+            "Account",
+            "Microsoft account integration is not implemented in Freexcel. Workbooks are local files; use Options for local app settings and your normal file-system workflow for identity, storage, and sharing.");
+
+    public static DeferredCommandMessage PivotTableExcluded() =>
+        new(
+            "PivotTable",
+            "PivotTables, pivot caches, slicers, and timelines are excluded from Freexcel v1. Use Sort, Filter, Remove Duplicates, Consolidate, and formulas for supported local analysis workflows.");
+
+    public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var featureList = string.Join(", ",
+            FormatUnsupportedXlsxFeatureList(report));
+
+        return new(
+            "Unsupported XLSX Features",
+            "This workbook contains features Freexcel does not preserve yet. " +
+            $"Saving to .xlsx may remove: {featureList}.\n\nContinue saving?");
+    }
+
+    public static DeferredCommandMessage UnsupportedXlsxFeatureOpenWarning(XlsxFeatureReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var featureList = string.Join(", ",
+            FormatUnsupportedXlsxFeatureList(report));
+
+        return new(
+            "Unsupported XLSX Features Detected",
+            "Freexcel opened this workbook, but it contains unsupported or excluded XLSX features: " +
+            $"{featureList}. These features may be removed if you save the workbook from Freexcel.");
+    }
+
+    public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
+    {
+        XlsxUnsupportedFeatureKind.Macros => "VBA macros (excluded)",
+        XlsxUnsupportedFeatureKind.PivotTables => "PivotTables/pivot caches (excluded)",
+        XlsxUnsupportedFeatureKind.Charts => "XLSX chart package parts",
+        XlsxUnsupportedFeatureKind.Slicers => "slicers (excluded with PivotTables)",
+        XlsxUnsupportedFeatureKind.Timelines => "timelines (excluded with PivotTables)",
+        XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
+        XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
+        XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
+        _ => kind.ToString()
+    };
+
+    private static IEnumerable<string> FormatUnsupportedXlsxFeatureList(XlsxFeatureReport report) =>
+        report.Features
+            .Select(f => FormatUnsupportedXlsxFeatureKind(f.Kind))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal);
+}
+
+public sealed record DeferredCommandMessage(string Title, string Body);

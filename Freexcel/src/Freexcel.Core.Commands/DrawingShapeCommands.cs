@@ -250,6 +250,8 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     private readonly CellColor? _outlineColor;
     private CellColor? _previousFillColor;
     private CellColor? _previousOutlineColor;
+    private WorkbookThemeColorReference? _previousFillThemeColor;
+    private WorkbookThemeColorReference? _previousOutlineThemeColor;
     private bool _applied;
 
     public string Label => "Shape Colors";
@@ -275,8 +277,12 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
 
         _previousFillColor = shape.FillColor;
         _previousOutlineColor = shape.OutlineColor;
+        _previousFillThemeColor = shape.FillThemeColor;
+        _previousOutlineThemeColor = shape.OutlineThemeColor;
         shape.FillColor = _fillColor;
         shape.OutlineColor = _outlineColor;
+        shape.FillThemeColor = null;
+        shape.OutlineThemeColor = null;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
@@ -288,6 +294,8 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         if (shape is null) return;
         shape.FillColor = _previousFillColor;
         shape.OutlineColor = _previousOutlineColor;
+        shape.FillThemeColor = _previousFillThemeColor;
+        shape.OutlineThemeColor = _previousOutlineThemeColor;
         _applied = false;
     }
 }

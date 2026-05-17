@@ -1,0 +1,132 @@
+<Window x:Class="Freexcel.App.Host.WorkbookThemeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Customize Theme"
+        Width="520"
+        Height="640"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,14,0,0">
+            <Button x:Name="SaveButton"
+                    Content="Save"
+                    Width="86"
+                    Margin="0,0,8,0"
+                    IsDefault="True"
+                    Click="SaveButton_Click"/>
+            <Button Content="Cancel"
+                    Width="86"
+                    IsCancel="True"/>
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Theme"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,14"/>
+
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name:" VerticalAlignment="Center" Margin="0,0,10,8"/>
+                    <TextBox x:Name="ThemeNameBox"
+                             Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="0,0,0,8"
+                             AutomationProperties.Name="Theme name"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Heading font:" VerticalAlignment="Center" Margin="0,0,10,8"/>
+                    <ComboBox x:Name="HeadingFontBox"
+                              Grid.Row="1"
+                              Grid.Column="1"
+                              Margin="0,0,0,8"
+                              IsEditable="True"
+                              AutomationProperties.Name="Heading font"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Body font:" VerticalAlignment="Center" Margin="0,0,10,8"/>
+                    <ComboBox x:Name="BodyFontBox"
+                              Grid.Row="2"
+                              Grid.Column="1"
+                              Margin="0,0,0,8"
+                              IsEditable="True"
+                              AutomationProperties.Name="Body font"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Effects:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox x:Name="EffectsBox"
+                              Grid.Row="3"
+                              Grid.Column="1"
+                              IsEditable="True"
+                              AutomationProperties.Name="Effects"/>
+                </Grid>
+
+                <TextBlock Text="Theme Colors"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8"/>
+
+                <UniformGrid Columns="2">
+                    <StackPanel Margin="0,0,10,8">
+                        <TextBlock Text="Dark 1"/>
+                        <TextBox x:Name="Dark1ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="Light 1"/>
+                        <TextBox x:Name="Light1ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,8">
+                        <TextBlock Text="Dark 2"/>
+                        <TextBox x:Name="Dark2ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="Light 2"/>
+                        <TextBox x:Name="Light2ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,8">
+                        <TextBlock Text="Accent 1"/>
+                        <TextBox x:Name="Accent1ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="Accent 2"/>
+                        <TextBox x:Name="Accent2ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,8">
+                        <TextBlock Text="Accent 3"/>
+                        <TextBox x:Name="Accent3ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="Accent 4"/>
+                        <TextBox x:Name="Accent4ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,8">
+                        <TextBlock Text="Accent 5"/>
+                        <TextBox x:Name="Accent5ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="Accent 6"/>
+                        <TextBox x:Name="Accent6ColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,8">
+                        <TextBlock Text="Hyperlink"/>
+                        <TextBox x:Name="HyperlinkColorBox"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8">
+                        <TextBlock Text="Followed Hyperlink"/>
+                        <TextBox x:Name="FollowedHyperlinkColorBox"/>
+                    </StackPanel>
+                </UniformGrid>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

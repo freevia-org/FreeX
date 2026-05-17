@@ -24,9 +24,12 @@ public static class ChartRenderer
         OxyColor.FromRgb(112, 173, 71)
     ];
 
-    public static ImageSource? Render(ChartModel chart, ViewportModel viewport)
+    public static ImageSource? Render(ChartModel chart, ViewportModel viewport) =>
+        Render(chart, viewport, WorkbookTheme.Office);
+
+    public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme)
     {
-        var model = BuildPlotModel(chart, viewport);
+        var model = BuildPlotModel(chart, viewport, theme ?? WorkbookTheme.Office);
         if (model == null) return null;
 
         var exporter = new PngExporter
@@ -48,7 +51,10 @@ public static class ChartRenderer
         return bitmap;
     }
 
-    private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport)
+    private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport) =>
+        BuildPlotModel(chart, viewport, WorkbookTheme.Office);
+
+    private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
 
@@ -67,8 +73,8 @@ public static class ChartRenderer
 
         var model = new PlotModel { Title = chart.Title };
         ApplyTitleStyle(model, chart);
-        ApplyAreaStyle(model, chart);
-        ConfigureLegend(model, chart);
+        ApplyAreaStyle(model, chart, theme);
+        ConfigureLegend(model, chart, theme);
 
         if (chart.Type is ChartType.Pie or ChartType.Doughnut)
         {
@@ -96,8 +102,8 @@ public static class ChartRenderer
                     : ""
             };
             var pieFormat = GetSeriesFormat(chart, 0);
-            ApplyPieFormat(pieSeries, pieFormat);
-            ApplyPieDataLabelStyle(pieSeries, chart);
+            ApplyPieFormat(pieSeries, pieFormat, theme);
+            ApplyPieDataLabelStyle(pieSeries, chart, theme);
             for (uint r = dataStartRow; r <= endRow; r++)
             {
                 if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
@@ -108,7 +114,7 @@ public static class ChartRenderer
                 {
                     IsExploded = chart.ExplodedSliceIndex == sliceIndex
                 };
-                if (pieFormat?.FillColor is { } fill)
+                if (pieFormat?.ResolveFillColor(theme) is { } fill)
                     slice.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
                 else
                     slice.Fill = PieSlicePalette[sliceIndex % PieSlicePalette.Length];
@@ -120,22 +126,22 @@ public static class ChartRenderer
 
         if (chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn)
         {
-            var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn);
+            var stackedColumnModel = BuildStackedColumnModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedColumn, theme);
             ApplyAxisBounds(stackedColumnModel, chart);
             return stackedColumnModel;
         }
 
         if (chart.Type is ChartType.StackedBar or ChartType.PercentStackedBar)
         {
-            var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar);
+            var stackedBarModel = BuildStackedBarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, chart.Type == ChartType.PercentStackedBar, theme);
             ApplyAxisBounds(stackedBarModel, chart);
             return stackedBarModel;
         }
 
         if (chart.Type == ChartType.Bubble)
         {
-            var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, out var trendPoints);
-            AddTrendlineIfRequested(bubbleModel, chart, trendPoints);
+            var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, out var trendPoints);
+            AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
             ApplyAxisBounds(bubbleModel, chart);
             return bubbleModel;
         }
@@ -175,11 +181,11 @@ public static class ChartRenderer
 
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
-                    var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex);
+                    var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
                     AddLinePoints(lineSeries, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
-                    AddLineDataLabelAnnotations(model, chart, lineSeries, seriesName, seriesIndex, categories);
+                    AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
                     model.Series.Add(lineSeries);
                     continue;
                 }
@@ -190,8 +196,8 @@ public static class ChartRenderer
                     LabelFormatString = GetNativeValueLabelFormat(chart, 4),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
-                ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex));
-                ApplyNativeDataLabelStyle(series, chart);
+                ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+                ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
@@ -202,7 +208,7 @@ public static class ChartRenderer
                         series.Items.Add(new RectangleBarItem(i - 0.35, Math.Min(0, v), i + 0.35, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -226,8 +232,8 @@ public static class ChartRenderer
                     LabelFormatString = GetNativeValueLabelFormat(chart, 0),
                     LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
                 };
-                ApplyBarFormat(series, GetSeriesFormat(chart, seriesIndex));
-                ApplyNativeDataLabelStyle(series, chart);
+                ApplyBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+                ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
@@ -238,7 +244,7 @@ public static class ChartRenderer
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, seriesName, seriesIndex, i, GetCategory(categories, i), v, i, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), v, i, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -270,11 +276,11 @@ public static class ChartRenderer
 
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
-                    var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex);
+                    var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
                     AddLinePoints(lineSeries, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
-                    AddLineDataLabelAnnotations(model, chart, lineSeries, seriesName, seriesIndex, categories);
+                    AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
                     model.Series.Add(lineSeries);
                     continue;
                 }
@@ -284,8 +290,8 @@ public static class ChartRenderer
                     Title = seriesName,
                     LabelFormatString = GetNativeValueLabelFormat(chart, 1)
                 };
-                ApplyAreaFormat(series, GetSeriesFormat(chart, seriesIndex));
-                ApplyNativeDataLabelStyle(series, chart);
+                ApplyAreaFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+                ApplyNativeDataLabelStyle(series, chart, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 int i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
@@ -296,7 +302,7 @@ public static class ChartRenderer
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -320,8 +326,8 @@ public static class ChartRenderer
                     LabelMargin = ToLabelMargin(chart.DataLabelPosition),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
-                ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex));
-                ApplyNativeDataLabelStyle(series, chart);
+                ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+                ApplyNativeDataLabelStyle(series, chart, theme);
                 var xCol = chart.FirstColIsCategories ? startCol : dataStartCol;
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 for (uint r = dataStartRow; r <= endRow; r++)
@@ -336,7 +342,7 @@ public static class ChartRenderer
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, seriesName, seriesIndex, (int)(r - dataStartRow), GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, (int)(r - dataStartRow), GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -366,22 +372,22 @@ public static class ChartRenderer
                     AddSecondaryAxisIfRequested(model, chart);
                 }
 
-                var series = CreateLineSeries(chart, seriesName, seriesIndex);
+                var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
                 AddLinePoints(series, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints);
                 if (firstSeriesPoints is null)
                     firstSeriesPoints = trendPoints;
-                AddLineDataLabelAnnotations(model, chart, series, seriesName, seriesIndex, categories);
+                AddLineDataLabelAnnotations(model, chart, theme, series, seriesName, seriesIndex, categories);
                 model.Series.Add(series);
             }
         }
 
-        AddTrendlineIfRequested(model, chart, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
+        AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart);
         return model;
     }
 
-    private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex)
+    private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)
     {
         var series = new LineSeries
         {
@@ -390,8 +396,8 @@ public static class ChartRenderer
             LabelMargin = ToLabelMargin(chart.DataLabelPosition),
             YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
         };
-        ApplyLineFormat(series, GetSeriesFormat(chart, seriesIndex));
-        ApplyNativeDataLabelStyle(series, chart);
+        ApplyLineFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+        ApplyNativeDataLabelStyle(series, chart, theme);
         return series;
     }
 
@@ -405,7 +411,8 @@ public static class ChartRenderer
         uint dataStartCol,
         uint endCol,
         uint headerRow,
-        bool normalizeToPercent)
+        bool normalizeToPercent,
+        WorkbookTheme theme)
     {
         model.Axes.Add(new LinearAxis
         {
@@ -443,7 +450,7 @@ public static class ChartRenderer
 
             if (IsComboLineSeries(chart, seriesIndex))
             {
-                var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex);
+                var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
                 var pointIndex = 0;
                 for (uint row = dataStartRow; row <= endRow; row++, pointIndex++)
                 {
@@ -452,7 +459,7 @@ public static class ChartRenderer
 
                     lineSeries.Points.Add(new DataPoint(pointIndex, value));
                 }
-                AddLineDataLabelAnnotations(model, chart, lineSeries, seriesName, seriesIndex, categories);
+                AddLineDataLabelAnnotations(model, chart, theme, lineSeries, seriesName, seriesIndex, categories);
                 model.Series.Add(lineSeries);
                 continue;
             }
@@ -462,8 +469,8 @@ public static class ChartRenderer
                 Title = seriesName,
                 LabelFormatString = GetNativeValueLabelFormat(chart, 4)
             };
-            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex));
-            ApplyNativeDataLabelStyle(series, chart);
+            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            ApplyNativeDataLabelStyle(series, chart, theme);
 
             var i = 0;
             for (uint row = dataStartRow; row <= endRow; row++, i++)
@@ -480,7 +487,7 @@ public static class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, seriesName, seriesIndex, i, GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -499,7 +506,8 @@ public static class ChartRenderer
         uint dataStartCol,
         uint endCol,
         uint headerRow,
-        bool normalizeToPercent)
+        bool normalizeToPercent,
+        WorkbookTheme theme)
     {
         var categoryAxis = new CategoryAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle };
         categoryAxis.Labels.AddRange(categories);
@@ -528,8 +536,8 @@ public static class ChartRenderer
                 Title = seriesName,
                 LabelFormatString = GetNativeValueLabelFormat(chart, 4)
             };
-            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex));
-            ApplyNativeDataLabelStyle(series, chart);
+            ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            ApplyNativeDataLabelStyle(series, chart, theme);
 
             var i = 0;
             for (uint row = dataStartRow; row <= endRow; row++, i++)
@@ -546,7 +554,7 @@ public static class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, seriesName, seriesIndex, i, GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -576,6 +584,7 @@ public static class ChartRenderer
         uint dataStartCol,
         uint endCol,
         uint headerRow,
+        WorkbookTheme theme,
         out List<DataPoint> trendPoints)
     {
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
@@ -583,38 +592,47 @@ public static class ChartRenderer
         trendPoints = [];
 
         var xCol = chart.DataRange.Start.Col;
-        var yCol = xCol + 1 <= endCol ? xCol + 1 : xCol;
-        var sizeCol = xCol + 2 <= endCol ? xCol + 2 : yCol;
-        var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, yCol), out var hdr)
-            ? hdr.DisplayText
-            : "Series 1";
-        var series = new ScatterSeries
+        var seriesIndex = 0;
+        for (var yCol = xCol + 1; yCol <= endCol; yCol += 2)
         {
-            Title = seriesName,
-            MarkerType = MarkerType.Circle,
-            LabelFormatString = GetNativeValueLabelFormat(chart, 1),
-            LabelMargin = ToLabelMargin(chart.DataLabelPosition)
-        };
-        ApplyScatterFormat(series, GetSeriesFormat(chart, 0));
-        ApplyNativeDataLabelStyle(series, chart);
-
-        var fallbackIndex = 0;
-        for (uint row = dataStartRow; row <= endRow; row++, fallbackIndex++)
-        {
-            if (!TryGetNumericCell(cellLookup, row, xCol, out var x))
-                x = fallbackIndex;
-            if (!TryGetNumericCell(cellLookup, row, yCol, out var y))
+            var sizeCol = yCol + 1;
+            if (sizeCol > endCol)
                 continue;
-            var size = TryGetNumericCell(cellLookup, row, sizeCol, out var rawSize)
-                ? Math.Max(1, Math.Abs(rawSize))
-                : 5;
-            series.Points.Add(new ScatterPoint(x, y, size));
-            trendPoints.Add(new DataPoint(x, y));
-            if (ShouldUseAnnotationLabels(chart))
-                AddDataLabelAnnotation(model, chart, seriesName, 0, fallbackIndex, GetCategory(categories, fallbackIndex), x, y, y);
+
+            var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, yCol), out var hdr)
+                ? hdr.DisplayText
+                : $"Series {seriesIndex + 1}";
+            var series = new ScatterSeries
+            {
+                Title = seriesName,
+                MarkerType = MarkerType.Circle,
+                LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+                LabelMargin = ToLabelMargin(chart.DataLabelPosition)
+            };
+            ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
+            ApplyNativeDataLabelStyle(series, chart, theme);
+
+            var fallbackIndex = 0;
+            for (uint row = dataStartRow; row <= endRow; row++, fallbackIndex++)
+            {
+                if (!TryGetNumericCell(cellLookup, row, xCol, out var x))
+                    x = fallbackIndex;
+                if (!TryGetNumericCell(cellLookup, row, yCol, out var y))
+                    continue;
+                var size = TryGetNumericCell(cellLookup, row, sizeCol, out var rawSize)
+                    ? Math.Max(1, Math.Abs(rawSize))
+                    : 5;
+                series.Points.Add(new ScatterPoint(x, y, size));
+                if (seriesIndex == 0)
+                    trendPoints.Add(new DataPoint(x, y));
+                if (ShouldUseAnnotationLabels(chart))
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, GetCategory(categories, fallbackIndex), x, y, y);
+            }
+
+            model.Series.Add(series);
+            seriesIndex++;
         }
 
-        model.Series.Add(series);
         return model;
     }
 
@@ -763,13 +781,13 @@ public static class ChartRenderer
         }
     }
 
-    private static void ApplyAreaStyle(PlotModel model, ChartModel chart)
+    private static void ApplyAreaStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
-        if (chart.ChartAreaFillColor is { } chartFill)
+        if (chart.ResolveChartAreaFillColor(theme) is { } chartFill)
             model.Background = OxyColor.FromRgb(chartFill.R, chartFill.G, chartFill.B);
-        if (chart.PlotAreaFillColor is { } plotFill)
+        if (chart.ResolvePlotAreaFillColor(theme) is { } plotFill)
             model.PlotAreaBackground = OxyColor.FromRgb(plotFill.R, plotFill.G, plotFill.B);
-        if (chart.PlotAreaBorderColor is { } plotBorder)
+        if (chart.ResolvePlotAreaBorderColor(theme) is { } plotBorder)
             model.PlotAreaBorderColor = OxyColor.FromRgb(plotBorder.R, plotBorder.G, plotBorder.B);
         model.PlotAreaBorderThickness = new OxyThickness(chart.PlotAreaBorderThickness);
     }
@@ -868,13 +886,13 @@ public static class ChartRenderer
     private static double GetPositiveAxisValue(double value) =>
         double.IsNaN(value) || value <= 0 ? double.NaN : value;
 
-    private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format)
+    private static void ApplyLineFormat(LineSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.StrokeColor is { } stroke)
+        if (format.ResolveStrokeColor(theme) is { } stroke)
             series.Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        else if (format.FillColor is { } fill)
+        else if (format.ResolveFillColor(theme) is { } fill)
             series.Color = OxyColor.FromRgb(fill.R, fill.G, fill.B);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
@@ -884,52 +902,52 @@ public static class ChartRenderer
             series.MarkerType = ToOxyMarkerType(markerStyle);
         if (format.MarkerSize is { } markerSize)
             series.MarkerSize = Math.Clamp(markerSize, 1, 20);
-        if (format.FillColor is { } markerFill)
+        if (format.ResolveFillColor(theme) is { } markerFill)
             series.MarkerFill = OxyColor.FromRgb(markerFill.R, markerFill.G, markerFill.B);
-        if (format.StrokeColor is { } markerStroke)
+        if (format.ResolveStrokeColor(theme) is { } markerStroke)
             series.MarkerStroke = OxyColor.FromRgb(markerStroke.R, markerStroke.G, markerStroke.B);
         if (format.StrokeThickness is { } markerStrokeThickness)
             series.MarkerStrokeThickness = markerStrokeThickness;
     }
 
-    private static void ApplyRectangleBarFormat(RectangleBarSeries series, ChartSeriesFormat? format)
+    private static void ApplyRectangleBarFormat(RectangleBarSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.FillColor is { } fill)
+        if (format.ResolveFillColor(theme) is { } fill)
             series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.StrokeColor is { } stroke)
+        if (format.ResolveStrokeColor(theme) is { } stroke)
             series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
     }
 
-    private static void ApplyBarFormat(BarSeries series, ChartSeriesFormat? format)
+    private static void ApplyBarFormat(BarSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.FillColor is { } fill)
+        if (format.ResolveFillColor(theme) is { } fill)
             series.FillColor = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.StrokeColor is { } stroke)
+        if (format.ResolveStrokeColor(theme) is { } stroke)
             series.StrokeColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
     }
 
-    private static void ApplyPieFormat(PieSeries series, ChartSeriesFormat? format)
+    private static void ApplyPieFormat(PieSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.StrokeColor is { } stroke)
+        if (format.ResolveStrokeColor(theme) is { } stroke)
             series.Stroke = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
     }
 
-    private static void ApplyPieDataLabelStyle(PieSeries series, ChartModel chart)
+    private static void ApplyPieDataLabelStyle(PieSeries series, ChartModel chart, WorkbookTheme theme)
     {
         series.FontSize = chart.DataLabelFontSize;
-        if (chart.DataLabelTextColor is not { } color)
+        if (chart.ResolveDataLabelTextColor(theme) is not { } color)
             return;
 
         var oxyColor = OxyColor.FromRgb(color.R, color.G, color.B);
@@ -937,13 +955,13 @@ public static class ChartRenderer
         series.InsideLabelColor = oxyColor;
     }
 
-    private static void ApplyAreaFormat(AreaSeries series, ChartSeriesFormat? format)
+    private static void ApplyAreaFormat(AreaSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.StrokeColor is { } stroke)
+        if (format.ResolveStrokeColor(theme) is { } stroke)
             series.Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
-        if (format.FillColor is { } fill)
+        if (format.ResolveFillColor(theme) is { } fill)
             series.Fill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
         if (format.StrokeThickness is { } thickness)
             series.StrokeThickness = thickness;
@@ -951,13 +969,13 @@ public static class ChartRenderer
             series.LineStyle = ToOxyLineStyle(dashStyle);
     }
 
-    private static void ApplyScatterFormat(ScatterSeries series, ChartSeriesFormat? format)
+    private static void ApplyScatterFormat(ScatterSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
         if (format is null)
             return;
-        if (format.FillColor is { } fill)
+        if (format.ResolveFillColor(theme) is { } fill)
             series.MarkerFill = OxyColor.FromRgb(fill.R, fill.G, fill.B);
-        if (format.StrokeColor is { } stroke)
+        if (format.ResolveStrokeColor(theme) is { } stroke)
             series.MarkerStroke = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
         if (format.StrokeThickness is { } thickness)
             series.MarkerStrokeThickness = thickness;
@@ -975,13 +993,13 @@ public static class ChartRenderer
             && !IsPercentStackedChart(chart)
             && !RequiresDataLabelAnnotationFormatting(chart);
 
-    private static void ApplyNativeDataLabelStyle(PlotElement element, ChartModel chart)
+    private static void ApplyNativeDataLabelStyle(PlotElement element, ChartModel chart, WorkbookTheme theme)
     {
         if (!ShouldUseNativeValueLabels(chart))
             return;
 
         element.FontSize = chart.DataLabelFontSize;
-        if (chart.DataLabelTextColor is { } color)
+        if (chart.ResolveDataLabelTextColor(theme) is { } color)
             element.TextColor = OxyColor.FromRgb(color.R, color.G, color.B);
     }
 
@@ -995,10 +1013,7 @@ public static class ChartRenderer
 
     private static bool ShouldRenderPercentageLabels(ChartModel chart) =>
         chart.ShowDataLabelPercentage
-            && chart.Type is ChartType.Pie
-                or ChartType.Doughnut
-                or ChartType.PercentStackedColumn
-                or ChartType.PercentStackedBar;
+            && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type);
 
     private static bool IsPercentStackedChart(ChartModel chart) =>
         chart.Type is ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
@@ -1006,7 +1021,9 @@ public static class ChartRenderer
     private static bool RequiresDataLabelAnnotationFormatting(ChartModel chart) =>
         chart.ShowDataLabelCallouts
             || chart.DataLabelFillColor is not null
+            || chart.DataLabelFillThemeColor is not null
             || chart.DataLabelBorderColor is not null
+            || chart.DataLabelBorderThemeColor is not null
             || chart.DataLabelBorderThickness > 0
             || Math.Abs(chart.DataLabelAngle) > 0.5;
 
@@ -1027,6 +1044,7 @@ public static class ChartRenderer
     private static void AddDataLabelAnnotation(
         PlotModel model,
         ChartModel chart,
+        WorkbookTheme theme,
         string seriesName,
         int seriesIndex,
         int pointIndex,
@@ -1036,6 +1054,9 @@ public static class ChartRenderer
         double value)
     {
         var pointFormat = GetPointDataLabelFormat(chart, seriesIndex, pointIndex);
+        var textColor = pointFormat?.ResolveTextColor(theme) ?? chart.ResolveDataLabelTextColor(theme);
+        var borderColor = pointFormat?.ResolveBorderColor(theme) ?? chart.ResolveDataLabelBorderColor(theme);
+        var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
         model.Annotations.Add(new TextAnnotation
         {
             Text = FormatDataLabel(chart, seriesName, categoryName, value),
@@ -1044,11 +1065,11 @@ public static class ChartRenderer
             TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
                 ? OxyPlot.VerticalAlignment.Top
                 : OxyPlot.VerticalAlignment.Bottom,
-            TextColor = ToOxyColor(pointFormat?.TextColor ?? chart.DataLabelTextColor) ?? OxyColors.Automatic,
+            TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
             FontSize = pointFormat?.FontSize ?? chart.DataLabelFontSize,
-            Stroke = ToOxyColor(pointFormat?.BorderColor ?? chart.DataLabelBorderColor) ?? (chart.ShowDataLabelCallouts ? OxyColors.Gray : OxyColors.Transparent),
+            Stroke = ToOxyColor(borderColor) ?? (chart.ShowDataLabelCallouts ? OxyColors.Gray : OxyColors.Transparent),
             StrokeThickness = pointFormat?.BorderThickness ?? (chart.DataLabelBorderThickness > 0 ? chart.DataLabelBorderThickness : chart.ShowDataLabelCallouts ? 1 : 0),
-            Background = ToOxyColor(pointFormat?.FillColor ?? chart.DataLabelFillColor) ?? (chart.ShowDataLabelCallouts ? OxyColor.FromAColor(235, OxyColors.White) : OxyColors.Transparent),
+            Background = ToOxyColor(fillColor) ?? (chart.ShowDataLabelCallouts ? OxyColor.FromAColor(235, OxyColors.White) : OxyColors.Transparent),
             TextRotation = chart.DataLabelAngle,
             Padding = new OxyThickness(chart.ShowDataLabelCallouts ? 4 : 2)
         });
@@ -1060,6 +1081,7 @@ public static class ChartRenderer
     private static void AddLineDataLabelAnnotations(
         PlotModel model,
         ChartModel chart,
+        WorkbookTheme theme,
         LineSeries series,
         string seriesName,
         int seriesIndex,
@@ -1074,6 +1096,7 @@ public static class ChartRenderer
             AddDataLabelAnnotation(
                 model,
                 chart,
+                theme,
                 seriesName,
                 seriesIndex,
                 pointIndex,
@@ -1205,6 +1228,7 @@ public static class ChartRenderer
     private static void AddTrendlineIfRequested(
         PlotModel model,
         ChartModel chart,
+        WorkbookTheme theme,
         IReadOnlyList<DataPoint>? points,
         bool swapTrendlineAxes = false)
     {
@@ -1228,7 +1252,7 @@ public static class ChartRenderer
             Title = GetTrendlineTitle(chart.TrendlineType),
             LineStyle = ToOxyLineStyle(chart.TrendlineDashStyle),
             StrokeThickness = chart.TrendlineThickness,
-            Color = chart.TrendlineColor is { } color
+            Color = chart.ResolveTrendlineColor(theme) is { } color
                 ? OxyColor.FromRgb(color.R, color.G, color.B)
                 : OxyColors.Gray
         };
@@ -1654,7 +1678,7 @@ public static class ChartRenderer
             : chart.SecondaryAxisSeriesIndexes.Any(index => index > 0 && index < seriesCount);
     }
 
-    private static void ConfigureLegend(PlotModel model, ChartModel chart)
+    private static void ConfigureLegend(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
         if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None)
             return;
@@ -1662,10 +1686,10 @@ public static class ChartRenderer
         var legend = new Legend
         {
             LegendPlacement = chart.LegendOverlay ? LegendPlacement.Inside : LegendPlacement.Outside,
-            LegendTextColor = ToOxyColor(chart.LegendTextColor) ?? OxyColors.Automatic,
+            LegendTextColor = ToOxyColor(chart.ResolveLegendTextColor(theme)) ?? OxyColors.Automatic,
             LegendFontSize = chart.LegendFontSize,
-            LegendBackground = ToOxyColor(chart.LegendFillColor) ?? OxyColors.Undefined,
-            LegendBorder = ToOxyColor(chart.LegendBorderColor) ?? OxyColors.Undefined,
+            LegendBackground = ToOxyColor(chart.ResolveLegendFillColor(theme)) ?? OxyColors.Undefined,
+            LegendBorder = ToOxyColor(chart.ResolveLegendBorderColor(theme)) ?? OxyColors.Undefined,
             LegendBorderThickness = chart.LegendBorderThickness,
             LegendPosition = GetLegendPosition(chart.LegendPosition, chart.LegendOverlay)
         };

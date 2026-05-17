@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Xml.Linq;
+using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
@@ -38,7 +40,7 @@ public static class XlsxFeatureInspector
 
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
             var features = archive.Entries
-                .Select(entry => InspectEntry(entry.FullName))
+                .Select(InspectEntry)
                 .Where(feature => feature is not null)
                 .Cast<XlsxUnsupportedFeature>()
                 .Distinct()
@@ -53,8 +55,9 @@ public static class XlsxFeatureInspector
         }
     }
 
-    private static XlsxUnsupportedFeature? InspectEntry(string packagePart)
+    private static XlsxUnsupportedFeature? InspectEntry(ZipArchiveEntry entry)
     {
+        var packagePart = entry.FullName;
         var normalized = packagePart.Replace('\\', '/').TrimStart('/').ToLowerInvariant();
 
         return normalized switch
@@ -63,8 +66,7 @@ public static class XlsxFeatureInspector
             _ when normalized.StartsWith("xl/pivottables/", StringComparison.Ordinal)
                 || normalized.StartsWith("xl/pivotcache/", StringComparison.Ordinal)
                 => Feature(XlsxUnsupportedFeatureKind.PivotTables),
-            _ when normalized.StartsWith("xl/charts/", StringComparison.Ordinal)
-                || normalized.StartsWith("xl/drawings/charts/", StringComparison.Ordinal)
+            _ when IsChartPart(normalized) && !IsSupportedChartPart(entry)
                 => Feature(XlsxUnsupportedFeatureKind.Charts),
             _ when normalized.StartsWith("xl/slicers/", StringComparison.Ordinal)
                 || normalized.StartsWith("xl/slicercaches/", StringComparison.Ordinal)
@@ -82,5 +84,23 @@ public static class XlsxFeatureInspector
         };
 
         XlsxUnsupportedFeature Feature(XlsxUnsupportedFeatureKind kind) => new(kind, packagePart);
+    }
+
+    private static bool IsChartPart(string normalizedPackagePart) =>
+        normalizedPackagePart.StartsWith("xl/charts/", StringComparison.Ordinal) ||
+        normalizedPackagePart.StartsWith("xl/drawings/charts/", StringComparison.Ordinal);
+
+    private static bool IsSupportedChartPart(ZipArchiveEntry entry)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            var chartXml = XDocument.Load(stream);
+            return XlsxChartPartReader.TryReadSupportedChart(chartXml, SheetId.New(), out _);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

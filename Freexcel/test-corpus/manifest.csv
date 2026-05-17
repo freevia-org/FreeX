@@ -1,0 +1,11 @@
+id,path,source_type,source_url,retrieved_on,license,feature_tags,expected_warnings,expected_status,notes
+generated-grid-basic-001,generated/grid-basic-001.xlsx,generated,local,2026-05-17,Freexcel-generated,basic-grid,,supported-pass,Numbers text blanks booleans dates and errors
+generated-formulas-001,generated/formulas-001.xlsx,generated,local,2026-05-17,Freexcel-generated,formulas,,supported-pass,Arithmetic aggregate logical text and date formulas
+generated-cross-sheet-001,generated/cross-sheet-001.xlsx,generated,local,2026-05-17,Freexcel-generated,formulas cross-sheet,,supported-pass,Cross-sheet references and named ranges
+generated-formatting-001,generated/formatting-001.xlsx,generated,local,2026-05-17,Freexcel-generated,formatting,,supported-pass,Fonts fills borders alignment wrapping and number formats
+generated-structure-001,generated/structure-001.xlsx,generated,local,2026-05-17,Freexcel-generated,structure,,supported-pass,Hidden rows columns freeze panes merges and dimensions
+generated-validation-001,generated/validation-001.xlsx,generated,local,2026-05-17,Freexcel-generated,data-validation named-ranges,,supported-pass,List numeric date and custom validation
+generated-conditional-formatting-001,generated/conditional-formatting-001.xlsx,generated,local,2026-05-17,Freexcel-generated,conditional-formatting,,supported-pass,Supported conditional formatting rules
+generated-objects-001,generated/objects-001.xlsx,generated,local,2026-05-17,Freexcel-generated,objects hyperlinks comments,,supported-pass,Comments hyperlinks images text boxes and shapes
+generated-charts-001,generated/charts-001.xlsx,generated,local,2026-05-17,Freexcel-generated,charts,,supported-pass,Supported native chart families
+generated-protection-page-setup-001,generated/protection-page-setup-001.xlsx,generated,local,2026-05-17,Freexcel-generated,protection page-setup,,supported-pass,Protection allow-edit ranges margins print area and scaling

@@ -1170,6 +1170,7 @@ public partial class MainWindow : Window
                 !element.IsVisible ||
                 element.ActualWidth <= 0 ||
                 element.ActualHeight <= 0 ||
+                (scope == RibbonKeyTipScope.Commands && IsStartScreenVisible() && !IsInsideStartScreenOverlay(element)) ||
                 (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)))
             {
                 continue;
@@ -1365,6 +1366,7 @@ public partial class MainWindow : Window
                 !element.IsVisible ||
                 element.ActualWidth <= 0 ||
                 element.ActualHeight <= 0 ||
+                (scope == RibbonKeyTipScope.Commands && IsStartScreenVisible() && !IsInsideStartScreenOverlay(element)) ||
                 (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)) ||
                 !ShouldShowKeyTipElement(element, scope) ||
                 string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)))
@@ -1374,6 +1376,20 @@ public partial class MainWindow : Window
 
             yield return element;
         }
+    }
+
+    private bool IsStartScreenVisible() =>
+        StartScreenOverlay?.Visibility == Visibility.Visible;
+
+    private bool IsInsideStartScreenOverlay(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null; current = GetTreeParent(current))
+        {
+            if (ReferenceEquals(current, StartScreenOverlay))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsInsideUnselectedTabItem(DependencyObject element)
@@ -1936,6 +1952,7 @@ public partial class MainWindow : Window
         SheetGrid.Charts = sheet?.Charts;
         SheetGrid.TextBoxes = sheet?.TextBoxes;
         SheetGrid.DrawingShapes = sheet?.DrawingShapes;
+        SheetGrid.WorkbookTheme = _workbook.Theme;
         SheetGrid.Pictures = sheet?.Pictures;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
@@ -2108,13 +2125,13 @@ public partial class MainWindow : Window
         SsPinnedList.ItemsSource = pinned.ToList();
     }
 
-    private void SsRecentTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void SsRecentTab_Click(object sender, RoutedEventArgs e)
     {
         if (_showingPinnedList)
             SwitchToRecentTab();
     }
 
-    private void SsPinnedTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void SsPinnedTab_Click(object sender, RoutedEventArgs e)
     {
         if (!_showingPinnedList)
             SwitchToPinnedTab();
@@ -2198,6 +2215,7 @@ public partial class MainWindow : Window
             UpdateViewport();
             RefreshSheetTabs();
             HideStartScreen();
+            ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
         }
         catch (Exception ex)
         {
@@ -2228,16 +2246,27 @@ public partial class MainWindow : Window
         ShowExcludedShareMessage();
     }
 
+    private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var message = DeferredCommandMessages.LocalAccountInfo();
+        MessageBox.Show(
+            message.Body,
+            message.Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
     private void SsHomeNavBtn_Click(object sender, RoutedEventArgs e)    => ShowHomeView();
     private void SsInfoBtn_Click(object sender, RoutedEventArgs e)       => ShowInfoView();
 
-    private void SsMoreTemplates_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)
     {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "https://create.microsoft.com/en-us/excel",
-            UseShellExecute = true
-        });
+        var message = DeferredCommandMessages.OnlineTemplatesExcluded();
+        MessageBox.Show(
+            message.Body,
+            message.Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
@@ -2429,34 +2458,29 @@ public partial class MainWindow : Window
         if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
             return true;
 
-        var featureList = string.Join(", ",
-            _currentXlsxFeatureReport.Features
-                .Select(f => FormatUnsupportedFeatureKind(f.Kind))
-                .Distinct()
-                .OrderBy(name => name));
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(_currentXlsxFeatureReport);
 
         var result = MessageBox.Show(
-            "This workbook contains features Freexcel does not preserve yet. " +
-            $"Saving to .xlsx may remove: {featureList}.\n\nContinue saving?",
-            "Unsupported XLSX Features",
+            message.Body,
+            message.Title,
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 
         return result == MessageBoxResult.Yes;
     }
 
-    private static string FormatUnsupportedFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
+    private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()
     {
-        XlsxUnsupportedFeatureKind.Macros => "macros",
-        XlsxUnsupportedFeatureKind.PivotTables => "pivot tables",
-        XlsxUnsupportedFeatureKind.Charts => "charts",
-        XlsxUnsupportedFeatureKind.Slicers => "slicers",
-        XlsxUnsupportedFeatureKind.Timelines => "timelines",
-        XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
-        XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
-        XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
-        _ => kind.ToString()
-    };
+        if (_currentXlsxFeatureReport?.HasUnsupportedFeatures != true)
+            return;
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(_currentXlsxFeatureReport);
+        MessageBox.Show(
+            message.Body,
+            message.Title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
 
     private void FindButton_Click(object sender, RoutedEventArgs e)
     {
@@ -2519,7 +2543,35 @@ public partial class MainWindow : Window
                 IsGrouped = _groupedSheetIds.Contains(sheet.Id)
             });
         }
+        RefreshSheetProtectionUi();
+        RefreshWorkbookProtectionUi();
         UpdateTitleBar();
+    }
+
+    private void RefreshSheetProtectionUi()
+    {
+        if (ProtectSheetButton is null)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var uiText = SheetProtectionWorkflow.GetUiText(sheet);
+        ProtectSheetButton.Content = uiText.ButtonContent;
+        RibbonTooltip.SetTitle(ProtectSheetButton, uiText.TooltipTitle);
+        RibbonTooltip.SetDescription(ProtectSheetButton, uiText.TooltipDescription);
+    }
+
+    private void RefreshWorkbookProtectionUi()
+    {
+        if (ProtectWorkbookButton is null)
+            return;
+
+        var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
+        ProtectWorkbookButton.Content = uiText.ButtonContent;
+        RibbonTooltip.SetTitle(ProtectWorkbookButton, uiText.TooltipTitle);
+        RibbonTooltip.SetDescription(ProtectWorkbookButton, uiText.TooltipDescription);
     }
 
     private string GenerateUniqueSheetName()
@@ -3443,6 +3495,7 @@ public partial class MainWindow : Window
         menu.Items.Add(new Separator());
         AddItem("Clear Contents",   ExecuteClearSelection);
 
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
         menu.IsOpen = true;
     }
@@ -5135,9 +5188,10 @@ public partial class MainWindow : Window
 
     private void PivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
+        var message = DeferredCommandMessages.PivotTableExcluded();
         MessageBox.Show(
-            "PivotTables, pivot caches, slicers, and timelines are excluded from Freexcel v1. Use Sort, Filter, Remove Duplicates, Consolidate, and formulas for supported local analysis workflows.",
-            "PivotTable",
+            message.Body,
+            message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
@@ -6966,19 +7020,6 @@ public partial class MainWindow : Window
         Menu
     }
 
-    private enum AltTextTargetKind
-    {
-        Picture,
-        Shape,
-        TextBox
-    }
-
-    private sealed record AltTextTarget(
-        AltTextTargetKind Kind,
-        Guid Id,
-        CellAddress Anchor,
-        string? AltText);
-
     private void PageLayoutDeferredBtn_Click(object sender, RoutedEventArgs e)
     {
         var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
@@ -6988,6 +7029,81 @@ public partial class MainWindow : Window
             message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    private void ThemeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+    }
+
+    private void ThemeOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(WorkbookTheme.Office);
+
+    private void ThemeColorfulMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(WorkbookThemeWorkflow.CreateColorfulTheme());
+
+    private void ThemeGrayscaleMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(WorkbookThemeWorkflow.CreateGrayscaleTheme());
+
+    private void ThemeCustomizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new WorkbookThemeDialog(_workbook.Theme) { Owner = this };
+        if (dialog.ShowDialog() == true)
+            ApplyWorkbookTheme(dialog.ResultTheme);
+    }
+
+    private void ThemeColorsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+    }
+
+    private void ThemeColorsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyOfficeColors(_workbook.Theme).WithName(_workbook.Theme.Name));
+
+    private void ThemeColorsColorfulMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyColorfulColors(_workbook.Theme).WithName(_workbook.Theme.Name));
+
+    private void ThemeColorsGrayscaleMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyGrayscaleColors(_workbook.Theme).WithName(_workbook.Theme.Name));
+
+    private void ThemeFontsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+    }
+
+    private void ThemeFontsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(_workbook.Theme.WithFonts(WorkbookTheme.Office.MajorFontName, WorkbookTheme.Office.MinorFontName));
+
+    private void ThemeFontsArialMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(_workbook.Theme.WithFonts("Arial", "Arial"));
+
+    private void ThemeFontsTimesMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(_workbook.Theme.WithFonts("Times New Roman", "Times New Roman"));
+
+    private void ThemeEffectsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+    }
+
+    private void ThemeEffectsOfficeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(_workbook.Theme.WithEffects(WorkbookTheme.Office.EffectsName));
+
+    private void ThemeEffectsSubtleMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(_workbook.Theme.WithEffects("Subtle"));
+
+    private void ThemeEffectsRefinedMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyWorkbookTheme(_workbook.Theme.WithEffects("Refined"));
+
+    private void ApplyWorkbookTheme(WorkbookTheme theme)
+    {
+        if (!TryExecuteCommand(new SetWorkbookThemeCommand(theme), "Themes"))
+            return;
+
+        UpdateViewport();
     }
 
     private void BackgroundBtn_Click(object sender, RoutedEventArgs e)
@@ -7418,6 +7534,7 @@ public partial class MainWindow : Window
             menu.Items.Add(item);
         }
 
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = btn;
         menu.IsOpen = true;
     }
@@ -7704,6 +7821,7 @@ public partial class MainWindow : Window
             menu.Items.Add(item);
         }
 
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         btn.ContextMenu = menu;
         menu.PlacementTarget = btn;
         menu.IsOpen = true;
@@ -8263,7 +8381,7 @@ public partial class MainWindow : Window
         var target = GetTargetAltTextObject(_currentSheetId);
         if (target is null)
         {
-            MessageBox.Show("No picture, shape, or text box found on this sheet.",
+            MessageBox.Show("No picture, shape, or text box is anchored at the selected cell.",
                 "Alt Text", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -8279,8 +8397,8 @@ public partial class MainWindow : Window
                     var groupedTarget = GetTargetAltTextObject(sheetId, target.Kind);
                     return target.Kind switch
                     {
-                        AltTextTargetKind.Picture => new SetPictureAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
-                        AltTextTargetKind.Shape => new SetDrawingShapeAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
+                        AltTextObjectKind.Picture => new SetPictureAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
+                        AltTextObjectKind.Shape => new SetDrawingShapeAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
                         _ => new SetTextBoxAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input)
                     };
                 }))
@@ -8294,57 +8412,13 @@ public partial class MainWindow : Window
         RefreshStatusBar();
     }
 
-    private AltTextTarget? GetTargetAltTextObject(SheetId sheetId, AltTextTargetKind? preferredKind = null)
+    private AltTextObjectTarget? GetTargetAltTextObject(SheetId sheetId, AltTextObjectKind? preferredKind = null)
     {
         var sheet = _workbook.GetSheet(sheetId);
         if (sheet is null)
             return null;
 
-        if (SheetGrid.SelectedRange is { } range)
-        {
-            var row = range.Start.Row;
-            var col = range.Start.Col;
-            if (preferredKind is null or AltTextTargetKind.Picture)
-            {
-                var picture = sheet.Pictures.LastOrDefault(item => item.Anchor.Row == row && item.Anchor.Col == col);
-                if (picture is not null)
-                    return new AltTextTarget(AltTextTargetKind.Picture, picture.Id, picture.Anchor, picture.AltText);
-            }
-
-            if (preferredKind is null or AltTextTargetKind.Shape)
-            {
-                var shape = sheet.DrawingShapes.LastOrDefault(item => item.Anchor.Row == row && item.Anchor.Col == col);
-                if (shape is not null)
-                    return new AltTextTarget(AltTextTargetKind.Shape, shape.Id, shape.Anchor, shape.AltText);
-            }
-
-            if (preferredKind is null or AltTextTargetKind.TextBox)
-            {
-                var textBox = sheet.TextBoxes.LastOrDefault(item => item.Anchor.Row == row && item.Anchor.Col == col);
-                if (textBox is not null)
-                    return new AltTextTarget(AltTextTargetKind.TextBox, textBox.Id, textBox.Anchor, textBox.AltText);
-            }
-        }
-
-        if (preferredKind is null or AltTextTargetKind.Picture && sheet.Pictures.Count > 0)
-        {
-            var picture = sheet.Pictures[^1];
-            return new AltTextTarget(AltTextTargetKind.Picture, picture.Id, picture.Anchor, picture.AltText);
-        }
-
-        if (preferredKind is null or AltTextTargetKind.Shape && sheet.DrawingShapes.Count > 0)
-        {
-            var shape = sheet.DrawingShapes[^1];
-            return new AltTextTarget(AltTextTargetKind.Shape, shape.Id, shape.Anchor, shape.AltText);
-        }
-
-        if (preferredKind is null or AltTextTargetKind.TextBox && sheet.TextBoxes.Count > 0)
-        {
-            var textBox = sheet.TextBoxes[^1];
-            return new AltTextTarget(AltTextTargetKind.TextBox, textBox.Id, textBox.Anchor, textBox.AltText);
-        }
-
-        return null;
+        return AltTextTargetResolver.Resolve(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
     }
 
     private void ReviewNewCommentBtn_Click(object sender, RoutedEventArgs e)
@@ -8428,34 +8502,43 @@ public partial class MainWindow : Window
 
     private void ProtectSheetBtn_Click(object sender, RoutedEventArgs e)
     {
-        var pwd = PromptForInput("Set sheet protection password (leave blank for no password):", "");
-        if (pwd is null) return;
-        var outcome = _commandBus.Execute(_workbook.Id, new ProtectSheetCommand(_currentSheetId, pwd));
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        string? pwd = null;
+        if (!sheet.IsProtected)
+        {
+            pwd = PromptForInput("Set sheet protection password (leave blank for no password):", "");
+            if (pwd is null) return;
+        }
+
+        var action = SheetProtectionWorkflow.CreateCommand(sheet, pwd);
+        var outcome = _commandBus.Execute(_workbook.Id, action.Command);
         if (!outcome.Success)
         {
-            ShowCommandError(outcome, "Protect Sheet");
+            ShowCommandError(outcome, action.Title);
             return;
         }
 
-        MessageBox.Show("Sheet is now protected.", "Protect Sheet", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show(action.SuccessMessage, action.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        RefreshSheetProtectionUi();
     }
 
     private void ProtectWorkbookBtn_Click(object sender, RoutedEventArgs e)
     {
-        IWorkbookCommand command;
-        if (_workbook.IsStructureProtected)
+        string? pwd = null;
+        if (!_workbook.IsStructureProtected)
         {
-            command = new UnprotectWorkbookCommand();
-        }
-        else
-        {
-            var pwd = PromptForInput("Set workbook structure password (leave blank for no password):", "");
+            pwd = PromptForInput("Set workbook structure password (leave blank for no password):", "");
             if (pwd is null) return;
-            command = new ProtectWorkbookCommand(pwd);
         }
 
-        if (!TryExecuteCommand(command, "Protect Workbook"))
+        var action = WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd);
+        if (!TryExecuteCommand(action.Command, action.Title))
             return;
+
+        MessageBox.Show(action.SuccessMessage, action.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        RefreshWorkbookProtectionUi();
         RefreshSheetTabs();
     }
     private void AllowEditRangesBtn_Click(object sender, RoutedEventArgs e)
@@ -9167,20 +9250,20 @@ public partial class MainWindow : Window
     private void HelpOnlineBtn_Click(object sender, RoutedEventArgs e)
     {
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = "https://github.com/anthropics/claude-code/issues", UseShellExecute = true });
+        { FileName = AppInfo.HelpUrl, UseShellExecute = true });
     }
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show(
-            "Freexcel\nVersion 0.5 (Phase 5)\n\nBuilt with .NET 10, WPF, ClosedXML, OxyPlot.\nPowered by Claude Code.",
+            AppInfo.AboutText,
             "About Freexcel", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void SendFeedbackBtn_Click(object sender, RoutedEventArgs e)
     {
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        { FileName = "https://github.com/anthropics/claude-code/issues/new", UseShellExecute = true });
+        { FileName = AppInfo.FeedbackUrl, UseShellExecute = true });
     }
 
     private void ExportAsXps(string xpsPath)

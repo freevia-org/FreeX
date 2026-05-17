@@ -227,6 +227,12 @@ public sealed class FormulaEvaluator
         {
             if (arg is RangeRefNode range)
             {
+                if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                {
+                    expandedArgs.Add(ErrorValue.Ref);
+                    continue;
+                }
+
                 if (isStructured)
                 {
                     // Build a 2-D RangeValue for structured functions
@@ -251,6 +257,12 @@ public sealed class FormulaEvaluator
             }
             else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(node.FunctionName))
             {
+                if (cell.SheetName is not null && !context.SheetExists(cell.SheetName))
+                {
+                    expandedArgs.Add(ErrorValue.Ref);
+                    continue;
+                }
+
                 expandedArgs.Add(BuildRangeValue(new RangeRefNode(cell, cell, cell.SheetName), context));
             }
             else if (arg is NamedRangeNode named)
@@ -570,7 +582,7 @@ public sealed class FormulaEvaluator
         public IReadOnlyList<ScalarValue> GetRangeValues(string sheetName, uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var target = _workbook?.GetSheet(sheetName);
-            if (target is null) return [];
+            if (target is null) return [ErrorValue.Ref];
             var values = new List<ScalarValue>();
             for (var r = startRow; r <= endRow; r++)
                 for (var c = startCol; c <= endCol; c++)
@@ -588,6 +600,8 @@ public sealed class FormulaEvaluator
 
         public string? TryGetSheetName(Freexcel.Core.Model.SheetId sheetId)
             => _workbook?.GetSheet(sheetId)?.Name;
+
+        public bool SheetExists(string sheetName) => _workbook?.GetSheet(sheetName) is not null;
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
     }
