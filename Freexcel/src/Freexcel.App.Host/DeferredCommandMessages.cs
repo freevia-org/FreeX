@@ -79,6 +79,15 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.ThreadedComments => "threaded comments",
         XlsxUnsupportedFeatureKind.TrackChanges => "track changes / revision history",
         XlsxUnsupportedFeatureKind.FormControls => "form controls / ActiveX controls",
+        XlsxUnsupportedFeatureKind.DigitalSignatures => "digital signatures",
+        XlsxUnsupportedFeatureKind.CustomRibbonUi => "custom ribbon UI",
+        XlsxUnsupportedFeatureKind.OfficeAddIns => "Office add-ins",
+        XlsxUnsupportedFeatureKind.LiveWebQueries => "live web queries / web publishing",
+        XlsxUnsupportedFeatureKind.SensitivityLabels => "sensitivity labels / IRM metadata",
+        XlsxUnsupportedFeatureKind.SmartArtDiagrams => "SmartArt diagrams",
+        XlsxUnsupportedFeatureKind.PrinterSettings => "printer settings",
+        XlsxUnsupportedFeatureKind.StructuredTables => "structured Excel tables",
+        XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => "chart sheets / dialog sheets / macro sheets",
         _ => kind.ToString()
     };
 

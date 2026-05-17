@@ -1,9 +1,17 @@
 <Application x:Class="Freexcel.App.Host.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System.Windows;assembly=PresentationFramework"
              xmlns:local="clr-namespace:Freexcel.App.Host"
              Startup="App_OnStartup">
     <Application.Resources>
-         
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.WindowBrushKey}" Color="White"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlBrushKey}" Color="White"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuBrushKey}" Color="White"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuBarBrushKey}" Color="White"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightBrushKey}" Color="White"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightLightBrushKey}" Color="White"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlTextBrushKey}" Color="#111111"/>
+        <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuTextBrushKey}" Color="#111111"/>
     </Application.Resources>
 </Application>

@@ -30,6 +30,15 @@ internal static class XlsxCorpusFixtureFactory
         "generated-threaded-comments-001" => true,
         "generated-track-changes-001" => true,
         "generated-form-controls-001" => true,
+        "generated-digital-signatures-001" => true,
+        "generated-custom-ribbon-ui-001" => true,
+        "generated-office-addins-001" => true,
+        "generated-live-web-queries-001" => true,
+        "generated-sensitivity-labels-001" => true,
+        "generated-smartart-diagrams-001" => true,
+        "generated-printer-settings-001" => true,
+        "generated-structured-tables-001" => true,
+        "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
         "generated-pivots-001" => true,
@@ -114,6 +123,39 @@ internal static class XlsxCorpusFixtureFactory
             ("xl/activeX/activeX1.xml", "<activeX/>"),
             ("xl/activeX/activeX1.bin", "Freexcel generated ActiveX placeholder"),
             ("xl/ctrlProps/ctrlProp1.xml", "<controlProperties/>")),
+        "generated-digital-signatures-001" => CreatePackage(
+            ("_xmlsignatures/origin.sigs", "Freexcel generated signature origin placeholder"),
+            ("_xmlsignatures/sig1.xml", "<Signature/>")),
+        "generated-custom-ribbon-ui-001" => CreatePackage(("customUI/customUI.xml", """
+            <customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui">
+              <ribbon/>
+            </customUI>
+            """)),
+        "generated-office-addins-001" => CreatePackage(
+            ("xl/webextensions/taskpanes.xml", "<taskpanes/>"),
+            ("xl/webextensions/webextension1.xml", "<webextension/>")),
+        "generated-live-web-queries-001" => CreatePackage(("xl/webPublishItems.xml", "<webPublishItems/>")),
+        "generated-sensitivity-labels-001" => CreatePackage(("docProps/custom.xml", """
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
+                        xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+              <property name="MSIP_Label_01234567-89ab-cdef-0123-456789abcdef_Enabled">
+                <vt:lpwstr>true</vt:lpwstr>
+              </property>
+            </Properties>
+            """)),
+        "generated-smartart-diagrams-001" => CreatePackage(
+            ("xl/diagrams/data1.xml", "<dgm:dataModel/>"),
+            ("xl/diagrams/layout1.xml", "<dgm:layoutDef/>"),
+            ("xl/diagrams/quickStyle1.xml", "<dgm:styleDef/>")),
+        "generated-printer-settings-001" => CreatePackage(("xl/printerSettings/printerSettings1.bin", "Freexcel generated printer settings placeholder")),
+        "generated-structured-tables-001" => CreatePackage(("xl/tables/table1.xml", """
+            <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                   id="1" name="Table1" displayName="Table1" ref="A1:B3"/>
+            """)),
+        "generated-unsupported-sheet-types-001" => CreatePackage(
+            ("xl/chartsheets/sheet1.xml", "<chartsheet/>"),
+            ("xl/dialogSheets/sheet2.xml", "<dialogsheet/>"),
+            ("xl/macroSheets/sheet3.xml", "<macrosheet/>")),
         "generated-unsupported-chart-001" => CreatePackage(("xl/charts/chart1.xml", """
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>

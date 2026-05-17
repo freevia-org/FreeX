@@ -201,4 +201,112 @@ public sealed class DeferredCommandMessageTests
 
         message.Body.Should().Contain("form controls / ActiveX controls");
     }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesDigitalSignatures()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DigitalSignatures, "_xmlsignatures/sig1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("digital signatures");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesCustomRibbonUi()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.CustomRibbonUi, "customUI/customUI.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("custom ribbon UI");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesOfficeAddIns()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.OfficeAddIns, "xl/webextensions/taskpanes.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("Office add-ins");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesLiveWebQueries()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LiveWebQueries, "xl/webPublishItems.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("live web queries / web publishing");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesSensitivityLabels()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SensitivityLabels, "docProps/custom.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("sensitivity labels / IRM metadata");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesSmartArtDiagrams()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SmartArtDiagrams, "xl/diagrams/data1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("SmartArt diagrams");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesPrinterSettings()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.PrinterSettings, "xl/printerSettings/printerSettings1.bin")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("printer settings");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesStructuredTables()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.StructuredTables, "xl/tables/table1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("structured Excel tables");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesUnsupportedSheetTypes()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes, "xl/chartsheets/sheet1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("chart sheets / dialog sheets / macro sheets");
+    }
 }
