@@ -624,6 +624,7 @@ public static class BuiltInFunctions
             return Math.Round(number, digits, MidpointRounding.AwayFromZero);
 
         double factor = Math.Pow(10, -digits);
+        if (!double.IsFinite(factor)) return 0.0; // rounding to enormous scale → 0
         return Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor;
     }
 
@@ -3292,7 +3293,13 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         double n = ToNumber(args[0]);
-        int dec = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 2;
+        int dec = 2;
+        if (args.Count > 1 && args[1] is not BlankValue)
+        {
+            double rawDec = ToNumber(args[1]);
+            if (!double.IsFinite(rawDec)) return ErrorValue.Num;
+            dec = (int)rawDec;
+        }
         bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
         return TextResult(FormatRoundedNumber(n, dec, useCommas: !noCommas));
     }
@@ -3311,7 +3318,13 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         double n = ToNumber(args[0]);
-        int dec = args.Count > 1 && args[1] is not BlankValue ? (int)ToNumber(args[1]) : 2;
+        int dec = 2;
+        if (args.Count > 1 && args[1] is not BlankValue)
+        {
+            double rawDec = ToNumber(args[1]);
+            if (!double.IsFinite(rawDec)) return ErrorValue.Num;
+            dec = (int)rawDec;
+        }
         return TextResult("$" + FormatRoundedNumber(n, dec, useCommas: true));
     }
 

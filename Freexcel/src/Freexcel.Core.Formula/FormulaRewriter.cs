@@ -130,8 +130,15 @@ public static class FormulaRewriter
         if (cr.Row < op.BeforeRow)
             return cr;
 
+        long newRow = (long)cr.Row + op.Count;
+        if (newRow > CellAddress.MaxRow)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
         changed = true;
-        return cr with { Row = cr.Row + op.Count };
+        return cr with { Row = (uint)newRow };
     }
 
     // ── Row delete ────────────────────────────────────────────────────────────
@@ -165,8 +172,15 @@ public static class FormulaRewriter
         if (cr.ColumnNumber < op.BeforeCol)
             return cr;
 
+        long newColNum = (long)cr.ColumnNumber + op.Count;
+        if (newColNum > CellAddress.MaxCol)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
         changed = true;
-        var newCol = CellAddress.NumberToColumnName(cr.ColumnNumber + op.Count);
+        var newCol = CellAddress.NumberToColumnName((uint)newColNum);
         return cr with { ColumnName = newCol };
     }
 
