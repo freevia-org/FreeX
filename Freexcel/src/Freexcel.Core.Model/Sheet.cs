@@ -337,6 +337,7 @@ public sealed class Sheet
     /// </summary>
     public void SetFormula(CellAddress address, string formulaText)
     {
+        ClearSpillRange(address);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
             existing.FormulaText = formulaText;

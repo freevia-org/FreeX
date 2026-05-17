@@ -23,6 +23,8 @@ public static class XlsxChartPartReader
         var scatterChart = scatterCharts.FirstOrDefault();
         var areaCharts = plotArea?.Elements(ChartNs + "areaChart").ToList() ?? [];
         var areaChart = areaCharts.FirstOrDefault();
+        var radarCharts = plotArea?.Elements(ChartNs + "radarChart").ToList() ?? [];
+        var stockCharts = plotArea?.Elements(ChartNs + "stockChart").ToList() ?? [];
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
         var pieChart = plotArea?.Element(ChartNs + "pieChart");
         var doughnutChart = plotArea?.Element(ChartNs + "doughnutChart");
@@ -53,10 +55,81 @@ public static class XlsxChartPartReader
         if (lineChart is not null)
             return TryReadLineChart(chartXml, plotArea, [lineChart], sheetId, out chart);
 
+        if (radarCharts.Count > 0)
+            return TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
+
+        if (stockCharts.Count > 0)
+            return TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart);
+
         if (barChart is null)
             return false;
 
         return TryReadBarChart(chartXml, plotArea, barCharts, sheetId, out chart);
+    }
+
+    private static bool TryReadLineLikeChart(
+        XDocument chartXml,
+        XElement? plotArea,
+        IReadOnlyList<XElement> plotCharts,
+        SheetId sheetId,
+        ChartType chartType,
+        out ChartModel chart)
+    {
+        var ranges = new List<GridRange>();
+        var hasTitleRange = false;
+        var hasCategoryRange = false;
+        var result = new ChartModel
+        {
+            Type = chartType,
+            Title = ReadTitle(chartXml)
+        };
+
+        foreach (var plotChart in plotCharts)
+        {
+            var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, plotChart);
+            var fallbackSeriesIndex = 0;
+            foreach (var series in plotChart.Elements(ChartNs + "ser"))
+            {
+                var seriesIndex = ReadSeriesIndex(series, fallbackSeriesIndex);
+                hasTitleRange |= HasSeriesRangeFormula(series, "tx");
+                hasCategoryRange |= HasSeriesRangeFormula(series, "cat");
+                foreach (var formula in ReadSeriesRangeFormulas(series))
+                {
+                    if (TryParseFormulaRange(formula, sheetId, out var range))
+                        ranges.Add(range);
+                }
+
+                if (usesSecondaryAxis && seriesIndex > 0)
+                    result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
+
+                if (TryReadSeriesLine(series, seriesIndex, out var format))
+                    result.SeriesFormats.Add(format);
+
+                ApplyPointDataLabels(series, seriesIndex, result);
+                ApplyTrendline(series, result);
+                fallbackSeriesIndex++;
+            }
+        }
+
+        if (ranges.Count == 0)
+        {
+            chart = new ChartModel();
+            return false;
+        }
+
+        result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
+            .Where(index => index > 0)
+            .Distinct()
+            .Order()
+            .ToList();
+        result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+        result.DataRange = UnionRanges(ranges);
+        result.FirstRowIsHeader = hasTitleRange;
+        result.FirstColIsCategories = hasCategoryRange;
+        ApplyChartLevelProperties(chartXml, result);
+        SanitizeLoadedChart(result);
+        chart = result;
+        return true;
     }
 
     private static bool TryReadBarLineComboChart(
@@ -838,6 +911,8 @@ public static class XlsxChartPartReader
             || element.Name == ChartNs + "lineChart"
             || element.Name == ChartNs + "scatterChart"
             || element.Name == ChartNs + "areaChart"
+            || element.Name == ChartNs + "radarChart"
+            || element.Name == ChartNs + "stockChart"
             || element.Name == ChartNs + "bubbleChart"
             || element.Name == ChartNs + "pieChart"
             || element.Name == ChartNs + "doughnutChart");

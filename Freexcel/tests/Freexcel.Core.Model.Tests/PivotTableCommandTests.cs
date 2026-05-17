@@ -40,11 +40,46 @@ public sealed class PivotTableCommandTests
         pivot.TargetRange.Should().Be(target);
         pivot.RowFields.Should().ContainSingle().Which.SourceFieldIndex.Should().Be(0);
         pivot.DataFields.Should().ContainSingle().Which.Should().Be(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.GetCell(3, 4)!.Value.Should().Be(new TextValue("Category"));
+        sheet.GetCell(4, 4)!.Value.Should().Be(new TextValue("A"));
+        sheet.GetCell(4, 5)!.Value.Should().Be(new NumberValue(10));
 
         command.Revert(ctx);
 
         workbook.PivotCaches.Should().BeEmpty();
         sheet.PivotTables.Should().BeEmpty();
+        sheet.GetCell(3, 4).Should().BeNull();
+        sheet.GetCell(4, 4).Should().BeNull();
+        sheet.GetCell(4, 5).Should().BeNull();
+    }
+
+    [Fact]
+    public void RefreshPivotTableCommand_RefreshesAndUndoRestoresPreviousCells()
+    {
+        var workbook = new Workbook("PivotCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "E5")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        sheet.SetCell(Addr(sheet, "D3"), new TextValue("old"));
+
+        var command = new RefreshPivotTableCommand(sheet.Id, "PivotTable1");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Category"));
+
+        command.Revert(ctx);
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("old"));
+        sheet.GetCell(Addr(sheet, "E3")).Should().BeNull();
     }
 
     [Fact]

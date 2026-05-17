@@ -12,6 +12,7 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
     private readonly IReadOnlyList<int> _dataFieldIndexes;
     private PivotCacheModel? _addedCache;
     private PivotTableModel? _addedPivotTable;
+    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
     public string Label => "Insert PivotTable";
 
@@ -49,6 +50,7 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotTable requires at least one data field.");
 
         var sheet = ctx.GetSheet(_sheetId);
+        _targetSnapshot = Snapshot(sheet, _targetRange);
         var headers = ReadHeaders(sheet, fieldCount);
         var cacheId = NextCacheId(ctx.Workbook);
         var cache = new PivotCacheModel
@@ -74,6 +76,7 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
 
         ctx.Workbook.PivotCaches.Add(cache);
         sheet.PivotTables.Add(pivotTable);
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         _addedCache = cache;
         _addedPivotTable = pivotTable;
         return new CommandOutcome(true, AffectedCells: [_targetRange.Start]);
@@ -86,8 +89,10 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
             sheet.PivotTables.Remove(_addedPivotTable);
         if (_addedCache is not null)
             ctx.Workbook.PivotCaches.Remove(_addedCache);
+        Restore(sheet, _targetSnapshot);
         _addedPivotTable = null;
         _addedCache = null;
+        _targetSnapshot = null;
     }
 
     private List<string> ReadHeaders(Sheet sheet, int fieldCount)
@@ -108,4 +113,65 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
         workbook.PivotCaches.Count == 0
             ? 1
             : workbook.PivotCaches.Max(cache => cache.CacheId) + 1;
+
+    internal static List<(CellAddress Address, Cell? Cell)> Snapshot(Sheet sheet, GridRange range)
+    {
+        var snapshot = new List<(CellAddress Address, Cell? Cell)>();
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        for (var col = range.Start.Col; col <= range.End.Col; col++)
+        {
+            var address = new CellAddress(sheet.Id, row, col);
+            snapshot.Add((address, sheet.GetCell(address)?.Clone()));
+        }
+
+        return snapshot;
+    }
+
+    internal static void Restore(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell? Cell)>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var (address, cell) in snapshot)
+        {
+            if (cell is null)
+                sheet.ClearCell(address);
+            else
+                sheet.SetCell(address, cell.Clone());
+        }
+    }
+}
+
+public sealed class RefreshPivotTableCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly string _pivotTableName;
+    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+
+    public RefreshPivotTableCommand(SheetId sheetId, string pivotTableName)
+    {
+        _sheetId = sheetId;
+        _pivotTableName = pivotTableName;
+    }
+
+    public string Label => "Refresh PivotTable";
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+            return new CommandOutcome(false, "PivotTable was not found.");
+
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        AddPivotTableCommand.Restore(ctx.GetSheet(_sheetId), _targetSnapshot);
+        _targetSnapshot = null;
+    }
 }

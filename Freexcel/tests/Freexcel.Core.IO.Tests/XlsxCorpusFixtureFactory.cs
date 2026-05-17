@@ -21,6 +21,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-images-sparklines-001",
         "generated-objects-001",
         "generated-charts-001",
+        "generated-pivots-001",
         "generated-structured-tables-001",
         "generated-protection-page-setup-001"
     };
@@ -42,13 +43,11 @@ internal static class XlsxCorpusFixtureFactory
         "generated-unsupported-sheet-types-001" => true,
         "generated-unsupported-chart-001" => true,
         "generated-vba-macros-001" => true,
-        "generated-pivots-001" => true,
         "generated-power-query-001" => true,
         "generated-data-model-001" => true,
         "generated-linked-data-types-001" => true,
         "generated-slicers-001" => true,
         "generated-timelines-001" => true,
-        "generated-external-links-001" => true,
         "generated-embedded-objects-001" => true,
         "generated-custom-xml-001" => true,
         _ => false
@@ -71,6 +70,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-images-sparklines-001" => CreateImagesAndSparklines(),
         "generated-objects-001" => CreateObjects(),
         "generated-charts-001" => CreateCharts(),
+        "generated-pivots-001" => CreatePivots(),
         "generated-structured-tables-001" => CreateStructuredTables(),
         "generated-protection-page-setup-001" => CreateProtectionAndPageSetup(),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated XLSX corpus fixture exists for this id.")
@@ -154,7 +154,6 @@ internal static class XlsxCorpusFixtureFactory
         "generated-timelines-001" => CreatePackage(
             ("xl/timelines/timeline1.xml", "<timeline/>"),
             ("xl/timelineCaches/timelineCache1.xml", "<timelineCacheDefinition/>")),
-        "generated-external-links-001" => CreatePackage(("xl/externalLinks/externalLink1.xml", "<externalLink/>")),
         "generated-embedded-objects-001" => CreatePackage(("xl/embeddings/oleObject1.bin", "Freexcel generated OLE placeholder")),
         "generated-custom-xml-001" => CreatePackage(("customXml/item1.xml", "<freexcelGeneratedCustomXml/>")),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
@@ -491,6 +490,20 @@ internal static class XlsxCorpusFixtureFactory
             LegendPosition = ChartLegendPosition.Bottom,
             SeriesFormats = [new ChartSeriesFormat(0, FillColor: new CellColor(68, 114, 196))]
         });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Radar,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "Radar View",
+            ShowLegend = true
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Stock,
+            DataRange = Range(sheet, "A1", "C4"),
+            Title = "Stock View",
+            ShowLegend = true
+        });
         return workbook;
     }
 
@@ -520,6 +533,51 @@ internal static class XlsxCorpusFixtureFactory
         table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
         sheet.StructuredTables.Add(table);
+        return workbook;
+    }
+
+    private static Workbook CreatePivots()
+    {
+        var workbook = NewWorkbook("generated-pivots-001");
+        var sheet = workbook.AddSheet("Pivot Data");
+        Set(sheet, "A1", new TextValue("Category"));
+        Set(sheet, "B1", new TextValue("Amount"));
+        Set(sheet, "A2", new TextValue("A"));
+        Set(sheet, "B2", new NumberValue(10));
+        Set(sheet, "A3", new TextValue("B"));
+        Set(sheet, "B3", new NumberValue(20));
+        Set(sheet, "A5", new TextValue("Category"));
+        Set(sheet, "B5", new TextValue("Sum of Amount"));
+        Set(sheet, "A6", new TextValue("A"));
+        Set(sheet, "B6", new NumberValue(10));
+        Set(sheet, "A7", new TextValue("B"));
+        Set(sheet, "B7", new NumberValue(20));
+        Set(sheet, "A8", new TextValue("Grand Total"));
+        Set(sheet, "B8", new NumberValue(30));
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = "A1:B3",
+            PackagePart = "xl/pivotCache/pivotCacheDefinition1.xml"
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount", 4));
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "A5", "B8"),
+            PackagePart = "xl/pivotTables/pivotTable1.xml"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
+        sheet.PivotTables.Add(pivot);
         return workbook;
     }
 

@@ -3249,7 +3249,8 @@ public static class BuiltInFunctions
                 else if (refError is not null) return refError;
                 continue;
             }
-            if (a is TextValue or BlankValue) return ErrorValue.Value;
+            if (a is TextValue) return ErrorValue.Value;
+            if (a is BlankValue) continue; // blank = FALSE, skip (no effect on XOR)
             hadUsableValue = true;
             result ^= ToBool(a);
         }
@@ -3402,10 +3403,17 @@ public static class BuiltInFunctions
     {
         row = 0; col = 0;
         int i = 0;
+        // Skip optional leading '$' (absolute column marker)
+        if (i < cellRef.Length && cellRef[i] == '$') i++;
         while (i < cellRef.Length && char.IsLetter(cellRef[i])) i++;
         if (i == 0 || i >= cellRef.Length) return false;
-        string colStr = cellRef[..i].ToUpperInvariant();
-        if (!uint.TryParse(cellRef[i..], out row)) return false;
+        // Strip leading '$' from the column portion when building colStr
+        int colStart = cellRef[0] == '$' ? 1 : 0;
+        string colStr = cellRef[colStart..i].ToUpperInvariant();
+        string rowPart = cellRef[i..];
+        // Skip optional '$' before row number
+        if (rowPart.Length > 0 && rowPart[0] == '$') rowPart = rowPart[1..];
+        if (!uint.TryParse(rowPart, out row)) return false;
         col = CellAddress.ColumnNameToNumber(colStr);
         return row > 0 && row <= CellAddress.MaxRow && col > 0 && col <= CellAddress.MaxCol;
     }
@@ -3456,6 +3464,7 @@ public static class BuiltInFunctions
         if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var lookupFlat = lookupVec.Flatten();
+        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
         var resultFlat = args.Count > 2 && args[2] is RangeValue rv
             ? rv.Flatten()
             : lookupFlat;

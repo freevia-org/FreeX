@@ -193,20 +193,17 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/slicers/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/slicercaches/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.Slicers);
             yield break;
         }
 
         if (normalized.StartsWith("xl/timelines/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/timelinecaches/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.Timelines);
             yield break;
         }
 
         if (normalized.StartsWith("xl/externallinks/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.ExternalLinks);
             yield break;
         }
 

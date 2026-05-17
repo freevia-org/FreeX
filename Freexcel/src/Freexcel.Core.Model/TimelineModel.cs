@@ -1,0 +1,12 @@
+namespace Freexcel.Core.Model;
+
+public sealed class TimelineModel
+{
+    public string Name { get; init; } = "";
+    public string CacheName { get; init; } = "";
+    public string? SourcePivotTableName { get; init; }
+    public string? SourceFieldName { get; init; }
+    public string? StartDate { get; init; }
+    public string? EndDate { get; init; }
+    public string PackagePart { get; init; } = "";
+}

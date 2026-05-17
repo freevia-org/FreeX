@@ -73,7 +73,7 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_ExternalLinkEmbeddedObjectAndCustomXml_DetectsAllFeatures()
+    public void Inspect_ExternalLinkEmbeddedObjectAndCustomXml_DetectsUnsupportedFeatures()
     {
         using var package = CreatePackage(
             "xl/externalLinks/externalLink1.xml",
@@ -82,9 +82,24 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.ExternalLinks);
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.ExternalLinks);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.EmbeddedObjects);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomXmlParts);
+    }
+
+    [Fact]
+    public void Inspect_SlicerAndTimelinePackage_DoesNotReportUnsupportedFeatures()
+    {
+        using var package = CreatePackage(
+            "xl/slicers/slicer1.xml",
+            "xl/slicerCaches/slicerCache1.xml",
+            "xl/timelines/timeline1.xml",
+            "xl/timelineCaches/timelineCache1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.Slicers);
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.Timelines);
     }
 
     [Fact]

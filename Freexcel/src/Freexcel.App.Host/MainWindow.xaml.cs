@@ -2641,7 +2641,9 @@ public partial class MainWindow : Window
         else
         {
             ScalarValue value;
-            if (double.TryParse(text, out var d)) value = new NumberValue(d);
+            if (double.TryParse(text, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d) && double.IsFinite(d))
+                value = new NumberValue(d);
             else if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
                      text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
                 value = new BoolValue(text.Equals("TRUE", StringComparison.OrdinalIgnoreCase));

@@ -9,6 +9,7 @@ public class XlsxCorpusScaffoldTests
         "supported-pass",
         "supported-known-gap",
         "supported-pivot-metadata-pass",
+        "supported-metadata-pass",
         "excluded-warning-pass",
         "corrupt-or-invalid"
     ];
