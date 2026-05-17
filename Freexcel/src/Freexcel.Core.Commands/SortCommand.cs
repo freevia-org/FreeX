@@ -46,6 +46,11 @@ public sealed class SortCommand : IWorkbookCommand
         if (_range.End.Row < _range.Start.Row || _range.End.Col < _range.Start.Col)
             return new CommandOutcome(true); // nothing to sort
 
+        // Excel rejects sorts that contain merged cells: sorting would move cell content
+        // out of sync with the merge region definitions.
+        if (sheet.MergedRegions.Any(m => _range.Overlaps(m)))
+            return new CommandOutcome(false, "Cannot sort a range that contains merged cells.");
+
         uint startRow = _range.Start.Row;
         uint endRow   = _range.End.Row;
         uint startCol = _range.Start.Col;

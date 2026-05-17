@@ -182,6 +182,14 @@ public static class NumberFormatter
         if (string.IsNullOrEmpty(format) || format == "General")
             return FormatNumberGeneral(value);
 
+        // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds
+        // and must be handled before the generic bracket-stripping pass.
+        var elapsedMatch = Regex.Match(format, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
+        if (elapsedMatch.Success)
+        {
+            return FormatElapsedTime(value, format, elapsedMatch);
+        }
+
         // Remove any remaining bracket content (conditions, locale, etc.)
         format = Regex.Replace(format, @"\[[^\]]*\]", "");
 
@@ -348,6 +356,77 @@ public static class NumberFormatter
         }
         newPos = pos;
         return false;
+    }
+
+    // ── Elapsed time format [h]:mm:ss, [m]:ss, [s] ───────────────────────────
+
+    private static string FormatElapsedTime(double value, string format, Match elapsedMatch)
+    {
+        // value is an OADate fraction; each unit = 1 day = 86400 seconds.
+        double totalSecondsD = Math.Abs(value) * 86400.0;
+        long totalSeconds = (long)totalSecondsD;
+        long totalMinutes = totalSeconds / 60;
+        long totalHours   = totalSeconds / 3600;
+        int remMinutes = (int)(totalMinutes % 60);
+        int remSeconds = (int)(totalSeconds % 60);
+
+        // Which bracket is the "lead" elapsed unit?
+        long leadValue;
+        string leadToken;
+        if (elapsedMatch.Groups[1].Success)       // [h] or [H]
+        {
+            leadValue = totalHours;
+            leadToken = elapsedMatch.Value;        // e.g. "[h]"
+        }
+        else if (elapsedMatch.Groups[2].Success)  // [m] or [M]
+        {
+            leadValue = totalMinutes;
+            leadToken = elapsedMatch.Value;
+            remMinutes = (int)(totalSeconds % 60);  // remSeconds stands; remMinutes not used here
+        }
+        else                                      // [s] or [S]
+        {
+            leadValue = totalSeconds;
+            leadToken = elapsedMatch.Value;
+        }
+
+        // Build output: replace the lead bracket with its numeric value,
+        // then fill in mm and ss with the remainder components.
+        var sb = new System.Text.StringBuilder();
+        if (value < 0) sb.Append('-');
+        int i = 0;
+        while (i < format.Length)
+        {
+            // Skip the bracket token we already handled
+            if (string.Compare(format, i, leadToken, 0, leadToken.Length, StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                sb.Append(leadValue);
+                i += leadToken.Length;
+            }
+            // Skip any other bracket content (locale, color, etc.)
+            else if (format[i] == '[')
+            {
+                int close = format.IndexOf(']', i + 1);
+                i = close >= 0 ? close + 1 : format.Length;
+            }
+            else if (i + 1 < format.Length &&
+                     format[i] == 'm' && format[i + 1] == 'm' &&
+                     elapsedMatch.Groups[1].Success) // mm after [h]
+            {
+                sb.Append(remMinutes.ToString("D2"));
+                i += 2;
+            }
+            else if (i + 1 < format.Length && format[i] == 's' && format[i + 1] == 's')
+            {
+                sb.Append(remSeconds.ToString("D2"));
+                i += 2;
+            }
+            else
+            {
+                sb.Append(format[i++]);
+            }
+        }
+        return sb.ToString();
     }
 
     // ── Text section ──────────────────────────────────────────────────────────
