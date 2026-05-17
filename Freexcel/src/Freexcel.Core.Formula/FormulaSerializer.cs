@@ -79,9 +79,9 @@ public static class FormulaSerializer
                 break;
 
             case BinaryOpNode bin:
-                // ^ is right-associative: (2^3)^4 needs parens on the LHS; 2^3^4 does not on the RHS.
-                bool lhsNeedsParens = bin.Operator is BinaryOperator.Power
-                    or BinaryOperator.Subtract or BinaryOperator.Divide;
+                // ^ is right-associative: (2^3)^4 needs parens on the LHS to override the natural
+                // right-to-left grouping; left-associative -, / never need LHS parens.
+                bool lhsNeedsParens = bin.Operator is BinaryOperator.Power;
                 WriteSubExpr(bin.Left, GetPrecedence(bin.Operator), lhsNeedsParens, sb);
                 sb.Append(OpSymbols[bin.Operator]);
                 WriteSubExpr(bin.Right, GetPrecedence(bin.Operator), bin.Operator is BinaryOperator.Subtract or BinaryOperator.Divide, sb);

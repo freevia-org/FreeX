@@ -159,4 +159,25 @@ public class FormulaSerializerTests
         // =A1+B1 → A1+B1 (no parens)
         RoundTrip("=A1+B1").Should().Be("A1+B1");
     }
+
+    [Fact]
+    public void Serialize_NoUnnecessaryParens_SubtractChain()
+    {
+        // left-associative: A1-B1-C1 parses as (A1-B1)-C1; no LHS parens needed
+        RoundTrip("=A1-B1-C1").Should().Be("A1-B1-C1");
+    }
+
+    [Fact]
+    public void Serialize_NoUnnecessaryParens_DivideChain()
+    {
+        // left-associative: 12/3/2 parses as (12/3)/2; no LHS parens needed
+        RoundTrip("=12/3/2").Should().Be("12/3/2");
+    }
+
+    [Fact]
+    public void Serialize_PowerLhsNeedsParens()
+    {
+        // right-associative: (A1^B1)^C1 ≠ A1^B1^C1; LHS parens must be kept
+        RoundTrip("=(A1^B1)^C1").Should().Be("(A1^B1)^C1");
+    }
 }
