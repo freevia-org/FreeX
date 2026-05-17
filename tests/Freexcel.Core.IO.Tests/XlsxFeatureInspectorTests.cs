@@ -103,6 +103,43 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RichDataPackage_DetectsLinkedDataTypes()
+    {
+        using var package = CreatePackage(
+            "xl/richData/rdrichvalue.xml",
+            "xl/richData/rdRichValueTypes.xml",
+            "xl/richData/richValueRel.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+    }
+
+    [Fact]
+    public void Inspect_ThreadedCommentsPackage_DetectsThreadedComments()
+    {
+        using var package = CreatePackage(
+            "xl/threadedComments/threadedComment1.xml",
+            "xl/persons/person.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.ThreadedComments);
+    }
+
+    [Fact]
+    public void Inspect_RevisionHistoryPackage_DetectsTrackChanges()
+    {
+        using var package = CreatePackage(
+            "xl/revisionHeaders/revisionHeader1.xml",
+            "xl/revisions/revisionLog1.xml");
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.TrackChanges);
+    }
+
+    [Fact]
     public void Inspect_ThemePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/theme/theme1.xml");

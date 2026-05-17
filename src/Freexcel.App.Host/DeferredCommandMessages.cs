@@ -75,6 +75,9 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.Sparklines => "sparklines",
         XlsxUnsupportedFeatureKind.PowerQuery => "Power Query queries (excluded)",
         XlsxUnsupportedFeatureKind.DataModel => "Data Model / Power Pivot (excluded)",
+        XlsxUnsupportedFeatureKind.LinkedDataTypes => "Microsoft linked data types (excluded)",
+        XlsxUnsupportedFeatureKind.ThreadedComments => "threaded comments",
+        XlsxUnsupportedFeatureKind.TrackChanges => "track changes / revision history",
         _ => kind.ToString()
     };
 

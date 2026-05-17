@@ -153,4 +153,40 @@ public sealed class DeferredCommandMessageTests
         message.Body.Should().Contain("Power Query queries (excluded)");
         message.Body.Should().Contain("Data Model / Power Pivot (excluded)");
     }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesLinkedDataTypes()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LinkedDataTypes, "xl/richData/rdrichvalue.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("Microsoft linked data types (excluded)");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesThreadedComments()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.ThreadedComments, "xl/threadedComments/threadedComment1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("threaded comments");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureWarning_NamesTrackChanges()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.TrackChanges, "xl/revisions/revisionLog1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("track changes / revision history");
+    }
 }
