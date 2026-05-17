@@ -77,6 +77,7 @@ public sealed class RecalcEngine
                 {
                     cachedAst = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
                     cell.CachedAst = cachedAst;
+                    RegisterFormulaDependencies(addr, cachedAst, addr.Sheet, workbook);
                 }
                 var result = _evaluator.Evaluate(cachedAst, sheet, workbook);
 
