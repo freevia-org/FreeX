@@ -783,6 +783,7 @@ public static class BuiltInFunctions
             for (int r = 1; r <= table.RowCount; r++)
             {
                 var cv = table.At(r, 1);
+                if (cv is ErrorValue cvErr) return cvErr;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestRow = r;
                 else
@@ -827,6 +828,7 @@ public static class BuiltInFunctions
             for (int c = 1; c <= table.ColCount; c++)
             {
                 var cv = table.At(1, c);
+                if (cv is ErrorValue cvErr) return cvErr;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestCol = c;
                 else
@@ -932,6 +934,7 @@ public static class BuiltInFunctions
             int best = -1;
             for (int i = 0; i < flat.Count; i++)
             {
+                if (flat[i] is ErrorValue fErr) return fErr;
                 if (CompareScalar(flat[i], lookupValue) <= 0)
                     best = i;
                 else
@@ -947,6 +950,7 @@ public static class BuiltInFunctions
             int best = -1;
             for (int i = 0; i < flat.Count; i++)
             {
+                if (flat[i] is ErrorValue fErr) return fErr;
                 if (CompareScalar(flat[i], lookupValue) >= 0)
                     best = i;
                 else
@@ -3354,8 +3358,12 @@ public static class BuiltInFunctions
         int bangIdx = refText.IndexOf('!');
         if (bangIdx >= 0)
         {
-            sheetName = refText[..bangIdx].Trim('\'');
-            refText   = refText[(bangIdx + 1)..];
+            var sheetPart = refText[..bangIdx];
+            if (sheetPart.StartsWith('\'') && sheetPart.EndsWith('\'') && sheetPart.Length >= 2)
+                sheetName = sheetPart[1..^1].Replace("''", "'");   // strip outer quotes and unescape ''→'
+            else
+                sheetName = sheetPart;
+            refText = refText[(bangIdx + 1)..];
         }
         if (useA1
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
@@ -3428,8 +3436,11 @@ public static class BuiltInFunctions
         var lookupVal = args[0];
         int matchIdx = -1;
         for (int i = 0; i < lookupFlat.Count; i++)
+        {
+            if (lookupFlat[i] is ErrorValue lErr) return lErr;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
+        }
         if (matchIdx < 0) return ErrorValue.NA;
         return matchIdx < resultFlat.Count ? resultFlat[matchIdx] : ErrorValue.NA;
     }
