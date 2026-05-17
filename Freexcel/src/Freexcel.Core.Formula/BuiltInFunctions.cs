@@ -768,7 +768,7 @@ public static class BuiltInFunctions
 
         var lookupValue = args[0];
         double rawCol = ToNumber(args[2]);
-        if (!double.IsFinite(rawCol)) return ErrorValue.Value;
+        if (!double.IsFinite(rawCol) || rawCol > int.MaxValue) return ErrorValue.Value;
         int colIndex = (int)rawCol;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         bool rangeLookup = args.Count < 4 || ToBool(args[3]); // default TRUE
@@ -815,7 +815,7 @@ public static class BuiltInFunctions
 
         var lookupValue = args[0];
         double rawRow = ToNumber(args[2]);
-        if (!double.IsFinite(rawRow)) return ErrorValue.Value;
+        if (!double.IsFinite(rawRow) || rawRow > int.MaxValue) return ErrorValue.Value;
         int rowIndex = (int)rawRow;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         bool rangeLookup = args.Count < 4 || ToBool(args[3]);
@@ -859,10 +859,10 @@ public static class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
         double rawRowNum = ToNumber(args[1]);
-        if (!double.IsFinite(rawRowNum)) return ErrorValue.Value;
+        if (!double.IsFinite(rawRowNum) || rawRowNum > int.MaxValue) return ErrorValue.Value;
         int rowNum = (int)rawRowNum;
         double rawColNum = args.Count > 2 ? ToNumber(args[2]) : 1.0;
-        if (!double.IsFinite(rawColNum)) return ErrorValue.Value;
+        if (!double.IsFinite(rawColNum) || rawColNum > int.MaxValue) return ErrorValue.Value;
         int colNum = (int)rawColNum;
 
         // For a 1-D range with a single index argument, the index selects along the
@@ -1425,6 +1425,9 @@ public static class BuiltInFunctions
         double rawDay = ToNumber(args[2]);
         if (!double.IsFinite(rawYear) || !double.IsFinite(rawMonth) || !double.IsFinite(rawDay))
             return ErrorValue.Num;
+        if (rawYear > int.MaxValue || rawMonth > int.MaxValue || rawDay > int.MaxValue ||
+            rawYear < int.MinValue || rawMonth < int.MinValue || rawDay < int.MinValue)
+            return ErrorValue.Num;
         int year  = (int)rawYear;
         int month = (int)rawMonth;
         int day   = (int)rawDay;
@@ -1517,7 +1520,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         double rawMonths = ToNumber(args[1]);
-        if (!double.IsFinite(rawMonths)) return ErrorValue.Num;
+        if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue || rawMonths < int.MinValue) return ErrorValue.Num;
         int months = (int)rawMonths;
         try
         {
@@ -2567,7 +2570,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
         double rawMonths = ToNumber(args[1]);
-        if (!double.IsFinite(rawMonths)) return ErrorValue.Num;
+        if (!double.IsFinite(rawMonths) || rawMonths > int.MaxValue - 1 || rawMonths < int.MinValue) return ErrorValue.Num;
         int months = (int)rawMonths;
         try
         {
@@ -2955,7 +2958,7 @@ public static class BuiltInFunctions
         double x = ToNumber(args[1]);
         if (!double.IsFinite(x)) return ErrorValue.Num;
         double rawSig = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 3;
-        if (!double.IsFinite(rawSig)) return ErrorValue.Num;
+        if (!double.IsFinite(rawSig) || rawSig > int.MaxValue) return ErrorValue.Num;
         int sig = (int)rawSig;
         if (sig < 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
@@ -3273,6 +3276,7 @@ public static class BuiltInFunctions
         double rawStart = ToNumber(args[1]);
         double rawNumChars = ToNumber(args[2]);
         if (!double.IsFinite(rawStart) || !double.IsFinite(rawNumChars)) return ErrorValue.Value;
+        if (rawStart > int.MaxValue || rawNumChars > int.MaxValue) return ErrorValue.Value;
 
         int startNum = (int)rawStart;
         int numChars = (int)rawNumChars;
@@ -3311,7 +3315,7 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is not BlankValue)
         {
             double rawDec = ToNumber(args[1]);
-            if (!double.IsFinite(rawDec)) return ErrorValue.Num;
+            if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
         bool noCommas = args.Count > 2 && args[2] is not BlankValue && ToBool(args[2]);
@@ -3336,7 +3340,7 @@ public static class BuiltInFunctions
         if (args.Count > 1 && args[1] is not BlankValue)
         {
             double rawDec = ToNumber(args[1]);
-            if (!double.IsFinite(rawDec)) return ErrorValue.Num;
+            if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
         return TextResult("$" + FormatRoundedNumber(n, dec, useCommas: true));
@@ -3771,6 +3775,14 @@ public static class BuiltInFunctions
         int requested = (int)raw;
         if (requested == 0)
         {
+            if (!isTake)
+            {
+                // DROP 0 → return entire array unchanged
+                start = 0;
+                count = dimensionLength;
+                return true;
+            }
+            // TAKE 0 → empty result
             start = 0;
             count = 0;
             return false;

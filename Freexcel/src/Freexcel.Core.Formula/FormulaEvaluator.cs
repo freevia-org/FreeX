@@ -574,8 +574,10 @@ public sealed class FormulaEvaluator
         public IReadOnlyList<ScalarValue> GetRangeValues(uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var values = new List<ScalarValue>();
-            for (var r = startRow; r <= endRow; r++)
-                for (var c = startCol; c <= endCol; c++)
+            var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
+            var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            for (var r = r0; r <= r1; r++)
+                for (var c = c0; c <= c1; c++)
                     values.Add(_sheet.GetValue(r, c));
             return values;
         }
@@ -585,8 +587,10 @@ public sealed class FormulaEvaluator
             var target = _workbook?.GetSheet(sheetName);
             if (target is null) return [ErrorValue.Ref];
             var values = new List<ScalarValue>();
-            for (var r = startRow; r <= endRow; r++)
-                for (var c = startCol; c <= endCol; c++)
+            var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
+            var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
+            for (var r = r0; r <= r1; r++)
+                for (var c = c0; c <= c1; c++)
                     values.Add(target.GetValue(r, c));
             return values;
         }
