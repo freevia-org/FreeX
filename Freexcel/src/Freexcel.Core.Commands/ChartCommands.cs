@@ -150,6 +150,54 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
     }
 }
 
+public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _chartId;
+    private readonly ChartType _chartType;
+    private ChartType? _previousType;
+    private bool? _previousFirstColIsCategories;
+
+    public string Label => "Change PivotChart Type";
+
+    public ChangePivotChartTypeCommand(SheetId sheetId, Guid chartId, ChartType chartType)
+    {
+        _sheetId = sheetId;
+        _chartId = chartId;
+        _chartType = Enum.IsDefined(chartType) ? chartType : ChartType.Column;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        if (chart is null)
+            return new CommandOutcome(false, "PivotChart was not found.");
+        if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
+            return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+
+        _previousType = chart.Type;
+        _previousFirstColIsCategories = chart.FirstColIsCategories;
+        chart.Type = _chartType;
+        chart.FirstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble);
+        return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousType is null || _previousFirstColIsCategories is null)
+            return;
+
+        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        if (chart is null)
+            return;
+
+        chart.Type = _previousType.Value;
+        chart.FirstColIsCategories = _previousFirstColIsCategories.Value;
+        _previousType = null;
+        _previousFirstColIsCategories = null;
+    }
+}
+
 public sealed record ChartLayoutOptions(
     string? Title = null,
     string? XAxisTitle = null,

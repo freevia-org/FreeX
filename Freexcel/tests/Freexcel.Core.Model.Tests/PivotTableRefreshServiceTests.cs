@@ -35,6 +35,148 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_AppliesPivotStyleToHeadersAndGrandTotals()
+    {
+        var workbook = new Workbook("PivotStyleRenderTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var headerStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId);
+        headerStyle.Bold.Should().BeTrue();
+        headerStyle.FillColor.Should().Be(new CellColor(91, 155, 213));
+        headerStyle.FontColor.Should().Be(CellColor.White);
+        var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId);
+        totalStyle.Bold.Should().BeTrue();
+        totalStyle.FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_AppliesPivotStyleRowAndColumnStripes()
+    {
+        var workbook = new Workbook("PivotStyleStripeRenderTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ShowRowStripes = true,
+            ShowColumnStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var firstBodyStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId);
+        firstBodyStyle.FillColor.Should().Be(new CellColor(234, 243, 252));
+        var secondBodyStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
+        secondBodyStyle.FillColor.Should().BeNull();
+        var stripedValueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F4"))!.StyleId);
+        stripedValueStyle.FillColor.Should().Be(new CellColor(234, 243, 252));
+        var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId);
+        totalStyle.FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Fact]
+    public void Refresh_AppliesPivotStyleHeaderFlagsToRowAndColumnHeadersSeparately()
+    {
+        var workbook = new Workbook("PivotStyleHeaderFlagRenderTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ShowRowHeaders = false,
+            ShowColumnHeaders = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().BeNull();
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F2"))!.StyleId).FillColor.Should().Be(new CellColor(91, 155, 213));
+    }
+
+    [Fact]
+    public void Refresh_AppliesNamedPivotStyleFamilyToSubtotalsAndGrandTotalsSeparately()
+    {
+        var workbook = new Workbook("PivotStyleFamilyRenderTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I12"),
+            StyleName = "PivotStyleMedium4",
+            ShowSubtotals = true,
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().Be(new CellColor(112, 173, 71));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G5"))!.StyleId).FillColor.Should().Be(new CellColor(226, 239, 218));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G9"))!.StyleId).FillColor.Should().Be(new CellColor(198, 224, 180));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(235, 245, 230));
+    }
+
+    [Theory]
+    [InlineData("PivotStyleLight16", 217, 225, 242, 242, 248, 238)]
+    [InlineData("PivotStyleMedium10", 237, 125, 49, 253, 239, 230)]
+    [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
+    [InlineData("PivotStyleDark7", 31, 78, 121, 232, 240, 248)]
+    public void Refresh_MapsAdditionalBuiltInPivotStyleFamilies(string styleName, byte headerR, byte headerG, byte headerB, byte stripeR, byte stripeG, byte stripeB)
+    {
+        var workbook = new Workbook("PivotStyleFamilyExpansionTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = styleName,
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(headerR, headerG, headerB));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
+            .FillColor.Should().Be(new CellColor(stripeR, stripeG, stripeB));
+    }
+
+    [Fact]
     public void Refresh_MaterializesColumnFieldMatrix()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -238,6 +380,90 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_AppliesComparisonAndBetweenLabelFiltersToRowFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("Central"));
+        sheet.SetCell(Addr(sheet, "B6"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C6"), new NumberValue(50));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C6"),
+            TargetRange = Range(sheet, "E2", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Between, "East", "West"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Text(sheet, "E4").Should().Be("West");
+        Text(sheet, "E5").Should().Be("Grand Total");
+        Number(sheet, "F5").Should().Be(70);
+        sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_AppliesSelectedItemsToRowFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["West"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("West");
+        Number(sheet, "F3").Should().Be(45);
+        Text(sheet, "E4").Should().Be("Grand Total");
+        Number(sheet, "F4").Should().Be(45);
+        sheet.GetCell(Addr(sheet, "E5")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_AppliesSelectedItemsToColumnFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1, SelectedItems: ["Q2"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Grand Total");
+        Number(sheet, "F3").Should().Be(15);
+        Number(sheet, "G3").Should().Be(15);
+        Number(sheet, "F4").Should().Be(25);
+        Number(sheet, "G4").Should().Be(25);
+        Number(sheet, "F5").Should().Be(40);
+        Number(sheet, "G5").Should().Be(40);
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+    }
+
+    [Fact]
     public void Refresh_MatrixAppliesValueFiltersToColumnFields()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -266,6 +492,64 @@ public sealed class PivotTableRefreshServiceTests
         Number(sheet, "F5").Should().Be(40);
         Number(sheet, "G5").Should().Be(40);
         sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_AppliesBetweenValueFiltersToRowFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("Central"));
+        sheet.SetCell(Addr(sheet, "B6"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C6"), new NumberValue(50));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C6"),
+            TargetRange = Range(sheet, "E2", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.Between, ComparisonValue: 40, ComparisonValue2: 75, SourceFieldIndex: 0));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("Central");
+        Text(sheet, "E4").Should().Be("West");
+        Text(sheet, "E5").Should().Be("Grand Total");
+        Number(sheet, "F5").Should().Be(95);
+        sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_AppliesAboveAverageValueFiltersToRowFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("Central"));
+        sheet.SetCell(Addr(sheet, "B6"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C6"), new NumberValue(50));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C6"),
+            TargetRange = Range(sheet, "E2", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.AboveAverage, SourceFieldIndex: 0));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("Central");
+        Text(sheet, "E4").Should().Be("West");
+        Text(sheet, "E5").Should().Be("Grand Total");
+        Number(sheet, "F5").Should().Be(95);
+        sheet.GetCell(Addr(sheet, "E6")).Should().BeNull();
     }
 
     [Fact]
@@ -360,6 +644,433 @@ public sealed class PivotTableRefreshServiceTests
         Text(sheet, "E5").Should().Be("Grand Total");
         Number(sheet, "F5").Should().Be(17.5);
         Number(sheet, "J5").Should().Be(4);
+    }
+
+    [Fact]
+    public void Refresh_EvaluatesStatisticalSummaryFunctions()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "L8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "StdDev", "stdDev"));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "StdDevp", "stdDevP"));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Var", "var"));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Varp", "varP"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(Math.Sqrt(12.5d), 0.0000001);
+        Number(sheet, "G3").Should().Be(2.5);
+        Number(sheet, "H3").Should().Be(12.5);
+        Number(sheet, "I3").Should().Be(6.25);
+        Number(sheet, "F5").Should().BeApproximately(Math.Sqrt(125d / 3d), 0.0000001);
+        Number(sheet, "G5").Should().BeApproximately(Math.Sqrt(31.25d), 0.0000001);
+        Number(sheet, "H5").Should().BeApproximately(125d / 3d, 0.0000001);
+        Number(sheet, "I5").Should().Be(31.25);
+    }
+
+    [Fact]
+    public void Refresh_CompactReportLayoutUsesSingleRowLabelColumn()
+    {
+        var workbook = new Workbook("PivotCompactLayoutTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G8"),
+            ReportLayout = PivotReportLayout.Compact
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Row Labels");
+        Text(sheet, "F2").Should().Be("Sum of Amount");
+        Text(sheet, "E3").Should().Be("East Q1");
+        Number(sheet, "F3").Should().Be(10);
+        Text(sheet, "E4").Should().Be("East Q2");
+        Number(sheet, "F4").Should().Be(15);
+        Text(sheet, "E7").Should().Be("Grand Total");
+        Number(sheet, "F7").Should().Be(70);
+        sheet.GetCell(Addr(sheet, "G3")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_CompactReportLayoutUsesSingleRowLabelColumnForMatrix()
+    {
+        var workbook = new Workbook("PivotCompactMatrixLayoutTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "J8"),
+            ReportLayout = PivotReportLayout.Compact
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Row Labels");
+        Text(sheet, "F2").Should().Be("Q1");
+        Text(sheet, "G2").Should().Be("Q2");
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Text(sheet, "E3").Should().Be("East Q1");
+        Number(sheet, "F3").Should().Be(10);
+        Number(sheet, "G3").Should().Be(0);
+        Number(sheet, "H3").Should().Be(10);
+        Text(sheet, "E6").Should().Be("West Q2");
+        Number(sheet, "F6").Should().Be(0);
+        Number(sheet, "G6").Should().Be(25);
+        Number(sheet, "H6").Should().Be(25);
+    }
+
+    [Fact]
+    public void Refresh_CanShowValuesAsPercentOfGrandTotal()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% of Grand Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfGrandTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(25d / 70d, 0.0000001);
+        Number(sheet, "F4").Should().BeApproximately(45d / 70d, 0.0000001);
+        Number(sheet, "F5").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanShowValuesAsPercentOfGrandTotal()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% of Grand Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfGrandTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(10d / 70d, 0.0000001);
+        Number(sheet, "G3").Should().BeApproximately(15d / 70d, 0.0000001);
+        Number(sheet, "H3").Should().BeApproximately(25d / 70d, 0.0000001);
+        Number(sheet, "F5").Should().BeApproximately(30d / 70d, 0.0000001);
+        Number(sheet, "G5").Should().BeApproximately(40d / 70d, 0.0000001);
+        Number(sheet, "H5").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanShowValuesAsPercentOfRowTotal()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% of Row Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfRowTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(10d / 25d, 0.0000001);
+        Number(sheet, "G3").Should().BeApproximately(15d / 25d, 0.0000001);
+        Number(sheet, "H3").Should().Be(1);
+        Number(sheet, "F4").Should().BeApproximately(20d / 45d, 0.0000001);
+        Number(sheet, "G4").Should().BeApproximately(25d / 45d, 0.0000001);
+        Number(sheet, "H4").Should().Be(1);
+        Number(sheet, "F5").Should().BeApproximately(30d / 70d, 0.0000001);
+        Number(sheet, "G5").Should().BeApproximately(40d / 70d, 0.0000001);
+        Number(sheet, "H5").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanShowValuesAsPercentOfColumnTotal()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% of Column Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfColumnTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(10d / 30d, 0.0000001);
+        Number(sheet, "G3").Should().BeApproximately(15d / 40d, 0.0000001);
+        Number(sheet, "H3").Should().BeApproximately(25d / 70d, 0.0000001);
+        Number(sheet, "F4").Should().BeApproximately(20d / 30d, 0.0000001);
+        Number(sheet, "G4").Should().BeApproximately(25d / 40d, 0.0000001);
+        Number(sheet, "H4").Should().BeApproximately(45d / 70d, 0.0000001);
+        Number(sheet, "F5").Should().Be(1);
+        Number(sheet, "G5").Should().Be(1);
+        Number(sheet, "H5").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_ColumnOnlyCanShowValuesAsPercentOfGrandTotal()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I5")
+        };
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% of Grand Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfGrandTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "E3").Should().BeApproximately(30d / 70d, 0.0000001);
+        Number(sheet, "F3").Should().BeApproximately(40d / 70d, 0.0000001);
+        Number(sheet, "G3").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_ValuesOnlyCanShowValuesAsPercentOfGrandTotal()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G5")
+        };
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% of Grand Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfGrandTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "E3").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_CanShowValuesAsRunningTotalInBaseField()
+    {
+        var workbook = new Workbook("PivotRunningTotalTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            2,
+            "Running Total",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.RunningTotalIn,
+            BaseFieldIndex: 1));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("Q1");
+        Number(sheet, "F3").Should().Be(30);
+        Text(sheet, "E4").Should().Be("Q2");
+        Number(sheet, "F4").Should().Be(70);
+        Number(sheet, "F5").Should().Be(70);
+    }
+
+    [Fact]
+    public void Refresh_CanShowValuesAsDifferenceFromBaseItem()
+    {
+        var workbook = new Workbook("PivotDifferenceFromTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            2,
+            "Difference From Q1",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.DifferenceFrom,
+            BaseFieldIndex: 1,
+            BaseItem: "Q1"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().Be(0);
+        Number(sheet, "F4").Should().Be(10);
+        Number(sheet, "F5").Should().Be(40);
+    }
+
+    [Fact]
+    public void Refresh_CanShowValuesAsPercentDifferenceFromBaseItem()
+    {
+        var workbook = new Workbook("PivotPercentDifferenceFromTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            2,
+            "% Difference From Q1",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.PercentDifferenceFrom,
+            BaseFieldIndex: 1,
+            BaseItem: "Q1"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().Be(0);
+        Number(sheet, "F4").Should().BeApproximately(10d / 30d, 0.0000001);
+        Number(sheet, "F5").Should().BeApproximately(40d / 30d, 0.0000001);
+    }
+
+    [Fact]
+    public void Refresh_CanShowValuesAsRankSmallestAndLargest()
+    {
+        var workbook = new Workbook("PivotRankTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            2,
+            "Rank Smallest",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.RankSmallest,
+            BaseFieldIndex: 1));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            2,
+            "Rank Largest",
+            "sum",
+            ShowValuesAs: PivotShowValuesAs.RankLargest,
+            BaseFieldIndex: 1));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().Be(1);
+        Number(sheet, "G3").Should().Be(2);
+        Number(sheet, "F4").Should().Be(2);
+        Number(sheet, "G4").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanShowValuesAsIndex()
+    {
+        var workbook = new Workbook("PivotIndexTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Index", "sum", ShowValuesAs: PivotShowValuesAs.Index));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(10d * 70d / (25d * 30d), 0.0000001);
+        Number(sheet, "G3").Should().BeApproximately(15d * 70d / (25d * 40d), 0.0000001);
+        Number(sheet, "F4").Should().BeApproximately(20d * 70d / (45d * 30d), 0.0000001);
+        Number(sheet, "G4").Should().BeApproximately(25d * 70d / (45d * 40d), 0.0000001);
+        Number(sheet, "H3").Should().Be(1);
+        Number(sheet, "F5").Should().Be(1);
+        Number(sheet, "H5").Should().Be(1);
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanShowValuesAsPercentOfParentTotals()
+    {
+        var workbook = new Workbook("PivotParentTotalsTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "K7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% Parent Row", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfParentRowTotal));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% Parent Column", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfParentColumnTotal));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "% Parent Total", "sum", ShowValuesAs: PivotShowValuesAs.PercentOfParentTotal));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "F3").Should().BeApproximately(10d / 25d, 0.0000001);
+        Number(sheet, "G3").Should().BeApproximately(10d / 30d, 0.0000001);
+        Number(sheet, "H3").Should().BeApproximately(10d / 70d, 0.0000001);
     }
 
     [Fact]
@@ -871,6 +1582,30 @@ public sealed class PivotTableRefreshServiceTests
         detail.Headers.Should().Equal("Region", "Quarter", "Amount");
         detail.Rows.Should().ContainSingle();
         detail.Rows[0].Select(PivotValueText).Should().Equal("East", "Q1", "10");
+    }
+
+    [Fact]
+    public void ExtractDetailRows_ForRowLabelCell_ReturnsNoRows()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "E3"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().BeEmpty();
     }
 
     [Fact]

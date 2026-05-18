@@ -32,7 +32,7 @@ public static class DeferredCommandMessages
     public static DeferredCommandMessage PivotTableModelFirst() =>
         new(
             "PivotTable",
-            "Freexcel now loads PivotTable and pivot caches metadata and preserves native PivotTable package parts on save. PivotTable creation, refresh, layout editing, slicers, and timelines are still deferred to the next PivotTable phases.");
+            "Freexcel loads and saves PivotTable and pivot caches metadata, creates and refreshes worksheet-range PivotTables from same-sheet or cross-sheet sources, supports Field List layout editing, GETPIVOTDATA, PivotChart field-button filtering and chart-type changes, Insert Slicer/Timeline authoring, slicer/timeline filtering, and preserves native PivotTable package parts where possible. Exact full-gallery PivotStyle theme semantics, full PivotChart Tools layout/design editing, native slicer/timeline drawing relationship fidelity, and native pivot cache edge cases remain partial.");
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
     {

@@ -807,7 +807,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute("Click")?.Value == "RefreshPivotTableBtn_Click")
             .ToList();
 
-        buttons.Should().ContainSingle();
+        buttons.Should().NotBeEmpty();
         buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Refresh");
     }
 
@@ -823,7 +823,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute("Click")?.Value == "PivotTableShowDetailsBtn_Click")
             .ToList();
 
-        buttons.Should().ContainSingle();
+        buttons.Should().NotBeEmpty();
         buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("detail");
     }
 
@@ -848,9 +848,340 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute("Click")?.Value == "PivotChartBtn_Click")
             .ToList();
 
-        buttons.Should().ContainSingle();
-        buttons[0].Attribute("Content")?.Value.Should().Contain("PivotChart");
-        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PivotTable");
+        buttons.Should().NotBeEmpty();
+        buttons.Should().AllSatisfy(button => button.Attribute("Content")?.Value.Should().Contain("PivotChart"));
+        buttons.Should().AllSatisfy(button => button.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PivotTable"));
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_HasExcelLikeZonesAndCommands()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var namedElements = document
+            .Descendants()
+            .Select(element => element.Attribute(xaml + "Name")?.Value)
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.Ordinal);
+
+        namedElements.Should().Contain([
+            "PivotFieldListPane",
+            "PivotAvailableFieldsList",
+            "PivotRowsList",
+            "PivotColumnsList",
+            "PivotValuesList",
+            "PivotFiltersList"
+        ]);
+
+        document
+            .Descendants(presentation + "Button")
+            .Select(button => button.Attribute("Click")?.Value)
+            .Should()
+            .Contain([
+                "PivotFieldToRowsBtn_Click",
+                "PivotFieldToColumnsBtn_Click",
+                "PivotFieldToValuesBtn_Click",
+                "PivotFieldToFiltersBtn_Click",
+                "PivotFieldRemoveBtn_Click",
+                "PivotFieldListCloseBtn_Click"
+            ]);
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("RefreshPivotFieldListPane()");
+        source.Should().Contain("ConfigurePivotTableLayoutCommand");
+        source.Should().Contain("PivotFieldToRowsBtn_Click");
+        source.Should().Contain("PivotFieldListCloseBtn_Click");
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_ExposesFieldDropdownCommands()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document
+            .Descendants(presentation + "MenuItem")
+            .Where(item => item.Attribute("Click")?.Value?.StartsWith("PivotField", StringComparison.Ordinal) == true)
+            .Select(item => item.Attribute("Click")!.Value)
+            .Should()
+            .Contain([
+                "PivotFieldSortAscendingMenuItem_Click",
+                "PivotFieldSortDescendingMenuItem_Click",
+                "PivotFieldSelectItemsMenuItem_Click",
+                "PivotFieldLabelFilterMenuItem_Click",
+                "PivotFieldValueFilterMenuItem_Click",
+                "PivotFieldClearFilterMenuItem_Click",
+                "PivotFieldValueSettingsMenuItem_Click"
+            ]);
+
+        document
+            .Descendants(presentation + "MenuItem")
+            .Where(item => item.Attribute("Click")?.Value == "PivotFieldSortAscendingMenuItem_Click")
+            .Should()
+            .AllSatisfy(item => item.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().NotBeNullOrWhiteSpace());
+    }
+
+    [Fact]
+    public void PivotTableValueFieldSettings_UsesExcelStyleDialog()
+    {
+        var mainWindowSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var dialogXaml = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
+        mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
+        var dialogSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        dialogSource.Should().Contain("% of Grand Total");
+        dialogSource.Should().Contain("% of Row Total");
+        dialogSource.Should().Contain("% of Column Total");
+        dialogSource.Should().Contain("Running Total In");
+        dialogSource.Should().Contain("Difference From");
+        dialogSource.Should().Contain("Rank Smallest to Largest");
+        dialogSource.Should().Contain("BaseFieldBox");
+        dialogSource.Should().Contain("BaseItemBox");
+
+        dialogXaml
+            .Descendants(presentation + "TabItem")
+            .Select(tab => tab.Attribute("Header")?.Value)
+            .Should()
+            .Contain(["Summarize Values By", "Show Values As", "Number Format"]);
+
+        dialogXaml
+            .Descendants()
+            .Select(element => element.Attribute(xaml + "Name")?.Value)
+            .Should()
+            .Contain([
+                "CustomNameBox",
+                "SummaryFunctionBox",
+                "ShowValuesAsBox",
+                "BaseFieldBox",
+                "BaseItemBox",
+                "NumberFormatBox"
+            ]);
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_SupportsDragDropReordering()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var fieldLists = document
+            .Descendants(presentation + "ListBox")
+            .Where(list => (list.Attribute(xaml + "Name")?.Value ?? "").StartsWith("Pivot", StringComparison.Ordinal))
+            .ToList();
+
+        fieldLists.Should().NotBeEmpty();
+        fieldLists.Should().AllSatisfy(list =>
+        {
+            list.Attribute("AllowDrop")?.Value.Should().Be("True");
+            list.Attribute("PreviewMouseMove")?.Value.Should().Be("PivotFieldList_PreviewMouseMove");
+            list.Attribute("Drop")?.Value.Should().Be("PivotFieldList_Drop");
+        });
+
+        source.Should().Contain("PivotFieldList_PreviewMouseMove");
+        source.Should().Contain("PivotFieldList_Drop");
+        source.Should().Contain("MovePivotFieldToZone");
+    }
+
+    [Fact]
+    public void PivotTableAvailableFields_ExposeExcelStyleCheckboxToggles()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var availableList = document
+            .Descendants(presentation + "ListBox")
+            .Single(list => list.Attribute(xaml + "Name")?.Value == "PivotAvailableFieldsList");
+
+        availableList
+            .Descendants(presentation + "CheckBox")
+            .Single()
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("PivotAvailableFieldCheckBox_Click");
+
+        source.Should().Contain("PivotFieldListItem");
+        source.Should().Contain("PivotAvailableFieldCheckBox_Click");
+        source.Should().Contain("TogglePivotAvailableField");
+    }
+
+    [Fact]
+    public void PivotTableSelectItems_UsesCheckboxFilterDialog()
+    {
+        var mainWindowSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var dialogXaml = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        mainWindowSource.Should().Contain("new PivotFieldFilterDialog");
+        mainWindowSource.Should().NotContain("PivotTable item filter: values separated by comma or semicolon");
+
+        dialogXaml
+            .Descendants()
+            .Select(element => element.Attribute(xaml + "Name")?.Value)
+            .Should()
+            .Contain(["FilterSearchBox", "SelectAllCheckBox", "FilterItemsList"]);
+
+        dialogXaml
+            .Descendants(presentation + "CheckBox")
+            .Where(item => item.Attribute(xaml + "Name")?.Value == "SelectAllCheckBox")
+            .Should()
+            .ContainSingle();
+    }
+
+    [Fact]
+    public void PivotTableRuleFilters_UseDialogChrome()
+    {
+        var mainWindowSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var labelDialog = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml"));
+        var valueDialog = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        mainWindowSource.Should().Contain("new PivotLabelFilterDialog");
+        mainWindowSource.Should().Contain("new PivotValueFilterDialog");
+        mainWindowSource.Should().NotContain("Label Filter: equals:text");
+        mainWindowSource.Should().NotContain("Value Filter: top:n");
+
+        labelDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
+            .Should().Contain(["LabelFilterKindBox", "LabelFilterValueBox", "LabelFilterValue2Box"]);
+        File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml.cs"))
+            .Should()
+            .Contain("PivotLabelFilterKind.Between")
+            .And.Contain("PivotLabelFilterKind.GreaterThan")
+            .And.Contain("PivotLabelFilterKind.LessThan");
+        valueDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
+            .Should().Contain(["ValueFilterKindBox", "ValueFilterValueBox", "ValueFilterValue2Box"]);
+        File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml.cs"))
+            .Should()
+            .Contain("PivotValueFilterKind.Between")
+            .And.Contain("PivotValueFilterKind.NotBetween")
+            .And.Contain("PivotValueFilterKind.AboveAverage")
+            .And.Contain("PivotValueFilterKind.BelowAverage");
+    }
+
+    [Fact]
+    public void PivotChartFieldButtons_RouteToPivotFieldMenus()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested");
+        source.Should().Contain("OnPivotChartFieldButtonRequested");
+        source.Should().Contain("CreatePivotFieldContextMenu");
+        source.Should().Contain("PivotFieldSelectItemsMenuItem_Click");
+        source.Should().Contain("PivotFieldLabelFilterMenuItem_Click");
+        source.Should().Contain("PivotFieldValueFilterMenuItem_Click");
+    }
+
+    [Fact]
+    public void SlicerTimelinePane_ExposesInteractivePivotFilters()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document
+            .Descendants(presentation + "Border")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "SlicerTimelinePane")
+            .Attribute("AutomationProperties.Name")?.Value
+            .Should()
+            .Be("Slicers and Timelines");
+
+        document.Descendants(presentation + "ItemsControl")
+            .Select(element => element.Attribute(xaml + "Name")?.Value)
+            .Should()
+            .Contain(["SlicerItemsControl", "TimelineItemsControl"]);
+
+        source.Should().Contain("RefreshSlicerTimelinePane");
+        source.Should().Contain("GetPivotSourceSheet");
+        source.Should().Contain("AddSlicerCommand");
+        source.Should().Contain("AddTimelineCommand");
+        source.Should().Contain("SetSlicerSelectionCommand");
+        source.Should().Contain("SetTimelineRangeCommand");
+        source.Should().Contain("SlicerTileButton_Click");
+        source.Should().Contain("TimelineApplyButton_Click");
+    }
+
+    [Fact]
+    public void PivotTableContextualTabs_ExposeAnalyzeAndDesignCommands()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var contextualTabs = document
+            .Descendants(presentation + "TabItem")
+            .Where(tab => tab.Attribute(xaml + "Name")?.Value is "PivotTableAnalyzeTab" or "PivotTableDesignTab")
+            .ToList();
+
+        contextualTabs.Select(tab => tab.Attribute("Header")?.Value)
+            .Should()
+            .BeEquivalentTo(["PivotTable Analyze", "Design"]);
+
+        var clickHandlers = contextualTabs
+            .Descendants(presentation + "Button")
+            .Select(button => button.Attribute("Click")?.Value)
+            .Where(click => click is not null)
+            .ToHashSet(StringComparer.Ordinal);
+
+        clickHandlers.Should().Contain([
+            "PivotFieldListBtn_Click",
+            "RefreshPivotTableBtn_Click",
+            "PivotTableShowDetailsBtn_Click",
+            "PivotChartBtn_Click",
+            "PivotChartChangeTypeBtn_Click",
+            "PivotInsertSlicerBtn_Click",
+            "PivotInsertTimelineBtn_Click",
+            "PivotGrandTotalsBtn_Click",
+            "PivotSubtotalsBtn_Click",
+            "PivotReportLayoutBtn_Click",
+            "PivotBlankRowsBtn_Click",
+            "PivotRowHeadersBtn_Click",
+            "PivotColumnHeadersBtn_Click",
+            "PivotBandedRowsBtn_Click",
+            "PivotBandedColumnsBtn_Click",
+            "PivotStyleGalleryBtn_Click"
+        ]);
+
+        contextualTabs
+            .Descendants(presentation + "Button")
+            .Should()
+            .AllSatisfy(button => button.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().NotBeNullOrWhiteSpace());
+    }
+
+    [Fact]
+    public void PivotTableContextualLayoutCommands_RouteThroughUndoableOptionsCommand()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ApplyPivotOptions(");
+        source.Should().Contain("new ConfigurePivotTableOptionsCommand");
+        source.Should().NotContain("PivotTableRefreshService.Refresh(_workbook, sheet, pivotTable);");
+    }
+
+    [Fact]
+    public void PivotTableChangeDataSource_RoutesThroughUndoableSourceCommand()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new ChangePivotTableSourceCommand");
+        source.Should().Contain("TryParseWorkbookRange");
+        source.Should().NotContain("Rebinding a loaded PivotTable cache to a different source range is still tracked as a parity gap.");
     }
 
     private static bool ContainsExcludedStatus(string? value) =>

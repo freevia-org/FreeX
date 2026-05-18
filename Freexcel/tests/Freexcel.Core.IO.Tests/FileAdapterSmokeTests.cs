@@ -7310,6 +7310,98 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoad_RoundTripsPivotCacheRefreshFlags()
+    {
+        var workbook = new Workbook("PivotCacheFlagsRoundTrip");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2",
+            RefreshOnLoad = false,
+            SaveData = false,
+            EnableRefresh = false,
+            RefreshedVersion = 7,
+            RefreshedBy = "Freexcel Tests"
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount"));
+        workbook.PivotCaches.Add(cache);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 4, 1), new CellAddress(sheet.Id, 7, 3))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
+            cacheXml.Should().Contain("refreshOnLoad=\"0\"");
+            cacheXml.Should().Contain("saveData=\"0\"");
+            cacheXml.Should().Contain("enableRefresh=\"0\"");
+            cacheXml.Should().Contain("refreshedVersion=\"7\"");
+            cacheXml.Should().Contain("refreshedBy=\"Freexcel Tests\"");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedCache = loaded.PivotCaches.Should().ContainSingle().Subject;
+        loadedCache.RefreshOnLoad.Should().BeFalse();
+        loadedCache.SaveData.Should().BeFalse();
+        loadedCache.EnableRefresh.Should().BeFalse();
+        loadedCache.RefreshedVersion.Should().Be(7);
+        loadedCache.RefreshedBy.Should().Be("Freexcel Tests");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsPivotCacheSharedItemMetadata()
+    {
+        var workbook = new Workbook("PivotSharedItemsMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source);
+
+        var loaded = adapter.Load(source);
+
+        var fields = loaded.PivotCaches.Should().ContainSingle().Subject.Fields;
+        fields[0].SharedItemCount.Should().Be(2);
+        fields[0].ContainsString.Should().BeTrue();
+        fields[1].SharedItemCount.Should().Be(2);
+        fields[1].ContainsNumber.Should().BeTrue();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
+        cacheXml.Should().Contain("<s v=\"A\"");
+        cacheXml.Should().Contain("<s v=\"B\"");
+        cacheXml.Should().Contain("containsNumber=\"1\"");
+        cacheXml.Should().Contain("count=\"2\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_RoundTripsExpandedPivotTableFields()
     {
         var workbook = new Workbook("ExpandedPivotXlsxTest");
@@ -7347,9 +7439,14 @@ public class FileAdapterSmokeTests
         pivot.ShowColumnGrandTotals = true;
         pivot.RepeatItemLabels = false;
         pivot.BlankLineAfterItems = true;
+        pivot.ReportLayout = PivotReportLayout.Compact;
         pivot.StyleName = "PivotStyleMedium9";
-        pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.NumberRange, GroupStart: 0, GroupInterval: 10));
-        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ShowRowHeaders = false;
+        pivot.ShowColumnHeaders = true;
+        pivot.ShowRowStripes = true;
+        pivot.ShowColumnStripes = true;
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItems: ["East"], Grouping: PivotFieldGrouping.NumberRange, GroupStart: 0, GroupInterval: 10));
+        pivot.ColumnFields.Add(new PivotFieldModel(1, SelectedItems: ["Q1"]));
         pivot.ColumnFields.Add(new PivotFieldModel(2));
         pivot.PageFields.Add(new PivotFieldModel(3, SelectedItem: "Domestic", SelectedItems: ["Domestic", "Export"]));
         pivot.ShowSubtotals = true;
@@ -7359,11 +7456,16 @@ public class FileAdapterSmokeTests
         pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 3));
         pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 25));
         pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.LessThanOrEqual, ComparisonValue: 100, SourceFieldIndex: 1));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.Between, ComparisonValue: 25, ComparisonValue2: 100, SourceFieldIndex: 0));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.AboveAverage, SourceFieldIndex: 0));
         pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "East"));
+        pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Between, "East", "West"));
         pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Value, PivotSortDirection.Descending, DataFieldIndex: 0));
-        pivot.DataFields.Add(new PivotDataFieldModel(4, "Average Amount", "average", 4));
-        pivot.DataFields.Add(new PivotDataFieldModel(4, "Max Amount", "max", 4));
-        pivot.DataFields.Add(new PivotDataFieldModel(-1, "Sum of Revenue", "sum", 4, "Revenue"));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Average Amount", "average", 4, ShowValuesAs: PivotShowValuesAs.PercentOfGrandTotal));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Max Amount", "max", 4, ShowValuesAs: PivotShowValuesAs.PercentOfRowTotal));
+        pivot.DataFields.Add(new PivotDataFieldModel(-1, "Sum of Revenue", "sum", 4, "Revenue", PivotShowValuesAs.PercentOfColumnTotal));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Running Amount", "sum", 4, ShowValuesAs: PivotShowValuesAs.RunningTotalIn, BaseFieldIndex: 1));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Difference From Q1", "sum", 4, ShowValuesAs: PivotShowValuesAs.DifferenceFrom, BaseFieldIndex: 1, BaseItem: "Q1"));
         sheet.PivotTables.Add(pivot);
 
         var saved = new MemoryStream();
@@ -7378,6 +7480,8 @@ public class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("colFields");
             pivotXml.ToString().Should().Contain("name=\"Domestic\"");
             pivotXml.ToString().Should().Contain("selectedItems=\"Domestic,Export\"");
+            pivotXml.ToString().Should().Contain("selectedItems=\"East\"");
+            pivotXml.ToString().Should().Contain("selectedItems=\"Q1\"");
             pivotXml.ToString().Should().Contain("groupBy=\"numberRange\"");
             pivotXml.ToString().Should().Contain("groupStart=\"0\"");
             pivotXml.ToString().Should().Contain("groupInterval=\"10\"");
@@ -7385,10 +7489,15 @@ public class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("type=\"top\"");
             pivotXml.ToString().Should().Contain("type=\"greaterThan\"");
             pivotXml.ToString().Should().Contain("type=\"lessThanOrEqual\"");
+            pivotXml.ToString().Should().Contain("type=\"between\"");
+            pivotXml.ToString().Should().Contain("type=\"aboveAverage\"");
             pivotXml.ToString().Should().Contain("field=\"1\"");
             pivotXml.ToString().Should().Contain("comparisonValue=\"25\"");
+            pivotXml.ToString().Should().Contain("comparisonValue2=\"100\"");
             pivotXml.ToString().Should().Contain("labelFilters");
             pivotXml.ToString().Should().Contain("contains");
+            pivotXml.ToString().Should().Contain("between");
+            pivotXml.ToString().Should().Contain("value2=\"West\"");
             pivotXml.ToString().Should().Contain("pivotSorts");
             pivotXml.ToString().Should().Contain("direction=\"descending\"");
             pivotXml.ToString().Should().Contain("showGrandTotals=\"1\"");
@@ -7396,7 +7505,12 @@ public class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("showColumnGrandTotals=\"1\"");
             pivotXml.ToString().Should().Contain("repeatItemLabels=\"0\"");
             pivotXml.ToString().Should().Contain("blankLineAfterItems=\"1\"");
+            pivotXml.ToString().Should().Contain("reportLayout=\"compact\"");
             pivotXml.ToString().Should().Contain("name=\"PivotStyleMedium9\"");
+            pivotXml.ToString().Should().Contain("showRowHeaders=\"0\"");
+            pivotXml.ToString().Should().Contain("showColHeaders=\"1\"");
+            pivotXml.ToString().Should().Contain("showRowStripes=\"1\"");
+            pivotXml.ToString().Should().Contain("showColStripes=\"1\"");
             pivotXml.ToString().Should().Contain("defaultSubtotal=\"1\"");
             pivotXml.ToString().Should().Contain("subtotalTop=\"1\"");
             pivotXml.ToString().Should().Contain("calculatedField");
@@ -7404,7 +7518,14 @@ public class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("formula=\"East+West\"");
             pivotXml.ToString().Should().Contain("formula=\"Amount*2\"");
             pivotXml.ToString().Should().Contain("subtotal=\"average\"");
+            pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfGrandTotal\"");
             pivotXml.ToString().Should().Contain("subtotal=\"max\"");
+            pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfRowTotal\"");
+            pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfColumnTotal\"");
+            pivotXml.ToString().Should().Contain("showValuesAs=\"runningTotalIn\"");
+            pivotXml.ToString().Should().Contain("showValuesAs=\"differenceFrom\"");
+            pivotXml.ToString().Should().Contain("baseField=\"1\"");
+            pivotXml.ToString().Should().Contain("baseItem=\"Q1\"");
         }
 
         saved.Position = 0;
@@ -7414,7 +7535,9 @@ public class FileAdapterSmokeTests
         loadedRowField.Grouping.Should().Be(PivotFieldGrouping.NumberRange);
         loadedRowField.GroupStart.Should().Be(0);
         loadedRowField.GroupInterval.Should().Be(10);
+        loadedRowField.SelectedItems.Should().Equal("East");
         loadedPivot.ColumnFields.Select(field => field.SourceFieldIndex).Should().Equal(1, 2);
+        loadedPivot.ColumnFields[0].SelectedItems.Should().Equal("Q1");
         var loadedPageField = loadedPivot.PageFields.Should().ContainSingle().Subject;
         loadedPageField.SourceFieldIndex.Should().Be(3);
         loadedPageField.SelectedItem.Should().Be("Domestic");
@@ -7426,17 +7549,34 @@ public class FileAdapterSmokeTests
         loadedPivot.ShowColumnGrandTotals.Should().BeTrue();
         loadedPivot.RepeatItemLabels.Should().BeFalse();
         loadedPivot.BlankLineAfterItems.Should().BeTrue();
+        loadedPivot.ReportLayout.Should().Be(PivotReportLayout.Compact);
         loadedPivot.StyleName.Should().Be("PivotStyleMedium9");
+        loadedPivot.ShowRowHeaders.Should().BeFalse();
+        loadedPivot.ShowColumnHeaders.Should().BeTrue();
+        loadedPivot.ShowRowStripes.Should().BeTrue();
+        loadedPivot.ShowColumnStripes.Should().BeTrue();
         loadedPivot.CalculatedFields.Should().ContainSingle().Which.Should().Be(new PivotCalculatedFieldModel("Revenue", "Amount*2"));
         loadedPivot.CalculatedItems.Should().ContainSingle().Which.Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
-        loadedPivot.ValueFilters.Should().HaveCount(3);
+        loadedPivot.ValueFilters.Should().HaveCount(5);
         loadedPivot.ValueFilters[0].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 3));
         loadedPivot.ValueFilters[1].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 25));
         loadedPivot.ValueFilters[2].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.LessThanOrEqual, ComparisonValue: 100, SourceFieldIndex: 1));
-        loadedPivot.LabelFilters.Should().ContainSingle().Which.Should().Be(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "East"));
+        loadedPivot.ValueFilters[3].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Between, ComparisonValue: 25, ComparisonValue2: 100, SourceFieldIndex: 0));
+        loadedPivot.ValueFilters[4].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.AboveAverage, SourceFieldIndex: 0));
+        loadedPivot.LabelFilters.Should().Equal(
+            new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "East"),
+            new PivotLabelFilterModel(0, PivotLabelFilterKind.Between, "East", "West"));
         loadedPivot.Sorts.Should().ContainSingle().Which.Should().Be(new PivotSortModel(PivotSortTarget.Value, PivotSortDirection.Descending, DataFieldIndex: 0));
-        loadedPivot.DataFields.Select(field => field.SummaryFunction).Should().Equal("average", "max", "sum");
+        loadedPivot.DataFields.Select(field => field.SummaryFunction).Should().Equal("average", "max", "sum", "sum", "sum");
+        loadedPivot.DataFields[0].ShowValuesAs.Should().Be(PivotShowValuesAs.PercentOfGrandTotal);
+        loadedPivot.DataFields[1].ShowValuesAs.Should().Be(PivotShowValuesAs.PercentOfRowTotal);
+        loadedPivot.DataFields[2].ShowValuesAs.Should().Be(PivotShowValuesAs.PercentOfColumnTotal);
         loadedPivot.DataFields[2].CalculatedFieldName.Should().Be("Revenue");
+        loadedPivot.DataFields[3].ShowValuesAs.Should().Be(PivotShowValuesAs.RunningTotalIn);
+        loadedPivot.DataFields[3].BaseFieldIndex.Should().Be(1);
+        loadedPivot.DataFields[4].ShowValuesAs.Should().Be(PivotShowValuesAs.DifferenceFrom);
+        loadedPivot.DataFields[4].BaseFieldIndex.Should().Be(1);
+        loadedPivot.DataFields[4].BaseItem.Should().Be("Q1");
     }
 
     [Fact]
@@ -7528,6 +7668,61 @@ public class FileAdapterSmokeTests
         archive.GetEntry("xl/slicerCaches/slicerCache1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTripsAuthoredSlicerAndTimelineSelectionState()
+    {
+        var workbook = new Workbook("AuthoredSlicerTimelineStateTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var slicer = new SlicerModel
+        {
+            Name = "Region Slicer",
+            CacheName = "Slicer_Region",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Region"
+        };
+        slicer.SelectedItems.AddRange(["East", "West"]);
+        workbook.Slicers.Add(slicer);
+        workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "Date Timeline",
+            CacheName = "Timeline_Date",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Date",
+            StartDate = "2026-01-01",
+            EndDate = "2026-12-31",
+            SelectedStartDate = "2026-03-01",
+            SelectedEndDate = "2026-06-30"
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            archive.GetEntry("xl/slicers/slicer1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/slicerCaches/slicerCache1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
+            archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
+            var slicerRels = LoadPackageXml(archive.GetEntry("xl/slicers/_rels/slicer1.xml.rels")!).ToString();
+            slicerRels.Should().Contain("../slicerCaches/slicerCache1.xml");
+            slicerRels.Should().Contain("slicerCache");
+            var timelineRels = LoadPackageXml(archive.GetEntry("xl/timelines/_rels/timeline1.xml.rels")!).ToString();
+            timelineRels.Should().Contain("../timelineCaches/timelineCache1.xml");
+            timelineRels.Should().Contain("timelineCache");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+
+        loaded.Slicers.Should().ContainSingle().Which.SelectedItems.Should().Equal("East", "West");
+        var timeline = loaded.Timelines.Should().ContainSingle().Subject;
+        timeline.SelectedStartDate.Should().Be("2026-03-01");
+        timeline.SelectedEndDate.Should().Be("2026-06-30");
     }
 
     [Fact]

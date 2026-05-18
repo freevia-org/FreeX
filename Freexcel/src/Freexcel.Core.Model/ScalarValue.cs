@@ -51,6 +51,8 @@ public sealed record ErrorValue(string Code) : ScalarValue
 /// </summary>
 public sealed record RangeValue(ScalarValue[,] Cells, uint StartRow = 1, uint StartCol = 1) : ScalarValue
 {
+    public string? SheetName { get; init; }
+
     public int RowCount => Cells.GetLength(0);
     public int ColCount => Cells.GetLength(1);
 

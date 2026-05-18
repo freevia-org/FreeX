@@ -428,7 +428,7 @@ public sealed class FormulaEvaluator
                     ? context.GetCellValue(range.SheetName, r0 + (uint)ri, c0 + (uint)ci)
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
-        return new RangeValue(cells, r0, c0);
+        return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
     }
 
     private ScalarValue EvaluateShortCircuit(FunctionCallNode node, IEvalContext context)
@@ -810,14 +810,14 @@ public sealed class FormulaEvaluator
              or "DMAX" or "DMIN" or "DPRODUCT" or "DSTDEV" or "DSTDEVP"
              or "DVAR" or "DVARP"
              or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK"
-             or "AGGREGATE" or "CELL"
+             or "AGGREGATE" or "CELL" or "GETPIVOTDATA"
              or "T.TEST" or "F.TEST" or "CHISQ.TEST"
              or "FREQUENCY"
              or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
              or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
-        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL";
+        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL" or "GETPIVOTDATA";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {

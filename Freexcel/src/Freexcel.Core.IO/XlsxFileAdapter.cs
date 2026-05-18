@@ -688,16 +688,27 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
                 SourceTableName = worksheetSource?.Attribute("name")?.Value,
-                PackagePart = cachePath
+                PackagePart = cachePath,
+                RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
+                SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
+                EnableRefresh = ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
+                RefreshedVersion = ReadIntAttribute(root, "refreshedVersion"),
+                RefreshedBy = root.Attribute("refreshedBy")?.Value
             };
 
             foreach (var field in root
                          .Element(workbookNs + "cacheFields")?
                          .Elements(workbookNs + "cacheField") ?? [])
             {
+                var sharedItems = field.Element(workbookNs + "sharedItems");
                 cache.Fields.Add(new PivotCacheFieldModel(
                     field.Attribute("name")?.Value ?? "",
-                    ReadIntAttribute(field, "numFmtId")));
+                    ReadIntAttribute(field, "numFmtId"),
+                    sharedItems is null ? null : ReadIntAttribute(sharedItems, "count"),
+                    ReadBoolAttribute(sharedItems, "containsBlank"),
+                    ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
+                    ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
+                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false)));
             }
 
             result.Add(cache);
@@ -747,6 +758,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     SourceFieldName = cache?.SourceFieldName,
                     PackagePart = slicerEntry.FullName.Replace('\\', '/')
                 });
+                slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
             }
 
             var timelineCaches = archive.Entries
@@ -772,6 +784,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     SourceFieldName = cache?.SourceFieldName,
                     StartDate = cache?.StartDate,
                     EndDate = cache?.EndDate,
+                    SelectedStartDate = cache?.SelectedStartDate,
+                    SelectedEndDate = cache?.SelectedEndDate,
                     PackagePart = timelineEntry.FullName.Replace('\\', '/')
                 });
             }
@@ -790,7 +804,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return new SlicerCacheMetadata(
             root?.Attribute("name")?.Value ?? "",
             root?.Attribute("sourceName")?.Value,
-            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value);
+            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
+            root?.Descendants()
+                .Where(e => string.Equals(e.Name.LocalName, "selectedItem", StringComparison.OrdinalIgnoreCase))
+                .Select(e => e.Attribute("value")?.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToList() ?? []);
     }
 
     private static TimelineCacheMetadata ReadTimelineCache(XDocument xml)
@@ -801,7 +821,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             root?.Attribute("sourceName")?.Value,
             root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
             root?.Attribute("startDate")?.Value,
-            root?.Attribute("endDate")?.Value);
+            root?.Attribute("endDate")?.Value,
+            root?.Attribute("selectedStartDate")?.Value,
+            root?.Attribute("selectedEndDate")?.Value);
     }
 
     private static IReadOnlyList<ExternalLinkModel> LoadExternalLinkMetadata(Stream xlsxStream)
@@ -1114,7 +1136,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static bool TryReadPivotTable(XDocument pivotXml, string pivotPath, out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, true, true, true, true, false, "PivotStyleLight16", [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, "PivotStyleLight16", true, true, false, false, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -1127,18 +1149,27 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return false;
 
         var calculatedFields = ReadPivotCalculatedFields(root.Element(workbookNs + "calculatedFields"), workbookNs);
+        var styleInfo = root.Element(workbookNs + "pivotTableStyleInfo");
         pivotTable = new PendingPivotTableModel(
             name,
             cacheId,
             targetReference,
             pivotPath,
             ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "defaultSubtotal"),
+            ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "subtotalTop")
+                ? PivotSubtotalPlacement.Top
+                : PivotSubtotalPlacement.Bottom,
             ReadBoolAttribute(root, "showGrandTotals", defaultValue: true),
             ReadBoolAttribute(root, "showRowGrandTotals", ReadBoolAttribute(root, "showGrandTotals", defaultValue: true)),
             ReadBoolAttribute(root, "showColumnGrandTotals", ReadBoolAttribute(root, "showGrandTotals", defaultValue: true)),
             ReadBoolAttribute(root, "repeatItemLabels", defaultValue: true),
             ReadBoolAttribute(root, "blankLineAfterItems"),
-            root.Element(workbookNs + "pivotTableStyleInfo")?.Attribute("name")?.Value ?? "PivotStyleLight16",
+            ReadPivotReportLayout(root.Attribute("reportLayout")?.Value),
+            styleInfo?.Attribute("name")?.Value ?? "PivotStyleLight16",
+            ReadBoolAttribute(styleInfo, "showRowHeaders", defaultValue: true),
+            ReadBoolAttribute(styleInfo, "showColHeaders", defaultValue: true),
+            ReadBoolAttribute(styleInfo, "showRowStripes"),
+            ReadBoolAttribute(styleInfo, "showColStripes"),
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs),
@@ -1164,6 +1195,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 return index.HasValue
                     ? new PivotFieldModel(
                         index.Value,
+                        field.Attribute("name")?.Value,
+                        ReadCsvAttribute(field.Attribute("selectedItems")?.Value),
                         Grouping: ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value),
                         GroupStart: ReadDoubleAttribute(field, "groupStart"),
                         GroupEnd: ReadDoubleAttribute(field, "groupEnd"),
@@ -1218,7 +1251,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     field.Attribute("name")?.Value ?? "",
                     field.Attribute("subtotal")?.Value ?? "sum",
                     ReadIntAttribute(field, "numFmtId"),
-                    calculatedFieldName);
+                    calculatedFieldName,
+                    ReadPivotShowValuesAs(field.Attribute("showValuesAs")?.Value),
+                    ReadIntAttribute(field, "baseField"),
+                    field.Attribute("baseItem")?.Value);
             })
             .Where(field => field.SourceFieldIndex >= 0 || field.CalculatedFieldName is not null)
             .ToList();
@@ -1236,8 +1272,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ReadPivotValueFilterKind(filter.Attribute("type")?.Value),
                 ReadIntAttribute(filter, "count") ?? 0,
                 ReadDoubleAttribute(filter, "comparisonValue"),
+                ReadDoubleAttribute(filter, "comparisonValue2"),
                 ReadIntAttribute(filter, "field")))
-            .Where(filter => filter.DataFieldIndex >= 0 && (filter.Count > 0 || filter.ComparisonValue is not null))
+            .Where(filter => filter.DataFieldIndex >= 0 &&
+                             (filter.Count > 0 ||
+                              filter.ComparisonValue is not null ||
+                              filter.Kind is PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage))
             .ToList();
     }
 
@@ -1251,7 +1291,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Select(filter => new PivotLabelFilterModel(
                 ReadIntAttribute(filter, "field") ?? -1,
                 ReadPivotLabelFilterKind(filter.Attribute("type")?.Value),
-                filter.Attribute("value")?.Value ?? ""))
+                filter.Attribute("value")?.Value ?? "",
+                filter.Attribute("value2")?.Value))
             .Where(filter => filter.SourceFieldIndex >= 0 && !string.IsNullOrEmpty(filter.Value))
             .ToList();
     }
@@ -1291,6 +1332,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => PivotFieldGrouping.None
         };
 
+    private static PivotReportLayout ReadPivotReportLayout(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "compact" or "compactform" or "compact-form" => PivotReportLayout.Compact,
+            "outline" or "outlineform" or "outline-form" => PivotReportLayout.Outline,
+            _ => PivotReportLayout.Tabular
+        };
+
+    private static PivotShowValuesAs ReadPivotShowValuesAs(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "percentofgrandtotal" or "percent-grand-total" => PivotShowValuesAs.PercentOfGrandTotal,
+            "percentofrowtotal" or "percent-row-total" => PivotShowValuesAs.PercentOfRowTotal,
+            "percentofcolumntotal" or "percentofcoltotal" or "percent-column-total" or "percent-col-total" => PivotShowValuesAs.PercentOfColumnTotal,
+            "runningtotalin" or "running-total-in" => PivotShowValuesAs.RunningTotalIn,
+            "differencefrom" or "difference-from" => PivotShowValuesAs.DifferenceFrom,
+            "percentdifferencefrom" or "percent-difference-from" => PivotShowValuesAs.PercentDifferenceFrom,
+            "ranksmallest" or "rank-smallest" => PivotShowValuesAs.RankSmallest,
+            "ranklargest" or "rank-largest" => PivotShowValuesAs.RankLargest,
+            "index" => PivotShowValuesAs.Index,
+            "percentofparentrowtotal" or "percent-parent-row-total" => PivotShowValuesAs.PercentOfParentRowTotal,
+            "percentofparentcolumntotal" or "percentofparentcoltotal" or "percent-parent-column-total" or "percent-parent-col-total" => PivotShowValuesAs.PercentOfParentColumnTotal,
+            "percentofparenttotal" or "percent-parent-total" => PivotShowValuesAs.PercentOfParentTotal,
+            _ => PivotShowValuesAs.None
+        };
+
     private static PivotValueFilterKind ReadPivotValueFilterKind(string? value) =>
         value?.Trim().ToLowerInvariant() switch
         {
@@ -1301,6 +1368,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "lessthanorequal" or "less_than_or_equal" => PivotValueFilterKind.LessThanOrEqual,
             "equals" or "equal" => PivotValueFilterKind.Equals,
             "doesnotequal" or "not_equal" => PivotValueFilterKind.DoesNotEqual,
+            "between" => PivotValueFilterKind.Between,
+            "notbetween" or "not_between" => PivotValueFilterKind.NotBetween,
+            "aboveaverage" or "above_average" => PivotValueFilterKind.AboveAverage,
+            "belowaverage" or "below_average" => PivotValueFilterKind.BelowAverage,
             _ => PivotValueFilterKind.Top
         };
 
@@ -1312,6 +1383,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "endswith" or "ends_with" => PivotLabelFilterKind.EndsWith,
             "contains" => PivotLabelFilterKind.Contains,
             "doesnotcontain" or "does_not_contain" => PivotLabelFilterKind.DoesNotContain,
+            "greaterthan" or "greater_than" => PivotLabelFilterKind.GreaterThan,
+            "greaterthanorequal" or "greater_than_or_equal" => PivotLabelFilterKind.GreaterThanOrEqual,
+            "lessthan" or "less_than" => PivotLabelFilterKind.LessThan,
+            "lessthanorequal" or "less_than_or_equal" => PivotLabelFilterKind.LessThanOrEqual,
+            "between" => PivotLabelFilterKind.Between,
             _ => PivotLabelFilterKind.Equals
         };
 
@@ -1353,11 +1429,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
             TargetRange = GridRange.Parse(pending.TargetReference, sheetId),
             PackagePart = pending.PackagePart,
             ShowSubtotals = pending.ShowSubtotals,
+            SubtotalPlacement = pending.SubtotalPlacement,
             ShowRowGrandTotals = pending.ShowRowGrandTotals,
             ShowColumnGrandTotals = pending.ShowColumnGrandTotals,
             RepeatItemLabels = pending.RepeatItemLabels,
             BlankLineAfterItems = pending.BlankLineAfterItems,
-            StyleName = string.IsNullOrWhiteSpace(pending.StyleName) ? "PivotStyleLight16" : pending.StyleName
+            ReportLayout = pending.ReportLayout,
+            StyleName = string.IsNullOrWhiteSpace(pending.StyleName) ? "PivotStyleLight16" : pending.StyleName,
+            ShowRowHeaders = pending.ShowRowHeaders,
+            ShowColumnHeaders = pending.ShowColumnHeaders,
+            ShowRowStripes = pending.ShowRowStripes,
+            ShowColumnStripes = pending.ShowColumnStripes
         };
 
         pivotTable.RowFields.AddRange(pending.RowFields);
@@ -1793,6 +1875,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
         {
             return $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
+        }
+
+        if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
+        }
+
+        if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
         }
 
         if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
@@ -3405,6 +3499,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SavePivotTables(packageStream, workbook);
         }
 
+        if (!SourcePackages.TryGetValue(workbook, out _) &&
+            (workbook.Slicers.Count > 0 || workbook.Timelines.Count > 0))
+        {
+            packageStream.Position = 0;
+            SaveSlicerTimelines(packageStream, workbook);
+        }
+
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
 
@@ -3441,6 +3542,82 @@ public sealed class XlsxFileAdapter : IFileAdapter
         PreserveExternalLinkReferences(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
+    }
+
+    private static void SaveSlicerTimelines(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace slicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+        XNamespace freexcelNs = "https://freexcel.local/xlsx/slicerTimelineState";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var slicerIndex = 1;
+        foreach (var slicer in workbook.Slicers)
+        {
+            var slicerPath = string.IsNullOrWhiteSpace(slicer.PackagePart)
+                ? $"xl/slicers/slicer{slicerIndex}.xml"
+                : slicer.PackagePart.TrimStart('/').Replace('\\', '/');
+            var cachePath = $"xl/slicerCaches/slicerCache{slicerIndex}.xml";
+
+            ReplacePackageXml(archive, slicerPath, new XDocument(
+                new XElement(slicerNs + "slicer",
+                    new XAttribute("name", slicer.Name),
+                    new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName))));
+            ReplacePackageXml(archive, cachePath, new XDocument(
+                new XElement(slicerNs + "slicerCacheDefinition",
+                    new XAttribute("name", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName),
+                    OptionalAttribute("sourceName", slicer.SourceFieldName),
+                    new XElement(slicerNs + "pivotTables",
+                        new XElement(slicerNs + "pivotTable", OptionalAttribute("name", slicer.SourcePivotTableName))),
+                    new XElement(freexcelNs + "selectedItems",
+                        slicer.SelectedItems.Select(item =>
+                            new XElement(freexcelNs + "selectedItem", new XAttribute("value", item)))))));
+            ReplacePackageXml(archive, GetWorksheetRelsPath(slicerPath), new XDocument(
+                new XElement(packageRelNs + "Relationships",
+                    new XElement(packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdSlicerCache"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicerCache"),
+                        new XAttribute("Target", GetRelativeTarget(slicerPath, cachePath))))));
+            EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
+            EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.slicerCache+xml");
+            slicerIndex++;
+        }
+
+        var timelineIndex = 1;
+        foreach (var timeline in workbook.Timelines)
+        {
+            var timelinePath = string.IsNullOrWhiteSpace(timeline.PackagePart)
+                ? $"xl/timelines/timeline{timelineIndex}.xml"
+                : timeline.PackagePart.TrimStart('/').Replace('\\', '/');
+            var cachePath = $"xl/timelineCaches/timelineCache{timelineIndex}.xml";
+
+            ReplacePackageXml(archive, timelinePath, new XDocument(
+                new XElement(slicerNs + "timeline",
+                    new XAttribute("name", timeline.Name),
+                    new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName))));
+            ReplacePackageXml(archive, cachePath, new XDocument(
+                new XElement(slicerNs + "timelineCacheDefinition",
+                    new XAttribute("name", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName),
+                    OptionalAttribute("sourceName", timeline.SourceFieldName),
+                    OptionalAttribute("startDate", timeline.StartDate),
+                    OptionalAttribute("endDate", timeline.EndDate),
+                    OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
+                    OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
+                    new XElement(slicerNs + "pivotTables",
+                        new XElement(slicerNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
+            ReplacePackageXml(archive, GetWorksheetRelsPath(timelinePath), new XDocument(
+                new XElement(packageRelNs + "Relationships",
+                    new XElement(packageRelNs + "Relationship",
+                        new XAttribute("Id", "rIdTimelineCache"),
+                        new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/timelineCache"),
+                        new XAttribute("Target", GetRelativeTarget(timelinePath, cachePath))))));
+            EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.timeline+xml");
+            EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.timelineCache+xml");
+            timelineIndex++;
+        }
+
+        static XAttribute? OptionalAttribute(string name, string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : new XAttribute(name, value);
     }
 
     private static bool IsPackageMetadataEntry(string entryName) =>
@@ -4751,7 +4928,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return new XDocument(new XElement(
             workbookNs + "pivotCacheDefinition",
             new XAttribute(XNamespace.Xmlns + "r", relNs),
-            new XAttribute("refreshOnLoad", "1"),
+            new XAttribute("refreshOnLoad", cache.RefreshOnLoad ? "1" : "0"),
+            new XAttribute("saveData", cache.SaveData ? "1" : "0"),
+            new XAttribute("enableRefresh", cache.EnableRefresh ? "1" : "0"),
+            cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
+            !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
             new XAttribute("recordCount", "0"),
             new XElement(
                 workbookNs + "cacheSource",
@@ -4764,8 +4945,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     workbookNs + "cacheField",
                     new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Field" : field.Name),
                     field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
-                    new XElement(workbookNs + "sharedItems"))))));
+                    ToPivotCacheSharedItemsXml(field, workbookNs))))));
     }
+
+    private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs) =>
+        new(
+            workbookNs + "sharedItems",
+            field.SharedItemCount is { } count ? new XAttribute("count", count.ToString(CultureInfo.InvariantCulture)) : null,
+            field.ContainsBlank ? new XAttribute("containsBlank", "1") : null,
+            field.ContainsString ? new XAttribute("containsString", "1") : null,
+            field.ContainsNumber ? new XAttribute("containsNumber", "1") : null,
+            field.ContainsDate ? new XAttribute("containsDate", "1") : null);
 
     private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
         new(new XElement(packageRelNs + "Relationships"));
@@ -4787,6 +4977,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("showColumnGrandTotals", pivot.ShowColumnGrandTotals ? "1" : "0"),
             new XAttribute("repeatItemLabels", pivot.RepeatItemLabels ? "1" : "0"),
             new XAttribute("blankLineAfterItems", pivot.BlankLineAfterItems ? "1" : "0"),
+            new XAttribute("reportLayout", ToPivotReportLayoutText(pivot.ReportLayout)),
             new XElement(
                 workbookNs + "location",
                 new XAttribute("ref", pivot.TargetRange.ToString()),
@@ -4805,10 +4996,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ToPivotSortsXml(pivot.Sorts, workbookNs),
             new XElement(workbookNs + "pivotTableStyleInfo",
                 new XAttribute("name", string.IsNullOrWhiteSpace(pivot.StyleName) ? "PivotStyleLight16" : pivot.StyleName),
-                new XAttribute("showRowHeaders", "1"),
-                new XAttribute("showColHeaders", "1"),
-                new XAttribute("showRowStripes", "0"),
-                new XAttribute("showColStripes", "0"),
+                new XAttribute("showRowHeaders", pivot.ShowRowHeaders ? "1" : "0"),
+                new XAttribute("showColHeaders", pivot.ShowColumnHeaders ? "1" : "0"),
+                new XAttribute("showRowStripes", pivot.ShowRowStripes ? "1" : "0"),
+                new XAttribute("showColStripes", pivot.ShowColumnStripes ? "1" : "0"),
                 new XAttribute("showLastColumn", "1"))));
 
     private static XElement ToPivotFieldsXml(PivotTableModel pivot, XNamespace workbookNs)
@@ -4830,6 +5021,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
                 pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
                 pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
+                pivot.ShowSubtotals && pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? new XAttribute("subtotalTop", "1") : null,
                 new XAttribute("showAll", "0"),
                 new XElement(workbookNs + "items",
                     new XAttribute("count", "1"),
@@ -4845,6 +5037,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 fields.Select(field => new XElement(
                     workbookNs + "field",
                     new XAttribute("x", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                    string.IsNullOrWhiteSpace(field.SelectedItem) ? null : new XAttribute("name", field.SelectedItem),
+                    field.SelectedItems is null || field.SelectedItems.Count == 0 ? null : new XAttribute("selectedItems", string.Join(",", field.SelectedItems)),
                     field.Grouping == PivotFieldGrouping.None ? null : new XAttribute("groupBy", ToPivotFieldGroupingText(field.Grouping)),
                     field.GroupStart is null ? null : new XAttribute("groupStart", FormatInvariant(field.GroupStart.Value)),
                     field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
@@ -4878,6 +5072,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XAttribute("fld", field.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("subtotal", string.IsNullOrWhiteSpace(field.SummaryFunction) ? "sum" : field.SummaryFunction),
                     string.IsNullOrWhiteSpace(field.CalculatedFieldName) ? null : new XAttribute("calculatedField", field.CalculatedFieldName),
+                    field.ShowValuesAs == PivotShowValuesAs.None ? null : new XAttribute("showValuesAs", ToPivotShowValuesAsText(field.ShowValuesAs)),
+                    field.BaseFieldIndex is { } baseField ? new XAttribute("baseField", baseField.ToString(CultureInfo.InvariantCulture)) : null,
+                    string.IsNullOrWhiteSpace(field.BaseItem) ? null : new XAttribute("baseItem", field.BaseItem),
                     field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null)));
 
     private static XElement? ToPivotCalculatedFieldsXml(IReadOnlyList<PivotCalculatedFieldModel> fields, XNamespace workbookNs) =>
@@ -4916,7 +5113,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XAttribute("type", ToPivotValueFilterKindText(filter.Kind)),
                     new XAttribute("count", filter.Count.ToString(CultureInfo.InvariantCulture)),
                     filter.SourceFieldIndex is null ? null : new XAttribute("field", filter.SourceFieldIndex.Value.ToString(CultureInfo.InvariantCulture)),
-                    filter.ComparisonValue is null ? null : new XAttribute("comparisonValue", FormatInvariant(filter.ComparisonValue.Value)))));
+                    filter.ComparisonValue is null ? null : new XAttribute("comparisonValue", FormatInvariant(filter.ComparisonValue.Value)),
+                    filter.ComparisonValue2 is null ? null : new XAttribute("comparisonValue2", FormatInvariant(filter.ComparisonValue2.Value)))));
 
     private static XElement? ToPivotLabelFiltersXml(IReadOnlyList<PivotLabelFilterModel> filters, XNamespace workbookNs) =>
         filters.Count == 0
@@ -4928,7 +5126,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     workbookNs + "labelFilter",
                     new XAttribute("field", filter.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("type", ToPivotLabelFilterKindText(filter.Kind)),
-                    new XAttribute("value", filter.Value))));
+                    new XAttribute("value", filter.Value),
+                    string.IsNullOrWhiteSpace(filter.Value2) ? null : new XAttribute("value2", filter.Value2))));
 
     private static XElement? ToPivotSortsXml(IReadOnlyList<PivotSortModel> sorts, XNamespace workbookNs) =>
         sorts.Count == 0
@@ -4954,6 +5153,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => "none"
         };
 
+    private static string ToPivotReportLayoutText(PivotReportLayout layout) =>
+        layout switch
+        {
+            PivotReportLayout.Compact => "compact",
+            PivotReportLayout.Outline => "outline",
+            _ => "tabular"
+        };
+
+    private static string ToPivotShowValuesAsText(PivotShowValuesAs showValuesAs) =>
+        showValuesAs switch
+        {
+            PivotShowValuesAs.PercentOfGrandTotal => "percentOfGrandTotal",
+            PivotShowValuesAs.PercentOfRowTotal => "percentOfRowTotal",
+            PivotShowValuesAs.PercentOfColumnTotal => "percentOfColumnTotal",
+            PivotShowValuesAs.RunningTotalIn => "runningTotalIn",
+            PivotShowValuesAs.DifferenceFrom => "differenceFrom",
+            PivotShowValuesAs.PercentDifferenceFrom => "percentDifferenceFrom",
+            PivotShowValuesAs.RankSmallest => "rankSmallest",
+            PivotShowValuesAs.RankLargest => "rankLargest",
+            PivotShowValuesAs.Index => "index",
+            PivotShowValuesAs.PercentOfParentRowTotal => "percentOfParentRowTotal",
+            PivotShowValuesAs.PercentOfParentColumnTotal => "percentOfParentColumnTotal",
+            PivotShowValuesAs.PercentOfParentTotal => "percentOfParentTotal",
+            _ => "none"
+        };
+
     private static string ToPivotValueFilterKindText(PivotValueFilterKind kind) =>
         kind switch
         {
@@ -4964,6 +5189,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             PivotValueFilterKind.LessThanOrEqual => "lessThanOrEqual",
             PivotValueFilterKind.Equals => "equals",
             PivotValueFilterKind.DoesNotEqual => "doesNotEqual",
+            PivotValueFilterKind.Between => "between",
+            PivotValueFilterKind.NotBetween => "notBetween",
+            PivotValueFilterKind.AboveAverage => "aboveAverage",
+            PivotValueFilterKind.BelowAverage => "belowAverage",
             _ => "top"
         };
 
@@ -4975,6 +5204,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             PivotLabelFilterKind.EndsWith => "endsWith",
             PivotLabelFilterKind.Contains => "contains",
             PivotLabelFilterKind.DoesNotContain => "doesNotContain",
+            PivotLabelFilterKind.GreaterThan => "greaterThan",
+            PivotLabelFilterKind.GreaterThanOrEqual => "greaterThanOrEqual",
+            PivotLabelFilterKind.LessThan => "lessThan",
+            PivotLabelFilterKind.LessThanOrEqual => "lessThanOrEqual",
+            PivotLabelFilterKind.Between => "between",
             _ => "equals"
         };
 
@@ -7921,14 +8155,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private sealed record SlicerCacheMetadata(
         string Name,
         string? SourceFieldName,
-        string? PivotTableName);
+        string? PivotTableName,
+        IReadOnlyList<string> SelectedItems);
 
     private sealed record TimelineCacheMetadata(
         string Name,
         string? SourceFieldName,
         string? PivotTableName,
         string? StartDate,
-        string? EndDate);
+        string? EndDate,
+        string? SelectedStartDate,
+        string? SelectedEndDate);
 
     private sealed record PendingPivotTableModel(
         string Name,
@@ -7936,12 +8173,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string TargetReference,
         string PackagePart,
         bool ShowSubtotals,
+        PivotSubtotalPlacement SubtotalPlacement,
         bool ShowGrandTotals,
         bool ShowRowGrandTotals,
         bool ShowColumnGrandTotals,
         bool RepeatItemLabels,
         bool BlankLineAfterItems,
+        PivotReportLayout ReportLayout,
         string StyleName,
+        bool ShowRowHeaders,
+        bool ShowColumnHeaders,
+        bool ShowRowStripes,
+        bool ShowColumnStripes,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,

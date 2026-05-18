@@ -515,6 +515,9 @@ public class GridView : FrameworkElement
     /// <summary>Fired on right mouse button down with the clicked cell address.</summary>
     public event Action<CellAddress, System.Windows.Point>? ContextMenuRequested;
 
+    /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
+    public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;
+
     /// <summary>Fired when the user releases after dragging a Page Layout margin guide.</summary>
     public event Action<WorksheetPageMargins>? PageMarginsChanged;
 
@@ -787,6 +790,13 @@ public class GridView : FrameworkElement
     {
         var pos = e.GetPosition(this);
 
+        if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)
+        {
+            PivotChartFieldButtonRequested?.Invoke(pivotButton.Chart, pivotButton.FieldButton, pos);
+            e.Handled = true;
+            return;
+        }
+
         if (HitTestPageMarginGuide(pos) is { } marginEdge)
         {
             _marginDragEdge = marginEdge;
@@ -879,6 +889,13 @@ public class GridView : FrameworkElement
     {
         if (Viewport == null) { base.OnMouseRightButtonDown(e); return; }
         var pos = e.GetPosition(this);
+        if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)
+        {
+            PivotChartFieldButtonRequested?.Invoke(pivotButton.Chart, pivotButton.FieldButton, pos);
+            e.Handled = true;
+            return;
+        }
+
         if (pos.X < ActualRowHeaderWidth || pos.Y < EffectiveColHeaderHeight) { base.OnMouseRightButtonDown(e); return; }
 
         foreach (var rm in Viewport.RowMetrics)
@@ -897,6 +914,35 @@ public class GridView : FrameworkElement
             }
         }
         base.OnMouseRightButtonDown(e);
+    }
+
+    public static (ChartModel Chart, string FieldButton)? HitTestPivotChartFieldButton(
+        IReadOnlyList<ChartModel>? charts,
+        Point pos,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (charts is null)
+            return null;
+
+        foreach (var chart in charts.Where(chart => chart.IsPivotChart).Reverse())
+        {
+            var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
+            var topButton = new Rect(rect.Left + 6, rect.Top + 6, Math.Min(150, Math.Max(80, rect.Width - 12)), 24);
+            if (topButton.Contains(pos))
+                return (chart, string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName!);
+
+            var bottomTop = rect.Bottom - 36;
+            var axisButton = new Rect(rect.Left + 6, bottomTop, 118, 24);
+            if (axisButton.Contains(pos))
+                return (chart, "Axis Fields");
+
+            var valuesButton = new Rect(rect.Right - 120, bottomTop, 104, 24);
+            if (valuesButton.Contains(pos))
+                return (chart, "Values");
+        }
+
+        return null;
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)

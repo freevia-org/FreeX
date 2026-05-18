@@ -616,12 +616,29 @@ public sealed class Sheet
                 CacheId     = pt.CacheId,
                 SourceRange = RemapRange(pt.SourceRange, newId),
                 TargetRange = RemapRange(pt.TargetRange, newId),
-                PackagePart = pt.PackagePart
+                PackagePart = pt.PackagePart,
+                ShowSubtotals = pt.ShowSubtotals,
+                SubtotalPlacement = pt.SubtotalPlacement,
+                ShowRowGrandTotals = pt.ShowRowGrandTotals,
+                ShowColumnGrandTotals = pt.ShowColumnGrandTotals,
+                RepeatItemLabels = pt.RepeatItemLabels,
+                BlankLineAfterItems = pt.BlankLineAfterItems,
+                ReportLayout = pt.ReportLayout,
+                StyleName = pt.StyleName,
+                ShowRowHeaders = pt.ShowRowHeaders,
+                ShowColumnHeaders = pt.ShowColumnHeaders,
+                ShowRowStripes = pt.ShowRowStripes,
+                ShowColumnStripes = pt.ShowColumnStripes
             };
             clonedPt.RowFields.AddRange(pt.RowFields);
             clonedPt.ColumnFields.AddRange(pt.ColumnFields);
             clonedPt.PageFields.AddRange(pt.PageFields);
             clonedPt.DataFields.AddRange(pt.DataFields);
+            clonedPt.CalculatedFields.AddRange(pt.CalculatedFields);
+            clonedPt.CalculatedItems.AddRange(pt.CalculatedItems);
+            clonedPt.LabelFilters.AddRange(pt.LabelFilters);
+            clonedPt.ValueFilters.AddRange(pt.ValueFilters);
+            clonedPt.Sorts.AddRange(pt.Sorts);
             copy.PivotTables.Add(clonedPt);
         }
 

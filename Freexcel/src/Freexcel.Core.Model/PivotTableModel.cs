@@ -4,10 +4,15 @@ public sealed class PivotCacheModel
 {
     public int CacheId { get; init; }
     public PivotCacheSourceType SourceType { get; init; } = PivotCacheSourceType.Unknown;
-    public string? SourceSheetName { get; init; }
-    public string? SourceReference { get; init; }
-    public string? SourceTableName { get; init; }
+    public string? SourceSheetName { get; set; }
+    public string? SourceReference { get; set; }
+    public string? SourceTableName { get; set; }
     public string PackagePart { get; init; } = "";
+    public bool RefreshOnLoad { get; set; } = true;
+    public bool SaveData { get; set; } = true;
+    public bool EnableRefresh { get; set; } = true;
+    public int? RefreshedVersion { get; set; }
+    public string? RefreshedBy { get; set; }
     public List<PivotCacheFieldModel> Fields { get; } = [];
 }
 
@@ -21,7 +26,12 @@ public enum PivotCacheSourceType
 
 public sealed record PivotCacheFieldModel(
     string Name,
-    int? NumberFormatId = null);
+    int? NumberFormatId = null,
+    int? SharedItemCount = null,
+    bool ContainsBlank = false,
+    bool ContainsString = false,
+    bool ContainsNumber = false,
+    bool ContainsDate = false);
 
 public sealed class PivotTableModel
 {
@@ -30,7 +40,7 @@ public sealed class PivotTableModel
 
     public string Name { get; init; } = "";
     public int CacheId { get; init; }
-    public GridRange SourceRange { get; init; }
+    public GridRange SourceRange { get; set; }
     public GridRange TargetRange { get; init; }
     public string PackagePart { get; init; } = "";
     public bool ShowSubtotals { get; set; }
@@ -56,7 +66,12 @@ public sealed class PivotTableModel
     }
     public bool RepeatItemLabels { get; set; } = true;
     public bool BlankLineAfterItems { get; set; }
+    public PivotReportLayout ReportLayout { get; set; } = PivotReportLayout.Tabular;
     public string StyleName { get; set; } = "PivotStyleLight16";
+    public bool ShowRowHeaders { get; set; } = true;
+    public bool ShowColumnHeaders { get; set; } = true;
+    public bool ShowRowStripes { get; set; }
+    public bool ShowColumnStripes { get; set; }
     public List<PivotFieldModel> RowFields { get; } = [];
     public List<PivotFieldModel> ColumnFields { get; } = [];
     public List<PivotFieldModel> PageFields { get; } = [];
@@ -93,12 +108,39 @@ public enum PivotSubtotalPlacement
     Top
 }
 
+public enum PivotReportLayout
+{
+    Compact,
+    Outline,
+    Tabular
+}
+
 public sealed record PivotDataFieldModel(
     int SourceFieldIndex,
     string Name,
     string SummaryFunction,
     int? NumberFormatId = null,
-    string? CalculatedFieldName = null);
+    string? CalculatedFieldName = null,
+    PivotShowValuesAs ShowValuesAs = PivotShowValuesAs.None,
+    int? BaseFieldIndex = null,
+    string? BaseItem = null);
+
+public enum PivotShowValuesAs
+{
+    None,
+    PercentOfGrandTotal,
+    PercentOfRowTotal,
+    PercentOfColumnTotal,
+    RunningTotalIn,
+    DifferenceFrom,
+    PercentDifferenceFrom,
+    RankSmallest,
+    RankLargest,
+    Index,
+    PercentOfParentRowTotal,
+    PercentOfParentColumnTotal,
+    PercentOfParentTotal
+}
 
 public sealed record PivotCalculatedFieldModel(
     string Name,
@@ -112,7 +154,8 @@ public sealed record PivotCalculatedItemModel(
 public sealed record PivotLabelFilterModel(
     int SourceFieldIndex,
     PivotLabelFilterKind Kind,
-    string Value);
+    string Value,
+    string? Value2 = null);
 
 public enum PivotLabelFilterKind
 {
@@ -121,7 +164,12 @@ public enum PivotLabelFilterKind
     BeginsWith,
     EndsWith,
     Contains,
-    DoesNotContain
+    DoesNotContain,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Between
 }
 
 public sealed record PivotValueFilterModel(
@@ -129,6 +177,7 @@ public sealed record PivotValueFilterModel(
     PivotValueFilterKind Kind,
     int Count = 0,
     double? ComparisonValue = null,
+    double? ComparisonValue2 = null,
     int? SourceFieldIndex = null);
 
 public enum PivotValueFilterKind
@@ -140,7 +189,11 @@ public enum PivotValueFilterKind
     LessThan,
     LessThanOrEqual,
     Equals,
-    DoesNotEqual
+    DoesNotEqual,
+    Between,
+    NotBetween,
+    AboveAverage,
+    BelowAverage
 }
 
 public sealed record PivotSortModel(

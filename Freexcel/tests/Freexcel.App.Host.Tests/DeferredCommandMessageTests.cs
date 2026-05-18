@@ -67,10 +67,12 @@ public sealed class DeferredCommandMessageTests
         var message = DeferredCommandMessages.PivotTableModelFirst();
 
         message.Title.Should().Be("PivotTable");
-        message.Body.Should().Contain("loads PivotTable");
+        message.Body.Should().Contain("loads and saves PivotTable");
         message.Body.Should().Contain("pivot caches");
         message.Body.Should().Contain("preserves native PivotTable package parts");
-        message.Body.Should().Contain("deferred");
+        message.Body.Should().Contain("Field List");
+        message.Body.Should().Contain("slicer/timeline");
+        message.Body.Should().Contain("remain partial");
     }
 
     [Fact]

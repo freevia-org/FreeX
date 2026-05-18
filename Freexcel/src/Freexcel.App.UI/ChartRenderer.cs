@@ -75,6 +75,7 @@ public static class ChartRenderer
         ApplyTitleStyle(model, chart);
         ApplyAreaStyle(model, chart, theme);
         ConfigureLegend(model, chart, theme);
+        AddPivotChartFieldButtons(model, chart);
 
         if (chart.Type is ChartType.Pie or ChartType.Doughnut)
         {
@@ -494,6 +495,33 @@ public static class ChartRenderer
         }
 
         return model;
+    }
+
+    private static void AddPivotChartFieldButtons(PlotModel model, ChartModel chart)
+    {
+        if (!chart.IsPivotChart)
+            return;
+
+        var captions = new[]
+        {
+            string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName,
+            "Axis Fields",
+            "Values"
+        };
+        for (var index = 0; index < captions.Length; index++)
+        {
+            model.Annotations.Add(new TextAnnotation
+            {
+                Text = captions[index],
+                TextPosition = new DataPoint(index * 1.2, 0),
+                Stroke = OxyColor.FromRgb(128, 128, 128),
+                StrokeThickness = 1,
+                Background = OxyColor.FromRgb(242, 242, 242),
+                TextColor = OxyColor.FromRgb(64, 64, 64),
+                FontSize = 10,
+                Padding = new OxyThickness(4, 2, 4, 2)
+            });
+        }
     }
 
     private static PlotModel BuildStackedBarModel(
