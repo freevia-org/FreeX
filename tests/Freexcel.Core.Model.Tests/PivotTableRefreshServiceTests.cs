@@ -68,6 +68,56 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MaterializesNestedColumnFieldMatrix()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesChannelData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D9"),
+            TargetRange = Range(sheet, "F2", "M10")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Region");
+        Text(sheet, "G2").Should().Be("Q1");
+        Text(sheet, "H2").Should().Be("Q1");
+        Text(sheet, "I2").Should().Be("Q2");
+        Text(sheet, "J2").Should().Be("Q2");
+        Text(sheet, "K2").Should().Be("Grand Total");
+        Text(sheet, "G3").Should().Be("Retail");
+        Text(sheet, "H3").Should().Be("Wholesale");
+        Text(sheet, "I3").Should().Be("Retail");
+        Text(sheet, "J3").Should().Be("Wholesale");
+        Text(sheet, "F4").Should().Be("East");
+        Number(sheet, "G4").Should().Be(10);
+        Number(sheet, "H4").Should().Be(15);
+        Number(sheet, "I4").Should().Be(20);
+        Number(sheet, "J4").Should().Be(25);
+        Number(sheet, "K4").Should().Be(70);
+        Text(sheet, "F5").Should().Be("West");
+        Number(sheet, "G5").Should().Be(30);
+        Number(sheet, "H5").Should().Be(35);
+        Number(sheet, "I5").Should().Be(40);
+        Number(sheet, "J5").Should().Be(45);
+        Number(sheet, "K5").Should().Be(150);
+        Text(sheet, "F6").Should().Be("Grand Total");
+        Number(sheet, "G6").Should().Be(40);
+        Number(sheet, "H6").Should().Be(50);
+        Number(sheet, "I6").Should().Be(60);
+        Number(sheet, "J6").Should().Be(70);
+        Number(sheet, "K6").Should().Be(220);
+    }
+
+    [Fact]
     public void Refresh_MaterializesMultipleRowAndDataFields()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -102,6 +152,178 @@ public sealed class PivotTableRefreshServiceTests
         Text(sheet, "E7").Should().Be("Grand Total");
         Number(sheet, "G7").Should().Be(70);
         Number(sheet, "H7").Should().Be(4);
+    }
+
+    [Fact]
+    public void Refresh_MaterializesValuesOnlyPivot()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H5")
+        };
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Count of Amount", "count"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Sum of Amount");
+        Text(sheet, "F2").Should().Be("Count of Amount");
+        Number(sheet, "E3").Should().Be(70);
+        Number(sheet, "F3").Should().Be(4);
+        sheet.GetCell(Addr(sheet, "E4")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MaterializesColumnOnlyPivot()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I5")
+        };
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E2").Should().Be("Q1");
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Grand Total");
+        Number(sheet, "E3").Should().Be(30);
+        Number(sheet, "F3").Should().Be(40);
+        Number(sheet, "G3").Should().Be(70);
+        sheet.GetCell(Addr(sheet, "E4")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MatrixAppliesLabelFiltersToColumnFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.LabelFilters.Add(new PivotLabelFilterModel(1, PivotLabelFilterKind.Equals, "Q1"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q1");
+        Text(sheet, "G2").Should().Be("Grand Total");
+        Number(sheet, "F3").Should().Be(10);
+        Number(sheet, "G3").Should().Be(10);
+        Number(sheet, "F4").Should().Be(20);
+        Number(sheet, "G4").Should().Be(20);
+        Number(sheet, "F5").Should().Be(30);
+        Number(sheet, "G5").Should().Be(30);
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MatrixAppliesValueFiltersToColumnFields()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 35, SourceFieldIndex: 1));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Grand Total");
+        Number(sheet, "F3").Should().Be(15);
+        Number(sheet, "G3").Should().Be(15);
+        Number(sheet, "F4").Should().Be(25);
+        Number(sheet, "G4").Should().Be(25);
+        Number(sheet, "F5").Should().Be(40);
+        Number(sheet, "G5").Should().Be(40);
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MatrixSortsColumnLabelsDescending()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Descending, FieldIndex: 1));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Q1");
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Number(sheet, "F3").Should().Be(15);
+        Number(sheet, "G3").Should().Be(10);
+        Number(sheet, "F5").Should().Be(40);
+        Number(sheet, "G5").Should().Be(30);
+    }
+
+    [Fact]
+    public void Refresh_MatrixSortsColumnValuesDescending()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Value, PivotSortDirection.Descending, DataFieldIndex: 0, FieldIndex: 1));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Q1");
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Number(sheet, "F3").Should().Be(15);
+        Number(sheet, "G3").Should().Be(10);
+        Number(sheet, "F5").Should().Be(40);
+        Number(sheet, "G5").Should().Be(30);
     }
 
     [Fact]
@@ -398,6 +620,39 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_CanPlaceOuterRowFieldSubtotalsAtTopOfGroup()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H10"),
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East Total");
+        Number(sheet, "G3").Should().Be(25);
+        Text(sheet, "E4").Should().Be("East");
+        Text(sheet, "F4").Should().Be("Q1");
+        Text(sheet, "E6").Should().Be("West Total");
+        Number(sheet, "G6").Should().Be(45);
+        Text(sheet, "E7").Should().Be("West");
+        Text(sheet, "F7").Should().Be("Q1");
+        Text(sheet, "E9").Should().Be("Grand Total");
+        Number(sheet, "G9").Should().Be(70);
+    }
+
+    [Fact]
     public void Refresh_HidesGrandTotalWhenDisabled()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -418,6 +673,64 @@ public sealed class PivotTableRefreshServiceTests
 
         Text(sheet, "E3").Should().Be("East");
         Text(sheet, "E4").Should().Be("West");
+        sheet.GetCell(Addr(sheet, "E5")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "F5")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanHideRowGrandTotalsWhileKeepingColumnGrandTotals()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I8"),
+            ShowRowGrandTotals = false,
+            ShowColumnGrandTotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q1");
+        Text(sheet, "G2").Should().Be("Q2");
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+        Text(sheet, "E5").Should().Be("Grand Total");
+        Number(sheet, "F5").Should().Be(30);
+        Number(sheet, "G5").Should().Be(40);
+        sheet.GetCell(Addr(sheet, "H5")).Should().BeNull();
+    }
+
+    [Fact]
+    public void Refresh_MatrixCanHideColumnGrandTotalsWhileKeepingRowGrandTotals()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I8"),
+            ShowRowGrandTotals = true,
+            ShowColumnGrandTotals = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "H2").Should().Be("Grand Total");
+        Number(sheet, "H3").Should().Be(25);
+        Number(sheet, "H4").Should().Be(45);
         sheet.GetCell(Addr(sheet, "E5")).Should().BeNull();
         sheet.GetCell(Addr(sheet, "F5")).Should().BeNull();
     }
@@ -560,6 +873,137 @@ public sealed class PivotTableRefreshServiceTests
         detail.Rows[0].Select(PivotValueText).Should().Equal("East", "Q1", "10");
     }
 
+    [Fact]
+    public void ExtractDetailRows_ForMatrixValueCell_FiltersByColumnField()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "F3"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().ContainSingle();
+        detail.Rows[0].Select(PivotValueText).Should().Equal("East", "Q1", "10");
+    }
+
+    [Fact]
+    public void ExtractDetailRows_ForGrandTotal_ReturnsAllFilteredSourceRows()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "F5"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().HaveCount(4);
+        var rowTexts = detail.Rows.Select(row => string.Join("|", row.Select(PivotValueText))).ToList();
+        rowTexts.Should().Contain("East|Q1|10");
+        rowTexts.Should().Contain("West|Q2|25");
+    }
+
+    [Fact]
+    public void ExtractDetailRows_ForSubtotal_ReturnsSourceRowsInSubtotalGroup()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H10"),
+            ShowSubtotals = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "G5"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().HaveCount(2);
+        var rowTexts = detail.Rows.Select(row => string.Join("|", row.Select(PivotValueText))).ToList();
+        rowTexts.Should().Contain("East|Q1|10");
+        rowTexts.Should().Contain("East|Q2|15");
+    }
+
+    [Fact]
+    public void ExtractDetailRows_WhenRepeatLabelsAreOff_UsesNearestVisibleOuterLabel()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "H10"),
+            RepeatItemLabels = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "G4"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().ContainSingle();
+        detail.Rows[0].Select(PivotValueText).Should().Equal("East", "Q2", "15");
+    }
+
+    [Fact]
+    public void ExtractDetailRows_ForColumnOnlyPivot_FiltersByColumnItem()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I5")
+        };
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var detail = PivotTableRefreshService.ExtractDetailRows(workbook, sheet, pivot, Addr(sheet, "F3"));
+
+        detail.Headers.Should().Equal("Region", "Quarter", "Amount");
+        detail.Rows.Should().HaveCount(2);
+        var rowTexts = detail.Rows.Select(row => string.Join("|", row.Select(PivotValueText))).ToList();
+        rowTexts.Should().Contain("East|Q2|15");
+        rowTexts.Should().Contain("West|Q2|25");
+    }
+
     private static void SeedSalesData(Sheet sheet)
     {
         sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
@@ -577,6 +1021,46 @@ public sealed class PivotTableRefreshServiceTests
         sheet.SetCell(Addr(sheet, "A5"), new TextValue("West"));
         sheet.SetCell(Addr(sheet, "B5"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C5"), new NumberValue(25));
+    }
+
+    private static void SeedSalesChannelData(Sheet sheet)
+    {
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Channel"));
+        sheet.SetCell(Addr(sheet, "D1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new TextValue("Retail"));
+        sheet.SetCell(Addr(sheet, "D2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C3"), new TextValue("Wholesale"));
+        sheet.SetCell(Addr(sheet, "D3"), new NumberValue(15));
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C4"), new TextValue("Retail"));
+        sheet.SetCell(Addr(sheet, "D4"), new NumberValue(20));
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B5"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C5"), new TextValue("Wholesale"));
+        sheet.SetCell(Addr(sheet, "D5"), new NumberValue(25));
+        sheet.SetCell(Addr(sheet, "A6"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B6"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C6"), new TextValue("Retail"));
+        sheet.SetCell(Addr(sheet, "D6"), new NumberValue(30));
+        sheet.SetCell(Addr(sheet, "A7"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B7"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C7"), new TextValue("Wholesale"));
+        sheet.SetCell(Addr(sheet, "D7"), new NumberValue(35));
+        sheet.SetCell(Addr(sheet, "A8"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B8"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C8"), new TextValue("Retail"));
+        sheet.SetCell(Addr(sheet, "D8"), new NumberValue(40));
+        sheet.SetCell(Addr(sheet, "A9"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B9"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C9"), new TextValue("Wholesale"));
+        sheet.SetCell(Addr(sheet, "D9"), new NumberValue(45));
     }
 
     private static void SeedSalesWithUnitsData(Sheet sheet)
