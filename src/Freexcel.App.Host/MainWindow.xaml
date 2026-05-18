@@ -2533,6 +2533,126 @@
             </TabItem>
 
             <!-- ── HELP ──────────────────────────────────────────────── -->
+            <TabItem x:Name="PivotTableAnalyzeTab" Header="PivotTable Analyze" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA">
+                <Border Background="White" Padding="4,3,4,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Field List" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldListBtn_Click"
+                                            local:RibbonTooltip.Title="Field List"
+                                            local:RibbonTooltip.KeyTip="FL"
+                                            local:RibbonTooltip.Description="Show or hide the PivotTable Fields task pane."/>
+                                    <Button Content="Refresh" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
+                                            local:RibbonTooltip.Title="Refresh"
+                                            local:RibbonTooltip.KeyTip="R"
+                                            local:RibbonTooltip.Description="Refresh the selected PivotTable."/>
+                                    <Button Content="Show Details" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
+                                            local:RibbonTooltip.Title="Show Details"
+                                            local:RibbonTooltip.KeyTip="D"
+                                            local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
+                                            local:RibbonTooltip.Title="PivotChart"
+                                            local:RibbonTooltip.KeyTip="C"
+                                            local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
+                                    <Button Content="Change Chart" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartChangeTypeBtn_Click"
+                                            local:RibbonTooltip.Title="Change Chart Type"
+                                            local:RibbonTooltip.KeyTip="CT"
+                                            local:RibbonTooltip.Description="Change the bound PivotChart type while preserving its PivotTable connection."/>
+                                    <Button Content="Insert Slicer" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
+                                            local:RibbonTooltip.Title="Insert Slicer"
+                                            local:RibbonTooltip.KeyTip="IS"
+                                            local:RibbonTooltip.Description="Create a slicer connected to the selected PivotTable field."/>
+                                    <Button Content="Insert Timeline" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertTimelineBtn_Click"
+                                            local:RibbonTooltip.Title="Insert Timeline"
+                                            local:RibbonTooltip.KeyTip="IT"
+                                            local:RibbonTooltip.Description="Create a timeline connected to the selected PivotTable date field."/>
+                                    <Button Content="Change Source" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChangeDataSourceBtn_Click"
+                                            local:RibbonTooltip.Title="Change Data Source"
+                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.Description="Change the source range for the selected PivotTable."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <TabItem x:Name="PivotTableDesignTab" Header="Design" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JD">
+                <Border Background="White" Padding="4,3,4,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="Grand Totals" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGrandTotalsBtn_Click"
+                                            local:RibbonTooltip.Title="Grand Totals"
+                                            local:RibbonTooltip.KeyTip="G"
+                                            local:RibbonTooltip.Description="Cycle grand totals for the selected PivotTable."/>
+                                    <Button Content="Subtotals" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotSubtotalsBtn_Click"
+                                            local:RibbonTooltip.Title="Subtotals"
+                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.Description="Cycle subtotals for the selected PivotTable."/>
+                                    <Button Content="Report Layout" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotReportLayoutBtn_Click"
+                                            local:RibbonTooltip.Title="Report Layout"
+                                            local:RibbonTooltip.KeyTip="L"
+                                            local:RibbonTooltip.Description="Switch PivotTable report layout options."/>
+                                    <Button Content="Blank Rows" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBlankRowsBtn_Click"
+                                            local:RibbonTooltip.Title="Blank Rows"
+                                            local:RibbonTooltip.KeyTip="B"
+                                            local:RibbonTooltip.Description="Toggle blank lines after PivotTable items."/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Layout" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel>
+                                        <Button Content="Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotStyleGalleryBtn_Click"
+                                                local:RibbonTooltip.Title="PivotTable Styles"
+                                                local:RibbonTooltip.KeyTip="Y"
+                                                local:RibbonTooltip.Description="Cycle PivotTable style gallery choices."/>
+                                        <Button Content="Banded Rows" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBandedRowsBtn_Click"
+                                                local:RibbonTooltip.Title="Banded Rows"
+                                                local:RibbonTooltip.KeyTip="R"
+                                                local:RibbonTooltip.Description="Toggle banded row formatting for the selected PivotTable."/>
+                                        <Button Content="Banded Cols" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBandedColumnsBtn_Click"
+                                                local:RibbonTooltip.Title="Banded Columns"
+                                                local:RibbonTooltip.KeyTip="C"
+                                                local:RibbonTooltip.Description="Toggle banded column formatting for the selected PivotTable."/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <Button Content="Row Headers" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotRowHeadersBtn_Click"
+                                                local:RibbonTooltip.Title="Row Headers"
+                                                local:RibbonTooltip.KeyTip="H"
+                                                local:RibbonTooltip.Description="Toggle row header styling for the selected PivotTable."/>
+                                        <Button Content="Column Headers" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotColumnHeadersBtn_Click"
+                                                local:RibbonTooltip.Title="Column Headers"
+                                                local:RibbonTooltip.KeyTip="O"
+                                                local:RibbonTooltip.Description="Toggle column header styling for the selected PivotTable."/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable Style Options" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
             <TabItem Header="Help" local:RibbonTooltip.KeyTip="Y">
                 <Border Background="White" Padding="4,3,4,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto"
@@ -2629,6 +2749,8 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <ui:GridView x:Name="SheetGrid" Grid.Column="0"/>
             <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
@@ -2639,6 +2761,271 @@
                        Orientation="Vertical" Minimum="1" Maximum="1000000" Value="1" SmallChange="1"
                        AutomationProperties.Name="Vertical Worksheet Scroll Bar"
                        AutomationProperties.HelpText="Scroll worksheet rows"/>
+
+            <Border x:Name="PivotFieldListPane"
+                    Grid.Column="2"
+                    Width="320"
+                    Background="#F7F7F7"
+                    BorderBrush="#C8C8C8"
+                    BorderThickness="1,0,0,0"
+                    Visibility="Collapsed"
+                    KeyboardNavigation.TabNavigation="Cycle"
+                    AutomationProperties.Name="PivotTable Fields">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" LastChildFill="True">
+                        <Button Content="X"
+                                Width="22"
+                                Height="22"
+                                DockPanel.Dock="Right"
+                                Padding="0"
+                                Click="PivotFieldListCloseBtn_Click"
+                                AutomationProperties.Name="Close PivotTable Fields"/>
+                        <TextBlock Text="PivotTable Fields"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"
+                                   VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <TextBlock Grid.Row="1"
+                               Text="Choose fields to add to report:"
+                               FontSize="12"
+                               Margin="0,12,0,4"/>
+                    <ListBox x:Name="PivotAvailableFieldsList"
+                             Grid.Row="2"
+                             MinHeight="120"
+                             SelectionMode="Single"
+                             AllowDrop="True"
+                             PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                             Drop="PivotFieldList_Drop"
+                             AutomationProperties.Name="Available PivotTable Fields">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Caption}"
+                                          IsChecked="{Binding IsChecked}"
+                                          Click="PivotAvailableFieldCheckBox_Click"
+                                          AutomationProperties.Name="{Binding Caption}"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Sort A to Z" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click"/>
+                                <MenuItem Header="Sort Z to A" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click"/>
+                                <MenuItem Header="Select Items..." local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click"/>
+                                <MenuItem Header="Label Filter..." local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click"/>
+                                <MenuItem Header="Value Filter..." local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click"/>
+                                <MenuItem Header="Clear Filter" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Value Field Settings..." local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click"/>
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
+                    </ListBox>
+
+                    <UniformGrid Grid.Row="3" Columns="5" Margin="0,8,0,8">
+                        <Button Content="Rows" Click="PivotFieldToRowsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Rows"/>
+                        <Button Content="Columns" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Columns"/>
+                        <Button Content="Values" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Values"/>
+                        <Button Content="Filters" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Filters"/>
+                        <Button Content="Remove" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Remove selected PivotTable field"/>
+                    </UniformGrid>
+
+                    <Grid Grid.Row="4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Filters" FontWeight="SemiBold" Margin="0,0,0,3"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Columns" FontWeight="SemiBold" Margin="0,0,0,3"/>
+                        <ListBox x:Name="PivotFiltersList"
+                                 Grid.Row="1"
+                                 Grid.Column="0"
+                                 MinHeight="80"
+                                 SelectionMode="Single"
+                                 AllowDrop="True"
+                                 PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 Drop="PivotFieldList_Drop"
+                                 AutomationProperties.Name="PivotTable Filters Area">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Sort A to Z" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click"/>
+                                    <MenuItem Header="Sort Z to A" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click"/>
+                                    <MenuItem Header="Select Items..." local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click"/>
+                                    <MenuItem Header="Label Filter..." local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click"/>
+                                    <MenuItem Header="Value Filter..." local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click"/>
+                                    <MenuItem Header="Clear Filter" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Value Field Settings..." local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+                        <ListBox x:Name="PivotColumnsList"
+                                 Grid.Row="1"
+                                 Grid.Column="2"
+                                 MinHeight="80"
+                                 SelectionMode="Single"
+                                 AllowDrop="True"
+                                 PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 Drop="PivotFieldList_Drop"
+                                 AutomationProperties.Name="PivotTable Columns Area">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Sort A to Z" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click"/>
+                                    <MenuItem Header="Sort Z to A" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click"/>
+                                    <MenuItem Header="Select Items..." local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click"/>
+                                    <MenuItem Header="Label Filter..." local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click"/>
+                                    <MenuItem Header="Value Filter..." local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click"/>
+                                    <MenuItem Header="Clear Filter" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Value Field Settings..." local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Rows" FontWeight="SemiBold" Margin="0,8,0,3"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="Values" FontWeight="SemiBold" Margin="0,8,0,3"/>
+                        <ListBox x:Name="PivotRowsList"
+                                 Grid.Row="3"
+                                 Grid.Column="0"
+                                 MinHeight="80"
+                                 SelectionMode="Single"
+                                 AllowDrop="True"
+                                 PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 Drop="PivotFieldList_Drop"
+                                 AutomationProperties.Name="PivotTable Rows Area">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Sort A to Z" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click"/>
+                                    <MenuItem Header="Sort Z to A" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click"/>
+                                    <MenuItem Header="Select Items..." local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click"/>
+                                    <MenuItem Header="Label Filter..." local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click"/>
+                                    <MenuItem Header="Value Filter..." local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click"/>
+                                    <MenuItem Header="Clear Filter" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Value Field Settings..." local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+                        <ListBox x:Name="PivotValuesList"
+                                 Grid.Row="3"
+                                 Grid.Column="2"
+                                 MinHeight="80"
+                                 SelectionMode="Single"
+                                 AllowDrop="True"
+                                 PreviewMouseMove="PivotFieldList_PreviewMouseMove"
+                                 Drop="PivotFieldList_Drop"
+                                 AutomationProperties.Name="PivotTable Values Area">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Sort A to Z" local:RibbonTooltip.KeyTip="S" Click="PivotFieldSortAscendingMenuItem_Click"/>
+                                    <MenuItem Header="Sort Z to A" local:RibbonTooltip.KeyTip="O" Click="PivotFieldSortDescendingMenuItem_Click"/>
+                                    <MenuItem Header="Select Items..." local:RibbonTooltip.KeyTip="I" Click="PivotFieldSelectItemsMenuItem_Click"/>
+                                    <MenuItem Header="Label Filter..." local:RibbonTooltip.KeyTip="L" Click="PivotFieldLabelFilterMenuItem_Click"/>
+                                    <MenuItem Header="Value Filter..." local:RibbonTooltip.KeyTip="F" Click="PivotFieldValueFilterMenuItem_Click"/>
+                                    <MenuItem Header="Clear Filter" local:RibbonTooltip.KeyTip="C" Click="PivotFieldClearFilterMenuItem_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Value Field Settings..." local:RibbonTooltip.KeyTip="V" Click="PivotFieldValueSettingsMenuItem_Click"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                        </ListBox>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border x:Name="SlicerTimelinePane"
+                    Grid.Column="3"
+                    Width="280"
+                    Background="#FFFFFF"
+                    BorderBrush="#C8C8C8"
+                    BorderThickness="1,0,0,0"
+                    Visibility="Collapsed"
+                    KeyboardNavigation.TabNavigation="Cycle"
+                    AutomationProperties.Name="Slicers and Timelines">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <DockPanel LastChildFill="True" Margin="0,0,0,8">
+                            <Button Content="X"
+                                    Width="22"
+                                    Height="22"
+                                    DockPanel.Dock="Right"
+                                    Padding="0"
+                                    Click="SlicerTimelinePaneCloseBtn_Click"
+                                    AutomationProperties.Name="Close Slicers and Timelines"/>
+                            <TextBlock Text="Slicers and Timelines"
+                                       FontWeight="SemiBold"
+                                       FontSize="14"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <ItemsControl x:Name="SlicerItemsControl"
+                                      AutomationProperties.Name="Workbook Slicers">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#D0D0D0" BorderThickness="1" Margin="0,0,0,10" Padding="8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding FieldName}" FontSize="11" Foreground="#666" Margin="0,1,0,6"/>
+                                            <ItemsControl ItemsSource="{Binding Tiles}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Content="{Binding Caption}"
+                                                                Tag="{Binding SlicerName}"
+                                                                Click="SlicerTileButton_Click"
+                                                                MinHeight="24"
+                                                                Margin="0,1"
+                                                                HorizontalContentAlignment="Left"
+                                                                AutomationProperties.Name="{Binding Caption}"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <Button Content="Clear Filter"
+                                                    Tag="{Binding Name}"
+                                                    Click="SlicerClearButton_Click"
+                                                    Margin="0,6,0,0"
+                                                    MinHeight="24"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <ItemsControl x:Name="TimelineItemsControl"
+                                      AutomationProperties.Name="Workbook Timelines">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#D0D0D0" BorderThickness="1" Margin="0,0,0,10" Padding="8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding FieldName}" FontSize="11" Foreground="#666" Margin="0,1,0,6"/>
+                                            <UniformGrid Columns="2">
+                                                <TextBox x:Name="TimelineStartBox" Text="{Binding SelectedStartDate, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,3,0"/>
+                                                <TextBox x:Name="TimelineEndBox" Text="{Binding SelectedEndDate, UpdateSourceTrigger=PropertyChanged}" Margin="3,0,0,0"/>
+                                            </UniformGrid>
+                                            <UniformGrid Columns="2" Margin="0,6,0,0">
+                                                <Button Content="Apply" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"/>
+                                                <Button Content="Clear" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"/>
+                                            </UniformGrid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════════════════

@@ -72,9 +72,21 @@ public partial class MainWindow : Window
     private ColumnResizeSnapshot? _columnResizeSnapshot;
     private RowResizeSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
+    private string? _pivotChartContextFieldCaption;
+    private bool _slicerTimelinePaneDismissed;
 
     private enum PasteMode { All, Values, Formulas, Formats }
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells);
+    private sealed record PivotFieldListItem(string Caption, bool IsChecked);
+    private sealed record SlicerPaneItem(string Name, string FieldName, IReadOnlyList<SlicerTileItem> Tiles);
+    private sealed record SlicerTileItem(string SlicerName, string Caption, bool IsSelected);
+    private sealed class TimelinePaneItem
+    {
+        public string Name { get; init; } = "";
+        public string FieldName { get; init; } = "";
+        public string SelectedStartDate { get; set; } = "";
+        public string SelectedEndDate { get; set; } = "";
+    }
     private InternalClipboard? _internalClipboard;
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
@@ -120,6 +132,7 @@ public partial class MainWindow : Window
         SheetGrid.RowResizing    += OnRowResizing;
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;
+        SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested;
         SheetGrid.PageMarginsChanged += OnPageMarginsChanged;
         SheetGrid.SplitDividerMoved += OnSplitDividerMoved;
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
@@ -2815,6 +2828,8 @@ public partial class MainWindow : Window
         VerticalScroll.LargeChange    = Math.Max(1, viewport.RowMetrics.Count);
         HorizontalScroll.LargeChange  = Math.Max(1, viewport.ColMetrics.Count);
         RefreshValidationDropdown();
+        RefreshPivotFieldListPane();
+        RefreshSlicerTimelinePane();
     }
 
     private SplitPaneViewportOffsets? GetSplitPaneViewportOffsets(Sheet? sheet, uint topRow, uint leftCol)
@@ -6197,6 +6212,110 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void PivotChartChangeTypeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+        {
+            MessageBox.Show(
+                "Select a cell inside an existing PivotTable before changing a PivotChart type.",
+                "Change PivotChart Type",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var chart = sheet.Charts.FirstOrDefault(item =>
+            item.IsPivotChart &&
+            string.Equals(item.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase));
+        if (chart is null)
+        {
+            MessageBox.Show(
+                "Insert or select a PivotChart connected to this PivotTable before changing its type.",
+                "Change PivotChart Type",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var input = PromptForInput("PivotChart type:", chart.Type.ToString());
+        if (string.IsNullOrWhiteSpace(input))
+            return;
+
+        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, ParseChartType(input)), "Change PivotChart Type"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void OnPivotChartFieldButtonRequested(ChartModel chart, string fieldButton, System.Windows.Point position)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || !chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
+            return;
+
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        _pivotChartContextFieldCaption = ResolvePivotChartFieldButtonCaption(pivotTable, headers, fieldButton);
+        if (string.IsNullOrWhiteSpace(_pivotChartContextFieldCaption))
+            return;
+
+        SetActiveCell(pivotTable.TargetRange.Start);
+        RefreshPivotFieldListPane();
+
+        var menu = CreatePivotFieldContextMenu();
+        menu.Closed += (_, _) => _pivotChartContextFieldCaption = null;
+        menu.PlacementTarget = SheetGrid;
+        menu.Placement = PlacementMode.RelativePoint;
+        menu.HorizontalOffset = position.X;
+        menu.VerticalOffset = position.Y;
+        menu.IsOpen = true;
+    }
+
+    private ContextMenu CreatePivotFieldContextMenu()
+    {
+        var menu = new ContextMenu();
+        void Add(string header, RoutedEventHandler handler)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += handler;
+            menu.Items.Add(item);
+        }
+
+        Add("Sort A to Z", PivotFieldSortAscendingMenuItem_Click);
+        Add("Sort Z to A", PivotFieldSortDescendingMenuItem_Click);
+        Add("Select Items...", PivotFieldSelectItemsMenuItem_Click);
+        Add("Label Filter...", PivotFieldLabelFilterMenuItem_Click);
+        Add("Value Filter...", PivotFieldValueFilterMenuItem_Click);
+        Add("Clear Filter", PivotFieldClearFilterMenuItem_Click);
+        menu.Items.Add(new Separator());
+        Add("Value Field Settings...", PivotFieldValueSettingsMenuItem_Click);
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+        return menu;
+    }
+
+    private static string? ResolvePivotChartFieldButtonCaption(PivotTableModel pivotTable, IReadOnlyList<string> headers, string fieldButton)
+    {
+        if (string.Equals(fieldButton, "Values", StringComparison.OrdinalIgnoreCase))
+            return pivotTable.DataFields.FirstOrDefault()?.Name;
+
+        if (string.Equals(fieldButton, "Axis Fields", StringComparison.OrdinalIgnoreCase))
+        {
+            var field = pivotTable.RowFields.Concat(pivotTable.ColumnFields).FirstOrDefault();
+            return field is null ? null : PivotFieldCaption(headers, field.SourceFieldIndex);
+        }
+
+        var pageField = pivotTable.PageFields.FirstOrDefault();
+        if (pageField is not null)
+            return PivotFieldCaption(headers, pageField.SourceFieldIndex);
+
+        var axisField = pivotTable.RowFields.Concat(pivotTable.ColumnFields).FirstOrDefault();
+        return axisField is null ? pivotTable.DataFields.FirstOrDefault()?.Name : PivotFieldCaption(headers, axisField.SourceFieldIndex);
+    }
+
     private static PivotTableModel? FindPivotTableForSelection(Sheet sheet, GridRange? selectedRange)
     {
         if (selectedRange is { } range)
@@ -6208,6 +6327,1286 @@ public partial class MainWindow : Window
         }
 
         return sheet.PivotTables.FirstOrDefault();
+    }
+
+    private void RefreshPivotFieldListPane()
+    {
+        if (PivotFieldListPane is null)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+        {
+            PivotFieldListPane.Visibility = Visibility.Collapsed;
+            SetPivotContextualTabsVisible(false);
+            PivotAvailableFieldsList.ItemsSource = null;
+            PivotRowsList.ItemsSource = null;
+            PivotColumnsList.ItemsSource = null;
+            PivotFiltersList.ItemsSource = null;
+            PivotValuesList.ItemsSource = null;
+            return;
+        }
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        PivotAvailableFieldsList.ItemsSource = headers
+            .Select((caption, index) => new PivotFieldListItem(
+                caption,
+                pivotTable.RowFields.Any(field => field.SourceFieldIndex == index) ||
+                pivotTable.ColumnFields.Any(field => field.SourceFieldIndex == index) ||
+                pivotTable.PageFields.Any(field => field.SourceFieldIndex == index) ||
+                pivotTable.DataFields.Any(field => field.SourceFieldIndex == index)))
+            .ToList();
+        PivotRowsList.ItemsSource = pivotTable.RowFields
+            .Select(field => PivotFieldCaption(headers, field.SourceFieldIndex))
+            .ToList();
+        PivotColumnsList.ItemsSource = pivotTable.ColumnFields
+            .Select(field => PivotFieldCaption(headers, field.SourceFieldIndex))
+            .ToList();
+        PivotFiltersList.ItemsSource = pivotTable.PageFields
+            .Select(field => PivotFieldCaption(headers, field.SourceFieldIndex))
+            .ToList();
+        PivotValuesList.ItemsSource = pivotTable.DataFields
+            .Select(field => field.Name)
+            .ToList();
+        PivotFieldListPane.Visibility = Visibility.Visible;
+        SetPivotContextualTabsVisible(true);
+    }
+
+    private void RefreshSlicerTimelinePane()
+    {
+        if (SlicerTimelinePane is null)
+            return;
+
+        var slicers = _workbook.Slicers
+            .Where(slicer => !string.IsNullOrWhiteSpace(slicer.Name))
+            .Select(slicer => new SlicerPaneItem(
+                slicer.Name,
+                slicer.SourceFieldName ?? slicer.CacheName,
+                BuildSlicerTiles(slicer)))
+            .ToList();
+        var timelines = _workbook.Timelines
+            .Where(timeline => !string.IsNullOrWhiteSpace(timeline.Name))
+            .Select(timeline => new TimelinePaneItem
+            {
+                Name = timeline.Name,
+                FieldName = timeline.SourceFieldName ?? timeline.CacheName,
+                SelectedStartDate = timeline.SelectedStartDate ?? timeline.StartDate ?? "",
+                SelectedEndDate = timeline.SelectedEndDate ?? timeline.EndDate ?? ""
+            })
+            .ToList();
+
+        SlicerItemsControl.ItemsSource = slicers;
+        TimelineItemsControl.ItemsSource = timelines;
+        if (slicers.Count == 0 && timelines.Count == 0)
+        {
+            SlicerTimelinePane.Visibility = Visibility.Collapsed;
+            _slicerTimelinePaneDismissed = false;
+        }
+        else if (!_slicerTimelinePaneDismissed)
+            SlicerTimelinePane.Visibility = Visibility.Visible;
+    }
+
+    private IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer)
+    {
+        var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        var items = ReadSlicerSourceItems(slicer).ToList();
+        if (items.Count == 0)
+            items.AddRange(slicer.SelectedItems);
+
+        return items
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)
+            .Select(item => new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)))
+            .ToList();
+    }
+
+    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
+    {
+        if (string.IsNullOrWhiteSpace(slicer.SourcePivotTableName) ||
+            string.IsNullOrWhiteSpace(slicer.SourceFieldName))
+        {
+            return [];
+        }
+
+        foreach (var sheet in _workbook.Sheets)
+        {
+            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+                string.Equals(pivot.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase));
+            if (pivotTable is null)
+                continue;
+
+            var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+            var sourceIndex = FindPivotSourceFieldIndex(headers, slicer.SourceFieldName);
+            return sourceIndex is null ? [] : ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value);
+        }
+
+        return [];
+    }
+
+    private void SlicerTimelinePaneCloseBtn_Click(object sender, RoutedEventArgs e)
+    {
+        _slicerTimelinePaneDismissed = true;
+        SlicerTimelinePane.Visibility = Visibility.Collapsed;
+    }
+
+    private void SlicerTileButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: SlicerTileItem tile })
+            return;
+
+        var slicer = _workbook.Slicers.FirstOrDefault(item =>
+            string.Equals(item.Name, tile.SlicerName, StringComparison.OrdinalIgnoreCase));
+        if (slicer is null)
+            return;
+
+        var allItems = ReadSlicerSourceItems(slicer).ToList();
+        var selected = slicer.SelectedItems.Count == 0
+            ? allItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase)
+            : slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+        if (!selected.Remove(tile.Caption))
+            selected.Add(tile.Caption);
+        if (selected.Count == allItems.Count)
+            selected.Clear();
+
+        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicer.Name, selected.ToList()), "Slicer"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void SlicerClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string slicerName })
+            return;
+
+        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, []), "Slicer"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void TimelineApplyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: TimelinePaneItem item })
+            return;
+
+        if (!TryExecuteCommand(
+                new SetTimelineRangeCommand(item.Name, EmptyToNull(item.SelectedStartDate), EmptyToNull(item.SelectedEndDate)),
+                "Timeline"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void TimelineClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: TimelinePaneItem item })
+            return;
+
+        if (!TryExecuteCommand(new SetTimelineRangeCommand(item.Name, null, null), "Timeline"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private static string? EmptyToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void SetPivotContextualTabsVisible(bool visible)
+    {
+        var visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (PivotTableAnalyzeTab is not null)
+            PivotTableAnalyzeTab.Visibility = visibility;
+        if (PivotTableDesignTab is not null)
+            PivotTableDesignTab.Visibility = visibility;
+    }
+
+    private void PivotFieldListBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (pivotTable is null)
+        {
+            MessageBox.Show(
+                "Select a cell inside an existing PivotTable before showing the field list.",
+                "PivotTable Fields",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        PivotFieldListPane.Visibility = PivotFieldListPane.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        if (PivotFieldListPane.Visibility == Visibility.Visible)
+            RefreshPivotFieldListPane();
+    }
+
+    private void PivotChangeDataSourceBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var input = PromptForInput("PivotTable source range:", FormatWorkbookRange(pivotTable.SourceRange));
+        if (string.IsNullOrWhiteSpace(input) || !TryParseWorkbookRange(sheet.Id, input, out var sourceRange))
+            return;
+
+        if (!TryExecuteCommand(
+                new ChangePivotTableSourceCommand(_currentSheetId, pivotTable.Name, sourceRange),
+                "Change PivotTable Data Source"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var fieldName = GetSelectedPivotFieldListItem();
+        if (FindPivotSourceFieldIndex(headers, fieldName) is null)
+            fieldName = headers.FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(fieldName))
+            return;
+
+        var name = PromptForInput("Slicer name:", $"{fieldName} Slicer");
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        if (!TryExecuteCommand(new AddSlicerCommand(name.Trim(), pivotTable.Name, fieldName), "Insert Slicer"))
+            return;
+
+        _slicerTimelinePaneDismissed = false;
+        RefreshSlicerTimelinePane();
+        UpdateViewport();
+    }
+
+    private void PivotInsertTimelineBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var fieldName = GetSelectedPivotFieldListItem();
+        if (FindPivotSourceFieldIndex(headers, fieldName) is null)
+            fieldName = headers.FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(fieldName))
+            return;
+
+        var name = PromptForInput("Timeline name:", $"{fieldName} Timeline");
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        if (!TryExecuteCommand(new AddTimelineCommand(name.Trim(), pivotTable.Name, fieldName), "Insert Timeline"))
+            return;
+
+        _slicerTimelinePaneDismissed = false;
+        RefreshSlicerTimelinePane();
+        UpdateViewport();
+    }
+
+    private void PivotGrandTotalsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+        {
+            ApplyPivotOptions(
+                pivotTable,
+                !pivotTable.ShowRowGrandTotals,
+                !pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+        }
+    }
+
+    private void PivotSubtotalsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+        {
+            var showSubtotals = pivotTable.ShowSubtotals;
+            var subtotalPlacement = pivotTable.SubtotalPlacement;
+            if (!pivotTable.ShowSubtotals)
+            {
+                showSubtotals = true;
+                subtotalPlacement = PivotSubtotalPlacement.Bottom;
+            }
+            else if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
+            {
+                subtotalPlacement = PivotSubtotalPlacement.Top;
+            }
+            else
+            {
+                showSubtotals = false;
+                subtotalPlacement = PivotSubtotalPlacement.Bottom;
+            }
+
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                showSubtotals,
+                subtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+        }
+    }
+
+    private void PivotReportLayoutBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+        {
+            var reportLayout = pivotTable.ReportLayout switch
+            {
+                PivotReportLayout.Compact => PivotReportLayout.Outline,
+                PivotReportLayout.Outline => PivotReportLayout.Tabular,
+                _ => PivotReportLayout.Compact
+            };
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                reportLayout);
+        }
+    }
+
+    private void PivotBlankRowsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                !pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+    }
+
+    private void PivotStyleGalleryBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+        {
+            var styleName = pivotTable.StyleName switch
+            {
+                "PivotStyleLight16" => "PivotStyleMedium9",
+                "PivotStyleMedium9" => "PivotStyleDark4",
+                _ => "PivotStyleLight16"
+            };
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                styleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+        }
+    }
+
+    private void PivotRowHeadersBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                !pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+    }
+
+    private void PivotColumnHeadersBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                !pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+    }
+
+    private void PivotBandedRowsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                !pivotTable.ShowRowStripes,
+                pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+    }
+
+    private void PivotBandedColumnsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (TryGetActivePivotTable(out _, out var pivotTable))
+            ApplyPivotOptions(
+                pivotTable,
+                pivotTable.ShowRowGrandTotals,
+                pivotTable.ShowColumnGrandTotals,
+                pivotTable.ShowSubtotals,
+                pivotTable.SubtotalPlacement,
+                pivotTable.RepeatItemLabels,
+                pivotTable.BlankLineAfterItems,
+                pivotTable.StyleName,
+                pivotTable.ShowRowHeaders,
+                pivotTable.ShowColumnHeaders,
+                pivotTable.ShowRowStripes,
+                !pivotTable.ShowColumnStripes,
+                pivotTable.ReportLayout);
+    }
+
+    private void ApplyPivotOptions(
+        PivotTableModel pivotTable,
+        bool showRowGrandTotals,
+        bool showColumnGrandTotals,
+        bool showSubtotals,
+        PivotSubtotalPlacement subtotalPlacement,
+        bool repeatItemLabels,
+        bool blankLineAfterItems,
+        string styleName,
+        bool showRowHeaders,
+        bool showColumnHeaders,
+        bool showRowStripes,
+        bool showColumnStripes,
+        PivotReportLayout reportLayout)
+    {
+        if (!TryExecuteCommand(
+                new ConfigurePivotTableOptionsCommand(
+                    _currentSheetId,
+                    pivotTable.Name,
+                    showRowGrandTotals,
+                    showColumnGrandTotals,
+                    showSubtotals,
+                    subtotalPlacement,
+                    repeatItemLabels,
+                    blankLineAfterItems,
+                    styleName,
+                    showRowHeaders,
+                    showColumnHeaders,
+                    showRowStripes,
+                    showColumnStripes,
+                    reportLayout),
+                "PivotTable Options"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
+    {
+        sheet = _workbook.GetSheet(_currentSheetId)!;
+        pivotTable = sheet is null ? null! : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)!;
+        return sheet is not null && pivotTable is not null;
+    }
+
+    private void PivotFieldListCloseBtn_Click(object sender, RoutedEventArgs e)
+    {
+        PivotFieldListPane.Visibility = Visibility.Collapsed;
+    }
+
+    private void PivotFieldToRowsBtn_Click(object sender, RoutedEventArgs e) =>
+        MoveSelectedPivotField(PivotFieldDropZone.Rows);
+
+    private void PivotFieldToColumnsBtn_Click(object sender, RoutedEventArgs e) =>
+        MoveSelectedPivotField(PivotFieldDropZone.Columns);
+
+    private void PivotFieldToValuesBtn_Click(object sender, RoutedEventArgs e) =>
+        MoveSelectedPivotField(PivotFieldDropZone.Values);
+
+    private void PivotFieldToFiltersBtn_Click(object sender, RoutedEventArgs e) =>
+        MoveSelectedPivotField(PivotFieldDropZone.Filters);
+
+    private void PivotFieldList_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed ||
+            sender is not ListBox list ||
+            GetPivotListItemCaption(list.SelectedItem) is not { } caption)
+        {
+            return;
+        }
+
+        DragDrop.DoDragDrop(list, caption, DragDropEffects.Move);
+    }
+
+    private void PivotFieldList_Drop(object sender, DragEventArgs e)
+    {
+        if (sender is not ListBox targetList ||
+            e.Data.GetData(DataFormats.StringFormat) is not string caption ||
+            GetPivotFieldDropZone(targetList) is not { } targetZone)
+        {
+            return;
+        }
+
+        MovePivotFieldToZone(caption, targetZone, targetList.SelectedIndex);
+        e.Handled = true;
+    }
+
+    private void PivotAvailableFieldCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { DataContext: PivotFieldListItem item } checkBox)
+            return;
+
+        TogglePivotAvailableField(item.Caption, checkBox.IsChecked == true);
+    }
+
+    private void TogglePivotAvailableField(string caption, bool isChecked)
+    {
+        if (isChecked)
+        {
+            var sheet = _workbook.GetSheet(_currentSheetId);
+            var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+            if (sheet is null || pivotTable is null)
+                return;
+
+            var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+            var sourceIndex = FindPivotSourceFieldIndex(headers, caption);
+            if (sourceIndex is null)
+                return;
+
+            var zone = IsNumericPivotSourceField(sheet, pivotTable, sourceIndex.Value)
+                ? PivotFieldDropZone.Values
+                : PivotFieldDropZone.Rows;
+            MovePivotFieldToZone(caption, zone, -1);
+            return;
+        }
+
+        MovePivotFieldToZone(caption, PivotFieldDropZone.Available, -1);
+    }
+
+    private void PivotFieldRemoveBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var selected = GetSelectedPivotFieldListItem();
+        if (string.IsNullOrWhiteSpace(selected))
+            return;
+
+        var sourceIndex = FindPivotSourceFieldIndex(headers, selected);
+        var rowFields = sourceIndex is null
+            ? pivotTable.RowFields.ToList()
+            : pivotTable.RowFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
+        var columnFields = sourceIndex is null
+            ? pivotTable.ColumnFields.ToList()
+            : pivotTable.ColumnFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
+        var pageFields = sourceIndex is null
+            ? pivotTable.PageFields.ToList()
+            : pivotTable.PageFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
+        var dataFields = pivotTable.DataFields
+            .Where(field => !string.Equals(field.Name, selected, StringComparison.CurrentCultureIgnoreCase) &&
+                            (sourceIndex is null || field.SourceFieldIndex != sourceIndex.Value))
+            .ToList();
+
+        ApplyPivotFieldListLayout(pivotTable, rowFields, columnFields, pageFields, dataFields);
+    }
+
+    private void PivotFieldSortAscendingMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyPivotFieldSort(PivotSortDirection.Ascending);
+
+    private void PivotFieldSortDescendingMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ApplyPivotFieldSort(PivotSortDirection.Descending);
+
+    private void PivotFieldClearFilterMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var selected = GetSelectedPivotFieldListItem();
+        var sourceIndex = FindPivotSourceFieldIndex(headers, selected);
+        var dataFieldIndex = FindPivotDataFieldIndex(pivotTable, selected);
+
+        var labelFilters = sourceIndex is null
+            ? pivotTable.LabelFilters.ToList()
+            : pivotTable.LabelFilters.Where(filter => filter.SourceFieldIndex != sourceIndex.Value).ToList();
+        var valueFilters = sourceIndex is null
+            ? pivotTable.ValueFilters.ToList()
+            : pivotTable.ValueFilters.Where(filter => filter.SourceFieldIndex != sourceIndex.Value).ToList();
+        var sorts = pivotTable.Sorts
+            .Where(sort =>
+                (sourceIndex is null || sort.FieldIndex != sourceIndex.Value) &&
+                (dataFieldIndex is null || sort.DataFieldIndex != dataFieldIndex.Value))
+            .ToList();
+
+        ApplyPivotFieldView(pivotTable, labelFilters, valueFilters, sorts);
+    }
+
+    private void PivotFieldSelectItemsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = FindPivotSourceFieldIndex(headers, GetSelectedPivotFieldListItem());
+        if (sourceIndex is null)
+            return;
+
+        var existingItems = pivotTable.RowFields
+            .Concat(pivotTable.ColumnFields)
+            .Concat(pivotTable.PageFields)
+            .FirstOrDefault(field => field.SourceFieldIndex == sourceIndex.Value)
+            ?.SelectedItems;
+        var dialog = new PivotFieldFilterDialog(ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value), existingItems)
+        {
+            Owner = this,
+            Title = $"{PivotFieldCaption(headers, sourceIndex.Value)} Filter"
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var allItems = ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value).ToList();
+        var selectedItems = dialog.SelectedItems;
+        var items = selectedItems.Count == 0 || selectedItems.Count == allItems.Count ? null : selectedItems;
+        var rowFields = SetPivotFieldSelectedItems(pivotTable.RowFields, sourceIndex.Value, items);
+        var columnFields = SetPivotFieldSelectedItems(pivotTable.ColumnFields, sourceIndex.Value, items);
+        var pageFields = SetPivotFieldSelectedItems(pivotTable.PageFields, sourceIndex.Value, items);
+
+        ApplyPivotFieldListLayout(pivotTable, rowFields, columnFields, pageFields, pivotTable.DataFields.ToList());
+    }
+
+    private void PivotFieldLabelFilterMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = FindPivotSourceFieldIndex(headers, GetSelectedPivotFieldListItem());
+        if (sourceIndex is null)
+            return;
+
+        var dialog = new PivotLabelFilterDialog(sourceIndex.Value) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.ResultFilter is not { } filter)
+            return;
+
+        var labelFilters = pivotTable.LabelFilters
+            .Where(item => item.SourceFieldIndex != sourceIndex.Value)
+            .Append(filter)
+            .ToList();
+        ApplyPivotFieldView(pivotTable, labelFilters, pivotTable.ValueFilters.ToList(), pivotTable.Sorts.ToList());
+    }
+
+    private void PivotFieldValueFilterMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null || pivotTable.DataFields.Count == 0)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = FindPivotSourceFieldIndex(headers, GetSelectedPivotFieldListItem());
+        if (sourceIndex is null)
+            return;
+
+        var dialog = new PivotValueFilterDialog(sourceIndex.Value) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.ResultFilter is not { } filter)
+            return;
+
+        var valueFilters = pivotTable.ValueFilters
+            .Where(item => item.SourceFieldIndex != sourceIndex.Value)
+            .Append(filter)
+            .ToList();
+        ApplyPivotFieldView(pivotTable, pivotTable.LabelFilters.ToList(), valueFilters, pivotTable.Sorts.ToList());
+    }
+
+    private void PivotFieldValueSettingsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var selected = GetSelectedPivotFieldListItem();
+        var dataFieldIndex = FindPivotDataFieldIndex(pivotTable, selected);
+        if (dataFieldIndex is null)
+        {
+            var sourceIndex = FindPivotSourceFieldIndex(headers, selected);
+            if (sourceIndex is null)
+                return;
+            dataFieldIndex = pivotTable.DataFields.FindIndex(field => field.SourceFieldIndex == sourceIndex.Value);
+            if (dataFieldIndex < 0)
+                return;
+        }
+
+        var current = pivotTable.DataFields[dataFieldIndex.Value];
+        var dialog = new PivotValueFieldSettingsDialog(current, headers) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var dataFields = pivotTable.DataFields.ToList();
+        dataFields[dataFieldIndex.Value] = dialog.ResultDataField;
+
+        ApplyPivotFieldListLayout(
+            pivotTable,
+            pivotTable.RowFields.ToList(),
+            pivotTable.ColumnFields.ToList(),
+            pivotTable.PageFields.ToList(),
+            dataFields);
+    }
+
+    private void MoveSelectedPivotField(PivotFieldDropZone zone)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var selected = GetSelectedPivotFieldListItem();
+        var sourceIndex = FindPivotSourceFieldIndex(headers, selected);
+        if (sourceIndex is null)
+            return;
+
+        var rowFields = pivotTable.RowFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
+        var columnFields = pivotTable.ColumnFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
+        var pageFields = pivotTable.PageFields.Where(field => field.SourceFieldIndex != sourceIndex.Value).ToList();
+        var dataFields = pivotTable.DataFields.ToList();
+        var field = new PivotFieldModel(sourceIndex.Value);
+
+        switch (zone)
+        {
+            case PivotFieldDropZone.Rows:
+                rowFields.Add(field);
+                break;
+            case PivotFieldDropZone.Columns:
+                columnFields.Add(field);
+                break;
+            case PivotFieldDropZone.Filters:
+                pageFields.Add(field);
+                break;
+            case PivotFieldDropZone.Values:
+                if (dataFields.All(dataField => dataField.SourceFieldIndex != sourceIndex.Value))
+                {
+                    var caption = PivotFieldCaption(headers, sourceIndex.Value);
+                    var summaryFunction = IsNumericPivotSourceField(sheet, pivotTable, sourceIndex.Value) ? "sum" : "count";
+                    var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
+                    dataFields.Add(new PivotDataFieldModel(sourceIndex.Value, displayName, summaryFunction));
+                }
+                break;
+        }
+
+        ApplyPivotFieldListLayout(pivotTable, rowFields, columnFields, pageFields, dataFields);
+    }
+
+    private void MovePivotFieldToZone(string caption, PivotFieldDropZone targetZone, int insertIndex)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = FindPivotFieldSourceIndex(headers, pivotTable, caption);
+        var draggedDataField = pivotTable.DataFields.FirstOrDefault(field =>
+            string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase));
+        if (sourceIndex is null && draggedDataField is null)
+            return;
+
+        var rowFields = pivotTable.RowFields.Where(field => field.SourceFieldIndex != sourceIndex).ToList();
+        var columnFields = pivotTable.ColumnFields.Where(field => field.SourceFieldIndex != sourceIndex).ToList();
+        var pageFields = pivotTable.PageFields.Where(field => field.SourceFieldIndex != sourceIndex).ToList();
+        var dataFields = pivotTable.DataFields
+            .Where(field => !string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase) &&
+                            field.SourceFieldIndex != sourceIndex)
+            .ToList();
+
+        if (targetZone == PivotFieldDropZone.Available)
+        {
+            ApplyPivotFieldListLayout(pivotTable, rowFields, columnFields, pageFields, dataFields);
+            return;
+        }
+
+        if (sourceIndex is null)
+            return;
+
+        switch (targetZone)
+        {
+            case PivotFieldDropZone.Rows:
+                InsertAt(rowFields, FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                break;
+            case PivotFieldDropZone.Columns:
+                InsertAt(columnFields, FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                break;
+            case PivotFieldDropZone.Filters:
+                InsertAt(pageFields, FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                break;
+            case PivotFieldDropZone.Values:
+                var valueField = draggedDataField ?? CreateDefaultPivotDataField(sheet, pivotTable, headers, sourceIndex.Value);
+                InsertAt(dataFields, valueField, insertIndex);
+                break;
+        }
+
+        ApplyPivotFieldListLayout(pivotTable, rowFields, columnFields, pageFields, dataFields);
+    }
+
+    private void ApplyPivotFieldSort(PivotSortDirection direction)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (sheet is null || pivotTable is null)
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var selected = GetSelectedPivotFieldListItem();
+        var sourceIndex = FindPivotSourceFieldIndex(headers, selected);
+        var dataFieldIndex = FindPivotDataFieldIndex(pivotTable, selected);
+        if (sourceIndex is null && dataFieldIndex is null)
+            return;
+
+        var sorts = pivotTable.Sorts
+            .Where(sort =>
+                (sourceIndex is null || sort.FieldIndex != sourceIndex.Value) &&
+                (dataFieldIndex is null || sort.DataFieldIndex != dataFieldIndex.Value))
+            .ToList();
+
+        if (dataFieldIndex is not null)
+        {
+            sorts.Add(new PivotSortModel(
+                PivotSortTarget.Value,
+                direction,
+                DataFieldIndex: dataFieldIndex.Value,
+                FieldIndex: pivotTable.RowFields.LastOrDefault()?.SourceFieldIndex ??
+                            pivotTable.ColumnFields.LastOrDefault()?.SourceFieldIndex ??
+                            0));
+        }
+        else
+        {
+            sorts.Add(new PivotSortModel(PivotSortTarget.Label, direction, FieldIndex: sourceIndex.GetValueOrDefault()));
+        }
+
+        ApplyPivotFieldView(pivotTable, pivotTable.LabelFilters.ToList(), pivotTable.ValueFilters.ToList(), sorts);
+    }
+
+    private void ApplyPivotFieldListLayout(
+        PivotTableModel pivotTable,
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IReadOnlyList<PivotFieldModel> pageFields,
+        IReadOnlyList<PivotDataFieldModel> dataFields)
+    {
+        if (dataFields.Count == 0)
+        {
+            MessageBox.Show(
+                "A PivotTable requires at least one value field.",
+                "PivotTable Fields",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new ConfigurePivotTableLayoutCommand(_currentSheetId, pivotTable.Name, rowFields, columnFields, pageFields, dataFields),
+                "PivotTable Fields"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void ApplyPivotFieldView(
+        PivotTableModel pivotTable,
+        IReadOnlyList<PivotLabelFilterModel> labelFilters,
+        IReadOnlyList<PivotValueFilterModel> valueFilters,
+        IReadOnlyList<PivotSortModel> sorts)
+    {
+        if (!TryExecuteCommand(
+                new ConfigurePivotTableViewCommand(_currentSheetId, pivotTable.Name, labelFilters, valueFilters, sorts),
+                "PivotTable Field"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private string? GetSelectedPivotFieldListItem()
+    {
+        if (!string.IsNullOrWhiteSpace(_pivotChartContextFieldCaption))
+            return _pivotChartContextFieldCaption;
+
+        foreach (var list in new[] { PivotAvailableFieldsList, PivotRowsList, PivotColumnsList, PivotValuesList, PivotFiltersList })
+        {
+            if (GetPivotListItemCaption(list.SelectedItem) is { } value)
+                return value;
+        }
+
+        return null;
+    }
+
+    private static string? GetPivotListItemCaption(object? item) =>
+        item switch
+        {
+            string value when !string.IsNullOrWhiteSpace(value) => value,
+            PivotFieldListItem field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
+            _ => null
+        };
+
+    private Sheet GetPivotSourceSheet(Sheet fallbackSheet, PivotTableModel pivotTable) =>
+        _workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
+
+    private List<string> ReadPivotSourceHeaders(Sheet sheet, PivotTableModel pivotTable)
+    {
+        var sourceSheet = GetPivotSourceSheet(sheet, pivotTable);
+        var headers = new List<string>();
+        var start = pivotTable.SourceRange.Start;
+        for (var col = start.Col; col <= pivotTable.SourceRange.End.Col; col++)
+        {
+            var caption = FormatCellValue(sourceSheet.GetValue(start.Row, col)).Trim();
+            headers.Add(string.IsNullOrWhiteSpace(caption) ? $"Column {headers.Count + 1}" : caption);
+        }
+
+        return headers;
+    }
+
+    private IReadOnlyList<string> ReadPivotFieldItems(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        var sourceSheet = GetPivotSourceSheet(sheet, pivotTable);
+        var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
+        var values = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
+        {
+            var text = FormatCellValue(sourceSheet.GetValue(row, sourceColumn)).Trim();
+            values.Add(string.IsNullOrWhiteSpace(text) ? "(blank)" : text);
+        }
+
+        return values.OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    private bool TryParseWorkbookRange(SheetId defaultSheetId, string input, out GridRange range)
+    {
+        range = default;
+        var normalized = input.Trim();
+        var sheetId = defaultSheetId;
+        var bangIndex = normalized.LastIndexOf('!');
+        if (bangIndex >= 0)
+        {
+            var sheetName = UnquoteSheetName(normalized[..bangIndex].Trim());
+            var sheet = _workbook.Sheets.FirstOrDefault(item =>
+                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase));
+            if (sheet is null)
+                return false;
+
+            sheetId = sheet.Id;
+            normalized = normalized[(bangIndex + 1)..].Trim();
+        }
+
+        var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is 0 or > 2)
+            return false;
+
+        try
+        {
+            var start = CellAddress.Parse(parts[0], sheetId);
+            var end = parts.Length == 1 ? start : CellAddress.Parse(parts[1], sheetId);
+            range = new GridRange(start, end);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string FormatWorkbookRange(GridRange range)
+    {
+        var reference = $"{range.Start.ToA1()}:{range.End.ToA1()}";
+        var sheet = _workbook.GetSheet(range.Start.Sheet);
+        return sheet is null || sheet.Id == _currentSheetId
+            ? reference
+            : $"{QuoteSheetNameForReference(sheet.Name)}!{reference}";
+    }
+
+    private static string UnquoteSheetName(string sheetName)
+    {
+        if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')
+            return sheetName[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return sheetName;
+    }
+
+    private static string QuoteSheetNameForReference(string sheetName)
+    {
+        if (sheetName.All(ch => char.IsLetterOrDigit(ch) || ch == '_'))
+            return sheetName;
+
+        return $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
+    }
+
+    private static string PivotFieldCaption(IReadOnlyList<string> headers, int sourceFieldIndex) =>
+        sourceFieldIndex >= 0 && sourceFieldIndex < headers.Count
+            ? headers[sourceFieldIndex]
+            : $"Column {sourceFieldIndex + 1}";
+
+    private static int? FindPivotSourceFieldIndex(IReadOnlyList<string> headers, string? caption)
+    {
+        if (string.IsNullOrWhiteSpace(caption))
+            return null;
+
+        for (var index = 0; index < headers.Count; index++)
+        {
+            if (string.Equals(headers[index], caption, StringComparison.CurrentCultureIgnoreCase))
+                return index;
+        }
+
+        return null;
+    }
+
+    private static int? FindPivotDataFieldIndex(PivotTableModel pivotTable, string? caption)
+    {
+        if (string.IsNullOrWhiteSpace(caption))
+            return null;
+
+        for (var index = 0; index < pivotTable.DataFields.Count; index++)
+        {
+            if (string.Equals(pivotTable.DataFields[index].Name, caption, StringComparison.CurrentCultureIgnoreCase))
+                return index;
+        }
+
+        return null;
+    }
+
+    private static int? FindPivotFieldSourceIndex(IReadOnlyList<string> headers, PivotTableModel pivotTable, string caption)
+    {
+        var sourceIndex = FindPivotSourceFieldIndex(headers, caption);
+        if (sourceIndex is not null)
+            return sourceIndex;
+
+        return pivotTable.DataFields
+            .FirstOrDefault(field => string.Equals(field.Name, caption, StringComparison.CurrentCultureIgnoreCase))
+            ?.SourceFieldIndex;
+    }
+
+    private static PivotFieldModel FindExistingPivotField(PivotTableModel pivotTable, int sourceFieldIndex) =>
+        pivotTable.RowFields
+            .Concat(pivotTable.ColumnFields)
+            .Concat(pivotTable.PageFields)
+            .FirstOrDefault(field => field.SourceFieldIndex == sourceFieldIndex)
+        ?? new PivotFieldModel(sourceFieldIndex);
+
+    private static PivotDataFieldModel CreateDefaultPivotDataField(Sheet sheet, PivotTableModel pivotTable, IReadOnlyList<string> headers, int sourceFieldIndex)
+    {
+        var caption = PivotFieldCaption(headers, sourceFieldIndex);
+        var summaryFunction = IsNumericPivotSourceField(sheet, pivotTable, sourceFieldIndex) ? "sum" : "count";
+        var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
+        return new PivotDataFieldModel(sourceFieldIndex, displayName, summaryFunction);
+    }
+
+    private static void InsertAt<T>(List<T> items, T item, int index)
+    {
+        if (index < 0 || index > items.Count)
+            items.Add(item);
+        else
+            items.Insert(index, item);
+    }
+
+    private PivotFieldDropZone? GetPivotFieldDropZone(ListBox list)
+    {
+        if (ReferenceEquals(list, PivotRowsList))
+            return PivotFieldDropZone.Rows;
+        if (ReferenceEquals(list, PivotColumnsList))
+            return PivotFieldDropZone.Columns;
+        if (ReferenceEquals(list, PivotFiltersList))
+            return PivotFieldDropZone.Filters;
+        if (ReferenceEquals(list, PivotValuesList))
+            return PivotFieldDropZone.Values;
+        if (ReferenceEquals(list, PivotAvailableFieldsList))
+            return PivotFieldDropZone.Available;
+        return null;
+    }
+
+    private static bool IsNumericPivotSourceField(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
+        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
+        {
+            if (sheet.GetValue(row, sourceColumn) is NumberValue or DateTimeValue)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static List<PivotFieldModel> SetPivotFieldSelectedItems(
+        IReadOnlyList<PivotFieldModel> fields,
+        int sourceFieldIndex,
+        IReadOnlyList<string>? selectedItems) =>
+        fields
+            .Select(field => field.SourceFieldIndex == sourceFieldIndex
+                ? field with
+                {
+                    SelectedItem = selectedItems is { Count: 1 } ? selectedItems[0] : null,
+                    SelectedItems = selectedItems
+                }
+                : field)
+            .ToList();
+
+    private static bool TryParsePivotLabelFilter(string input, int sourceFieldIndex, out PivotLabelFilterModel filter)
+    {
+        filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.Contains, "");
+        var normalized = input.Trim();
+        if (normalized.StartsWith("<>", StringComparison.Ordinal))
+        {
+            filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.DoesNotEqual, normalized[2..].Trim());
+            return !string.IsNullOrWhiteSpace(filter.Value);
+        }
+
+        var parts = normalized.Split(':', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1]))
+            return false;
+
+        var kind = parts[0].ToLowerInvariant() switch
+        {
+            "equals" or "=" => PivotLabelFilterKind.Equals,
+            "notequals" or "not" or "<>" => PivotLabelFilterKind.DoesNotEqual,
+            "begins" or "beginswith" => PivotLabelFilterKind.BeginsWith,
+            "ends" or "endswith" => PivotLabelFilterKind.EndsWith,
+            "contains" => PivotLabelFilterKind.Contains,
+            "notcontains" => PivotLabelFilterKind.DoesNotContain,
+            _ => PivotLabelFilterKind.Contains
+        };
+        filter = new PivotLabelFilterModel(sourceFieldIndex, kind, parts[1]);
+        return true;
+    }
+
+    private static bool TryParsePivotValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
+    {
+        filter = new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, SourceFieldIndex: sourceFieldIndex);
+        var normalized = input.Trim();
+        if (TryParseTopBottomPivotValueFilter(normalized, sourceFieldIndex, out filter))
+            return true;
+
+        var operators = new[]
+        {
+            (Text: ">=", Kind: PivotValueFilterKind.GreaterThanOrEqual),
+            (Text: "<=", Kind: PivotValueFilterKind.LessThanOrEqual),
+            (Text: "<>", Kind: PivotValueFilterKind.DoesNotEqual),
+            (Text: ">", Kind: PivotValueFilterKind.GreaterThan),
+            (Text: "<", Kind: PivotValueFilterKind.LessThan),
+            (Text: "=", Kind: PivotValueFilterKind.Equals)
+        };
+        foreach (var op in operators)
+        {
+            if (!normalized.StartsWith(op.Text, StringComparison.Ordinal))
+                continue;
+
+            if (!double.TryParse(
+                    normalized[op.Text.Length..].Trim(),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var value))
+            {
+                return false;
+            }
+
+            filter = new PivotValueFilterModel(0, op.Kind, ComparisonValue: value, SourceFieldIndex: sourceFieldIndex);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseTopBottomPivotValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
+    {
+        filter = new PivotValueFilterModel(0, PivotValueFilterKind.Top, SourceFieldIndex: sourceFieldIndex);
+        var parts = input.Split(':', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 ||
+            !int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var count) ||
+            count <= 0)
+        {
+            return false;
+        }
+
+        var kind = parts[0].ToLowerInvariant() switch
+        {
+            "top" => PivotValueFilterKind.Top,
+            "bottom" => PivotValueFilterKind.Bottom,
+            _ => (PivotValueFilterKind?)null
+        };
+        if (kind is null)
+            return false;
+
+        filter = new PivotValueFilterModel(0, kind.Value, Count: count, SourceFieldIndex: sourceFieldIndex);
+        return true;
+    }
+
+    private enum PivotFieldDropZone
+    {
+        Available,
+        Rows,
+        Columns,
+        Values,
+        Filters
     }
 
     private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);
@@ -7416,8 +8815,13 @@ public partial class MainWindow : Window
 
     private void InsertChartOfType(string type)
     {
+        InsertChartOfType(ParseChartType(type));
+    }
+
+    private static ChartType ParseChartType(string type)
+    {
         var normalized = type.Trim().ToLowerInvariant();
-        InsertChartOfType(normalized switch
+        return normalized switch
         {
             "line" => ChartType.Line,
             "pie" => ChartType.Pie,
@@ -7430,8 +8834,10 @@ public partial class MainWindow : Window
             "scatter" => ChartType.Scatter,
             "bubble" => ChartType.Bubble,
             "area" => ChartType.Area,
+            "radar" => ChartType.Radar,
+            "stock" => ChartType.Stock,
             _ => ChartType.Column
-        });
+        };
     }
 
     private void SparklineLineBtn_Click(object sender, RoutedEventArgs e)    => InsertSparkline("line");

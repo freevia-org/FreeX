@@ -23,8 +23,8 @@ public sealed class PivotTableDialog : Window
         });
         stack.Children.Add(new TextBlock
         {
-            Text = "Freexcel loads existing PivotTable metadata and preserves native PivotTable package parts on save.\n\n" +
-                   "PivotTable creation, refresh, and layout editing are deferred to the next PivotTable phases.",
+            Text = "Freexcel creates a worksheet-range PivotTable and opens the PivotTable Fields pane for Excel-style layout editing.\n\n" +
+                   "Cloud BI/data-model PivotTables remain excluded from the local workbook feature set.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });

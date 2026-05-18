@@ -8,5 +8,7 @@ public sealed class TimelineModel
     public string? SourceFieldName { get; init; }
     public string? StartDate { get; init; }
     public string? EndDate { get; init; }
+    public string? SelectedStartDate { get; set; }
+    public string? SelectedEndDate { get; set; }
     public string PackagePart { get; init; } = "";
 }
