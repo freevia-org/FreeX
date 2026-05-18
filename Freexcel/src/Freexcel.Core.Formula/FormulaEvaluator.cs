@@ -235,6 +235,10 @@ public sealed class FormulaEvaluator
         if (node.FunctionName is "IF" or "IFERROR" or "IFNA" or "CHOOSE" or "IFS" or "SWITCH")
             return EvaluateShortCircuit(node, context);
 
+        // AST-aware functions: must inspect the raw argument nodes before evaluation.
+        if (node.FunctionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET")
+            return EvaluateAstAware(node, context);
+
         var (func, minArgs, maxArgs) = BuiltInFunctions.Get(node.FunctionName);
 
         bool isStructured = IsStructuredRangeFunction(node.FunctionName);
@@ -481,6 +485,229 @@ public sealed class FormulaEvaluator
         return ErrorValue.NA;
     }
 
+    private ScalarValue EvaluateAstAware(FunctionCallNode node, IEvalContext context)
+    {
+        return node.FunctionName switch
+        {
+            "ISREF"        => EvaluateIsRef(node, context),
+            "ISFORMULA"    => EvaluateIsFormula(node, context),
+            "FORMULATEXT"  => EvaluateFormulaText(node, context),
+            "OFFSET"       => EvaluateOffset(node, context),
+            _              => ErrorValue.Value
+        };
+    }
+
+    private static ScalarValue EvaluateIsRef(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 1) return ErrorValue.Value;
+        var arg = node.Arguments[0];
+        return arg switch
+        {
+            CellRefNode cell  => new BoolValue(cell.SheetName is null || context.SheetExists(cell.SheetName)),
+            RangeRefNode rng  => new BoolValue(rng.SheetName is null || context.SheetExists(rng.SheetName)),
+            NamedRangeNode nm => new BoolValue(context.TryResolveNamedRange(nm.Name) is not null),
+            _                 => new BoolValue(false)
+        };
+    }
+
+    private ScalarValue EvaluateIsFormula(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 1) return ErrorValue.Value;
+        var arg = node.Arguments[0];
+        if (arg is NamedRangeNode nm)
+        {
+            var range = context.TryResolveNamedRange(nm.Name);
+            if (range is null) return ErrorValue.Name;
+            var r = range.Value;
+            var sheetName = context.TryGetSheetName(r.Start.Sheet);
+            var cell = sheetName is not null
+                ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
+                : context.TryGetCell(r.Start.Row, r.Start.Col);
+            return new BoolValue(cell?.HasFormula == true);
+        }
+        if (arg is CellRefNode cellRef)
+        {
+            if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                return ErrorValue.Ref;
+            var cell = cellRef.SheetName is not null
+                ? context.TryGetCell(cellRef.SheetName, cellRef.Row, cellRef.ColumnNumber)
+                : context.TryGetCell(cellRef.Row, cellRef.ColumnNumber);
+            return new BoolValue(cell?.HasFormula == true);
+        }
+        if (arg is RangeRefNode rangeRef)
+        {
+            if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
+                return ErrorValue.Ref;
+            var cell = rangeRef.SheetName is not null
+                ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
+                : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
+            return new BoolValue(cell?.HasFormula == true);
+        }
+        return ErrorValue.Value;
+    }
+
+    private ScalarValue EvaluateFormulaText(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count != 1) return ErrorValue.NA;
+        var arg = node.Arguments[0];
+        Freexcel.Core.Model.Cell? cell = null;
+        if (arg is CellRefNode cellRef)
+        {
+            if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                return ErrorValue.Ref;
+            cell = cellRef.SheetName is not null
+                ? context.TryGetCell(cellRef.SheetName, cellRef.Row, cellRef.ColumnNumber)
+                : context.TryGetCell(cellRef.Row, cellRef.ColumnNumber);
+        }
+        else if (arg is RangeRefNode rangeRef)
+        {
+            if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
+                return ErrorValue.Ref;
+            cell = rangeRef.SheetName is not null
+                ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
+                : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
+        }
+        else if (arg is NamedRangeNode nm)
+        {
+            var range = context.TryResolveNamedRange(nm.Name);
+            if (range is null) return ErrorValue.Name;
+            var r = range.Value;
+            var sheetName = context.TryGetSheetName(r.Start.Sheet);
+            cell = sheetName is not null
+                ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
+                : context.TryGetCell(r.Start.Row, r.Start.Col);
+        }
+        else
+        {
+            return ErrorValue.NA;
+        }
+        if (cell is null || !cell.HasFormula) return ErrorValue.NA;
+        return new TextValue(cell.FormulaText!);
+    }
+
+    private ScalarValue EvaluateOffset(FunctionCallNode node, IEvalContext context)
+    {
+        if (node.Arguments.Count is < 3 or > 5) return ErrorValue.Value;
+        var baseArg = node.Arguments[0];
+
+        uint baseRow, baseCol; int baseHeight, baseWidth; string? baseSheet = null;
+        switch (baseArg)
+        {
+            case CellRefNode cellRef:
+                if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                    return ErrorValue.Ref;
+                baseRow = cellRef.Row; baseCol = cellRef.ColumnNumber;
+                baseHeight = 1; baseWidth = 1;
+                baseSheet = cellRef.SheetName;
+                break;
+            case RangeRefNode rangeRef:
+                if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
+                    return ErrorValue.Ref;
+                uint r0 = Math.Min(rangeRef.Start.Row, rangeRef.End.Row);
+                uint r1 = Math.Max(rangeRef.Start.Row, rangeRef.End.Row);
+                uint c0 = Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+                uint c1 = Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+                baseRow = r0; baseCol = c0;
+                baseHeight = (int)(r1 - r0 + 1);
+                baseWidth = (int)(c1 - c0 + 1);
+                baseSheet = rangeRef.SheetName;
+                break;
+            case NamedRangeNode nm:
+                var nr = context.TryResolveNamedRange(nm.Name);
+                if (nr is null) return ErrorValue.Name;
+                var g = nr.Value;
+                uint nr0 = Math.Min(g.Start.Row, g.End.Row);
+                uint nr1 = Math.Max(g.Start.Row, g.End.Row);
+                uint nc0 = Math.Min(g.Start.Col, g.End.Col);
+                uint nc1 = Math.Max(g.Start.Col, g.End.Col);
+                baseRow = nr0; baseCol = nc0;
+                baseHeight = (int)(nr1 - nr0 + 1);
+                baseWidth = (int)(nc1 - nc0 + 1);
+                baseSheet = context.TryGetSheetName(g.Start.Sheet);
+                break;
+            default:
+                return ErrorValue.Value;
+        }
+
+        var rowsArg = EvaluateNode(node.Arguments[1], context);
+        if (rowsArg is ErrorValue er) return er;
+        var colsArg = EvaluateNode(node.Arguments[2], context);
+        if (colsArg is ErrorValue ec) return ec;
+        var rowsCoerced = CoerceToNumber(rowsArg);
+        if (rowsCoerced is ErrorValue erc) return erc;
+        var colsCoerced = CoerceToNumber(colsArg);
+        if (colsCoerced is ErrorValue ecc) return ecc;
+        double dRows = ((NumberValue)rowsCoerced).Value;
+        double dCols = ((NumberValue)colsCoerced).Value;
+        if (!double.IsFinite(dRows) || !double.IsFinite(dCols)) return ErrorValue.Value;
+        long rowsOff = (long)Math.Truncate(dRows);
+        long colsOff = (long)Math.Truncate(dCols);
+
+        int height = baseHeight;
+        int width = baseWidth;
+        if (node.Arguments.Count >= 4 && node.Arguments[3] is not OmittedArgumentNode)
+        {
+            var hArg = EvaluateNode(node.Arguments[3], context);
+            if (hArg is ErrorValue eh) return eh;
+            if (hArg is not BlankValue)
+            {
+                var hc = CoerceToNumber(hArg);
+                if (hc is ErrorValue ehc) return ehc;
+                double dh = ((NumberValue)hc).Value;
+                if (!double.IsFinite(dh)) return ErrorValue.Value;
+                height = (int)Math.Truncate(dh);
+            }
+        }
+        if (node.Arguments.Count == 5 && node.Arguments[4] is not OmittedArgumentNode)
+        {
+            var wArg = EvaluateNode(node.Arguments[4], context);
+            if (wArg is ErrorValue ew) return ew;
+            if (wArg is not BlankValue)
+            {
+                var wc = CoerceToNumber(wArg);
+                if (wc is ErrorValue ewc) return ewc;
+                double dw = ((NumberValue)wc).Value;
+                if (!double.IsFinite(dw)) return ErrorValue.Value;
+                width = (int)Math.Truncate(dw);
+            }
+        }
+        if (height == 0 || width == 0) return ErrorValue.Ref;
+
+        long startRow = (long)baseRow + rowsOff;
+        long startCol = (long)baseCol + colsOff;
+        // Allow negative height/width: range extends upward/leftward from base
+        long endRow = startRow + (height > 0 ? height - 1 : height + 1);
+        long endCol = startCol + (width  > 0 ? width  - 1 : width  + 1);
+        long r0Final = Math.Min(startRow, endRow);
+        long r1Final = Math.Max(startRow, endRow);
+        long c0Final = Math.Min(startCol, endCol);
+        long c1Final = Math.Max(startCol, endCol);
+        if (r0Final < 1 || c0Final < 1 ||
+            r1Final > Freexcel.Core.Model.CellAddress.MaxRow ||
+            c1Final > Freexcel.Core.Model.CellAddress.MaxCol)
+            return ErrorValue.Ref;
+
+        int rowSpan = (int)(r1Final - r0Final + 1);
+        int colSpan = (int)(c1Final - c0Final + 1);
+        if ((long)rowSpan * colSpan > 1_000_000L) return ErrorValue.Ref;
+
+        if (rowSpan == 1 && colSpan == 1)
+        {
+            return baseSheet is not null
+                ? context.GetCellValue(baseSheet, (uint)r0Final, (uint)c0Final)
+                : context.GetCellValue((uint)r0Final, (uint)c0Final);
+        }
+        var cells = new ScalarValue[rowSpan, colSpan];
+        for (int ri = 0; ri < rowSpan; ri++)
+            for (int ci = 0; ci < colSpan; ci++)
+            {
+                cells[ri, ci] = baseSheet is not null
+                    ? context.GetCellValue(baseSheet, (uint)(r0Final + ri), (uint)(c0Final + ci))
+                    : context.GetCellValue((uint)(r0Final + ri), (uint)(c0Final + ci));
+            }
+        return new RangeValue(cells, (uint)r0Final, (uint)c0Final);
+    }
+
     private ScalarValue EvaluateSwitch(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count < 3) return ErrorValue.Value;
@@ -532,10 +759,12 @@ public sealed class FormulaEvaluator
         name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH" or "XMATCH"
              or "SUMIF" or "COUNTIF" or "AVERAGEIF"
              or "SUMPRODUCT"
-             or "LARGE" or "SMALL" or "RANK"
+             or "LARGE" or "SMALL" or "RANK" or "RANK.EQ" or "RANK.AVG" or "DEVSQ"
+             or "MULTINOMIAL" or "SERIESSUM"
+             or "MMULT" or "MINVERSE" or "MDETERM"
              or "SUMIFS" or "COUNTIFS" or "AVERAGEIFS"
              or "XLOOKUP"
-             or "WORKDAY" or "NETWORKDAYS"
+             or "WORKDAY" or "NETWORKDAYS" or "WORKDAY.INTL" or "NETWORKDAYS.INTL"
              or "CORREL" or "FORECAST" or "FORECAST.LINEAR"
              or "PERCENTILE" or "PERCENTILE.INC" or "PERCENTILE.EXC"
              or "QUARTILE" or "QUARTILE.INC"
@@ -543,14 +772,18 @@ public sealed class FormulaEvaluator
              or "LOOKUP"
              or "IRR"
              or "RANDARRAY"
-             or "FILTER" or "SORT" or "SORTBY" or "TAKE" or "DROP"
+             or "FILTER" or "SORT" or "SORTBY" or "TAKE" or "DROP" or "TRANSPOSE"
              or "CHOOSEROWS" or "CHOOSECOLS" or "VSTACK" or "HSTACK"
              or "TOROW" or "TOCOL" or "WRAPROWS" or "WRAPCOLS" or "EXPAND" or "UNIQUE"
              or "SUBTOTAL"
-             or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK";
+             or "DSUM" or "DAVERAGE" or "DCOUNT" or "DCOUNTA" or "DGET"
+             or "DMAX" or "DMIN" or "DPRODUCT" or "DSTDEV" or "DSTDEVP"
+             or "DVAR" or "DVARP"
+             or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK"
+             or "AGGREGATE" or "CELL";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
-        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK";
+        name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL";
 
     private static ScalarValue CoerceToNumber(ScalarValue v) => v switch
     {
@@ -632,6 +865,15 @@ public sealed class FormulaEvaluator
         public bool SheetExists(string sheetName) => _workbook?.GetSheet(sheetName) is not null;
 
         public bool IsRowHidden(uint row) => _sheet.IsRowEffectivelyHidden(row);
+
+        public Freexcel.Core.Model.Sheet? CurrentSheet => _sheet;
+
+        public Freexcel.Core.Model.Workbook? CurrentWorkbook => _workbook;
+
+        public Freexcel.Core.Model.Cell? TryGetCell(uint row, uint col) => _sheet.GetCell(row, col);
+
+        public Freexcel.Core.Model.Cell? TryGetCell(string sheetName, uint row, uint col)
+            => _workbook?.GetSheet(sheetName)?.GetCell(row, col);
     }
 }
 

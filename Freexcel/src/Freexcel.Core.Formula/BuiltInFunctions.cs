@@ -283,6 +283,27 @@ public static class BuiltInFunctions
         ["TYPE"]       = (TypeFunc, 1, 1),
         ["ERROR.TYPE"] = (ErrorTypeFunc, 1, 1),
 
+        // ── Phase A2: AST-aware reference / information functions ───────────
+        // (Implementations live in FormulaEvaluator.EvaluateAstAware; the
+        // entries below exist so BuiltInFunctions.Exists/ValidateArgCount
+        // recognize them. The Func slot returns #VALUE! as a defensive
+        // fallback — the evaluator routes these names to the AST-aware
+        // path before this delegate is ever invoked.)
+        ["ISREF"]       = (AstAwareStub, 1, 1),
+        ["ISFORMULA"]   = (AstAwareStub, 1, 1),
+        ["FORMULATEXT"] = (AstAwareStub, 1, 1),
+        ["OFFSET"]      = (AstAwareStub, 3, 5),
+
+        // ── Phase A2: Context-aware information ─────────────────────────────
+        ["CELL"]        = (CellInfo, 1, 2),
+        ["INFO"]        = (InfoFunc, 1, 1),
+
+        // ── Phase A2: AGGREGATE ─────────────────────────────────────────────
+        ["AGGREGATE"]   = (Aggregate, 3, 255),
+
+        // ── Phase A2: CONVERT ───────────────────────────────────────────────
+        ["CONVERT"]     = (Convert, 3, 3),
+
         // ── Phase A1: Database functions ─────────────────────────────────────
         ["DSUM"]     = (DSum, 3, 3),
         ["DAVERAGE"] = (DAverage, 3, 3),
@@ -298,7 +319,7 @@ public static class BuiltInFunctions
         ["DVARP"]    = (DVarP, 3, 3),
     };
 
-    private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT"];
+    private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);
@@ -5275,6 +5296,584 @@ public static class BuiltInFunctions
         double s = nums.Sum(x => (x - mean) * (x - mean)) / nums.Count;
         return NumberResult(s);
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A2 – AST-aware stub
+    // ════════════════════════════════════════════════════════════════════════
+    // Defensive fallback if EvaluateAstAware routing is bypassed; the
+    // FormulaEvaluator dispatches ISREF/ISFORMULA/FORMULATEXT/OFFSET to
+    // AST-aware code paths before invoking this delegate.
+    private static ScalarValue AstAwareStub(IReadOnlyList<ScalarValue> args, IEvalContext ctx) => ErrorValue.Value;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A2 – CELL(info_type, [reference])
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue CellInfo(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        var infoType = ToText(args[0]).Trim().ToLowerInvariant();
+
+        // Resolve reference: use args[1] when present; otherwise default to A1.
+        // We don't have access to the original AST node here, so we read the
+        // computed scalar/range (built by the evaluator's standard arg expansion).
+        uint row = 1, col = 1;
+        ScalarValue cellValue = BlankValue.Instance;
+        var sheet = ctx.CurrentSheet;
+        if (args.Count >= 2)
+        {
+            if (args[1] is ErrorValue e1) return e1;
+            if (args[1] is RangeValue rv)
+            {
+                row = rv.StartRow;
+                col = rv.StartCol;
+                cellValue = rv.Cells[0, 0];
+            }
+            else if (args[1] is BlankValue)
+            {
+                cellValue = ctx.GetCellValue(row, col);
+            }
+            else
+            {
+                // A non-range value — CELL needs a reference; treat as A1 of current sheet
+                // but use the computed scalar as the value for "contents"/"type".
+                cellValue = args[1];
+            }
+        }
+        else
+        {
+            cellValue = ctx.GetCellValue(row, col);
+        }
+
+        var underlying = sheet?.GetCell(row, col);
+
+        switch (infoType)
+        {
+            case "address":
+                return new TextValue($"${CellAddress.NumberToColumnName(col)}${row}");
+            case "col":
+                return new NumberValue(col);
+            case "row":
+                return new NumberValue(row);
+            case "contents":
+                return cellValue;
+            case "type":
+                return new TextValue(cellValue switch
+                {
+                    BlankValue => "b",
+                    TextValue  => "l",
+                    _          => "v"
+                });
+            case "protect":
+            {
+                if (sheet is null) return new NumberValue(0);
+                bool locked = true; // default style is locked
+                if (underlying is not null && ctx.CurrentWorkbook is not null)
+                {
+                    var style = ctx.CurrentWorkbook.GetStyle(underlying.StyleId);
+                    locked = style.Locked;
+                }
+                return new NumberValue(sheet.IsProtected && locked ? 1 : 0);
+            }
+            case "width":
+            {
+                if (sheet is null) return new NumberValue(8);
+                if (sheet.ColumnWidths.TryGetValue(col, out var w)) return new NumberValue(w);
+                return new NumberValue(sheet.DefaultColumnWidth);
+            }
+            case "filename":
+                // In-memory workbook has no on-disk path; Excel compat is empty string.
+                return new TextValue("");
+            case "format":
+            {
+                if (underlying is null || ctx.CurrentWorkbook is null) return new TextValue("");
+                var style = ctx.CurrentWorkbook.GetStyle(underlying.StyleId);
+                return new TextValue(style.NumberFormat == "General" ? "" : style.NumberFormat);
+            }
+            case "color":
+                return new NumberValue(0);
+            case "parentheses":
+                return new NumberValue(0);
+            case "prefix":
+                return new TextValue("");
+            default:
+                return ErrorValue.Value;
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A2 – INFO(type_text)
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue InfoFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var infoType = ToText(args[0]).Trim().ToLowerInvariant();
+        switch (infoType)
+        {
+            case "directory":
+                try { return new TextValue(Environment.CurrentDirectory); }
+                catch { return new TextValue(""); }
+            case "numfile":
+                return new NumberValue(ctx.CurrentWorkbook?.SheetCount ?? 1);
+            case "origin":
+                return new TextValue("$A:$A1");
+            case "osversion":
+                return new TextValue("Windows (32-bit) NT 10.00");
+            case "recalc":
+                return new TextValue(ctx.CurrentWorkbook?.CalculationMode == WorkbookCalculationMode.Manual
+                    ? "Manual" : "Automatic");
+            case "release":
+                return new TextValue("16.0");
+            case "system":
+                return new TextValue("pcdos");
+            case "memavail":
+            case "memused":
+            case "totmem":
+                return new NumberValue(0);
+            default:
+                return ErrorValue.Value;
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A2 – AGGREGATE(function_num, options, array/ref, [k])
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Aggregate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        var funcNumD = ToNumber(args[0]);
+        var optionsD = ToNumber(args[1]);
+        if (!double.IsFinite(funcNumD) || !double.IsFinite(optionsD)) return ErrorValue.Value;
+        int funcNum = (int)funcNumD;
+        int options = (int)optionsD;
+        if (funcNum < 1 || funcNum > 19) return ErrorValue.Value;
+        if (options < 0 || options > 7) return ErrorValue.Value;
+
+        bool ignoreErrors = options == 2 || options == 3 || options == 6 || options == 7;
+        // Hidden-row ignore (options 1, 3, 5, 7) is not honored here — see header note.
+
+        bool needsK = funcNum is >= 14 and <= 19;
+        if (needsK && args.Count < 4) return ErrorValue.Value;
+
+        var nums = new List<double>();
+        // Collect from positional value args (skip funcNum, options, and a potential k arg)
+        int kIndex = needsK ? args.Count - 1 : -1;
+        for (int i = 2; i < args.Count; i++)
+        {
+            if (i == kIndex) continue;
+            var arg = args[i];
+            if (arg is ErrorValue err)
+            {
+                if (ignoreErrors) continue;
+                return err;
+            }
+            if (arg is RangeValue rv)
+            {
+                foreach (var cell in rv.Flatten())
+                {
+                    if (cell is ErrorValue ce)
+                    {
+                        if (ignoreErrors) continue;
+                        return ce;
+                    }
+                    if (TryCellNumber(cell, out double v)) nums.Add(v);
+                }
+            }
+            else if (TryCellNumber(arg, out double v)) nums.Add(v);
+            else if (arg is DirectTextLiteralValue d && TryDirectTextNumber(d, out double dv)) nums.Add(dv);
+        }
+
+        double? k = null;
+        if (needsK)
+        {
+            if (args[kIndex] is ErrorValue ek) return ek;
+            var kc = ToNumber(args[kIndex]);
+            if (!double.IsFinite(kc)) return ErrorValue.Num;
+            k = kc;
+        }
+
+        switch (funcNum)
+        {
+            case 1:  return nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Average());
+            case 2:  return new NumberValue(nums.Count);
+            case 3:
+            {
+                int countA = 0;
+                for (int i = 2; i < args.Count; i++)
+                {
+                    if (i == kIndex) continue;
+                    var arg = args[i];
+                    if (arg is ErrorValue err)
+                    {
+                        if (ignoreErrors) continue;
+                        return err;
+                    }
+                    if (arg is RangeValue rv)
+                    {
+                        foreach (var cell in rv.Flatten())
+                        {
+                            if (cell is ErrorValue ce)
+                            {
+                                if (ignoreErrors) continue;
+                                return ce;
+                            }
+                            if (cell is not BlankValue) countA++;
+                        }
+                    }
+                    else if (arg is not BlankValue) countA++;
+                }
+                return new NumberValue(countA);
+            }
+            case 4:  return nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Max());
+            case 5:  return nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Min());
+            case 6:  return NumberResult(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (a, x) => a * x));
+            case 7:
+            {
+                if (nums.Count < 2) return ErrorValue.DivByZero;
+                double mean = nums.Average();
+                return NumberResult(Math.Sqrt(nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1)));
+            }
+            case 8:
+            {
+                if (nums.Count == 0) return ErrorValue.DivByZero;
+                double mean = nums.Average();
+                return NumberResult(Math.Sqrt(nums.Sum(x => (x - mean) * (x - mean)) / nums.Count));
+            }
+            case 9:  return NumberResult(nums.Sum());
+            case 10:
+            {
+                if (nums.Count < 2) return ErrorValue.DivByZero;
+                double mean = nums.Average();
+                return NumberResult(nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1));
+            }
+            case 11:
+            {
+                if (nums.Count == 0) return ErrorValue.DivByZero;
+                double mean = nums.Average();
+                return NumberResult(nums.Sum(x => (x - mean) * (x - mean)) / nums.Count);
+            }
+            case 12:
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                var s = nums.OrderBy(x => x).ToList();
+                int n = s.Count;
+                return NumberResult(n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2.0);
+            }
+            case 13: // MODE.SNGL
+            {
+                if (nums.Count == 0) return ErrorValue.NA;
+                var counts = nums.GroupBy(x => x).Select(g => (g.Key, Count: g.Count())).ToList();
+                int maxCount = counts.Max(c => c.Count);
+                if (maxCount < 2) return ErrorValue.NA;
+                return NumberResult(counts.First(c => c.Count == maxCount).Key);
+            }
+            case 14: // LARGE
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                int ki = (int)Math.Truncate(k!.Value);
+                if (ki < 1 || ki > nums.Count) return ErrorValue.Num;
+                var s = nums.OrderByDescending(x => x).ToList();
+                return NumberResult(s[ki - 1]);
+            }
+            case 15: // SMALL
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                int ki = (int)Math.Truncate(k!.Value);
+                if (ki < 1 || ki > nums.Count) return ErrorValue.Num;
+                var s = nums.OrderBy(x => x).ToList();
+                return NumberResult(s[ki - 1]);
+            }
+            case 16: // PERCENTILE.INC
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                if (k!.Value < 0 || k.Value > 1) return ErrorValue.Num;
+                return NumberResult(PercentileIncCalc(nums, k.Value));
+            }
+            case 17: // QUARTILE.INC
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                int q = (int)Math.Truncate(k!.Value);
+                if (q < 0 || q > 4) return ErrorValue.Num;
+                return NumberResult(PercentileIncCalc(nums, q / 4.0));
+            }
+            case 18: // PERCENTILE.EXC
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                if (k!.Value <= 0 || k.Value >= 1) return ErrorValue.Num;
+                return NumberResult(PercentileExcCalc(nums, k.Value));
+            }
+            case 19: // QUARTILE.EXC
+            {
+                if (nums.Count == 0) return ErrorValue.Num;
+                int q = (int)Math.Truncate(k!.Value);
+                if (q < 1 || q > 3) return ErrorValue.Num;
+                return NumberResult(PercentileExcCalc(nums, q / 4.0));
+            }
+            default:
+                return ErrorValue.Value;
+        }
+    }
+
+    private static double PercentileIncCalc(List<double> nums, double p)
+    {
+        var s = nums.OrderBy(x => x).ToList();
+        int n = s.Count;
+        if (n == 1) return s[0];
+        double pos = p * (n - 1);
+        int lo = (int)Math.Floor(pos);
+        int hi = (int)Math.Ceiling(pos);
+        if (lo == hi) return s[lo];
+        return s[lo] + (pos - lo) * (s[hi] - s[lo]);
+    }
+
+    private static double PercentileExcCalc(List<double> nums, double p)
+    {
+        var s = nums.OrderBy(x => x).ToList();
+        int n = s.Count;
+        double pos = p * (n + 1) - 1;
+        if (pos < 0 || pos > n - 1) throw new FormulaEvalException("#NUM!", "k out of range");
+        int lo = (int)Math.Floor(pos);
+        int hi = (int)Math.Ceiling(pos);
+        if (lo == hi) return s[lo];
+        return s[lo] + (pos - lo) * (s[hi] - s[lo]);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A2 – CONVERT(number, from_unit, to_unit)
+    // ════════════════════════════════════════════════════════════════════════
+
+    private enum UnitCategory { Weight, Distance, Time, Pressure, Force, Energy, Power, Area, Volume, Speed, Information, Temperature }
+
+    private static readonly Dictionary<string, (UnitCategory Cat, double Factor)> ConvertUnits = BuildConvertUnits();
+
+    private static Dictionary<string, (UnitCategory Cat, double Factor)> BuildConvertUnits()
+    {
+        var d = new Dictionary<string, (UnitCategory, double)>(StringComparer.Ordinal);
+        void Add(UnitCategory cat, string unit, double factor) => d[unit] = (cat, factor);
+
+        // Weight (base = gram)
+        Add(UnitCategory.Weight, "g", 1);
+        Add(UnitCategory.Weight, "kg", 1000);
+        Add(UnitCategory.Weight, "lbm", 453.59237);
+        Add(UnitCategory.Weight, "ozm", 28.349523);
+        Add(UnitCategory.Weight, "stone", 6350.293);
+        Add(UnitCategory.Weight, "ton", 907184.74);
+        Add(UnitCategory.Weight, "uk_ton", 1016046.91);
+        Add(UnitCategory.Weight, "mg", 0.001);
+        Add(UnitCategory.Weight, "ug", 0.000001);
+        Add(UnitCategory.Weight, "ng", 1e-9);
+        Add(UnitCategory.Weight, "sg", 14593.903);
+        Add(UnitCategory.Weight, "cwt", 45359.237);
+        Add(UnitCategory.Weight, "uk_cwt", 50802.345);
+
+        // Distance (base = meter)
+        Add(UnitCategory.Distance, "m", 1);
+        Add(UnitCategory.Distance, "km", 1000);
+        Add(UnitCategory.Distance, "mi", 1609.344);
+        Add(UnitCategory.Distance, "Nmi", 1852);
+        Add(UnitCategory.Distance, "in", 0.0254);
+        Add(UnitCategory.Distance, "ft", 0.3048);
+        Add(UnitCategory.Distance, "yd", 0.9144);
+        Add(UnitCategory.Distance, "ang", 1e-10);
+        Add(UnitCategory.Distance, "Pica", 0.000423333);
+        Add(UnitCategory.Distance, "cm", 0.01);
+        Add(UnitCategory.Distance, "mm", 0.001);
+        Add(UnitCategory.Distance, "um", 1e-6);
+        Add(UnitCategory.Distance, "nm", 1e-9);
+        Add(UnitCategory.Distance, "ly", 9.4607304725808e15);
+        Add(UnitCategory.Distance, "au", 149597870700.0);
+        Add(UnitCategory.Distance, "pc", 3.085677581491367e16);
+
+        // Time (base = second)
+        Add(UnitCategory.Time, "sec", 1);
+        Add(UnitCategory.Time, "s", 1);
+        Add(UnitCategory.Time, "min", 60);
+        Add(UnitCategory.Time, "mn", 2629800);
+        Add(UnitCategory.Time, "hr", 3600);
+        Add(UnitCategory.Time, "day", 86400);
+        Add(UnitCategory.Time, "yr", 31557600);
+
+        // Pressure (base = Pa)
+        Add(UnitCategory.Pressure, "Pa", 1);
+        Add(UnitCategory.Pressure, "atm", 101325);
+        Add(UnitCategory.Pressure, "mmHg", 133.322);
+        Add(UnitCategory.Pressure, "psi", 6894.757);
+        Add(UnitCategory.Pressure, "Torr", 133.322);
+
+        // Force (base = N)
+        Add(UnitCategory.Force, "N", 1);
+        Add(UnitCategory.Force, "dyn", 1e-5);
+        Add(UnitCategory.Force, "lbf", 4.44822);
+        Add(UnitCategory.Force, "pond", 0.00980665);
+
+        // Energy (base = J)
+        Add(UnitCategory.Energy, "J", 1);
+        Add(UnitCategory.Energy, "kJ", 1000);
+        Add(UnitCategory.Energy, "e", 1e-7);
+        Add(UnitCategory.Energy, "c", 4.184);
+        Add(UnitCategory.Energy, "cal", 4.184);
+        Add(UnitCategory.Energy, "eV", 1.60218e-19);
+        Add(UnitCategory.Energy, "HPh", 2684519.54);
+        Add(UnitCategory.Energy, "Wh", 3600);
+        Add(UnitCategory.Energy, "flb", 1.35582);
+        Add(UnitCategory.Energy, "BTU", 1055.056);
+
+        // Power (base = W)
+        Add(UnitCategory.Power, "W", 1);
+        Add(UnitCategory.Power, "kW", 1000);
+        Add(UnitCategory.Power, "HP", 745.69987);
+        Add(UnitCategory.Power, "PS", 735.49875);
+
+        // Temperature (special — base = K, with offsets handled separately)
+        Add(UnitCategory.Temperature, "C", double.NaN);
+        Add(UnitCategory.Temperature, "F", double.NaN);
+        Add(UnitCategory.Temperature, "K", double.NaN);
+        Add(UnitCategory.Temperature, "Rank", double.NaN);
+        Add(UnitCategory.Temperature, "Reau", double.NaN);
+
+        // Area (base = m^2)
+        Add(UnitCategory.Area, "m2", 1);
+        Add(UnitCategory.Area, "m^2", 1);
+        Add(UnitCategory.Area, "km2", 1e6);
+        Add(UnitCategory.Area, "km^2", 1e6);
+        Add(UnitCategory.Area, "mi2", 2589988.11);
+        Add(UnitCategory.Area, "mi^2", 2589988.11);
+        Add(UnitCategory.Area, "ft2", 0.092903);
+        Add(UnitCategory.Area, "ft^2", 0.092903);
+        Add(UnitCategory.Area, "in2", 0.000645);
+        Add(UnitCategory.Area, "in^2", 0.000645);
+        Add(UnitCategory.Area, "yd2", 0.836127);
+        Add(UnitCategory.Area, "yd^2", 0.836127);
+        Add(UnitCategory.Area, "ha", 10000);
+        Add(UnitCategory.Area, "acre", 4046.856);
+
+        // Volume (base = liter)
+        Add(UnitCategory.Volume, "l", 1);
+        Add(UnitCategory.Volume, "L", 1);
+        Add(UnitCategory.Volume, "tsp", 0.00492892);
+        Add(UnitCategory.Volume, "tbs", 0.0147868);
+        Add(UnitCategory.Volume, "oz", 0.0295735);
+        Add(UnitCategory.Volume, "cup", 0.236588);
+        Add(UnitCategory.Volume, "pt", 0.473176);
+        Add(UnitCategory.Volume, "qt", 0.946353);
+        Add(UnitCategory.Volume, "gal", 3.785412);
+        Add(UnitCategory.Volume, "m3", 1000);
+        Add(UnitCategory.Volume, "m^3", 1000);
+        Add(UnitCategory.Volume, "mi3", 4168181825441);
+        Add(UnitCategory.Volume, "mi^3", 4168181825441);
+        Add(UnitCategory.Volume, "ft3", 28.3168);
+        Add(UnitCategory.Volume, "ft^3", 28.3168);
+        Add(UnitCategory.Volume, "in3", 0.0163871);
+        Add(UnitCategory.Volume, "in^3", 0.0163871);
+        Add(UnitCategory.Volume, "yd3", 764.555);
+        Add(UnitCategory.Volume, "yd^3", 764.555);
+        Add(UnitCategory.Volume, "ml", 0.001);
+        Add(UnitCategory.Volume, "cl", 0.01);
+        Add(UnitCategory.Volume, "dl", 0.1);
+        Add(UnitCategory.Volume, "Nmi3", 6352182208);
+        Add(UnitCategory.Volume, "Nmi^3", 6352182208);
+
+        // Speed (base = m/s)
+        Add(UnitCategory.Speed, "m/s", 1);
+        Add(UnitCategory.Speed, "m/h", 1.0 / 3600);
+        Add(UnitCategory.Speed, "mph", 0.44704);
+        Add(UnitCategory.Speed, "kn", 0.514444);
+
+        // Information (base = bit)
+        Add(UnitCategory.Information, "bit", 1);
+        Add(UnitCategory.Information, "byte", 8);
+        Add(UnitCategory.Information, "kbit", 1000);
+        Add(UnitCategory.Information, "kbyte", 8000);
+        Add(UnitCategory.Information, "Mbit", 1e6);
+        Add(UnitCategory.Information, "Mbyte", 8e6);
+        Add(UnitCategory.Information, "Gbit", 1e9);
+        Add(UnitCategory.Information, "Gbyte", 8e9);
+        Add(UnitCategory.Information, "Tbit", 1e12);
+        Add(UnitCategory.Information, "Tbyte", 8e12);
+
+        return d;
+    }
+
+    private static readonly Dictionary<string, double> ConvertPrefixes = new(StringComparer.Ordinal)
+    {
+        ["Y"] = 1e24, ["Z"] = 1e21, ["E"] = 1e18, ["P"] = 1e15, ["T"] = 1e12,
+        ["G"] = 1e9, ["M"] = 1e6, ["k"] = 1e3, ["h"] = 1e2, ["e"] = 1e1,
+        ["d"] = 1e-1, ["c"] = 1e-2, ["m"] = 1e-3, ["u"] = 1e-6, ["n"] = 1e-9,
+        ["p"] = 1e-12, ["f"] = 1e-15, ["a"] = 1e-18, ["z"] = 1e-21, ["y"] = 1e-24
+    };
+
+    private static bool TryResolveUnit(string unit, out UnitCategory cat, out double factor)
+    {
+        if (ConvertUnits.TryGetValue(unit, out var entry))
+        {
+            cat = entry.Cat;
+            factor = entry.Factor;
+            return true;
+        }
+        // Try a SI prefix only when at least 2 chars remain — we don't want
+        // single-letter prefixes (e.g. "m") to be re-interpreted when they
+        // already exist as base units in the table above.
+        if (unit.Length >= 2)
+        {
+            string p = unit[..1];
+            string rest = unit[1..];
+            if (ConvertPrefixes.TryGetValue(p, out double pFactor)
+                && ConvertUnits.TryGetValue(rest, out var rEntry)
+                && rEntry.Cat != UnitCategory.Temperature)
+            {
+                cat = rEntry.Cat;
+                factor = rEntry.Factor * pFactor;
+                return true;
+            }
+        }
+        cat = default; factor = 0; return false;
+    }
+
+    private static ScalarValue Convert(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+
+        double n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Value;
+        string from = ToText(args[1]);
+        string to = ToText(args[2]);
+
+        if (!TryResolveUnit(from, out var fromCat, out var fromFactor)) return ErrorValue.NA;
+        if (!TryResolveUnit(to, out var toCat, out var toFactor)) return ErrorValue.NA;
+        if (fromCat != toCat) return ErrorValue.NA;
+
+        if (fromCat == UnitCategory.Temperature)
+        {
+            // Convert input to Kelvin, then to target.
+            double k = from switch
+            {
+                "C"    => n + 273.15,
+                "F"    => (n - 32) * 5.0 / 9.0 + 273.15,
+                "K"    => n,
+                "Rank" => n * 5.0 / 9.0,
+                "Reau" => n * 5.0 / 4.0 + 273.15,
+                _      => double.NaN
+            };
+            if (!double.IsFinite(k)) return ErrorValue.NA;
+            double r = to switch
+            {
+                "C"    => k - 273.15,
+                "F"    => (k - 273.15) * 9.0 / 5.0 + 32,
+                "K"    => k,
+                "Rank" => k * 9.0 / 5.0,
+                "Reau" => (k - 273.15) * 4.0 / 5.0,
+                _      => double.NaN
+            };
+            return double.IsFinite(r) ? NumberResult(r) : ErrorValue.NA;
+        }
+
+        return NumberResult(n * fromFactor / toFactor);
+    }
 }
 
 /// <summary>
@@ -5304,4 +5903,16 @@ public interface IEvalContext
 
     /// <summary>Returns true if the row is hidden (filter, manual, or group collapse).</summary>
     bool IsRowHidden(uint row);
+
+    /// <summary>Returns the current evaluation sheet (the formula's host sheet), or null when no sheet context.</summary>
+    Model.Sheet? CurrentSheet { get; }
+
+    /// <summary>Returns the current workbook, or null when no workbook context.</summary>
+    Model.Workbook? CurrentWorkbook { get; }
+
+    /// <summary>Try to get the underlying cell on the current sheet (for FORMULATEXT/ISFORMULA).</summary>
+    Model.Cell? TryGetCell(uint row, uint col);
+
+    /// <summary>Try to get the underlying cell on a named sheet (for FORMULATEXT/ISFORMULA).</summary>
+    Model.Cell? TryGetCell(string sheetName, uint row, uint col);
 }
