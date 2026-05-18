@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Freexcel.Core.Model;
 
@@ -100,9 +101,12 @@ public static class BuiltInFunctions
         ["LARGE"]       = (Large, 2, 2),
         ["SMALL"]       = (Small, 2, 2),
         ["RANK"]        = (Rank, 2, 3),
+        ["RANK.EQ"]     = (RankEq, 2, 3),
+        ["RANK.AVG"]    = (RankAvg, 2, 3),
         ["STDEV"]       = (Stdev, 1, 255),
         ["STDEV.S"]     = (Stdev, 1, 255),
         ["MEDIAN"]      = (Median, 1, 255),
+        ["DEVSQ"]       = (Devsq, 1, 255),
 
         // ── Phase 5: Additional commonly-used functions ──────────────────────
 
@@ -252,6 +256,46 @@ public static class BuiltInFunctions
 
         // ── Subtotal ─────────────────────────────────────────────────────────
         ["SUBTOTAL"] = (Subtotal, 2, 255),
+
+        // ── Phase A1: Text ───────────────────────────────────────────────────
+        ["UNICHAR"]     = (Unichar, 1, 1),
+        ["UNICODE"]     = (UnicodeFunc, 1, 1),
+        ["NUMBERVALUE"] = (Numbervalue, 1, 3),
+
+        // ── Phase A1: Math ───────────────────────────────────────────────────
+        ["SQRTPI"]      = (Sqrtpi, 1, 1),
+        ["MULTINOMIAL"] = (Multinomial, 1, 255),
+        ["SERIESSUM"]   = (SeriesSum, 4, 4),
+
+        // ── Phase A1: Matrix ─────────────────────────────────────────────────
+        ["MMULT"]    = (Mmult, 2, 2),
+        ["MINVERSE"] = (Minverse, 1, 1),
+        ["MDETERM"]  = (Mdeterm, 1, 1),
+
+        // ── Phase A1: Date (weekend mask) ───────────────────────────────────
+        ["NETWORKDAYS.INTL"] = (NetworkdaysIntl, 2, 4),
+        ["WORKDAY.INTL"]     = (WorkdayIntl, 2, 4),
+
+        // ── Phase A1: Lookup ────────────────────────────────────────────────
+        ["TRANSPOSE"] = (Transpose, 1, 1),
+
+        // ── Phase A1: Information ────────────────────────────────────────────
+        ["TYPE"]       = (TypeFunc, 1, 1),
+        ["ERROR.TYPE"] = (ErrorTypeFunc, 1, 1),
+
+        // ── Phase A1: Database functions ─────────────────────────────────────
+        ["DSUM"]     = (DSum, 3, 3),
+        ["DAVERAGE"] = (DAverage, 3, 3),
+        ["DCOUNT"]   = (DCount, 3, 3),
+        ["DCOUNTA"]  = (DCountA, 3, 3),
+        ["DGET"]     = (DGet, 3, 3),
+        ["DMAX"]     = (DMax, 3, 3),
+        ["DMIN"]     = (DMin, 3, 3),
+        ["DPRODUCT"] = (DProduct, 3, 3),
+        ["DSTDEV"]   = (DStdev, 3, 3),
+        ["DSTDEVP"]  = (DStdevP, 3, 3),
+        ["DVAR"]     = (DVar, 3, 3),
+        ["DVARP"]    = (DVarP, 3, 3),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT"];
@@ -4406,6 +4450,831 @@ public static class BuiltInFunctions
 
     private static double SubtotalStdDevS(List<double> nums) => Math.Sqrt(SubtotalVarS(nums));
     private static double SubtotalStdDevP(List<double> nums) => Math.Sqrt(SubtotalVarP(nums));
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Text: UNICHAR, UNICODE, NUMBERVALUE
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue RankEq(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        Rank(args, ctx);
+
+    private static ScalarValue RankAvg(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[1] is not RangeValue range) return ErrorValue.Value;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        var number = ToNumber(args[0]);
+        if (!double.IsFinite(number)) return ErrorValue.Num;
+        double rawOrder = args.Count > 2 ? ToNumber(args[2]) : 0;
+        if (!double.IsFinite(rawOrder)) return ErrorValue.Num;
+        var (nums, err) = CollectRangeNumbers(range);
+        if (err is not null) return err;
+        if (!nums!.Contains(number)) return ErrorValue.NA;
+        int betterCount = rawOrder == 0 ? nums.Count(x => x > number) : nums.Count(x => x < number);
+        int tieCount = nums.Count(x => x == number);
+        return new NumberValue(betterCount + 1 + (tieCount - 1) / 2.0);
+    }
+
+    private static ScalarValue Devsq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var nums = new List<double>();
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue e) return e;
+            if (arg is RangeValue rv)
+            {
+                var (rangeNums, rangeError) = CollectRangeNumbers(rv);
+                if (rangeError is not null) return rangeError;
+                nums.AddRange(rangeNums!);
+            }
+            else if (arg is NumberValue nv) nums.Add(nv.Value);
+            else if (arg is DateTimeValue dt) nums.Add(dt.Value);
+            else if (arg is BoolValue bv) nums.Add(bv.Value ? 1 : 0);
+            else if (arg is DirectTextLiteralValue direct)
+            {
+                if (!TryDirectTextNumber(direct, out double value)) return ErrorValue.Value;
+                nums.Add(value);
+            }
+        }
+        if (nums.Count == 0) return ErrorValue.DivByZero;
+        double mean = nums.Average();
+        return NumberResult(nums.Sum(x => (x - mean) * (x - mean)));
+    }
+
+    private static ScalarValue Unichar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n)) return ErrorValue.Value;
+        int codePoint = (int)Math.Truncate(n);
+        if (codePoint <= 0 || codePoint > 0x10FFFF) return ErrorValue.Value;
+        if (codePoint >= 0xD800 && codePoint <= 0xDFFF) return ErrorValue.Value; // surrogate halves
+        if (n != codePoint) return ErrorValue.Value; // non-integer
+        return new TextValue(char.ConvertFromUtf32(codePoint));
+    }
+
+    private static ScalarValue UnicodeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        if (args[0] is not TextValue and not DirectTextLiteralValue) return ErrorValue.Value;
+        var text = ToText(args[0]);
+        if (text.Length == 0) return ErrorValue.Value;
+        if (char.IsHighSurrogate(text[0]))
+        {
+            if (text.Length < 2 || !char.IsLowSurrogate(text[1])) return ErrorValue.Value;
+            return new NumberValue(char.ConvertToUtf32(text[0], text[1]));
+        }
+        if (char.IsLowSurrogate(text[0])) return ErrorValue.Value;
+        return new NumberValue(text[0]);
+    }
+
+    private static ScalarValue Numbervalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+
+        var text = ToText(args[0]).Trim();
+        var decSep = args.Count > 1 && args[1] is not BlankValue ? ToText(args[1]) : ".";
+        var grpSep = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]) : ",";
+
+        // Validate separators per Excel spec
+        if (decSep.Length != 1) return ErrorValue.Value;
+        if (grpSep.Length == 0) return ErrorValue.Value;
+        if (decSep == grpSep) return ErrorValue.Value;
+        if (grpSep.Contains(decSep)) return ErrorValue.Value;
+
+        // Strip whitespace (Excel allows whitespace anywhere)
+        text = text.Replace(" ", "").Replace("\t", "");
+
+        // Trailing percent
+        int pctCount = 0;
+        while (text.EndsWith('%'))
+        {
+            pctCount++;
+            text = text[..^1];
+        }
+
+        // Remove all group separator characters
+        text = text.Replace(grpSep, string.Empty, StringComparison.Ordinal);
+        // Substitute decimal separator with '.'
+        if (decSep != ".") text = text.Replace(decSep, ".", StringComparison.Ordinal);
+
+        if (text.Length == 0) return new NumberValue(0);
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+            return ErrorValue.Value;
+
+        for (int i = 0; i < pctCount; i++) v /= 100.0;
+        return NumberResult(v);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Math: SQRTPI, MULTINOMIAL, SERIESSUM
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Sqrtpi(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var n = ToNumber(args[0]);
+        if (!double.IsFinite(n) || n < 0) return ErrorValue.Num;
+        return NumberResult(Math.Sqrt(n * Math.PI));
+    }
+
+    private static ScalarValue Multinomial(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        var values = new List<int>();
+        long sum = 0;
+        foreach (var arg in args)
+        {
+            if (arg is ErrorValue err) return err;
+            if (arg is RangeValue rv)
+            {
+                foreach (var cell in rv.Flatten())
+                {
+                    if (cell is ErrorValue ec) return ec;
+                    if (cell is BlankValue) continue;
+                    if (!TryCellNumber(cell, out double d)) return ErrorValue.Value;
+                    if (!double.IsFinite(d) || d < 0) return ErrorValue.Num;
+                    int n = (int)Math.Truncate(d);
+                    values.Add(n);
+                    sum += n;
+                }
+            }
+            else
+            {
+                if (arg is BlankValue) continue;
+                double d;
+                if (!TryCellNumber(arg, out d))
+                {
+                    d = ToNumber(arg);
+                }
+                if (!double.IsFinite(d) || d < 0) return ErrorValue.Num;
+                int n = (int)Math.Truncate(d);
+                values.Add(n);
+                sum += n;
+            }
+        }
+        if (values.Count == 0) return ErrorValue.Value;
+
+        // Use log-gamma to avoid overflow: log(sum!) - sum(log(n_i!))
+        double logResult = LogGamma(sum + 1.0);
+        foreach (var v in values)
+            logResult -= LogGamma(v + 1.0);
+
+        if (logResult > Math.Log(1e308)) return ErrorValue.Num;
+        double result = Math.Round(Math.Exp(logResult));
+        return NumberResult(result);
+    }
+
+    /// <summary>Lanczos approximation of ln(Γ(x)) for x > 0.</summary>
+    private static double LogGamma(double x)
+    {
+        double[] c =
+        [
+             76.18009172947146,
+            -86.50532032941677,
+             24.01409824083091,
+            -1.231739572450155,
+             0.1208650973866179e-2,
+            -0.5395239384953e-5
+        ];
+        double y = x;
+        double tmp = x + 5.5;
+        tmp -= (x + 0.5) * Math.Log(tmp);
+        double ser = 1.000000000190015;
+        for (int j = 0; j < 6; j++)
+        {
+            y += 1.0;
+            ser += c[j] / y;
+        }
+        return -tmp + Math.Log(2.5066282746310005 * ser / x);
+    }
+
+    private static ScalarValue SeriesSum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args[2] is ErrorValue e2) return e2;
+        if (args[3] is ErrorValue e3) return e3;
+
+        double x = ToNumber(args[0]);
+        double n = ToNumber(args[1]);
+        double m = ToNumber(args[2]);
+        if (!double.IsFinite(x) || !double.IsFinite(n) || !double.IsFinite(m))
+            return ErrorValue.Num;
+
+        if (args[3] is not RangeValue coeffs) return ErrorValue.Value;
+
+        double sum = 0;
+        int i = 0;
+        foreach (var cell in coeffs.Flatten())
+        {
+            if (cell is ErrorValue ec) return ec;
+            if (cell is BlankValue) { i++; continue; }
+            if (!TryCellNumber(cell, out double a)) return ErrorValue.Value;
+            sum += a * Math.Pow(x, n + i * m);
+            i++;
+        }
+        return NumberResult(sum);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Matrix: MMULT, MINVERSE, MDETERM
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static bool TryRangeToMatrix(ScalarValue value, out double[,] matrix, out ScalarValue? error)
+    {
+        matrix = null!;
+        error = null;
+        if (value is ErrorValue err) { error = err; return false; }
+        if (value is not RangeValue rv) { error = ErrorValue.Value; return false; }
+        int rows = rv.RowCount;
+        int cols = rv.ColCount;
+        var m = new double[rows, cols];
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                var cell = rv.Cells[r, c];
+                if (cell is ErrorValue ecell) { error = ecell; return false; }
+                if (!TryCellNumber(cell, out double d))
+                {
+                    error = ErrorValue.Value;
+                    return false;
+                }
+                m[r, c] = d;
+            }
+        }
+        matrix = m;
+        return true;
+    }
+
+    private static ScalarValue Mmult(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryRangeToMatrix(args[0], out var a, out var ea)) return ea!;
+        if (!TryRangeToMatrix(args[1], out var b, out var eb)) return eb!;
+
+        int m = a.GetLength(0);
+        int k = a.GetLength(1);
+        int k2 = b.GetLength(0);
+        int n = b.GetLength(1);
+        if (k != k2) return ErrorValue.Value;
+
+        var result = new ScalarValue[m, n];
+        for (int i = 0; i < m; i++)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                double sum = 0;
+                for (int p = 0; p < k; p++)
+                    sum += a[i, p] * b[p, j];
+                if (!double.IsFinite(sum)) return ErrorValue.Num;
+                result[i, j] = new NumberValue(sum);
+            }
+        }
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue Minverse(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryRangeToMatrix(args[0], out var a, out var ea)) return ea!;
+        int n = a.GetLength(0);
+        if (a.GetLength(1) != n) return ErrorValue.Value;
+
+        // Build augmented matrix [A | I]
+        var aug = new double[n, 2 * n];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++) aug[i, j] = a[i, j];
+            aug[i, n + i] = 1.0;
+        }
+
+        // Gauss-Jordan elimination with partial pivoting
+        for (int col = 0; col < n; col++)
+        {
+            int pivotRow = col;
+            double pivotMax = Math.Abs(aug[col, col]);
+            for (int r = col + 1; r < n; r++)
+            {
+                double v = Math.Abs(aug[r, col]);
+                if (v > pivotMax) { pivotMax = v; pivotRow = r; }
+            }
+            if (pivotMax < 1e-14) return ErrorValue.Num; // singular
+
+            if (pivotRow != col)
+            {
+                for (int j = 0; j < 2 * n; j++)
+                    (aug[col, j], aug[pivotRow, j]) = (aug[pivotRow, j], aug[col, j]);
+            }
+
+            double pivot = aug[col, col];
+            for (int j = 0; j < 2 * n; j++) aug[col, j] /= pivot;
+
+            for (int r = 0; r < n; r++)
+            {
+                if (r == col) continue;
+                double factor = aug[r, col];
+                if (factor == 0) continue;
+                for (int j = 0; j < 2 * n; j++)
+                    aug[r, j] -= factor * aug[col, j];
+            }
+        }
+
+        var result = new ScalarValue[n, n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+            {
+                double v = aug[i, n + j];
+                if (!double.IsFinite(v)) return ErrorValue.Num;
+                result[i, j] = new NumberValue(v);
+            }
+        return new RangeValue(result);
+    }
+
+    private static ScalarValue Mdeterm(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryRangeToMatrix(args[0], out var a, out var ea)) return ea!;
+        int n = a.GetLength(0);
+        if (a.GetLength(1) != n) return ErrorValue.Value;
+
+        // LU decomposition with partial pivoting; det = product of U diagonals * (-1)^swaps
+        var lu = (double[,])a.Clone();
+        int swaps = 0;
+        for (int col = 0; col < n; col++)
+        {
+            int pivotRow = col;
+            double pivotMax = Math.Abs(lu[col, col]);
+            for (int r = col + 1; r < n; r++)
+            {
+                double v = Math.Abs(lu[r, col]);
+                if (v > pivotMax) { pivotMax = v; pivotRow = r; }
+            }
+            if (pivotMax < 1e-300) return new NumberValue(0);
+            if (pivotRow != col)
+            {
+                for (int j = 0; j < n; j++)
+                    (lu[col, j], lu[pivotRow, j]) = (lu[pivotRow, j], lu[col, j]);
+                swaps++;
+            }
+
+            double pivot = lu[col, col];
+            for (int r = col + 1; r < n; r++)
+            {
+                double factor = lu[r, col] / pivot;
+                lu[r, col] = factor;
+                for (int j = col + 1; j < n; j++)
+                    lu[r, j] -= factor * lu[col, j];
+            }
+        }
+
+        double det = (swaps % 2 == 0) ? 1.0 : -1.0;
+        for (int i = 0; i < n; i++) det *= lu[i, i];
+        return NumberResult(det);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Date (weekend mask): NETWORKDAYS.INTL, WORKDAY.INTL
+    // ════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Parses a weekend argument: number code 1-17 OR 7-char "0"/"1" string.
+    /// Returns Mon-Sun mask (mask[0]=Mon,…,mask[6]=Sun). True = weekend day.
+    /// </summary>
+    private static (bool[]? Mask, ErrorValue? Error) ParseWeekendMask(ScalarValue value)
+    {
+        var mask = new bool[7];
+        if (value is BlankValue)
+        {
+            mask[5] = true; // Sat
+            mask[6] = true; // Sun
+            return (mask, null);
+        }
+
+        if (value is TextValue or DirectTextLiteralValue)
+        {
+            var pattern = ToText(value);
+            if (pattern.Length != 7) return (null, ErrorValue.Value);
+            if (pattern.Any(c => c is not '0' and not '1')) return (null, ErrorValue.Value);
+            if (pattern.All(c => c == '1')) return (null, ErrorValue.Value); // all-weekend not allowed
+            for (int i = 0; i < 7; i++) mask[i] = pattern[i] == '1';
+            return (mask, null);
+        }
+
+        double rawCode = ToNumber(value);
+        if (!double.IsFinite(rawCode)) return (null, ErrorValue.Value);
+        int code = (int)rawCode;
+        // Mon=0..Sun=6
+        switch (code)
+        {
+            case 1: mask[5] = true; mask[6] = true; break;        // Sat, Sun
+            case 2: mask[6] = true; mask[0] = true; break;        // Sun, Mon
+            case 3: mask[0] = true; mask[1] = true; break;        // Mon, Tue
+            case 4: mask[1] = true; mask[2] = true; break;        // Tue, Wed
+            case 5: mask[2] = true; mask[3] = true; break;        // Wed, Thu
+            case 6: mask[3] = true; mask[4] = true; break;        // Thu, Fri
+            case 7: mask[4] = true; mask[5] = true; break;        // Fri, Sat
+            case 11: mask[6] = true; break;                       // Sun
+            case 12: mask[0] = true; break;                       // Mon
+            case 13: mask[1] = true; break;                       // Tue
+            case 14: mask[2] = true; break;                       // Wed
+            case 15: mask[3] = true; break;                       // Thu
+            case 16: mask[4] = true; break;                       // Fri
+            case 17: mask[5] = true; break;                       // Sat
+            default: return (null, ErrorValue.Num);
+        }
+        return (mask, null);
+    }
+
+    /// <summary>Map DayOfWeek to a Mon=0..Sun=6 index.</summary>
+    private static int DowToMonIndex(DayOfWeek dow) => dow switch
+    {
+        DayOfWeek.Monday    => 0,
+        DayOfWeek.Tuesday   => 1,
+        DayOfWeek.Wednesday => 2,
+        DayOfWeek.Thursday  => 3,
+        DayOfWeek.Friday    => 4,
+        DayOfWeek.Saturday  => 5,
+        _                   => 6 // Sunday
+    };
+
+    private static HashSet<DateTime> CollectHolidays(ScalarValue? arg)
+    {
+        var holidays = new HashSet<DateTime>();
+        if (arg is RangeValue rv)
+        {
+            foreach (var v in rv.Flatten())
+                if (TryCellNumber(v, out double serial))
+                    holidays.Add(DateTime.FromOADate(serial).Date);
+        }
+        else if (arg is not null && TryCellNumber(arg, out double s))
+        {
+            holidays.Add(DateTime.FromOADate(s).Date);
+        }
+        return holidays;
+    }
+
+    private static ScalarValue NetworkdaysIntl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
+        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var endRaw)) return ErrorValue.Num;
+
+        var (mask, maskErr) = ParseWeekendMask(args.Count > 2 ? args[2] : BlankValue.Instance);
+        if (maskErr is not null) return maskErr;
+        var holidays = args.Count > 3 ? CollectHolidays(args[3]) : new HashSet<DateTime>();
+
+        var startDt = startRaw.Date;
+        var endDt = endRaw.Date;
+        int sign = startDt <= endDt ? 1 : -1;
+        var lo = startDt <= endDt ? startDt : endDt;
+        var hi = startDt <= endDt ? endDt : startDt;
+
+        int count = 0;
+        for (var d = lo; d <= hi; d = d.AddDays(1))
+        {
+            if (mask![DowToMonIndex(d.DayOfWeek)]) continue;
+            if (holidays.Contains(d.Date)) continue;
+            count++;
+        }
+        return new NumberValue(sign * count);
+    }
+
+    private static ScalarValue WorkdayIntl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
+        if (!TryOADateToDateTime(args[0], out var current)) return ErrorValue.Num;
+        double rawDays = ToNumber(args[1]);
+        if (!double.IsFinite(rawDays)) return ErrorValue.Num;
+        if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
+        int days = (int)rawDays;
+
+        var (mask, maskErr) = ParseWeekendMask(args.Count > 2 ? args[2] : BlankValue.Instance);
+        if (maskErr is not null) return maskErr;
+        var holidays = args.Count > 3 ? CollectHolidays(args[3]) : new HashSet<DateTime>();
+
+        int sign = days < 0 ? -1 : 1;
+        int remaining = Math.Abs(days);
+        while (remaining > 0)
+        {
+            current = current.AddDays(sign);
+            if (mask![DowToMonIndex(current.DayOfWeek)]) continue;
+            if (holidays.Contains(current.Date)) continue;
+            remaining--;
+        }
+        return new NumberValue(current.ToOADate());
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Lookup: TRANSPOSE
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue Transpose(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue err) return err;
+        if (args[0] is not RangeValue rv) return args[0]; // scalar passes through
+        int rows = rv.RowCount;
+        int cols = rv.ColCount;
+        var result = new ScalarValue[cols, rows];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                result[c, r] = rv.Cells[r, c];
+        return new RangeValue(result);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Information: TYPE, ERROR.TYPE
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static ScalarValue TypeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        return args[0] switch
+        {
+            ErrorValue => new NumberValue(16),
+            RangeValue => new NumberValue(64),
+            BoolValue  => new NumberValue(4),
+            TextValue or DirectTextLiteralValue => new NumberValue(2),
+            NumberValue or DateTimeValue => new NumberValue(1),
+            BlankValue => new NumberValue(1),
+            _ => new NumberValue(1)
+        };
+    }
+
+    private static ScalarValue ErrorTypeFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is not ErrorValue ev) return ErrorValue.NA;
+        return ev.Code switch
+        {
+            "#NULL!"  => new NumberValue(1),
+            "#DIV/0!" => new NumberValue(2),
+            "#VALUE!" => new NumberValue(3),
+            "#REF!"   => new NumberValue(4),
+            "#NAME?"  => new NumberValue(5),
+            "#NUM!"   => new NumberValue(6),
+            "#N/A"    => new NumberValue(7),
+            "#GETTING_DATA" => new NumberValue(8),
+            "#SPILL!" => new NumberValue(14),
+            _ => ErrorValue.NA
+        };
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Phase A1 – Database functions
+    // DSUM, DAVERAGE, DCOUNT, DCOUNTA, DGET, DMAX, DMIN, DPRODUCT, DSTDEV, DSTDEVP, DVAR, DVARP
+    // ════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Resolve field arg to 0-based column index in database (or null if not found).</summary>
+    private static int? ResolveDatabaseField(RangeValue database, ScalarValue field)
+    {
+        if (TryCellNumber(field, out double colIdx))
+        {
+            int idx = (int)colIdx;
+            if (idx < 1 || idx > database.ColCount) return null;
+            return idx - 1;
+        }
+        if (field is TextValue or DirectTextLiteralValue)
+        {
+            var name = ToText(field);
+            for (int c = 0; c < database.ColCount; c++)
+            {
+                var header = database.Cells[0, c];
+                if (header is TextValue or DirectTextLiteralValue)
+                {
+                    if (string.Equals(ToText(header), name, StringComparison.OrdinalIgnoreCase))
+                        return c;
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Find database column index matching the given header text (case-insensitive).</summary>
+    private static int FindDbHeaderCol(RangeValue database, string headerText)
+    {
+        for (int c = 0; c < database.ColCount; c++)
+        {
+            var h = database.Cells[0, c];
+            string hText = h is TextValue or DirectTextLiteralValue ? ToText(h) : ToText(h);
+            if (string.Equals(hText, headerText, StringComparison.OrdinalIgnoreCase))
+                return c;
+        }
+        return -1;
+    }
+
+    /// <summary>Returns true if a single data row matches a single criteria row (AND across columns).</summary>
+    private static bool DbRowMatchesCriteriaRow(RangeValue database, int dataRow, RangeValue criteria, int critRow)
+    {
+        bool hasAnyCriterion = false;
+        for (int cc = 0; cc < criteria.ColCount; cc++)
+        {
+            var critHeader = criteria.Cells[0, cc];
+            if (critHeader is BlankValue) continue;
+
+            var critCell = criteria.Cells[critRow, cc];
+            if (critCell is BlankValue) continue;
+            if (critCell is TextValue tv && tv.Value.Length == 0) continue;
+
+            hasAnyCriterion = true;
+            var headerText = ToText(critHeader);
+            int dbCol = FindDbHeaderCol(database, headerText);
+            if (dbCol < 0) return false;
+
+            var cellValue = database.Cells[dataRow, dbCol];
+            if (!MatchesCriteria(cellValue, critCell)) return false;
+        }
+        return hasAnyCriterion;
+    }
+
+    /// <summary>Extract values from the field column for all matching rows.</summary>
+    private static (List<ScalarValue> Matches, ErrorValue? Error) DatabaseExtract(
+        RangeValue database, ScalarValue fieldArg, RangeValue criteria)
+    {
+        if (database.RowCount < 2) return (new List<ScalarValue>(), null);
+
+        int? fieldCol = ResolveDatabaseField(database, fieldArg);
+        if (fieldCol is null) return (new List<ScalarValue>(), ErrorValue.Value);
+
+        var matches = new List<ScalarValue>();
+        for (int r = 1; r < database.RowCount; r++)
+        {
+            bool rowMatches = false;
+            // OR across criteria rows
+            for (int cr = 1; cr < criteria.RowCount; cr++)
+            {
+                if (DbRowMatchesCriteriaRow(database, r, criteria, cr))
+                {
+                    rowMatches = true;
+                    break;
+                }
+            }
+            if (rowMatches)
+            {
+                var cell = database.Cells[r, fieldCol.Value];
+                if (cell is ErrorValue ev) return (matches, ev);
+                matches.Add(cell);
+            }
+        }
+        return (matches, null);
+    }
+
+    private static (List<double> Nums, ErrorValue? Error) DatabaseExtractNumeric(
+        RangeValue database, ScalarValue fieldArg, RangeValue criteria)
+    {
+        var (matches, err) = DatabaseExtract(database, fieldArg, criteria);
+        if (err is not null) return (new List<double>(), err);
+        var nums = new List<double>();
+        foreach (var v in matches)
+            if (TryCellNumber(v, out double d)) nums.Add(d);
+        return (nums, null);
+    }
+
+    private static bool TryDbArgs(
+        IReadOnlyList<ScalarValue> args,
+        out RangeValue database,
+        out ScalarValue field,
+        out RangeValue criteria,
+        out ScalarValue? error)
+    {
+        database = null!;
+        field = null!;
+        criteria = null!;
+        error = null;
+        if (args[0] is ErrorValue e0) { error = e0; return false; }
+        if (args[1] is ErrorValue e1) { error = e1; return false; }
+        if (args[2] is ErrorValue e2) { error = e2; return false; }
+        if (args[0] is not RangeValue db) { error = ErrorValue.Value; return false; }
+        if (args[2] is not RangeValue cr) { error = ErrorValue.Value; return false; }
+        database = db;
+        field = args[1];
+        criteria = cr;
+        return true;
+    }
+
+    private static ScalarValue DSum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        return NumberResult(nums.Sum());
+    }
+
+    private static ScalarValue DAverage(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count == 0) return ErrorValue.DivByZero;
+        return NumberResult(nums.Average());
+    }
+
+    private static ScalarValue DCount(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        return new NumberValue(nums.Count);
+    }
+
+    private static ScalarValue DCountA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (matches, e) = DatabaseExtract(db, f, cr);
+        if (e is not null) return e;
+        int count = 0;
+        foreach (var v in matches)
+            if (v is not BlankValue && !(v is TextValue tv && tv.Value.Length == 0)) count++;
+        return new NumberValue(count);
+    }
+
+    private static ScalarValue DGet(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (matches, e) = DatabaseExtract(db, f, cr);
+        if (e is not null) return e;
+        if (matches.Count == 0) return ErrorValue.Value;
+        if (matches.Count > 1) return ErrorValue.Num;
+        return matches[0];
+    }
+
+    private static ScalarValue DMax(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count == 0) return ErrorValue.Num;
+        return NumberResult(nums.Max());
+    }
+
+    private static ScalarValue DMin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count == 0) return ErrorValue.Num;
+        return NumberResult(nums.Min());
+    }
+
+    private static ScalarValue DProduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count == 0) return new NumberValue(1);
+        double prod = 1;
+        foreach (var x in nums) prod *= x;
+        return NumberResult(prod);
+    }
+
+    private static ScalarValue DStdev(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count < 2) return ErrorValue.DivByZero;
+        double mean = nums.Average();
+        double s = nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
+        return NumberResult(Math.Sqrt(s));
+    }
+
+    private static ScalarValue DStdevP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count == 0) return ErrorValue.DivByZero;
+        double mean = nums.Average();
+        double s = nums.Sum(x => (x - mean) * (x - mean)) / nums.Count;
+        return NumberResult(Math.Sqrt(s));
+    }
+
+    private static ScalarValue DVar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count < 2) return ErrorValue.DivByZero;
+        double mean = nums.Average();
+        double s = nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
+        return NumberResult(s);
+    }
+
+    private static ScalarValue DVarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        if (e is not null) return e;
+        if (nums.Count == 0) return ErrorValue.DivByZero;
+        double mean = nums.Average();
+        double s = nums.Sum(x => (x - mean) * (x - mean)) / nums.Count;
+        return NumberResult(s);
+    }
 }
 
 /// <summary>
