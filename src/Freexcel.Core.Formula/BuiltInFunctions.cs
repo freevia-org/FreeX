@@ -1535,8 +1535,13 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        if (!TryOADateToDateTime(args[0], out var start)) return ErrorValue.Num;
-        if (!TryOADateToDateTime(args[1], out var end)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[0], out var startRaw)) return ErrorValue.Num;
+        if (!TryOADateToDateTime(args[1], out var endRaw)) return ErrorValue.Num;
+        // DATEDIF operates on whole dates — discard any time portion so that
+        // e.g. DATEDIF(2024-01-01 23:00, 2024-01-02 01:00, "D") returns 1 (Excel)
+        // rather than 0 (TimeSpan.Days would otherwise round toward zero).
+        var start = startRaw.Date;
+        var end = endRaw.Date;
         if (end < start) return ErrorValue.Num;
         var unit  = ToText(args[2]).ToUpperInvariant();
 
@@ -2752,6 +2757,11 @@ public static class BuiltInFunctions
 
     private static double ActualActualDenominator(DateTime start, DateTime end)
     {
+        // Normalize order so the denominator is well-defined when callers pass
+        // a reversed range (Excel allows YEARFRAC(start > end) and returns a
+        // negative value — without this swap the loop is empty and we'd
+        // divide by zero, yielding ±infinity instead of a finite result).
+        if (start > end) (start, end) = (end, start);
         if (start.Year == end.Year)
             return DateTime.IsLeapYear(start.Year) ? 366.0 : 365.0;
         double total = 0;
@@ -3208,10 +3218,19 @@ public static class BuiltInFunctions
         if (FirstError(args) is { } e) return e;
         if (args[0] is not RangeValue valRange) return ErrorValue.Value;
         double guess = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 0.1;
+        if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
         if (err is not null) return err;
         var cashflows = values!;
-        if (cashflows.Count == 0) return ErrorValue.Value;
+        if (cashflows.Count < 2) return ErrorValue.Num;
+        // Excel requires at least one positive and one negative cashflow.
+        bool hasPositive = false, hasNegative = false;
+        for (int i = 0; i < cashflows.Count; i++)
+        {
+            if (cashflows[i] > 0) hasPositive = true;
+            else if (cashflows[i] < 0) hasNegative = true;
+        }
+        if (!hasPositive || !hasNegative) return ErrorValue.Num;
         double r = guess;
         for (int iter = 0; iter < 100; iter++)
         {

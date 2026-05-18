@@ -1393,6 +1393,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Datedif_DaysIgnoresTimePortion()
+    {
+        // DATEDIF must operate on whole-day boundaries — without truncation
+        // the TimeSpan-based subtraction would return 0 days here even though
+        // the dates differ by 1 calendar day.
+        var sheet = MakeSheet();
+        var s1 = new DateTime(2024, 1, 1, 23, 0, 0).ToOADate();
+        var s2 = new DateTime(2024, 1, 2, 1, 0, 0).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(s1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(s2));
+        _eval.Evaluate("=DATEDIF(A1,B1,\"D\")", sheet).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Mod_BasicModulo()
     {
         var sheet = MakeSheet();
@@ -3047,6 +3061,21 @@ public class FunctionLibraryTests
         _eval.Evaluate("=YEARFRAC(A1,B1,NA())", sheet).Should().Be(ErrorValue.NA);
     }
 
+    [Fact]
+    public void Yearfrac_Basis1_ReversedRange_ReturnsFiniteNegative()
+    {
+        // Previously the actual/actual denominator loop did not execute when
+        // start.Year > end.Year, returning 0 and causing divide-by-zero.
+        double start = new DateTime(2024, 1, 1).ToOADate();
+        double end   = new DateTime(2022, 1, 1).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(start)), (1, 2, new NumberValue(end)));
+        var result = _eval.Evaluate("=YEARFRAC(A1,B1,1)", sheet);
+        result.Should().BeOfType<NumberValue>();
+        var value = ((NumberValue)result).Value;
+        double.IsFinite(value).Should().BeTrue();
+        value.Should().BeApproximately(-2.0, 0.05);
+    }
+
     [Fact] public void VarS_ThreeValues_ReturnsSampleVariance()
     {
         var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
@@ -3629,6 +3658,38 @@ public class FunctionLibraryTests
             (3, 1, new TextValue("1E309")));
 
         _eval.Evaluate("=IRR(A1:A2,A3)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Irr_AllPositiveCashflows_ReturnsNumError()
+    {
+        // No sign change — IRR equation has no real solution above -1; Excel returns #NUM!.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(100)),
+            (2, 1, new NumberValue(200)),
+            (3, 1, new NumberValue(300)));
+        _eval.Evaluate("=IRR(A1:A3)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Irr_AllNegativeCashflows_ReturnsNumError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-100)),
+            (2, 1, new NumberValue(-200)),
+            (3, 1, new NumberValue(-300)));
+        _eval.Evaluate("=IRR(A1:A3)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Irr_GuessAtOrBelowMinusOne_ReturnsNumError()
+    {
+        // 1 + guess must be > 0 for the IRR Newton iteration to make sense.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(-1000)),
+            (2, 1, new NumberValue(1100)));
+        _eval.Evaluate("=IRR(A1:A2,-1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=IRR(A1:A2,-2)", sheet).Should().Be(ErrorValue.Num);
     }
 
     [Fact] public void Sln_StraightLine_ReturnsAnnualDep()
