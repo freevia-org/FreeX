@@ -89,6 +89,39 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_ReadsPivotSourceBinding()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:pivotSource>
+                <c:name>Data!PivotTable1</c:name>
+                <c:fmtId val="0"/>
+              </c:pivotSource>
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:tx><c:strRef><c:f>Data!$E$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Data!$D$2:$D$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Data!$E$2:$E$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.IsPivotChart.Should().BeTrue();
+        chart.PivotTableName.Should().Be("PivotTable1");
+    }
+
+    [Fact]
     public void TryReadSupportedChart_ReadsBarDirection()
     {
         var sheetId = new SheetId(Guid.NewGuid());

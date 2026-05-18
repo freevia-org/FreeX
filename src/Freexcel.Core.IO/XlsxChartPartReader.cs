@@ -28,43 +28,58 @@ public static class XlsxChartPartReader
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
         var pieChart = plotArea?.Element(ChartNs + "pieChart");
         var doughnutChart = plotArea?.Element(ChartNs + "doughnutChart");
+        bool read;
         if (doughnutChart is not null)
-            return TryReadPieFamilyChart(chartXml, doughnutChart, sheetId, ChartType.Doughnut, out chart);
-
-        if (pieChart is not null)
-            return TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, out chart);
-
-        if (bubbleChart is not null)
-            return TryReadBubbleChart(chartXml, bubbleChart, sheetId, out chart);
-
-        if (areaChart is not null && lineChart is not null)
-            return TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, out chart);
-
-        if (areaCharts.Count > 0)
-            return TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, out chart);
-
-        if (scatterCharts.Count > 0)
-            return TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, out chart);
-
-        if (barChart is not null && lineChart is not null)
-            return TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, sheetId, out chart);
-
-        if (lineCharts.Count > 1)
-            return TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, out chart);
-
-        if (lineChart is not null)
-            return TryReadLineChart(chartXml, plotArea, [lineChart], sheetId, out chart);
-
-        if (radarCharts.Count > 0)
-            return TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
-
-        if (stockCharts.Count > 0)
-            return TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart);
-
-        if (barChart is null)
+            read = TryReadPieFamilyChart(chartXml, doughnutChart, sheetId, ChartType.Doughnut, out chart);
+        else if (pieChart is not null)
+            read = TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, out chart);
+        else if (bubbleChart is not null)
+            read = TryReadBubbleChart(chartXml, bubbleChart, sheetId, out chart);
+        else if (areaChart is not null && lineChart is not null)
+            read = TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, out chart);
+        else if (areaCharts.Count > 0)
+            read = TryReadAreaChart(chartXml, plotArea, areaCharts, sheetId, out chart);
+        else if (scatterCharts.Count > 0)
+            read = TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, out chart);
+        else if (barChart is not null && lineChart is not null)
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, sheetId, out chart);
+        else if (lineCharts.Count > 1)
+            read = TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, out chart);
+        else if (lineChart is not null)
+            read = TryReadLineChart(chartXml, plotArea, [lineChart], sheetId, out chart);
+        else if (radarCharts.Count > 0)
+            read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
+        else if (stockCharts.Count > 0)
+            read = TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart);
+        else if (barChart is not null)
+            read = TryReadBarChart(chartXml, plotArea, barCharts, sheetId, out chart);
+        else
             return false;
 
-        return TryReadBarChart(chartXml, plotArea, barCharts, sheetId, out chart);
+        if (read)
+            ApplyPivotSourceMetadata(chartXml, chart);
+
+        return read;
+    }
+
+    private static void ApplyPivotSourceMetadata(XDocument chartXml, ChartModel chart)
+    {
+        var pivotSourceName = chartXml.Root?
+            .Element(ChartNs + "pivotSource")?
+            .Element(ChartNs + "name")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(pivotSourceName))
+            return;
+
+        chart.IsPivotChart = true;
+        chart.PivotTableName = ExtractPivotTableName(pivotSourceName);
+    }
+
+    private static string ExtractPivotTableName(string pivotSourceName)
+    {
+        var bangIndex = pivotSourceName.LastIndexOf('!');
+        var name = bangIndex >= 0 ? pivotSourceName[(bangIndex + 1)..] : pivotSourceName;
+        return name.Trim().Trim('\'');
     }
 
     private static bool TryReadLineLikeChart(

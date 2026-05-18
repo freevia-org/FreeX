@@ -166,6 +166,14 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
 
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
+        foreach (var chart in sheet.Charts.Where(chart =>
+                     chart.IsPivotChart &&
+                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            chart.DataRange = outputRange;
+            chart.PivotCacheId = pivotTable.CacheId;
+        }
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
@@ -173,5 +181,157 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
     {
         AddPivotTableCommand.Restore(ctx.GetSheet(_sheetId), _targetSnapshot);
         _targetSnapshot = null;
+    }
+}
+
+public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly string _pivotTableName;
+    private readonly IReadOnlyList<PivotFieldModel> _rowFields;
+    private readonly IReadOnlyList<PivotFieldModel> _columnFields;
+    private readonly IReadOnlyList<PivotFieldModel> _pageFields;
+    private readonly IReadOnlyList<PivotDataFieldModel> _dataFields;
+    private PivotLayoutSnapshot? _snapshot;
+    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+
+    public ConfigurePivotTableLayoutCommand(
+        SheetId sheetId,
+        string pivotTableName,
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IReadOnlyList<PivotFieldModel> pageFields,
+        IReadOnlyList<PivotDataFieldModel> dataFields)
+    {
+        _sheetId = sheetId;
+        _pivotTableName = pivotTableName;
+        _rowFields = rowFields;
+        _columnFields = columnFields;
+        _pageFields = pageFields;
+        _dataFields = dataFields;
+    }
+
+    public string Label => "Configure PivotTable Layout";
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+            return new CommandOutcome(false, "PivotTable was not found.");
+        if (_rowFields.Count == 0)
+            return new CommandOutcome(false, "PivotTable requires at least one row field.");
+        if (_dataFields.Count == 0)
+            return new CommandOutcome(false, "PivotTable requires at least one data field.");
+
+        _snapshot = PivotLayoutSnapshot.Capture(pivotTable);
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.TargetRange);
+
+        Replace(pivotTable.RowFields, _rowFields);
+        Replace(pivotTable.ColumnFields, _columnFields);
+        Replace(pivotTable.PageFields, _pageFields);
+        Replace(pivotTable.DataFields, _dataFields);
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is not null && _snapshot is not null)
+            _snapshot.Restore(pivotTable);
+        AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        _snapshot = null;
+        _targetSnapshot = null;
+    }
+
+    private static void Replace<T>(List<T> target, IReadOnlyList<T> source)
+    {
+        target.Clear();
+        target.AddRange(source);
+    }
+
+    private sealed record PivotLayoutSnapshot(
+        IReadOnlyList<PivotFieldModel> RowFields,
+        IReadOnlyList<PivotFieldModel> ColumnFields,
+        IReadOnlyList<PivotFieldModel> PageFields,
+        IReadOnlyList<PivotDataFieldModel> DataFields)
+    {
+        public static PivotLayoutSnapshot Capture(PivotTableModel pivotTable) =>
+            new(
+                pivotTable.RowFields.ToList(),
+                pivotTable.ColumnFields.ToList(),
+                pivotTable.PageFields.ToList(),
+                pivotTable.DataFields.ToList());
+
+        public void Restore(PivotTableModel pivotTable)
+        {
+            Replace(pivotTable.RowFields, RowFields);
+            Replace(pivotTable.ColumnFields, ColumnFields);
+            Replace(pivotTable.PageFields, PageFields);
+            Replace(pivotTable.DataFields, DataFields);
+        }
+    }
+}
+
+public sealed class DrillDownPivotTableCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly string _pivotTableName;
+    private readonly CellAddress _pivotCell;
+    private SheetId? _detailSheetId;
+
+    public DrillDownPivotTableCommand(SheetId sheetId, string pivotTableName, CellAddress pivotCell)
+    {
+        _sheetId = sheetId;
+        _pivotTableName = pivotTableName;
+        _pivotCell = pivotCell;
+    }
+
+    public string Label => "Show PivotTable Details";
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+            return new CommandOutcome(false, "PivotTable was not found.");
+
+        var details = PivotTableRefreshService.ExtractDetailRows(ctx.Workbook, sheet, pivotTable, _pivotCell);
+        if (details.Headers.Count == 0 || details.Rows.Count == 0)
+            return new CommandOutcome(false, "No detail rows were found for this PivotTable cell.");
+
+        var detailSheet = ctx.Workbook.AddSheet(GenerateDetailSheetName(ctx.Workbook));
+        _detailSheetId = detailSheet.Id;
+        for (var col = 0; col < details.Headers.Count; col++)
+            detailSheet.SetCell(new CellAddress(detailSheet.Id, 1, (uint)col + 1), new TextValue(details.Headers[col]));
+        for (var row = 0; row < details.Rows.Count; row++)
+        for (var col = 0; col < details.Headers.Count; col++)
+            detailSheet.SetCell(new CellAddress(detailSheet.Id, (uint)row + 2, (uint)col + 1), Cell.FromValue(details.Rows[row][col]));
+
+        return new CommandOutcome(true, AffectedCells: [new CellAddress(detailSheet.Id, 1, 1)]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_detailSheetId is { } detailSheetId)
+            ctx.Workbook.RemoveSheet(detailSheetId);
+        _detailSheetId = null;
+    }
+
+    private static string GenerateDetailSheetName(Workbook workbook)
+    {
+        for (var index = 1; index <= 10000; index++)
+        {
+            var name = index == 1 ? "Detail" : $"Detail{index}";
+            if (workbook.ValidateSheetName(name) is null)
+                return name;
+        }
+
+        return $"Detail{Guid.NewGuid():N}"[..31];
     }
 }

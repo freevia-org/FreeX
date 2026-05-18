@@ -130,6 +130,38 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    [Fact]
+    public void PublicCorpusRows_OpenAndSaveWhenFilesArePresent()
+    {
+        var workspace = FindWorkspaceRoot();
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "public")
+            .Where(row => row.ExpectedStatus == "public-pass")
+            .ToArray();
+
+        rows.Should().HaveCountGreaterThanOrEqualTo(25, "the public corpus should include a meaningful real-workbook sample set");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(workspace, "test-corpus", row.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                continue;
+
+            using var source = File.OpenRead(path);
+            var workbook = adapter.Load(source);
+            workbook.SheetCount.Should().BeGreaterThan(0, row.Id);
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Length.Should().BeGreaterThan(0, row.Id);
+
+            saved.Position = 0;
+            var roundTripped = adapter.Load(saved);
+            roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
+        }
+    }
+
     private static IReadOnlyList<ManifestRow> ReadManifestRows()
     {
         var manifestPath = Path.Combine(FindWorkspaceRoot(), "test-corpus", "manifest.csv");

@@ -80,6 +80,9 @@ public sealed class ChartModel
     public Guid Id { get; init; } = Guid.NewGuid();
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
+    public bool IsPivotChart { get; set; }
+    public string? PivotTableName { get; set; }
+    public int? PivotCacheId { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }

@@ -1120,7 +1120,11 @@ public partial class MainWindow : Window
             {
                 SetActiveCell(newAddr);
                 if (e.ClickCount == 2)
-                    EnterEditMode();
+                {
+                    if (!TryShowPivotTableDetails(showMessage: false))
+                        EnterEditMode();
+                    e.Handled = true;
+                }
                 else
                 {
                     // Start drag-select
@@ -6035,12 +6039,175 @@ public partial class MainWindow : Window
 
     private void PivotTableBtn_Click(object sender, RoutedEventArgs e)
     {
-        var message = DeferredCommandMessages.PivotTableModelFirst();
-        MessageBox.Show(
-            message.Body,
-            message.Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null || SheetGrid.SelectedRange is not { } sourceRange)
+        {
+            MessageBox.Show(
+                "Select a source range with a header row before creating a PivotTable.",
+                "Insert PivotTable",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (sourceRange.RowCount < 2 || sourceRange.ColCount < 2)
+        {
+            MessageBox.Show(
+                "PivotTable source data must include at least two columns and a header row.",
+                "Insert PivotTable",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var dataFieldIndex = ChooseDefaultPivotDataField(sheet, sourceRange);
+        var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
+        var targetRange = GetDefaultPivotTargetRange(sheet, sourceRange);
+        var name = GenerateUniquePivotTableName(sheet);
+
+        if (!TryExecuteCommand(
+                new AddPivotTableCommand(
+                    _currentSheetId,
+                    sourceRange,
+                    targetRange,
+                    name,
+                    rowFieldIndexes: [rowFieldIndex],
+                    dataFieldIndexes: [dataFieldIndex]),
+                "Insert PivotTable"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void RefreshPivotTableBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (pivotTable is null)
+        {
+            MessageBox.Show(
+                "Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.",
+                "Refresh PivotTable",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryExecuteCommand(new RefreshPivotTableCommand(_currentSheetId, pivotTable.Name), "Refresh PivotTable"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void PivotTableShowDetailsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        _ = TryShowPivotTableDetails(showMessage: true);
+    }
+
+    private bool TryShowPivotTableDetails(bool showMessage)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var selected = SheetGrid.SelectedRange?.Start;
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (pivotTable is null || selected is null)
+        {
+            if (showMessage)
+            {
+                MessageBox.Show(
+                    "Select a value cell inside an existing PivotTable before showing detail rows.",
+                    "Show PivotTable Details",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+
+            return false;
+        }
+
+        if (!TryExecuteCommand(
+                new DrillDownPivotTableCommand(_currentSheetId, pivotTable.Name, selected.Value),
+                "Show PivotTable Details"))
+            return false;
+
+        var detailSheet = _workbook.Sheets.LastOrDefault();
+        if (detailSheet is not null)
+            _currentSheetId = detailSheet.Id;
+        RefreshSheetTabs();
+        UpdateViewport();
+        return true;
+    }
+
+    private static int ChooseDefaultPivotDataField(Sheet sheet, GridRange sourceRange)
+    {
+        for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+        {
+            for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
+            {
+                if (sheet.GetValue(row, col) is NumberValue or DateTimeValue)
+                    return checked((int)(col - sourceRange.Start.Col));
+            }
+        }
+
+        return checked((int)Math.Min(1, sourceRange.ColCount - 1));
+    }
+
+    private static GridRange GetDefaultPivotTargetRange(Sheet sheet, GridRange sourceRange)
+    {
+        var start = new CellAddress(
+            sheet.Id,
+            sourceRange.Start.Row,
+            Math.Min(sourceRange.End.Col + 2, 16384));
+        var end = new CellAddress(
+            sheet.Id,
+            Math.Min(start.Row + sourceRange.RowCount + 2, 1048576),
+            Math.Min(start.Col + sourceRange.ColCount + 2, 16384));
+        return new GridRange(start, end);
+    }
+
+    private static string GenerateUniquePivotTableName(Sheet sheet)
+    {
+        for (var index = sheet.PivotTables.Count + 1; index <= 10000; index++)
+        {
+            var name = $"PivotTable{index}";
+            if (sheet.PivotTables.All(pivot => !string.Equals(pivot.Name, name, StringComparison.OrdinalIgnoreCase)))
+                return name;
+        }
+
+        return $"PivotTable{Guid.NewGuid():N}"[..31];
+    }
+
+    private void PivotChartBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var pivotTable = sheet is null ? null : FindPivotTableForSelection(sheet, SheetGrid.SelectedRange);
+        if (pivotTable is null)
+        {
+            MessageBox.Show(
+                "Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.",
+                "Insert PivotChart",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new AddPivotChartCommand(_currentSheetId, pivotTable.Name, ChartType.Column, $"{pivotTable.Name} Chart"),
+                "Insert PivotChart"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private static PivotTableModel? FindPivotTableForSelection(Sheet sheet, GridRange? selectedRange)
+    {
+        if (selectedRange is { } range)
+        {
+            var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+                pivot.TargetRange.Contains(range.Start) || pivot.TargetRange.Overlaps(range));
+            if (pivotTable is not null)
+                return pivotTable;
+        }
+
+        return sheet.PivotTables.FirstOrDefault();
     }
 
     private void TableBtn_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(0);

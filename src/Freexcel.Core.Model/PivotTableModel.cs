@@ -30,17 +30,100 @@ public sealed class PivotTableModel
     public GridRange SourceRange { get; init; }
     public GridRange TargetRange { get; init; }
     public string PackagePart { get; init; } = "";
+    public bool ShowSubtotals { get; set; }
     public List<PivotFieldModel> RowFields { get; } = [];
     public List<PivotFieldModel> ColumnFields { get; } = [];
     public List<PivotFieldModel> PageFields { get; } = [];
     public List<PivotDataFieldModel> DataFields { get; } = [];
+    public List<PivotCalculatedFieldModel> CalculatedFields { get; } = [];
+    public List<PivotCalculatedItemModel> CalculatedItems { get; } = [];
+    public List<PivotLabelFilterModel> LabelFilters { get; } = [];
+    public List<PivotValueFilterModel> ValueFilters { get; } = [];
+    public List<PivotSortModel> Sorts { get; } = [];
 }
 
 public sealed record PivotFieldModel(
-    int SourceFieldIndex);
+    int SourceFieldIndex,
+    string? SelectedItem = null,
+    IReadOnlyList<string>? SelectedItems = null,
+    PivotFieldGrouping Grouping = PivotFieldGrouping.None,
+    double? GroupStart = null,
+    double? GroupEnd = null,
+    double? GroupInterval = null);
+
+public enum PivotFieldGrouping
+{
+    None,
+    Year,
+    Quarter,
+    Month,
+    Day,
+    NumberRange
+}
 
 public sealed record PivotDataFieldModel(
     int SourceFieldIndex,
     string Name,
     string SummaryFunction,
-    int? NumberFormatId = null);
+    int? NumberFormatId = null,
+    string? CalculatedFieldName = null);
+
+public sealed record PivotCalculatedFieldModel(
+    string Name,
+    string Formula);
+
+public sealed record PivotCalculatedItemModel(
+    int SourceFieldIndex,
+    string Name,
+    string Formula);
+
+public sealed record PivotLabelFilterModel(
+    int SourceFieldIndex,
+    PivotLabelFilterKind Kind,
+    string Value);
+
+public enum PivotLabelFilterKind
+{
+    Equals,
+    DoesNotEqual,
+    BeginsWith,
+    EndsWith,
+    Contains,
+    DoesNotContain
+}
+
+public sealed record PivotValueFilterModel(
+    int DataFieldIndex,
+    PivotValueFilterKind Kind,
+    int Count = 0,
+    double? ComparisonValue = null);
+
+public enum PivotValueFilterKind
+{
+    Top,
+    Bottom,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Equals,
+    DoesNotEqual
+}
+
+public sealed record PivotSortModel(
+    PivotSortTarget Target,
+    PivotSortDirection Direction,
+    int DataFieldIndex = 0,
+    int FieldIndex = 0);
+
+public enum PivotSortTarget
+{
+    Label,
+    Value
+}
+
+public enum PivotSortDirection
+{
+    Ascending,
+    Descending
+}
