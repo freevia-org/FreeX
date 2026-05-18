@@ -780,7 +780,9 @@ public sealed class FormulaEvaluator
              or "DMAX" or "DMIN" or "DPRODUCT" or "DSTDEV" or "DSTDEVP"
              or "DVAR" or "DVARP"
              or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK"
-             or "AGGREGATE" or "CELL";
+             or "AGGREGATE" or "CELL"
+             or "T.TEST" or "F.TEST" or "CHISQ.TEST"
+             or "FREQUENCY";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL";
