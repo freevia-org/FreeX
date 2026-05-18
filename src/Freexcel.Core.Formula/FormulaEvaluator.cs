@@ -17,7 +17,7 @@ public sealed class FormulaEvaluator
         var tokens = lexer.Tokenize();
         var parser = new Parser(tokens);
         var ast = parser.Parse();
-        var context = new SheetEvalContext(sheet, workbook);
+        var context = new SheetEvalContext(sheet, workbook, this);
         return EvaluateNode(ast, context);
     }
 
@@ -26,7 +26,7 @@ public sealed class FormulaEvaluator
     /// </summary>
     public ScalarValue Evaluate(FormulaNode ast, Sheet sheet, Freexcel.Core.Model.Workbook? workbook = null)
     {
-        var context = new SheetEvalContext(sheet, workbook);
+        var context = new SheetEvalContext(sheet, workbook, this);
         return EvaluateNode(ast, context);
     }
 
@@ -56,6 +56,10 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue EvaluateNamedRange(NamedRangeNode node, IEvalContext context)
     {
+        // Local LET/LAMBDA bindings shadow workbook named ranges.
+        var binding = context.TryResolveLambdaBinding(node.Name);
+        if (binding is not null) return binding;
+
         var range = context.TryResolveNamedRange(node.Name);
         if (range is null)
             return ErrorValue.Name;
@@ -228,6 +232,16 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateFunction(FunctionCallNode node, IEvalContext context)
     {
+        // LET-scoped lambda bindings: a name like "double" resolves to a LambdaValue
+        // before any built-in lookup, allowing user-defined functions to shadow nothing.
+        var lambdaBinding = context.TryResolveLambdaBinding(node.FunctionName);
+        if (lambdaBinding is LambdaValue lv)
+            return InvokeLambdaWithArgs(lv, node.Arguments, context);
+
+        // LET and LAMBDA are AST-aware special forms not in the built-in registry.
+        if (node.FunctionName is "LET" or "LAMBDA")
+            return EvaluateAstAware(node, context);
+
         if (!BuiltInFunctions.Exists(node.FunctionName))
             return ErrorValue.Name;
 
@@ -290,38 +304,52 @@ public sealed class FormulaEvaluator
             }
             else if (arg is NamedRangeNode named)
             {
-                var resolvedRange = context.TryResolveNamedRange(named.Name);
-                if (resolvedRange is null)
+                // Check LET/LAMBDA bindings first — these shadow workbook named ranges.
+                var lambdaBound = context.TryResolveLambdaBinding(named.Name);
+                if (lambdaBound is not null)
                 {
-                    expandedArgs.Add(ErrorValue.Name);
+                    if (isStructured && lambdaBound is RangeValue)
+                        expandedArgs.Add(lambdaBound);
+                    else if (!isStructured && lambdaBound is RangeValue flatRv)
+                        AddRangeValues(expandedArgs, flatRv.Flatten(), node.FunctionName);
+                    else
+                        expandedArgs.Add(lambdaBound);
                 }
                 else
                 {
-                    var r = resolvedRange.Value;
-                    if (isStructured)
+                    var resolvedRange = context.TryResolveNamedRange(named.Name);
+                    if (resolvedRange is null)
                     {
-                        // Build a RangeRefNode-equivalent structure for structured functions
-                        var start = new CellRefNode(
-                            Freexcel.Core.Model.CellAddress.NumberToColumnName(r.Start.Col),
-                            r.Start.Row);
-                        var end = new CellRefNode(
-                            Freexcel.Core.Model.CellAddress.NumberToColumnName(r.End.Col),
-                            r.End.Row);
-                        var syntheticRange = new RangeRefNode(start, end);
-                        expandedArgs.Add(BuildRangeValue(syntheticRange, context));
+                        expandedArgs.Add(ErrorValue.Name);
                     }
                     else
                     {
-                        // Resolve the sheet name when the named range lives on a different sheet
-                        var sheetName = context.TryGetSheetName(r.Start.Sheet);
-                        IReadOnlyList<ScalarValue> values = sheetName is not null
-                            ? context.GetRangeValues(sheetName,
-                                r.Start.Row, r.Start.Col,
-                                r.End.Row, r.End.Col)
-                            : context.GetRangeValues(
-                                r.Start.Row, r.Start.Col,
-                                r.End.Row, r.End.Col);
-                        AddRangeValues(expandedArgs, values, node.FunctionName);
+                        var r = resolvedRange.Value;
+                        if (isStructured)
+                        {
+                            // Build a RangeRefNode-equivalent structure for structured functions
+                            var start = new CellRefNode(
+                                Freexcel.Core.Model.CellAddress.NumberToColumnName(r.Start.Col),
+                                r.Start.Row);
+                            var end = new CellRefNode(
+                                Freexcel.Core.Model.CellAddress.NumberToColumnName(r.End.Col),
+                                r.End.Row);
+                            var syntheticRange = new RangeRefNode(start, end);
+                            expandedArgs.Add(BuildRangeValue(syntheticRange, context));
+                        }
+                        else
+                        {
+                            // Resolve the sheet name when the named range lives on a different sheet
+                            var sheetName = context.TryGetSheetName(r.Start.Sheet);
+                            IReadOnlyList<ScalarValue> values = sheetName is not null
+                                ? context.GetRangeValues(sheetName,
+                                    r.Start.Row, r.Start.Col,
+                                    r.End.Row, r.End.Col)
+                                : context.GetRangeValues(
+                                    r.Start.Row, r.Start.Col,
+                                    r.End.Row, r.End.Col);
+                            AddRangeValues(expandedArgs, values, node.FunctionName);
+                        }
                     }
                 }
             }
@@ -493,6 +521,8 @@ public sealed class FormulaEvaluator
             "ISFORMULA"    => EvaluateIsFormula(node, context),
             "FORMULATEXT"  => EvaluateFormulaText(node, context),
             "OFFSET"       => EvaluateOffset(node, context),
+            "LET"          => EvaluateLet(node, context),
+            "LAMBDA"       => EvaluateLambda(node, context),
             _              => ErrorValue.Value
         };
     }
@@ -782,7 +812,9 @@ public sealed class FormulaEvaluator
              or "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK"
              or "AGGREGATE" or "CELL"
              or "T.TEST" or "F.TEST" or "CHISQ.TEST"
-             or "FREQUENCY";
+             or "FREQUENCY"
+             or "MIRR" or "XIRR" or "XNPV" or "FVSCHEDULE"
+             or "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL";
 
     private static bool IsSingleCellReferenceRangeFunction(string name) =>
         name is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "COUNTBLANK" or "CELL";
@@ -809,15 +841,74 @@ public sealed class FormulaEvaluator
         _ => v.ToString() ?? ""
     };
 
+    // ── LET / LAMBDA evaluation ────────────────────────────────────────────
+
+    private ScalarValue EvaluateLet(FunctionCallNode node, IEvalContext context)
+    {
+        // LET(name1, val1, ..., nameN, valN, calc_expr)
+        // arg count must be odd and >= 3 (at least one binding pair + body)
+        if (node.Arguments.Count < 3 || node.Arguments.Count % 2 == 0)
+            return ErrorValue.Value;
+
+        var bindings = new Dictionary<string, ScalarValue>(StringComparer.OrdinalIgnoreCase);
+        var scoped = new ScopedEvalContext(context, bindings, this);
+
+        int pairCount = (node.Arguments.Count - 1) / 2;
+        for (int i = 0; i < pairCount; i++)
+        {
+            string? name = node.Arguments[i * 2] switch
+            {
+                NamedRangeNode nm => nm.Name,
+                StringNode s     => s.Value,
+                _                => null
+            };
+            if (name is null) return ErrorValue.Value;
+            bindings[name] = EvaluateNode(node.Arguments[i * 2 + 1], scoped);
+        }
+
+        return EvaluateNode(node.Arguments[^1], scoped);
+    }
+
+    private static ScalarValue EvaluateLambda(FunctionCallNode node, IEvalContext _)
+    {
+        // LAMBDA([param1, param2, ...,] body)
+        // All args except the last must be identifier (NamedRangeNode) parameter names.
+        if (node.Arguments.Count < 1) return ErrorValue.Value;
+
+        var paramNames = new List<string>(node.Arguments.Count - 1);
+        for (int i = 0; i < node.Arguments.Count - 1; i++)
+        {
+            if (node.Arguments[i] is NamedRangeNode nm)
+                paramNames.Add(nm.Name);
+            else
+                return ErrorValue.Value;
+        }
+
+        return new LambdaValue(paramNames, node.Arguments[^1]);
+    }
+
+    private ScalarValue InvokeLambdaWithArgs(LambdaValue lambda, IReadOnlyList<FormulaNode> argNodes, IEvalContext context)
+    {
+        if (argNodes.Count != lambda.Parameters.Count) return ErrorValue.Value;
+        var args = new ScalarValue[argNodes.Count];
+        for (int i = 0; i < argNodes.Count; i++)
+            args[i] = EvaluateNode(argNodes[i], context);
+        return context.InvokeLambda(lambda, args);
+    }
+
+    // ── Evaluation contexts ────────────────────────────────────────────────
+
     private sealed class SheetEvalContext : IEvalContext
     {
         private readonly Sheet _sheet;
         private readonly Freexcel.Core.Model.Workbook? _workbook;
+        private readonly FormulaEvaluator _evaluator;
 
-        public SheetEvalContext(Sheet sheet, Freexcel.Core.Model.Workbook? workbook = null)
+        public SheetEvalContext(Sheet sheet, Freexcel.Core.Model.Workbook? workbook, FormulaEvaluator evaluator)
         {
             _sheet = sheet;
             _workbook = workbook;
+            _evaluator = evaluator;
         }
 
         public ScalarValue GetCellValue(uint row, uint col) => _sheet.GetValue(row, col);
@@ -876,8 +967,63 @@ public sealed class FormulaEvaluator
 
         public Freexcel.Core.Model.Cell? TryGetCell(string sheetName, uint row, uint col)
             => _workbook?.GetSheet(sheetName)?.GetCell(row, col);
+
+        public ScalarValue? TryResolveLambdaBinding(string name) => null;
+
+        public ScalarValue InvokeLambda(LambdaValue lambda, IReadOnlyList<ScalarValue> args)
+        {
+            if (args.Count != lambda.Parameters.Count) return ErrorValue.Value;
+            var bindings = new Dictionary<string, ScalarValue>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < lambda.Parameters.Count; i++)
+                bindings[lambda.Parameters[i]] = args[i];
+            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(this, bindings, _evaluator));
+        }
+    }
+
+    // Wraps an IEvalContext with an extra layer of local name→value bindings (from LET).
+    // Bindings in this layer shadow the inner context and can be mutated by EvaluateLet
+    // before the body is evaluated (enabling forward references within the same LET).
+    private sealed class ScopedEvalContext : IEvalContext
+    {
+        private readonly IEvalContext _inner;
+        private readonly Dictionary<string, ScalarValue> _bindings;
+        private readonly FormulaEvaluator _evaluator;
+
+        public ScopedEvalContext(IEvalContext inner, Dictionary<string, ScalarValue> bindings, FormulaEvaluator evaluator)
+        {
+            _inner = inner;
+            _bindings = bindings;
+            _evaluator = evaluator;
+        }
+
+        public ScalarValue GetCellValue(uint row, uint col) => _inner.GetCellValue(row, col);
+        public ScalarValue GetCellValue(string sn, uint row, uint col) => _inner.GetCellValue(sn, row, col);
+        public IReadOnlyList<ScalarValue> GetRangeValues(uint r0, uint c0, uint r1, uint c1) => _inner.GetRangeValues(r0, c0, r1, c1);
+        public IReadOnlyList<ScalarValue> GetRangeValues(string sn, uint r0, uint c0, uint r1, uint c1) => _inner.GetRangeValues(sn, r0, c0, r1, c1);
+        public Freexcel.Core.Model.GridRange? TryResolveNamedRange(string name) => _inner.TryResolveNamedRange(name);
+        public string? TryGetSheetName(Freexcel.Core.Model.SheetId id) => _inner.TryGetSheetName(id);
+        public bool SheetExists(string sn) => _inner.SheetExists(sn);
+        public bool IsRowHidden(uint row) => _inner.IsRowHidden(row);
+        public Freexcel.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
+        public Freexcel.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
+        public Freexcel.Core.Model.Cell? TryGetCell(uint row, uint col) => _inner.TryGetCell(row, col);
+        public Freexcel.Core.Model.Cell? TryGetCell(string sn, uint row, uint col) => _inner.TryGetCell(sn, row, col);
+
+        public ScalarValue? TryResolveLambdaBinding(string name) =>
+            _bindings.TryGetValue(name, out var v) ? v : _inner.TryResolveLambdaBinding(name);
+
+        public ScalarValue InvokeLambda(LambdaValue lambda, IReadOnlyList<ScalarValue> args)
+        {
+            if (args.Count != lambda.Parameters.Count) return ErrorValue.Value;
+            var nb = new Dictionary<string, ScalarValue>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < lambda.Parameters.Count; i++) nb[lambda.Parameters[i]] = args[i];
+            return _evaluator.EvaluateNode(lambda.Body, new ScopedEvalContext(this, nb, _evaluator));
+        }
     }
 }
+
+/// <summary>A first-class function value created by LAMBDA. Holds parameter names and the unevaluated body AST.</summary>
+public sealed record LambdaValue(IReadOnlyList<string> Parameters, FormulaNode Body) : ScalarValue;
 
 internal sealed record DirectTextLiteralValue(string Value) : ScalarValue;
 internal sealed record ReferencedScalarValue(ScalarValue Value) : ScalarValue;

@@ -424,6 +424,18 @@ public static class BuiltInFunctions
         ["ODDFYIELD"] = (Oddfyield, 8, 9),
         ["ODDLPRICE"] = (Oddlprice, 7, 8),
         ["ODDLYIELD"] = (Oddlyield, 7, 8),
+
+        // ── Phase D: Lambda / higher-order functions ─────────────────────────
+        // LET and LAMBDA are AST-aware special forms handled by FormulaEvaluator;
+        // they are not registered here but are recognised by name before the built-in
+        // lookup so they don't return #NAME?.  The higher-order helpers below ARE
+        // registered because they receive their lambda arg as a pre-evaluated LambdaValue.
+        ["MAP"]       = (MapFunc,       2, 255),
+        ["REDUCE"]    = (ReduceFunc,    3, 3),
+        ["SCAN"]      = (ScanFunc,      3, 3),
+        ["BYROW"]     = (ByRowFunc,     2, 2),
+        ["BYCOL"]     = (ByColFunc,     2, 2),
+        ["MAKEARRAY"] = (MakeArrayFunc, 3, 3),
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
@@ -7998,6 +8010,127 @@ public static class BuiltInFunctions
         double y = ((redemption + couponAmt) / (pr + couponAmt * a) - 1) / dsc * frequency;
         return NumberResult(y);
     }
+    // ── Phase D: Higher-order function implementations ───────────────────────
+
+    // MAP(array1, [array2, ...], lambda(v1, [v2, ...])) → same-shape array
+    private static ScalarValue MapFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count < 2) return ErrorValue.Value;
+        if (args[^1] is not LambdaValue lambda) return ErrorValue.Value;
+
+        var arrays = new List<RangeValue>(args.Count - 1);
+        for (int i = 0; i < args.Count - 1; i++)
+        {
+            if (args[i] is not RangeValue rv) return ErrorValue.Value;
+            arrays.Add(rv);
+        }
+
+        int rows = arrays[0].RowCount, cols = arrays[0].ColCount;
+        if (arrays.Any(a => a.RowCount != rows || a.ColCount != cols)) return ErrorValue.Value;
+        if (lambda.Parameters.Count != arrays.Count) return ErrorValue.Value;
+
+        var result = new ScalarValue[rows, cols];
+        var invokeArgs = new ScalarValue[arrays.Count];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                for (int k = 0; k < arrays.Count; k++)
+                    invokeArgs[k] = arrays[k].At(r + 1, c + 1);
+                result[r, c] = ctx.InvokeLambda(lambda, invokeArgs);
+            }
+        return new RangeValue(result);
+    }
+
+    // REDUCE(initial, array, lambda(accumulator, value)) → scalar
+    private static ScalarValue ReduceFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count != 3) return ErrorValue.Value;
+        if (args[1] is not RangeValue rv) return ErrorValue.Value;
+        if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
+        if (lambda.Parameters.Count != 2) return ErrorValue.Value;
+
+        ScalarValue acc = args[0];
+        var flat = rv.Flatten();
+        foreach (var val in flat)
+            acc = ctx.InvokeLambda(lambda, [acc, val]);
+        return acc;
+    }
+
+    // SCAN(initial, array, lambda(accumulator, value)) → same-shape array of intermediates
+    private static ScalarValue ScanFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count != 3) return ErrorValue.Value;
+        if (args[1] is not RangeValue rv) return ErrorValue.Value;
+        if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
+        if (lambda.Parameters.Count != 2) return ErrorValue.Value;
+
+        int rows = rv.RowCount, cols = rv.ColCount;
+        var result = new ScalarValue[rows, cols];
+        ScalarValue acc = args[0];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+            {
+                acc = ctx.InvokeLambda(lambda, [acc, rv.At(r + 1, c + 1)]);
+                result[r, c] = acc;
+            }
+        return new RangeValue(result);
+    }
+
+    // BYROW(array, lambda(row)) → N×1 array
+    private static ScalarValue ByRowFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count != 2) return ErrorValue.Value;
+        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is not LambdaValue lambda) return ErrorValue.Value;
+        if (lambda.Parameters.Count != 1) return ErrorValue.Value;
+
+        int rows = rv.RowCount, cols = rv.ColCount;
+        var result = new ScalarValue[rows, 1];
+        for (int r = 0; r < rows; r++)
+        {
+            var rowCells = new ScalarValue[1, cols];
+            for (int c = 0; c < cols; c++) rowCells[0, c] = rv.At(r + 1, c + 1);
+            result[r, 0] = ctx.InvokeLambda(lambda, [new RangeValue(rowCells)]);
+        }
+        return new RangeValue(result);
+    }
+
+    // BYCOL(array, lambda(col)) → 1×M array
+    private static ScalarValue ByColFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count != 2) return ErrorValue.Value;
+        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is not LambdaValue lambda) return ErrorValue.Value;
+        if (lambda.Parameters.Count != 1) return ErrorValue.Value;
+
+        int rows = rv.RowCount, cols = rv.ColCount;
+        var result = new ScalarValue[1, cols];
+        for (int c = 0; c < cols; c++)
+        {
+            var colCells = new ScalarValue[rows, 1];
+            for (int r = 0; r < rows; r++) colCells[r, 0] = rv.At(r + 1, c + 1);
+            result[0, c] = ctx.InvokeLambda(lambda, [new RangeValue(colCells)]);
+        }
+        return new RangeValue(result);
+    }
+
+    // MAKEARRAY(rows, cols, lambda(row_num, col_num)) → rows×cols array
+    private static ScalarValue MakeArrayFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args.Count != 3) return ErrorValue.Value;
+        if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
+        if (lambda.Parameters.Count != 2) return ErrorValue.Value;
+        if (args[0] is not NumberValue rowsNv || args[1] is not NumberValue colsNv)
+            return ErrorValue.Value;
+        int rows = (int)rowsNv.Value, cols = (int)colsNv.Value;
+        if (rows < 1 || cols < 1 || (long)rows * cols > 1_000_000L) return ErrorValue.Value;
+
+        var result = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                result[r, c] = ctx.InvokeLambda(lambda, [new NumberValue(r + 1), new NumberValue(c + 1)]);
+        return new RangeValue(result);
+    }
 }
 
 /// <summary>
@@ -8039,4 +8172,17 @@ public interface IEvalContext
 
     /// <summary>Try to get the underlying cell on a named sheet (for FORMULATEXT/ISFORMULA).</summary>
     Model.Cell? TryGetCell(string sheetName, uint row, uint col);
+
+    /// <summary>
+    /// Look up a local variable binding created by LET or a LAMBDA invocation.
+    /// Returns null if the name is not bound in the current scope.
+    /// Default: no local bindings.
+    /// </summary>
+    ScalarValue? TryResolveLambdaBinding(string name) => null;
+
+    /// <summary>
+    /// Invoke a LambdaValue with pre-evaluated scalar arguments, creating a new scope.
+    /// Default: returns #VALUE! — implementations that support LAMBDA must override this.
+    /// </summary>
+    ScalarValue InvokeLambda(LambdaValue lambda, IReadOnlyList<ScalarValue> args) => ErrorValue.Value;
 }
