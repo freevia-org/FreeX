@@ -1114,7 +1114,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static bool TryReadPivotTable(XDocument pivotXml, string pivotPath, out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, true, true, true, true, false, "PivotStyleLight16", [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -1133,6 +1133,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetReference,
             pivotPath,
             ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "defaultSubtotal"),
+            ReadBoolAttribute(root, "showGrandTotals", defaultValue: true),
+            ReadBoolAttribute(root, "showRowGrandTotals", ReadBoolAttribute(root, "showGrandTotals", defaultValue: true)),
+            ReadBoolAttribute(root, "showColumnGrandTotals", ReadBoolAttribute(root, "showGrandTotals", defaultValue: true)),
+            ReadBoolAttribute(root, "repeatItemLabels", defaultValue: true),
+            ReadBoolAttribute(root, "blankLineAfterItems"),
+            root.Element(workbookNs + "pivotTableStyleInfo")?.Attribute("name")?.Value ?? "PivotStyleLight16",
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs),
@@ -1229,7 +1235,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ReadIntAttribute(filter, "dataField") ?? -1,
                 ReadPivotValueFilterKind(filter.Attribute("type")?.Value),
                 ReadIntAttribute(filter, "count") ?? 0,
-                ReadDoubleAttribute(filter, "comparisonValue")))
+                ReadDoubleAttribute(filter, "comparisonValue"),
+                ReadIntAttribute(filter, "field")))
             .Where(filter => filter.DataFieldIndex >= 0 && (filter.Count > 0 || filter.ComparisonValue is not null))
             .ToList();
     }
@@ -1345,7 +1352,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             CacheId = pending.CacheId,
             TargetRange = GridRange.Parse(pending.TargetReference, sheetId),
             PackagePart = pending.PackagePart,
-            ShowSubtotals = pending.ShowSubtotals
+            ShowSubtotals = pending.ShowSubtotals,
+            ShowRowGrandTotals = pending.ShowRowGrandTotals,
+            ShowColumnGrandTotals = pending.ShowColumnGrandTotals,
+            RepeatItemLabels = pending.RepeatItemLabels,
+            BlankLineAfterItems = pending.BlankLineAfterItems,
+            StyleName = string.IsNullOrWhiteSpace(pending.StyleName) ? "PivotStyleLight16" : pending.StyleName
         };
 
         pivotTable.RowFields.AddRange(pending.RowFields);
@@ -1370,9 +1382,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ? value
             : null;
 
-    private static bool ReadBoolAttribute(XElement? element, string attributeName)
+    private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false)
     {
         var value = element?.Attribute(attributeName)?.Value;
+        if (value is null)
+            return defaultValue;
         return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -4768,6 +4782,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("applyPatternFormats", "1"),
             new XAttribute("updatedVersion", "8"),
             new XAttribute("minRefreshableVersion", "3"),
+            new XAttribute("showGrandTotals", pivot.ShowGrandTotals ? "1" : "0"),
+            new XAttribute("showRowGrandTotals", pivot.ShowRowGrandTotals ? "1" : "0"),
+            new XAttribute("showColumnGrandTotals", pivot.ShowColumnGrandTotals ? "1" : "0"),
+            new XAttribute("repeatItemLabels", pivot.RepeatItemLabels ? "1" : "0"),
+            new XAttribute("blankLineAfterItems", pivot.BlankLineAfterItems ? "1" : "0"),
             new XElement(
                 workbookNs + "location",
                 new XAttribute("ref", pivot.TargetRange.ToString()),
@@ -4785,7 +4804,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ToPivotLabelFiltersXml(pivot.LabelFilters, workbookNs),
             ToPivotSortsXml(pivot.Sorts, workbookNs),
             new XElement(workbookNs + "pivotTableStyleInfo",
-                new XAttribute("name", "PivotStyleLight16"),
+                new XAttribute("name", string.IsNullOrWhiteSpace(pivot.StyleName) ? "PivotStyleLight16" : pivot.StyleName),
                 new XAttribute("showRowHeaders", "1"),
                 new XAttribute("showColHeaders", "1"),
                 new XAttribute("showRowStripes", "0"),
@@ -4896,6 +4915,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XAttribute("dataField", filter.DataFieldIndex.ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("type", ToPivotValueFilterKindText(filter.Kind)),
                     new XAttribute("count", filter.Count.ToString(CultureInfo.InvariantCulture)),
+                    filter.SourceFieldIndex is null ? null : new XAttribute("field", filter.SourceFieldIndex.Value.ToString(CultureInfo.InvariantCulture)),
                     filter.ComparisonValue is null ? null : new XAttribute("comparisonValue", FormatInvariant(filter.ComparisonValue.Value)))));
 
     private static XElement? ToPivotLabelFiltersXml(IReadOnlyList<PivotLabelFilterModel> filters, XNamespace workbookNs) =>
@@ -7916,6 +7936,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string TargetReference,
         string PackagePart,
         bool ShowSubtotals,
+        bool ShowGrandTotals,
+        bool ShowRowGrandTotals,
+        bool ShowColumnGrandTotals,
+        bool RepeatItemLabels,
+        bool BlankLineAfterItems,
+        string StyleName,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,

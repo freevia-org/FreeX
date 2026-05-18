@@ -25,12 +25,38 @@ public sealed record PivotCacheFieldModel(
 
 public sealed class PivotTableModel
 {
+    private bool _showRowGrandTotals = true;
+    private bool _showColumnGrandTotals = true;
+
     public string Name { get; init; } = "";
     public int CacheId { get; init; }
     public GridRange SourceRange { get; init; }
     public GridRange TargetRange { get; init; }
     public string PackagePart { get; init; } = "";
     public bool ShowSubtotals { get; set; }
+    public PivotSubtotalPlacement SubtotalPlacement { get; set; } = PivotSubtotalPlacement.Bottom;
+    public bool ShowGrandTotals
+    {
+        get => _showRowGrandTotals || _showColumnGrandTotals;
+        set
+        {
+            _showRowGrandTotals = value;
+            _showColumnGrandTotals = value;
+        }
+    }
+    public bool ShowRowGrandTotals
+    {
+        get => _showRowGrandTotals;
+        set => _showRowGrandTotals = value;
+    }
+    public bool ShowColumnGrandTotals
+    {
+        get => _showColumnGrandTotals;
+        set => _showColumnGrandTotals = value;
+    }
+    public bool RepeatItemLabels { get; set; } = true;
+    public bool BlankLineAfterItems { get; set; }
+    public string StyleName { get; set; } = "PivotStyleLight16";
     public List<PivotFieldModel> RowFields { get; } = [];
     public List<PivotFieldModel> ColumnFields { get; } = [];
     public List<PivotFieldModel> PageFields { get; } = [];
@@ -59,6 +85,12 @@ public enum PivotFieldGrouping
     Month,
     Day,
     NumberRange
+}
+
+public enum PivotSubtotalPlacement
+{
+    Bottom,
+    Top
 }
 
 public sealed record PivotDataFieldModel(
@@ -96,7 +128,8 @@ public sealed record PivotValueFilterModel(
     int DataFieldIndex,
     PivotValueFilterKind Kind,
     int Count = 0,
-    double? ComparisonValue = null);
+    double? ComparisonValue = null,
+    int? SourceFieldIndex = null);
 
 public enum PivotValueFilterKind
 {

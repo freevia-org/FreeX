@@ -10,16 +10,16 @@ public static class PivotTableRefreshService
     public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable)
     {
         var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
-        if (sourceSheet is null || pivotTable.RowFields.Count == 0 || pivotTable.DataFields.Count == 0)
+        if (sourceSheet is null || pivotTable.DataFields.Count == 0)
             return;
 
         ClearTargetRange(targetSheet, pivotTable.TargetRange);
 
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
-        var columnField = pivotTable.ColumnFields.FirstOrDefault();
+        var columnFields = pivotTable.ColumnFields.ToList();
         if (!pivotTable.RowFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
             !pivotTable.PageFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
-            (columnField is not null && !IsValidField(columnField.SourceFieldIndex, headers.Count)) ||
+            !columnFields.All(field => IsValidField(field.SourceFieldIndex, headers.Count)) ||
             !pivotTable.DataFields.All(field => IsValidDataField(field, pivotTable, headers.Count)))
         {
             return;
@@ -28,8 +28,12 @@ public static class PivotTableRefreshService
         var rows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count)
             .Where(row => MatchesPageFilters(row, pivotTable.PageFields))
             .ToList();
-        if (columnField is not null)
-            WriteMatrixPivot(targetSheet, pivotTable, headers, rows, columnField);
+        if (pivotTable.RowFields.Count == 0 && columnFields.Count == 0)
+            WriteValuesOnlyPivot(targetSheet, pivotTable, headers, rows);
+        else if (pivotTable.RowFields.Count == 0)
+            WriteColumnOnlyPivot(targetSheet, pivotTable, headers, rows, columnFields);
+        else if (columnFields.Count > 0)
+            WriteMatrixPivot(targetSheet, pivotTable, headers, rows, columnFields);
         else
             WriteRowPivot(targetSheet, pivotTable, headers, rows);
     }
@@ -46,27 +50,92 @@ public static class PivotTableRefreshService
 
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
         var outputRow = pivotCell.Row;
-        if (outputRow <= pivotTable.TargetRange.Start.Row)
+        var columnFields = pivotTable.ColumnFields.ToList();
+        var firstDataRow = pivotTable.TargetRange.Start.Row + (uint)Math.Max(1, columnFields.Count);
+        if (outputRow < firstDataRow)
             return new PivotDetailRows(headers, []);
 
         var rowFields = pivotTable.RowFields.ToList();
         var keys = new List<string>();
+        var isRowGrandTotal = false;
+        var isSubtotal = false;
         for (var index = 0; index < rowFields.Count; index++)
         {
-            var value = targetSheet.GetCell(outputRow, pivotTable.TargetRange.Start.Col + (uint)index)?.Value;
-            if (value is null)
+            var key = ReadDetailRowKey(targetSheet, pivotTable, outputRow, firstDataRow, index, rowFields.Count);
+            if (key is null)
                 return new PivotDetailRows(headers, []);
-            var key = KeyText(value);
-            if (key.EndsWith(" Total", StringComparison.OrdinalIgnoreCase) || string.Equals(key, "Grand Total", StringComparison.OrdinalIgnoreCase))
-                return new PivotDetailRows(headers, []);
+            if (string.Equals(key, "Grand Total", StringComparison.OrdinalIgnoreCase))
+            {
+                keys.Clear();
+                isRowGrandTotal = true;
+                break;
+            }
+
+            if (key.EndsWith(" Total", StringComparison.OrdinalIgnoreCase))
+            {
+                keys.Add(key[..^" Total".Length]);
+                isSubtotal = true;
+                break;
+            }
             keys.Add(key);
         }
 
+        var columnKeys = ReadDetailColumnKeys(targetSheet, pivotTable, pivotCell, columnFields);
+        if (columnKeys is null)
+            return new PivotDetailRows(headers, []);
+
         var rows = ReadSourceRows(sourceSheet, pivotTable.SourceRange, headers.Count)
             .Where(row => MatchesPageFilters(row, pivotTable.PageFields))
-            .Where(row => rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).SequenceEqual(keys, StringComparer.CurrentCultureIgnoreCase))
+            .Where(row => RowDetailMatches(row, rowFields, keys, isRowGrandTotal, isSubtotal))
+            .Where(row => ColumnDetailMatches(row, columnFields, columnKeys))
             .ToList();
         return new PivotDetailRows(headers, rows);
+    }
+
+    private static string? ReadDetailRowKey(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        uint outputRow,
+        uint firstDataRow,
+        int fieldIndex,
+        int rowFieldCount)
+    {
+        var column = pivotTable.TargetRange.Start.Col + (uint)fieldIndex;
+        var value = sheet.GetCell(outputRow, column)?.Value;
+        if (value is not null)
+            return KeyText(value);
+
+        if (pivotTable.RepeatItemLabels || fieldIndex >= rowFieldCount - 1)
+            return null;
+
+        for (var row = outputRow - 1; row >= firstDataRow; row--)
+        {
+            value = sheet.GetCell(row, column)?.Value;
+            if (value is not null)
+                return KeyText(value);
+            if (row == firstDataRow)
+                break;
+        }
+
+        return null;
+    }
+
+    private static bool RowDetailMatches(
+        IReadOnlyList<ScalarValue> row,
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<string> rowKeys,
+        bool isRowGrandTotal,
+        bool isSubtotal)
+    {
+        if (isRowGrandTotal)
+            return true;
+
+        var sourceKeys = rowFields
+            .Select(field => GroupKeyText(row[field.SourceFieldIndex], field))
+            .ToList();
+        return isSubtotal
+            ? sourceKeys.Take(rowKeys.Count).SequenceEqual(rowKeys, StringComparer.CurrentCultureIgnoreCase)
+            : sourceKeys.SequenceEqual(rowKeys, StringComparer.CurrentCultureIgnoreCase);
     }
 
     public static GridRange GetMaterializedOutputRange(Sheet sheet, PivotTableModel pivotTable)
@@ -96,6 +165,86 @@ public static class PivotTableRefreshService
             new CellAddress(sheet.Id, maxRow.Value, maxCol.Value));
     }
 
+    private static IReadOnlyList<string>? ReadDetailColumnKeys(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        CellAddress pivotCell,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        if (columnFields.Count == 0)
+            return [];
+
+        var firstValueColumn = pivotTable.TargetRange.Start.Col + (uint)pivotTable.RowFields.Count;
+        if (pivotCell.Col < firstValueColumn)
+            return null;
+
+        if (pivotTable.ShowRowGrandTotals)
+        {
+            var dataFieldWidth = Math.Max(1, pivotTable.DataFields.Count);
+            var valueOffset = pivotCell.Col - firstValueColumn;
+            var materialized = GetMaterializedOutputRange(sheet, pivotTable);
+            var grandTotalStart = materialized.End.Col >= (uint)dataFieldWidth - 1
+                ? materialized.End.Col - (uint)dataFieldWidth + 1
+                : materialized.End.Col;
+            if (valueOffset >= 0 && pivotCell.Col >= grandTotalStart)
+                return [];
+        }
+
+        var keys = new List<string>();
+        for (var level = 0; level < columnFields.Count; level++)
+        {
+            var value = sheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, pivotCell.Col)?.Value;
+            if (value is null)
+                return null;
+            var key = KeyText(value);
+            if (string.Equals(key, "Grand Total", StringComparison.OrdinalIgnoreCase) ||
+                key.StartsWith("Grand Total ", StringComparison.OrdinalIgnoreCase))
+            {
+                return [];
+            }
+            keys.Add(RemoveDataFieldCaptionSuffix(key, pivotTable.DataFields));
+        }
+
+        return keys;
+    }
+
+    private static string RemoveDataFieldCaptionSuffix(string key, IReadOnlyList<PivotDataFieldModel> dataFields)
+    {
+        foreach (var dataField in dataFields)
+        {
+            var suffix = $" {dataField.Name}";
+            if (key.EndsWith(suffix, StringComparison.CurrentCultureIgnoreCase))
+                return key[..^suffix.Length];
+        }
+
+        return key;
+    }
+
+    private static bool ColumnDetailMatches(
+        IReadOnlyList<ScalarValue> row,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IReadOnlyList<string> columnKeys)
+    {
+        if (columnKeys.Count == 0)
+            return true;
+        if (columnFields.Count != columnKeys.Count)
+            return false;
+
+        for (var index = 0; index < columnFields.Count; index++)
+        {
+            var field = columnFields[index];
+            if (!string.Equals(
+                    GroupKeyText(row[field.SourceFieldIndex], field),
+                    columnKeys[index],
+                    StringComparison.CurrentCultureIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static void WriteRowPivot(
         Sheet sheet,
         PivotTableModel pivotTable,
@@ -113,11 +262,17 @@ public static class PivotTableRefreshService
             .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
             .ToList();
         groups = ApplyLabelFilters(groups, pivotTable, rowFields);
-        groups = ApplyValueFilters(groups, pivotTable, headers);
-        groups = ApplySorts(groups, pivotTable, headers);
+        groups = ApplyValueFilters(groups, pivotTable, headers, rowFields);
+        groups = ApplySorts(groups, pivotTable, headers, rowFields);
         var retainedRows = groups.SelectMany(group => group).ToList();
+        var topSubtotalRows = pivotTable.ShowSubtotals && rowFields.Count > 1 && pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top
+            ? groups
+                .GroupBy(group => new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray()))
+                .ToDictionary(group => group.Key, group => group.SelectMany(item => item).ToList())
+            : [];
         var outputRow = start.Row + 1;
         PivotKey? currentSubtotalKey = null;
+        PivotKey? previousRowKey = null;
         var subtotalRows = new List<IReadOnlyList<ScalarValue>>();
         var calculatedItemTotals = new double[pivotTable.DataFields.Count];
         foreach (var group in groups)
@@ -127,22 +282,51 @@ public static class PivotTableRefreshService
                 var subtotalKey = new PivotKey(group.Key.Values.Take(rowFields.Count - 1).ToArray());
                 if (currentSubtotalKey is not null && !currentSubtotalKey.Equals(subtotalKey))
                 {
-                    WriteSubtotalRow(sheet, pivotTable, headers, start, rowFields.Count, currentSubtotalKey, subtotalRows, outputRow);
-                    outputRow++;
+                    if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
+                    {
+                        WriteSubtotalRow(sheet, pivotTable, headers, start, rowFields.Count, currentSubtotalKey, subtotalRows, outputRow);
+                        outputRow++;
+                    }
                     subtotalRows.Clear();
                 }
 
-                currentSubtotalKey = subtotalKey;
-                subtotalRows.AddRange(group);
+                if (currentSubtotalKey is null || !currentSubtotalKey.Equals(subtotalKey))
+                {
+                    currentSubtotalKey = subtotalKey;
+                    if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top &&
+                        topSubtotalRows.TryGetValue(subtotalKey, out var rowsForSubtotal))
+                    {
+                        WriteSubtotalRow(sheet, pivotTable, headers, start, rowFields.Count, subtotalKey, rowsForSubtotal, outputRow);
+                        outputRow++;
+                    }
+                }
+
+                if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
+                    subtotalRows.AddRange(group);
             }
 
             for (var index = 0; index < group.Key.Values.Count; index++)
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(group.Key.Values[index]));
+            {
+                var suppressRepeat = !pivotTable.RepeatItemLabels &&
+                    index < group.Key.Values.Count - 1 &&
+                    previousRowKey is not null &&
+                    previousRowKey.Values.Count > index &&
+                    string.Equals(previousRowKey.Values[index], group.Key.Values[index], StringComparison.CurrentCultureIgnoreCase);
+                if (!suppressRepeat)
+                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col + (uint)index), new TextValue(group.Key.Values[index]));
+            }
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 sheet.SetCell(
                     new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFields.Count + (uint)index),
                     new NumberValue(Aggregate(group, pivotTable.DataFields[index], pivotTable, headers)));
+            previousRowKey = group.Key;
             outputRow++;
+            if (pivotTable.BlankLineAfterItems &&
+                rowFields.Count > 1 &&
+                IsEndOfOuterItem(groups, group, rowFields.Count))
+            {
+                outputRow++;
+            }
         }
         if (rowFields.Count == 1)
         {
@@ -163,17 +347,123 @@ public static class PivotTableRefreshService
                 outputRow++;
             }
         }
-        if (pivotTable.ShowSubtotals && rowFields.Count > 1 && currentSubtotalKey is not null)
+        if (pivotTable.ShowSubtotals &&
+            rowFields.Count > 1 &&
+            pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom &&
+            currentSubtotalKey is not null)
         {
             WriteSubtotalRow(sheet, pivotTable, headers, start, rowFields.Count, currentSubtotalKey, subtotalRows, outputRow);
             outputRow++;
         }
 
-        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue("Grand Total"));
+        if (pivotTable.ShowColumnGrandTotals)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue("Grand Total"));
+            for (var index = 0; index < pivotTable.DataFields.Count; index++)
+                sheet.SetCell(
+                    new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFields.Count + (uint)index),
+                    new NumberValue(Aggregate(retainedRows, pivotTable.DataFields[index], pivotTable, headers) + calculatedItemTotals[index]));
+        }
+    }
+
+    private static void WriteValuesOnlyPivot(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows)
+    {
+        var start = pivotTable.TargetRange.Start;
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
             sheet.SetCell(
-                new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFields.Count + (uint)index),
-                new NumberValue(Aggregate(retainedRows, pivotTable.DataFields[index], pivotTable, headers) + calculatedItemTotals[index]));
+                new CellAddress(sheet.Id, start.Row + 1, start.Col + (uint)index),
+                new NumberValue(Aggregate(rows, pivotTable.DataFields[index], pivotTable, headers)));
+        }
+    }
+
+    private static void WriteColumnOnlyPivot(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        var start = pivotTable.TargetRange.Start;
+        var columnKeys = rows
+            .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
+            .Distinct()
+            .Order(PivotKeyComparer.Instance)
+            .ToList();
+        columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
+        columnKeys = ApplyValueFilters(columnKeys, rows, pivotTable, headers, columnFields);
+        columnKeys = ApplySorts(columnKeys, rows, pivotTable, headers, columnFields);
+        var visibleRows = rows
+            .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
+            .ToList();
+        var singleDataField = pivotTable.DataFields.Count == 1;
+
+        var outputColumn = start.Col;
+        foreach (var columnKey in columnKeys)
+        {
+            foreach (var dataField in pivotTable.DataFields)
+            {
+                WriteColumnHeader(sheet, start.Row, outputColumn, columnKey, dataField, singleDataField);
+                outputColumn++;
+            }
+        }
+
+        if (pivotTable.ShowRowGrandTotals)
+        {
+            foreach (var dataField in pivotTable.DataFields)
+            {
+                var caption = singleDataField ? "Grand Total" : $"Grand Total {dataField.Name}";
+                sheet.SetCell(new CellAddress(sheet.Id, start.Row, outputColumn), new TextValue(caption));
+                outputColumn++;
+            }
+        }
+
+        var outputRow = start.Row + (uint)columnFields.Count;
+        outputColumn = start.Col;
+        foreach (var columnKey in columnKeys)
+        {
+            var columnRows = rows.Where(row => ColumnKeyMatches(row, columnFields, columnKey)).ToList();
+            foreach (var dataField in pivotTable.DataFields)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(columnRows, dataField, pivotTable, headers)));
+                outputColumn++;
+            }
+        }
+
+        if (pivotTable.ShowRowGrandTotals)
+        {
+            foreach (var dataField in pivotTable.DataFields)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(visibleRows, dataField, pivotTable, headers)));
+                outputColumn++;
+            }
+        }
+    }
+
+    private static bool IsEndOfOuterItem(
+        IReadOnlyList<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
+        IGrouping<PivotKey, IReadOnlyList<ScalarValue>> group,
+        int rowFieldCount)
+    {
+        var index = -1;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (ReferenceEquals(groups[i], group))
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0 || index >= groups.Count - 1)
+            return true;
+        var currentOuter = group.Key.Values.Take(rowFieldCount - 1);
+        var nextOuter = groups[index + 1].Key.Values.Take(rowFieldCount - 1);
+        return !currentOuter.SequenceEqual(nextOuter, StringComparer.CurrentCultureIgnoreCase);
     }
 
     private static void WriteSubtotalRow(
@@ -198,7 +488,7 @@ public static class PivotTableRefreshService
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
-        PivotFieldModel columnField)
+        IReadOnlyList<PivotFieldModel> columnFields)
     {
         var start = pivotTable.TargetRange.Start;
         var rowFields = pivotTable.RowFields.ToList();
@@ -206,10 +496,20 @@ public static class PivotTableRefreshService
             .GroupBy(row => new PivotKey(rowFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
             .ToList();
         rowGroups = ApplyLabelFilters(rowGroups, pivotTable, rowFields);
-        rowGroups = ApplyValueFilters(rowGroups, pivotTable, headers);
-        rowGroups = ApplySorts(rowGroups, pivotTable, headers);
+        rowGroups = ApplyValueFilters(rowGroups, pivotTable, headers, rowFields);
+        rowGroups = ApplySorts(rowGroups, pivotTable, headers, rowFields);
         var retainedRows = rowGroups.SelectMany(group => group).ToList();
-        var columnKeys = retainedRows.Select(row => GroupKeyText(row[columnField.SourceFieldIndex], columnField)).Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase).ToList();
+        var columnKeys = retainedRows
+            .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
+            .Distinct()
+            .Order(PivotKeyComparer.Instance)
+            .ToList();
+        columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
+        columnKeys = ApplyValueFilters(columnKeys, retainedRows, pivotTable, headers, columnFields);
+        columnKeys = ApplySorts(columnKeys, retainedRows, pivotTable, headers, columnFields);
+        var visibleRows = retainedRows
+            .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
+            .ToList();
         var singleDataField = pivotTable.DataFields.Count == 1;
 
         for (var index = 0; index < rowFields.Count; index++)
@@ -221,19 +521,21 @@ public static class PivotTableRefreshService
         {
             foreach (var dataField in pivotTable.DataFields)
             {
-                var caption = singleDataField ? columnKey : $"{columnKey} {dataField.Name}";
+                WriteColumnHeader(sheet, start.Row, outputColumn, columnKey, dataField, singleDataField);
+                outputColumn++;
+            }
+        }
+        if (pivotTable.ShowRowGrandTotals)
+        {
+            foreach (var dataField in pivotTable.DataFields)
+            {
+                var caption = singleDataField ? "Grand Total" : $"Grand Total {dataField.Name}";
                 sheet.SetCell(new CellAddress(sheet.Id, start.Row, outputColumn), new TextValue(caption));
                 outputColumn++;
             }
         }
-        foreach (var dataField in pivotTable.DataFields)
-        {
-            var caption = singleDataField ? "Grand Total" : $"Grand Total {dataField.Name}";
-            sheet.SetCell(new CellAddress(sheet.Id, start.Row, outputColumn), new TextValue(caption));
-            outputColumn++;
-        }
 
-        var outputRow = start.Row + 1;
+        var outputRow = start.Row + (uint)columnFields.Count;
         foreach (var rowGroup in rowGroups)
         {
             for (var index = 0; index < rowGroup.Key.Values.Count; index++)
@@ -243,7 +545,7 @@ public static class PivotTableRefreshService
             foreach (var columnKey in columnKeys)
             {
                 var columnRows = rowGroup
-                    .Where(row => string.Equals(GroupKeyText(row[columnField.SourceFieldIndex], columnField), columnKey, StringComparison.CurrentCultureIgnoreCase))
+                    .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
                     .ToList();
                 foreach (var dataField in pivotTable.DataFields)
                 {
@@ -251,32 +553,84 @@ public static class PivotTableRefreshService
                     outputColumn++;
                 }
             }
-            foreach (var dataField in pivotTable.DataFields)
+            if (pivotTable.ShowRowGrandTotals)
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(rowGroup, dataField, pivotTable, headers)));
-                outputColumn++;
+                var visibleRowGroupRows = rowGroup
+                    .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
+                    .ToList();
+                foreach (var dataField in pivotTable.DataFields)
+                {
+                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(visibleRowGroupRows, dataField, pivotTable, headers)));
+                    outputColumn++;
+                }
             }
             outputRow++;
         }
 
-        sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue("Grand Total"));
-        outputColumn = valueStartCol;
-        foreach (var columnKey in columnKeys)
+        if (pivotTable.ShowColumnGrandTotals)
         {
-            var columnRows = retainedRows
-                .Where(row => string.Equals(GroupKeyText(row[columnField.SourceFieldIndex], columnField), columnKey, StringComparison.CurrentCultureIgnoreCase))
-                .ToList();
-            foreach (var dataField in pivotTable.DataFields)
+            sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue("Grand Total"));
+            outputColumn = valueStartCol;
+            foreach (var columnKey in columnKeys)
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(columnRows, dataField, pivotTable, headers)));
-                outputColumn++;
+                var columnRows = retainedRows
+                    .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
+                    .ToList();
+                foreach (var dataField in pivotTable.DataFields)
+                {
+                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(columnRows, dataField, pivotTable, headers)));
+                    outputColumn++;
+                }
+            }
+            if (pivotTable.ShowRowGrandTotals)
+            {
+                foreach (var dataField in pivotTable.DataFields)
+                {
+                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(visibleRows, dataField, pivotTable, headers)));
+                    outputColumn++;
+                }
             }
         }
-        foreach (var dataField in pivotTable.DataFields)
+    }
+
+    private static void WriteColumnHeader(
+        Sheet sheet,
+        uint startRow,
+        uint outputColumn,
+        PivotKey columnKey,
+        PivotDataFieldModel dataField,
+        bool singleDataField)
+    {
+        for (var level = 0; level < columnKey.Values.Count; level++)
         {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(Aggregate(retainedRows, dataField, pivotTable, headers)));
-            outputColumn++;
+            var caption = columnKey.Values[level];
+            if (!singleDataField && level == columnKey.Values.Count - 1)
+                caption = $"{caption} {dataField.Name}";
+            sheet.SetCell(new CellAddress(sheet.Id, startRow + (uint)level, outputColumn), new TextValue(caption));
         }
+    }
+
+    private static bool ColumnKeyMatches(
+        IReadOnlyList<ScalarValue> row,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        PivotKey columnKey)
+    {
+        if (columnFields.Count != columnKey.Values.Count)
+            return false;
+
+        for (var index = 0; index < columnFields.Count; index++)
+        {
+            var field = columnFields[index];
+            if (!string.Equals(
+                    GroupKeyText(row[field.SourceFieldIndex], field),
+                    columnKey.Values[index],
+                    StringComparison.CurrentCultureIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static IReadOnlyList<string> ReadHeaders(Sheet sheet, GridRange range)
@@ -349,10 +703,17 @@ public static class PivotTableRefreshService
     private static List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> ApplyValueFilters(
         List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
         PivotTableModel pivotTable,
-        IReadOnlyList<string> headers)
+        IReadOnlyList<string> headers,
+        IReadOnlyList<PivotFieldModel> rowFields)
     {
         foreach (var filter in pivotTable.ValueFilters)
         {
+            if (filter.SourceFieldIndex is not null &&
+                !rowFields.Any(field => field.SourceFieldIndex == filter.SourceFieldIndex.Value))
+            {
+                continue;
+            }
+
             if (filter.DataFieldIndex < 0 ||
                 filter.DataFieldIndex >= pivotTable.DataFields.Count)
             {
@@ -380,6 +741,56 @@ public static class PivotTableRefreshService
         return groups;
     }
 
+    private static List<PivotKey> ApplyValueFilters(
+        List<PivotKey> keys,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<PivotFieldModel> fields)
+    {
+        foreach (var filter in pivotTable.ValueFilters)
+        {
+            if (filter.SourceFieldIndex is null ||
+                !fields.Any(field => field.SourceFieldIndex == filter.SourceFieldIndex.Value))
+            {
+                continue;
+            }
+
+            if (filter.DataFieldIndex < 0 ||
+                filter.DataFieldIndex >= pivotTable.DataFields.Count)
+            {
+                continue;
+            }
+            if ((filter.Kind == PivotValueFilterKind.Top || filter.Kind == PivotValueFilterKind.Bottom) && filter.Count <= 0)
+                continue;
+
+            var dataField = pivotTable.DataFields[filter.DataFieldIndex];
+            var aggregates = keys
+                .Select(key => new
+                {
+                    Key = key,
+                    Value = Aggregate(rows.Where(row => ColumnKeyMatches(row, fields, key)).ToList(), dataField, pivotTable, headers)
+                })
+                .ToList();
+
+            keys = filter.Kind switch
+            {
+                PivotValueFilterKind.Bottom => aggregates.OrderBy(item => item.Value).Take(filter.Count).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.Top => aggregates.OrderByDescending(item => item.Value).Take(filter.Count).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.GreaterThan => aggregates.Where(item => item.Value > (filter.ComparisonValue ?? 0)).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.GreaterThanOrEqual => aggregates.Where(item => item.Value >= (filter.ComparisonValue ?? 0)).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.LessThan => aggregates.Where(item => item.Value < (filter.ComparisonValue ?? 0)).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.LessThanOrEqual => aggregates.Where(item => item.Value <= (filter.ComparisonValue ?? 0)).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.Equals => aggregates.Where(item => Math.Abs(item.Value - (filter.ComparisonValue ?? 0)) < 0.0000001).Select(item => item.Key).ToList(),
+                PivotValueFilterKind.DoesNotEqual => aggregates.Where(item => Math.Abs(item.Value - (filter.ComparisonValue ?? 0)) >= 0.0000001).Select(item => item.Key).ToList(),
+                _ => keys
+            };
+            keys = keys.Order(PivotKeyComparer.Instance).ToList();
+        }
+
+        return keys;
+    }
+
     private static List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> ApplyLabelFilters(
         List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
         PivotTableModel pivotTable,
@@ -397,6 +808,25 @@ public static class PivotTableRefreshService
         }
 
         return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
+    }
+
+    private static List<PivotKey> ApplyLabelFilters(
+        List<PivotKey> keys,
+        PivotTableModel pivotTable,
+        IReadOnlyList<PivotFieldModel> fields)
+    {
+        foreach (var filter in pivotTable.LabelFilters)
+        {
+            var fieldIndex = fields.ToList().FindIndex(field => field.SourceFieldIndex == filter.SourceFieldIndex);
+            if (fieldIndex < 0)
+                continue;
+
+            keys = keys
+                .Where(key => MatchesLabelFilter(key.Values[fieldIndex], filter))
+                .ToList();
+        }
+
+        return keys.Order(PivotKeyComparer.Instance).ToList();
     }
 
     private static bool MatchesLabelFilter(string label, PivotLabelFilterModel filter)
@@ -417,13 +847,15 @@ public static class PivotTableRefreshService
     private static List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> ApplySorts(
         List<IGrouping<PivotKey, IReadOnlyList<ScalarValue>>> groups,
         PivotTableModel pivotTable,
-        IReadOnlyList<string> headers)
+        IReadOnlyList<string> headers,
+        IReadOnlyList<PivotFieldModel> rowFields)
     {
         if (pivotTable.Sorts.Count == 0)
             return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
 
         var sort = pivotTable.Sorts[^1];
         if (sort.Target == PivotSortTarget.Value &&
+            rowFields.Any(field => field.SourceFieldIndex == sort.FieldIndex) &&
             sort.DataFieldIndex >= 0 &&
             sort.DataFieldIndex < pivotTable.DataFields.Count)
         {
@@ -433,9 +865,47 @@ public static class PivotTableRefreshService
                 : groups.OrderBy(group => Aggregate(group, dataField, pivotTable, headers)).ThenBy(group => group.Key, PivotKeyComparer.Instance).ToList();
         }
 
+        if (!rowFields.Any(field => field.SourceFieldIndex == sort.FieldIndex))
+        {
+            return groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
+        }
+
         return sort.Direction == PivotSortDirection.Descending
             ? groups.OrderByDescending(group => group.Key, PivotKeyComparer.Instance).ToList()
             : groups.OrderBy(group => group.Key, PivotKeyComparer.Instance).ToList();
+    }
+
+    private static List<PivotKey> ApplySorts(
+        List<PivotKey> keys,
+        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<PivotFieldModel> fields)
+    {
+        if (pivotTable.Sorts.Count == 0)
+            return keys.Order(PivotKeyComparer.Instance).ToList();
+
+        var sort = pivotTable.Sorts[^1];
+        var fieldIndex = fields.ToList().FindIndex(field => field.SourceFieldIndex == sort.FieldIndex);
+        if (sort.Target == PivotSortTarget.Label && fieldIndex >= 0)
+        {
+            return sort.Direction == PivotSortDirection.Descending
+                ? keys.OrderByDescending(key => key.Values[fieldIndex], StringComparer.CurrentCultureIgnoreCase).ThenBy(key => key, PivotKeyComparer.Instance).ToList()
+                : keys.OrderBy(key => key.Values[fieldIndex], StringComparer.CurrentCultureIgnoreCase).ThenBy(key => key, PivotKeyComparer.Instance).ToList();
+        }
+
+        if (sort.Target == PivotSortTarget.Value &&
+            fieldIndex >= 0 &&
+            sort.DataFieldIndex >= 0 &&
+            sort.DataFieldIndex < pivotTable.DataFields.Count)
+        {
+            var dataField = pivotTable.DataFields[sort.DataFieldIndex];
+            return sort.Direction == PivotSortDirection.Descending
+                ? keys.OrderByDescending(key => Aggregate(rows.Where(row => ColumnKeyMatches(row, fields, key)).ToList(), dataField, pivotTable, headers)).ThenBy(key => key, PivotKeyComparer.Instance).ToList()
+                : keys.OrderBy(key => Aggregate(rows.Where(row => ColumnKeyMatches(row, fields, key)).ToList(), dataField, pivotTable, headers)).ThenBy(key => key, PivotKeyComparer.Instance).ToList();
+        }
+
+        return keys.Order(PivotKeyComparer.Instance).ToList();
     }
 
     private static string GroupKeyText(ScalarValue value, PivotFieldModel field) =>
