@@ -5086,4 +5086,382 @@ public class FunctionLibraryTests
         var sheet = MakeSheet((1, 1, new NumberValue(1E308)), (2, 1, new NumberValue(1E308)));
         _eval.Evaluate("=SUBTOTAL(6,A1:A2)", sheet).Should().Be(ErrorValue.Num);
     }
+
+    [Fact]
+    public void Transpose_Range_ReturnsTransposedMatrix()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)));
+
+        var result = _eval.Evaluate("=TRANSPOSE(A1:C2)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(3);
+        rv.ColCount.Should().Be(2);
+        rv.At(1, 1).Should().Be(new NumberValue(1));
+        rv.At(1, 2).Should().Be(new NumberValue(4));
+        rv.At(3, 1).Should().Be(new NumberValue(3));
+        rv.At(3, 2).Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void Sqrtpi_PositiveNumber_ReturnsSquareRootOfNumberTimesPi()
+    {
+        var result = _eval.Evaluate("=SQRTPI(2)", MakeSheet());
+
+        result.Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(Math.Sqrt(2 * Math.PI), 1e-12);
+    }
+
+    [Fact]
+    public void Numbervalue_ParsesCustomDecimalAndGroupSeparators()
+    {
+        _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\",\",\".\")", MakeSheet())
+            .Should().Be(new NumberValue(1234.56));
+    }
+
+    [Fact]
+    public void Unicode_AndUnichar_RoundTripCodePoint()
+    {
+        _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
+        _eval.Evaluate("=UNICHAR(9731)", MakeSheet()).Should().Be(new TextValue("\u2603"));
+    }
+
+    [Fact]
+    public void WorkdayIntl_UsesWeekendMaskAndHolidays()
+    {
+        var holiday = DateTimeValue.FromDateTime(new DateTime(2026, 5, 20));
+        var sheet = MakeSheet((1, 1, holiday));
+
+        var result = _eval.Evaluate("=WORKDAY.INTL(DATE(2026,5,18),3,\"0000011\",A1:A1)", sheet);
+
+        result.Should().Be(new NumberValue(new DateTime(2026, 5, 22).ToOADate()));
+    }
+
+    [Fact]
+    public void NetworkdaysIntl_UsesWeekendMaskAndHolidays()
+    {
+        var holiday = DateTimeValue.FromDateTime(new DateTime(2026, 5, 20));
+        var sheet = MakeSheet((1, 1, holiday));
+
+        _eval.Evaluate("=NETWORKDAYS.INTL(DATE(2026,5,18),DATE(2026,5,22),\"0000011\",A1:A1)", sheet)
+            .Should().Be(new NumberValue(4));
+    }
+
+    // ── UNICHAR / UNICODE additional cases ───────────────────────────────────
+
+    [Fact]
+    public void Unichar_BasicAscii_ReturnsLetter() =>
+        _eval.Evaluate("=UNICHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
+
+    [Fact]
+    public void Unichar_Zero_ReturnsValueError() =>
+        _eval.Evaluate("=UNICHAR(0)", MakeSheet()).Should().Be(ErrorValue.Value);
+
+    [Fact]
+    public void Unichar_OutOfRange_ReturnsValueError() =>
+        _eval.Evaluate("=UNICHAR(1114112)", MakeSheet()).Should().Be(ErrorValue.Value);
+
+    [Fact]
+    public void Unichar_Surrogate_ReturnsValueError() =>
+        _eval.Evaluate("=UNICHAR(55296)", MakeSheet()).Should().Be(ErrorValue.Value);
+
+    [Fact]
+    public void Unicode_BasicAscii_ReturnsCodePoint() =>
+        _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
+
+    [Fact]
+    public void Unicode_EmptyText_ReturnsValueError() =>
+        _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
+
+    // ── NUMBERVALUE edge cases ───────────────────────────────────────────────
+
+    [Fact]
+    public void Numbervalue_DefaultSeparators_ParsesPlainNumber() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1234.56\")", MakeSheet())
+            .Should().Be(new NumberValue(1234.56));
+
+    [Fact]
+    public void Numbervalue_TrailingPercent_DividesBy100() =>
+        _eval.Evaluate("=NUMBERVALUE(\"10%\")", MakeSheet())
+            .Should().Be(new NumberValue(0.1));
+
+    [Fact]
+    public void Numbervalue_InvalidSeparators_ReturnsValueError() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1.234\",\".\",\".\")", MakeSheet())
+            .Should().Be(ErrorValue.Value);
+
+    // ── SQRTPI additional ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Sqrtpi_One_ReturnsSqrtPi() =>
+        _eval.Evaluate("=SQRTPI(1)", MakeSheet())
+            .Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(Math.Sqrt(Math.PI), 1e-12);
+
+    [Fact]
+    public void Sqrtpi_Negative_ReturnsNumError() =>
+        _eval.Evaluate("=SQRTPI(-1)", MakeSheet()).Should().Be(ErrorValue.Num);
+
+    // ── MULTINOMIAL ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Multinomial_TwoArgs_ReturnsExpected() =>
+        // (2+3)!/(2!*3!) = 120 / (2*6) = 10
+        _eval.Evaluate("=MULTINOMIAL(2,3)", MakeSheet())
+            .Should().Be(new NumberValue(10));
+
+    [Fact]
+    public void Multinomial_NegativeArg_ReturnsNumError() =>
+        _eval.Evaluate("=MULTINOMIAL(2,-1)", MakeSheet()).Should().Be(ErrorValue.Num);
+
+    // ── SERIESSUM ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void SeriesSum_SimplePolynomial_ReturnsExpected()
+    {
+        // x=2, n=0, m=1, coeffs = {1,2,3} → 1*2^0 + 2*2^1 + 3*2^2 = 1+4+12 = 17
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+        _eval.Evaluate("=SERIESSUM(2,0,1,A1:A3)", sheet)
+            .Should().Be(new NumberValue(17));
+    }
+
+    // ── Matrix functions ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Mmult_2x3_Times_3x2_Returns2x2()
+    {
+        // A = [[1,2,3],[4,5,6]], B = [[7,8],[9,10],[11,12]]
+        // A*B = [[58,64],[139,154]]
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)),
+            (4, 1, new NumberValue(7)),  (4, 2, new NumberValue(8)),
+            (5, 1, new NumberValue(9)),  (5, 2, new NumberValue(10)),
+            (6, 1, new NumberValue(11)), (6, 2, new NumberValue(12)));
+        var result = _eval.Evaluate("=MMULT(A1:C2,A4:B6)", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.At(1, 1).Should().Be(new NumberValue(58));
+        rv.At(1, 2).Should().Be(new NumberValue(64));
+        rv.At(2, 1).Should().Be(new NumberValue(139));
+        rv.At(2, 2).Should().Be(new NumberValue(154));
+    }
+
+    [Fact]
+    public void Mmult_IncompatibleDimensions_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)),
+            (2, 1, new NumberValue(1)), (2, 2, new NumberValue(2)));
+        // 2x2 * 1x1 = invalid (k mismatch)
+        _eval.Evaluate("=MMULT(A1:B2,A1:A1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Mdeterm_2x2_ReturnsMinusTwo()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)),
+            (2, 1, new NumberValue(3)), (2, 2, new NumberValue(4)));
+        var result = _eval.Evaluate("=MDETERM(A1:B2)", sheet);
+        result.Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(-2, 1e-12);
+    }
+
+    [Fact]
+    public void Mdeterm_NonSquare_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)), (1, 3, new NumberValue(3)),
+            (2, 1, new NumberValue(4)), (2, 2, new NumberValue(5)), (2, 3, new NumberValue(6)));
+        _eval.Evaluate("=MDETERM(A1:C2)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Minverse_2x2_ReturnsInverse()
+    {
+        // A = [[1,2],[3,4]]; A^-1 = [[-2,1],[1.5,-0.5]]
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)),
+            (2, 1, new NumberValue(3)), (2, 2, new NumberValue(4)));
+        var result = _eval.Evaluate("=MINVERSE(A1:B2)", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        ((NumberValue)rv.At(1, 1)).Value.Should().BeApproximately(-2, 1e-12);
+        ((NumberValue)rv.At(1, 2)).Value.Should().BeApproximately(1, 1e-12);
+        ((NumberValue)rv.At(2, 1)).Value.Should().BeApproximately(1.5, 1e-12);
+        ((NumberValue)rv.At(2, 2)).Value.Should().BeApproximately(-0.5, 1e-12);
+    }
+
+    [Fact]
+    public void Minverse_Singular_ReturnsNumError()
+    {
+        // Singular matrix [[1,2],[2,4]] – det = 0
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)),
+            (2, 1, new NumberValue(2)), (2, 2, new NumberValue(4)));
+        _eval.Evaluate("=MINVERSE(A1:B2)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    // ── Date weekend masks ──────────────────────────────────────────────────
+
+    [Fact]
+    public void NetworkdaysIntl_SunOnlyWeekend_CountsSatAsWorkday()
+    {
+        // Mon May 18 .. Sun May 24 2026 with Sun-only weekend = 6 workdays (Mon..Sat)
+        var sheet = MakeSheet();
+        _eval.Evaluate("=NETWORKDAYS.INTL(DATE(2026,5,18),DATE(2026,5,24),11)", sheet)
+            .Should().Be(new NumberValue(6));
+    }
+
+    [Fact]
+    public void WorkdayIntl_WithStringPattern_Advances3DaysSkippingWeekend()
+    {
+        // From Mon May 18 2026 + 3 workdays with weekend Sat+Sun (pattern "0000011") = Thu May 21
+        var sheet = MakeSheet();
+        _eval.Evaluate("=WORKDAY.INTL(DATE(2026,5,18),3,\"0000011\")", sheet)
+            .Should().Be(new NumberValue(new DateTime(2026, 5, 21).ToOADate()));
+    }
+
+    [Fact]
+    public void NetworkdaysIntl_InvalidStringPattern_ReturnsValueError() =>
+        _eval.Evaluate("=NETWORKDAYS.INTL(DATE(2026,5,18),DATE(2026,5,22),\"1234567\")", MakeSheet())
+            .Should().Be(ErrorValue.Value);
+
+    // ── TYPE ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Type_Number_Returns1() =>
+        _eval.Evaluate("=TYPE(1)", MakeSheet()).Should().Be(new NumberValue(1));
+
+    [Fact]
+    public void Type_Text_Returns2() =>
+        _eval.Evaluate("=TYPE(\"x\")", MakeSheet()).Should().Be(new NumberValue(2));
+
+    [Fact]
+    public void Type_Logical_Returns4() =>
+        _eval.Evaluate("=TYPE(TRUE)", MakeSheet()).Should().Be(new NumberValue(4));
+
+    [Fact]
+    public void Type_Error_Returns16() =>
+        _eval.Evaluate("=TYPE(NA())", MakeSheet()).Should().Be(new NumberValue(16));
+
+    // (TYPE on a range argument is subject to implicit intersection in scalar contexts;
+    // tested via TRANSPOSE result indirectly via the dedicated TRANSPOSE tests.)
+
+    // ── ERROR.TYPE ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ErrorType_DivByZero_Returns2() =>
+        _eval.Evaluate("=ERROR.TYPE(1/0)", MakeSheet()).Should().Be(new NumberValue(2));
+
+    [Fact]
+    public void ErrorType_Na_Returns7() =>
+        _eval.Evaluate("=ERROR.TYPE(NA())", MakeSheet()).Should().Be(new NumberValue(7));
+
+    [Fact]
+    public void ErrorType_NotAnError_ReturnsNa() =>
+        _eval.Evaluate("=ERROR.TYPE(1)", MakeSheet()).Should().Be(ErrorValue.NA);
+
+    // ── DSUM ────────────────────────────────────────────────────────────────
+
+    private Sheet MakeDbSheet()
+    {
+        // Database A1:C5 (1 header row + 4 data rows):
+        //   Name   Age  Salary
+        //   Alice  30   100
+        //   Bob    25   200
+        //   Carol  30   300
+        //   Dave   40   400
+        return MakeSheet(
+            (1, 1, new TextValue("Name")), (1, 2, new TextValue("Age")), (1, 3, new TextValue("Salary")),
+            (2, 1, new TextValue("Alice")), (2, 2, new NumberValue(30)), (2, 3, new NumberValue(100)),
+            (3, 1, new TextValue("Bob")),   (3, 2, new NumberValue(25)), (3, 3, new NumberValue(200)),
+            (4, 1, new TextValue("Carol")), (4, 2, new NumberValue(30)), (4, 3, new NumberValue(300)),
+            (5, 1, new TextValue("Dave")),  (5, 2, new NumberValue(40)), (5, 3, new NumberValue(400)),
+            // Criteria E1:E2 = Age | 30
+            (1, 5, new TextValue("Age")),
+            (2, 5, new NumberValue(30)));
+    }
+
+    [Fact]
+    public void DSum_FilterByAge_SumsMatchingSalaries()
+    {
+        var sheet = MakeDbSheet();
+        // Rows where Age=30 (Alice 100, Carol 300) → Sum = 400
+        _eval.Evaluate("=DSUM(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(400));
+    }
+
+    [Fact]
+    public void DAverage_FilterByAge_AveragesMatchingSalaries()
+    {
+        var sheet = MakeDbSheet();
+        _eval.Evaluate("=DAVERAGE(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(200));
+    }
+
+    [Fact]
+    public void DCount_FilterByAge_CountsMatching()
+    {
+        var sheet = MakeDbSheet();
+        _eval.Evaluate("=DCOUNT(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void DCountA_FilterByAge_CountsNonBlank()
+    {
+        var sheet = MakeDbSheet();
+        _eval.Evaluate("=DCOUNTA(A1:C5,\"Name\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void DGet_UniqueMatch_ReturnsValue()
+    {
+        var sheet = MakeDbSheet();
+        // Filter Age=25 (Bob) → single match → return Salary 200
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("Age"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new NumberValue(25));
+        _eval.Evaluate("=DGET(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(200));
+    }
+
+    [Fact]
+    public void DGet_MultipleMatches_ReturnsNum()
+    {
+        var sheet = MakeDbSheet();
+        // Age=30 matches 2 rows → #NUM!
+        _eval.Evaluate("=DGET(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void DMax_FilterByAge_ReturnsMax()
+    {
+        var sheet = MakeDbSheet();
+        _eval.Evaluate("=DMAX(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(300));
+    }
+
+    [Fact]
+    public void DMin_FilterByAge_ReturnsMin()
+    {
+        var sheet = MakeDbSheet();
+        _eval.Evaluate("=DMIN(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(100));
+    }
+
+    [Fact]
+    public void DProduct_FilterByAge_ReturnsProduct()
+    {
+        var sheet = MakeDbSheet();
+        _eval.Evaluate("=DPRODUCT(A1:C5,\"Salary\",E1:E2)", sheet)
+            .Should().Be(new NumberValue(30000));
+    }
 }
