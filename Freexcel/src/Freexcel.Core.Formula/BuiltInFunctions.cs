@@ -348,6 +348,7 @@ public static class BuiltInFunctions
         ["SKEW.P"]           = (SkewP, 1, 255),
         ["KURT"]             = (Kurt, 1, 255),
         ["FREQUENCY"]        = (Frequency, 2, 2),
+        ["CONFIDENCE"]       = (ConfidenceNorm, 3, 3),
         ["CONFIDENCE.NORM"]  = (ConfidenceNorm, 3, 3),
         ["CONFIDENCE.T"]     = (ConfidenceT, 3, 3),
 
