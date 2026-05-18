@@ -2665,6 +2665,31 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_VeryHiddenSheetAndCodeName()
+    {
+        var workbook = new Workbook("VeryHiddenSheetMetadataTest");
+        var visible = workbook.AddSheet("Visible");
+        visible.SetCell(new CellAddress(visible.Id, 1, 1), new TextValue("visible"));
+        var hidden = workbook.AddSheet("Internal");
+        hidden.SetCell(new CellAddress(hidden.Id, 1, 1), new TextValue("hidden"));
+        hidden.IsHidden = true;
+        hidden.IsVeryHidden = true;
+        hidden.CodeName = "SheetInternal";
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedHidden = loaded.Sheets.Single(s => s.Name == "Internal");
+        loadedHidden.IsHidden.Should().BeTrue();
+        loadedHidden.IsVeryHidden.Should().BeTrue();
+        loadedHidden.CodeName.Should().Be("SheetInternal");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_HiddenEmptyRowsAndColumns()
     {
         var workbook = new Workbook("HiddenEmptyLayoutTest");
@@ -7101,6 +7126,33 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesCalcChainPackagePartAlongsideModelEdits()
+    {
+        var workbook = new Workbook("CalcChainRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalCalcChainPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/calcChain.xml").Should().NotBeNull();
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString().Should().Contain("calcChain.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -7255,6 +7307,148 @@ public class FileAdapterSmokeTests
             .Should().Equal("Category", "Amount");
         loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Which.DataFields
             .Should().ContainSingle().Which.NumberFormatId.Should().Be(4);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_RoundTripsExpandedPivotTableFields()
+    {
+        var workbook = new Workbook("ExpandedPivotXlsxTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Quarter"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Q1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(10));
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:C2"
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Region"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Quarter"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 9, 5))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0, Grouping: PivotFieldGrouping.NumberRange, GroupStart: 0, GroupInterval: 10));
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Q1", SelectedItems: ["Q1", "Q2"]));
+        pivot.ShowSubtotals = true;
+        pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Revenue", "Amount*2"));
+        pivot.CalculatedItems.Add(new PivotCalculatedItemModel(0, "East + West", "East+West"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 3));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 25));
+        pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "East"));
+        pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Value, PivotSortDirection.Descending, DataFieldIndex: 0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Average Amount", "average", 4));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Max Amount", "max", 4));
+        pivot.DataFields.Add(new PivotDataFieldModel(-1, "Sum of Revenue", "sum", 4, "Revenue"));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+            pivotXml.ToString().Should().Contain("pageField");
+            pivotXml.ToString().Should().Contain("name=\"Q1\"");
+            pivotXml.ToString().Should().Contain("selectedItems=\"Q1,Q2\"");
+            pivotXml.ToString().Should().Contain("groupBy=\"numberRange\"");
+            pivotXml.ToString().Should().Contain("groupStart=\"0\"");
+            pivotXml.ToString().Should().Contain("groupInterval=\"10\"");
+            pivotXml.ToString().Should().Contain("valueFilters");
+            pivotXml.ToString().Should().Contain("type=\"top\"");
+            pivotXml.ToString().Should().Contain("type=\"greaterThan\"");
+            pivotXml.ToString().Should().Contain("comparisonValue=\"25\"");
+            pivotXml.ToString().Should().Contain("labelFilters");
+            pivotXml.ToString().Should().Contain("contains");
+            pivotXml.ToString().Should().Contain("pivotSorts");
+            pivotXml.ToString().Should().Contain("direction=\"descending\"");
+            pivotXml.ToString().Should().Contain("defaultSubtotal=\"1\"");
+            pivotXml.ToString().Should().Contain("calculatedField");
+            pivotXml.ToString().Should().Contain("calculatedItems");
+            pivotXml.ToString().Should().Contain("formula=\"East+West\"");
+            pivotXml.ToString().Should().Contain("formula=\"Amount*2\"");
+            pivotXml.ToString().Should().Contain("subtotal=\"average\"");
+            pivotXml.ToString().Should().Contain("subtotal=\"max\"");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedPivot = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
+        var loadedRowField = loadedPivot.RowFields.Should().ContainSingle().Subject;
+        loadedRowField.Grouping.Should().Be(PivotFieldGrouping.NumberRange);
+        loadedRowField.GroupStart.Should().Be(0);
+        loadedRowField.GroupInterval.Should().Be(10);
+        var loadedPageField = loadedPivot.PageFields.Should().ContainSingle().Subject;
+        loadedPageField.SourceFieldIndex.Should().Be(1);
+        loadedPageField.SelectedItem.Should().Be("Q1");
+        loadedPageField.SelectedItems.Should().Equal("Q1", "Q2");
+        loadedPivot.ShowSubtotals.Should().BeTrue();
+        loadedPivot.CalculatedFields.Should().ContainSingle().Which.Should().Be(new PivotCalculatedFieldModel("Revenue", "Amount*2"));
+        loadedPivot.CalculatedItems.Should().ContainSingle().Which.Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
+        loadedPivot.ValueFilters.Should().HaveCount(2);
+        loadedPivot.ValueFilters[0].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.Top, 3));
+        loadedPivot.ValueFilters[1].Should().Be(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 25));
+        loadedPivot.LabelFilters.Should().ContainSingle().Which.Should().Be(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "East"));
+        loadedPivot.Sorts.Should().ContainSingle().Which.Should().Be(new PivotSortModel(PivotSortTarget.Value, PivotSortDirection.Descending, DataFieldIndex: 0));
+        loadedPivot.DataFields.Select(field => field.SummaryFunction).Should().Equal("average", "max", "sum");
+        loadedPivot.DataFields[2].CalculatedFieldName.Should().Be("Revenue");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesPivotChartSourceAndRoundTripsBinding()
+    {
+        var workbook = new Workbook("AuthoredPivotChartXlsxTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new TextValue("Sum of Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 2), new NumberValue(20));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2)),
+            Title = "Pivot Chart",
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 1,
+            Width = 360,
+            Height = 240
+        });
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            var pivotSource = chartXml.Root!.Element(chartNs + "pivotSource");
+            pivotSource.Should().NotBeNull();
+            pivotSource!.Element(chartNs + "name")!.Value.Should().Be("Data!PivotTable1");
+            pivotSource.Element(chartNs + "fmtId")!.Attribute("val")!.Value.Should().Be("0");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        loaded.GetSheetAt(0).Charts.Should().ContainSingle().Which.Should().Match<ChartModel>(
+            chart => chart.IsPivotChart &&
+                     chart.PivotTableName == "PivotTable1" &&
+                     chart.PivotCacheId == null);
     }
 
     [Fact]
@@ -7469,6 +7663,40 @@ public class FileAdapterSmokeTests
                         new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"),
                         new XAttribute("Target", "linked-workbook.xlsx"),
                         new XAttribute("TargetMode", "External")))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalCalcChainPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace calcNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/calcChain.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            ReplacePackageXml(archive, "xl/calcChain.xml", new XDocument(
+                new XElement(
+                    calcNs + "calcChain",
+                    new XElement(calcNs + "c", new XAttribute("r", "A1"), new XAttribute("i", "1")))));
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelCalcChain"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"),
+                new XAttribute("Target", "calcChain.xml")));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
         }
 
         packageStream.Position = 0;

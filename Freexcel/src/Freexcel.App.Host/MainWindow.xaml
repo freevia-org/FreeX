@@ -1243,7 +1243,19 @@
                                 <Button Content="PivotTable" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
                                         local:RibbonTooltip.Title="PivotTable"
                                         local:RibbonTooltip.KeyTip="P"
-                                        local:RibbonTooltip.Description="Loaded PivotTables are retained on XLSX save; creation and refresh are deferred."/>
+                                        local:RibbonTooltip.Description="Create a PivotTable from the selected range."/>
+                                <Button Content="Refresh Pivot" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
+                                        local:RibbonTooltip.Title="Refresh PivotTable"
+                                        local:RibbonTooltip.KeyTip="RP"
+                                        local:RibbonTooltip.Description="Refresh the selected PivotTable from its source data."/>
+                                <Button Content="Show Details" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
+                                        local:RibbonTooltip.Title="Show Details"
+                                        local:RibbonTooltip.KeyTip="PD"
+                                        local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
+                                <Button Content="PivotChart" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
+                                        local:RibbonTooltip.Title="PivotChart"
+                                        local:RibbonTooltip.KeyTip="PV"
+                                        local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
                                 <Button Content="Table"      Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"

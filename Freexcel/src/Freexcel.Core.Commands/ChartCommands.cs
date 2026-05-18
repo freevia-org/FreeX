@@ -66,6 +66,90 @@ public sealed class AddChartCommand : IWorkbookCommand
         Enum.IsDefined(value) ? value : defaultValue;
 }
 
+public sealed class AddPivotChartCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly string _pivotTableName;
+    private readonly ChartType _chartType;
+    private readonly string? _title;
+    private readonly double _left;
+    private readonly double _top;
+    private readonly double _width;
+    private readonly double _height;
+    private ChartModel? _addedChart;
+
+    public string Label => "Insert PivotChart";
+
+    public AddPivotChartCommand(
+        SheetId sheetId,
+        string pivotTableName,
+        ChartType chartType,
+        string? title = null,
+        double left = 20,
+        double top = 20,
+        double width = 400,
+        double height = 300)
+    {
+        _sheetId = sheetId;
+        _pivotTableName = pivotTableName;
+        _chartType = Enum.IsDefined(chartType) ? chartType : ChartType.Column;
+        _title = title;
+        _left = left;
+        _top = top;
+        _width = width;
+        _height = height;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(_pivotTableName))
+            return new CommandOutcome(false, "PivotTable name is required.");
+        if (!double.IsFinite(_width) || !double.IsFinite(_height) || _width <= 0 || _height <= 0)
+            return new CommandOutcome(false, "Chart size must be positive.");
+
+        var sheet = ctx.GetSheet(_sheetId);
+        var pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, _pivotTableName, StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+            return new CommandOutcome(false, "PivotTable was not found.");
+
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        var dataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
+        var chart = new ChartModel
+        {
+            Type = _chartType,
+            DataRange = dataRange,
+            FirstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble),
+            IsPivotChart = true,
+            PivotTableName = pivotTable.Name,
+            PivotCacheId = pivotTable.CacheId,
+            Title = _title,
+            Left = _left,
+            Top = _top,
+            Width = _width,
+            Height = _height
+        };
+
+        if (ChartTypeSupport.GetDataSeriesCount(chart) <= 0)
+            return new CommandOutcome(false, "PivotChart source must include at least one data series.");
+        if (ChartTypeSupport.GetDataPointCount(chart) <= 0)
+            return new CommandOutcome(false, "PivotChart source must include at least one data point.");
+
+        sheet.Charts.Add(chart);
+        _addedChart = chart;
+        return new CommandOutcome(true, AffectedCells: [dataRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_addedChart is null)
+            return;
+
+        ctx.GetSheet(_sheetId).Charts.Remove(_addedChart);
+        _addedChart = null;
+    }
+}
+
 public sealed record ChartLayoutOptions(
     string? Title = null,
     string? XAxisTitle = null,

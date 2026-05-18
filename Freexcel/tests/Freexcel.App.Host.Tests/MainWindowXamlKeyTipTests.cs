@@ -780,32 +780,81 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void PivotTableEntryPoint_DisclosesModelFirstDeferredStatusBeforeClick()
+    public void PivotTableEntryPoint_IsAvailableOnInsertRibbon()
     {
         var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        var missing = document
+        var buttons = document
             .Descendants(presentation + "Button")
             .Where(element => element.Attribute("Click")?.Value == "PivotTableBtn_Click")
-            .Where(element =>
-                !ContainsModelFirstPivotStatus(element.Attribute("Content")?.Value) &&
-                !ContainsModelFirstPivotStatus(element.Attribute(local + "RibbonTooltip.Title")?.Value) &&
-                !ContainsModelFirstPivotStatus(element.Attribute(local + "RibbonTooltip.Description")?.Value))
-            .Select(element => element.Attribute("Content")?.Value ?? element.Name.LocalName)
             .ToList();
 
-        missing.Should().BeEmpty("PivotTable creation is deferred even though existing PivotTables now have model-first XLSX load/save support");
+        buttons.Should().ContainSingle();
+        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Create");
+    }
+
+    [Fact]
+    public void PivotTableRefreshEntryPoint_IsAvailableOnInsertRibbon()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var buttons = document
+            .Descendants(presentation + "Button")
+            .Where(element => element.Attribute("Click")?.Value == "RefreshPivotTableBtn_Click")
+            .ToList();
+
+        buttons.Should().ContainSingle();
+        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Refresh");
+    }
+
+    [Fact]
+    public void PivotTableShowDetailsEntryPoint_IsAvailableOnInsertRibbon()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var buttons = document
+            .Descendants(presentation + "Button")
+            .Where(element => element.Attribute("Click")?.Value == "PivotTableShowDetailsBtn_Click")
+            .ToList();
+
+        buttons.Should().ContainSingle();
+        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("detail");
+    }
+
+    [Fact]
+    public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("e.ClickCount == 2");
+        source.Should().Contain("TryShowPivotTableDetails(showMessage: false)");
+    }
+
+    [Fact]
+    public void PivotChartEntryPoint_IsAvailableOnInsertRibbon()
+    {
+        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var buttons = document
+            .Descendants(presentation + "Button")
+            .Where(element => element.Attribute("Click")?.Value == "PivotChartBtn_Click")
+            .ToList();
+
+        buttons.Should().ContainSingle();
+        buttons[0].Attribute("Content")?.Value.Should().Contain("PivotChart");
+        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PivotTable");
     }
 
     private static bool ContainsExcludedStatus(string? value) =>
         value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
-
-    private static bool ContainsModelFirstPivotStatus(string? value) =>
-        value?.Contains("deferred", StringComparison.OrdinalIgnoreCase) == true ||
-        value?.Contains("retained", StringComparison.OrdinalIgnoreCase) == true ||
-        value?.Contains("model-first", StringComparison.OrdinalIgnoreCase) == true;
 
     private static string FindWorkspaceFile(params string[] relativeParts)
     {

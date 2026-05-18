@@ -162,6 +162,12 @@ public sealed class Sheet
     /// <summary>True when the sheet is hidden from the worksheet tab strip.</summary>
     public bool IsHidden { get; set; }
 
+    /// <summary>True when the sheet is Excel veryHidden and cannot be shown from the normal sheet-tab UI.</summary>
+    public bool IsVeryHidden { get; set; }
+
+    /// <summary>Optional VBA/OOXML sheet code name metadata.</summary>
+    public string? CodeName { get; set; }
+
     /// <summary>Optional worksheet tab color.</summary>
     public CellColor? TabColor { get; set; }
 
@@ -541,6 +547,8 @@ public sealed class Sheet
             PrintComments                 = PrintComments,
             ViewMode                      = ViewMode,
             IsHidden                      = false,
+            IsVeryHidden                  = IsVeryHidden,
+            CodeName                      = CodeName,
             TabColor                      = TabColor,
             IsProtected                   = IsProtected,
             ProtectionPassword            = ProtectionPassword,
