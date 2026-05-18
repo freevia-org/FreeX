@@ -93,6 +93,54 @@ public sealed class SubtotalCommandTests
     }
 
     [Fact]
+    public void SubtotalCommand_WithPageBreakBetweenGroups_AddsBreakAfterEachSubtotalForThreeOrMoreGroups()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new SimpleCtx(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        // Three groups: East (rows 2-4), West (rows 5-7), North (rows 8-10)
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(11));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 6, 2), new NumberValue(21));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 7, 2), new NumberValue(22));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 9, 2), new NumberValue(31));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 10, 2), new NumberValue(32));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 10, 2));
+
+        var command = new SubtotalCommand(
+            sheet.Id,
+            range,
+            groupByColumnOffset: 0,
+            subtotalColumnOffset: 1,
+            pageBreakBetweenGroups: true);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        // After insertions: East Total at row 5, West Total at row 9, North Total at row 13.
+        // North is the last group, so no break after it. The break should appear AFTER each
+        // subtotal except the last, i.e. at rows 6 and 10.
+        sheet.GetValue(5, 1).Should().Be(new TextValue("East Total"));
+        sheet.GetValue(9, 1).Should().Be(new TextValue("West Total"));
+        sheet.GetValue(13, 1).Should().Be(new TextValue("North Total"));
+        sheet.RowPageBreaks.Should().Contain(6u);
+        sheet.RowPageBreaks.Should().Contain(10u);
+    }
+
+    [Fact]
     public void SubtotalCommand_WithSummaryAboveData_InsertsTotalsBeforeGroupsAndGrandTotalAtTop()
     {
         var workbook = new Workbook("test");

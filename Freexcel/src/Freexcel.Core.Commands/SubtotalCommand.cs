@@ -73,14 +73,29 @@ public sealed class SubtotalCommand : IWorkbookCommand
 
         if (_summaryBelowData)
         {
-            foreach (var group in groups.OrderByDescending(g => g.EndRow))
+            // Process groups bottom-up so each insertion only shifts already-inserted
+            // (lower) rows. Track each prospective break alongside its source group's
+            // *original* endRow — the final row number is then `endRow + 2 + N`, where
+            // N counts how many earlier groups (smaller endRow) get inserted above it.
+            var orderedGroups = groups.OrderByDescending(g => g.EndRow).ToList();
+            var pendingBreaks = new List<uint>();
+            for (int i = 0; i < orderedGroups.Count; i++)
             {
+                var group = orderedGroups[i];
                 var insertRow = group.EndRow + 1;
                 if (!ApplyInsertAndEdit(ctx, insertRow, $"{group.Label} Total", group.StartRow, group.EndRow, affected))
                     return new CommandOutcome(false, "Could not insert subtotal row.");
 
                 if (_pageBreakBetweenGroups && group.EndRow < _range.End.Row)
-                    pageBreakRows.Add(insertRow + 1);
+                    pendingBreaks.Add(group.EndRow);
+            }
+
+            // For each pending break, the final row is endRow + 2 (the row after the inserted subtotal)
+            // PLUS one extra for every group with a smaller endRow (those insertions land above and shift it).
+            foreach (var sourceEndRow in pendingBreaks)
+            {
+                uint subsequentInsertions = (uint)orderedGroups.Count(g => g.EndRow < sourceEndRow);
+                pageBreakRows.Add(sourceEndRow + 2 + subsequentInsertions);
             }
 
             foreach (var rowBreak in pageBreakRows)
