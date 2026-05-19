@@ -280,6 +280,7 @@ public sealed class XlsxChartPartReaderTests
               </c:pivotSource>
               <c:roundedCorners val="1"/>
               <c:chart>
+                <c:autoTitleDeleted val="1"/>
                 <c:plotArea>
                   <c:barChart>
                     <c:barDir val="col"/>
@@ -305,6 +306,7 @@ public sealed class XlsxChartPartReaderTests
         chart.RoundedCorners.Should().BeTrue();
         chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Span);
         chart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        chart.AutoTitleDeleted.Should().BeTrue();
     }
 
     [Fact]
