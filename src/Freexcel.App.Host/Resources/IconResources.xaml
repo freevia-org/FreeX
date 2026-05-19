@@ -1,18 +1,5 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Style x:Key="FreexcelQatIcon" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-        <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Foreground" Value="#1F1F1F"/>
-        <Setter Property="HorizontalAlignment" Value="Center"/>
-        <Setter Property="VerticalAlignment" Value="Center"/>
-        <Setter Property="TextAlignment" Value="Center"/>
-    </Style>
-
-    <Style x:Key="FreexcelQatOnAccentIcon" BasedOn="{StaticResource FreexcelQatIcon}" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="#FFFFFF"/>
-    </Style>
-
     <Style x:Key="FreexcelAppMarkText" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -20,13 +7,6 @@
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="HorizontalAlignment" Value="Center"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
-    </Style>
-
-    <Style x:Key="FreexcelRibbonGlyph" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="#1F1F1F"/>
-        <Setter Property="HorizontalAlignment" Value="Center"/>
-        <Setter Property="VerticalAlignment" Value="Center"/>
-        <Setter Property="TextAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="FreexcelRibbonLargeIconSlot" TargetType="Border">
@@ -52,21 +32,6 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="Margin" Value="0,0,4,0"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
-    </Style>
-
-    <Style x:Key="FreexcelRibbonLargeIconText" BasedOn="{StaticResource FreexcelRibbonGlyph}" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="23"/>
-        <Setter Property="LineHeight" Value="24"/>
-    </Style>
-
-    <Style x:Key="FreexcelRibbonMediumIconText" BasedOn="{StaticResource FreexcelRibbonGlyph}" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="19"/>
-        <Setter Property="LineHeight" Value="20"/>
-    </Style>
-
-    <Style x:Key="FreexcelRibbonSmallIconText" BasedOn="{StaticResource FreexcelRibbonGlyph}" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="LineHeight" Value="14"/>
     </Style>
 
     <Style x:Key="FreexcelRibbonLargeLabel" TargetType="TextBlock">
