@@ -4487,8 +4487,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
-        if (sourceExtensionList is null && sourceDefinedNames is null && sourceBookViews is null)
+        var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
+        if (sourceExtensionList is null &&
+            sourceDefinedNames is null &&
+            sourceBookViews is null &&
+            sourceWorkbookProperties is null)
+        {
             return;
+        }
 
         var targetWorkbookXml = LoadXml(targetWorkbookEntry);
         var targetRoot = targetWorkbookXml.Root;
@@ -4496,6 +4502,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var changed = false;
+        if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
+            changed = true;
         if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
             changed = true;
         if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
@@ -4505,6 +4513,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (changed)
             ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
+    private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceWorkbookProperties is null)
+            return false;
+
+        var targetWorkbookProperties = targetRoot.Element(workbookNs + "workbookPr");
+        if (targetWorkbookProperties is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceWorkbookProperties));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceWorkbookProperties.Attributes())
+        {
+            if (targetWorkbookProperties.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetWorkbookProperties.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetWorkbookProperties
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceWorkbookProperties.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetWorkbookProperties.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
