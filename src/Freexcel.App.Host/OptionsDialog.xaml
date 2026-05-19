@@ -61,6 +61,7 @@
                          ItemContainerStyle="{StaticResource OptionTabItem}">
                     <ListBoxItem Content="General"/>
                     <ListBoxItem Content="Formulas"/>
+                    <ListBoxItem Content="View"/>
                     <ListBoxItem Content="Save"/>
                 </ListBox>
             </Border>
@@ -181,6 +182,21 @@
                         <TextBlock Text="Enable background error checks for:"
                                    FontSize="12" Foreground="#555" Margin="0,0,0,8"/>
                         <StackPanel x:Name="OptErrorCheckingRules"/>
+                    </StackPanel>
+
+                    <!-- VIEW -->
+                    <StackPanel x:Name="PanelView" Visibility="Collapsed">
+
+                        <TextBlock Text="Workbook view options"
+                                   FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
+                        <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
+
+                        <CheckBox x:Name="OptShowFormulaBar"
+                                  Content="Show formula bar"
+                                  FontSize="12" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="OptFormulaBarExpanded"
+                                  Content="Expand formula bar"
+                                  FontSize="12" Margin="0,0,0,4"/>
                     </StackPanel>
 
                     <!-- ═══ SAVE ═══════════════════════════════════════════ -->
