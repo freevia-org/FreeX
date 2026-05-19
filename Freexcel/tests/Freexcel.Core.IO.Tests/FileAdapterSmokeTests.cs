@@ -7487,6 +7487,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFileVersion()
+    {
+        var workbook = new Workbook("WorkbookFileVersionRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("version"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileVersion(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion");
+        fileVersion.Should().NotBeNull();
+        fileVersion!.Attribute("appName")!.Value.Should().Be("xl");
+        fileVersion.Attribute("lastEdited")!.Value.Should().Be("7");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -8897,6 +8927,25 @@ public class FileAdapterSmokeTests
                     new XAttribute("personalView", "0"),
                     new XAttribute("includePrintSettings", "1"),
                     new XAttribute("includeHiddenRowCol", "1"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookFileVersion(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.AddFirst(new XElement(
+                workbookNs + "fileVersion",
+                new XAttribute("appName", "xl"),
+                new XAttribute("lastEdited", "7"),
+                new XAttribute("lowestEdited", "7"),
+                new XAttribute("rupBuild", "28129")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
