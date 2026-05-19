@@ -416,13 +416,13 @@
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
-                <Border DockPanel.Dock="Left" Width="22" Height="22"
-                        Background="{StaticResource FreexcelWhiteBrush}" CornerRadius="2" Margin="0,0,8,0"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="F" Foreground="{StaticResource FreexcelGreenBrush}" FontFamily="Segoe UI"
-                               FontWeight="SemiBold" FontSize="12"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+                <Image Source="Resources/Freexcel.ico"
+                       DockPanel.Dock="Left"
+                       Width="22" Height="22"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Center"
+                       SnapsToDevicePixels="True"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
                 <!-- QAT buttons -->
                 <Button x:Name="SaveQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource RibbonBtn}" FontSize="13"
