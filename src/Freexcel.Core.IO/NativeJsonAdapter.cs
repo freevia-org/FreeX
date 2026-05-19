@@ -203,24 +203,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             }
             foreach (var sparklineDto in sDto.Sparklines ?? [])
             {
-                if (sparklineDto?.DataRange is null || sparklineDto.Location is null) continue;
-                try
-                {
-                    var dataRange = GridRange.Parse(sparklineDto.DataRange, sheet.Id);
-                    var location = CellAddress.Parse(sparklineDto.Location, sheet.Id);
-                    if (dataRange.Start.Sheet != sheet.Id || dataRange.End.Sheet != sheet.Id || location.Sheet != sheet.Id)
-                        continue;
-                    if (!Enum.IsDefined(sparklineDto.Kind))
-                        continue;
-
-                    sheet.Sparklines.Add(new SparklineModel
-                    {
-                        DataRange = dataRange,
-                        Location = location,
-                        Kind = sparklineDto.Kind
-                    });
-                }
-                catch (FormatException) { /* skip sparklines with unparseable ranges */ }
+                if (TryLoadSparkline(sparklineDto, sheet.Id) is { } sparkline)
+                    sheet.Sparklines.Add(sparkline);
             }
             foreach (var chartDto in sDto.Charts ?? [])
             {
@@ -576,17 +560,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 TextBoxes = s.TextBoxes.Select(NativeJsonVisualDtoMapper.FromTextBox).ToList(),
                 DrawingShapes = s.DrawingShapes.Select(NativeJsonVisualDtoMapper.FromDrawingShape).ToList(),
                 Sparklines = s.Sparklines
-                    .Where(sparkline =>
-                        sparkline.DataRange.Start.Sheet == s.Id &&
-                        sparkline.DataRange.End.Sheet == s.Id &&
-                        sparkline.Location.Sheet == s.Id &&
-                        Enum.IsDefined(sparkline.Kind))
-                    .Select(sparkline => new SparklineDto
-                    {
-                        DataRange = sparkline.DataRange.ToString(),
-                        Location = sparkline.Location.ToA1(),
-                        Kind = sparkline.Kind
-                    }).ToList(),
+                    .Where(sparkline => IsSparklineOnSheet(sparkline, s.Id) && Enum.IsDefined(sparkline.Kind))
+                    .Select(ToSparklineDto)
+                    .ToList(),
                 Charts = s.Charts.Select(ToChartDto).ToList(),
                 DataValidations = s.DataValidations
                     .Where(IsSupportedDataValidation)
@@ -679,6 +655,45 @@ public sealed class NativeJsonAdapter : IFileAdapter
         dto.MaxCalculationIterations = workbook.MaxCalculationIterations;
         dto.MaxCalculationChange = workbook.MaxCalculationChange;
     }
+
+    private static SparklineModel? TryLoadSparkline(SparklineDto? sparklineDto, SheetId sheetId)
+    {
+        if (sparklineDto?.DataRange is null || sparklineDto.Location is null)
+            return null;
+
+        try
+        {
+            var dataRange = GridRange.Parse(sparklineDto.DataRange, sheetId);
+            var location = CellAddress.Parse(sparklineDto.Location, sheetId);
+            if (dataRange.Start.Sheet != sheetId || dataRange.End.Sheet != sheetId || location.Sheet != sheetId)
+                return null;
+            if (!Enum.IsDefined(sparklineDto.Kind))
+                return null;
+
+            return new SparklineModel
+            {
+                DataRange = dataRange,
+                Location = location,
+                Kind = sparklineDto.Kind
+            };
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsSparklineOnSheet(SparklineModel sparkline, SheetId sheetId) =>
+        sparkline.DataRange.Start.Sheet == sheetId &&
+        sparkline.DataRange.End.Sheet == sheetId &&
+        sparkline.Location.Sheet == sheetId;
+
+    private static SparklineDto ToSparklineDto(SparklineModel sparkline) => new()
+    {
+        DataRange = sparkline.DataRange.ToString(),
+        Location = sparkline.Location.ToA1(),
+        Kind = sparkline.Kind
+    };
 
     private static ChartModel? TryLoadChart(ChartDto? chartDto, SheetId sheetId)
     {
