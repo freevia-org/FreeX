@@ -2260,7 +2260,11 @@ public class GridView : FrameworkElement
         var cbRange = ClipboardRange;
         if (cbRange == null || Viewport == null) return;
 
-        var rect = CalculateClipboardMarquee(Viewport, cbRange.Value, ActualRowHeaderWidth);
+        var rect = CalculateClipboardMarquee(
+            Viewport,
+            cbRange.Value,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
         if (rect is null) return;
 
         var dashBlack = new DashStyle([4.0, 4.0], _marchOffset);
@@ -2620,7 +2624,8 @@ public class GridView : FrameworkElement
     public static Rect? CalculateClipboardMarquee(
         ViewportModel viewport,
         GridRange range,
-        double headerSize)
+        double rowHeaderWidth,
+        double columnHeaderHeight)
     {
         var visibleRows = viewport.RowMetrics
             .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
@@ -2632,10 +2637,10 @@ public class GridView : FrameworkElement
         if (visibleRows.Count == 0 || visibleColumns.Count == 0)
             return null;
 
-        var top = visibleRows.Min(row => row.TopOffset) + headerSize;
-        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + headerSize;
-        var left = visibleColumns.Min(column => column.LeftOffset) + headerSize;
-        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + headerSize;
+        var top = visibleRows.Min(row => row.TopOffset) + columnHeaderHeight;
+        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + columnHeaderHeight;
+        var left = visibleColumns.Min(column => column.LeftOffset) + rowHeaderWidth;
+        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + rowHeaderWidth;
 
         if (right <= left || bottom <= top)
             return null;

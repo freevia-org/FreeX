@@ -94,9 +94,13 @@ public sealed class GridViewSelectionLayoutTests
             [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20), new RowMetric(3, 20, 40)],
             [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64), new ColMetric(3, 64, 128)]);
 
-        var rect = GridView.CalculateClipboardMarquee(viewport, range, headerSize: 30);
+        var rect = GridView.CalculateClipboardMarquee(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
 
-        rect.Should().Be(new Rect(94, 50, 128, 40));
+        rect.Should().Be(new Rect(94, 38, 128, 40));
     }
 
     [Fact]
@@ -111,7 +115,11 @@ public sealed class GridViewSelectionLayoutTests
             [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
             [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]);
 
-        GridView.CalculateClipboardMarquee(viewport, range, headerSize: 30).Should().BeNull();
+        GridView.CalculateClipboardMarquee(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18).Should().BeNull();
     }
 
     private static ViewportModel Viewport() =>
