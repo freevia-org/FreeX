@@ -124,6 +124,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.L)
+        {
+            shortcut = KeyboardCommandShortcut.ToggleFilter;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Control && effectiveKey == Key.Q)
         {
             shortcut = KeyboardCommandShortcut.QuickAnalysis;
@@ -388,6 +394,7 @@ public enum KeyboardCommandShortcut
     CalculateSheet,
     RebuildDependenciesAndCalculate,
     ToggleFormulaBarExpansion,
+    ToggleFilter,
     QuickAnalysis,
     OpenPrintBackstage,
     PasteValues,
