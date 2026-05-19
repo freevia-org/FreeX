@@ -2,13 +2,13 @@ using System.IO;
 
 namespace Freexcel.App.Host;
 
-public enum ExportFormat
+internal enum ExportFormat
 {
     Xps,
     PdfViaWindowsPrinter
 }
 
-public sealed record ExportRequest(string Path, ExportFormat Format);
+internal sealed record ExportRequest(string Path, ExportFormat Format);
 
 internal static class ExportPlanner
 {
