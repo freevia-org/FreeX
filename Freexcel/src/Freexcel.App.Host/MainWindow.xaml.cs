@@ -29,6 +29,8 @@ namespace Freexcel.App.Host;
 public partial class MainWindow : Window
 {
     private const double MaximizedSafeInsetDip = 8.0;
+    private const double SheetTabNavScrollAmount = 140.0;
+    private const double SheetTabScrollEpsilon = 0.5;
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
@@ -5013,6 +5015,12 @@ public partial class MainWindow : Window
         _sheetTabs.Clear();
         foreach (var tab in plan.Tabs)
             _sheetTabs.Add(tab);
+        UpdateSheetTabNavigation();
+        Dispatcher.BeginInvoke(() =>
+        {
+            BringCurrentSheetTabIntoView();
+            UpdateSheetTabNavigation();
+        }, DispatcherPriority.Loaded);
         RefreshSheetProtectionUi();
         RefreshWorkbookProtectionUi();
         UpdateTitleBar();
@@ -12821,16 +12829,66 @@ public partial class MainWindow : Window
     private void SheetNavLeftBtn_Click(object sender, RoutedEventArgs e)
     {
         SheetTabsScroller.ScrollToHorizontalOffset(
-            Math.Max(0, SheetTabsScroller.HorizontalOffset - 80));
+            Math.Max(0, SheetTabsScroller.HorizontalOffset - SheetTabNavScrollAmount));
     }
 
     private void SheetNavRightBtn_Click(object sender, RoutedEventArgs e)
     {
         SheetTabsScroller.ScrollToHorizontalOffset(
-            SheetTabsScroller.HorizontalOffset + 80);
+            Math.Min(SheetTabsScroller.ScrollableWidth, SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount));
     }
 
     // ── Sheet tab context menu ────────────────────────────────────────────────
+
+    private void SheetTabsScroller_Loaded(object sender, RoutedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
+    private void SheetTabsScroller_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
+    private void SheetTabsScroller_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
+    private void UpdateSheetTabNavigation()
+    {
+        var canScroll = SheetTabsScroller.ScrollableWidth > SheetTabScrollEpsilon;
+        SheetNavLeftBtn.Visibility = canScroll && SheetTabsScroller.HorizontalOffset > SheetTabScrollEpsilon
+            ? Visibility.Visible
+            : Visibility.Hidden;
+        SheetNavRightBtn.Visibility = canScroll &&
+                                      SheetTabsScroller.HorizontalOffset < SheetTabsScroller.ScrollableWidth - SheetTabScrollEpsilon
+            ? Visibility.Visible
+            : Visibility.Hidden;
+    }
+
+    private void BringCurrentSheetTabIntoView()
+    {
+        var activeTab = _sheetTabs.FirstOrDefault(tab => tab.Id == _currentSheetId);
+        if (activeTab is null ||
+            SheetTabsControl.ItemContainerGenerator.ContainerFromItem(activeTab) is not FrameworkElement container)
+            return;
+
+        var bounds = container.TransformToAncestor(SheetTabsScroller)
+            .TransformBounds(new Rect(new Point(0, 0), container.RenderSize));
+        if (bounds.Left < 0)
+        {
+            SheetTabsScroller.ScrollToHorizontalOffset(
+                Math.Max(0, SheetTabsScroller.HorizontalOffset + bounds.Left));
+        }
+        else if (bounds.Right > SheetTabsScroller.ViewportWidth)
+        {
+            SheetTabsScroller.ScrollToHorizontalOffset(
+                Math.Min(
+                    SheetTabsScroller.ScrollableWidth,
+                    SheetTabsScroller.HorizontalOffset + bounds.Right - SheetTabsScroller.ViewportWidth));
+        }
+    }
 
     private void SheetCtxRename_Click(object sender, RoutedEventArgs e)
     {
