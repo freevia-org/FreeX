@@ -28,4 +28,11 @@ public sealed class CustomViewsDialogXamlTests
         showButton.Attribute("IsDefault")?.Value.Should().Be("True");
     }
 
+    [Fact]
+    public void CustomViewNameDialog_CreateResult_TrimsViewName()
+    {
+        CustomViewNameDialog.CreateResult("  Quarter Close  ")
+            .Should()
+            .Be(new CustomViewNameDialogResult("Quarter Close"));
+    }
 }

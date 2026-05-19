@@ -42,4 +42,10 @@ public class ExportPlannerTests
         ExportPlanner.PdfFallbackMessage.Should().Be(
             "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.");
     }
+
+    [Fact]
+    public void PrintPreviewDialog_CreateTitle_IncludesWorkbookName()
+    {
+        PrintPreviewDialog.CreateTitle("Book1").Should().Be("Print Preview - Book1");
+    }
 }
