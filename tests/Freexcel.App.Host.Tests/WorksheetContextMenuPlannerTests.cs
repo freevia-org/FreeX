@@ -29,11 +29,17 @@ public sealed class WorksheetContextMenuPlannerTests
             "Delete Note",
             "Hyperlink...",
             "Format Cells...",
+            "Clear All",
             "Clear Formats",
+            "Clear Comments",
             "Clear Hyperlinks",
             "Clear Contents");
 
         commands.Single(command => command.Header == "Clear Filter")
             .Action.Should().Be(WorksheetContextMenuAction.ClearFilter);
+        commands.Single(command => command.Header == "Clear All")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
+        commands.Single(command => command.Header == "Clear Comments")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
     }
 }
