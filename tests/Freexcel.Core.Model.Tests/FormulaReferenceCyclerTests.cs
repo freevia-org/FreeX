@@ -167,6 +167,22 @@ public class FormulaReferenceCyclerTests
     }
 
     [Fact]
+    public void TryCycleReferenceAtCaret_CyclesRangeWithRepeatedSheetQualifierAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(Sheet1!A1:Sheet1!B2)",
+            caretIndex: 13,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM(Sheet1!$A$1:Sheet1!$B$2)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(23);
+    }
+
+    [Fact]
     public void TryCycleReferenceAtCaret_ReturnsFalseWhenCaretIsNotOnReference()
     {
         var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
