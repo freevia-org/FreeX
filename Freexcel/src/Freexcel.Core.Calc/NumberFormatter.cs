@@ -198,6 +198,7 @@ public static class NumberFormatter
 
         // Remove any remaining bracket content (conditions, locale, etc.)
         format = Regex.Replace(format, @"\[[^\]]*\]", "");
+        format = RemoveSpacingAndFillDirectives(format);
 
         // Percentage: multiply value by 100 before formatting
         if (format.Contains('%'))
@@ -226,6 +227,12 @@ public static class NumberFormatter
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
+
+        if (IsSimpleFractionFormat(format))
+            return FormatSimpleFraction(value, format);
+
+        if (IsScientificFormat(format))
+            return FormatScientific(value, format);
 
         // Accounting / text literals — strip quoted strings to expose the numeric pattern
         var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
@@ -269,6 +276,133 @@ public static class NumberFormatter
         catch { numStr = value.ToString(CultureInfo.InvariantCulture); }
 
         return prefix + numStr + suffix;
+    }
+
+    private static string RemoveSpacingAndFillDirectives(string format)
+    {
+        var sb = new System.Text.StringBuilder(format.Length);
+        bool inQuote = false;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                sb.Append(c);
+                continue;
+            }
+
+            if (!inQuote && c == '_')
+            {
+                if (i + 1 < format.Length) i++;
+                continue;
+            }
+
+            if (!inQuote && c == '*')
+                continue;
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool IsSimpleFractionFormat(string format)
+    {
+        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        return stripped.Contains("?/?", StringComparison.Ordinal) ||
+               stripped.Contains("?/??", StringComparison.Ordinal) ||
+               stripped.Contains("??/??", StringComparison.Ordinal);
+    }
+
+    private static string FormatSimpleFraction(double value, string format)
+    {
+        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        var denominatorPattern = Regex.Match(stripped, @"/(\?+)");
+        int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
+
+        double absValue = Math.Abs(value);
+        int whole = stripped.Contains('#') || stripped.Contains('0') ? (int)Math.Floor(absValue) : 0;
+        double fractional = absValue - whole;
+
+        var (numerator, denominator) = ApproximateFraction(fractional, maxDenominator);
+        if (numerator == denominator)
+        {
+            whole++;
+            numerator = 0;
+        }
+
+        var sign = value < 0 ? "-" : "";
+        if (numerator == 0)
+            return sign + (whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture));
+
+        string fraction = numerator.ToString(CultureInfo.InvariantCulture) + "/" +
+                          denominator.ToString(CultureInfo.InvariantCulture);
+        return whole > 0
+            ? sign + whole.ToString(CultureInfo.InvariantCulture) + " " + fraction
+            : sign + fraction;
+    }
+
+    private static (int Numerator, int Denominator) ApproximateFraction(double value, int maxDenominator)
+    {
+        int bestNumerator = 0;
+        int bestDenominator = 1;
+        double bestError = double.MaxValue;
+
+        for (int denominator = 1; denominator <= maxDenominator; denominator++)
+        {
+            int numerator = (int)Math.Round(value * denominator);
+            double error = Math.Abs(value - numerator / (double)denominator);
+            if (error < bestError)
+            {
+                bestError = error;
+                bestNumerator = numerator;
+                bestDenominator = denominator;
+            }
+        }
+
+        int gcd = GreatestCommonDivisor(bestNumerator, bestDenominator);
+        return (bestNumerator / gcd, bestDenominator / gcd);
+    }
+
+    private static int GreatestCommonDivisor(int a, int b)
+    {
+        a = Math.Abs(a);
+        b = Math.Abs(b);
+        while (b != 0)
+        {
+            int t = b;
+            b = a % b;
+            a = t;
+        }
+        return a == 0 ? 1 : a;
+    }
+
+    private static bool IsScientificFormat(string format)
+    {
+        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        return Regex.IsMatch(stripped, @"E[+-]0+", RegexOptions.IgnoreCase);
+    }
+
+    private static string FormatScientific(double value, string format)
+    {
+        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        var mantissa = stripped.Split(['E', 'e'], 2)[0];
+        int decimals = mantissa.Contains('.')
+            ? mantissa[(mantissa.IndexOf('.') + 1)..].Count(c => c == '0' || c == '#')
+            : 0;
+
+        string result = value.ToString("E" + decimals.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        result = Regex.Replace(result, @"E([+-])(\d{2,})$", match =>
+        {
+            string sign = match.Groups[1].Value;
+            string exponent = match.Groups[2].Value;
+            int minDigits = Regex.Match(stripped, @"E[+-](0+)", RegexOptions.IgnoreCase).Groups[1].Value.Length;
+            exponent = int.Parse(exponent, CultureInfo.InvariantCulture).ToString("D" + minDigits.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+            return "E" + sign + exponent;
+        });
+        return result;
     }
 
     // ── Date/time formatting ──────────────────────────────────────────────────
