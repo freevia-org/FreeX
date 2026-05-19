@@ -69,6 +69,26 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void ConditionalFormattingTopBottomRules_ExposeExcelParityMenuChoices()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var menuItems = document
+            .Descendants(presentation + "MenuItem")
+            .Select(element => new
+            {
+                Header = element.Attribute("Header")?.Value,
+                Click = element.Attribute("Click")?.Value
+            })
+            .ToList();
+
+        menuItems.Should().Contain(item => item.Header == "Top 10%..." && item.Click == "CfTop10PercentMenuItem_Click");
+        menuItems.Should().Contain(item => item.Header == "Bottom 10%..." && item.Click == "CfBottom10PercentMenuItem_Click");
+        menuItems.Should().Contain(item => item.Header == "Below Average..." && item.Click == "CfBelowAvgMenuItem_Click");
+    }
+
+    [Fact]
     public void BackstageAccountEntryPoint_DisclosesLocalAccountDecision()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
