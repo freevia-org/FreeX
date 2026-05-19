@@ -8078,6 +8078,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPrintOptionsMetadata()
+    {
+        var workbook = new Workbook("WorksheetPrintOptionsMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Print options"));
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPrintOptionsMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull();
+        printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
+        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
     {
         var workbook = new Workbook("ScenariosRetentionTest");
@@ -9865,6 +9898,28 @@ public class FileAdapterSmokeTests
                         new XAttribute("man", "1"),
                         new XAttribute("pt", "1"),
                         new XAttribute("customAttr", "col-native"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPrintOptionsMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+            if (printOptions is null)
+            {
+                printOptions = new XElement(worksheetNs + "printOptions");
+                worksheetXml.Root!.Add(printOptions);
+            }
+
+            printOptions.SetAttributeValue("gridLinesSet", "1");
+            printOptions.SetAttributeValue("customAttr", "print-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

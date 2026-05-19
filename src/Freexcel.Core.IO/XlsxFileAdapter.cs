@@ -4783,12 +4783,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .ToList();
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
+            var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
+                sourcePrintOptions is null &&
                 sourceSheetProtection is null &&
                 sourceSheetViews is null &&
                 sourceExtensionList is null)
@@ -4805,6 +4807,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetFormatProperties(sourceSheetFormatProperties, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetElementAttributes(sourcePrintOptions, targetRoot, workbookNs + "printOptions"))
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
@@ -4838,6 +4842,31 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetElementAttributes(XElement? sourceElement, XElement targetRoot, XName elementName)
+    {
+        if (sourceElement is null)
+            return false;
+
+        var targetElement = targetRoot.Element(elementName);
+        if (targetElement is null)
+        {
+            targetRoot.Add(new XElement(sourceElement));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceElement.Attributes())
+        {
+            if (targetElement.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetBreaks(XElement sourceBreaks, XElement targetRoot, XNamespace workbookNs)
