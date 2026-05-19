@@ -135,6 +135,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Icon=\"Resources/Freexcel.ico\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppFreeBand\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppXOutline\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppX\"");
         xaml.Should().Contain("<TextBlock Text=\"FREE\"");
         xaml.Should().Contain("<TextBlock Text=\"X\"");
@@ -145,6 +146,8 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Grid.RowSpan=\"3\"");
         xaml.Should().Contain("FontSize=\"6.6\"");
         xaml.Should().Contain("FontSize=\"14.5\"");
+        xaml.Should().Contain("FontSize=\"15.8\"");
+        xaml.Should().Contain("Foreground=\"#155C38\"");
         xaml.Should().Contain("Margin=\"0,-2,0,0\"");
         xaml.Should().NotContain("<Image Source=\"Resources/Freexcel.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreexcelGreenBrush}\"");
