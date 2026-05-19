@@ -4621,24 +4621,12 @@ public partial class MainWindow : Window
 
         if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            int newLevel = GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
+            int newLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
             return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
         }
 
-        int rowLevel = GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
+        int rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
         return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
-    }
-
-    private static int GetNextOutlineLevel(uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
-    {
-        int maxExisting = 0;
-        for (uint index = start; index <= end; index++)
-        {
-            if (outlineLevels.TryGetValue(index, out var level) && level > maxExisting)
-                maxExisting = level;
-        }
-
-        return Math.Min(maxExisting + 1, 8);
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
