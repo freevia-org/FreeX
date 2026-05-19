@@ -7397,6 +7397,34 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDefinedNames()
+    {
+        var workbook = new Workbook("DefinedNameRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedDefinedName(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString().Should().Contain("DynamicSalesRange");
+        workbookXml.ToString().Should().Contain("hidden=\"1\"");
+        workbookXml.ToString().Should().Contain("1+1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPrinterSettingsPackageAndWorksheetReference()
     {
         var workbook = new Workbook("PrinterSettingsRetentionTest");
@@ -8547,6 +8575,31 @@ public class FileAdapterSmokeTests
                         x15Ns + "futureMetadata",
                         new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
                         new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedDefinedName(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames");
+            if (definedNames is null)
+            {
+                definedNames = new XElement(workbookNs + "definedNames");
+                workbookXml.Root!.Add(definedNames);
+            }
+
+            definedNames.Add(new XElement(
+                workbookNs + "definedName",
+                new XAttribute("name", "DynamicSalesRange"),
+                new XAttribute("hidden", "1"),
+                "1+1"));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 

@@ -4485,7 +4485,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
-        if (sourceExtensionList is null)
+        var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
+        if (sourceExtensionList is null && sourceDefinedNames is null)
             return;
 
         var targetWorkbookXml = LoadXml(targetWorkbookEntry);
@@ -4493,8 +4494,57 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (targetRoot is null)
             return;
 
+        var changed = false;
+        if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
+            changed = true;
         if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            changed = true;
+
+        if (changed)
             ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
+    private static bool MergeWorkbookDefinedNames(XElement? sourceDefinedNames, XElement targetRoot, XNamespace workbookNs)
+    {
+        var sourceNames = sourceDefinedNames?
+            .Elements(workbookNs + "definedName")
+            .ToList()
+            ?? [];
+        if (sourceNames.Count == 0)
+            return false;
+
+        var targetDefinedNames = targetRoot.Element(workbookNs + "definedNames");
+        if (targetDefinedNames is null)
+        {
+            targetRoot.Add(new XElement(sourceDefinedNames!));
+            return true;
+        }
+
+        var existingKeys = targetDefinedNames
+            .Elements(workbookNs + "definedName")
+            .Select(DefinedNameKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceName in sourceNames)
+        {
+            var key = DefinedNameKey(sourceName);
+            if (existingKeys.Contains(key))
+                continue;
+
+            targetDefinedNames.Add(new XElement(sourceName));
+            existingKeys.Add(key);
+            changed = true;
+        }
+
+        return changed;
+
+        static string DefinedNameKey(XElement element)
+        {
+            var name = element.Attribute("name")?.Value ?? string.Empty;
+            var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
+            return $"{name}\u001f{localSheetId}";
+        }
     }
 
     private static void PreserveWorksheetMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
