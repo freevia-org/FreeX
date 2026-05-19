@@ -8384,6 +8384,82 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetPageBreaks()
+    {
+        var workbook = new Workbook("WorksheetPageBreakRemoval");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page breaks"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPageBreakMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.RowPageBreaks.Remove(20u).Should().BeTrue();
+        loadedSheet.ColumnPageBreaks.Remove(5u).Should().BeTrue();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!.Element(worksheetNs + "rowBreaks")?.Elements(worksheetNs + "brk")
+            .Select(element => (string?)element.Attribute("id"))
+            .Should().NotContain("20");
+        worksheetXml.Root!.Element(worksheetNs + "colBreaks")?.Elements(worksheetNs + "brk")
+            .Select(element => (string?)element.Attribute("id"))
+            .Should().NotContain("5");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RetainsMalformedNativeOnlyWorksheetPageBreaks()
+    {
+        var workbook = new Workbook("WorksheetNativeOnlyPageBreaks");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page breaks"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPageBreakMetadata(source);
+        AddMalformedWorksheetPageBreakMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.RowPageBreaks.Remove(20u).Should().BeTrue();
+        loadedSheet.ColumnPageBreaks.Remove(5u).Should().BeTrue();
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rowBreaks = worksheetXml.Root!.Element(worksheetNs + "rowBreaks")!
+            .Elements(worksheetNs + "brk")
+            .ToList();
+        rowBreaks.Select(element => (string?)element.Attribute("id")).Should().NotContain("20");
+        rowBreaks.Select(element => (string?)element.Attribute("customAttr")).Should().ContainSingle("row-native-only");
+
+        var columnBreaks = worksheetXml.Root!.Element(worksheetNs + "colBreaks")!
+            .Elements(worksheetNs + "brk")
+            .ToList();
+        columnBreaks.Select(element => (string?)element.Attribute("id")).Should().NotContain("5");
+        columnBreaks.Select(element => (string?)element.Attribute("customAttr")).Should().ContainSingle("col-native-only");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPrintOptionsMetadata()
     {
         var workbook = new Workbook("WorksheetPrintOptionsMetadata");
@@ -10942,6 +11018,31 @@ public class FileAdapterSmokeTests
                         new XAttribute("man", "1"),
                         new XAttribute("pt", "1"),
                         new XAttribute("customAttr", "col-native"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMalformedWorksheetPageBreakMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "rowBreaks")!.Add(
+                new XElement(
+                    worksheetNs + "brk",
+                    new XAttribute("id", "0"),
+                    new XAttribute("man", "1"),
+                    new XAttribute("customAttr", "row-native-only")));
+            worksheetXml.Root!.Element(worksheetNs + "colBreaks")!.Add(
+                new XElement(
+                    worksheetNs + "brk",
+                    new XAttribute("id", "0"),
+                    new XAttribute("man", "1"),
+                    new XAttribute("customAttr", "col-native-only")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
