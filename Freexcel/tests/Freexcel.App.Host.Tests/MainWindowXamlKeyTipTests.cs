@@ -156,12 +156,13 @@ public sealed class MainWindowXamlKeyTipTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var optionsButton = document
             .Descendants()
-            .Single(element => element.Attribute("Click")?.Value == "SsOptionsBtn_Click");
+            .Single(element => element.Attribute(x + "Name")?.Value == "SsOptionsNavBtn");
 
-        optionsButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("SsOptionsNavBtn");
+        optionsButton.Attribute("Click")?.Value.Should().Be("SsOptionsBtn_Click");
         optionsButton.ToString().Should().Contain("AutomationProperties.Name=\"Options\"");
         optionsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageOptionsButton\"");
         optionsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Open Freexcel settings");
