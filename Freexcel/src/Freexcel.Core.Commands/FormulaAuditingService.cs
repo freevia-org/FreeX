@@ -1,5 +1,6 @@
 using Freexcel.Core.Model;
 using Freexcel.Core.Formula;
+using System.Globalization;
 
 namespace Freexcel.Core.Commands;
 
@@ -33,7 +34,8 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Num.Code, "Formulas with invalid numbers", "Flag formulas that result in #NUM!."),
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
-        new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!.")
+        new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
+        new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
     ];
 
     public static bool IsSupported(string errorCode) =>
@@ -117,6 +119,8 @@ public sealed class SetFormulaErrorCheckingRuleCommand : IWorkbookCommand
 
 public static class FormulaAuditingService
 {
+    public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
+
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {
         var sheet = workbook.GetSheet(formulaAddress.Sheet);
@@ -227,8 +231,13 @@ public static class FormulaAuditingService
         return result;
     }
 
-    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null) =>
-        FindFormulaErrors(workbook, sheetId)
+    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
+    {
+        var sheetOrder = workbook.Sheets
+            .Select((sheet, index) => (sheet.Id, index))
+            .ToDictionary(x => x.Id, x => x.index);
+
+        var result = FindFormulaErrors(workbook, sheetId)
             .Select(error => new FormulaErrorIssue(
                 error.SheetId,
                 error.SheetName,
@@ -238,6 +247,49 @@ public static class FormulaAuditingService
                 error.FormulaText is null ? null : "=" + error.FormulaText,
                 DescribeError(error.Error)))
             .ToList();
+
+        if (!workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode))
+            result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));
+
+        return result
+            .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
+            .ThenBy(issue => issue.Address.Row)
+            .ThenBy(issue => issue.Address.Col)
+            .ToList();
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindNumbersStoredAsTextIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.HasFormula || cell.IgnoreFormulaError || cell.Value is not TextValue text || !IsNumberStoredAsText(text.Value))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    NumberStoredAsTextErrorCode,
+                    null,
+                    "The number in this cell is formatted as text or preceded by an apostrophe.");
+            }
+        }
+    }
+
+    private static bool IsNumberStoredAsText(string text) =>
+        double.TryParse(
+            text,
+            NumberStyles.Float | NumberStyles.AllowThousands,
+            CultureInfo.InvariantCulture,
+            out var value)
+        && !double.IsNaN(value)
+        && !double.IsInfinity(value);
 
     private static string DescribeError(ErrorValue error) => error.Code switch
     {
