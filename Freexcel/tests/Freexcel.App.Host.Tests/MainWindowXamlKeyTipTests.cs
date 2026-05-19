@@ -159,7 +159,9 @@ public sealed class MainWindowXamlKeyTipTests
 
         var optionsButton = document
             .Descendants()
-            .Single(element => element.Attribute("Click")?.Value == "SsOptionsBtn_Click");
+            .Single(element =>
+                element.Attribute("Click")?.Value == "SsOptionsBtn_Click" &&
+                element.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value == "SsOptionsNavBtn");
 
         optionsButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("SsOptionsNavBtn");
         optionsButton.ToString().Should().Contain("AutomationProperties.Name=\"Options\"");
