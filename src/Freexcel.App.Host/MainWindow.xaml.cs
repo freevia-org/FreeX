@@ -1828,34 +1828,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            ExecuteCopy();
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.X && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            ExecuteCopy(isCut: true);
-            e.Handled = true;
-            return;
-        }
         if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(e.Key, e.SystemKey, Keyboard.Modifiers))
         {
             PasteSpecialBtn_Click(sender, e);
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            ExecutePaste();
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            SelectCurrentRegionOrAll();
             e.Handled = true;
             return;
         }
@@ -1899,19 +1874,6 @@ public partial class MainWindow : Window
                     break;
             }
 
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            ExecuteUndo();
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            ExecuteRedo();
             e.Handled = true;
             return;
         }
@@ -2017,6 +1979,24 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.SaveWorkbook:
                 SaveButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.Copy:
+                ExecuteCopy();
+                break;
+            case KeyboardCommandShortcut.Cut:
+                ExecuteCopy(isCut: true);
+                break;
+            case KeyboardCommandShortcut.Paste:
+                ExecutePaste();
+                break;
+            case KeyboardCommandShortcut.SelectCurrentRegionOrAll:
+                SelectCurrentRegionOrAll();
+                break;
+            case KeyboardCommandShortcut.Undo:
+                ExecuteUndo();
+                break;
+            case KeyboardCommandShortcut.Redo:
+                ExecuteRedo();
                 break;
             case KeyboardCommandShortcut.CreateTable:
                 TableBtn_Click(sender, e);

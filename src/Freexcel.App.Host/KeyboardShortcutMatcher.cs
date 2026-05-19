@@ -88,6 +88,42 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.C)
+        {
+            shortcut = KeyboardCommandShortcut.Copy;
+            return true;
+        }
+
+        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.X)
+        {
+            shortcut = KeyboardCommandShortcut.Cut;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.V)
+        {
+            shortcut = KeyboardCommandShortcut.Paste;
+            return true;
+        }
+
+        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.A)
+        {
+            shortcut = KeyboardCommandShortcut.SelectCurrentRegionOrAll;
+            return true;
+        }
+
+        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.Z)
+        {
+            shortcut = KeyboardCommandShortcut.Undo;
+            return true;
+        }
+
+        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.Y)
+        {
+            shortcut = KeyboardCommandShortcut.Redo;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Control && effectiveKey is Key.T or Key.L)
         {
             shortcut = KeyboardCommandShortcut.CreateTable;
@@ -516,6 +552,12 @@ public enum KeyboardCommandShortcut
     NewWorkbook,
     OpenWorkbook,
     SaveWorkbook,
+    Copy,
+    Cut,
+    Paste,
+    SelectCurrentRegionOrAll,
+    Undo,
+    Redo,
     CreateTable,
     InsertHyperlink,
     FillDown,
