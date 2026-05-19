@@ -1772,12 +1772,6 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if ((e.Key == Key.D1 || e.Key == Key.NumPad1) && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                OpenFormatCellsDialog();
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.TryGetCommandShortcut(e.Key, e.SystemKey, Keyboard.Modifiers, out var commandShortcut))
             {
                 ExecuteCommandShortcut(commandShortcut, sender, e);
@@ -2071,6 +2065,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.SelectNextSheetGroup:
                 SelectAdjacentVisibleSheetGroup(1);
+                break;
+            case KeyboardCommandShortcut.OpenFormatCells:
+                OpenFormatCellsDialog();
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);
