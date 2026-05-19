@@ -273,15 +273,10 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
-    public void UnsupportedXlsxFeatureWarning_NamesPrinterSettings()
+    public void UnsupportedXlsxFeatureKinds_DoNotIncludePrinterSettings()
     {
-        var report = new XlsxFeatureReport([
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.PrinterSettings, "xl/printerSettings/printerSettings1.bin")
-        ]);
-
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
-
-        message.Body.Should().Contain("printer settings");
+        Enum.GetNames<XlsxUnsupportedFeatureKind>().Should().NotContain("PrinterSettings",
+            "printer settings are retained and should not trigger unsupported-feature warnings");
     }
 
     [Fact]
