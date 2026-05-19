@@ -216,6 +216,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
+        source.Should().Contain("private bool ApplyAutoFilterDialogResult(");
+        source.Should().Contain("FilterInputParser.TryParseTopBottom");
+        source.Should().Contain("FilterInputParser.TryParseCriterion");
+        source.Should().Contain("FilterInputParser.TryParseAverage");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));

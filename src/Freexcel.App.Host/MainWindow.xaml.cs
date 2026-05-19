@@ -3353,29 +3353,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
-        {
-            if (!TryExecuteRepeatableCurrentRangeCommand(
-                    "Sort",
-                    plan.Range,
-                    currentRange => new SortCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
-                return;
-            UpdateViewport();
-            return;
-        }
-
-        if (dialog.Result.SelectedValues.Count == 0)
-        {
-            MessageBox.Show("Select at least one filter item.", "AutoFilter", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Filter",
-                plan.Range,
-                currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SelectedValues)))
-            return;
-        UpdateViewport();
+        ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, "AutoFilter");
     }
 
     private void PositionAutoFilterDialogAtActiveCell(Window dialog, CellAddress activeCell)
@@ -5303,21 +5281,34 @@ public partial class MainWindow : Window
         var dialog = new AutoFilterDialog(items) { Owner = this, Title = "Filter" };
         if (dialog.ShowDialog() != true) return;
 
-        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
+        ApplyAutoFilterDialogResult(range, filterColOffset, dialog.Result, "Filter");
+    }
+
+    private bool ApplyAutoFilterDialogResult(
+        GridRange range,
+        uint filterColOffset,
+        AutoFilterDialogResult result,
+        string dialogTitle)
+    {
+        if (result.SortDirection != AutoFilterSortDirection.None)
         {
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Sort",
                     range,
-                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
-                return;
+                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
+                return false;
             UpdateViewport();
-            return;
+            return true;
         }
 
-        var value = dialog.Result.CriteriaText;
+        var value = result.CriteriaText;
         var filterText = value.TrimStart();
+        var criteriaMatchesChecklist = string.Equals(
+            value,
+            string.Join(", ", result.SelectedValues),
+            StringComparison.Ordinal);
         if (string.IsNullOrWhiteSpace(filterText))
-            return;
+            return ApplyChecklistFilter(range, filterColOffset, result.SelectedValues, dialogTitle);
         if (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
             filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
             filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
@@ -5326,8 +5317,8 @@ public partial class MainWindow : Window
             if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var error))
             {
                 MessageBox.Show(error ?? "Enter top:n, bottom:n, toppercent:n, or bottompercent:n.",
-                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                    dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
             }
 
             if (!TryExecuteRepeatableCurrentRangeCommand(
@@ -5336,9 +5327,9 @@ public partial class MainWindow : Window
                     currentRange => percent
                         ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
                         : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
-                return;
+                return false;
             UpdateViewport();
-            return;
+            return true;
         }
 
         if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
@@ -5347,9 +5338,9 @@ public partial class MainWindow : Window
                     "Filter",
                     range,
                     currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
-                return;
+                return false;
             UpdateViewport();
-            return;
+            return true;
         }
 
         if (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
@@ -5373,26 +5364,44 @@ public partial class MainWindow : Window
             if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var error) || criterion is null)
             {
                 MessageBox.Show(error ?? "Enter a supported filter criterion.",
-                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                    dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
             }
 
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Filter",
                     range,
                     currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
-                return;
+                return false;
             UpdateViewport();
-            return;
+            return true;
         }
 
-        var allowedValues = FilterInputParser.ParseAllowedValues(value);
+        var allowedValues = criteriaMatchesChecklist
+            ? result.SelectedValues
+            : FilterInputParser.ParseAllowedValues(value);
+        return ApplyChecklistFilter(range, filterColOffset, allowedValues, dialogTitle);
+    }
+
+    private bool ApplyChecklistFilter(
+        GridRange range,
+        uint filterColOffset,
+        IReadOnlyList<string> allowedValues,
+        string dialogTitle)
+    {
+        if (allowedValues.Count == 0)
+        {
+            MessageBox.Show("Select at least one filter item.", dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
-            return;
+            return false;
         UpdateViewport();
+        return true;
     }
 
     private void CfRuleButton_Click(object sender, RoutedEventArgs e)
