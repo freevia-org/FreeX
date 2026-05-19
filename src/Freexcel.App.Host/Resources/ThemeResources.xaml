@@ -2,6 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <SolidColorBrush x:Key="FreexcelGreenBrush" Color="#217346"/>
     <SolidColorBrush x:Key="FreexcelGreenDarkBrush" Color="#185C37"/>
+    <SolidColorBrush x:Key="FreexcelTitleBarBrush" Color="#217346"/>
+    <SolidColorBrush x:Key="FreexcelTitleBarHoverBrush" Color="#2A8C57"/>
     <SolidColorBrush x:Key="FreexcelGreenSoftBrush" Color="#EAF4EF"/>
     <SolidColorBrush x:Key="FreexcelGreenPressedBrush" Color="#D6EADE"/>
     <SolidColorBrush x:Key="FreexcelTextBrush" Color="#1F1F1F"/>

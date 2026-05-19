@@ -7,6 +7,7 @@
         xmlns:local="clr-namespace:Freexcel.App.Host"
         mc:Ignorable="d"
         Title="Freexcel"
+        Icon="Resources/Freexcel.ico"
         Height="720" Width="1280"
         WindowState="Maximized"
         Background="{DynamicResource FreexcelSheetSurfaceBrush}"
@@ -26,7 +27,7 @@
             <ResourceDictionary Source="Resources/ThemeResources.xaml"/>
             <ResourceDictionary Source="Resources/IconResources.xaml"/>
         </ResourceDictionary.MergedDictionaries>
-
+        <SolidColorBrush x:Key="FreexcelTitleBarBrush" Color="#217346"/>
         <!-- ── Ribbon button styles ─────────────────────────────────────── -->
 
         <Style x:Key="RibbonBtn" TargetType="Button">
@@ -179,6 +180,7 @@
             <Setter Property="Background"   Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="BorderBrush"  Value="Transparent"/>
+            <Setter Property="Foreground"   Value="{StaticResource FreexcelWhiteBrush}"/>
             <Setter Property="FontFamily"   Value="Segoe MDL2 Assets"/>
             <Setter Property="FontSize"     Value="10"/>
             <Setter Property="Width"        Value="46"/>
@@ -410,14 +412,16 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 0  Title bar / Quick Access Toolbar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Background="{StaticResource FreexcelChromeSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
+        <Border Grid.Row="0" Background="{StaticResource FreexcelTitleBarBrush}" BorderBrush="{StaticResource FreexcelGreenDarkBrush}"
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
                 <Border DockPanel.Dock="Left" Width="22" Height="22"
-                        Background="{StaticResource FreexcelGreenBrush}" CornerRadius="2" Margin="0,0,8,0"
+                        Background="{StaticResource FreexcelWhiteBrush}" CornerRadius="2" Margin="0,0,8,0"
                         VerticalAlignment="Center">
-                    <TextBlock Text="F" Style="{StaticResource FreexcelAppMarkText}"/>
+                    <TextBlock Text="F" Foreground="{StaticResource FreexcelGreenBrush}" FontFamily="Segoe UI"
+                               FontWeight="SemiBold" FontSize="12"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <!-- QAT buttons -->
                 <Button x:Name="SaveQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
@@ -427,7 +431,7 @@
                         local:RibbonTooltip.Title="Save"
                         local:RibbonTooltip.KeyTip="1"
                         local:RibbonTooltip.Description="Save the workbook.">
-                    <TextBlock Text="&#xE74E;" Style="{StaticResource FreexcelQatIcon}"/>
+                    <TextBlock Text="&#xE74E;" Style="{StaticResource FreexcelQatOnAccentIcon}"/>
                 </Button>
                 <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource RibbonBtn}" FontSize="14"
@@ -436,7 +440,7 @@
                         local:RibbonTooltip.Title="Undo"
                         local:RibbonTooltip.KeyTip="2"
                         local:RibbonTooltip.Description="Undo the last action.">
-                    <TextBlock Text="&#xE7A7;" Style="{StaticResource FreexcelQatIcon}"/>
+                    <TextBlock Text="&#xE7A7;" Style="{StaticResource FreexcelQatOnAccentIcon}"/>
                 </Button>
                 <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,8,0"
                         Style="{StaticResource RibbonBtn}" FontSize="14"
@@ -445,7 +449,7 @@
                         local:RibbonTooltip.Title="Redo"
                         local:RibbonTooltip.KeyTip="3"
                         local:RibbonTooltip.Description="Redo the last undone action.">
-                    <TextBlock Text="&#xE7A6;" Style="{StaticResource FreexcelQatIcon}"/>
+                    <TextBlock Text="&#xE7A6;" Style="{StaticResource FreexcelQatOnAccentIcon}"/>
                 </Button>
                 <!-- System buttons — must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
@@ -461,7 +465,7 @@
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="12" Foreground="{StaticResource FreexcelTextBrush}"/>
+                           FontSize="12" Foreground="{StaticResource FreexcelWhiteBrush}" FontWeight="SemiBold"/>
             </DockPanel>
         </Border>
 

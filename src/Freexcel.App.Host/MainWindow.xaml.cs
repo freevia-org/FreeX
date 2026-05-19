@@ -260,11 +260,30 @@ public partial class MainWindow : Window
             : ribbonScrollViewer?.ViewportWidth;
         if (availableWidth is null or <= 0)
             availableWidth = RibbonTabs.ActualWidth > 0 ? RibbonTabs.ActualWidth : activePanel.ActualWidth;
+        if (RibbonTabs.ActualWidth > 0)
+            availableWidth = Math.Min(availableWidth.Value, Math.Max(0, RibbonTabs.ActualWidth - 12));
 
+        var fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
         var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
-        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups);
-        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
+        ApplyHomeRibbonBreakpointOverrides(availableWidth.Value, groups, plannedStates);
+        ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
 
+        while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
+               CollapseOneMoreRibbonGroup(plannedStates))
+        {
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+        }
+
+        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        _ribbonCompact = compacted;
+    }
+
+    private static void ApplyRibbonAdaptiveStates(
+        IReadOnlyList<FrameworkElement> groups,
+        IReadOnlyList<Button> collapsedButtons,
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates)
+    {
         for (var i = 0; i < groups.Count; i++)
         {
             collapsedButtons[i].Visibility = Visibility.Collapsed;
@@ -287,8 +306,54 @@ public partial class MainWindow : Window
                     break;
             }
         }
+    }
 
-        _ribbonCompact = compacted;
+    private static bool RibbonRowOverflows(StackPanel activePanel, double availableWidth)
+    {
+        activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
+    }
+
+    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states)
+    {
+        for (var i = states.Length - 1; i >= 0; i--)
+        {
+            if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+
+            if (i == 0 && states.Length > 1)
+                return false;
+
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void ApplyHomeRibbonBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<FrameworkElement> groups,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth > 1320)
+            return;
+
+        var stylesIndex = -1;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (string.Equals(GetRibbonGroupName(groups[i]), "Styles", StringComparison.Ordinal))
+            {
+                stylesIndex = i;
+                break;
+            }
+        }
+
+        if (stylesIndex < 0)
+            return;
+
+        for (var i = stylesIndex; i < states.Length; i++)
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
@@ -309,6 +374,25 @@ public partial class MainWindow : Window
         SetRibbonGroupCompact(group, level);
         group.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return Math.Max(0, group.DesiredSize.Width);
+    }
+
+    private static double MeasureRibbonFixedChromeWidth(StackPanel panel)
+    {
+        var fixedWidth = 0.0;
+        foreach (var child in panel.Children.OfType<FrameworkElement>())
+        {
+            if (child.Visibility != Visibility.Visible ||
+                child is Grid ||
+                IsRibbonCollapsedGroupButton(child))
+            {
+                continue;
+            }
+
+            child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            fixedWidth += child.DesiredSize.Width;
+        }
+
+        return fixedWidth;
     }
 
     private static List<Button> InsertRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
@@ -570,7 +654,7 @@ public partial class MainWindow : Window
                     button.Width = level switch
                     {
                         RibbonCompactLevel.Full => fullWidth,
-                        RibbonCompactLevel.SmallWithLabels => Math.Max(compactWidth + 28, Math.Ceiling(fullWidth * 0.72)),
+                        RibbonCompactLevel.SmallWithLabels => fullWidth,
                         _ => compactWidth
                     };
                 }
@@ -669,8 +753,18 @@ public partial class MainWindow : Window
         NormalizeRibbonCommandButtons();
         ConfigureInsertRibbonSurface();
         AlignRibbonIconColumns();
+        DisableRibbonScrollBars();
         ApplyToolbarDropdownWhiteBackgrounds();
         UpdateRibbonCompactMode(force: forceCompact);
+    }
+
+    private void DisableRibbonScrollBars()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
@@ -1710,7 +1804,108 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.OpenActiveDropdown:
                 OpenActiveDropdown();
                 break;
+            case KeyboardCommandShortcut.ScrollActiveCellIntoView:
+                ScrollActiveCellIntoView();
+                break;
+            case KeyboardCommandShortcut.CycleSelectionCorner:
+                CycleSelectionCorner();
+                break;
+            case KeyboardCommandShortcut.SelectDirectPrecedents:
+                SelectFormulaAuditCells(selectDependents: false, includeTransitive: false);
+                break;
+            case KeyboardCommandShortcut.SelectDirectDependents:
+                SelectFormulaAuditCells(selectDependents: true, includeTransitive: false);
+                break;
+            case KeyboardCommandShortcut.SelectAllPrecedents:
+                SelectFormulaAuditCells(selectDependents: false, includeTransitive: true);
+                break;
+            case KeyboardCommandShortcut.SelectAllDependents:
+                SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
+                break;
         }
+    }
+
+    private void SelectFormulaAuditCells(bool selectDependents, bool includeTransitive)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var activeCell = _selectionCursor ?? _selectionAnchor ?? range.Start;
+        var matches = GetFormulaAuditMatches(activeCell, selectDependents, includeTransitive)
+            .Where(address => address.Sheet == _currentSheetId)
+            .Distinct()
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            StatusReadyText.Visibility = Visibility.Visible;
+            var depth = includeTransitive ? "traceable" : "direct";
+            StatusReadyText.Text = selectDependents
+                ? $"No {depth} dependents on this sheet"
+                : $"No {depth} precedents on this sheet";
+            return;
+        }
+
+        var compressedRanges = SelectionRangeService.CompressAddresses(matches);
+        _selectionAnchor = matches[0];
+        _selectionCursor = matches[0];
+        SheetGrid.SelectedRange = new GridRange(matches[0], matches[0]);
+        SheetGrid.SelectedRanges = compressedRanges;
+        CellAddressBox.Text = compressedRanges.Count == 1
+            ? FormatRangeReference(compressedRanges[0].Start, compressedRanges[0].End)
+            : $"{matches.Count} cells";
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(matches[0]), matches[0]);
+        EnsureCellVisible(matches[0]);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private IReadOnlyList<CellAddress> GetFormulaAuditMatches(
+        CellAddress activeCell,
+        bool selectDependents,
+        bool includeTransitive)
+    {
+        if (!includeTransitive)
+        {
+            return selectDependents
+                ? FormulaAuditingService.GetDirectDependents(_workbook, activeCell)
+                : FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell);
+        }
+
+        var arrows = selectDependents
+            ? FormulaAuditingService.GetDependentTraceArrows(_workbook, activeCell)
+            : FormulaAuditingService.GetPrecedentTraceArrows(_workbook, activeCell);
+        return arrows
+            .Select(arrow => selectDependents ? arrow.To : arrow.From)
+            .ToList();
+    }
+
+    private void CycleSelectionCorner()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var currentCorner = _selectionCursor ?? _selectionAnchor ?? range.Start;
+        var nextCorner = SelectionCornerNavigator.GetNextCorner(range, currentCorner);
+        _selectionAnchor = nextCorner;
+        _selectionCursor = nextCorner;
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner);
+        EnsureCellVisible(nextCorner);
+        FocusSheetGridIfNeeded();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void ScrollActiveCellIntoView()
+    {
+        if (SheetGrid.SelectedRange?.Start is not { } activeCell)
+            return;
+
+        EnsureCellVisible(activeCell);
+        FocusSheetGridIfNeeded();
     }
 
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
@@ -6137,9 +6332,9 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         ApplyStyleDiff(new StyleDiff(FontSize: fontSize));
 
-        var height = Math.Max(18.0, Math.Ceiling(fontSize * 96.0 / 72.0 + 5.0));
+        var newHeight = Math.Max(18.0, Math.Ceiling(fontSize * 96.0 / 72.0 + 5.0));
         if (!TryExecuteGroupedSheetCommand("Auto Fit Row Height", sheetId =>
-                new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)))
+                new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, newHeight)))
             return;
 
         UpdateViewport();
@@ -6480,10 +6675,13 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new FailedWorkbookCommand("Sheet not found.");
 
-        var height = AutoFitSizingService.EstimateRowHeight(
-            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Rows),
+        var plans = AutoFitPlanner.PlanRowHeights(
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
-        return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height);
+
+        return CreateAutoFitRowHeightCommand(sheetId, plans);
     }
 
     private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
@@ -6492,37 +6690,44 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new FailedWorkbookCommand("Sheet not found.");
 
-        var width = AutoFitSizingService.EstimateColumnWidth(
-            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Columns),
+        var plans = AutoFitPlanner.PlanColumnWidths(
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultColumnWidth);
-        return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width);
+
+        return CreateAutoFitColumnWidthCommand(sheetId, plans);
     }
 
-    private enum AutoFitAxis
+    private static IWorkbookCommand CreateAutoFitRowHeightCommand(
+        SheetId sheetId,
+        IReadOnlyList<AutoFitSizePlan> plans)
     {
-        Rows,
-        Columns
+        if (plans.Count == 1)
+            return new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
+
+        return new CompositeWorkbookCommand(
+            "Auto Row Height",
+            plans.Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
     }
 
-    private IEnumerable<string> CollectAutoFitDisplayTexts(Sheet sheet, GridRange range, AutoFitAxis axis)
+    private static IWorkbookCommand CreateAutoFitColumnWidthCommand(
+        SheetId sheetId,
+        IReadOnlyList<AutoFitSizePlan> plans)
     {
-        var usedRange = sheet.GetUsedRange();
-        if (usedRange is null)
-            yield break;
+        if (plans.Count == 1)
+            return new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
 
-        var rowStart = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.Start.Row : range.Start.Row;
-        var rowEnd = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.End.Row : range.End.Row;
-        var colStart = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.Start.Col : range.Start.Col;
-        var colEnd = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.End.Col : range.End.Col;
+        return new CompositeWorkbookCommand(
+            "Auto Column Width",
+            plans.Select(plan => (IWorkbookCommand)new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
+    }
 
-        foreach (var (address, cell) in sheet.GetUsedCells())
-        {
-            if (address.Row < rowStart || address.Row > rowEnd ||
-                address.Col < colStart || address.Col > colEnd)
-                continue;
-
-            yield return GetAutoFitDisplayText(sheet, cell);
-        }
+    private string? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
+    {
+        return sheet.GetCell(row, col) is { } cell
+            ? GetAutoFitDisplayText(sheet, cell)
+            : null;
     }
 
     private string GetAutoFitDisplayText(Sheet sheet, Cell cell)
