@@ -3181,7 +3181,7 @@ public partial class MainWindow : Window
 
         _suppressValidationDropdownCommit = true;
         _validationDropdown!.ItemsSource = items;
-        var currentText = FormatCellValue(sheet.GetCell(range.Start)?.Value);
+        var currentText = SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetCell(range.Start)?.Value);
         _validationDropdown.SelectedItem = items.FirstOrDefault(item =>
             string.Equals(item, currentText, StringComparison.OrdinalIgnoreCase));
         _suppressValidationDropdownCommit = false;
@@ -3368,9 +3368,6 @@ public partial class MainWindow : Window
             CommitEdit();
         }
     }
-
-    private static string FormatCellValue(ScalarValue? value) =>
-        SpreadsheetDisplayFormatter.FormatCellValue(value);
 
     private void FocusSheetGridIfNeeded()
     {
@@ -8604,7 +8601,7 @@ public partial class MainWindow : Window
         var start = pivotTable.SourceRange.Start;
         for (var col = start.Col; col <= pivotTable.SourceRange.End.Col; col++)
         {
-            var caption = FormatCellValue(sourceSheet.GetValue(start.Row, col)).Trim();
+            var caption = SpreadsheetDisplayFormatter.FormatCellValue(sourceSheet.GetValue(start.Row, col)).Trim();
             headers.Add(string.IsNullOrWhiteSpace(caption) ? $"Column {headers.Count + 1}" : caption);
         }
 
@@ -8618,7 +8615,7 @@ public partial class MainWindow : Window
         var values = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
         for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
         {
-            var text = FormatCellValue(sourceSheet.GetValue(row, sourceColumn)).Trim();
+            var text = SpreadsheetDisplayFormatter.FormatCellValue(sourceSheet.GetValue(row, sourceColumn)).Trim();
             values.Add(string.IsNullOrWhiteSpace(text) ? "(blank)" : text);
         }
 
