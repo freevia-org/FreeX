@@ -1828,18 +1828,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            FindButton_Click(sender, e);
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            ReplaceButton_Click(sender, e);
-            e.Handled = true;
-            return;
-        }
         if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             ExecuteCopy();
@@ -2068,6 +2056,12 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.OpenFormatCells:
                 OpenFormatCellsDialog();
+                break;
+            case KeyboardCommandShortcut.Find:
+                FindButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.Replace:
+                ReplaceButton_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);
