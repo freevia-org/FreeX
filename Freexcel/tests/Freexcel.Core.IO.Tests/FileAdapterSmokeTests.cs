@@ -9211,6 +9211,15 @@ public class FileAdapterSmokeTests
             ChartStyleId = 42,
             Uses1904DateSystem = true,
             Language = "en-US",
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                OverrideMappings =
+                {
+                    ["bg1"] = "lt1",
+                    ["tx1"] = "dk1",
+                    ["accent1"] = "accent2"
+                }
+            },
             PrintSettings = new ChartPrintSettingsModel
             {
                 PageMargins = new ChartPageMarginsModel
@@ -9255,8 +9264,14 @@ public class FileAdapterSmokeTests
         {
             var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
             chartXml.Root!.Element(chartNs + "date1904")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "lang")!.Attribute("val")!.Value.Should().Be("en-US");
+            var colorMap = chartXml.Root.Element(chartNs + "clrMapOvr")!
+                .Element(drawingNs + "overrideClrMapping")!;
+            colorMap.Attribute("bg1")!.Value.Should().Be("lt1");
+            colorMap.Attribute("tx1")!.Value.Should().Be("dk1");
+            colorMap.Attribute("accent1")!.Value.Should().Be("accent2");
             var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
             var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
             pageMargins.Attribute("l")!.Value.Should().Be("0.7");
@@ -9292,6 +9307,7 @@ public class FileAdapterSmokeTests
         loadedChart.ChartStyleId.Should().Be(42);
         loadedChart.Uses1904DateSystem.Should().BeTrue();
         loadedChart.Language.Should().Be("en-US");
+        loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
         loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
         loadedChart.RoundedCorners.Should().BeTrue();
         loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
