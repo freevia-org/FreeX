@@ -2297,6 +2297,10 @@
                                         local:RibbonTooltip.Title="Text to Columns"
                                         local:RibbonTooltip.KeyTip="E"
                                         local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space."/>
+                                <Button Content="Flash Fill"        Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
+                                        local:RibbonTooltip.Title="Flash Fill"
+                                        local:RibbonTooltip.KeyTip="FF"
+                                        local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns."/>
                                 <Button Content="Remove Duplicates" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
                                         local:RibbonTooltip.Title="Remove Duplicates"
                                         local:RibbonTooltip.KeyTip="M"
@@ -2436,7 +2440,7 @@
                                         Click="AccessibilityCheckerBtn_Click"
                                         local:RibbonTooltip.Title="Check Accessibility"
                                         local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Find merged cells and objects missing alternate text."/>
+                                        local:RibbonTooltip.Description="Find merged cells, objects missing alternate text, and charts without titles."/>
                                 <Button Content="Alt Text" Width="96" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -2458,6 +2462,10 @@
                                             local:RibbonTooltip.Title="New Note"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Add a simple cell note to the selected cell; threaded comments are not implemented."/>
+                                    <Button Content="Edit"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
+                                            local:RibbonTooltip.Title="Edit Note"
+                                            local:RibbonTooltip.KeyTip="E"
+                                            local:RibbonTooltip.Description="Edit the simple cell note on the selected cell; threaded comments are not implemented."/>
                                     <Button Content="Delete" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteCommentBtn_Click"
                                             local:RibbonTooltip.Title="Delete Note"
                                             local:RibbonTooltip.KeyTip="D"
@@ -2465,15 +2473,15 @@
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Prev"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
-                                            local:RibbonTooltip.Title="Previous Comment"
+                                            local:RibbonTooltip.Title="Previous Note"
                                             local:RibbonTooltip.KeyTip="P"
-                                            local:RibbonTooltip.Description="Navigate to the previous comment in the sheet."/>
+                                            local:RibbonTooltip.Description="Navigate to the previous simple cell note in the sheet."/>
                                     <Button Content="Next"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
-                                            local:RibbonTooltip.Title="Next Comment"
+                                            local:RibbonTooltip.Title="Next Note"
                                             local:RibbonTooltip.KeyTip="N"
-                                            local:RibbonTooltip.Description="Navigate to the next comment in the sheet."/>
+                                            local:RibbonTooltip.Description="Navigate to the next simple cell note in the sheet."/>
                                 </StackPanel>
-                                <Button Content="Show Comments" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
+                                <Button Content="Show Notes" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
                                         local:RibbonTooltip.Title="Show Notes"
                                         local:RibbonTooltip.KeyTip="H"
                                         local:RibbonTooltip.Description="Open a list of simple cell notes on the active sheet."/>
