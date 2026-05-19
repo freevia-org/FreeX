@@ -4722,6 +4722,26 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private bool TryGetFirstChartForDialog(string caption, string missingMessage, out ChartModel chart)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        chart = sheet?.Charts.FirstOrDefault()!;
+        if (chart is not null)
+            return true;
+
+        ShowCommandError(new CommandOutcome(false, missingMessage), caption);
+        return false;
+    }
+
+    private bool ApplyChartLayoutDialogResult(string caption, ChartModel chart, ChartLayoutOptions options)
+    {
+        if (!TryExecuteCommand(new SetChartLayoutCommand(_currentSheetId, chart.Id, options), caption))
+            return false;
+
+        UpdateViewport();
+        return true;
+    }
+
     private bool TryExecuteGroupedSheetCommand(
         string title,
         Func<SheetId, IWorkbookCommand> createCommand,
@@ -8990,30 +9010,24 @@ public partial class MainWindow : Window
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Data Labels",
-                "Insert or select a chart before changing data labels.",
-                null,
-                null,
-                chart => new ChartLayoutOptions(ShowDataLabels: !chart.ShowDataLabels)))
+        ShowChartDataLabelsDialog();
+    }
+
+    private void ShowChartDataLabelsDialog()
+    {
+        if (!TryGetFirstChartForDialog("Format Data Labels", "Insert or select a chart before changing data labels.", out var chart))
             return;
 
-        UpdateViewport();
+        var dialog = new ChartDataLabelsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Data Labels", chart, dialog.Result.ToOptions());
     }
 
     private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Data Label Position",
-                "Insert or select a chart before changing data label positions.",
-                null,
-                null,
-                chart => new ChartLayoutOptions(
-                    ShowDataLabels: true,
-                    DataLabelPosition: ChartOptionCycler.NextDataLabelPosition(chart.DataLabelPosition))))
-            return;
-
-        UpdateViewport();
+        ShowChartDataLabelsDialog();
     }
 
     private void ChartDataLabelCategoryBtn_Click(object sender, RoutedEventArgs e)
@@ -9272,30 +9286,30 @@ public partial class MainWindow : Window
 
     private void ChartTrendlineBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Trendline",
-                "Insert or select a chart before changing trendlines.",
-                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                "Linear trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
-                chart => new ChartLayoutOptions(ShowLinearTrendline: !chart.ShowLinearTrendline)))
+        ShowChartTrendlineDialog();
+    }
+
+    private void ShowChartTrendlineDialog()
+    {
+        if (!TryGetFirstChartForDialog("Format Trendline", "Insert or select a chart before changing trendlines.", out var chart))
             return;
 
-        UpdateViewport();
+        if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
+        {
+            ShowCommandError(new CommandOutcome(false, "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts."), "Format Trendline");
+            return;
+        }
+
+        var dialog = new ChartTrendlineOptionsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Trendline", chart, dialog.Result.ToOptions());
     }
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteRepeatableChartLayout(
-                "Trendline Type",
-                "Insert or select a chart before changing trendline type.",
-                chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
-                chart => new ChartLayoutOptions(
-                    ShowLinearTrendline: true,
-                    TrendlineType: ChartOptionCycler.NextTrendlineType(chart.TrendlineType))))
-            return;
-
-        UpdateViewport();
+        ShowChartTrendlineDialog();
     }
 
     private void ChartTrendlinePeriodBtn_Click(object sender, RoutedEventArgs e)
@@ -9411,32 +9425,32 @@ public partial class MainWindow : Window
 
     private void ChartXAxisBoundsBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisBounds(useXAxis: true);
+        ShowChartAxisFormatDialog(useXAxis: true);
     }
 
     private void ChartYAxisBoundsBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisBounds(useXAxis: false);
+        ShowChartAxisFormatDialog(useXAxis: false);
     }
 
     private void ChartXAxisLogBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisLogScale(useXAxis: true);
+        ShowChartAxisFormatDialog(useXAxis: true);
     }
 
     private void ChartYAxisLogBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisLogScale(useXAxis: false);
+        ShowChartAxisFormatDialog(useXAxis: false);
     }
 
     private void ChartXAxisNumberFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisNumberFormat(useXAxis: true);
+        ShowChartAxisFormatDialog(useXAxis: true);
     }
 
     private void ChartYAxisNumberFormatBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisNumberFormat(useXAxis: false);
+        ShowChartAxisFormatDialog(useXAxis: false);
     }
 
     private void ChartXAxisGridlinesBtn_Click(object sender, RoutedEventArgs e)
@@ -9461,12 +9475,12 @@ public partial class MainWindow : Window
 
     private void ChartXAxisTickBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisTicks(useXAxis: true);
+        ShowChartAxisFormatDialog(useXAxis: true);
     }
 
     private void ChartYAxisTickBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisTicks(useXAxis: false);
+        ShowChartAxisFormatDialog(useXAxis: false);
     }
 
     private void ChartXAxisLabelsBtn_Click(object sender, RoutedEventArgs e)
@@ -9501,12 +9515,25 @@ public partial class MainWindow : Window
 
     private void ChartXAxisLineBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisLine(useXAxis: true);
+        ShowChartAxisFormatDialog(useXAxis: true);
     }
 
     private void ChartYAxisLineBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleChartAxisLine(useXAxis: false);
+        ShowChartAxisFormatDialog(useXAxis: false);
+    }
+
+    private void ShowChartAxisFormatDialog(bool useXAxis)
+    {
+        var caption = useXAxis ? "Format X Axis" : "Format Y Axis";
+        if (!TryGetFirstChartForDialog(caption, "Insert or select a chart before changing axis options.", out var chart))
+            return;
+
+        var dialog = new ChartAxisFormatDialog(chart, useXAxis) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult(useXAxis ? "Format X Axis" : "Format Y Axis", chart, dialog.Result.ToOptions());
     }
 
     private void ToggleChartAxisTicks(bool useXAxis)
@@ -9841,13 +9868,7 @@ public partial class MainWindow : Window
 
     private void ChartSeriesColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleSeriesFormat(
-            "Series Color",
-            format => format with
-            {
-                FillColor = ChartOptionCycler.NextSeriesColor(format.FillColor),
-                StrokeColor = ChartOptionCycler.NextSeriesColor(format.StrokeColor ?? format.FillColor)
-            });
+        ShowChartSeriesFormatDialog();
     }
 
     private void ChartSeriesWidthBtn_Click(object sender, RoutedEventArgs e)
@@ -9878,22 +9899,26 @@ public partial class MainWindow : Window
 
     private void ChartSeriesMarkerBtn_Click(object sender, RoutedEventArgs e)
     {
-        ToggleSeriesFormat(
-            "Series Marker",
-            format => format with
-            {
-                MarkerStyle = format.MarkerStyle switch
-                {
-                    null => ChartMarkerStyle.Circle,
-                    ChartMarkerStyle.Circle => ChartMarkerStyle.Square,
-                    ChartMarkerStyle.Square => ChartMarkerStyle.Diamond,
-                    ChartMarkerStyle.Diamond => ChartMarkerStyle.Triangle,
-                    ChartMarkerStyle.Triangle => ChartMarkerStyle.None,
-                    _ => null
-                }
-            },
-            chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
-            "Series marker shape and size are currently supported for line and scatter charts.");
+        ShowChartSeriesFormatDialog();
+    }
+
+    private void ShowChartSeriesFormatDialog()
+    {
+        if (!TryGetFirstChartForDialog("Format Data Series", "Insert or select a chart before changing series formatting.", out var chart))
+            return;
+
+        var seriesCount = ChartOptionCycler.GetSeriesCount(chart);
+        if (seriesCount <= 0)
+        {
+            ShowCommandError(new CommandOutcome(false, "Add data series before changing series formatting."), "Format Data Series");
+            return;
+        }
+
+        var dialog = new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart)) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult("Format Data Series", chart, dialog.Result.ToOptions(chart.SeriesFormats));
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)

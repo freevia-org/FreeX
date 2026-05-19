@@ -314,6 +314,40 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "QuickAnalysisPlanner.cs"));
+
+        source.Should().Contain("ToolTip = option.PreviewText");
+        planner.Should().Contain("QuickAnalysisPreviewKind");
+    }
+
+    [Fact]
+    public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
+        source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
+        source.Should().Contain("TryGetCellOverlayRect(activeCell)");
+        source.Should().Contain("SheetGrid.PointToScreen");
+        source.Should().Contain("WindowStartupLocation.Manual");
+    }
+
+    [Fact]
+    public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
+        source.Should().Contain("private bool ApplyAutoFilterDialogResult(");
+        source.Should().Contain("FilterInputParser.TryParseTopBottom");
+        source.Should().Contain("FilterInputParser.TryParseCriterion");
+        source.Should().Contain("FilterInputParser.TryParseAverage");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
@@ -458,6 +492,21 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ApplyPivotOptions(pivotTable, dialog.Result)");
         source.Should().NotContain("var reportLayout = pivotTable.ReportLayout switch");
         source.Should().NotContain("var styleName = pivotTable.StyleName switch");
+    }
+
+    [Fact]
+    public void ChartFormattingCommands_OpenExplicitFormatDialogs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new ChartDataLabelsDialog(chart)");
+        source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");
+        source.Should().Contain("new ChartAxisFormatDialog(chart, useXAxis)");
+        source.Should().Contain("new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart))");
+        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Labels\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Trendline\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(useXAxis ? \"Format X Axis\" : \"Format Y Axis\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Series\"");
     }
 
     [Fact]

@@ -9,6 +9,7 @@ public sealed class PasteSpecialDialogTests
     [Theory]
     [InlineData("_rbComments", PasteSpecialDialogMode.Comments)]
     [InlineData("_rbValidation", PasteSpecialDialogMode.Validation)]
+    [InlineData("_rbAllUsingSourceTheme", PasteSpecialDialogMode.AllUsingSourceTheme)]
     [InlineData("_rbAllExceptBorders", PasteSpecialDialogMode.AllExceptBorders)]
     [InlineData("_rbFormulasAndNumberFormats", PasteSpecialDialogMode.FormulasAndNumberFormats)]
     [InlineData("_rbValuesAndNumberFormats", PasteSpecialDialogMode.ValuesAndNumberFormats)]
