@@ -3742,6 +3742,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         MergeContentTypes(sourceArchive, generatedArchive);
         MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        PreserveDocumentProperties(sourceArchive, generatedArchive);
         PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive);
         PreserveStylesheetMetadata(sourceArchive, generatedArchive);
         PreservePivotXmlReferences(sourceArchive, generatedArchive);
@@ -3752,6 +3753,84 @@ public sealed class XlsxFileAdapter : IFileAdapter
         PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
         PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
+    }
+
+    private static void PreserveDocumentProperties(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        PreserveDocumentPropertyElements(
+            sourceArchive,
+            targetArchive,
+            "docProps/core.xml",
+            [
+                XName.Get("subject", "http://purl.org/dc/elements/1.1/"),
+                XName.Get("keywords", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                XName.Get("category", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                XName.Get("contentStatus", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                XName.Get("language", "http://purl.org/dc/elements/1.1/"),
+                XName.Get("version", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties")
+            ]);
+
+        PreserveDocumentPropertyElements(
+            sourceArchive,
+            targetArchive,
+            "docProps/app.xml",
+            [
+                XName.Get("Application", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("Manager", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("PresentationFormat", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("Template", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")
+            ]);
+    }
+
+    private static void PreserveDocumentPropertyElements(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string partName,
+        IReadOnlyCollection<XName> stableElementNames)
+    {
+        var sourceEntry = sourceArchive.GetEntry(partName);
+        var targetEntry = targetArchive.GetEntry(partName);
+        if (sourceEntry is null)
+            return;
+
+        if (targetEntry is null)
+        {
+            CopyZipEntry(sourceEntry, targetArchive);
+            return;
+        }
+
+        var sourceXml = LoadXml(sourceEntry);
+        var targetXml = LoadXml(targetEntry);
+        var sourceRoot = sourceXml.Root;
+        var targetRoot = targetXml.Root;
+        if (sourceRoot is null || targetRoot is null)
+            return;
+
+        var changed = false;
+        foreach (var stableElementName in stableElementNames)
+        {
+            var sourceElement = sourceRoot.Element(stableElementName);
+            if (sourceElement is null)
+                continue;
+
+            var targetElement = targetRoot.Element(stableElementName);
+            if (targetElement is null)
+            {
+                targetRoot.Add(new XElement(sourceElement));
+                changed = true;
+                continue;
+            }
+
+            if (XNode.DeepEquals(targetElement, sourceElement))
+                continue;
+
+            targetElement.ReplaceWith(new XElement(sourceElement));
+            changed = true;
+        }
+
+        if (changed)
+            ReplacePackageXml(targetArchive, partName, targetXml);
     }
 
     private static void PreserveStylesheetMetadata(ZipArchive sourceArchive, ZipArchive targetArchive)
