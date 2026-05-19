@@ -4,8 +4,10 @@ public static class RibbonAdaptiveLayoutPlanner
 {
     public static IReadOnlyList<RibbonAdaptiveGroupState> Plan(
         double availableWidth,
-        IReadOnlyList<RibbonAdaptiveGroup> groups)
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        double fixedChromeWidth = 0)
     {
+        availableWidth = Math.Max(0, availableWidth - Math.Max(0, fixedChromeWidth));
         var states = Enumerable
             .Repeat(RibbonAdaptiveGroupState.Full, groups.Count)
             .ToArray();
