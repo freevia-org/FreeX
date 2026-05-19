@@ -990,8 +990,11 @@
                                             </MenuItem>
                                             <MenuItem Header="Top/Bottom Rules" local:RibbonTooltip.KeyTip="T">
                                                 <MenuItem Header="Top 10 Items..."        local:RibbonTooltip.KeyTip="TT" Click="CfTop10MenuItem_Click"/>
+                                                <MenuItem Header="Top 10%..."             local:RibbonTooltip.KeyTip="TP" Click="CfTop10PercentMenuItem_Click"/>
                                                 <MenuItem Header="Bottom 10 Items..."     local:RibbonTooltip.KeyTip="TB" Click="CfBottom10MenuItem_Click"/>
+                                                <MenuItem Header="Bottom 10%..."          local:RibbonTooltip.KeyTip="BP" Click="CfBottom10PercentMenuItem_Click"/>
                                                 <MenuItem Header="Above Average..."       local:RibbonTooltip.KeyTip="TA" Click="CfAboveAvgMenuItem_Click"/>
+                                                <MenuItem Header="Below Average..."       local:RibbonTooltip.KeyTip="TL" Click="CfBelowAvgMenuItem_Click"/>
                                             </MenuItem>
                                             <MenuItem Header="Data Bars..."               local:RibbonTooltip.KeyTip="D" Click="CfDataBarMenuItem_Click"/>
                                             <MenuItem Header="Color Scales..."            local:RibbonTooltip.KeyTip="C" Click="CfColorScaleMenuItem_Click"/>
@@ -2411,7 +2414,7 @@
                                         Click="SpellCheckBtn_Click"
                                         local:RibbonTooltip.Title="Spelling"
                                         local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Find known misspellings in text cells on the active sheet."/>
+                                        local:RibbonTooltip.Description="Find known misspellings in text cells on the active sheet with replace, replace all, and ignore choices."/>
                                 <Button Content="Workbook Stats" Width="104" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -3491,7 +3494,7 @@
                             Click="SaveButton_Click"
                             local:RibbonTooltip.Title="Save As"
                             local:RibbonTooltip.KeyTip="A"/>
-                    <Button Content="Print" HorizontalAlignment="Stretch"
+                    <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"
