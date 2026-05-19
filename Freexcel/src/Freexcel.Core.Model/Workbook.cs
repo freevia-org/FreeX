@@ -37,6 +37,9 @@ public sealed class Workbook
     /// <summary>External workbook link metadata loaded from XLSX packages.</summary>
     public List<ExternalLinkModel> ExternalLinks { get; } = [];
 
+    /// <summary>Custom PivotTable style metadata loaded from XLSX stylesheet tableStyle definitions.</summary>
+    public List<PivotTableStyleModel> PivotTableStyles { get; } = [];
+
     /// <summary>Saved workbook view snapshots, similar to Excel Custom Views.</summary>
     public List<WorkbookCustomView> CustomViews { get; } = [];
 
