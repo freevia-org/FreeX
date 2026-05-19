@@ -2334,6 +2334,9 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.PieChart:
                 ChartPieMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.DoughnutChart:
+                ChartDoughnutMenuItem_Click(sender, e);
+                break;
             case QuickAnalysisCommand.BarChart:
                 ChartBarMenuItem_Click(sender, e);
                 break;
@@ -2348,6 +2351,15 @@ public partial class MainWindow : Window
                 break;
             case QuickAnalysisCommand.ScatterChart:
                 ChartScatterMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.BubbleChart:
+                ChartBubbleMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.RadarChart:
+                ChartRadarMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.StockChart:
+                ChartStockMenuItem_Click(sender, e);
                 break;
             case QuickAnalysisCommand.Sum:
                 AutoSumSumMenuItem_Click(sender, e);
