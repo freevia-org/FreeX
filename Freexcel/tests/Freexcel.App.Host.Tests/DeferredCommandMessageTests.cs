@@ -65,7 +65,7 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
-    public void UnsupportedXlsxFeatureSaveWarning_UsesDocumentedExclusionLanguage()
+    public void UnsupportedXlsxFeatureSaveWarning_UsesRetainedOpaqueFeatureLanguage()
     {
         var report = new XlsxFeatureReport([
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
@@ -75,14 +75,17 @@ public sealed class DeferredCommandMessageTests
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(report);
 
         message.Title.Should().Be("Unsupported XLSX Features");
-        message.Body.Should().Contain("does not preserve yet");
+        message.Body.Should().Contain("retains as opaque package parts");
+        message.Body.Should().Contain("does not run, render, author, or deeply edit");
         message.Body.Should().Contain("VBA macros (excluded)");
         message.Body.Should().Contain("SmartArt diagrams");
         message.Body.Should().Contain("Continue saving?");
+        message.Body.Should().NotContain("does not preserve yet");
+        message.Body.Should().NotContain("may remove");
     }
 
     [Fact]
-    public void UnsupportedXlsxFeatureOpenWarning_DisclosesPotentialLossBeforeSave()
+    public void UnsupportedXlsxFeatureOpenWarning_DisclosesRetainedOpaqueFeatures()
     {
         var report = new XlsxFeatureReport([
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
@@ -95,7 +98,22 @@ public sealed class DeferredCommandMessageTests
         message.Body.Should().Contain("opened this workbook");
         message.Body.Should().Contain("VBA macros (excluded)");
         message.Body.Should().Contain("live web queries / web publishing");
-        message.Body.Should().Contain("may be removed if you save");
+        message.Body.Should().Contain("retained as opaque package parts");
+        message.Body.Should().Contain("will not be executed, refreshed, rendered, or edited");
+        message.Body.Should().NotContain("may be removed if you save");
+    }
+
+    [Fact]
+    public void UnsupportedXlsxFeatureOpenWarning_DisclosesDigitalSignatureInvalidationRisk()
+    {
+        var report = new XlsxFeatureReport([
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DigitalSignatures, "_xmlsignatures/sig1.xml")
+        ]);
+
+        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
+
+        message.Body.Should().Contain("digital signatures");
+        message.Body.Should().Contain("Digital signatures may no longer validate after workbook edits");
     }
 
     [Fact]
