@@ -9602,19 +9602,23 @@ public class FileAdapterSmokeTests
         loaded.Slicers.Should().ContainSingle().Which.Should().BeEquivalentTo(new SlicerModel
         {
             Name = "Region Slicer",
+            Caption = "Region",
             CacheName = "Slicer_Region",
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Region",
+            StyleName = "SlicerStyleLight2",
             PackagePart = "xl/slicers/slicer1.xml"
         });
         loaded.Timelines.Should().ContainSingle().Which.Should().BeEquivalentTo(new TimelineModel
         {
             Name = "Date Timeline",
+            Caption = "Order Date",
             CacheName = "Timeline_Date",
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Date",
             StartDate = "2026-01-01",
             EndDate = "2026-03-31",
+            StyleName = "TimeSlicerStyleLight1",
             PackagePart = "xl/timelines/timeline1.xml"
         });
 
@@ -9628,6 +9632,12 @@ public class FileAdapterSmokeTests
         archive.GetEntry("xl/slicerCaches/slicerCache1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
+        var slicerXml = LoadPackageXml(archive.GetEntry("xl/slicers/slicer1.xml")!);
+        slicerXml.Root!.Attribute("caption")!.Value.Should().Be("Region");
+        slicerXml.Root.Attribute("style")!.Value.Should().Be("SlicerStyleLight2");
+        var timelineXml = LoadPackageXml(archive.GetEntry("xl/timelines/timeline1.xml")!);
+        timelineXml.Root!.Attribute("caption")!.Value.Should().Be("Order Date");
+        timelineXml.Root.Attribute("style")!.Value.Should().Be("TimeSlicerStyleLight1");
     }
 
     [Fact]
@@ -11568,7 +11578,9 @@ public class FileAdapterSmokeTests
             ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
                 <slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
                         name="Region Slicer"
-                        cache="Slicer_Region"/>
+                        cache="Slicer_Region"
+                        caption="Region"
+                        style="SlicerStyleLight2"/>
                 """));
             ReplacePackageXml(archive, "xl/slicerCaches/slicerCache1.xml", XDocument.Parse("""
                 <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
@@ -11582,7 +11594,9 @@ public class FileAdapterSmokeTests
             ReplacePackageXml(archive, "xl/timelines/timeline1.xml", XDocument.Parse("""
                 <timeline xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
                           name="Date Timeline"
-                          cache="Timeline_Date"/>
+                          cache="Timeline_Date"
+                          caption="Order Date"
+                          style="TimeSlicerStyleLight1"/>
                 """));
             ReplacePackageXml(archive, "xl/timelineCaches/timelineCache1.xml", XDocument.Parse("""
                 <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
