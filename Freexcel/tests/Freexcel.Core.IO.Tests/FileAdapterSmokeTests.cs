@@ -7467,6 +7467,46 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDrawingAnchorsAlongsideAuthoredShapes()
+    {
+        var workbook = new Workbook("UnsupportedDrawingRetention");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Native drawing"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(loadedSheet.Id, 4, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 120,
+            Height = 60,
+            FillColor = new CellColor(220, 235, 247),
+            OutlineColor = new CellColor(45, 90, 135)
+        });
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+        var drawingText = drawingXml.ToString();
+        drawingText.Should().Contain("cxnSp");
+        drawingText.Should().Contain("grpSp");
+        drawingText.Should().Contain("Native connector");
+        drawingText.Should().Contain("Native group");
+        drawingText.Should().Contain("Shape 1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_LoadsAndPreservesExternalLinkMetadata()
     {
         var workbook = new Workbook("ExternalLinksRetentionTest");
@@ -10251,6 +10291,87 @@ public class FileAdapterSmokeTests
                                         new XAttribute("dist", "20000"),
                                         new XAttribute("dir", "5400000"),
                                         new XElement(drawingNs + "srgbClr", new XAttribute("val", "808080")))))),
+                        new XElement(spreadsheetDrawingNs + "clientData"))));
+            ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedDrawingPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
+            worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdNativeUnsupportedDrawing")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdNativeUnsupportedDrawing"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                new XAttribute("Target", "../drawings/drawing1.xml")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var drawingXml = new XDocument(
+                new XElement(spreadsheetDrawingNs + "wsDr",
+                    new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                    new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                    new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                        new XElement(spreadsheetDrawingNs + "from",
+                            new XElement(spreadsheetDrawingNs + "col", "1"),
+                            new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                            new XElement(spreadsheetDrawingNs + "row", "1"),
+                            new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                        new XElement(spreadsheetDrawingNs + "to",
+                            new XElement(spreadsheetDrawingNs + "col", "3"),
+                            new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                            new XElement(spreadsheetDrawingNs + "row", "3"),
+                            new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                        new XElement(spreadsheetDrawingNs + "cxnSp",
+                            new XElement(spreadsheetDrawingNs + "nvCxnSpPr",
+                                new XElement(spreadsheetDrawingNs + "cNvPr",
+                                    new XAttribute("id", "2"),
+                                    new XAttribute("name", "Native connector")),
+                                new XElement(spreadsheetDrawingNs + "cNvCxnSpPr")),
+                            new XElement(spreadsheetDrawingNs + "spPr",
+                                new XElement(drawingNs + "prstGeom", new XAttribute("prst", "line"), new XElement(drawingNs + "avLst")))),
+                        new XElement(spreadsheetDrawingNs + "clientData")),
+                    new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                        new XElement(spreadsheetDrawingNs + "from",
+                            new XElement(spreadsheetDrawingNs + "col", "4"),
+                            new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                            new XElement(spreadsheetDrawingNs + "row", "1"),
+                            new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                        new XElement(spreadsheetDrawingNs + "to",
+                            new XElement(spreadsheetDrawingNs + "col", "6"),
+                            new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                            new XElement(spreadsheetDrawingNs + "row", "4"),
+                            new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                        new XElement(spreadsheetDrawingNs + "grpSp",
+                            new XElement(spreadsheetDrawingNs + "nvGrpSpPr",
+                                new XElement(spreadsheetDrawingNs + "cNvPr",
+                                    new XAttribute("id", "3"),
+                                    new XAttribute("name", "Native group")),
+                                new XElement(spreadsheetDrawingNs + "cNvGrpSpPr")),
+                            new XElement(spreadsheetDrawingNs + "grpSpPr",
+                                new XElement(drawingNs + "xfrm"))),
                         new XElement(spreadsheetDrawingNs + "clientData"))));
             ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
         }

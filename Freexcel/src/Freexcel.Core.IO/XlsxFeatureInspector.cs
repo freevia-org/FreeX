@@ -216,13 +216,6 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
-        if (normalized.StartsWith("xl/drawings/", StringComparison.Ordinal) &&
-            normalized.EndsWith(".xml", StringComparison.Ordinal) &&
-            DrawingHasUnsupportedObjects(entry))
-        {
-            yield return Feature(XlsxUnsupportedFeatureKind.DrawingObjects);
-        }
-
         XlsxUnsupportedFeature Feature(XlsxUnsupportedFeatureKind kind) => new(kind, packagePart);
     }
 
@@ -253,26 +246,6 @@ public static class XlsxFeatureInspector
             return worksheetXml
                 .Descendants()
                 .Any(element => string.Equals(element.Name.LocalName, "sparklineGroups", StringComparison.OrdinalIgnoreCase));
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool DrawingHasUnsupportedObjects(ZipArchiveEntry entry)
-    {
-        try
-        {
-            using var stream = entry.Open();
-            var drawingXml = XDocument.Load(stream);
-            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-
-            return drawingXml
-                .Descendants()
-                .Any(element =>
-                    element.Name.Namespace == spreadsheetDrawingNs &&
-                    element.Name.LocalName is "cxnSp" or "grpSp");
         }
         catch
         {
