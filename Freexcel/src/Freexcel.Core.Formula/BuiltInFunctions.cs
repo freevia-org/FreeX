@@ -2865,7 +2865,7 @@ public static class BuiltInFunctions
         if (args.Count > 2 && args[2] is RangeValue hRange)
             foreach (var v in hRange.Flatten())
                 if (TryCellNumber(v, out double holidaySerial))
-                    holidays.Add(DateTime.FromOADate(holidaySerial).Date);
+                    holidays.Add(SerialToDate(holidaySerial).Date);
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
@@ -2902,9 +2902,9 @@ public static class BuiltInFunctions
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
-        int count = CountWeekdaysInclusive(lo, hi);
+        int count = CountExcelWeekdaysInclusive(lo, hi);
         foreach (var h in holidays)
-            if (h >= lo && h <= hi && h.DayOfWeek != DayOfWeek.Saturday && h.DayOfWeek != DayOfWeek.Sunday)
+            if (h >= lo && h <= hi && ExcelDowToMonIndex(h) < 5)
                 count--;
         return new NumberValue(sign * count);
     }
@@ -2919,6 +2919,20 @@ public static class BuiltInFunctions
         {
             int dow = (startDow + i) % 7;
             if (dow != 0 && dow != 6) count++;
+        }
+        return count;
+    }
+
+    private static int CountExcelWeekdaysInclusive(DateTime lo, DateTime hi)
+    {
+        int totalDays = (int)(hi - lo).TotalDays + 1;
+        int fullWeeks = totalDays / 7;
+        int count = fullWeeks * 5;
+        int startDow = ExcelDowToMonIndex(lo);
+        for (int i = 0; i < totalDays % 7; i++)
+        {
+            int dow = (startDow + i) % 7;
+            if (dow < 5) count++;
         }
         return count;
     }
@@ -5101,7 +5115,7 @@ public static class BuiltInFunctions
         int count = 0;
         for (var d = lo; d <= hi; d = d.AddDays(1))
         {
-            if (mask![DowToMonIndex(d.DayOfWeek)]) continue;
+            if (mask![ExcelDowToMonIndex(d)]) continue;
             if (holidays.Contains(d.Date)) continue;
             count++;
         }
