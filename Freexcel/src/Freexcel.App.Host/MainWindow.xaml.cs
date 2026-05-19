@@ -1800,12 +1800,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.Oem3 && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ShowFormulasBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if (e.Key == Key.PageUp && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
             {
                 SelectAdjacentVisibleSheetGroup(-1);
@@ -2092,6 +2086,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.InsertCurrentTime:
                 InsertCurrentDateOrTime(insertTime: true);
+                break;
+            case KeyboardCommandShortcut.ToggleShowFormulas:
+                ShowFormulasBtn_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);

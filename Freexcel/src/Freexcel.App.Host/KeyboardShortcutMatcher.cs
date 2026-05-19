@@ -130,6 +130,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Oem3)
+        {
+            shortcut = KeyboardCommandShortcut.ToggleShowFormulas;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -474,6 +480,7 @@ public enum KeyboardCommandShortcut
     FlashFill,
     InsertCurrentDate,
     InsertCurrentTime,
+    ToggleShowFormulas,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,
