@@ -586,6 +586,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             style.Italic = font.Element(workbookNs + "i") is not null;
             style.Underline = font.Element(workbookNs + "u") is not null;
             style.Strikethrough = font.Element(workbookNs + "strike") is not null;
+            var verticalAlignment = font.Element(workbookNs + "vertAlign")?.Attribute("val")?.Value;
+            style.Superscript = string.Equals(verticalAlignment, "superscript", StringComparison.OrdinalIgnoreCase);
+            style.Subscript = string.Equals(verticalAlignment, "subscript", StringComparison.OrdinalIgnoreCase);
             if (double.TryParse(font.Element(workbookNs + "sz")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var size) &&
                 IsSupportedFontSize(size))
             {
@@ -5709,6 +5712,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     style.Italic != def.Italic ? new XElement(workbookNs + "i") : null,
                     style.Underline != def.Underline ? new XElement(workbookNs + "u") : null,
                     style.Strikethrough != def.Strikethrough ? new XElement(workbookNs + "strike") : null,
+                    style.Superscript != def.Superscript
+                        ? new XElement(workbookNs + "vertAlign", new XAttribute("val", "superscript"))
+                        : style.Subscript != def.Subscript
+                            ? new XElement(workbookNs + "vertAlign", new XAttribute("val", "subscript"))
+                            : null,
                     style.FontColor != def.FontColor ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(style.FontColor))) : null,
                     style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize)
                         ? new XElement(workbookNs + "sz", new XAttribute("val", style.FontSize.ToString(CultureInfo.InvariantCulture)))
@@ -5741,6 +5749,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             style.Italic != def.Italic ||
             style.Underline != def.Underline ||
             style.Strikethrough != def.Strikethrough ||
+            style.Superscript != def.Superscript ||
+            style.Subscript != def.Subscript ||
             style.FontColor != def.FontColor ||
             style.FontSize != def.FontSize ||
             style.FontName != def.FontName;
