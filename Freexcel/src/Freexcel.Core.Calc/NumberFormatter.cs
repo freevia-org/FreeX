@@ -268,6 +268,9 @@ public static class NumberFormatter
             prefix = prefixSb.ToString();
             suffix = suffixSb.ToString();
             format = numPartSb.ToString();
+
+            if (string.IsNullOrEmpty(format))
+                return prefix + suffix;
         }
 
         // Pass the cleaned format to .NET — it understands #,##0.00, 0.00, 0, # etc.
@@ -398,9 +401,11 @@ public static class NumberFormatter
         {
             string sign = match.Groups[1].Value;
             string exponent = match.Groups[2].Value;
-            int minDigits = Regex.Match(stripped, @"E[+-](0+)", RegexOptions.IgnoreCase).Groups[1].Value.Length;
+            var exponentFormat = Regex.Match(stripped, @"E([+-])(0+)", RegexOptions.IgnoreCase);
+            int minDigits = exponentFormat.Groups[2].Value.Length;
             exponent = int.Parse(exponent, CultureInfo.InvariantCulture).ToString("D" + minDigits.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
-            return "E" + sign + exponent;
+            string displaySign = exponentFormat.Groups[1].Value == "-" && sign == "+" ? "" : sign;
+            return "E" + displaySign + exponent;
         });
         return result;
     }

@@ -37,11 +37,20 @@ public class NumberFormatterTests
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]
     [InlineData("0.00E+00", 1200, "1.20E+03")]
+    [InlineData("0.00E-00", 1200, "1.20E03")]
     public void CustomNumberSubset_FormatsVariableDecimalsFractionsAndScientific(string format, double value, string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
+    {
+        var result = NumberFormatter.Format(new NumberValue(0), "0;0;\"-\"");
+
+        Assert.Equal("-", result);
     }
 
     [Fact]
