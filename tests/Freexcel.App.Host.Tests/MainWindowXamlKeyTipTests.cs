@@ -216,6 +216,23 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void AccessibilityTooltip_DisclosesCurrentCheckerCoverage()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var accessibilityButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
+
+        var description = accessibilityButton.Attribute(local + "RibbonTooltip.Description")?.Value;
+        description.Should().Contain("merged cells");
+        description.Should().Contain("alternate text");
+        description.Should().Contain("charts without titles");
+    }
+
+    [Fact]
     public void AllowEditRangesTooltip_DisclosesAddRangePromptWorkflow()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
