@@ -166,6 +166,18 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.F)
+        {
+            shortcut = KeyboardCommandShortcut.Find;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.H)
+        {
+            shortcut = KeyboardCommandShortcut.Replace;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -517,6 +529,8 @@ public enum KeyboardCommandShortcut
     SelectPreviousSheetGroup,
     SelectNextSheetGroup,
     OpenFormatCells,
+    Find,
+    Replace,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,

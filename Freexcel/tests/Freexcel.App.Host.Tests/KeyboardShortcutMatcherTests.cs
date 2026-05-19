@@ -89,6 +89,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.PageDown, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectNextSheetGroup)]
     [InlineData(Key.D1, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenFormatCells)]
     [InlineData(Key.NumPad1, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenFormatCells)]
+    [InlineData(Key.F, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Find)]
+    [InlineData(Key.H, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Replace)]
     [InlineData(Key.F3, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertFunction)]
     [InlineData(Key.F7, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SpellCheck)]
     [InlineData(Key.F4, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CloseWorkbook)]
