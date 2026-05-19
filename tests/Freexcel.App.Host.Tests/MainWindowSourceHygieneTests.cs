@@ -141,8 +141,9 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("<RowDefinition Height=\"8\"/>");
         xaml.Should().Contain("<RowDefinition Height=\"1\"/>");
         xaml.Should().Contain("<RowDefinition Height=\"*\"/>");
+        xaml.Should().Contain("Margin=\"0\"");
         xaml.Should().Contain("FontSize=\"5.8\"");
-        xaml.Should().Contain("Margin=\"0,-1,0,0\"");
+        xaml.Should().NotContain("Margin=\"0,-1,0,0\"");
         xaml.Should().NotContain("<Image Source=\"Resources/Freexcel.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreexcelGreenBrush}\"");
         theme.Should().Contain("x:Key=\"FreexcelTitleBarBrush\"");
