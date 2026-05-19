@@ -5468,18 +5468,35 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return true;
         }
 
+        var tempSheet = SheetId.New();
         var targetBySqref = targetIgnoredErrors
             .Elements(workbookNs + "ignoredError")
             .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
             .GroupBy(element => element.Attribute("sqref")!.Value, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var parsedTargets = targetIgnoredErrors
+            .Elements(workbookNs + "ignoredError")
+            .Select(element => new
+            {
+                Element = element,
+                Parsed = TryParseSqrefCells(element.Attribute("sqref")?.Value, tempSheet, out var cells),
+                Cells = cells
+            })
+            .Where(entry => entry.Parsed)
+            .ToList();
 
         var changed = false;
         foreach (var sourceIgnoredError in sourceIgnoredErrors.Elements(workbookNs + "ignoredError"))
         {
             var sqref = sourceIgnoredError.Attribute("sqref")?.Value;
-            if (string.IsNullOrWhiteSpace(sqref) ||
-                !targetBySqref.TryGetValue(sqref, out var targetIgnoredError))
+            if (!string.IsNullOrWhiteSpace(sqref) &&
+                targetBySqref.TryGetValue(sqref, out var targetIgnoredError))
+            {
+                changed |= MergeMissingAttributes(sourceIgnoredError, targetIgnoredError);
+                continue;
+            }
+
+            if (!TryParseSqrefCells(sqref, tempSheet, out var sourceCells))
             {
                 targetIgnoredErrors.Add(new XElement(sourceIgnoredError));
                 if (!string.IsNullOrWhiteSpace(sqref))
@@ -5488,14 +5505,62 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            foreach (var attribute in sourceIgnoredError.Attributes())
+            var overlappingTargets = parsedTargets
+                .Where(target => target.Cells.Overlaps(sourceCells))
+                .Select(target => target.Element)
+                .ToList();
+            if (overlappingTargets.Count > 0)
             {
-                if (targetIgnoredError.Attribute(attribute.Name) is not null)
-                    continue;
+                foreach (var overlappingTarget in overlappingTargets)
+                    changed |= MergeMissingAttributes(sourceIgnoredError, overlappingTarget);
 
-                targetIgnoredError.SetAttributeValue(attribute.Name, attribute.Value);
-                changed = true;
+                continue;
             }
+
+            targetIgnoredErrors.Add(new XElement(sourceIgnoredError));
+            var addedIgnoredError = targetIgnoredErrors.Elements(workbookNs + "ignoredError").Last();
+            if (!string.IsNullOrWhiteSpace(sqref))
+                targetBySqref[sqref] = addedIgnoredError;
+            parsedTargets.Add(new
+            {
+                Element = addedIgnoredError,
+                Parsed = true,
+                Cells = sourceCells
+            });
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool TryParseSqrefCells(string? sqref, SheetId sheet, out HashSet<CellAddress> cells)
+    {
+        cells = [];
+        if (string.IsNullOrWhiteSpace(sqref))
+            return false;
+
+        foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!TryParseSqrefToken(token, sheet, out var range))
+                return false;
+
+            foreach (var cell in range.AllCells())
+                cells.Add(cell);
+        }
+
+        return cells.Count > 0;
+    }
+
+    private static bool MergeMissingAttributes(XElement sourceElement, XElement targetElement)
+    {
+        var changed = false;
+        foreach (var attribute in sourceElement.Attributes())
+        {
+            if (targetElement.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
         }
 
         return changed;
