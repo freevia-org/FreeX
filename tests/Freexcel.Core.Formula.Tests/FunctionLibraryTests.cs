@@ -4485,6 +4485,39 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_AcceptsArrayComparisonIncludeExpression()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+
+        var rv = _eval.Evaluate("=FILTER(A1:A3,A1:A3>1)", sheet).Should().BeOfType<RangeValue>().Subject;
+
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(1);
+        rv.At(1, 1).Should().Be(new NumberValue(2));
+        rv.At(2, 1).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Sumproduct_AcceptsArrayArithmeticExpression()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)),
+            (2, 1, new NumberValue(2)), (2, 2, new NumberValue(20)),
+            (3, 1, new NumberValue(3)), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=SUMPRODUCT(A1:A3+1,B1:B3)", sheet).Should().Be(new NumberValue(200));
+    }
+
+    [Fact]
+    public void Aggregate_FlattensDynamicArrayArithmeticResult()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(2,2)*2)", MakeSheet()).Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
     public void Sum_FlattensFilterDynamicArrayResult()
     {
         var sheet = MakeSheet(

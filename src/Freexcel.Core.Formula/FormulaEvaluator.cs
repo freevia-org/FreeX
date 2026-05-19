@@ -87,8 +87,8 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateBinaryOp(BinaryOpNode node, IEvalContext context)
     {
-        var left = EvaluateNode(node.Left, context);
-        var right = EvaluateNode(node.Right, context);
+        var left = EvaluateArrayOperand(node.Left, context);
+        var right = EvaluateArrayOperand(node.Right, context);
 
         // Propagate errors
         if (left is ErrorValue errL) return errL;
@@ -112,7 +112,33 @@ public sealed class FormulaEvaluator
         };
     }
 
+    private ScalarValue EvaluateArrayOperand(FormulaNode node, IEvalContext context)
+    {
+        if (node is RangeRefNode range)
+            return BuildRangeValue(range, context);
+
+        var value = EvaluateNode(node, context);
+        if (value is not RangeValue || node is not NamedRangeNode named)
+            return value;
+
+        var resolvedRange = context.TryResolveNamedRange(named.Name);
+        if (resolvedRange is null)
+            return value;
+
+        var r = resolvedRange.Value;
+        var start = new CellRefNode(
+            Freexcel.Core.Model.CellAddress.NumberToColumnName(r.Start.Col),
+            r.Start.Row);
+        var end = new CellRefNode(
+            Freexcel.Core.Model.CellAddress.NumberToColumnName(r.End.Col),
+            r.End.Row);
+        return BuildRangeValue(new RangeRefNode(start, end), context);
+    }
+
     private static ScalarValue PowerOp(ScalarValue left, ScalarValue right)
+        => ElementwiseOp(left, right, PowerScalarOp);
+
+    private static ScalarValue PowerScalarOp(ScalarValue left, ScalarValue right)
     {
         var a = CoerceToNumber(left);
         var b = CoerceToNumber(right);
@@ -126,6 +152,9 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
+        => ElementwiseOp(left, right, (l, r) => ArithScalarOp(l, r, op));
+
+    private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
     {
         var a = CoerceToNumber(left);
         var b = CoerceToNumber(right);
@@ -136,6 +165,9 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue DivideOp(ScalarValue left, ScalarValue right)
+        => ElementwiseOp(left, right, DivideScalarOp);
+
+    private static ScalarValue DivideScalarOp(ScalarValue left, ScalarValue right)
     {
         var a = CoerceToNumber(left);
         var b = CoerceToNumber(right);
@@ -148,30 +180,88 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue ConcatOp(ScalarValue left, ScalarValue right)
+        => ElementwiseOp(left, right, (l, r) => new TextValue(ValueToString(l) + ValueToString(r)));
+
+    private static ScalarValue ElementwiseOp(
+        ScalarValue left,
+        ScalarValue right,
+        Func<ScalarValue, ScalarValue, ScalarValue> scalarOp)
     {
-        return new TextValue(ValueToString(left) + ValueToString(right));
+        var leftRange = left as RangeValue;
+        var rightRange = right as RangeValue;
+        if (leftRange is null && rightRange is null)
+            return scalarOp(left, right);
+
+        if (leftRange is RangeValue lr && rightRange is RangeValue rr)
+        {
+            if (lr.RowCount != rr.RowCount || lr.ColCount != rr.ColCount)
+                return ErrorValue.Value;
+
+            var cells = new ScalarValue[lr.RowCount, lr.ColCount];
+            for (var row = 0; row < lr.RowCount; row++)
+                for (var col = 0; col < lr.ColCount; col++)
+                    cells[row, col] = scalarOp(lr.Cells[row, col], rr.Cells[row, col]);
+            return new RangeValue(cells, lr.StartRow, lr.StartCol) { SheetName = lr.SheetName };
+        }
+
+        var range = leftRange ?? rightRange!;
+        var scalar = leftRange is null ? left : right;
+        var scalarOnLeft = leftRange is null;
+        var result = new ScalarValue[range.RowCount, range.ColCount];
+        for (var row = 0; row < range.RowCount; row++)
+        {
+            for (var col = 0; col < range.ColCount; col++)
+            {
+                var rangeValue = range.Cells[row, col];
+                result[row, col] = scalarOnLeft
+                    ? scalarOp(scalar, rangeValue)
+                    : scalarOp(rangeValue, scalar);
+            }
+        }
+
+        return new RangeValue(result, range.StartRow, range.StartCol) { SheetName = range.SheetName };
     }
 
     private static ScalarValue CompareOp(ScalarValue left, ScalarValue right, int expected)
+        => ElementwiseOp(left, right, (l, r) => CompareScalarOp(l, r, expected));
+
+    private static ScalarValue CompareScalarOp(ScalarValue left, ScalarValue right, int expected)
     {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
         return new BoolValue(cmp == expected);
     }
 
     private static ScalarValue CompareOpNot(ScalarValue left, ScalarValue right, int expected)
+        => ElementwiseOp(left, right, (l, r) => CompareScalarOpNot(l, r, expected));
+
+    private static ScalarValue CompareScalarOpNot(ScalarValue left, ScalarValue right, int expected)
     {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
         return new BoolValue(cmp != expected);
     }
 
     private static ScalarValue CompareOpLessOrEqual(ScalarValue left, ScalarValue right)
+        => ElementwiseOp(left, right, CompareScalarOpLessOrEqual);
+
+    private static ScalarValue CompareScalarOpLessOrEqual(ScalarValue left, ScalarValue right)
     {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
         return new BoolValue(cmp <= 0);
     }
 
     private static ScalarValue CompareOpGreaterOrEqual(ScalarValue left, ScalarValue right)
+        => ElementwiseOp(left, right, CompareScalarOpGreaterOrEqual);
+
+    private static ScalarValue CompareScalarOpGreaterOrEqual(ScalarValue left, ScalarValue right)
     {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
         return new BoolValue(cmp >= 0);
     }
