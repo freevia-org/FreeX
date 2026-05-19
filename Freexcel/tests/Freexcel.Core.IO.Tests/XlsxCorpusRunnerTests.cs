@@ -95,7 +95,8 @@ public class XlsxCorpusRunnerTests
         {
             using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
             var before = CapturePackageSummary(source);
-            before.CriticalParts.Should().NotBeEmpty(row.Id);
+            var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
+            before.CriticalParts.Should().Contain(fixtureParts, row.Id);
 
             source.Position = 0;
             var workbook = adapter.Load(source);
@@ -110,6 +111,28 @@ public class XlsxCorpusRunnerTests
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
         }
+    }
+
+    private static string[] CaptureKnownGapFixtureParts(string id)
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(id);
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+        return archive.Entries
+            .Select(entry => entry.FullName.Replace('\\', '/'))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    [Fact]
+    public void GeneratedUnsupportedChartFixture_UsesCurrentlyUnsupportedChartFamily()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage("generated-unsupported-chart-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!).ToString();
+
+        chartXml.Should().Contain("surfaceChart");
+        chartXml.Should().NotContain("radarChart", "radar charts are supported now and should not anchor the unsupported-chart fixture");
     }
 
     [Fact]
@@ -211,8 +234,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
-            [XlsxUnsupportedFeatureKind.ConditionalFormats] = "unsupported conditional-format rule disclosed",
-            [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
@@ -280,9 +301,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("embedded-objects"))
             expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);
-
-        if (tags.Contains("connectors") || tags.Contains("group-shapes"))
-            expected.Add(XlsxUnsupportedFeatureKind.DrawingObjects);
 
         return expected.Distinct().ToArray();
     }
@@ -398,7 +416,9 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/slicer", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/timeline", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/connections.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/query", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/queries/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/model/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/datamodel/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/powerpivot/", StringComparison.OrdinalIgnoreCase) ||
@@ -409,6 +429,14 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/activeX/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/webextensions/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/webPublishItems.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/diagrams/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/custom.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) ||
@@ -429,6 +457,12 @@ public class XlsxCorpusRunnerTests
             .Where(target => !target!.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
             .Select(target => $"{relsEntry.FullName.Replace('\\', '/')}=>{target!.Replace('\\', '/')}")
             .ToArray() ?? [];
+    }
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
     }
 
     private sealed record WorkbookSummary(
