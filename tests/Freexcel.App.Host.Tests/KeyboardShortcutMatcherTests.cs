@@ -75,7 +75,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.F9, Key.None, ModifierKeys.None, KeyboardCommandShortcut.CalculateNow)]
     [InlineData(Key.F9, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.CalculateSheet)]
     [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
-    [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.RebuildDependenciesAndCalculate)]
     [InlineData(Key.U, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFormulaBarExpansion)]
     [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
     [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]

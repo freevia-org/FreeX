@@ -228,6 +228,13 @@ public partial class MainWindow : Window
         _recalcEngine.RecalculateAllFormulas(_workbook);
     }
 
+    private void RebuildDependenciesAndCalculate()
+    {
+        _recalcEngine.RebuildFormulaDependencies(_workbook);
+        _recalcEngine.RecalculateAllFormulas(_workbook);
+        UpdateViewport();
+    }
+
     private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
         if (_workbook.CalculationMode == WorkbookCalculationMode.Automatic)
@@ -1764,6 +1771,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.CalculateSheet:
                 CalcSheetBtn_Click(sender, e);
                 break;
+            case KeyboardCommandShortcut.RebuildDependenciesAndCalculate:
+                RebuildDependenciesAndCalculate();
+                break;
             case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
                 FormulaBarExpandBtn_Click(sender, e);
                 break;
@@ -2810,11 +2820,27 @@ public partial class MainWindow : Window
     private void OpenActiveDropdown()
     {
         RefreshValidationDropdown();
-        if (_validationDropdown?.Visibility != Visibility.Visible)
+        if (_validationDropdown?.Visibility == Visibility.Visible)
+        {
+            _validationDropdown.Focus();
+            _validationDropdown.IsDropDownOpen = true;
             return;
+        }
 
-        _validationDropdown.Focus();
-        _validationDropdown.IsDropDownOpen = true;
+        OpenAutoFilterDropdownForActiveCell();
+    }
+
+    private void OpenAutoFilterDropdownForActiveCell()
+    {
+        if (SheetGrid.SelectedRange?.Start is not { } activeCell ||
+            _workbook.GetSheet(_currentSheetId) is not { } sheet ||
+            SelectionRangeService.GetCurrentRegion(sheet, activeCell) is not { } currentRegion ||
+            !AutoFilterDropdownPlanner.TryPlan(currentRegion, activeCell, out var plan))
+        {
+            return;
+        }
+
+        ApplyFilterPrompt(plan.Range, plan.FilterColumnOffset);
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)
@@ -4730,6 +4756,11 @@ public partial class MainWindow : Window
     private void FilterButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        ApplyFilterPrompt(range, filterColOffset: 0);
+    }
+
+    private void ApplyFilterPrompt(GridRange range, uint filterColOffset)
+    {
         var value = PromptForInput("Filter: values separated by comma/semicolon, top:n, bottom:n, toppercent:n, bottompercent:n, aboveavg, belowavg, blank, nonblank, text=value, text<>value, contains:text, notcontains:text, begins:text, ends:text, between:min:max, date=yyyy-mm-dd, date<>yyyy-mm-dd, date>yyyy-mm-dd, date>=yyyy-mm-dd, date<yyyy-mm-dd, date<=yyyy-mm-dd, datebetween:start:end, >number, >=number, <number, <=number, =number, or <>number", "");
         if (value is null) return;  // user cancelled
         var filterText = value.TrimStart();
@@ -4749,8 +4780,8 @@ public partial class MainWindow : Window
                     "Filter",
                     range,
                     currentRange => percent
-                        ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset: 0, count, top)
-                        : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset: 0, count, top)))
+                        ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
+                        : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
                 return;
             UpdateViewport();
             return;
@@ -4761,7 +4792,7 @@ public partial class MainWindow : Window
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Filter",
                     range,
-                    currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset: 0, aboveAverage)))
+                    currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
                 return;
             UpdateViewport();
             return;
@@ -4795,7 +4826,7 @@ public partial class MainWindow : Window
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Filter",
                     range,
-                    currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset: 0, criterion)))
+                    currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
                 return;
             UpdateViewport();
             return;
@@ -4805,7 +4836,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
-                currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset: 0, allowedValues: allowedValues)))
+                currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
             return;
         UpdateViewport();
     }
