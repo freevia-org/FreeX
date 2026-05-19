@@ -19,6 +19,31 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RibbonIconSet_UsesSharedIconSlotsAndDecorator()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RibbonCommandPresentationPlanner.cs"));
+
+        iconResources.Should().Contain("FreexcelRibbonLargeIconSlot");
+        iconResources.Should().Contain("FreexcelRibbonSmallIconSlot");
+        iconResources.Should().Contain("FreexcelRibbonLargeLabel");
+        iconResources.Should().Contain("FreexcelRibbonSmallLabel");
+
+        source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
+        source.Should().Contain("NormalizeExistingRibbonIconText();");
+        source.Should().Contain("GetRibbonIconAccentBrushes");
+        source.Should().Contain("RibbonCommandIconAccent.Chart");
+        source.Should().Contain("HorizontalAlignment.Left");
+
+        planner.Should().Contain("RibbonCommandIconAccent.Chart");
+        planner.Should().Contain("RibbonCommandIconAccent.Data");
+        planner.Should().Contain("RibbonCommandIconAccent.Warning");
+        planner.Should().Contain("RibbonCommandIconAccent.Help");
+    }
+
+    [Fact]
     public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
