@@ -17,6 +17,10 @@ public sealed class ConditionalFormatDialog : Window
     private readonly Label _value2Label;
     private readonly ComboBox _colorBox;
     private readonly TextBox? _formulaBox;
+    private readonly ComboBox _iconSetStyleBox;
+    private readonly CheckBox _iconSetShowValueBox;
+    private readonly CheckBox _iconSetReverseBox;
+    private ConditionalFormat? _existingRule;
 
     private static readonly (string Label, Color Color)[] ColorOptions =
     [
@@ -26,6 +30,15 @@ public sealed class ConditionalFormatDialog : Window
         ("Light Blue Fill",   Color.FromRgb(189, 215, 238)),
         ("Bold Red Text",     Color.FromRgb(255, 0, 0)),
         ("Bold Green Text",   Color.FromRgb(0, 176, 80)),
+    ];
+
+    private static readonly string[] IconSetStyles =
+    [
+        "3TrafficLights1",
+        "3Arrows",
+        "3Symbols",
+        "4TrafficLights",
+        "5Arrows"
     ];
 
     /// <summary>Creates a new-rule dialog for the given rule type and range.</summary>
@@ -41,11 +54,17 @@ public sealed class ConditionalFormatDialog : Window
         ResizeMode = ResizeMode.NoResize;
 
         bool isFormula = ruleType is "Formula" or "Use a Formula";
+        bool isIconSet = ruleType is "Icon Set";
         bool isBetween = ruleType is "Between";
         bool needsValue = ruleType is "Greater Than" or "Less Than" or "Equal To"
                                    or "Between" or "Text Contains";
 
         var inner = new StackPanel { Margin = new Thickness(16) };
+        _iconSetStyleBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8) };
+        foreach (var style in IconSetStyles) _iconSetStyleBox.Items.Add(style);
+        _iconSetStyleBox.SelectedIndex = 0;
+        _iconSetShowValueBox = new CheckBox { Content = "Show value", Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
+        _iconSetReverseBox = new CheckBox { Content = "Reverse icon order", Margin = new Thickness(0, 0, 0, 12) };
 
         if (isFormula)
         {
@@ -54,6 +73,18 @@ public sealed class ConditionalFormatDialog : Window
             _formulaBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "=" };
             inner.Children.Add(_formulaBox);
             // placeholders needed by Ok_Click — never shown
+            _value1Box  = new TextBox();
+            _value2Box  = new TextBox();
+            _value2Label = new Label();
+        }
+        else if (isIconSet)
+        {
+            Height = 230;
+            inner.Children.Add(new Label { Content = "Icon set:", Padding = new Thickness(0) });
+            inner.Children.Add(_iconSetStyleBox);
+            inner.Children.Add(_iconSetShowValueBox);
+            inner.Children.Add(_iconSetReverseBox);
+
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
             _value2Label = new Label();
@@ -90,8 +121,11 @@ public sealed class ConditionalFormatDialog : Window
         btnRow.Children.Add(ok);
         btnRow.Children.Add(cancel);
 
-        inner.Children.Add(colorLabel);
-        inner.Children.Add(_colorBox);
+        if (!isIconSet)
+        {
+            inner.Children.Add(colorLabel);
+            inner.Children.Add(_colorBox);
+        }
         inner.Children.Add(btnRow);
         Content = inner;
     }
@@ -101,6 +135,7 @@ public sealed class ConditionalFormatDialog : Window
         : this(RuleTypeLabel(existingRule), existingRule.AppliesTo)
     {
         _existingId = existingRule.Id;   // preserve Id so the command recognises it as an update
+        _existingRule = CloneRule(existingRule);
 
         // Pre-populate value fields
         if (existingRule.RuleType == CfRuleType.Formula)
@@ -114,6 +149,17 @@ public sealed class ConditionalFormatDialog : Window
         {
             _value1Box.Text = existingRule.Value1 ?? "";
             _value2Box.Text = existingRule.Value2 ?? "";
+            if (existingRule.RuleType == CfRuleType.IconSet)
+            {
+                var style = string.IsNullOrWhiteSpace(existingRule.IconSetStyle)
+                    ? IconSetStyles[0]
+                    : existingRule.IconSetStyle;
+                if (!IconSetStyles.Contains(style))
+                    _iconSetStyleBox.Items.Add(style);
+                _iconSetStyleBox.SelectedItem = style;
+                _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
+                _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
+            }
         }
 
         // Pre-select the closest color option from FormatIfTrue.FillColor
@@ -129,7 +175,10 @@ public sealed class ConditionalFormatDialog : Window
 
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
-        var cf = new ConditionalFormat { Id = _existingId, AppliesTo = _range };
+        var cf = _existingRule is not null
+            ? CloneRule(_existingRule)
+            : new ConditionalFormat { Id = _existingId, AppliesTo = _range };
+        cf.AppliesTo = _range;
         var (_, fillColor) = ColorOptions[_colorBox.SelectedIndex < 0 ? 0 : _colorBox.SelectedIndex];
 
         bool isFormula = _ruleType is "Formula" or "Use a Formula";
@@ -146,6 +195,7 @@ public sealed class ConditionalFormatDialog : Window
             {
                 "Data Bar"    => CfRuleType.DataBar,
                 "Color Scale" => CfRuleType.ColorScale,
+                "Icon Set"    => CfRuleType.IconSet,
                 "Above Average" or "Below Average" => CfRuleType.AboveAverage,
                 "Top 10 Items" or "Bottom 10 Items" => CfRuleType.Top10,
                 _ => CfRuleType.CellValue
@@ -164,18 +214,67 @@ public sealed class ConditionalFormatDialog : Window
                 cf.Value1 = _value1Box.Text.Trim();
                 cf.Value2 = _value2Box.Text.Trim();
             }
+            else if (cf.RuleType == CfRuleType.IconSet)
+            {
+                cf.IconSetStyle = _iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0];
+                cf.IconSetShowValue = _iconSetShowValueBox.IsChecked == true;
+                cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
+            }
 
             cf.AboveAverage = _ruleType != "Below Average" && _ruleType != "Bottom 10 Items";
         }
 
-        cf.FormatIfTrue = new CellStyle
+        if (cf.RuleType != CfRuleType.IconSet)
         {
-            FillColor = new CellColor(fillColor.R, fillColor.G, fillColor.B)
-        };
+            cf.FormatIfTrue = new CellStyle
+            {
+                FillColor = new CellColor(fillColor.R, fillColor.G, fillColor.B)
+            };
+        }
 
         ResultRule = cf;
         DialogResult = true;
     }
+
+    private static ConditionalFormat CloneRule(ConditionalFormat source) => new()
+    {
+        Id = source.Id,
+        AppliesTo = source.AppliesTo,
+        Priority = source.Priority,
+        RuleType = source.RuleType,
+        Operator = source.Operator,
+        Value1 = source.Value1,
+        Value2 = source.Value2,
+        FormatIfTrue = source.FormatIfTrue?.Clone(),
+        MinColor = source.MinColor,
+        MidColor = source.MidColor,
+        MaxColor = source.MaxColor,
+        UseThreeColorScale = source.UseThreeColorScale,
+        MinThresholdType = source.MinThresholdType,
+        MinThresholdValue = source.MinThresholdValue,
+        MidThresholdType = source.MidThresholdType,
+        MidThresholdValue = source.MidThresholdValue,
+        MaxThresholdType = source.MaxThresholdType,
+        MaxThresholdValue = source.MaxThresholdValue,
+        DataBarColor = source.DataBarColor,
+        DataBarMinThresholdType = source.DataBarMinThresholdType,
+        DataBarMinThresholdValue = source.DataBarMinThresholdValue,
+        DataBarMaxThresholdType = source.DataBarMaxThresholdType,
+        DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
+        DataBarShowValue = source.DataBarShowValue,
+        DataBarMinLength = source.DataBarMinLength,
+        DataBarMaxLength = source.DataBarMaxLength,
+        AboveAverage = source.AboveAverage,
+        FormulaText = source.FormulaText,
+        IconSetStyle = source.IconSetStyle,
+        IconSetShowValue = source.IconSetShowValue,
+        IconSetReverse = source.IconSetReverse,
+        TopBottomRank = source.TopBottomRank,
+        TopBottomPercent = source.TopBottomPercent,
+        TextRuleText = source.TextRuleText,
+        DateOccurringPeriod = source.DateOccurringPeriod,
+        StopIfTrue = source.StopIfTrue
+    };
 
     /// <summary>Returns the human-readable rule type label for a <see cref="ConditionalFormat"/>.</summary>
     private static string RuleTypeLabel(ConditionalFormat cf) => cf.RuleType switch
@@ -183,6 +282,7 @@ public sealed class ConditionalFormatDialog : Window
         CfRuleType.Formula     => "Formula",
         CfRuleType.DataBar     => "Data Bar",
         CfRuleType.ColorScale  => "Color Scale",
+        CfRuleType.IconSet     => "Icon Set",
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
         CfRuleType.Top10       => cf.AboveAverage ? "Top 10 Items" : "Bottom 10 Items",
         CfRuleType.CellValue   => cf.Operator switch
