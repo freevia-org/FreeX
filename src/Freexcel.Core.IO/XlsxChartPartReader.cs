@@ -25,7 +25,7 @@ public static class XlsxChartPartReader
         var areaChart = areaCharts.FirstOrDefault();
         var radarCharts = plotArea?.Elements(ChartNs + "radarChart").ToList() ?? [];
         var stockCharts = plotArea?.Elements(ChartNs + "stockChart").ToList() ?? [];
-        var deferredAdvancedChart = FindDeferredAdvancedChart(plotArea);
+        var deferredAdvancedChart = HasDirectSupportedChart(plotArea) ? null : FindDeferredAdvancedChart(plotArea);
         var threeDColumnChart = plotArea?.Element(ChartNs + "bar3DChart");
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
         var pieChart = plotArea?.Element(ChartNs + "pieChart");
@@ -96,6 +96,19 @@ public static class XlsxChartPartReader
             .FirstOrDefault(element => element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart");
         return mapChart is null ? null : (mapChart, ChartType.Map);
     }
+
+    private static bool HasDirectSupportedChart(XElement? plotArea) =>
+        plotArea?.Elements().Any(element => element.Name.LocalName is
+            "areaChart" or
+            "barChart" or
+            "bubbleChart" or
+            "doughnutChart" or
+            "lineChart" or
+            "ofPieChart" or
+            "pieChart" or
+            "radarChart" or
+            "scatterChart" or
+            "stockChart") == true;
 
     private static bool TryReadDeferredAdvancedChart(
         XDocument chartXml,
