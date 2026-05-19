@@ -76,6 +76,19 @@ public sealed class ChartExternalDataModel
     public bool? AutoUpdate { get; set; }
 }
 
+public sealed class ChartManualLayoutModel
+{
+    public string? LayoutTarget { get; set; }
+    public string? XMode { get; set; }
+    public string? YMode { get; set; }
+    public string? WidthMode { get; set; }
+    public string? HeightMode { get; set; }
+    public double? X { get; set; }
+    public double? Y { get; set; }
+    public double? Width { get; set; }
+    public double? Height { get; set; }
+}
+
 public sealed class ChartPageMarginsModel
 {
     public double? Left { get; set; }
@@ -150,6 +163,8 @@ public sealed class ChartModel
     public int? ChartStyleId { get; set; }
     public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
     public ChartExternalDataModel? ExternalData { get; set; }
+    public ChartManualLayoutModel? PlotAreaLayout { get; set; }
+    public ChartManualLayoutModel? LegendLayout { get; set; }
     public bool RoundedCorners { get; set; }
     public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
     public bool ShowDataLabelsOverMaximum { get; set; }
