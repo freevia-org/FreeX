@@ -3893,6 +3893,13 @@
                                     <TextBlock Text="Format" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
                                     <TextBlock x:Name="InfoFormat" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
 
+                                    <TextBlock Text="Workbook statistics" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoStatisticsSummary" FontSize="12" Foreground="#555"
+                                               TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="Accessibility" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoAccessibilitySummary" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+
                                     <Rectangle Height="1" Fill="#E0E0E0" Margin="0,0,0,20"/>
 
                                     <TextBlock Text="About Freexcel"

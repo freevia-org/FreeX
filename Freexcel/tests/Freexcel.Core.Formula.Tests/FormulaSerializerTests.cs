@@ -65,6 +65,24 @@ public class FormulaSerializerTests
     public void Serialize_SheetQualifiedRange() => RoundTrip("=Sheet2!A1:B2").Should().Be("Sheet2!A1:B2");
 
     [Fact]
+    public void Serialize_FullColumnRange() => RoundTrip("=A:A").Should().Be("A:A");
+
+    [Fact]
+    public void Serialize_FullRowRange() => RoundTrip("=1:1").Should().Be("1:1");
+
+    [Fact]
+    public void Serialize_SheetQualifiedFullColumnRange() => RoundTrip("=Sheet2!A:A").Should().Be("Sheet2!A:A");
+
+    [Fact]
+    public void Serialize_RepeatedSheetQualifiedFullColumnRange() => RoundTrip("=Sheet2!A:Sheet2!B").Should().Be("Sheet2!A:B");
+
+    [Fact]
+    public void Serialize_SheetQualifiedFullRowRange() => RoundTrip("=Sheet2!1:2").Should().Be("Sheet2!1:2");
+
+    [Fact]
+    public void Serialize_RepeatedSheetQualifiedFullRowRange() => RoundTrip("=Sheet2!1:Sheet2!2").Should().Be("Sheet2!1:2");
+
+    [Fact]
     public void Serialize_QuotedSheetQualifiedRange_WithSpace() => RoundTrip("='My Sheet'!A1:B2").Should().Be("'My Sheet'!A1:B2");
 
     [Fact]
