@@ -5869,6 +5869,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.PickFromDropDown:
                 OpenActiveDropdown();
                 break;
+            case WorksheetContextMenuAction.QuickAnalysis:
+                ShowQuickAnalysisMenu();
+                break;
             case WorksheetContextMenuAction.HideRows:
                 ExecuteRowsHidden(hidden: true);
                 break;
