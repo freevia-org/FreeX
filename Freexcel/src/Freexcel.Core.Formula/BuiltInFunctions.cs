@@ -1646,8 +1646,13 @@ public static class BuiltInFunctions
             var dt = new DateTime(year, 1, 1)
                 .AddMonths(month - 1)
                 .AddDays(day - 1);
-            if (dt.ToOADate() < 0) return ErrorValue.Num;
-            return new NumberValue(dt.ToOADate());
+            double serial = DateToSerial(dt);
+            if (serial < 0) return ErrorValue.Num;
+            if (year == 1900 && month == 3 && day == 0)
+                return new NumberValue(60);
+            if (dt == new DateTime(1900, 3, 1) && month < 3)
+                return new NumberValue(60);
+            return new NumberValue(serial);
         }
         catch { return ErrorValue.Num; }
     }
@@ -1659,7 +1664,7 @@ public static class BuiltInFunctions
         var num = ToNumber(v);
         if (!double.IsFinite(num) || num < -657435.0 || num > 2958465.0)
             return false;
-        dt = DateTime.FromOADate(num);
+        dt = SerialToDate(num);
         return true;
     }
 
@@ -1669,18 +1674,21 @@ public static class BuiltInFunctions
     private static ScalarValue Year(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (IsExcelFakeLeapDay(args[0])) return new NumberValue(1900);
         return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
     }
 
     private static ScalarValue Month(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (IsExcelFakeLeapDay(args[0])) return new NumberValue(2);
         return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
     }
 
     private static ScalarValue Day(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
+        if (IsExcelFakeLeapDay(args[0])) return new NumberValue(29);
         return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
     }
 
@@ -1706,11 +1714,13 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
-        if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
+        double rawSerial = ToNumber(args[0]);
+        if (!double.IsFinite(rawSerial)) return ErrorValue.Num;
         double rawReturnType = args.Count > 1 ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
-        int dow = (int)dt.DayOfWeek; // 0=Sunday...6=Saturday
+        int daySerial = (int)Math.Floor(rawSerial);
+        int dow = ((daySerial - 1) % 7 + 7) % 7; // 0=Sunday...6=Saturday in Excel's 1900 date system
         return returnType switch
         {
             1 => new NumberValue(dow + 1),                     // Sun=1..Sat=7
@@ -7579,10 +7589,21 @@ public static class BuiltInFunctions
     }
 
     private static DateTime SerialToDate(double serial) =>
-        new DateTime(1899, 12, 30).AddDays(serial);
+        serial < 60
+            ? new DateTime(1899, 12, 30).AddDays(serial + 1)
+            : new DateTime(1899, 12, 30).AddDays(serial);
 
     private static double DateToSerial(DateTime d) =>
-        (d - new DateTime(1899, 12, 30)).TotalDays;
+        d < new DateTime(1900, 3, 1)
+            ? (d - new DateTime(1899, 12, 30)).TotalDays - 1
+            : (d - new DateTime(1899, 12, 30)).TotalDays;
+
+    private static bool IsExcelFakeLeapDay(ScalarValue value)
+    {
+        if (value is ErrorValue) return false;
+        double serial = ToNumber(value);
+        return double.IsFinite(serial) && Math.Abs(serial - 60) < 1e-10;
+    }
 
     private static double ActualYearLength(DateTime d1, DateTime d2)
     {
