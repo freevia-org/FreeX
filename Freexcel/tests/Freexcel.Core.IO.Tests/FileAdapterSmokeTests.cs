@@ -8932,6 +8932,234 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadsSupportedWorksheetScenariosIntoWorkbookModel()
+    {
+        var workbook = new Workbook("ScenarioLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        var scenario = loaded.Scenarios.Should().ContainSingle().Subject;
+        scenario.Name.Should().Be("BestCase");
+        scenario.ChangingCells.Should().ContainSingle()
+            .Which.Should().Be(new ScenarioCellValue(
+                new CellAddress(loadedSheet.Id, 1, 1),
+                new NumberValue(42)));
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModelScenariosToWorksheetXmlGroupedBySheet()
+    {
+        var workbook = new Workbook("ScenarioSaveTest");
+        var data = workbook.AddSheet("Data");
+        var assumptions = workbook.AddSheet("Assumptions");
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "BestCase",
+            [
+                new ScenarioCellValue(new CellAddress(data.Id, 1, 1), new NumberValue(42)),
+                new ScenarioCellValue(new CellAddress(assumptions.Id, 2, 2), new TextValue("manual"))
+            ]));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var firstWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var secondWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet2.xml")!);
+
+        var firstScenario = firstWorksheetXml.Root!
+            .Element(worksheetNs + "scenarios")!
+            .Elements(worksheetNs + "scenario")
+            .Should().ContainSingle().Subject;
+        firstScenario.Attribute("name")!.Value.Should().Be("BestCase");
+        firstScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("A1");
+        firstScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("42");
+        firstScenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
+        firstWorksheetXml.Root!.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("scenarios", "pageMargins");
+
+        var secondScenario = secondWorksheetXml.Root!
+            .Element(worksheetNs + "scenarios")!
+            .Elements(worksheetNs + "scenario")
+            .Should().ContainSingle().Subject;
+        secondScenario.Attribute("name")!.Value.Should().Be("BestCase");
+        secondScenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("B2");
+        secondScenario.Element(worksheetNs + "inputCells")!.Attribute("val")!.Value.Should().Be("manual");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_DeduplicatesScenarioInputCellsAndSkipsBlankValues()
+    {
+        var workbook = new Workbook("ScenarioDedupeTest");
+        var sheet = workbook.AddSheet("Data");
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "BestCase",
+            [
+                new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(10)),
+                new ScenarioCellValue(new CellAddress(sheet.Id, 1, 1), new NumberValue(20)),
+                new ScenarioCellValue(new CellAddress(sheet.Id, 1, 2), BlankValue.Instance)
+            ]));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var inputCells = worksheetXml.Root!
+            .Element(worksheetNs + "scenarios")!
+            .Element(worksheetNs + "scenario")!
+            .Elements(worksheetNs + "inputCells")
+            .ToList();
+
+        inputCells.Should().ContainSingle();
+        inputCells[0].Attribute("r")!.Value.Should().Be("A1");
+        inputCells[0].Attribute("val")!.Value.Should().Be("20");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesModeledScenarioNativeMetadataWithoutDuplicates()
+    {
+        var workbook = new Workbook("ScenarioMetadataMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios")!;
+        scenarios.Attribute("current").Should().BeNull();
+        scenarios.Attribute("show").Should().BeNull();
+        var scenario = scenarios.Elements(worksheetNs + "scenario")
+            .Single(element => element.Attribute("name")?.Value == "BestCase");
+        scenario.Attribute("locked")!.Value.Should().Be("1");
+        scenario.Attribute("user")!.Value.Should().Be("FreexcelTest");
+        scenario.Elements(worksheetNs + "inputCells").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotPreserveScenarioCurrentShowWhenListChanges()
+    {
+        var workbook = new Workbook("ScenarioIndexMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loaded.Scenarios.Clear();
+        loaded.Scenarios.Add(new WorkbookScenario(
+            "OtherCase",
+            [new ScenarioCellValue(new CellAddress(loadedSheet.Id, 1, 1), new NumberValue(12))]));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios")!;
+
+        scenarios.Attribute("current").Should().BeNull();
+        scenarios.Attribute("show").Should().BeNull();
+        var scenario = scenarios.Elements(worksheetNs + "scenario").Should().ContainSingle().Subject;
+        scenario.Attribute("name")!.Value.Should().Be("OtherCase");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedModeledScenario()
+    {
+        var workbook = new Workbook("ScenarioRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.Scenarios.Clear();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var scenarioEntries = worksheetXml.Root!
+            .Element(worksheetNs + "scenarios")?
+            .Elements(worksheetNs + "scenario") ?? [];
+        scenarioEntries.Any(element => element.Attribute("name")?.Value == "BestCase").Should().BeFalse();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RetainsUnsupportedWorksheetScenarioEntryBestEffort()
+    {
+        var workbook = new Workbook("ScenarioUnsupportedRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedWorksheetScenario(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.Scenarios.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var scenario = worksheetXml.Root!
+            .Element(worksheetNs + "scenarios")!
+            .Elements(worksheetNs + "scenario")
+            .Single(element => element.Attribute("name")?.Value == "NativeOnly");
+        scenario.Element(worksheetNs + "inputCells")!.Attribute("r")!.Value.Should().Be("A1:B1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_MergesUnknownWorksheetExtensionListEntries()
     {
         var workbook = new Workbook("WorksheetExtensionRetentionTest");
@@ -11559,6 +11787,30 @@ public class FileAdapterSmokeTests
                     new XElement(
                         worksheetNs + "inputCells",
                         new XAttribute("r", "A1"),
+                        new XAttribute("val", "42")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedWorksheetScenario(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "scenarios",
+                new XElement(
+                    worksheetNs + "scenario",
+                    new XAttribute("name", "NativeOnly"),
+                    new XAttribute("count", "1"),
+                    new XAttribute("comment", "range reference is outside Freexcel's supported subset"),
+                    new XElement(
+                        worksheetNs + "inputCells",
+                        new XAttribute("r", "A1:B1"),
                         new XAttribute("val", "42")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
