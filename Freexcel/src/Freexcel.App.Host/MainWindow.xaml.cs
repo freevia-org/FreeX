@@ -2992,6 +2992,12 @@ public partial class MainWindow : Window
                 toggleButton.IsChecked = toggleButton.IsChecked != true;
 
             button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu &&
+                ReferenceEquals(_activeRibbonKeyTipMenu?.PlacementTarget, button))
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -3012,14 +3018,27 @@ public partial class MainWindow : Window
             return false;
         }
 
-        _activeRibbonKeyTipMenu = menu;
-        _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
-        _ribbonKeyTipSequence = "";
+        OpenRibbonContextMenu(button, menu, enterKeyTipMenuScope: true);
+        return true;
+    }
+
+    private void OpenRibbonContextMenu(ButtonBase button, ContextMenu menu, bool enterKeyTipMenuScope = false)
+    {
+        button.ContextMenu = menu;
         menu.PlacementTarget = button;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
+
+        if (enterKeyTipMenuScope || _ribbonKeyTipMode.IsActive)
+            EnterRibbonMenuKeyTipScope(menu);
+    }
+
+    private void EnterRibbonMenuKeyTipScope(ContextMenu menu)
+    {
+        _activeRibbonKeyTipMenu = menu;
+        _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
+        _ribbonKeyTipSequence = "";
         ClearKeyTipOverlay();
-        return true;
     }
 
     private bool TryInvokeActiveMenuItemKeyTip(string keyTip)
@@ -8973,6 +8992,50 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Move Chart", out var chart))
+            return;
+
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        if (currentSheet is null)
+            return;
+
+        var dialog = new MoveChartDialog(currentSheet.Name) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
+        {
+            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), "Move Chart"))
+                return;
+
+            var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
+            if (createdSheet is not null)
+                _currentSheetId = createdSheet.Id;
+        }
+        else
+        {
+            var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
+            if (targetSheet is null)
+            {
+                MessageBox.Show("Target sheet was not found.", "Move Chart", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), "Move Chart"))
+                return;
+
+            _currentSheetId = targetSheet.Id;
+        }
+
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        RefreshSheetTabs();
+        UpdateViewport();
+    }
+
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -10916,8 +10979,7 @@ public partial class MainWindow : Window
         }
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
-        menu.PlacementTarget = btn;
-        menu.IsOpen = true;
+        OpenRibbonContextMenu(btn, menu);
     }
 
     private void InsertDefinedNameIntoFormula(string name)
@@ -11185,9 +11247,7 @@ public partial class MainWindow : Window
         }
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
-        btn.ContextMenu = menu;
-        menu.PlacementTarget = btn;
-        menu.IsOpen = true;
+        OpenRibbonContextMenu(btn, menu);
     }
 
     private void InsertFormulaFunction(string funcName)
