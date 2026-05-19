@@ -290,6 +290,8 @@ public sealed class XlsxChartPartReaderTests
                     </c:ser>
                   </c:barChart>
                 </c:plotArea>
+                <c:dispBlanksAs val="span"/>
+                <c:showDLblsOverMax val="1"/>
               </c:chart>
             </c:chartSpace>
             """);
@@ -301,6 +303,8 @@ public sealed class XlsxChartPartReaderTests
         chart.PivotTableName.Should().Be("PivotTable1");
         chart.ChartStyleId.Should().Be(42);
         chart.RoundedCorners.Should().BeTrue();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Span);
+        chart.ShowDataLabelsOverMaximum.Should().BeTrue();
     }
 
     [Fact]
