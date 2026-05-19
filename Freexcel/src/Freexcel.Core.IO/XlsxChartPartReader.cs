@@ -65,6 +65,7 @@ public static class XlsxChartPartReader
         if (read)
         {
             ApplyChartStyleMetadata(chartXml, chart);
+            ApplyChartBehaviorMetadata(chartXml, chart);
             ApplyPivotSourceMetadata(chartXml, chart);
         }
 
@@ -82,6 +83,25 @@ public static class XlsxChartPartReader
 
         chart.RoundedCorners = IsTrue(chartXml.Root?
             .Element(ChartNs + "roundedCorners")?
+            .Attribute("val")?
+            .Value);
+    }
+
+    private static void ApplyChartBehaviorMetadata(XDocument chartXml, ChartModel chart)
+    {
+        var chartElement = chartXml.Root?.Element(ChartNs + "chart");
+        chart.BlankDisplayMode = chartElement?
+            .Element(ChartNs + "dispBlanksAs")?
+            .Attribute("val")?
+            .Value switch
+            {
+                "span" => ChartBlankDisplayMode.Span,
+                "zero" => ChartBlankDisplayMode.Zero,
+                _ => ChartBlankDisplayMode.Gap
+            };
+
+        chart.ShowDataLabelsOverMaximum = IsTrue(chartElement?
+            .Element(ChartNs + "showDLblsOverMax")?
             .Attribute("val")?
             .Value);
     }
