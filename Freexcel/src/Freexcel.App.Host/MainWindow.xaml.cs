@@ -1409,11 +1409,28 @@ public partial class MainWindow : Window
             Grid.SetColumnSpan(grid, columnSpan);
 
             foreach (var button in directButtons)
+            {
+                NormalizeDenseRibbonColumnButton(button);
                 grid.Children.Add(button);
+            }
 
             parentPanel.Children.RemoveAt(index);
             parentPanel.Children.Insert(index, grid);
         }
+    }
+
+    private static void NormalizeDenseRibbonColumnButton(Button button)
+    {
+        var commandName = GetRibbonButtonTitleOrLabel(button);
+        if (string.IsNullOrWhiteSpace(commandName))
+            return;
+
+        var label = FindRibbonContentLabel(button.Content) ?? commandName;
+        button.Height = 22;
+        button.Padding = new Thickness(3, 1, 3, 1);
+        button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+        button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
     }
 
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
