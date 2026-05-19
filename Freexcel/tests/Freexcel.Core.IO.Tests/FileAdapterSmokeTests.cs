@@ -8002,6 +8002,50 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesStableDocumentProperties()
+    {
+        var workbook = new Workbook("DocumentPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("document properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddStableDocumentProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var coreProperties = LoadPackageXml(archive.GetEntry("docProps/core.xml")!);
+        XNamespace dcNs = "http://purl.org/dc/elements/1.1/";
+        XNamespace cpNs = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+        coreProperties.Root!.Element(dcNs + "subject").Should().NotBeNull();
+        coreProperties.Root.Element(dcNs + "subject")!.Value.Should().Be("Freexcel parity subject");
+        coreProperties.Root.Element(cpNs + "keywords").Should().NotBeNull();
+        coreProperties.Root.Element(cpNs + "keywords")!.Value.Should().Be("freexcel,xlsx,parity");
+        coreProperties.Root.Element(cpNs + "category").Should().NotBeNull();
+        coreProperties.Root.Element(cpNs + "category")!.Value.Should().Be("Native Metadata");
+        coreProperties.Root.Element(cpNs + "contentStatus").Should().NotBeNull();
+        coreProperties.Root.Element(cpNs + "contentStatus")!.Value.Should().Be("Reviewed");
+
+        var appProperties = LoadPackageXml(archive.GetEntry("docProps/app.xml")!);
+        XNamespace appNs = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+        appProperties.Root!.Element(appNs + "Company").Should().NotBeNull();
+        appProperties.Root.Element(appNs + "Company")!.Value.Should().Be("Freexcel Test Lab");
+        appProperties.Root.Element(appNs + "Manager").Should().NotBeNull();
+        appProperties.Root.Element(appNs + "Manager")!.Value.Should().Be("XLSX Fidelity");
+        appProperties.Root.Element(appNs + "Application").Should().NotBeNull();
+        appProperties.Root.Element(appNs + "Application")!.Value.Should().Be("Microsoft Excel");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -10250,6 +10294,77 @@ public class FileAdapterSmokeTests
         }
 
         packageStream.Position = 0;
+    }
+
+    private static void AddStableDocumentProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace dcNs = "http://purl.org/dc/elements/1.1/";
+            XNamespace cpNs = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+            XNamespace appNs = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+
+            var coreXml = archive.GetEntry("docProps/core.xml") is { } coreEntry
+                ? LoadPackageXml(coreEntry)
+                : new XDocument(new XElement(cpNs + "coreProperties"));
+            SetElementValue(coreXml.Root!, dcNs + "subject", "Freexcel parity subject");
+            SetElementValue(coreXml.Root!, cpNs + "keywords", "freexcel,xlsx,parity");
+            SetElementValue(coreXml.Root!, cpNs + "category", "Native Metadata");
+            SetElementValue(coreXml.Root!, cpNs + "contentStatus", "Reviewed");
+            ReplacePackageXml(archive, "docProps/core.xml", coreXml);
+
+            var appXml = archive.GetEntry("docProps/app.xml") is { } appEntry
+                ? LoadPackageXml(appEntry)
+                : new XDocument(new XElement(appNs + "Properties"));
+            SetElementValue(appXml.Root!, appNs + "Company", "Freexcel Test Lab");
+            SetElementValue(appXml.Root!, appNs + "Manager", "XLSX Fidelity");
+            SetElementValue(appXml.Root!, appNs + "Application", "Microsoft Excel");
+            ReplacePackageXml(archive, "docProps/app.xml", appXml);
+            EnsureContentType(
+                archive,
+                "/docProps/core.xml",
+                "application/vnd.openxmlformats-package.core-properties+xml");
+            EnsureContentType(
+                archive,
+                "/docProps/app.xml",
+                "application/vnd.openxmlformats-officedocument.extended-properties+xml");
+        }
+
+        packageStream.Position = 0;
+
+        static void SetElementValue(XElement root, XName name, string value)
+        {
+            var element = root.Element(name);
+            if (element is null)
+            {
+                element = new XElement(name);
+                root.Add(element);
+            }
+
+            element.Value = value;
+        }
+
+        static void EnsureContentType(ZipArchive archive, string partName, string contentType)
+        {
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            var contentTypes = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            var existing = contentTypes.Root!
+                .Elements(contentTypeNs + "Override")
+                .FirstOrDefault(element => element.Attribute("PartName")?.Value == partName);
+            if (existing is null)
+            {
+                contentTypes.Root.Add(new XElement(
+                    contentTypeNs + "Override",
+                    new XAttribute("PartName", partName),
+                    new XAttribute("ContentType", contentType)));
+            }
+            else
+            {
+                existing.SetAttributeValue("ContentType", contentType);
+            }
+
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypes);
+        }
     }
 
     private static void AddMinimalCustomSheetViews(MemoryStream packageStream)
