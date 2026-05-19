@@ -29,17 +29,6 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
-    public void ShareExcludedMessage_NamesCloudCoauthoringExclusion()
-    {
-        var message = DeferredCommandMessages.ShareExcluded();
-
-        message.Title.Should().Be("Share Workbook");
-        message.Body.Should().Contain("excluded");
-        message.Body.Should().Contain("Microsoft 365 Share");
-        message.Body.Should().Contain("cloud co-authoring");
-    }
-
-    [Fact]
     public void OnlineTemplatesMessage_NamesExternalMicrosoftServiceExclusion()
     {
         var message = DeferredCommandMessages.OnlineTemplatesExcluded();

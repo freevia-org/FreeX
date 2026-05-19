@@ -13,6 +13,9 @@ public static class KeyboardShortcutMatcher
         modifiers == ModifierKeys.Control &&
         (key is Key.Subtract or Key.OemMinus || systemKey is Key.Subtract or Key.OemMinus);
 
+    public static bool IsPasteSpecialShortcut(Key key, ModifierKeys modifiers) =>
+        key == Key.V && modifiers == (ModifierKeys.Control | ModifierKeys.Alt);
+
     public static bool TryGetGridShortcut(Key key, ModifierKeys modifiers, out KeyboardGridShortcut shortcut)
     {
         shortcut = default;
@@ -37,6 +40,93 @@ public static class KeyboardShortcutMatcher
         if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.D0 or Key.NumPad0)
         {
             shortcut = KeyboardGridShortcut.UnhideColumns;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryGetSelectionShortcut(Key key, ModifierKeys modifiers, out KeyboardSelectionShortcut shortcut)
+    {
+        shortcut = default;
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.Space)
+        {
+            shortcut = KeyboardSelectionShortcut.SelectAll;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.Multiply or Key.D8)
+        {
+            shortcut = KeyboardSelectionShortcut.SelectCurrentRegion;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryGetCommandShortcut(Key key, Key systemKey, ModifierKeys modifiers, out KeyboardCommandShortcut shortcut)
+    {
+        shortcut = default;
+        var effectiveKey = key == Key.None ? systemKey : key;
+        if (modifiers == ModifierKeys.Control && effectiveKey is Key.T or Key.L)
+        {
+            shortcut = KeyboardCommandShortcut.CreateTable;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
+        {
+            shortcut = KeyboardCommandShortcut.InsertFunction;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F7)
+        {
+            shortcut = KeyboardCommandShortcut.SpellCheck;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F9)
+        {
+            shortcut = KeyboardCommandShortcut.CalculateNow;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F9)
+        {
+            shortcut = KeyboardCommandShortcut.CalculateSheet;
+            return true;
+        }
+
+        if (effectiveKey == Key.F9 &&
+            (modifiers == (ModifierKeys.Control | ModifierKeys.Alt) ||
+             modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)))
+        {
+            shortcut = KeyboardCommandShortcut.CalculateNow;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.U)
+        {
+            shortcut = KeyboardCommandShortcut.ToggleFormulaBarExpansion;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Q)
+        {
+            shortcut = KeyboardCommandShortcut.QuickAnalysis;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.F1)
+        {
+            shortcut = KeyboardCommandShortcut.InsertEmbeddedChart;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F11)
+        {
+            shortcut = KeyboardCommandShortcut.InsertChartSheet;
             return true;
         }
 
@@ -116,6 +206,25 @@ public enum KeyboardGridShortcut
     UnhideRows,
     HideColumns,
     UnhideColumns
+}
+
+public enum KeyboardSelectionShortcut
+{
+    SelectAll,
+    SelectCurrentRegion
+}
+
+public enum KeyboardCommandShortcut
+{
+    CreateTable,
+    InsertFunction,
+    SpellCheck,
+    CalculateNow,
+    CalculateSheet,
+    ToggleFormulaBarExpansion,
+    QuickAnalysis,
+    InsertEmbeddedChart,
+    InsertChartSheet
 }
 
 public enum BorderKeyboardShortcut

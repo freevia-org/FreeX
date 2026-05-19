@@ -14,11 +14,6 @@ public static class DeferredCommandMessages
             commandName,
             $"{commandName} is deferred until Freexcel has multi-window workbook hosting. It is tracked as a documented parity gap, not a silent partial implementation.");
 
-    public static DeferredCommandMessage ShareExcluded() =>
-        new(
-            "Share Workbook",
-            "Microsoft 365 Share and cloud co-authoring are excluded from Freexcel. Save the workbook and share the file through your normal file system or source-control workflow.");
-
     public static DeferredCommandMessage OnlineTemplatesExcluded() =>
         new(
             "Online Templates",

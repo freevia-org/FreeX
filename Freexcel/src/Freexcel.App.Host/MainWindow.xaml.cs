@@ -59,6 +59,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
     private readonly RecentFilesStore _recentFiles;
+    private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
     private FreexcelOptions _options = FreexcelOptions.Load();
     private string? _currentFilePath;
@@ -244,40 +245,51 @@ public partial class MainWindow : Window
         if (activePanel is null)
             return;
 
+        RemoveRibbonCollapsedGroupButtons(activePanel);
         var groups = activePanel.Children
             .OfType<FrameworkElement>()
-            .Where(e => e is not System.Windows.Shapes.Rectangle)
+            .Where(e => e is not System.Windows.Shapes.Rectangle && !IsRibbonCollapsedGroupButton(e))
             .ToList();
 
         foreach (var group in groups)
-            SetRibbonGroupCompact(group, RibbonCompactLevel.Full);
-
-        activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var availableWidth = FindVisualAncestor<ScrollViewer>(activePanel)?.ViewportWidth;
-        if (availableWidth is null or <= 0)
-            availableWidth = activePanel.ActualWidth > 0 ? activePanel.ActualWidth : RibbonTabs.ActualWidth;
-
-        var compacted = false;
-        if (activePanel.DesiredSize.Width > availableWidth.Value)
         {
-            foreach (var group in groups.AsEnumerable().Reverse())
-            {
-                SetRibbonGroupCompact(group, RibbonCompactLevel.SmallWithLabels);
-                compacted = true;
-                activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                if (activePanel.DesiredSize.Width <= availableWidth.Value)
-                    break;
-            }
+            group.Visibility = Visibility.Visible;
+            SetRibbonGroupCompact(group, RibbonCompactLevel.Full);
         }
 
-        if (activePanel.DesiredSize.Width > availableWidth.Value)
+        var collapsedButtons = InsertRibbonCollapsedGroupButtons(activePanel, groups);
+
+        activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var ribbonScrollViewer = FindVisualAncestor<ScrollViewer>(activePanel);
+        var availableWidth = ribbonScrollViewer?.ActualWidth > 0
+            ? ribbonScrollViewer.ActualWidth
+            : ribbonScrollViewer?.ViewportWidth;
+        if (availableWidth is null or <= 0)
+            availableWidth = RibbonTabs.ActualWidth > 0 ? RibbonTabs.ActualWidth : activePanel.ActualWidth;
+
+        var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
+        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups);
+        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+
+        for (var i = 0; i < groups.Count; i++)
         {
-            foreach (var group in groups.AsEnumerable().Reverse())
+            collapsedButtons[i].Visibility = Visibility.Collapsed;
+            groups[i].Visibility = Visibility.Visible;
+
+            switch (plannedStates[i])
             {
-                SetRibbonGroupCompact(group, RibbonCompactLevel.IconOnly);
-                compacted = true;
-                activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                if (activePanel.DesiredSize.Width <= availableWidth.Value)
+                case RibbonAdaptiveGroupState.Full:
+                    SetRibbonGroupCompact(groups[i], RibbonCompactLevel.Full);
+                    break;
+                case RibbonAdaptiveGroupState.SmallWithLabels:
+                    SetRibbonGroupCompact(groups[i], RibbonCompactLevel.SmallWithLabels);
+                    break;
+                case RibbonAdaptiveGroupState.IconOnly:
+                    SetRibbonGroupCompact(groups[i], RibbonCompactLevel.IconOnly);
+                    break;
+                case RibbonAdaptiveGroupState.Collapsed:
+                    groups[i].Visibility = Visibility.Collapsed;
+                    collapsedButtons[i].Visibility = Visibility.Visible;
                     break;
             }
         }
@@ -285,15 +297,257 @@ public partial class MainWindow : Window
         _ribbonCompact = compacted;
     }
 
+    private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
+    {
+        var name = GetRibbonGroupName(group);
+        var fullWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.Full);
+        var smallWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.SmallWithLabels);
+        var iconWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.IconOnly);
+        collapsedButton.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var collapsedWidth = Math.Max(48, collapsedButton.DesiredSize.Width);
+        SetRibbonGroupCompact(group, RibbonCompactLevel.Full);
+
+        return new RibbonAdaptiveGroup(name, fullWidth, smallWidth, iconWidth, collapsedWidth);
+    }
+
+    private static double MeasureRibbonGroupWidth(FrameworkElement group, RibbonCompactLevel level)
+    {
+        SetRibbonGroupCompact(group, level);
+        group.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Max(0, group.DesiredSize.Width);
+    }
+
+    private static List<Button> InsertRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
+    {
+        var buttons = new List<Button>(groups.Count);
+        foreach (var group in groups)
+        {
+            var button = CreateRibbonCollapsedGroupButton(group);
+            var index = panel.Children.IndexOf(group);
+            panel.Children.Insert(index + 1, button);
+            buttons.Add(button);
+        }
+
+        return buttons;
+    }
+
+    private static void RemoveRibbonCollapsedGroupButtons(StackPanel panel)
+    {
+        for (var i = panel.Children.Count - 1; i >= 0; i--)
+        {
+            if (panel.Children[i] is FrameworkElement element && IsRibbonCollapsedGroupButton(element))
+                panel.Children.RemoveAt(i);
+        }
+    }
+
+    private static bool IsRibbonCollapsedGroupButton(FrameworkElement element) =>
+        element.Tag is string tag && string.Equals(tag, "RibbonCollapsedGroupButton", StringComparison.Ordinal);
+
+    private static Button CreateRibbonCollapsedGroupButton(FrameworkElement group)
+    {
+        var groupName = GetRibbonGroupName(group);
+        var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
+        var button = new Button
+        {
+            Tag = "RibbonCollapsedGroupButton",
+            Width = 56,
+            Height = 64,
+            Margin = new Thickness(1, 0, 3, 0),
+            Padding = new Thickness(3, 2, 3, 2),
+            Visibility = Visibility.Collapsed,
+            ContextMenu = CreateCollapsedRibbonGroupMenu(group),
+            Content = new StackPanel
+            {
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = icon.Glyph,
+                        Tag = "RibbonIcon",
+                        FontFamily = icon.FontFamily,
+                        FontSize = 22,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                        TextAlignment = TextAlignment.Center,
+                        Margin = new Thickness(0, 2, 0, 1)
+                    },
+                    new TextBlock
+                    {
+                        Text = groupName,
+                        Tag = "RibbonLabel",
+                        FontSize = 10,
+                        TextWrapping = TextWrapping.Wrap,
+                        TextAlignment = TextAlignment.Center,
+                        MaxWidth = 52,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                    },
+                    new TextBlock
+                    {
+                        Text = "\uE70D",
+                        Tag = "RibbonIcon",
+                        FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                        FontSize = 8,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                    }
+                }
+            }
+        };
+
+        button.SetResourceReference(StyleProperty, "RibbonTallButton");
+        RibbonTooltip.SetTitle(button, groupName);
+        RibbonTooltip.SetDescription(button, $"Show the {groupName} commands.");
+        RibbonTooltip.SetKeyTip(button, CreateGroupKeyTip(groupName));
+        button.Click += (_, _) =>
+        {
+            if (button.ContextMenu is null)
+                return;
+
+            button.ContextMenu.PlacementTarget = button;
+            button.ContextMenu.Placement = PlacementMode.Bottom;
+            button.ContextMenu.IsOpen = true;
+        };
+        return button;
+    }
+
+    private static ContextMenu CreateCollapsedRibbonGroupMenu(FrameworkElement group)
+    {
+        var menu = new ContextMenu();
+        var added = new HashSet<ButtonBase>();
+
+        foreach (var button in EnumerateVisualDescendants(group).OfType<ButtonBase>())
+        {
+            if (!added.Add(button) || FindVisualAncestor<ButtonBase>(button) is { } ancestor && !ReferenceEquals(ancestor, button))
+                continue;
+
+            if (CreateMenuItemForRibbonButton(button) is { } item)
+                menu.Items.Add(item);
+        }
+
+        if (menu.Items.Count == 0)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = GetRibbonGroupName(group),
+                IsEnabled = false
+            });
+        }
+
+        return menu;
+    }
+
+    private static MenuItem? CreateMenuItemForRibbonButton(ButtonBase button)
+    {
+        var title = RibbonTooltip.GetTitle(button);
+        if (string.IsNullOrWhiteSpace(title))
+            title = button.Content as string;
+        if (string.IsNullOrWhiteSpace(title))
+            title = button.Name;
+        if (string.IsNullOrWhiteSpace(title))
+            return null;
+
+        var item = new MenuItem
+        {
+            Header = title,
+            IsEnabled = button.IsEnabled
+        };
+
+        var keyTip = RibbonTooltip.GetKeyTip(button);
+        if (!string.IsNullOrWhiteSpace(keyTip))
+            RibbonTooltip.SetKeyTip(item, keyTip);
+
+        if (button.ContextMenu is { Items.Count: > 0 } contextMenu)
+        {
+            foreach (var child in contextMenu.Items)
+            {
+                if (CloneRibbonMenuItem(child) is { } childItem)
+                    item.Items.Add(childItem);
+            }
+        }
+        else
+        {
+            item.Click += (_, _) => InvokeRibbonButton(button);
+        }
+
+        return item;
+    }
+
+    private static object? CloneRibbonMenuItem(object source)
+    {
+        if (source is Separator)
+            return new Separator();
+
+        if (source is not MenuItem sourceItem)
+            return null;
+
+        var item = new MenuItem
+        {
+            Header = sourceItem.Header,
+            IsEnabled = sourceItem.IsEnabled,
+            InputGestureText = sourceItem.InputGestureText
+        };
+
+        var keyTip = RibbonTooltip.GetKeyTip(sourceItem);
+        if (!string.IsNullOrWhiteSpace(keyTip))
+            RibbonTooltip.SetKeyTip(item, keyTip);
+
+        foreach (var child in sourceItem.Items)
+        {
+            if (CloneRibbonMenuItem(child) is { } childItem)
+                item.Items.Add(childItem);
+        }
+
+        item.Click += (_, args) =>
+        {
+            if (args.OriginalSource is MenuItem original && original.Items.Count > 0)
+                return;
+
+            sourceItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, sourceItem));
+        };
+
+        return item;
+    }
+
+    private static void InvokeRibbonButton(ButtonBase button)
+    {
+        if (button is ToggleButton toggleButton)
+            toggleButton.IsChecked = toggleButton.IsChecked != true;
+
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+    }
+
+    private static string GetRibbonGroupName(FrameworkElement group)
+    {
+        var label = EnumerateVisualDescendants(group)
+            .OfType<TextBlock>()
+            .LastOrDefault(textBlock => FindVisualAncestor<Border>(textBlock) is not null &&
+                                        FindVisualAncestor<ButtonBase>(textBlock) is null);
+
+        return string.IsNullOrWhiteSpace(label?.Text) ? "Commands" : label.Text.Trim();
+    }
+
+    private static string CreateGroupKeyTip(string groupName)
+    {
+        var letters = new string(groupName.Where(char.IsLetterOrDigit).Take(2).ToArray());
+        return string.IsNullOrWhiteSpace(letters) ? "G" : letters.ToUpperInvariant();
+    }
+
     private StackPanel? GetActiveRibbonPanel()
     {
         if (RibbonTabs.SelectedItem is not TabItem tabItem)
             return null;
 
+        if (string.Equals(tabItem.Header?.ToString(), "Home", StringComparison.Ordinal) &&
+            HomeRibbonPanel is not null)
+        {
+            return HomeRibbonPanel;
+        }
+
         return EnumerateVisualDescendants(tabItem)
             .OfType<StackPanel>()
+            .OrderByDescending(panel => panel.Children.OfType<Grid>().Count())
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                     panel.Children.OfType<FrameworkElement>().Any(e => e is Grid));
+                                     panel.Children.OfType<Grid>().Count() >= 2);
     }
 
     private enum RibbonCompactLevel
@@ -1013,6 +1267,12 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            if (KeyboardShortcutMatcher.TryGetCommandShortcut(e.Key, e.SystemKey, Keyboard.Modifiers, out var commandShortcut))
+            {
+                ExecuteCommandShortcut(commandShortcut, sender, e);
+                e.Handled = true;
+                return;
+            }
             if (KeyboardShortcutMatcher.TryGetNumberFormatShortcut(e.Key, Keyboard.Modifiers, out var numberFormatShortcut))
             {
                 ApplyNumberFormatShortcut(numberFormatShortcut);
@@ -1189,7 +1449,14 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(e.Key, Keyboard.Modifiers))
+        {
+            PasteSpecialBtn_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control)
         {
             ExecutePaste();
             e.Handled = true;
@@ -1198,6 +1465,16 @@ public partial class MainWindow : Window
         if (e.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             SelectCurrentRegionOrAll();
+            e.Handled = true;
+            return;
+        }
+        if (KeyboardShortcutMatcher.TryGetSelectionShortcut(e.Key, Keyboard.Modifiers, out var selectionShortcut))
+        {
+            if (selectionShortcut == KeyboardSelectionShortcut.SelectAll)
+                SelectAll();
+            else
+                SelectCurrentRegionOnly();
+
             e.Handled = true;
             return;
         }
@@ -1322,6 +1599,38 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
+    {
+        switch (shortcut)
+        {
+            case KeyboardCommandShortcut.CreateTable:
+                TableBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.InsertFunction:
+                InsertFunctionBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.SpellCheck:
+                SpellCheckBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.CalculateNow:
+                CalcNowBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.CalculateSheet:
+                CalcSheetBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
+                FormulaBarExpandBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.QuickAnalysis:
+                StatusReadyText.Text = "Quick Analysis is not available in Freexcel.";
+                break;
+            case KeyboardCommandShortcut.InsertEmbeddedChart:
+            case KeyboardCommandShortcut.InsertChartSheet:
+                ChartColumnMenuItem_Click(sender, e);
+                break;
+        }
+    }
+
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (!_pendingStandaloneAltKeyTip)
@@ -1401,6 +1710,26 @@ public partial class MainWindow : Window
         }
 
         SelectAll();
+    }
+
+    private void SelectCurrentRegionOnly()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var activeCell = SheetGrid.SelectedRange?.Start;
+        if (sheet is not null &&
+            activeCell is { } cell &&
+            SelectionRangeService.GetCurrentRegion(sheet, cell) is { } currentRegion)
+        {
+            _selectionAnchor = currentRegion.Start;
+            _selectionCursor = currentRegion.End;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.SelectedRange = currentRegion;
+            CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
+            FormulaBar.Text = FormatFormulaBarText(sheet.GetCell(cell), cell);
+            SheetGrid.Focus();
+            RefreshToolbar();
+            RefreshStatusBar();
+        }
     }
 
     private void SelectWholeRowsFromSelection()
@@ -2187,7 +2516,35 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        if (TryGetInlineEditorNavigationTarget(e, out var next))
+        var current = SheetGrid.SelectedRange?.Start;
+        if (current is null)
+            return;
+
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            e.Key,
+            Keyboard.Modifiers,
+            current.Value,
+            pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
+            allowFormulaBarNavigationKeys: false);
+
+        if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
+        {
+            InsertLineBreak(_inlineEditor!);
+            FormulaBar.Text = _inlineEditor!.Text;
+            e.Handled = true;
+            return;
+        }
+
+        if (intent.Action == ExcelEditKeyAction.CommitSelection)
+        {
+            FormulaBar.Text = _inlineEditor!.Text;
+            if (CommitEditAcrossSelection())
+                HideInlineEditor(commit: false);
+            e.Handled = true;
+            return;
+        }
+
+        if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } next)
         {
             var text = _inlineEditor!.Text;
             FormulaBar.Text = text;
@@ -2201,39 +2558,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool TryGetInlineEditorNavigationTarget(System.Windows.Input.KeyEventArgs e, out CellAddress target)
+    private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
     {
-        target = default;
-        if (SheetGrid.SelectedRange?.Start is not { } current)
-            return false;
-
-        bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-        bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-        bool altHeld = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-
-        if (ctrlHeld || altHeld)
-            return false;
-
-        var next = e.Key switch
-        {
-            Key.Up when !shiftHeld => new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
-            Key.Down when !shiftHeld => new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Left when !shiftHeld => new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
-            Key.Right when !shiftHeld => new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
-            Key.Enter => shiftHeld
-                ? new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)
-                : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Tab => shiftHeld
-                ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
-                : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
-            _ => (CellAddress?)null
-        };
-
-        if (next is null)
-            return false;
-
-        target = next.Value;
-        return true;
+        var insertion = Environment.NewLine;
+        var start = editor.SelectionStart;
+        var length = editor.SelectionLength;
+        editor.Text = editor.Text.Remove(start, length).Insert(start, insertion);
+        editor.CaretIndex = start + insertion.Length;
     }
 
     private void InlineEditor_LostFocus(object sender, RoutedEventArgs e)
@@ -2257,9 +2588,15 @@ public partial class MainWindow : Window
 
     private void CancelCopyAndTransientModes()
     {
-        SheetGrid.ClipboardRange = null;
+        ClearClipboardVisualState();
         _internalClipboard = null;
         _formatPainterActive = false;
+    }
+
+    private void ClearClipboardVisualState()
+    {
+        SheetGrid.ClipboardRange = null;
+        SheetGrid.ClipboardIsCut = false;
     }
 
     private void EnsureCellVisible(CellAddress addr)
@@ -2371,19 +2708,6 @@ public partial class MainWindow : Window
             if (TryCycleFormulaReference(FormulaBar))
                 e.Handled = true;
         }
-        else if (e.Key == System.Windows.Input.Key.Enter
-            && (e.KeyboardDevice.Modifiers & System.Windows.Input.ModifierKeys.Shift) == 0)
-        {
-            var current = SheetGrid.SelectedRange?.Start;
-            CommitEdit();
-            if (current.HasValue)
-            {
-                var next = new CellAddress(_currentSheetId, current.Value.Row + 1, current.Value.Col);
-                SetActiveCell(next);
-                EnsureCellVisible(next);
-            }
-            e.Handled = true;
-        }
         else if (e.Key == System.Windows.Input.Key.Escape)
         {
             // Restore the original cell value and return focus to grid
@@ -2393,30 +2717,40 @@ public partial class MainWindow : Window
                 var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
             }
-            SheetGrid.ClipboardRange = null;
+            ClearClipboardVisualState();
             SheetGrid.Focus();
             e.Handled = true;
         }
-        else if (e.Key is Key.Up or Key.Down or Key.Tab or Key.PageUp or Key.PageDown)
+        else if (SheetGrid.SelectedRange?.Start is { } current)
         {
-            var current = SheetGrid.SelectedRange?.Start;
-            CommitEdit();
-            if (current.HasValue)
+            int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+            var intent = ExcelEditKeyPlanner.GetIntent(
+                e.Key,
+                e.KeyboardDevice.Modifiers,
+                current,
+                pageSize,
+                allowFormulaBarNavigationKeys: true);
+
+            if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
-                int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
-                var target = e.Key switch
-                {
-                    Key.Up       => new CellAddress(_currentSheetId, current.Value.Row > 1 ? current.Value.Row - 1 : 1u, current.Value.Col),
-                    Key.Down     => new CellAddress(_currentSheetId, Math.Min(current.Value.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Value.Col),
-                    Key.Tab      => new CellAddress(_currentSheetId, current.Value.Row, Math.Min(current.Value.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
-                    Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Value.Row - pageSize), current.Value.Col),
-                    Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Value.Row + (uint)pageSize), current.Value.Col),
-                    _            => current.Value
-                };
-                SetActiveCell(target);
-                EnsureCellVisible(target);
+                InsertLineBreak(FormulaBar);
+                e.Handled = true;
             }
-            e.Handled = true;
+            else if (intent.Action == ExcelEditKeyAction.CommitSelection)
+            {
+                CommitEditAcrossSelection();
+                e.Handled = true;
+            }
+            else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
+            {
+                if (CommitEdit())
+                {
+                    SetActiveCell(target);
+                    EnsureCellVisible(target);
+                }
+
+                e.Handled = true;
+            }
         }
     }
 
@@ -2445,7 +2779,38 @@ public partial class MainWindow : Window
         var addr = SheetGrid.SelectedRange.Value.Start;
         var text = FormulaBar.Text;
 
-        Cell newCell;
+        if (!TryCreateCellFromEntryText(addr, text, out var newCell))
+            return false;
+
+        return CommitPreparedEdits([(addr, newCell)], text, [addr], "Edit Cell");
+    }
+
+    private bool CommitEditAcrossSelection()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return false;
+        var text = FormulaBar.Text;
+        var edits = new List<(CellAddress Address, Cell NewCell)>();
+        foreach (var address in range.AllCells())
+        {
+            if (!TryCreateCellFromEntryText(address, text, out var newCell))
+                return false;
+
+            edits.Add((address, newCell));
+        }
+
+        if (edits.Count == 0)
+            return false;
+
+        return CommitPreparedEdits(
+            edits,
+            text,
+            edits.Select(edit => edit.Address).ToList(),
+            "Edit Selection");
+    }
+
+    private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
+    {
+        newCell = default!;
         if (text.StartsWith("="))
         {
             var formula = text.Substring(1);
@@ -2520,23 +2885,34 @@ public partial class MainWindow : Window
             newCell = Cell.FromValue(value);
         }
 
-        if (!TryExecuteEditCells([(addr, newCell)], "Edit Cell", out var outcome))
+        return true;
+    }
+
+    private bool CommitPreparedEdits(
+        IReadOnlyList<(CellAddress Address, Cell NewCell)> edits,
+        string text,
+        IReadOnlyList<CellAddress> fallbackAffectedCells,
+        string title)
+    {
+        if (!TryExecuteEditCells(edits, title, out var outcome))
             return false;
 
-        var affectedCells = outcome.AffectedCells ?? [addr];
+        var affectedCells = outcome.AffectedCells ?? fallbackAffectedCells;
         if (text.StartsWith("="))
         {
             // For now, we manually register dependencies because we haven't automated this in the command yet.
             try
             {
-                var formulaA1 = _options.UseR1C1ReferenceStyle
-                    ? FormulaReferenceStyleService.ToA1(text.Substring(1), addr)
-                    : text.Substring(1);
-                var lexer = new Lexer("=" + formulaA1);
-                var parser = new Parser(lexer.Tokenize());
-                var ast = parser.Parse();
                 foreach (var affected in affectedCells)
+                {
+                    var formulaA1 = _options.UseR1C1ReferenceStyle
+                        ? FormulaReferenceStyleService.ToA1(text.Substring(1), affected)
+                        : text.Substring(1);
+                    var lexer = new Lexer("=" + formulaA1);
+                    var parser = new Parser(lexer.Tokenize());
+                    var ast = parser.Parse();
                     _recalcEngine.RegisterFormulaDependencies(affected, ast, affected.Sheet, _workbook);
+                }
             }
             catch
             {
@@ -3268,9 +3644,9 @@ public partial class MainWindow : Window
 
         NormalizeRibbonSurfaceAfterTabSelection();
     }
-    private void SsShareBtn_Click(object sender, RoutedEventArgs e)
+    private async void SsShareBtn_Click(object sender, RoutedEventArgs e)
     {
-        ShowExcludedShareMessage();
+        await ShareWorkbookAsync();
     }
 
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
@@ -3438,7 +3814,7 @@ public partial class MainWindow : Window
         SaveWorkbookWithDialog();
     }
 
-    private void SaveWorkbookWithDialog()
+    private bool SaveWorkbookWithDialog()
     {
         var filter = string.Join("|", _fileAdapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -3452,16 +3828,20 @@ public partial class MainWindow : Window
         {
             var ext = System.IO.Path.GetExtension(dialog.FileName).ToLower();
             var adapter = _fileAdapters.FirstOrDefault(a => a.Extension == ext);
-            if (adapter == null) return;
-            SaveWorkbookToTarget(new FileSaveTarget(dialog.FileName, adapter));
+            if (adapter == null)
+                return false;
+
+            return SaveWorkbookToTarget(new FileSaveTarget(dialog.FileName, adapter));
         }
+
+        return false;
     }
 
-    private void SaveWorkbookToTarget(FileSaveTarget target)
+    private bool SaveWorkbookToTarget(FileSaveTarget target)
     {
         var ext = System.IO.Path.GetExtension(target.Path).ToLowerInvariant();
         if (ext == ".xlsx" && !ConfirmUnsupportedXlsxFeatureSave())
-            return;
+            return false;
 
         try
         {
@@ -3470,11 +3850,13 @@ public partial class MainWindow : Window
             _currentFilePath = target.Path;
             _recentFiles.AddOrUpdate(target.Path);
             UpdateTitleBar();
+            return true;
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Failed to save file:\n{ex.Message}", "Save Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
     }
 
@@ -4930,6 +5312,7 @@ public partial class MainWindow : Window
 
         // Show marching ants around the copied range
         SheetGrid.ClipboardRange = range;
+        SheetGrid.ClipboardIsCut = isCut;
 
         // Capture raw cells (including formulas) for paste formula adjustment
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -5098,7 +5481,7 @@ public partial class MainWindow : Window
         _selectionCursor = pastedEnd;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
-        SheetGrid.ClipboardRange = null;
+        ClearClipboardVisualState();
     }
 
     private void CompleteExternalPasteSelection(IReadOnlyList<IReadOnlyList<string>> rows)
@@ -5119,7 +5502,7 @@ public partial class MainWindow : Window
         _selectionCursor = pastedEnd;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
-        SheetGrid.ClipboardRange = null;
+        ClearClipboardVisualState();
     }
 
     private bool TryPasteClipboardImage(CellAddress anchor)
@@ -5155,7 +5538,7 @@ public partial class MainWindow : Window
                     }))
                 return true;
 
-            SheetGrid.ClipboardRange = null;
+            ClearClipboardVisualState();
             UpdateViewport();
             RefreshToolbar();
             return true;
@@ -5366,8 +5749,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        _repeatPostAction = _ => { SheetGrid.ClipboardRange = null; };
-        SheetGrid.ClipboardRange = null;
+        _repeatPostAction = _ => ClearClipboardVisualState();
+        ClearClipboardVisualState();
         UpdateViewport();
         RefreshToolbar();
     }
@@ -11041,16 +11424,37 @@ public partial class MainWindow : Window
         MessageBox.Show($"{range} can now be edited while this sheet is protected.",
             "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
     }
-    private void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => ShowExcludedShareMessage();
+    private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();
 
-    private static void ShowExcludedShareMessage()
+    private async Task ShareWorkbookAsync()
     {
-        var message = DeferredCommandMessages.ShareExcluded();
-        MessageBox.Show(
-            message.Body,
-            message.Title,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        var plan = ShareWorkbookPlanner.CreatePlan(_currentFilePath);
+        if (plan.Kind == ShareWorkbookPlanKind.SaveAsBeforeShare)
+        {
+            if (!SaveWorkbookWithDialog())
+                return;
+        }
+        else if (FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target))
+        {
+            if (!SaveWorkbookToTarget(target!))
+                return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_currentFilePath))
+            return;
+
+        try
+        {
+            await _shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Failed to open Windows Share:\n{ex.Message}",
+                "Share Workbook",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     // ── View tab ─────────────────────────────────────────────────────────────
