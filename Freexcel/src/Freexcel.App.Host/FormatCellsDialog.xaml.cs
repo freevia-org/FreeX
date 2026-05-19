@@ -53,6 +53,7 @@ public partial class FormatCellsDialog : Window
         DlgVAlignBox.ItemsSource  = Enum.GetNames(typeof(CellVAlign));
         DlgVAlignBox.SelectedItem = s.VerticalAlignment.ToString();
         DlgWrapTextCheck.IsChecked = s.WrapText;
+        DlgShrinkToFitCheck.IsChecked = s.ShrinkToFit;
     }
 
     private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
@@ -88,6 +89,7 @@ public partial class FormatCellsDialog : Window
             HAlign:        hAlign,
             VAlign:        vAlign,
             WrapText:      DlgWrapTextCheck.IsChecked,
+            ShrinkToFit:   DlgShrinkToFitCheck.IsChecked,
             NumberFormat:  numFmt
         );
 
