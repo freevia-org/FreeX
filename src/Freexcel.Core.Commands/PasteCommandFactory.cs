@@ -62,7 +62,8 @@ public static class PasteCommandFactory
         var rowDelta = (int)destination.Row - (int)sourceRange.Start.Row;
         var colDelta = (int)destination.Col - (int)sourceRange.Start.Col;
         var pasteOp = new PasteOffsetOp(rowDelta, colDelta);
-        var activeSheetName = workbook.GetSheet(targetSheetId)?.Name ?? "";
+        var targetSheet = workbook.GetSheet(targetSheetId);
+        var activeSheetName = targetSheet?.Name ?? "";
 
         if (mode == PasteCellsMode.Formats)
         {
@@ -75,7 +76,18 @@ public static class PasteCommandFactory
         foreach (var (source, sourceCell) in sourceCells)
         {
             var destinationAddress = Shift(source, targetSheetId, rowDelta, colDelta);
-            var pastedCell = BuildPastedCell(sourceCell, mode, pasteOp, activeSheetName, rowDelta, colDelta);
+            var destinationStyle =
+                targetSheet?.GetCell(destinationAddress)?.StyleId
+                ?? targetSheet?.GetStyleOnly(destinationAddress.Row, destinationAddress.Col)
+                ?? StyleId.Default;
+            var pastedCell = BuildPastedCell(
+                sourceCell,
+                mode,
+                pasteOp,
+                activeSheetName,
+                rowDelta,
+                colDelta,
+                destinationStyle);
             edits.Add((destinationAddress, pastedCell));
         }
 
@@ -90,10 +102,15 @@ public static class PasteCommandFactory
         PasteOffsetOp pasteOp,
         string activeSheetName,
         int rowDelta,
-        int colDelta)
+        int colDelta,
+        StyleId destinationStyle)
     {
         if (mode == PasteCellsMode.Values)
-            return Cell.FromValue(sourceCell.Value);
+        {
+            var valueCell = Cell.FromValue(sourceCell.Value);
+            valueCell.StyleId = destinationStyle;
+            return valueCell;
+        }
 
         var pastedCell = sourceCell.Clone();
         if (pastedCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
@@ -104,7 +121,14 @@ public static class PasteCommandFactory
         }
 
         if (mode == PasteCellsMode.Formulas && !pastedCell.HasFormula)
-            return Cell.FromValue(sourceCell.Value);
+        {
+            var valueCell = Cell.FromValue(sourceCell.Value);
+            valueCell.StyleId = destinationStyle;
+            return valueCell;
+        }
+
+        if (mode == PasteCellsMode.Formulas)
+            pastedCell.StyleId = destinationStyle;
 
         return pastedCell;
     }
