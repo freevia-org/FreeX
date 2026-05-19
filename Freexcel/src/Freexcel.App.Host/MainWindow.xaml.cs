@@ -1772,30 +1772,6 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                SaveButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                OpenButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                CreateNewWorkbook();
-                e.Handled = true;
-                return;
-            }
-            if ((e.Key == Key.D1 || e.Key == Key.NumPad1) && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                OpenFormatCellsDialog();
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.TryGetCommandShortcut(e.Key, e.SystemKey, Keyboard.Modifiers, out var commandShortcut))
             {
                 ExecuteCommandShortcut(commandShortcut, sender, e);
@@ -1818,108 +1794,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.Oem3 && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ShowFormulasBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.L && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                FilterButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageUp && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                SelectAdjacentVisibleSheetGroup(-1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageDown && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                SelectAdjacentVisibleSheetGroup(1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageUp && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ActivateAdjacentVisibleSheet(-1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageDown && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ActivateAdjacentVisibleSheet(1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.F11 && Keyboard.Modifiers == ModifierKeys.Shift)
-            {
-                AddSheetButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.D && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                FillDownMenuItem_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.R && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                FillRightMenuItem_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.E && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                TryFlashFill();
-                e.Handled = true;
-                return;
-            }
-            if ((e.Key == Key.D5 || e.Key == Key.NumPad5) && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ApplyFontToggleShortcut(FontToggleShortcut.Strikethrough, StrikeButton);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                InsertLinkBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.OemSemicolon && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                InsertCurrentDateOrTime(insertTime: false);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.OemSemicolon && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                InsertCurrentDateOrTime(insertTime: true);
-                e.Handled = true;
-                return;
-            }
-            if ((e.SystemKey == Key.OemPlus || e.SystemKey == Key.Add) && Keyboard.Modifiers == ModifierKeys.Alt)
-            {
-                InsertAutoSumFormula("SUM");
-                e.Handled = true;
-                return;
-            }
-            if (e.SystemKey == Key.Right && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
-            {
-                GroupRowsBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.SystemKey == Key.Left && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
-            {
-                UngroupRowsBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.IsCtrlPlus(e.Key, e.SystemKey, Keyboard.Modifiers))
             {
                 ExecuteKeyboardInsert();
@@ -1938,19 +1812,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                Close();
-                e.Handled = true;
-                return;
-            }
-            if ((e.Key == Key.F5 && Keyboard.Modifiers == ModifierKeys.None) ||
-                (e.Key == Key.G && Keyboard.Modifiers == ModifierKeys.Control))
-            {
-                FindGoToMenuItem_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
         }
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
@@ -1959,6 +1820,7 @@ public partial class MainWindow : Window
             {
                 FontToggleShortcut.Bold => BoldButton,
                 FontToggleShortcut.Italic => ItalicButton,
+                FontToggleShortcut.Strikethrough => StrikeButton,
                 _ => UnderlineButton
             };
             ApplyFontToggleShortcut(fontToggleShortcut, button);
@@ -1966,18 +1828,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            FindButton_Click(sender, e);
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.H && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            ReplaceButton_Click(sender, e);
-            e.Handled = true;
-            return;
-        }
         if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             ExecuteCopy();
@@ -2159,14 +2009,68 @@ public partial class MainWindow : Window
     {
         switch (shortcut)
         {
+            case KeyboardCommandShortcut.NewWorkbook:
+                CreateNewWorkbook();
+                break;
+            case KeyboardCommandShortcut.OpenWorkbook:
+                OpenButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.SaveWorkbook:
+                SaveButton_Click(sender, e);
+                break;
             case KeyboardCommandShortcut.CreateTable:
                 TableBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.InsertHyperlink:
+                InsertLinkBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.FillDown:
+                FillDownMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.FillRight:
+                FillRightMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.FlashFill:
+                TryFlashFill();
+                break;
+            case KeyboardCommandShortcut.InsertCurrentDate:
+                InsertCurrentDateOrTime(insertTime: false);
+                break;
+            case KeyboardCommandShortcut.InsertCurrentTime:
+                InsertCurrentDateOrTime(insertTime: true);
+                break;
+            case KeyboardCommandShortcut.ToggleShowFormulas:
+                ShowFormulasBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ActivatePreviousSheet:
+                ActivateAdjacentVisibleSheet(-1);
+                break;
+            case KeyboardCommandShortcut.ActivateNextSheet:
+                ActivateAdjacentVisibleSheet(1);
+                break;
+            case KeyboardCommandShortcut.SelectPreviousSheetGroup:
+                SelectAdjacentVisibleSheetGroup(-1);
+                break;
+            case KeyboardCommandShortcut.SelectNextSheetGroup:
+                SelectAdjacentVisibleSheetGroup(1);
+                break;
+            case KeyboardCommandShortcut.OpenFormatCells:
+                OpenFormatCellsDialog();
+                break;
+            case KeyboardCommandShortcut.Find:
+                FindButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.Replace:
+                ReplaceButton_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.SpellCheck:
                 SpellCheckBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.CloseWorkbook:
+                Close();
                 break;
             case KeyboardCommandShortcut.CalculateNow:
                 CalcNowBtn_Click(sender, e);
@@ -2180,15 +2084,33 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
                 FormulaBarExpandBtn_Click(sender, e);
                 break;
+            case KeyboardCommandShortcut.ToggleFilter:
+                FilterButton_Click(sender, e);
+                break;
             case KeyboardCommandShortcut.QuickAnalysis:
                 ShowQuickAnalysisMenu();
                 break;
             case KeyboardCommandShortcut.OpenPrintBackstage:
                 OpenPrintBackstage();
                 break;
+            case KeyboardCommandShortcut.PasteValues:
+                ExecutePaste(PasteMode.Values);
+                break;
+            case KeyboardCommandShortcut.GoTo:
+                FindGoToMenuItem_Click(sender, e);
+                break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
                 ChartColumnMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.AutoSum:
+                InsertAutoSumFormula("SUM");
+                break;
+            case KeyboardCommandShortcut.GroupSelection:
+                GroupRowsBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.UngroupSelection:
+                UngroupRowsBtn_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.OpenFormatCellsFont:
                 OpenFormatCellsDialog(FormatCellsDialogTab.Font);
@@ -2230,6 +2152,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.OpenActiveDropdown:
                 OpenActiveDropdown();
                 break;
+            case KeyboardCommandShortcut.SelectVisibleCellsOnly:
+                SelectGoToSpecialMatches(GoToSpecialKind.VisibleCellsOnly, showEmptyMessage: true);
+                break;
             case KeyboardCommandShortcut.ScrollActiveCellIntoView:
                 ScrollActiveCellIntoView();
                 break;
@@ -2247,6 +2172,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.SelectAllDependents:
                 SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
+                break;
+            case KeyboardCommandShortcut.SelectCellsWithComments:
+                SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true);
                 break;
         }
     }
@@ -5890,11 +5818,23 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.SortDescending:
                 SortDescButton_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.CustomSort:
+                SortCustomMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.Filter:
                 FilterButton_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ClearFilter:
                 ClearFilterButton_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ReapplyFilter:
+                FilterReapplyMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.PickFromDropDown:
+                OpenActiveDropdown();
+                break;
+            case WorksheetContextMenuAction.QuickAnalysis:
+                ShowQuickAnalysisMenu();
                 break;
             case WorksheetContextMenuAction.HideRows:
                 ExecuteRowsHidden(hidden: true);
@@ -5902,17 +5842,35 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.UnhideRows:
                 ExecuteRowsHidden(hidden: false);
                 break;
+            case WorksheetContextMenuAction.RowHeight:
+                FormatRowHeightMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.AutoFitRowHeight:
+                FormatAutoRowMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.HideColumns:
                 ExecuteColumnsHidden(hidden: true);
                 break;
             case WorksheetContextMenuAction.UnhideColumns:
                 ExecuteColumnsHidden(hidden: false);
                 break;
+            case WorksheetContextMenuAction.ColumnWidth:
+                FormatColWidthMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.AutoFitColumnWidth:
+                FormatAutoColMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.NewNote:
+                ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.EditNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.DeleteNote:
                 ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShowNotes:
+                ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
@@ -7827,10 +7785,26 @@ public partial class MainWindow : Window
         var dialog = new GoToSpecialDialog { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
-        var matches = GoToSpecialService.Find(sheet, range, dialog.SelectedKind);
+        SelectGoToSpecialMatches(dialog.SelectedKind, showEmptyMessage: true, sheet, range);
+    }
+
+    private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+        var range = SheetGrid.SelectedRange ?? sheet.GetUsedRange() ??
+            new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
+
+        SelectGoToSpecialMatches(kind, showEmptyMessage, sheet, range);
+    }
+
+    private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage, Sheet sheet, GridRange range)
+    {
+        var matches = GoToSpecialService.Find(sheet, range, kind);
         if (matches.Count == 0)
         {
-            MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (showEmptyMessage)
+                MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
