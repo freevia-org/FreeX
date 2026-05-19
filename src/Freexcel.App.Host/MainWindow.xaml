@@ -433,7 +433,7 @@
                                 Grid.Row="0"
                                 Background="#2FA466"
                                 CornerRadius="1,1,0,0"
-                                Margin="1,1,1,0"/>
+                                Margin="0"/>
                         <TextBlock Text="FREE"
                                    Grid.Row="0"
                                    Foreground="{StaticResource FreexcelWhiteBrush}"
@@ -450,7 +450,6 @@
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="12.5"
-                                   Margin="0,-1,0,0"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    TextAlignment="Center"/>
