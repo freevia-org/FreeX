@@ -8045,6 +8045,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         ? null
                         : ToChartTitleXml(chart, chartNs, drawingNs),
                     chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
+                    ToPivotFormatsXml(chart, chartNs),
                     new XElement(chartNs + "plotArea",
                         ToManualLayoutXml(chart.PlotAreaLayout, chartNs),
                         plotCharts,
@@ -8056,6 +8057,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     chart.ShowDataInHiddenRowsAndColumns ? new XElement(chartNs + "plotVisOnly", new XAttribute("val", "0")) : null,
                     ToBlankDisplayXml(chart, chartNs),
                     chart.ShowDataLabelsOverMaximum ? new XElement(chartNs + "showDLblsOverMax", new XAttribute("val", "1")) : null)));
+    }
+
+    private static XElement? ToPivotFormatsXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (string.IsNullOrWhiteSpace(chart.PivotFormatsXml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(chart.PivotFormatsXml);
+            return element.Name == chartNs + "pivotFmts"
+                ? element
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
