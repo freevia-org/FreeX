@@ -677,6 +677,7 @@ public sealed class Sheet
                 PackagePart = table.PackagePart
             };
             clonedTable.Columns.AddRange(table.Columns);
+            clonedTable.FilterColumns.AddRange(table.FilterColumns);
             copy.StructuredTables.Add(clonedTable);
         }
 

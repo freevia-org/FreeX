@@ -6,6 +6,31 @@ namespace Freexcel.App.Host.Tests;
 public sealed class MainWindowSourceHygieneTests
 {
     [Fact]
+    public void MainWindow_MergesVisualRefreshResourceDictionaries()
+    {
+        var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
+        var appHostDirectory = Directory.GetParent(mainWindowPath)!.FullName;
+        var xaml = File.ReadAllText(mainWindowPath);
+
+        File.Exists(Path.Combine(appHostDirectory, "Resources", "ThemeResources.xaml")).Should().BeTrue();
+        File.Exists(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml")).Should().BeTrue();
+        xaml.Should().Contain("Source=\"Resources/ThemeResources.xaml\"");
+        xaml.Should().Contain("Source=\"Resources/IconResources.xaml\"");
+    }
+
+    [Fact]
+    public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        xaml.Should().Contain("x:Name=\"SaveQatBtn\"");
+        xaml.Should().Contain("FreexcelQatIcon");
+        xaml.Should().NotContain("Content=\"💾\"");
+        xaml.Should().NotContain("Content=\"↩\"");
+        xaml.Should().NotContain("Content=\"↪\"");
+    }
+
+    [Fact]
     public void MainWindow_DoesNotKeepLegacyZoomConversionHelpers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));

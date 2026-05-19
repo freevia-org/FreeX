@@ -120,7 +120,6 @@ public static class ChartOptionCycler
             _ => ChartType.Column
         };
     }
-
     public static bool TryGetAxisBounds(Sheet sheet, ChartModel chart, bool useXAxis, out double minimum, out double maximum)
     {
         minimum = 0;

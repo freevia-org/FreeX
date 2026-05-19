@@ -52,6 +52,21 @@ public sealed class Workbook
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
 
+    /// <summary>Whether Excel should fully recalculate the workbook when it is opened.</summary>
+    public bool FullCalculationOnLoad { get; set; }
+
+    /// <summary>Whether Excel should force a full calculation pass even if dependencies appear clean.</summary>
+    public bool ForceFullCalculation { get; set; }
+
+    /// <summary>Whether iterative calculation is enabled for circular formulas.</summary>
+    public bool IterativeCalculation { get; set; }
+
+    /// <summary>Maximum iterative-calculation passes. Null means Excel/default.</summary>
+    public int? MaxCalculationIterations { get; set; }
+
+    /// <summary>Maximum iterative-calculation change threshold. Null means Excel/default.</summary>
+    public double? MaxCalculationChange { get; set; }
+
     /// <summary>Workbook-level theme definition for Excel-style theme colors, fonts, and effects.</summary>
     public WorkbookTheme Theme { get; set; } = WorkbookTheme.Office;
 

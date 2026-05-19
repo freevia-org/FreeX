@@ -1742,7 +1742,7 @@ public static class BuiltInFunctions
         try
         {
             var result = dt.AddMonths(months);
-            return new NumberValue(result.ToOADate());
+            return new NumberValue(DateToSerial(result));
         }
         catch { return ErrorValue.Num; }
     }
@@ -2794,7 +2794,7 @@ public static class BuiltInFunctions
         var text = ToText(args[0]);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
-            return new NumberValue(Math.Floor(dt.ToOADate()));
+            return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
 
@@ -2810,7 +2810,7 @@ public static class BuiltInFunctions
         {
             var target = dt.AddMonths(months + 1);
             var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
-            return new NumberValue(eomonth.ToOADate());
+            return new NumberValue(DateToSerial(eomonth));
         }
         catch { return ErrorValue.Num; }
     }
@@ -2826,20 +2826,20 @@ public static class BuiltInFunctions
         if (returnType == 21)
             return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
 
-        DayOfWeek firstDay = returnType switch
+        int firstDay = returnType switch
         {
-            1 or 17 => DayOfWeek.Sunday,
-            2 or 11 => DayOfWeek.Monday,
-            12 => DayOfWeek.Tuesday,
-            13 => DayOfWeek.Wednesday,
-            14 => DayOfWeek.Thursday,
-            15 => DayOfWeek.Friday,
-            16 => DayOfWeek.Saturday,
-            _ => (DayOfWeek)(-1)
+            1 or 17 => 6,
+            2 or 11 => 0,
+            12 => 1,
+            13 => 2,
+            14 => 3,
+            15 => 4,
+            16 => 5,
+            _ => -1
         };
-        if ((int)firstDay < 0) return ErrorValue.Num;
+        if (firstDay < 0) return ErrorValue.Num;
         var jan1 = new DateTime(dt.Year, 1, 1);
-        int jan1Dow = ((int)jan1.DayOfWeek - (int)firstDay + 7) % 7;
+        int jan1Dow = (ExcelDowToMonIndex(jan1) - firstDay + 7) % 7;
         int dayOfYear = (dt - jan1).Days;
         return new NumberValue((dayOfYear + jan1Dow) / 7 + 1);
     }
@@ -2865,7 +2865,7 @@ public static class BuiltInFunctions
         if (args.Count > 2 && args[2] is RangeValue hRange)
             foreach (var v in hRange.Flatten())
                 if (TryCellNumber(v, out double holidaySerial))
-                    holidays.Add(DateTime.FromOADate(holidaySerial).Date);
+                    holidays.Add(SerialToDate(holidaySerial).Date);
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);
         // Skip full weeks when there are no holidays — 5 workdays = 7 calendar days
@@ -2878,12 +2878,11 @@ public static class BuiltInFunctions
         while (remaining > 0)
         {
             current = current.AddDays(sign);
-            if (current.DayOfWeek != DayOfWeek.Saturday &&
-                current.DayOfWeek != DayOfWeek.Sunday &&
+            if (ExcelDowToMonIndex(current) < 5 &&
                 !holidays.Contains(current.Date))
                 remaining--;
         }
-        return new NumberValue(current.ToOADate());
+        return new NumberValue(DateToSerial(current));
     }
 
     private static ScalarValue Networkdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2903,9 +2902,9 @@ public static class BuiltInFunctions
         int sign = startDt <= endDt ? 1 : -1;
         var lo = startDt <= endDt ? startDt : endDt;
         var hi = startDt <= endDt ? endDt   : startDt;
-        int count = CountWeekdaysInclusive(lo, hi);
+        int count = CountExcelWeekdaysInclusive(lo, hi);
         foreach (var h in holidays)
-            if (h >= lo && h <= hi && h.DayOfWeek != DayOfWeek.Saturday && h.DayOfWeek != DayOfWeek.Sunday)
+            if (h >= lo && h <= hi && ExcelDowToMonIndex(h) < 5)
                 count--;
         return new NumberValue(sign * count);
     }
@@ -2920,6 +2919,20 @@ public static class BuiltInFunctions
         {
             int dow = (startDow + i) % 7;
             if (dow != 0 && dow != 6) count++;
+        }
+        return count;
+    }
+
+    private static int CountExcelWeekdaysInclusive(DateTime lo, DateTime hi)
+    {
+        int totalDays = (int)(hi - lo).TotalDays + 1;
+        int fullWeeks = totalDays / 7;
+        int count = fullWeeks * 5;
+        int startDow = ExcelDowToMonIndex(lo);
+        for (int i = 0; i < totalDays % 7; i++)
+        {
+            int dow = (startDow + i) % 7;
+            if (dow < 5) count++;
         }
         return count;
     }
@@ -5058,6 +5071,12 @@ public static class BuiltInFunctions
         _                   => 6 // Sunday
     };
 
+    private static int ExcelDowToMonIndex(DateTime date)
+    {
+        int serial = (int)Math.Floor(DateToSerial(date));
+        return ((serial + 5) % 7 + 7) % 7;
+    }
+
     private static HashSet<DateTime> CollectHolidays(ScalarValue? arg)
     {
         var holidays = new HashSet<DateTime>();
@@ -5065,11 +5084,11 @@ public static class BuiltInFunctions
         {
             foreach (var v in rv.Flatten())
                 if (TryCellNumber(v, out double serial))
-                    holidays.Add(DateTime.FromOADate(serial).Date);
+                    holidays.Add(SerialToDate(serial).Date);
         }
         else if (arg is not null && TryCellNumber(arg, out double s))
         {
-            holidays.Add(DateTime.FromOADate(s).Date);
+            holidays.Add(SerialToDate(s).Date);
         }
         return holidays;
     }
@@ -5096,7 +5115,7 @@ public static class BuiltInFunctions
         int count = 0;
         for (var d = lo; d <= hi; d = d.AddDays(1))
         {
-            if (mask![DowToMonIndex(d.DayOfWeek)]) continue;
+            if (mask![ExcelDowToMonIndex(d)]) continue;
             if (holidays.Contains(d.Date)) continue;
             count++;
         }
@@ -5124,11 +5143,11 @@ public static class BuiltInFunctions
         while (remaining > 0)
         {
             current = current.AddDays(sign);
-            if (mask![DowToMonIndex(current.DayOfWeek)]) continue;
+            if (mask![ExcelDowToMonIndex(current)]) continue;
             if (holidays.Contains(current.Date)) continue;
             remaining--;
         }
-        return new NumberValue(current.ToOADate());
+        return new NumberValue(DateToSerial(current));
     }
 
     // ════════════════════════════════════════════════════════════════════════

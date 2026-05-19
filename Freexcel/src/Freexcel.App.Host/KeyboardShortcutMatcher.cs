@@ -197,6 +197,24 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemQuotes)
+        {
+            shortcut = KeyboardCommandShortcut.CopyFormulaFromAbove;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemQuotes)
+        {
+            shortcut = KeyboardCommandShortcut.CopyValueFromAbove;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.Down)
+        {
+            shortcut = KeyboardCommandShortcut.OpenActiveDropdown;
+            return true;
+        }
+
         return false;
     }
 
@@ -302,7 +320,10 @@ public enum KeyboardCommandShortcut
     EditInFormulaBar,
     InsertWorksheet,
     ZoomIn,
-    ZoomOut
+    ZoomOut,
+    CopyFormulaFromAbove,
+    CopyValueFromAbove,
+    OpenActiveDropdown
 }
 
 public enum BorderKeyboardShortcut

@@ -37,6 +37,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var workbookProtection = LoadWorkbookProtection(packageStream);
         packageStream.Position = 0;
+        var calculationProperties = LoadWorkbookCalculationProperties(packageStream);
+        packageStream.Position = 0;
         var pivotMetadata = LoadPivotMetadata(packageStream);
         packageStream.Position = 0;
         var slicerTimelineMetadata = LoadSlicerTimelineMetadata(packageStream);
@@ -57,6 +59,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
+        if (calculationProperties.Mode is { } calculationMode)
+            workbook.CalculationMode = calculationMode;
+        workbook.FullCalculationOnLoad = calculationProperties.FullCalculationOnLoad;
+        workbook.ForceFullCalculation = calculationProperties.ForceFullCalculation;
+        workbook.IterativeCalculation = calculationProperties.IterativeCalculation;
+        workbook.MaxCalculationIterations = calculationProperties.MaxIterations;
+        workbook.MaxCalculationChange = calculationProperties.MaxChange;
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
         foreach (var slicer in slicerTimelineMetadata.Slicers)
@@ -731,7 +740,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ReadBoolAttribute(sharedItems, "containsBlank"),
                     ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
                     ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false)));
+                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false),
+                    ReadBoolAttribute(sharedItems, "containsMixedTypes"),
+                    ReadBoolAttribute(sharedItems, "containsSemiMixedTypes"),
+                    ReadBoolAttribute(sharedItems, "containsNonDate"),
+                    ReadBoolAttribute(sharedItems, "containsInteger"),
+                    ReadBoolAttribute(sharedItems, "longText"),
+                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "minValue"),
+                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "maxValue"),
+                    sharedItems?.Attribute("minDate")?.Value,
+                    sharedItems?.Attribute("maxDate")?.Value));
             }
 
             result.Add(cache);
@@ -1008,6 +1026,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             false,
             false,
             tablePath,
+            [],
             []);
         var root = tableXml.Root;
         if (root is null)
@@ -1039,10 +1058,39 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Elements(workbookNs + "tableColumn")
                 .Select(column => new StructuredTableColumnModel(
                     ReadIntAttribute(column, "id") ?? 0,
-                    column.Attribute("name")?.Value ?? ""))
+                    column.Attribute("name")?.Value ?? "",
+                    column.Attribute("totalsRowLabel")?.Value,
+                    column.Attribute("totalsRowFunction")?.Value))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
-                .ToList() ?? []);
+                .ToList() ?? [],
+            ReadStructuredTableFilterColumns(root.Element(workbookNs + "autoFilter"), workbookNs));
         return true;
+    }
+
+    private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
+        XElement? autoFilter,
+        XNamespace workbookNs)
+    {
+        if (autoFilter is null)
+            return [];
+
+        return autoFilter
+            .Elements(workbookNs + "filterColumn")
+            .Select(column =>
+            {
+                var filters = column.Element(workbookNs + "filters");
+                return new StructuredTableFilterColumnModel(
+                    ReadIntAttribute(column, "colId") ?? -1,
+                    filters?
+                        .Elements(workbookNs + "filter")
+                        .Select(filter => filter.Attribute("val")?.Value)
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .Select(value => value!)
+                        .ToList() ?? [],
+                    ReadBoolAttribute(filters, "blank"));
+            })
+            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank))
+            .ToList();
     }
 
     private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
@@ -1063,6 +1111,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             PackagePart = pending.PackagePart
         };
         table.Columns.AddRange(pending.Columns);
+        table.FilterColumns.AddRange(pending.FilterColumns);
         return table;
     }
 
@@ -1727,6 +1776,53 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private sealed record WorkbookProtectionState(bool IsStructureProtected, string? PasswordHash)
     {
         public static WorkbookProtectionState None { get; } = new(false, null);
+    }
+
+    private static WorkbookCalculationProperties LoadWorkbookCalculationProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookCalculationProperties.Default;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
+            if (calcPr is null)
+                return WorkbookCalculationProperties.Default;
+
+            var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
+                ? WorkbookCalculationMode.Manual
+                : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
+                    ? WorkbookCalculationMode.Automatic
+                    : (WorkbookCalculationMode?)null;
+
+            return new WorkbookCalculationProperties(
+                mode,
+                ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
+                ReadBoolAttribute(calcPr, "forceFullCalc"),
+                ReadBoolAttribute(calcPr, "iterate"),
+                ReadIntAttribute(calcPr, "iterateCount"),
+                ReadDoubleAttribute(calcPr, "iterateDelta"));
+        }
+        catch
+        {
+            return WorkbookCalculationProperties.Default;
+        }
+    }
+
+    private sealed record WorkbookCalculationProperties(
+        WorkbookCalculationMode? Mode,
+        bool FullCalculationOnLoad,
+        bool ForceFullCalculation,
+        bool IterativeCalculation,
+        int? MaxIterations,
+        double? MaxChange)
+    {
+        public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
     }
 
     private static readonly (WorkbookThemeColorSlot Slot, string ElementName)[] ThemeColorElements =
@@ -3522,6 +3618,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveWorkbookProtection(packageStream, workbook);
         }
 
+        packageStream.Position = 0;
+        SaveWorkbookCalculationProperties(packageStream, workbook);
+
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
         {
             packageStream.Position = 0;
@@ -3579,8 +3678,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveWorksheetCharts(packageStream, workbook);
         }
 
-        if (!SourcePackages.TryGetValue(workbook, out _) &&
-            workbook.Sheets.Any(sheet =>
+        if (workbook.Sheets.Any(sheet =>
                 sheet.Pictures.Any(IsSupportedXlsxPicture) ||
                 sheet.TextBoxes.Any(IsSupportedXlsxTextBox) ||
                 sheet.DrawingShapes.Any(IsSupportedXlsxDrawingShape)))
@@ -3641,10 +3739,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         MergeContentTypes(sourceArchive, generatedArchive);
         MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive);
         PreservePivotXmlReferences(sourceArchive, generatedArchive);
         PreserveStructuredTableXmlReferences(sourceArchive, generatedArchive);
         PreserveExternalLinkReferences(sourceArchive, generatedArchive);
+        MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
+        PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
+        PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
     }
 
@@ -4280,6 +4382,717 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
+    private static void PreserveWorksheetPrinterSettingsReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
+            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+        {
+            return;
+        }
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var sourceWorkbookRels = LoadRelationshipTargets(
+            sourceArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var targetWorkbookRels = LoadRelationshipTargets(
+            targetArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+
+        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
+        {
+            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+                continue;
+
+            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
+            var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
+            var sourceRelId = sourcePageSetup?.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(sourceRelId))
+                continue;
+
+            var sourceWorksheetRels = LoadRelationshipTargets(
+                sourceArchive,
+                GetWorksheetRelsPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                packageRelNs);
+            if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var printerSettingsPath) ||
+                !printerSettingsPath.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
+                targetArchive.GetEntry(printerSettingsPath) is null)
+            {
+                continue;
+            }
+
+            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
+                ? LoadXml(targetWorksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            var targetRelId = EnsureRelationshipForPackagePart(
+                targetWorksheetRelsXml,
+                packageRelNs,
+                targetWorksheetPath,
+                printerSettingsPath,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings");
+            ReplacePackageXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
+
+            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null)
+                continue;
+
+            var targetPageSetup = targetRoot.Element(workbookNs + "pageSetup");
+            if (targetPageSetup is null)
+            {
+                targetPageSetup = new XElement(workbookNs + "pageSetup");
+                targetRoot.Add(targetPageSetup);
+            }
+
+            targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+            targetPageSetup.SetAttributeValue(relNs + "id", targetRelId);
+            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
+
+    private static void PreserveWorkbookMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        if (sourceWorkbookEntry is null || targetWorkbookEntry is null)
+            return;
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
+        var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
+        var sourceFileSharing = sourceWorkbookXml.Root?.Element(workbookNs + "fileSharing");
+        var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
+        var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
+        var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
+        var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
+        if (sourceExtensionList is null &&
+            sourceFileVersion is null &&
+            sourceFileSharing is null &&
+            sourceDefinedNames is null &&
+            sourceBookViews is null &&
+            sourceCustomWorkbookViews is null &&
+            sourceWorkbookProperties is null)
+        {
+            return;
+        }
+
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var targetRoot = targetWorkbookXml.Root;
+        if (targetRoot is null)
+            return;
+
+        var changed = false;
+        if (MergeWorkbookChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceFileSharing, targetRoot, workbookNs + "fileSharing"))
+            changed = true;
+        if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
+            changed = true;
+        if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceCustomWorkbookViews, targetRoot, workbookNs + "customWorkbookViews"))
+            changed = true;
+        if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
+            changed = true;
+        if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            changed = true;
+
+        if (changed)
+            ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
+    private static bool MergeWorkbookChildBlock(XElement? sourceBlock, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlock is null || targetRoot.Element(blockName) is not null)
+            return false;
+
+        targetRoot.Add(new XElement(sourceBlock));
+        return true;
+    }
+
+    private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceWorkbookProperties is null)
+            return false;
+
+        var targetWorkbookProperties = targetRoot.Element(workbookNs + "workbookPr");
+        if (targetWorkbookProperties is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceWorkbookProperties));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceWorkbookProperties.Attributes())
+        {
+            if (targetWorkbookProperties.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetWorkbookProperties.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetWorkbookProperties
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceWorkbookProperties.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetWorkbookProperties.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
+    {
+        var sourceViews = sourceBookViews?
+            .Elements(workbookNs + "workbookView")
+            .ToList()
+            ?? [];
+        if (sourceViews.Count == 0)
+            return false;
+
+        var targetBookViews = targetRoot.Element(workbookNs + "bookViews");
+        if (targetBookViews is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceBookViews!));
+            return true;
+        }
+
+        var existing = targetBookViews
+            .Elements(workbookNs + "workbookView")
+            .Select(view => view.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var changed = false;
+        foreach (var sourceView in sourceViews)
+        {
+            var raw = sourceView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            if (existing.Contains(raw))
+                continue;
+
+            targetBookViews.Add(new XElement(sourceView));
+            existing.Add(raw);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorkbookDefinedNames(XElement? sourceDefinedNames, XElement targetRoot, XNamespace workbookNs)
+    {
+        var sourceNames = sourceDefinedNames?
+            .Elements(workbookNs + "definedName")
+            .ToList()
+            ?? [];
+        if (sourceNames.Count == 0)
+            return false;
+
+        var targetDefinedNames = targetRoot.Element(workbookNs + "definedNames");
+        if (targetDefinedNames is null)
+        {
+            targetRoot.Add(new XElement(sourceDefinedNames!));
+            return true;
+        }
+
+        var existingKeys = targetDefinedNames
+            .Elements(workbookNs + "definedName")
+            .Select(DefinedNameKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceName in sourceNames)
+        {
+            var key = DefinedNameKey(sourceName);
+            if (existingKeys.Contains(key))
+                continue;
+
+            targetDefinedNames.Add(new XElement(sourceName));
+            existingKeys.Add(key);
+            changed = true;
+        }
+
+        return changed;
+
+        static string DefinedNameKey(XElement element)
+        {
+            var name = element.Attribute("name")?.Value ?? string.Empty;
+            var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
+            return $"{name}\u001f{localSheetId}";
+        }
+    }
+
+    private static void PreserveWorksheetMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XName[] retainedChildNames =
+        [
+            workbookNs + "customSheetViews",
+            workbookNs + "scenarios",
+            workbookNs + "ignoredErrors",
+            workbookNs + "cellWatches",
+            workbookNs + "sheetCalcPr",
+            workbookNs + "phoneticPr"
+        ];
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
+            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+        {
+            return;
+        }
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var sourceWorkbookRels = LoadRelationshipTargets(
+            sourceArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var targetWorkbookRels = LoadRelationshipTargets(
+            targetArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+
+        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
+        {
+            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+                continue;
+
+            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
+            var sourceBlocks = retainedChildNames
+                .Select(name => sourceWorksheetXml.Root?.Element(name))
+                .Where(element => element is not null)
+                .Cast<XElement>()
+                .ToList();
+            var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
+            var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
+            if (sourceBlocks.Count == 0 && sourceSheetProperties is null && sourceExtensionList is null)
+                continue;
+
+            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null)
+                continue;
+
+            var changed = false;
+            if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
+                changed = true;
+            foreach (var sourceBlock in sourceBlocks)
+            {
+                if (targetRoot.Element(sourceBlock.Name) is not null)
+                    continue;
+
+                targetRoot.Add(new XElement(sourceBlock));
+                changed = true;
+            }
+
+            if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+                changed = true;
+
+            if (changed)
+                ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
+
+    private static bool MergeWorksheetSheetProperties(XElement? sourceSheetProperties, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceSheetProperties is null)
+            return false;
+
+        var targetSheetProperties = targetRoot.Element(workbookNs + "sheetPr");
+        if (targetSheetProperties is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceSheetProperties));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceSheetProperties.Attributes())
+        {
+            if (targetSheetProperties.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetSheetProperties.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetSheetProperties
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceSheetProperties.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetSheetProperties.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceExtensionList is null)
+            return false;
+
+        var sourceExtensions = sourceExtensionList
+            .Elements(workbookNs + "ext")
+            .ToList();
+        if (sourceExtensions.Count == 0)
+            return false;
+
+        var targetExtensionList = targetRoot.Element(workbookNs + "extLst");
+        if (targetExtensionList is null)
+        {
+            targetRoot.Add(new XElement(sourceExtensionList));
+            return true;
+        }
+
+        var existingUris = targetExtensionList
+            .Elements(workbookNs + "ext")
+            .Select(extension => extension.Attribute("uri")?.Value)
+            .Where(uri => !string.IsNullOrWhiteSpace(uri))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceExtension in sourceExtensions)
+        {
+            var uri = sourceExtension.Attribute("uri")?.Value;
+            if (!string.IsNullOrWhiteSpace(uri) && existingUris.Contains(uri))
+                continue;
+
+            targetExtensionList.Add(new XElement(sourceExtension));
+            if (!string.IsNullOrWhiteSpace(uri))
+                existingUris.Add(uri);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static void MergeWorksheetDrawingParts(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
+            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+        {
+            return;
+        }
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var sourceWorkbookRels = LoadRelationshipTargets(
+            sourceArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var targetWorkbookRels = LoadRelationshipTargets(
+            targetArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+
+        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
+        {
+            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, workbookNs, relNs, packageRelNs);
+            var targetDrawingPath = GetWorksheetDrawingPath(targetArchive, targetWorksheetPath, workbookNs, relNs, packageRelNs);
+            if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
+                continue;
+
+            MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, relNs, packageRelNs);
+        }
+    }
+
+    private static string? GetWorksheetDrawingPath(
+        ZipArchive archive,
+        string worksheetPath,
+        XNamespace worksheetNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var worksheetEntry = archive.GetEntry(worksheetPath);
+        if (worksheetEntry is null)
+            return null;
+
+        var worksheetXml = LoadXml(worksheetEntry);
+        var drawingRelId = worksheetXml.Root?
+            .Element(worksheetNs + "drawing")?
+            .Attribute(relNs + "id")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(drawingRelId))
+            return null;
+
+        var worksheetRels = LoadRelationshipTargets(
+            archive,
+            GetWorksheetRelsPath(worksheetPath),
+            worksheetPath,
+            packageRelNs);
+        return worksheetRels.TryGetValue(drawingRelId, out var drawingPath)
+            ? drawingPath
+            : null;
+    }
+
+    private static void MergeDrawingPart(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceDrawingPath,
+        string targetDrawingPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var sourceDrawingEntry = sourceArchive.GetEntry(sourceDrawingPath);
+        var targetDrawingEntry = targetArchive.GetEntry(targetDrawingPath);
+        if (sourceDrawingEntry is null || targetDrawingEntry is null)
+            return;
+
+        var sourceDrawingXml = LoadXml(sourceDrawingEntry);
+        var targetDrawingXml = LoadXml(targetDrawingEntry);
+        if (sourceDrawingXml.Root is null || targetDrawingXml.Root is null)
+            return;
+
+        var relIdMap = MergeDrawingRelationships(
+            sourceArchive,
+            targetArchive,
+            sourceDrawingPath,
+            targetDrawingPath,
+            packageRelNs);
+        var existingAnchorKeys = targetDrawingXml.Root.Elements()
+            .Select(GetDrawingAnchorIdentity)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var changed = false;
+        foreach (var sourceAnchor in sourceDrawingXml.Root.Elements())
+        {
+            var anchorCopy = new XElement(sourceAnchor);
+            RemapRelationshipReferences(anchorCopy, relNs, relIdMap);
+            if (!existingAnchorKeys.Add(GetDrawingAnchorIdentity(anchorCopy)))
+                continue;
+
+            targetDrawingXml.Root.Add(anchorCopy);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            EnsureUniqueDrawingObjectIds(targetDrawingXml.Root);
+            ReplacePackageXml(targetArchive, targetDrawingPath, targetDrawingXml);
+        }
+    }
+
+    private static Dictionary<string, string> MergeDrawingRelationships(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceDrawingPath,
+        string targetDrawingPath,
+        XNamespace packageRelNs)
+    {
+        var relIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sourceRelsPath = GetWorksheetRelsPath(sourceDrawingPath);
+        var sourceRelsEntry = sourceArchive.GetEntry(sourceRelsPath);
+        if (sourceRelsEntry is null)
+            return relIdMap;
+
+        var targetRelsPath = GetWorksheetRelsPath(targetDrawingPath);
+        var sourceRelsXml = LoadXml(sourceRelsEntry);
+        var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
+            ? LoadXml(targetRelsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        if (sourceRelsXml.Root is null || targetRelsXml.Root is null)
+            return relIdMap;
+
+        var targetRelationships = targetRelsXml.Root.Elements(packageRelNs + "Relationship").ToList();
+        var usedIds = targetRelationships
+            .Select(rel => rel.Attribute("Id")?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var changed = false;
+
+        foreach (var sourceRelationship in sourceRelsXml.Root.Elements(packageRelNs + "Relationship"))
+        {
+            var sourceId = sourceRelationship.Attribute("Id")?.Value;
+            var type = sourceRelationship.Attribute("Type")?.Value;
+            var target = sourceRelationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(sourceId) ||
+                string.IsNullOrWhiteSpace(type) ||
+                string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            var targetMode = sourceRelationship.Attribute("TargetMode")?.Value;
+            var resolvedTarget = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
+                ? target
+                : ResolveRelationshipTarget(sourceDrawingPath, target);
+            var targetRelationship = targetRelationships.FirstOrDefault(rel =>
+                string.Equals(rel.Attribute("Type")?.Value, type, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(rel.Attribute("TargetMode")?.Value, targetMode, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
+                        ? rel.Attribute("Target")?.Value
+                        : ResolveRelationshipTarget(targetDrawingPath, rel.Attribute("Target")?.Value ?? ""),
+                    resolvedTarget,
+                    StringComparison.OrdinalIgnoreCase));
+            if (targetRelationship is not null)
+            {
+                relIdMap[sourceId] = targetRelationship.Attribute("Id")!.Value;
+                continue;
+            }
+
+            var targetId = sourceId;
+            if (usedIds.Contains(targetId))
+                targetId = NextPreservedRelationshipId(usedIds);
+            usedIds.Add(targetId);
+            relIdMap[sourceId] = targetId;
+
+            targetRelsXml.Root.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", targetId),
+                new XAttribute("Type", type),
+                new XAttribute("Target", string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
+                    ? target
+                    : GetRelativeTarget(targetDrawingPath, resolvedTarget)),
+                string.IsNullOrWhiteSpace(targetMode) ? null : new XAttribute("TargetMode", targetMode)));
+            changed = true;
+        }
+
+        if (changed)
+            ReplacePackageXml(targetArchive, targetRelsPath, targetRelsXml);
+
+        return relIdMap;
+    }
+
+    private static string NextPreservedRelationshipId(HashSet<string> usedIds)
+    {
+        var index = 1;
+        while (usedIds.Contains($"rIdPreserved{index}"))
+            index++;
+
+        return $"rIdPreserved{index}";
+    }
+
+    private static void RemapRelationshipReferences(
+        XElement element,
+        XNamespace relNs,
+        IReadOnlyDictionary<string, string> relIdMap)
+    {
+        if (relIdMap.Count == 0)
+            return;
+
+        foreach (var attribute in element.DescendantsAndSelf().Attributes().Where(attribute => attribute.Name.Namespace == relNs))
+        {
+            if (relIdMap.TryGetValue(attribute.Value, out var replacementId))
+                attribute.Value = replacementId;
+        }
+    }
+
+    private static string GetDrawingAnchorIdentity(XElement anchor)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var objectName = anchor
+            .Descendants(spreadsheetDrawingNs + "cNvPr")
+            .Select(element => element.Attribute("name")?.Value)
+            .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+        return string.IsNullOrWhiteSpace(objectName)
+            ? anchor.ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+            : $"{anchor.Name.LocalName}:{objectName}";
+    }
+
+    private static void EnsureUniqueDrawingObjectIds(XElement drawingRoot)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var objectProperties = drawingRoot
+            .Descendants(spreadsheetDrawingNs + "cNvPr")
+            .ToList();
+        var usedIds = new HashSet<int>();
+        var nextId = objectProperties
+            .Select(element => int.TryParse(element.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : 0)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        foreach (var objectProperty in objectProperties)
+        {
+            if (int.TryParse(objectProperty.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) &&
+                id > 0 &&
+                usedIds.Add(id))
+            {
+                continue;
+            }
+
+            while (!usedIds.Add(nextId))
+                nextId++;
+            objectProperty.SetAttributeValue("id", nextId.ToString(CultureInfo.InvariantCulture));
+            nextId++;
+        }
+    }
+
     private static void PreserveUnsupportedConditionalFormatting(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -4419,6 +5232,43 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var replacement = archive.CreateEntry("xl/workbook.xml");
         using var stream = replacement.Open();
         workbookXml.Save(stream);
+    }
+
+    private static void SaveWorkbookCalculationProperties(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var calcPr = root.Element(workbookNs + "calcPr");
+        if (calcPr is null)
+        {
+            calcPr = new XElement(workbookNs + "calcPr");
+            root.Add(calcPr);
+        }
+
+        calcPr.SetAttributeValue("calcMode", workbook.CalculationMode == WorkbookCalculationMode.Manual ? "manual" : "auto");
+        SetBooleanAttribute(calcPr, "fullCalcOnLoad", workbook.FullCalculationOnLoad);
+        SetBooleanAttribute(calcPr, "forceFullCalc", workbook.ForceFullCalculation);
+        SetBooleanAttribute(calcPr, "iterate", workbook.IterativeCalculation);
+        calcPr.SetAttributeValue(
+            "iterateCount",
+            workbook.MaxCalculationIterations is { } maxIterations ? maxIterations.ToString(CultureInfo.InvariantCulture) : null);
+        calcPr.SetAttributeValue(
+            "iterateDelta",
+            workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
+
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+        static void SetBooleanAttribute(XElement element, string name, bool value) =>
+            element.SetAttributeValue(name, value ? "1" : null);
     }
 
     private static void SaveAllowEditRanges(Stream xlsxStream, Workbook workbook)
@@ -4590,14 +5440,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("ref", table.Range.ToString()),
             new XAttribute("totalsRowShown", table.TotalsRowShown ? "1" : "0"));
         if (table.HasAutoFilter)
-            root.Add(new XElement(workbookNs + "autoFilter", new XAttribute("ref", table.Range.ToString())));
+            root.Add(ToStructuredTableAutoFilterXml(table, workbookNs));
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
             columns.Select(column => new XElement(
                 workbookNs + "tableColumn",
                 new XAttribute("id", column.Id),
-                new XAttribute("name", column.Name)))));
+                new XAttribute("name", column.Name),
+                string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
+                string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction)))));
         if (!string.IsNullOrWhiteSpace(table.StyleName))
         {
             root.Add(new XElement(
@@ -4611,6 +5463,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return new XDocument(root);
     }
+
+    private static XElement ToStructuredTableAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
+        new(
+            workbookNs + "autoFilter",
+            new XAttribute("ref", table.Range.ToString()),
+            table.FilterColumns.Select(filterColumn => new XElement(
+                workbookNs + "filterColumn",
+                new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)),
+                new XElement(
+                    workbookNs + "filters",
+                    filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
+                    filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))))));
 
     private static int ExtractTrailingNumber(string text)
     {
@@ -5059,7 +5923,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
             field.ContainsBlank ? new XAttribute("containsBlank", "1") : null,
             field.ContainsString ? new XAttribute("containsString", "1") : null,
             field.ContainsNumber ? new XAttribute("containsNumber", "1") : null,
-            field.ContainsDate ? new XAttribute("containsDate", "1") : null);
+            field.ContainsDate ? new XAttribute("containsDate", "1") : null,
+            field.ContainsMixedTypes ? new XAttribute("containsMixedTypes", "1") : null,
+            field.ContainsSemiMixedTypes ? new XAttribute("containsSemiMixedTypes", "1") : null,
+            field.ContainsNonDate ? new XAttribute("containsNonDate", "1") : null,
+            field.ContainsInteger ? new XAttribute("containsInteger", "1") : null,
+            field.ContainsLongText ? new XAttribute("longText", "1") : null,
+            field.MinValue is { } minValue ? new XAttribute("minValue", minValue.ToString(CultureInfo.InvariantCulture)) : null,
+            field.MaxValue is { } maxValue ? new XAttribute("maxValue", maxValue.ToString(CultureInfo.InvariantCulture)) : null,
+            !string.IsNullOrWhiteSpace(field.MinDate) ? new XAttribute("minDate", field.MinDate) : null,
+            !string.IsNullOrWhiteSpace(field.MaxDate) ? new XAttribute("maxDate", field.MaxDate) : null);
 
     private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
         new(new XElement(packageRelNs + "Relationships"));
@@ -8445,5 +9318,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         bool ShowRowStripes,
         bool ShowColumnStripes,
         string PackagePart,
-        IReadOnlyList<StructuredTableColumnModel> Columns);
+        IReadOnlyList<StructuredTableColumnModel> Columns,
+        IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
 }

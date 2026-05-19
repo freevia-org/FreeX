@@ -95,7 +95,6 @@ public sealed class ChartOptionCyclerTests
     {
         ChartOptionCycler.ParseChartType(text).Should().Be(expected);
     }
-
     [Fact]
     public void TryGetAxisBounds_UsesNumericChartDataAndExpandsSingleValueRanges()
     {

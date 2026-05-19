@@ -1222,6 +1222,11 @@ public class FileAdapterSmokeTests
         var workbook = new Workbook("CalculationNativeTest");
         workbook.AddSheet("Sheet1");
         workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        workbook.FullCalculationOnLoad = true;
+        workbook.ForceFullCalculation = true;
+        workbook.IterativeCalculation = true;
+        workbook.MaxCalculationIterations = 50;
+        workbook.MaxCalculationChange = 0.01;
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -1231,6 +1236,11 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        loaded.FullCalculationOnLoad.Should().BeTrue();
+        loaded.ForceFullCalculation.Should().BeTrue();
+        loaded.IterativeCalculation.Should().BeTrue();
+        loaded.MaxCalculationIterations.Should().Be(50);
+        loaded.MaxCalculationChange.Should().Be(0.01);
     }
 
     [Fact]
@@ -3162,6 +3172,48 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_WorkbookCalculationProperties()
+    {
+        var workbook = new Workbook("CalculationPropertiesTest")
+        {
+            CalculationMode = WorkbookCalculationMode.Manual,
+            FullCalculationOnLoad = true,
+            ForceFullCalculation = true,
+            IterativeCalculation = true,
+            MaxCalculationIterations = 123,
+            MaxCalculationChange = 0.001
+        };
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!).ToString();
+            workbookXml.Should().Contain("calcMode=\"manual\"");
+            workbookXml.Should().Contain("fullCalcOnLoad=\"1\"");
+            workbookXml.Should().Contain("forceFullCalc=\"1\"");
+            workbookXml.Should().Contain("iterate=\"1\"");
+            workbookXml.Should().Contain("iterateCount=\"123\"");
+            workbookXml.Should().Contain("iterateDelta=\"0.001\"");
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        loaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        loaded.FullCalculationOnLoad.Should().BeTrue();
+        loaded.ForceFullCalculation.Should().BeTrue();
+        loaded.IterativeCalculation.Should().BeTrue();
+        loaded.MaxCalculationIterations.Should().Be(123);
+        loaded.MaxCalculationChange.Should().Be(0.001);
     }
 
     [Fact]
@@ -7373,6 +7425,490 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnknownWorkbookExtensionListEntries()
+    {
+        var workbook = new Workbook("WorkbookExtensionRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("workbook metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorkbookExtensionList(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString().Should().Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}");
+        workbookXml.ToString().Should().Contain("FreexcelUnknownWorkbookExtension");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDefinedNames()
+    {
+        var workbook = new Workbook("DefinedNameRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedDefinedName(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString().Should().Contain("DynamicSalesRange");
+        workbookXml.ToString().Should().Contain("hidden=\"1\"");
+        workbookXml.ToString().Should().Contain("1+1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdditionalWorkbookViews()
+    {
+        var workbook = new Workbook("WorkbookViewsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdditionalWorkbookView(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var views = workbookXml.Root!.Element(workbookNs + "bookViews")!.Elements(workbookNs + "workbookView").ToList();
+        views.Should().HaveCount(2);
+        views.Any(view =>
+            string.Equals(view.Attribute("visibility")?.Value, "hidden", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("tabRatio")?.Value, "700", StringComparison.Ordinal))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesCustomWorkbookViews()
+    {
+        var workbook = new Workbook("CustomWorkbookViewsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom view"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddCustomWorkbookViews(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customViews = workbookXml.Root!.Element(workbookNs + "customWorkbookViews");
+        customViews.Should().NotBeNull();
+        customViews!.ToString().Should().Contain("FreexcelView");
+        customViews.ToString().Should().Contain("guid=\"{22222222-2222-2222-2222-222222222222}\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFileVersion()
+    {
+        var workbook = new Workbook("WorkbookFileVersionRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("version"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileVersion(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var fileVersion = workbookXml.Root!.Element(workbookNs + "fileVersion");
+        fileVersion.Should().NotBeNull();
+        fileVersion!.Attribute("appName")!.Value.Should().Be("xl");
+        fileVersion.Attribute("lastEdited")!.Value.Should().Be("7");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFileSharing()
+    {
+        var workbook = new Workbook("WorkbookFileSharingRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sharing"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileSharing(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var fileSharing = workbookXml.Root!.Element(workbookNs + "fileSharing");
+        fileSharing.Should().NotBeNull();
+        fileSharing!.Attribute("readOnlyRecommended")!.Value.Should().Be("1");
+        fileSharing.Attribute("userName")!.Value.Should().Be("FreexcelTest");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
+    {
+        var workbook = new Workbook("WorkbookPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedWorkbookProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
+        workbookPr.Should().NotBeNull();
+        workbookPr!.Attribute("date1904").Should().NotBeNull();
+        workbookPr.Attribute("date1904")!.Value.Should().Be("1");
+        workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesPrinterSettingsPackageAndWorksheetReference()
+    {
+        var workbook = new Workbook("PrinterSettingsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("print me"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPrinterSettingsPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull();
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        worksheetXml.Root!.Element(worksheetNs + "pageSetup")!
+            .Attribute(relNs + "id")!
+            .Value.Should().Be("rIdPrinterSettings1");
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString().Should().Contain("../printerSettings/printerSettings1.bin");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomSheetViews()
+    {
+        var workbook = new Workbook("CustomSheetViewsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalCustomSheetViews(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customSheetViews = worksheetXml.Root!.Element(worksheetNs + "customSheetViews");
+        customSheetViews.Should().NotBeNull();
+        customSheetViews!.ToString().Should().Contain("{11111111-1111-1111-1111-111111111111}");
+        customSheetViews.ToString().Should().Contain("topLeftCell=\"B2\"");
+        customSheetViews.ToString().Should().Contain("showGridLines=\"0\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
+    {
+        var workbook = new Workbook("ScenariosRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios");
+        scenarios.Should().NotBeNull();
+        scenarios!.ToString().Should().Contain("BestCase");
+        scenarios.ToString().Should().Contain("inputCells");
+        scenarios.ToString().Should().Contain("val=\"42\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MergesUnknownWorksheetExtensionListEntries()
+    {
+        var workbook = new Workbook("WorksheetExtensionRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(3));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalSparklineWorksheetExtension(source, includeUnknownExtension: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).Sparklines.Should().ContainSingle();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString().Should().Contain("sparklineGroups");
+        worksheetXml.ToString().Should().Contain("{FFEEDDCC-BBAA-9988-7766-554433221100}");
+        worksheetXml.ToString().Should().Contain("FreexcelUnknownWorksheetExtension");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorksheetSheetProperties()
+    {
+        var workbook = new Workbook("SheetPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sheet properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedWorksheetSheetProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+        sheetPr.Should().NotBeNull();
+        sheetPr!.Attribute("filterMode").Should().NotBeNull();
+        sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
+        sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
+        sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetIgnoredErrors()
+    {
+        var workbook = new Workbook("IgnoredErrorsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        ignoredErrors.Should().NotBeNull();
+        ignoredErrors!.ToString().Should().Contain("numberStoredAsText=\"1\"");
+        ignoredErrors.ToString().Should().Contain("sqref=\"A1\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCellWatches()
+    {
+        var workbook = new Workbook("CellWatchesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCellWatches(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cellWatches = worksheetXml.Root!.Element(worksheetNs + "cellWatches");
+        cellWatches.Should().NotBeNull();
+        cellWatches!.ToString().Should().Contain("r=\"A1\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCalculationProperties()
+    {
+        var workbook = new Workbook("WorksheetCalculationPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCalculationProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull();
+        sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+        phoneticProperties.Should().NotBeNull();
+        phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
+        phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -7619,6 +8155,52 @@ public class FileAdapterSmokeTests
         cacheXml.Should().Contain("<s v=\"B\"");
         cacheXml.Should().Contain("containsNumber=\"1\"");
         cacheXml.Should().Contain("count=\"2\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsPivotCacheSharedItemEdgeMetadata()
+    {
+        var workbook = new Workbook("PivotSharedItemEdgeMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotCacheDefinitionXml: PivotCacheDefinitionWithSharedItemEdgeMetadataXml);
+
+        var loaded = adapter.Load(source);
+
+        var fields = loaded.PivotCaches.Should().ContainSingle().Subject.Fields;
+        var mixed = fields[0];
+        mixed.ContainsMixedTypes.Should().BeTrue();
+        mixed.ContainsSemiMixedTypes.Should().BeTrue();
+        mixed.ContainsLongText.Should().BeTrue();
+        var numeric = fields[1];
+        numeric.ContainsInteger.Should().BeTrue();
+        numeric.ContainsNonDate.Should().BeTrue();
+        numeric.MinValue.Should().Be(10);
+        numeric.MaxValue.Should().Be(20);
+        var date = fields[2];
+        date.ContainsDate.Should().BeTrue();
+        date.MinDate.Should().Be("2026-01-01T00:00:00");
+        date.MaxDate.Should().Be("2026-03-31T00:00:00");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
+        cacheXml.Should().Contain("containsMixedTypes=\"1\"");
+        cacheXml.Should().Contain("containsSemiMixedTypes=\"1\"");
+        cacheXml.Should().Contain("longText=\"1\"");
+        cacheXml.Should().Contain("containsInteger=\"1\"");
+        cacheXml.Should().Contain("containsNonDate=\"1\"");
+        cacheXml.Should().Contain("minValue=\"10\"");
+        cacheXml.Should().Contain("maxValue=\"20\"");
+        cacheXml.Should().Contain("minDate=\"2026-01-01T00:00:00\"");
+        cacheXml.Should().Contain("maxDate=\"2026-03-31T00:00:00\"");
     }
 
     [Fact]
@@ -7921,6 +8503,44 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_PreservesNativeSlicerTimelineDrawingAnchorsWhenWritingFreexcelDrawings()
+    {
+        var workbook = new Workbook("SlicerTimelineDrawingTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalSlicerTimelinePackage(source, includeDrawing: true);
+
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(loadedSheet.Id, 4, 6),
+            Kind = PictureKind.Image,
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png",
+            AltText = "Freexcel picture",
+            Width = 96,
+            Height = 64
+        });
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+        drawingXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("Native Slicer Shape");
+        drawingXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("Freexcel picture");
+
+        var drawingRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!);
+        drawingRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("media/freexcelPicture");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTripsAuthoredSlicerAndTimelineSelectionState()
     {
         var workbook = new Workbook("AuthoredSlicerTimelineStateTest");
@@ -8043,6 +8663,73 @@ public class FileAdapterSmokeTests
         roundTripped.GetSheetAt(0).GetValue(4, 1).Should().Be(new TextValue("C"));
         roundTripped.GetSheetAt(0).StructuredTables.Should().ContainSingle()
             .Which.Name.Should().Be("Table1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableTotalsRowMetadata()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableTotalsTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeTotalsRow: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.TotalsRowShown.Should().BeTrue();
+        table.Columns.Should().Contain(column =>
+            column.Name == "Category" &&
+            column.TotalsRowLabel == "Total");
+        table.Columns.Should().Contain(column =>
+            column.Name == "Amount" &&
+            column.TotalsRowFunction == "sum");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString();
+        tableXml.Should().Contain("totalsRowShown=\"1\"");
+        tableXml.Should().Contain("totalsRowLabel=\"Total\"");
+        tableXml.Should().Contain("totalsRowFunction=\"sum\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableAutoFilterValues()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableFilterTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeFilterValues: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.FilterColumns.Should().ContainSingle().Which.Should().BeEquivalentTo(new StructuredTableFilterColumnModel(
+            ColumnId: 0,
+            Values: ["A", "B"],
+            IncludeBlank: true));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString();
+        tableXml.Should().Contain("filterColumn");
+        tableXml.Should().Contain("colId=\"0\"");
+        tableXml.Should().Contain("blank=\"1\"");
+        tableXml.Should().Contain("val=\"A\"");
+        tableXml.Should().Contain("val=\"B\"");
     }
 
     private static Workbook CreateStructuredTableWorkbook(string name)
@@ -8181,7 +8868,372 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalStructuredTablePackage(MemoryStream packageStream)
+    private static void AddMinimalPrinterSettingsPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/printerSettings/printerSettings1.bin",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+            if (pageSetup is null)
+            {
+                pageSetup = new XElement(worksheetNs + "pageSetup", new XAttribute("paperSize", "1"), new XAttribute("orientation", "portrait"));
+                worksheetXml.Root.Add(pageSetup);
+            }
+
+            pageSetup.SetAttributeValue(relNs + "id", "rIdPrinterSettings1");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdPrinterSettings1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings"),
+                new XAttribute("Target", "../printerSettings/printerSettings1.bin")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            archive.GetEntry("xl/printerSettings/printerSettings1.bin")?.Delete();
+            var settingsEntry = archive.CreateEntry("xl/printerSettings/printerSettings1.bin");
+            using var settingsStream = settingsEntry.Open();
+            settingsStream.Write([0x46, 0x58, 0x4C, 0x50, 0x52, 0x4E]);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorkbookExtensionList(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "extLst",
+                new XElement(
+                    workbookNs + "ext",
+                    new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                    new XElement(
+                        x15Ns + "futureMetadata",
+                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                        new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedDefinedName(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            var definedNames = workbookXml.Root!.Element(workbookNs + "definedNames");
+            if (definedNames is null)
+            {
+                definedNames = new XElement(workbookNs + "definedNames");
+                workbookXml.Root!.Add(definedNames);
+            }
+
+            definedNames.Add(new XElement(
+                workbookNs + "definedName",
+                new XAttribute("name", "DynamicSalesRange"),
+                new XAttribute("hidden", "1"),
+                "1+1"));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddAdditionalWorkbookView(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            var bookViews = workbookXml.Root!.Element(workbookNs + "bookViews");
+            if (bookViews is null)
+            {
+                bookViews = new XElement(workbookNs + "bookViews");
+                workbookXml.Root!.AddFirst(bookViews);
+            }
+
+            bookViews.Add(new XElement(
+                workbookNs + "workbookView",
+                new XAttribute("visibility", "hidden"),
+                new XAttribute("minimized", "1"),
+                new XAttribute("showHorizontalScroll", "0"),
+                new XAttribute("showVerticalScroll", "0"),
+                new XAttribute("showSheetTabs", "0"),
+                new XAttribute("tabRatio", "700"),
+                new XAttribute("firstSheet", "0"),
+                new XAttribute("activeTab", "0")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddCustomWorkbookViews(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "customWorkbookViews",
+                new XElement(
+                    workbookNs + "customWorkbookView",
+                    new XAttribute("name", "FreexcelView"),
+                    new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                    new XAttribute("autoUpdate", "0"),
+                    new XAttribute("mergeInterval", "0"),
+                    new XAttribute("personalView", "0"),
+                    new XAttribute("includePrintSettings", "1"),
+                    new XAttribute("includeHiddenRowCol", "1"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookFileVersion(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.AddFirst(new XElement(
+                workbookNs + "fileVersion",
+                new XAttribute("appName", "xl"),
+                new XAttribute("lastEdited", "7"),
+                new XAttribute("lowestEdited", "7"),
+                new XAttribute("rupBuild", "28129")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookFileSharing(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.AddFirst(new XElement(
+                workbookNs + "fileSharing",
+                new XAttribute("readOnlyRecommended", "1"),
+                new XAttribute("userName", "FreexcelTest")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedWorkbookProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
+            if (workbookPr is null)
+            {
+                workbookPr = new XElement(workbookNs + "workbookPr");
+                workbookXml.Root!.AddFirst(workbookPr);
+            }
+
+            workbookPr.SetAttributeValue("date1904", "1");
+            workbookPr.SetAttributeValue("defaultThemeVersion", "166925");
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalCustomSheetViews(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "customSheetViews",
+                new XElement(
+                    worksheetNs + "customSheetView",
+                    new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                    new XAttribute("scale", "120"),
+                    new XAttribute("showGridLines", "0"),
+                    new XAttribute("showRowCol", "0"),
+                    new XAttribute("state", "visible"),
+                    new XElement(
+                        worksheetNs + "pane",
+                        new XAttribute("xSplit", "1"),
+                        new XAttribute("ySplit", "1"),
+                        new XAttribute("topLeftCell", "B2"),
+                        new XAttribute("activePane", "bottomRight")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorksheetScenarios(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "scenarios",
+                new XAttribute("current", "0"),
+                new XAttribute("show", "0"),
+                new XElement(
+                    worksheetNs + "scenario",
+                    new XAttribute("name", "BestCase"),
+                    new XAttribute("locked", "1"),
+                    new XAttribute("count", "1"),
+                    new XAttribute("user", "FreexcelTest"),
+                    new XElement(
+                        worksheetNs + "inputCells",
+                        new XAttribute("r", "A1"),
+                        new XAttribute("val", "42")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedWorksheetSheetProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+            if (sheetPr is null)
+            {
+                sheetPr = new XElement(worksheetNs + "sheetPr");
+                worksheetXml.Root!.AddFirst(sheetPr);
+            }
+
+            sheetPr.SetAttributeValue("filterMode", "1");
+            if (sheetPr.Element(worksheetNs + "pageSetUpPr") is null)
+            {
+                sheetPr.Add(new XElement(
+                    worksheetNs + "pageSetUpPr",
+                    new XAttribute("autoPageBreaks", "0")));
+            }
+
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetIgnoredErrors(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "ignoredErrors",
+                new XElement(
+                    worksheetNs + "ignoredError",
+                    new XAttribute("sqref", "A1"),
+                    new XAttribute("numberStoredAsText", "1"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetCellWatches(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "cellWatches",
+                new XElement(
+                    worksheetNs + "cellWatch",
+                    new XAttribute("r", "A1"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetCalculationProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "sheetCalcPr",
+                new XAttribute("fullCalcOnLoad", "1")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPhoneticProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "phoneticPr",
+                new XAttribute("fontId", "1"),
+                new XAttribute("type", "fullwidthKatakana"),
+                new XAttribute("alignment", "center")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalStructuredTablePackage(
+        MemoryStream packageStream,
+        bool includeTotalsRow = false,
+        bool includeFilterValues = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -8214,7 +9266,14 @@ public class FileAdapterSmokeTests
                 new XAttribute("Target", "../tables/table1.xml")));
             ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
 
-            ReplacePackageXml(archive, "xl/tables/table1.xml", XDocument.Parse(MinimalStructuredTableXml));
+            ReplacePackageXml(
+                archive,
+                "xl/tables/table1.xml",
+                XDocument.Parse(includeTotalsRow
+                    ? StructuredTableWithTotalsRowXml
+                    : includeFilterValues
+                        ? StructuredTableWithFilterValuesXml
+                        : MinimalStructuredTableXml));
         }
 
         packageStream.Position = 0;
@@ -8437,16 +9496,25 @@ public class FileAdapterSmokeTests
         0x42, 0x60, 0x82
     ];
 
-    private static void AddMinimalSparklineWorksheetExtension(MemoryStream packageStream)
+    private static void AddMinimalSparklineWorksheetExtension(MemoryStream packageStream, bool includeUnknownExtension = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+            XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
             XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Elements(worksheetNs + "extLst").Remove();
-            worksheetXml.Root!.Add(new XElement(
+            var sparkline = new XElement(
+                x14Ns + "sparkline",
+                new XElement(xmNs + "f", "Sheet1!A1:C1"),
+                new XElement(xmNs + "sqref", "D1"));
+            var sparklineGroup = new XElement(
+                x14Ns + "sparklineGroup",
+                new XAttribute("type", "column"),
+                new XElement(x14Ns + "sparklines", sparkline));
+            var extLst = new XElement(
                 worksheetNs + "extLst",
                 new XElement(
                     worksheetNs + "ext",
@@ -8455,22 +9523,29 @@ public class FileAdapterSmokeTests
                         x14Ns + "sparklineGroups",
                         new XAttribute(XNamespace.Xmlns + "x14", x14Ns),
                         new XAttribute(XNamespace.Xmlns + "xm", xmNs),
-                        new XElement(
-                            x14Ns + "sparklineGroup",
-                            new XAttribute("type", "column"),
-                            new XElement(
-                                x14Ns + "sparklines",
-                                new XElement(
-                                    x14Ns + "sparkline",
-                                    new XElement(xmNs + "f", "Sheet1!A1:C1"),
-                                    new XElement(xmNs + "sqref", "D1"))))))));
+                        sparklineGroup)));
+            if (includeUnknownExtension)
+            {
+                extLst.Add(new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-BBAA-9988-7766-554433221100}"),
+                    new XElement(
+                        x15Ns + "futureMetadata",
+                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                        new XAttribute("name", "FreexcelUnknownWorksheetExtension"))));
+            }
+
+            worksheetXml.Root!.Add(extLst);
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalPivotTablePackage(MemoryStream packageStream, bool includeCacheRecords = false)
+    private static void AddMinimalPivotTablePackage(
+        MemoryStream packageStream,
+        bool includeCacheRecords = false,
+        string? pivotCacheDefinitionXml = null)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -8533,7 +9608,7 @@ public class FileAdapterSmokeTests
                         new XAttribute("Target", "../pivotCache/pivotCacheDefinition1.xml"))));
             ReplacePackageXml(archive, "xl/pivotTables/_rels/pivotTable1.xml.rels", pivotTableRelsXml);
 
-            ReplacePackageXml(archive, "xl/pivotCache/pivotCacheDefinition1.xml", XDocument.Parse(MinimalPivotCacheDefinitionXml));
+            ReplacePackageXml(archive, "xl/pivotCache/pivotCacheDefinition1.xml", XDocument.Parse(pivotCacheDefinitionXml ?? MinimalPivotCacheDefinitionXml));
             if (includeCacheRecords)
             {
                 var cacheRelsXml = new XDocument(
@@ -8551,10 +9626,17 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalSlicerTimelinePackage(MemoryStream packageStream)
+    private static void AddMinimalSlicerTimelinePackage(MemoryStream packageStream, bool includeDrawing = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
             ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
                 <slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
                         name="Region Slicer"
@@ -8585,6 +9667,60 @@ public class FileAdapterSmokeTests
                   </pivotTables>
                 </timelineCacheDefinition>
                 """));
+
+            if (includeDrawing)
+            {
+                var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+                ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+                var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+                var worksheetXml = LoadPackageXml(worksheetEntry);
+                worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
+                worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdNativeSlicerDrawing")));
+                ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+                var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+                var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                    ? LoadPackageXml(worksheetRelsEntry)
+                    : new XDocument(new XElement(packageRelNs + "Relationships"));
+                worksheetRelsXml.Root!.Add(new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", "rIdNativeSlicerDrawing"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                    new XAttribute("Target", "../drawings/drawing1.xml")));
+                ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+                var drawingXml = new XDocument(
+                    new XElement(spreadsheetDrawingNs + "wsDr",
+                        new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                        new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                        new XAttribute(XNamespace.Xmlns + "r", relNs),
+                        new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                            new XElement(spreadsheetDrawingNs + "from",
+                                new XElement(spreadsheetDrawingNs + "col", "2"),
+                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                                new XElement(spreadsheetDrawingNs + "row", "2"),
+                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                            new XElement(spreadsheetDrawingNs + "to",
+                                new XElement(spreadsheetDrawingNs + "col", "5"),
+                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                                new XElement(spreadsheetDrawingNs + "row", "10"),
+                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                            new XElement(spreadsheetDrawingNs + "sp",
+                                new XElement(spreadsheetDrawingNs + "nvSpPr",
+                                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                                        new XAttribute("id", "100"),
+                                        new XAttribute("name", "Native Slicer Shape")),
+                                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+                                new XElement(spreadsheetDrawingNs + "spPr"),
+                                new XElement(spreadsheetDrawingNs + "txBody",
+                                    new XElement(drawingNs + "bodyPr"),
+                                    new XElement(drawingNs + "lstStyle"),
+                                    new XElement(drawingNs + "p"))),
+                            new XElement(spreadsheetDrawingNs + "clientData"))));
+                ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+            }
         }
 
         packageStream.Position = 0;
@@ -8814,6 +9950,49 @@ public class FileAdapterSmokeTests
         </pivotCacheDefinition>
         """;
 
+    private const string PivotCacheDefinitionWithSharedItemEdgeMetadataXml = """
+        <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              refreshedBy="Freexcel Test"
+                              refreshOnLoad="0"
+                              recordCount="2">
+          <cacheSource type="worksheet">
+            <worksheetSource ref="A1:C3" sheet="Data"/>
+          </cacheSource>
+          <cacheFields count="3">
+            <cacheField name="Mixed" numFmtId="0">
+              <sharedItems containsString="1"
+                           containsMixedTypes="1"
+                           containsSemiMixedTypes="1"
+                           longText="1"
+                           count="2">
+                <s v="Short"/>
+                <s v="Long text sample"/>
+              </sharedItems>
+            </cacheField>
+            <cacheField name="Amount" numFmtId="0">
+              <sharedItems containsNumber="1"
+                           containsNonDate="1"
+                           containsInteger="1"
+                           minValue="10"
+                           maxValue="20"
+                           count="2">
+                <n v="10"/>
+                <n v="20"/>
+              </sharedItems>
+            </cacheField>
+            <cacheField name="Date" numFmtId="14">
+              <sharedItems containsDate="1"
+                           minDate="2026-01-01T00:00:00"
+                           maxDate="2026-03-31T00:00:00"
+                           count="2">
+                <d v="2026-01-01T00:00:00"/>
+                <d v="2026-03-31T00:00:00"/>
+              </sharedItems>
+            </cacheField>
+          </cacheFields>
+        </pivotCacheDefinition>
+        """;
+
     private const string MinimalPivotCacheRecordsXml = """
         <pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2">
           <r>
@@ -8835,6 +10014,53 @@ public class FileAdapterSmokeTests
                ref="A1:B3"
                totalsRowShown="0">
           <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithTotalsRowXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B4"
+               totalsRowShown="1">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category" totalsRowLabel="Total"/>
+            <tableColumn id="2" name="Amount" totalsRowFunction="sum"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithFilterValuesXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="0">
+              <filters blank="1">
+                <filter val="A"/>
+                <filter val="B"/>
+              </filters>
+            </filterColumn>
+          </autoFilter>
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
             <tableColumn id="2" name="Amount"/>
