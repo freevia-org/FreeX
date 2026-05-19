@@ -225,6 +225,7 @@ public static class BuiltInFunctions
         ["REPLACE"]     = (Replace, 4, 4),
         ["CONCATENATE"] = (Concatenate, 1, 255),
         ["T"]           = (TFunc, 1, 1),
+        ["HYPERLINK"]   = (Hyperlink, 1, 2),
         ["FIXED"]       = (Fixed, 1, 3),
         ["CLEAN"]       = (Clean, 1, 1),
         ["DOLLAR"]      = (Dollar, 1, 2),
@@ -304,6 +305,23 @@ public static class BuiltInFunctions
 
         // ── Phase A2: CONVERT ───────────────────────────────────────────────
         ["CONVERT"]     = (Convert, 3, 3),
+        ["BIN2DEC"]     = (Bin2Dec, 1, 1),
+        ["BIN2HEX"]     = (Bin2Hex, 1, 2),
+        ["BIN2OCT"]     = (Bin2Oct, 1, 2),
+        ["DEC2BIN"]     = (Dec2Bin, 1, 2),
+        ["DEC2HEX"]     = (Dec2Hex, 1, 2),
+        ["DEC2OCT"]     = (Dec2Oct, 1, 2),
+        ["HEX2BIN"]     = (Hex2Bin, 1, 2),
+        ["HEX2DEC"]     = (Hex2Dec, 1, 1),
+        ["HEX2OCT"]     = (Hex2Oct, 1, 2),
+        ["OCT2BIN"]     = (Oct2Bin, 1, 2),
+        ["OCT2DEC"]     = (Oct2Dec, 1, 1),
+        ["OCT2HEX"]     = (Oct2Hex, 1, 2),
+        ["BITAND"]      = (BitAnd, 2, 2),
+        ["BITOR"]       = (BitOr, 2, 2),
+        ["BITXOR"]      = (BitXor, 2, 2),
+        ["BITLSHIFT"]   = (BitLShift, 2, 2),
+        ["BITRSHIFT"]   = (BitRShift, 2, 2),
 
         // ── Phase A1: Database functions ─────────────────────────────────────
         ["DSUM"]     = (DSum, 3, 3),
@@ -441,6 +459,10 @@ public static class BuiltInFunctions
     };
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
+    private static readonly string[] SpecialFunctionNames = ["LET", "LAMBDA"];
+
+    /// <summary>Recognized built-in and special-form function names.</summary>
+    public static IReadOnlyCollection<string> Names => Functions.Keys.Concat(SpecialFunctionNames).ToArray();
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);
@@ -3539,6 +3561,15 @@ public static class BuiltInFunctions
         return args[0] is TextValue t ? TextResult(t.Value) : new TextValue("");
     }
 
+    private static ScalarValue Hyperlink(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
+
+        var display = args.Count > 1 ? ToText(args[1]) : ToText(args[0]);
+        return TextResult(display);
+    }
+
     private static ScalarValue Fixed(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
@@ -6398,6 +6429,174 @@ public static class BuiltInFunctions
         return NumberResult(n * fromFactor / toFactor);
     }
 
+    private static ScalarValue Bin2Dec(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToDecimal(args[0], 2, 10, 512L, 1024L);
+
+    private static ScalarValue Bin2Hex(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToBase(args, 2, 10, 512L, 1024L, 16, upper: true);
+
+    private static ScalarValue Bin2Oct(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToBase(args, 2, 10, 512L, 1024L, 8, upper: false);
+
+    private static ScalarValue Dec2Bin(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DecimalToBase(args, 2, -512L, 511L, 1024L, 10, upper: false);
+
+    private static ScalarValue Dec2Hex(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DecimalToBase(args, 16, -549755813888L, 549755813887L, 1099511627776L, 10, upper: true);
+
+    private static ScalarValue Dec2Oct(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        DecimalToBase(args, 8, -536870912L, 536870911L, 1073741824L, 10, upper: false);
+
+    private static ScalarValue Hex2Bin(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToBase(args, 16, 10, 549755813888L, 1099511627776L, 2, upper: false);
+
+    private static ScalarValue Hex2Dec(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToDecimal(args[0], 16, 10, 549755813888L, 1099511627776L);
+
+    private static ScalarValue Hex2Oct(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToBase(args, 16, 10, 549755813888L, 1099511627776L, 8, upper: false);
+
+    private static ScalarValue Oct2Bin(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToBase(args, 8, 10, 536870912L, 1073741824L, 2, upper: false);
+
+    private static ScalarValue Oct2Dec(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToDecimal(args[0], 8, 10, 536870912L, 1073741824L);
+
+    private static ScalarValue Oct2Hex(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BaseToBase(args, 8, 10, 536870912L, 1073741824L, 16, upper: true);
+
+    private static ScalarValue BaseToDecimal(ScalarValue arg, int fromBase, int maxDigits, long signThreshold, long modulus)
+    {
+        if (arg is ErrorValue error) return error;
+        return TryParseBaseNumber(arg, fromBase, maxDigits, signThreshold, modulus, out var value)
+            ? new NumberValue(value)
+            : ErrorValue.Num;
+    }
+
+    private static ScalarValue BaseToBase(IReadOnlyList<ScalarValue> args, int fromBase, int maxDigits, long signThreshold, long modulus, int toBase, bool upper)
+    {
+        if (args[0] is ErrorValue error) return error;
+        if (!TryParseBaseNumber(args[0], fromBase, maxDigits, signThreshold, modulus, out var value)) return ErrorValue.Num;
+        if (value < 0) return DecimalToBaseText(value, toBase, NegativeModulusForBase(toBase), 10, upper);
+        return FormatBaseText(value, toBase, args.Count > 1 ? args[1] : null, upper);
+    }
+
+    private static ScalarValue DecimalToBase(IReadOnlyList<ScalarValue> args, int toBase, long min, long max, long modulus, int negativeWidth, bool upper)
+    {
+        if (args[0] is ErrorValue error) return error;
+        if (!TryGetEngineeringInteger(args[0], out var value)) return ErrorValue.Num;
+        if (value < min || value > max) return ErrorValue.Num;
+        if (value < 0) return DecimalToBaseText(value, toBase, modulus, negativeWidth, upper);
+        return FormatBaseText(value, toBase, args.Count > 1 ? args[1] : null, upper);
+    }
+
+    private static ScalarValue DecimalToBaseText(long value, int toBase, long modulus, int width, bool upper)
+    {
+        string converted = System.Convert.ToString(value < 0 ? modulus + value : value, toBase);
+        if (upper) converted = converted.ToUpperInvariant();
+        return new TextValue(converted.PadLeft(width, '0'));
+    }
+
+    private static ScalarValue FormatBaseText(long value, int toBase, ScalarValue? placesArg, bool upper)
+    {
+        string converted = System.Convert.ToString(value, toBase);
+        if (upper) converted = converted.ToUpperInvariant();
+        if (placesArg is null or BlankValue) return new TextValue(converted);
+        if (!TryGetEngineeringInteger(placesArg, out var places) || places < 0 || places > int.MaxValue) return ErrorValue.Num;
+        if (places < converted.Length) return ErrorValue.Num;
+        return new TextValue(converted.PadLeft((int)places, '0'));
+    }
+
+    private static bool TryParseBaseNumber(ScalarValue arg, int fromBase, int maxDigits, long signThreshold, long modulus, out long value)
+    {
+        value = 0;
+        string text = ToText(arg).Trim();
+        if (text.Length == 0 || text.Length > maxDigits) return false;
+
+        foreach (char ch in text)
+        {
+            int digit = ch switch
+            {
+                >= '0' and <= '9' => ch - '0',
+                >= 'A' and <= 'F' => ch - 'A' + 10,
+                >= 'a' and <= 'f' => ch - 'a' + 10,
+                _ => -1
+            };
+            if (digit < 0 || digit >= fromBase) return false;
+            value = value * fromBase + digit;
+        }
+
+        if (text.Length == maxDigits && value >= signThreshold) value -= modulus;
+        return true;
+    }
+
+    private static long NegativeModulusForBase(int toBase) => toBase switch
+    {
+        2 => 1024L,
+        8 => 1073741824L,
+        16 => 1099511627776L,
+        _ => throw new ArgumentOutOfRangeException(nameof(toBase), toBase, null)
+    };
+
+    private static bool TryGetEngineeringInteger(ScalarValue arg, out long value)
+    {
+        value = 0;
+        if (arg is ErrorValue) return false;
+        double number = ToNumber(arg);
+        if (!double.IsFinite(number) || Math.Truncate(number) != number) return false;
+        if (number < long.MinValue || number > long.MaxValue) return false;
+        value = (long)number;
+        return true;
+    }
+
+    private const long MaxBitFunctionValue = 281474976710655L;
+
+    private static ScalarValue BitAnd(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BitBinary(args, (left, right) => left & right);
+
+    private static ScalarValue BitOr(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BitBinary(args, (left, right) => left | right);
+
+    private static ScalarValue BitXor(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BitBinary(args, (left, right) => left ^ right);
+
+    private static ScalarValue BitBinary(IReadOnlyList<ScalarValue> args, Func<long, long, long> op)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (!TryGetBitInteger(args[0], out var left)) return ErrorValue.Num;
+        if (!TryGetBitInteger(args[1], out var right)) return ErrorValue.Num;
+        return new NumberValue(op(left, right));
+    }
+
+    private static ScalarValue BitLShift(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BitShift(args, leftShift: true);
+
+    private static ScalarValue BitRShift(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
+        BitShift(args, leftShift: false);
+
+    private static ScalarValue BitShift(IReadOnlyList<ScalarValue> args, bool leftShift)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        if (!TryGetBitInteger(args[0], out var number)) return ErrorValue.Num;
+        if (!TryGetEngineeringInteger(args[1], out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
+
+        bool effectiveLeft = leftShift ? shift >= 0 : shift < 0;
+        int bits = (int)Math.Abs(shift);
+        if (effectiveLeft && bits > 0 && number > (MaxBitFunctionValue >> bits))
+            return ErrorValue.Num;
+
+        long result = effectiveLeft ? number << bits : number >> bits;
+        return result > MaxBitFunctionValue ? ErrorValue.Num : new NumberValue(result);
+    }
+
+    private static bool TryGetBitInteger(ScalarValue arg, out long value)
+    {
+        if (!TryGetEngineeringInteger(arg, out value)) return false;
+        return value >= 0 && value <= MaxBitFunctionValue;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Phase B — Statistical Distribution Functions
     // ═══════════════════════════════════════════════════════════════════════════
@@ -8322,17 +8521,18 @@ public static class BuiltInFunctions
         double redemption  = ToNumber(args[6]);
         int frequency      = (int)Math.Truncate(ToNumber(args[7]));
         int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
-        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
-            !double.IsFinite(yld) || !double.IsFinite(redemption))
+        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
+            !double.IsFinite(firstCoupon) || !double.IsFinite(rate) || !double.IsFinite(yld) ||
+            !double.IsFinite(redemption))
             return ErrorValue.Num;
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
-        // Use standard bond pricing starting from first coupon date
+        if (basis < 0 || basis > 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
+        DateTime id = SerialToDate(issue);
         DateTime fcd = SerialToDate(firstCoupon);
-        if (sd >= md || fcd > md) return ErrorValue.Num;
-        // Simplified: treat as standard bond from settlement/maturity
-        double price = CalcBondPrice(sd, md, rate, yld, redemption, frequency, basis);
+        if (!(md > fcd && fcd > sd && sd > id)) return ErrorValue.Num;
+        double price = OddFirstPrice(id, sd, md, fcd, rate, yld, redemption, frequency, basis);
         return NumberResult(price);
     }
 
@@ -8349,20 +8549,23 @@ public static class BuiltInFunctions
         double redemption  = ToNumber(args[6]);
         int frequency      = (int)Math.Truncate(ToNumber(args[7]));
         int basis = args.Count > 8 && args[8] is not BlankValue ? (int)Math.Truncate(ToNumber(args[8])) : 0;
-        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
-            !double.IsFinite(pr) || !double.IsFinite(redemption))
+        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(issue) ||
+            !double.IsFinite(firstCoupon) || !double.IsFinite(rate) || !double.IsFinite(pr) ||
+            !double.IsFinite(redemption))
             return ErrorValue.Num;
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (basis < 0 || basis > 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
-        if (sd >= md) return ErrorValue.Num;
-        // Newton-Raphson using standard bond price function
+        DateTime id = SerialToDate(issue), fcd = SerialToDate(firstCoupon);
+        if (!(md > fcd && fcd > sd && sd > id)) return ErrorValue.Num;
+
         double y = 0.1;
         for (int iter = 0; iter < 200; iter++)
         {
-            double p = CalcBondPrice(sd, md, rate, y, redemption, frequency, basis);
+            double p = OddFirstPrice(id, sd, md, fcd, rate, y, redemption, frequency, basis);
             double dy = 1e-6;
-            double dp = (CalcBondPrice(sd, md, rate, y + dy, redemption, frequency, basis) - p) / dy;
+            double dp = (OddFirstPrice(id, sd, md, fcd, rate, y + dy, redemption, frequency, basis) - p) / dy;
             if (Math.Abs(dp) < 1e-14) break;
             double delta = (p - pr) / dp;
             y -= delta;
@@ -8384,24 +8587,16 @@ public static class BuiltInFunctions
         double redemption  = ToNumber(args[5]);
         int frequency      = (int)Math.Truncate(ToNumber(args[6]));
         int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
-        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
-            !double.IsFinite(yld) || !double.IsFinite(redemption))
+        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(lastInterest) ||
+            !double.IsFinite(rate) || !double.IsFinite(yld) || !double.IsFinite(redemption))
             return ErrorValue.Num;
         if (rate < 0 || yld < 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (basis < 0 || basis > 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         DateTime li = SerialToDate(lastInterest);
-        if (sd >= md) return ErrorValue.Num;
-        // Odd last period: one remaining coupon + redemption
-        double dcfLast = DayCountFraction(li, md, basis);
-        double dcfNorm = 1.0 / frequency;
-        double dcfSettle = DayCountFraction(li, sd, basis);
-        double a = dcfSettle / dcfNorm;
-        double dsc = (dcfLast - dcfSettle) / dcfNorm;
-        double couponAmt = rate / frequency * redemption;
-        double y = yld / frequency;
-        double price = (redemption + couponAmt) / (1 + dsc * y) - couponAmt * a;
-        return NumberResult(price);
+        if (!(md > sd && sd > li)) return ErrorValue.Num;
+        return NumberResult(OddLastPrice(li, sd, md, rate, yld, redemption, frequency, basis));
     }
 
     private static ScalarValue Oddlyield(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -8416,26 +8611,99 @@ public static class BuiltInFunctions
         double redemption  = ToNumber(args[5]);
         int frequency      = (int)Math.Truncate(ToNumber(args[6]));
         int basis = args.Count > 7 && args[7] is not BlankValue ? (int)Math.Truncate(ToNumber(args[7])) : 0;
-        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(rate) ||
-            !double.IsFinite(pr) || !double.IsFinite(redemption))
+        if (!double.IsFinite(settlement) || !double.IsFinite(maturity) || !double.IsFinite(lastInterest) ||
+            !double.IsFinite(rate) || !double.IsFinite(pr) || !double.IsFinite(redemption))
             return ErrorValue.Num;
         if (rate < 0 || pr <= 0 || redemption <= 0) return ErrorValue.Num;
         if (frequency != 1 && frequency != 2 && frequency != 4) return ErrorValue.Num;
+        if (basis < 0 || basis > 4) return ErrorValue.Num;
         DateTime sd = SerialToDate(settlement), md = SerialToDate(maturity);
         DateTime li = SerialToDate(lastInterest);
-        if (sd >= md) return ErrorValue.Num;
-        // Solve for yld via Newton-Raphson using the oddlprice formula
-        // price = (redemption + couponAmt) / (1 + dsc*y) - couponAmt*a
-        // Rearranged: y = ((redemption + couponAmt) / (price + couponAmt*a) - 1) / dsc
-        double dcfLast = DayCountFraction(li, md, basis);
-        double dcfNorm = 1.0 / frequency;
-        double dcfSettle = DayCountFraction(li, sd, basis);
-        double a = dcfSettle / dcfNorm;
-        double dsc = (dcfLast - dcfSettle) / dcfNorm;
+        if (!(md > sd && sd > li)) return ErrorValue.Num;
+
+        double daysInCoupon = CouponPeriodDays(li, frequency, basis);
+        double accruedPeriods = FinancialDays(li, sd, basis) / daysInCoupon;
+        double remainingPeriods = FinancialDays(sd, md, basis) / daysInCoupon;
+        double oddCouponPeriods = FinancialDays(li, md, basis) / daysInCoupon;
         double couponAmt = rate / frequency * redemption;
-        if (Math.Abs(dsc) < 1e-14) return ErrorValue.DivByZero;
-        double y = ((redemption + couponAmt) / (pr + couponAmt * a) - 1) / dsc * frequency;
+        double numerator = redemption + couponAmt * oddCouponPeriods;
+        double denominator = pr + couponAmt * accruedPeriods;
+        if (Math.Abs(remainingPeriods) < 1e-14 || Math.Abs(denominator) < 1e-14) return ErrorValue.DivByZero;
+        double y = (numerator / denominator - 1) / remainingPeriods * frequency;
         return NumberResult(y);
+    }
+
+    private static double OddFirstPrice(DateTime issue, DateTime settlement, DateTime maturity, DateTime firstCoupon,
+        double rate, double yld, double redemption, int frequency, int basis)
+    {
+        int months = 12 / frequency;
+        DateTime previousCoupon = firstCoupon.AddMonths(-months);
+        double daysInCoupon = CouponPeriodDays(previousCoupon, frequency, basis);
+        double accrued = FinancialDays(issue, settlement, basis) / daysInCoupon;
+        double firstCouponPeriods = FinancialDays(issue, firstCoupon, basis) / daysInCoupon;
+        double periodsToFirstCoupon = FinancialDays(settlement, firstCoupon, basis) / daysInCoupon;
+        double couponAmt = rate / frequency * redemption;
+        double yieldPerPeriod = yld / frequency;
+
+        double price = couponAmt * firstCouponPeriods / Math.Pow(1 + yieldPerPeriod, periodsToFirstCoupon);
+        int k = 1;
+        for (DateTime d = firstCoupon.AddMonths(months); d <= maturity; d = d.AddMonths(months))
+        {
+            double cash = couponAmt;
+            if (d == maturity)
+                cash += redemption;
+            price += cash / Math.Pow(1 + yieldPerPeriod, k + periodsToFirstCoupon);
+            k++;
+        }
+        return price - couponAmt * accrued;
+    }
+
+    private static double OddLastPrice(DateTime lastInterest, DateTime settlement, DateTime maturity,
+        double rate, double yld, double redemption, int frequency, int basis)
+    {
+        double daysInCoupon = CouponPeriodDays(lastInterest, frequency, basis);
+        double accruedPeriods = FinancialDays(lastInterest, settlement, basis) / daysInCoupon;
+        double remainingPeriods = FinancialDays(settlement, maturity, basis) / daysInCoupon;
+        double oddCouponPeriods = FinancialDays(lastInterest, maturity, basis) / daysInCoupon;
+        double couponAmt = rate / frequency * redemption;
+        if (Math.Abs(remainingPeriods) < 1e-14) return double.NaN;
+        double y = yld / frequency;
+        return (redemption + couponAmt * oddCouponPeriods) / (1 + remainingPeriods * y)
+             - couponAmt * accruedPeriods;
+    }
+
+    private static double CouponPeriodDays(DateTime periodStart, int frequency, int basis)
+        => FinancialDays(periodStart, periodStart.AddMonths(12 / frequency), basis);
+
+    private static double FinancialDays(DateTime d1, DateTime d2, int basis)
+    {
+        return basis switch
+        {
+            0 => Days360Us(d1, d2),
+            1 => (d2 - d1).TotalDays,
+            2 => (d2 - d1).TotalDays,
+            3 => (d2 - d1).TotalDays,
+            4 => Days360European(d1, d2),
+            _ => (d2 - d1).TotalDays
+        };
+    }
+
+    private static double Days360Us(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd2 == 31 && dd1 >= 30) dd2 = 30;
+        if (dd1 == 31) dd1 = 30;
+        return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
+    }
+
+    private static double Days360European(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd1 == 31) dd1 = 30;
+        if (dd2 == 31) dd2 = 30;
+        return (y2 - y1) * 360 + (m2 - m1) * 30 + (dd2 - dd1);
     }
     // ── Phase D: Higher-order function implementations ───────────────────────
 
