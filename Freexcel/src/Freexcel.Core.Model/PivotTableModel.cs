@@ -7,6 +7,8 @@ public sealed class PivotCacheModel
     public string? SourceSheetName { get; set; }
     public string? SourceReference { get; set; }
     public string? SourceTableName { get; set; }
+    public int? ConnectionId { get; set; }
+    public bool IsOlap { get; set; }
     public string PackagePart { get; init; } = "";
     public bool RefreshOnLoad { get; set; } = true;
     public bool SaveData { get; set; } = true;
@@ -21,7 +23,9 @@ public enum PivotCacheSourceType
     Unknown,
     WorksheetRange,
     Table,
-    External
+    External,
+    Consolidation,
+    Scenario
 }
 
 public sealed record PivotCacheFieldModel(
