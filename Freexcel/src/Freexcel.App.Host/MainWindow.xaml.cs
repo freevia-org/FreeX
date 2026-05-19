@@ -3407,7 +3407,7 @@ public partial class MainWindow : Window
         if (items.Count == 0)
             return;
 
-        var dialog = new PivotFieldFilterDialog(items)
+        var dialog = new AutoFilterDialog(items)
         {
             Owner = this,
             Title = "AutoFilter"
@@ -3416,7 +3416,18 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.SelectedItems.Count == 0)
+        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Sort",
+                    plan.Range,
+                    currentRange => new SortCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
+                return;
+            UpdateViewport();
+            return;
+        }
+
+        if (dialog.Result.SelectedValues.Count == 0)
         {
             MessageBox.Show("Select at least one filter item.", "AutoFilter", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -3425,7 +3436,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 plan.Range,
-                currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.SelectedItems)))
+                currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SelectedValues)))
             return;
         UpdateViewport();
     }
@@ -5279,15 +5290,11 @@ public partial class MainWindow : Window
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var input = PromptForInput("Sort keys (for example 1 asc; 2 desc):", "1 asc");
-        if (input is null) return;
-
-        if (!SortInputParser.TryParse(input, out var keys, out var error))
-        {
-            MessageBox.Show(error ?? "Enter sort keys such as 1 asc; 2 desc.",
-                "Custom Sort", MessageBoxButton.OK, MessageBoxImage.Warning);
+        var dialog = new SortDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
-        }
+
+        var keys = dialog.ResultSortKeys;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
@@ -5305,9 +5312,28 @@ public partial class MainWindow : Window
 
     private void ApplyFilterPrompt(GridRange range, uint filterColOffset)
     {
-        var value = PromptForInput("Filter: values separated by comma/semicolon, top:n, bottom:n, toppercent:n, bottompercent:n, aboveavg, belowavg, blank, nonblank, text=value, text<>value, contains:text, notcontains:text, begins:text, ends:text, between:min:max, date=yyyy-mm-dd, date<>yyyy-mm-dd, date>yyyy-mm-dd, date>=yyyy-mm-dd, date<yyyy-mm-dd, date<=yyyy-mm-dd, datebetween:start:end, >number, >=number, <number, <=number, =number, or <>number", "");
-        if (value is null) return;  // user cancelled
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var items = sheet is null
+            ? Array.Empty<AutoFilterChecklistItem>()
+            : AutoFilterDropdownPlanner.CreateChecklistItems(sheet, new AutoFilterDropdownPlan(range, filterColOffset));
+        var dialog = new AutoFilterDialog(items) { Owner = this, Title = "Filter" };
+        if (dialog.ShowDialog() != true) return;
+
+        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Sort",
+                    range,
+                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
+                return;
+            UpdateViewport();
+            return;
+        }
+
+        var value = dialog.Result.CriteriaText;
         var filterText = value.TrimStart();
+        if (string.IsNullOrWhiteSpace(filterText))
+            return;
         if (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
             filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
             filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
@@ -5704,22 +5730,45 @@ public partial class MainWindow : Window
 
     private void FontColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        var input = PromptForInput("Font color (R,G,B e.g. 255,0,0):", "0,0,0");
-        if (input is null) return;
-        var parts = input.Split(',');
-        if (parts.Length == 3 && byte.TryParse(parts[0].Trim(), out var r)
-            && byte.TryParse(parts[1].Trim(), out var g) && byte.TryParse(parts[2].Trim(), out var b))
-            ApplyStyleDiff(new StyleDiff(FontColor: new CellColor(r, g, b)));
+        var initial = GetCurrentCellStyle().FontColor;
+        if (TryShowColorPicker("Font Color", initial, allowNoColor: false, out var color) && color is { } selected)
+            ApplyStyleDiff(new StyleDiff(FontColor: selected));
     }
 
     private void FillColorBtn_Click(object sender, RoutedEventArgs e)
     {
-        var input = PromptForInput("Fill color (R,G,B e.g. 255,255,0):", "255,255,255");
-        if (input is null) return;
-        var parts = input.Split(',');
-        if (parts.Length == 3 && byte.TryParse(parts[0].Trim(), out var r)
-            && byte.TryParse(parts[1].Trim(), out var g) && byte.TryParse(parts[2].Trim(), out var b))
-            ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(r, g, b)));
+        var initial = GetCurrentCellStyle().FillColor;
+        if (!TryShowColorPicker("Fill Color", initial, allowNoColor: true, out var color))
+            return;
+
+        ApplyStyleDiff(color is { } selected
+            ? new StyleDiff(FillColor: selected)
+            : new StyleDiff(FillColor: null, ClearFill: true));
+    }
+
+    private CellStyle GetCurrentCellStyle()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
+        return _workbook.GetStyle(sheet?.GetCell(address)?.StyleId ?? StyleId.Default);
+    }
+
+    private bool TryShowColorPicker(string title, CellColor? initialColor, bool allowNoColor, out CellColor? color)
+    {
+        var dialog = new ColorPickerDialog(initialColor, allowNoColor)
+        {
+            Owner = this,
+            Title = title
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            color = dialog.SelectedColor;
+            return true;
+        }
+
+        color = null;
+        return false;
     }
 
     private void NumberFormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -6088,10 +6137,7 @@ public partial class MainWindow : Window
 
     private bool ExecuteKeyboardInsertCellsWithPrompt(GridRange range)
     {
-        var input = PromptForInput("Insert cells (right/down/row/column):", "right");
-        if (input is null) return false;
-
-        if (!KeyboardInsertDeletePlanner.TryParseInsertDialogChoice(input, out var choice))
+        if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
             return false;
 
         return choice switch
@@ -6127,10 +6173,7 @@ public partial class MainWindow : Window
 
     private bool ExecuteKeyboardDeleteCellsWithPrompt(GridRange range)
     {
-        var input = PromptForInput("Delete cells (left/up/row/column):", "left");
-        if (input is null) return false;
-
-        if (!KeyboardInsertDeletePlanner.TryParseDeleteDialogChoice(input, out var choice))
+        if (!TryShowCellShiftDialog(CellShiftDialogMode.Delete, out var choice))
             return false;
 
         return choice switch
@@ -6162,6 +6205,19 @@ public partial class MainWindow : Window
                     GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
                     DeleteCellsShiftDirection.Left))
         };
+    }
+
+    private bool TryShowCellShiftDialog(CellShiftDialogMode mode, out KeyboardInsertDeleteDialogChoice choice)
+    {
+        var dialog = new CellShiftDialog(mode) { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            choice = default;
+            return false;
+        }
+
+        choice = CellShiftDialog.ToKeyboardChoice(mode, dialog.SelectedChoice);
+        return true;
     }
 
     private void ExecuteRowsHidden(bool hidden)
@@ -7379,10 +7435,8 @@ public partial class MainWindow : Window
     private void InsertCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var input = PromptForInput("Insert cells (right/down/row/column):", "right");
-        if (input is null) return;
 
-        if (!KeyboardInsertDeletePlanner.TryParseInsertDialogChoice(input, out var choice))
+        if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
             return;
 
         CommandOutcome outcome;
@@ -7419,10 +7473,8 @@ public partial class MainWindow : Window
     private void DeleteCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var input = PromptForInput("Delete cells (left/up/row/column):", "left");
-        if (input is null) return;
 
-        if (!KeyboardInsertDeletePlanner.TryParseDeleteDialogChoice(input, out var choice))
+        if (!TryShowCellShiftDialog(CellShiftDialogMode.Delete, out var choice))
             return;
 
         CommandOutcome outcome;
@@ -7783,15 +7835,12 @@ public partial class MainWindow : Window
     private void FindReplaceMenuItem_Click(object sender, RoutedEventArgs e)    => ReplaceButton_Click(sender, e);
     private void FindGoToMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var input = PromptForInput("Go To cell (e.g. B5):", "A1");
-        if (input is null) return;
-        try
-        {
-            var addr = CellAddress.Parse(input.Trim(), _currentSheetId);
-            SetActiveCell(addr);
-            EnsureCellVisible(addr);
-        }
-        catch { MessageBox.Show("Invalid cell address."); }
+        var defaultAddress = SheetGrid.SelectedRange?.Start.ToA1() ?? "A1";
+        var dialog = new GoToDialog(_currentSheetId, defaultAddress) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        SetActiveCell(dialog.SelectedAddress);
+        EnsureCellVisible(dialog.SelectedAddress);
     }
     private void FindGoToSpecialMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -7799,12 +7848,10 @@ public partial class MainWindow : Window
         if (sheet is null) return;
         var range = SheetGrid.SelectedRange ?? sheet.GetUsedRange() ??
             new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
-        var input = PromptForInput("Go To Special (blanks/constants/formulas/comments/validation/visible):", "blanks");
-        if (input is null) return;
+        var dialog = new GoToSpecialDialog { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
-        var kind = GoToSpecialInputParser.Parse(input);
-
-        var matches = GoToSpecialService.Find(sheet, range, kind);
+        var matches = GoToSpecialService.Find(sheet, range, dialog.SelectedKind);
         if (matches.Count == 0)
         {
             MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -7918,15 +7965,39 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sheet, sourceRange);
+        var dialog = new PivotTableDialog(_workbook, _currentSheetId, sourceRange) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.SourceRangeText, out var dialogSourceRange))
+        {
+            MessageBox.Show("Enter a valid PivotTable source range.", "Insert PivotTable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
+        {
+            MessageBox.Show("New chart-style PivotTable sheets are tracked for Wave 2, but this build places PivotTables on worksheets.",
+                "Insert PivotTable", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.DestinationRangeText, out var targetRange) ||
+            targetRange.Start.Sheet != _currentSheetId)
+        {
+            MessageBox.Show("Enter a destination cell on the active worksheet.", "Insert PivotTable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
+        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
         var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
-        var targetRange = PivotUiPlanner.DefaultTargetRange(sheet, sourceRange);
         var name = PivotUiPlanner.GenerateUniquePivotTableName(sheet);
 
         if (!TryExecuteCommand(
                 new AddPivotTableCommand(
                     _currentSheetId,
-                    sourceRange,
+                    dialogSourceRange,
                     targetRange,
                     name,
                     rowFieldIndexes: [rowFieldIndex],
@@ -7935,6 +8006,8 @@ public partial class MainWindow : Window
             return;
 
         UpdateViewport();
+        if (dialog.Result.OpenFieldList)
+            RefreshPivotFieldListPane();
     }
 
     private void RefreshPivotTableBtn_Click(object sender, RoutedEventArgs e)
@@ -8041,11 +8114,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("PivotChart type:", chart.Type.ToString());
-        if (string.IsNullOrWhiteSpace(input))
+        var dialog = new PivotChartTypeDialog(chart.Type) { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
 
-        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, ChartOptionCycler.ParseChartType(input)), "Change PivotChart Type"))
+        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change PivotChart Type"))
             return;
 
         UpdateViewport();
@@ -8301,8 +8374,10 @@ public partial class MainWindow : Window
         if (sheet is null || pivotTable is null)
             return;
 
-        var input = PromptForInput("PivotTable source range:", FormatWorkbookRange(pivotTable.SourceRange));
-        if (string.IsNullOrWhiteSpace(input) || !TryParseWorkbookRange(sheet.Id, input, out var sourceRange))
+        var dialog = new PivotTableDataSourceDialog(FormatWorkbookRange(pivotTable.SourceRange)) { Owner = this };
+        if (dialog.ShowDialog() != true ||
+            string.IsNullOrWhiteSpace(dialog.Result.SourceRangeText) ||
+            !TryParseWorkbookRange(sheet.Id, dialog.Result.SourceRangeText, out var sourceRange))
             return;
 
         if (!TryExecuteCommand(
@@ -8326,11 +8401,13 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(fieldName))
             return;
 
-        var name = PromptForInput("Slicer name:", $"{fieldName} Slicer");
-        if (string.IsNullOrWhiteSpace(name))
+        var dialog = new InsertSlicerDialog(headers, fieldName) { Owner = this };
+        if (dialog.ShowDialog() != true ||
+            string.IsNullOrWhiteSpace(dialog.Result.FieldName) ||
+            string.IsNullOrWhiteSpace(dialog.Result.SlicerName))
             return;
 
-        if (!TryExecuteCommand(new AddSlicerCommand(name.Trim(), pivotTable.Name, fieldName), "Insert Slicer"))
+        if (!TryExecuteCommand(new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName), "Insert Slicer"))
             return;
 
         _slicerTimelinePaneDismissed = false;
@@ -8351,11 +8428,13 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(fieldName))
             return;
 
-        var name = PromptForInput("Timeline name:", $"{fieldName} Timeline");
-        if (string.IsNullOrWhiteSpace(name))
+        var dialog = new InsertTimelineDialog(headers, fieldName) { Owner = this };
+        if (dialog.ShowDialog() != true ||
+            string.IsNullOrWhiteSpace(dialog.Result.DateFieldName) ||
+            string.IsNullOrWhiteSpace(dialog.Result.TimelineName))
             return;
 
-        if (!TryExecuteCommand(new AddTimelineCommand(name.Trim(), pivotTable.Name, fieldName), "Insert Timeline"))
+        if (!TryExecuteCommand(new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName), "Insert Timeline"))
             return;
 
         _slicerTimelinePaneDismissed = false;
@@ -9155,8 +9234,11 @@ public partial class MainWindow : Window
 
     private void InsertChartPickerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+        var dialog = new InsertChartDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        InsertChartOfType(dialog.Result.ChartType);
     }
     private void ChartColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Column);
     private void ChartStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.StackedColumn);
@@ -10240,14 +10322,16 @@ public partial class MainWindow : Window
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
-        var url = PromptForInput("URL:", "https://");
-        if (url is null) return;
-        var label = PromptForInput("Display text (leave blank to use URL):", "");
-        var text = string.IsNullOrWhiteSpace(label) ? url : label;
+        var dialog = new HyperlinkDialog { Owner = this };
+        if (dialog.ShowDialog() != true) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Link",
                 SheetGrid.SelectedRange.Value,
-                currentRange => new SetHyperlinkCommand(_currentSheetId, currentRange.Start, url, text)))
+                currentRange => new SetHyperlinkCommand(
+                    _currentSheetId,
+                    currentRange.Start,
+                    dialog.Result.Target,
+                    dialog.Result.DisplayText)))
             return;
         UpdateViewport();
     }
@@ -10302,21 +10386,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Picture size (width x height):", $"{(int)picture.Width}x{(int)picture.Height}");
-        if (input is null) return;
-        var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !double.TryParse(parts[0], out var width) ||
-            !double.TryParse(parts[1], out var height))
-        {
-            MessageBox.Show("Enter size as width x height, for example 320x180.",
-                "Picture Size", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new ObjectSizeDialog(picture.Width, picture.Height, "Picture Size") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Picture Size",
-                sheetId => new ResizePictureCommand(sheetId, GetTargetPicture(sheetId)?.Id ?? Guid.Empty, width, height)))
+                sheetId => new ResizePictureCommand(
+                    sheetId,
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
+                    dialog.Result.Width,
+                    dialog.Result.Height)))
             return;
 
         UpdateViewport();
@@ -10331,18 +10410,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Rotation degrees:", ((int)picture.RotationDegrees).ToString());
-        if (input is null) return;
-        if (!double.TryParse(input, out var rotation))
-        {
-            MessageBox.Show("Enter a numeric rotation in degrees.",
-                "Rotate Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new RotationDialog(picture.RotationDegrees, "Rotate Picture") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Rotate Picture",
-                sheetId => new RotatePictureCommand(sheetId, GetTargetPicture(sheetId)?.Id ?? Guid.Empty, rotation)))
+                sheetId => new RotatePictureCommand(
+                    sheetId,
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
+                    dialog.Result.Degrees)))
             return;
 
         UpdateViewport();
@@ -10363,31 +10439,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        var defaultText = string.Join(", ",
-            DrawingInputParser.FormatCropPercent(picture.CropLeft),
-            DrawingInputParser.FormatCropPercent(picture.CropTop),
-            DrawingInputParser.FormatCropPercent(picture.CropRight),
-            DrawingInputParser.FormatCropPercent(picture.CropBottom));
-        var input = PromptForInput("Crop percentages (left, top, right, bottom). Use 0,0,0,0 to reset:", defaultText);
-        if (input is null) return;
-
-        var parts = input.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 4 ||
-            !DrawingInputParser.TryParseCropPercent(parts[0], out var left) ||
-            !DrawingInputParser.TryParseCropPercent(parts[1], out var top) ||
-            !DrawingInputParser.TryParseCropPercent(parts[2], out var right) ||
-            !DrawingInputParser.TryParseCropPercent(parts[3], out var bottom) ||
-            left + right >= 1 ||
-            top + bottom >= 1)
-        {
-            MessageBox.Show("Enter four percentages between 0 and 99, keeping visible width and height. Example: 10, 0, 10, 0.",
-                "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new PictureCropDialog(picture) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Crop Picture",
-                sheetId => new SetPictureCropCommand(sheetId, GetTargetPicture(sheetId)?.Id ?? Guid.Empty, left, top, right, bottom)))
+                sheetId => new SetPictureCropCommand(
+                    sheetId,
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
+                    dialog.Result.Left,
+                    dialog.Result.Top,
+                    dialog.Result.Right,
+                    dialog.Result.Bottom)))
             return;
 
         UpdateViewport();
@@ -10489,15 +10552,15 @@ public partial class MainWindow : Window
     private void InsertTextBox()
     {
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        var text = PromptForInput("Text box text:", "");
-        if (text is null) return;
+        var dialog = new TextEntryDialog("Insert Text Box", "Text:", "") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Text Box",
                 sheetId =>
                 {
                     var currentAnchor = SheetGrid.SelectedRange?.Start ?? anchor;
-                    return new AddTextBoxCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), text);
+                    return new AddTextBoxCommand(sheetId, new CellAddress(sheetId, currentAnchor.Row, currentAnchor.Col), dialog.Result.Text);
                 }))
             return;
 
@@ -10559,17 +10622,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Object size (width x height):", $"{(int)target.Width}x{(int)target.Height}");
-        if (input is null) return;
-        var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !double.TryParse(parts[0], out var width) ||
-            !double.TryParse(parts[1], out var height))
-        {
-            MessageBox.Show("Enter size as width x height, for example 160x90.",
-                "Object Size", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new ObjectSizeDialog(target.Width, target.Height, "Object Size") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Object Size",
@@ -10577,8 +10631,8 @@ public partial class MainWindow : Window
                 {
                     var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
                     return target.Kind == DrawingObjectTargetKind.Shape
-                        ? new ResizeDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, width, height)
-                        : new ResizeTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, width, height);
+                        ? new ResizeDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height)
+                        : new ResizeTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Width, dialog.Result.Height);
                 }))
             return;
 
@@ -10596,14 +10650,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Rotation degrees:", ((int)target.RotationDegrees).ToString());
-        if (input is null) return;
-        if (!double.TryParse(input, out var rotation))
-        {
-            MessageBox.Show("Enter a numeric rotation in degrees.",
-                "Rotate Object", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new RotationDialog(target.RotationDegrees, "Rotate Object") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Rotate Object",
@@ -10611,8 +10659,8 @@ public partial class MainWindow : Window
                 {
                     var groupedTarget = GetTargetDrawingObject(sheetId, target.Kind);
                     return target.Kind == DrawingObjectTargetKind.Shape
-                        ? new RotateDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, rotation)
-                        : new RotateTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, rotation);
+                        ? new RotateDrawingShapeCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees)
+                        : new RotateTextBoxCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Degrees);
                 }))
             return;
 
@@ -10633,18 +10681,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput(
-            isFill ? "Object fill color (R,G,B):" : "Object outline color (R,G,B):",
-            isFill ? "31,119,180" : "68,68,68");
-        if (input is null) return;
-        if (!DrawingInputParser.TryParseRgbColor(input, out var color))
-        {
-            MessageBox.Show("Enter a color as R,G,B, for example 31,119,180.",
-                isFill ? "Object Fill" : "Object Outline",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+        var initial = isFill ? target.FillColor : target.OutlineColor;
+        if (!TryShowColorPicker(isFill ? "Object Fill" : "Object Outline", initial, allowNoColor: false, out var selectedColor)
+            || selectedColor is not { } color)
             return;
-        }
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 isFill ? "Object Fill" : "Object Outline",
@@ -10682,21 +10722,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Gradient colors (start R,G,B; end R,G,B):", "31,119,180; 180,210,240");
-        if (input is null) return;
-        var parts = input.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !DrawingInputParser.TryParseRgbColor(parts[0], out var startColor) ||
-            !DrawingInputParser.TryParseRgbColor(parts[1], out var endColor))
-        {
-            MessageBox.Show("Enter two colors separated by a semicolon, for example 31,119,180; 180,210,240.",
-                "Shape Gradient", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new ShapeGradientDialog { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Shape Gradient",
-                sheetId => new SetDrawingShapeGradientCommand(sheetId, GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty, startColor, endColor)))
+                sheetId => new SetDrawingShapeGradientCommand(
+                    sheetId,
+                    GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
+                    dialog.Result.StartColor,
+                    dialog.Result.EndColor)))
             return;
 
         SetActiveCell(shape.Anchor);
@@ -10991,26 +11026,7 @@ public partial class MainWindow : Window
 
     private void MarginCustomMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-
-        var current = sheet.PageMargins;
-        var defaultValue = string.Join(", ",
-            current.Left.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
-            current.Right.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
-            current.Top.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
-            current.Bottom.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
-
-        var input = PromptForInput("Custom margins in inches (left, right, top, bottom):", defaultValue);
-        if (input is null) return;
-
-        if (!PageMarginInputParser.TryParse(input, out var margins, out var error))
-        {
-            MessageBox.Show(error, "Page Margins", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        TryExecuteGroupedSheetCommand("Page Margins", sheetId => new SetPageMarginsCommand(sheetId, margins));
+        PageSetupDialogBtn_Click(sender, e);
     }
 
     private void PageOrientBtn_Click(object sender, RoutedEventArgs e)
@@ -11074,41 +11090,7 @@ public partial class MainWindow : Window
 
     private void ScaleToFitBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-
-        var current = sheet.ScaleToFit;
-        var defaultValue = current.ScalePercent.HasValue
-            ? current.ScalePercent.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : $"{current.FitToPagesWide ?? 1}x{current.FitToPagesTall ?? 1}";
-        var input = PromptForInput("Scale percent (10-400) or pages wide x tall (for example 1x1):", defaultValue);
-        if (input is null) return;
-
-        WorksheetScaleToFit scaleToFit;
-        if (input.Contains('x', StringComparison.OrdinalIgnoreCase))
-        {
-            var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2 ||
-                !int.TryParse(parts[0], out var wide) ||
-                !int.TryParse(parts[1], out var tall))
-            {
-                MessageBox.Show("Enter fit-to-pages as width x height, for example 1x1.", "Scale to Fit", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            scaleToFit = new WorksheetScaleToFit(null, wide, tall);
-        }
-        else if (int.TryParse(input, out var percent))
-        {
-            scaleToFit = new WorksheetScaleToFit(percent, null, null);
-        }
-        else
-        {
-            MessageBox.Show("Enter a scale percent or fit-to-pages value.", "Scale to Fit", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        TryExecuteGroupedSheetCommand("Scale to Fit", sheetId => new SetScaleToFitCommand(sheetId, scaleToFit));
+        PageSetupDialogBtn_Click(sender, e);
     }
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
@@ -11154,24 +11136,7 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var rowsDefault = sheet.PrintTitleRows is { } rows ? $"{rows.Start}:{rows.End}" : "none";
-        var colsDefault = sheet.PrintTitleColumns is { } cols
-            ? $"{CellAddress.NumberToColumnName(cols.Start)}:{CellAddress.NumberToColumnName(cols.End)}"
-            : "none";
-        var rowsInput = PromptForInput("Rows to repeat at top (for example 1:2, or none):", rowsDefault);
-        if (rowsInput is null) return;
-        var colsInput = PromptForInput("Columns to repeat at left (for example A:C, or none):", colsDefault);
-        if (colsInput is null) return;
-
-        if (!PageLayoutInputParser.TryParseRepeatRows(rowsInput, out var repeatRows) ||
-            !PageLayoutInputParser.TryParseRepeatColumns(colsInput, out var repeatColumns))
-        {
-            MessageBox.Show("Enter row titles as 1:2 and column titles as A:C, or type none.",
-                "Print Titles", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        TryExecuteGroupedSheetCommand("Print Titles", sheetId => new SetPrintTitlesCommand(sheetId, repeatRows, repeatColumns));
+        PageSetupDialogBtn_Click(sender, e);
     }
 
     private void PageSetupDialogBtn_Click(object sender, RoutedEventArgs e)
@@ -11244,16 +11209,12 @@ public partial class MainWindow : Window
     private void DefineNameBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var name = PromptForInput("Define named range (name):", "");
-        if (string.IsNullOrWhiteSpace(name)) return;
-        var outcome = _commandBus.Execute(_workbook.Id, new DefineNamedRangeCommand(name.Trim(), range));
-        if (!outcome.Success)
+        var dialog = new NamedRangeDialog(_workbook, _commandBus, range)
         {
-            ShowCommandError(outcome, "Define Name");
-            return;
-        }
-
-        MessageBox.Show($"Named range '{name}' = {range} defined.", "Define Name", MessageBoxButton.OK, MessageBoxImage.Information);
+            Owner = this
+        };
+        dialog.ShowDialog();
+        RefreshStatusBar();
     }
 
     private void CreateNamesFromSelectionBtn_Click(object sender, RoutedEventArgs e)
@@ -11648,9 +11609,9 @@ public partial class MainWindow : Window
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var delimInput = PromptForInput("Delimiter (e.g. , or ;):", ",");
-        if (delimInput is null || delimInput.Length == 0) return;
-        char delim = delimInput[0];
+        var dialog = new TextToColumnsDialog { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+        char delim = dialog.Result.Delimiter[0];
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Text to Columns",
                 range,
@@ -11679,13 +11640,16 @@ public partial class MainWindow : Window
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var dialog = new RemoveDuplicatesDialog(RemoveDuplicatesDialog.BuildColumnChoices(range)) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
+
         RemoveDuplicateRowsCommand? command = null;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Remove Duplicates",
                 range,
                 currentRange =>
                 {
-                    command = new RemoveDuplicateRowsCommand(_currentSheetId, currentRange);
+                    command = new RemoveDuplicateRowsCommand(_currentSheetId, currentRange, dialog.Result.SelectedColumnOffsets);
                     return command;
                 }))
             return;
@@ -11699,45 +11663,12 @@ public partial class MainWindow : Window
         var defaultList = SheetGrid.SelectedRange is { } selected
             ? FormatWorkbookRange(selected)
             : "A1:C10";
-        var listInput = PromptForInput("List range:", defaultList);
-        if (listInput is null) return;
-        if (!TryParseWorkbookRange(_currentSheetId, listInput, out var listRange))
-        {
-            MessageBox.Show("Invalid list range.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var criteriaInput = PromptForInput("Criteria range:", "E1:F2");
-        if (criteriaInput is null) return;
-        if (!TryParseWorkbookRange(_currentSheetId, criteriaInput, out var criteriaRange))
-        {
-            MessageBox.Show("Invalid criteria range.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        CellAddress? copyTo = null;
-        var copyInput = PromptForInput("Copy to cell (leave blank to filter in place):", "");
-        if (copyInput is null) return;
-        if (!string.IsNullOrWhiteSpace(copyInput))
-        {
-            if (!CellAddress.TryParse(copyInput.Trim(), _currentSheetId, out var destination))
-            {
-                MessageBox.Show("Invalid copy destination.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            copyTo = destination;
-        }
-
-        var uniqueInput = PromptForInput("Unique records only? (yes/no):", "no");
-        if (uniqueInput is null) return;
-        var unique = uniqueInput.Trim().Equals("yes", StringComparison.OrdinalIgnoreCase) ||
-                     uniqueInput.Trim().Equals("y", StringComparison.OrdinalIgnoreCase) ||
-                     uniqueInput.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+        var dialog = new AdvancedFilterDialog(_currentSheetId, defaultList) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var outcome = _commandBus.Execute(
             _workbook.Id,
-            new AdvancedFilterCommand(listRange, criteriaRange, copyTo, unique));
+            new AdvancedFilterCommand(dialog.Result.ListRange, dialog.Result.CriteriaRange, dialog.Result.CopyToCell, dialog.Result.UniqueRecordsOnly));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Advanced Filter");
@@ -11745,7 +11676,7 @@ public partial class MainWindow : Window
         }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        if (copyTo is { } destinationCell)
+        if (dialog.Result.CopyToCell is { } destinationCell)
             SetActiveCell(destinationCell);
         UpdateViewport();
     }
@@ -11754,36 +11685,13 @@ public partial class MainWindow : Window
     {
         var selected = SheetGrid.SelectedRange;
         var defaultSource = selected?.ToString() ?? "A1:B2";
-        var sourceInput = PromptForInput("Source ranges to sum (same size, separated by comma or semicolon):", defaultSource);
-        if (sourceInput is null) return;
-
-        var ranges = new List<GridRange>();
-        foreach (var part in sourceInput.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            try
-            {
-                ranges.Add(GridRange.Parse(part, _currentSheetId));
-            }
-            catch
-            {
-                MessageBox.Show($"Invalid range: {part}", "Consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-        }
-
         var defaultDestination = selected?.Start.ToA1() ?? "A1";
-        var destinationInput = PromptForInput("Destination cell:", defaultDestination);
-        if (destinationInput is null) return;
-
-        if (!CellAddress.TryParse(destinationInput, _currentSheetId, out var destination))
-        {
-            MessageBox.Show("Invalid destination cell.", "Consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new ConsolidateDialog(_currentSheetId, defaultSource, defaultDestination) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         var outcome = _commandBus.ExecuteRepeatable(
             _workbook.Id,
-            () => new ConsolidateCommand(ranges, destination));
+            () => new ConsolidateCommand(dialog.Result.SourceRanges, dialog.Result.DestinationCell));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Consolidate");
@@ -11791,8 +11699,8 @@ public partial class MainWindow : Window
         }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
-        SetActiveCell(destination);
-        EnsureCellVisible(destination);
+        SetActiveCell(dialog.Result.DestinationCell);
+        EnsureCellVisible(dialog.Result.DestinationCell);
         UpdateViewport();
     }
 
@@ -11806,15 +11714,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Group column, subtotal columns, function, options (for example 1,2+3,sum,replace pagebreak above):", "1,2,sum,replace");
-        if (input is null) return;
-
-        if (!SubtotalInputParser.TryParse(input, out var options, out var error))
-        {
-            MessageBox.Show(error ?? "Enter group column, subtotal columns, and optional function, for example 1,2+3,sum.",
-                "Subtotal", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
+        var dialog = new SubtotalDialog { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Subtotal",
@@ -11824,12 +11725,12 @@ public partial class MainWindow : Window
                     var subtotalCommand = new SubtotalCommand(
                         _currentSheetId,
                         currentRange,
-                        groupByColumnOffset: options.GroupColumnOffset,
-                        subtotalColumnOffsets: options.SubtotalColumnOffsets,
-                        functionNumber: options.FunctionNumber,
-                        pageBreakBetweenGroups: options.PageBreakBetweenGroups,
-                        summaryBelowData: options.SummaryBelowData);
-                    return options.ReplaceExisting
+                        groupByColumnOffset: dialog.Result.GroupColumnOffset,
+                        subtotalColumnOffsets: dialog.Result.SubtotalColumnOffsets,
+                        functionNumber: dialog.Result.FunctionNumber,
+                        pageBreakBetweenGroups: dialog.Result.PageBreakBetweenGroups,
+                        summaryBelowData: dialog.Result.SummaryBelowData);
+                    return dialog.Result.ReplaceCurrentSubtotals
                         ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(_currentSheetId, currentRange), subtotalCommand])
                         : subtotalCommand;
                 },
@@ -11878,35 +11779,28 @@ public partial class MainWindow : Window
 
     private void ScenariosBtn_Click(object sender, RoutedEventArgs e)
     {
-        var action = PromptForInput("Scenario action (save/show/list/report):", _workbook.Scenarios.Count == 0 ? "save" : "show");
-        if (action is null)
+        var dialog = new ScenarioManagerDialog(_workbook) { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
 
-        switch (action.Trim().ToLowerInvariant())
+        switch (dialog.SelectedAction)
         {
-            case "save":
-            case "add":
-                SaveScenarioFromSelection();
+            case ScenarioManagerAction.Save:
+                SaveScenarioFromSelection(dialog.NewScenarioName);
                 break;
-            case "show":
-            case "apply":
-                ShowScenarioByName();
+            case ScenarioManagerAction.Show:
+                ShowScenarioByName(dialog.SelectedScenarioName);
                 break;
-            case "list":
-            case "manager":
+            case ScenarioManagerAction.List:
                 ListScenarios();
                 break;
-            case "report":
-            case "summary":
+            case ScenarioManagerAction.Report:
                 CreateScenarioSummaryReport();
-                break;
-            default:
-                MessageBox.Show("Enter save, show, list, or report.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
                 break;
         }
     }
 
-    private void SaveScenarioFromSelection()
+    private void SaveScenarioFromSelection(string? scenarioName)
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
@@ -11918,7 +11812,9 @@ public partial class MainWindow : Window
         if (sheet is null)
             return;
 
-        var name = PromptForInput("Scenario name:", _workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}");
+        var name = string.IsNullOrWhiteSpace(scenarioName)
+            ? (_workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}")
+            : scenarioName;
         if (name is null)
             return;
 
@@ -11932,7 +11828,7 @@ public partial class MainWindow : Window
             "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void ShowScenarioByName()
+    private void ShowScenarioByName(string? scenarioName)
     {
         if (_workbook.Scenarios.Count == 0)
         {
@@ -11940,7 +11836,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var name = PromptForInput("Scenario name to show:", _workbook.Scenarios[0].Name);
+        var name = string.IsNullOrWhiteSpace(scenarioName) ? _workbook.Scenarios[0].Name : scenarioName;
         if (name is null)
             return;
 
@@ -12036,56 +11932,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        var mode = PromptForInput("Data table type (one/two):", "one");
-        if (mode is null)
+        var dialog = new DataTableDialog(_currentSheetId, range) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
-        var twoVariable = mode.Trim().Equals("two", StringComparison.OrdinalIgnoreCase) ||
-                          mode.Trim().Equals("2", StringComparison.OrdinalIgnoreCase);
-
-        var formulaDefault = new CellAddress(_currentSheetId, range.Start.Row, twoVariable ? range.Start.Col : range.Start.Col + 1).ToA1();
-        var formulaInput = PromptForInput("Formula cell:", formulaDefault);
-        if (formulaInput is null)
-            return;
-        if (!CellAddress.TryParse(formulaInput.Trim(), _currentSheetId, out var formulaCell))
-        {
-            MessageBox.Show("Enter a valid formula cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
+        var formulaCell = dialog.Result.FormulaCell;
         Func<GridRange, IWorkbookCommand> createCommand;
-        if (twoVariable)
+        if (dialog.Result.Mode == DataTableMode.TwoVariable)
         {
-            var rowInputText = PromptForInput("Row input cell:", formulaCell.ToA1());
-            if (rowInputText is null)
-                return;
-            if (!CellAddress.TryParse(rowInputText.Trim(), _currentSheetId, out var rowInputCell))
-            {
-                MessageBox.Show("Enter a valid row input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            var columnInputText = PromptForInput("Column input cell:", formulaCell.ToA1());
-            if (columnInputText is null)
-                return;
-            if (!CellAddress.TryParse(columnInputText.Trim(), _currentSheetId, out var columnInputCell))
-            {
-                MessageBox.Show("Enter a valid column input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            createCommand = currentRange => new TwoVariableDataTableCommand(currentRange, formulaCell, rowInputCell, columnInputCell);
+            createCommand = currentRange => new TwoVariableDataTableCommand(currentRange, formulaCell, dialog.Result.RowInputCell!.Value, dialog.Result.ColumnInputCell!.Value);
         }
         else
         {
-            var inputInput = PromptForInput("Column input cell:", formulaCell.ToA1());
-            if (inputInput is null)
-                return;
-            if (!CellAddress.TryParse(inputInput.Trim(), _currentSheetId, out var inputCell))
-            {
-                MessageBox.Show("Enter a valid input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
+            var inputCell = dialog.Result.RowInputCell ?? dialog.Result.ColumnInputCell!.Value;
             createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell);
         }
 
@@ -12206,8 +12064,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var input = PromptForInput("Alt text:", target.AltText ?? "");
-        if (input is null)
+        var dialog = new TextEntryDialog("Alt Text", "Alt text:", target.AltText ?? "") { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -12217,9 +12075,9 @@ public partial class MainWindow : Window
                     var groupedTarget = GetTargetAltTextObject(sheetId, target.Kind);
                     return target.Kind switch
                     {
-                        AltTextObjectKind.Picture => new SetPictureAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
-                        AltTextObjectKind.Shape => new SetDrawingShapeAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input),
-                        _ => new SetTextBoxAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, input)
+                        AltTextObjectKind.Picture => new SetPictureAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Text),
+                        AltTextObjectKind.Shape => new SetDrawingShapeAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Text),
+                        _ => new SetTextBoxAltTextCommand(sheetId, groupedTarget?.Id ?? Guid.Empty, dialog.Result.Text)
                     };
                 }))
         {
@@ -12249,12 +12107,12 @@ public partial class MainWindow : Window
         var defaultText = sheet is null
             ? string.Empty
             : CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr);
-        var text = PromptForInput($"Add comment to {addr.ToA1()}:", defaultText);
-        if (text is null) return;
+        var dialog = new TextEntryDialog("Comment", $"Comment for {addr.ToA1()}:", defaultText) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Comment",
                 SheetGrid.SelectedRange.Value,
-                currentRange => new SetCommentCommand(_currentSheetId, currentRange.Start, text)))
+                currentRange => new SetCommentCommand(_currentSheetId, currentRange.Start, dialog.Result.Text)))
             return;
 
         UpdateViewport();
@@ -12322,8 +12180,9 @@ public partial class MainWindow : Window
         string? pwd = null;
         if (!sheet.IsProtected)
         {
-            pwd = PromptForInput("Set sheet protection password (leave blank for no password):", "");
-            if (pwd is null) return;
+            var dialog = new PasswordProtectionDialog("Protect Sheet", "Password (optional):") { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            pwd = dialog.Password;
         }
 
         var action = SheetProtectionWorkflow.CreateCommand(sheet, pwd);
@@ -12343,8 +12202,9 @@ public partial class MainWindow : Window
         string? pwd = null;
         if (!_workbook.IsStructureProtected)
         {
-            pwd = PromptForInput("Set workbook structure password (leave blank for no password):", "");
-            if (pwd is null) return;
+            var dialog = new PasswordProtectionDialog("Protect Workbook", "Password (optional):") { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            pwd = dialog.Password;
         }
 
         var action = WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd);
@@ -12358,24 +12218,13 @@ public partial class MainWindow : Window
     private void AllowEditRangesBtn_Click(object sender, RoutedEventArgs e)
     {
         var defaultRange = SheetGrid.SelectedRange?.ToString() ?? "A1:A1";
-        var input = PromptForInput("Range to allow editing while protected:", defaultRange);
-        if (input is null) return;
+        var dialog = new AllowEditRangeDialog(_currentSheetId, defaultRange) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
 
-        GridRange range;
-        try
-        {
-            range = GridRange.Parse(input, _currentSheetId);
-        }
-        catch
-        {
-            MessageBox.Show("Invalid range.", "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (!TryExecuteCommand(new AllowEditRangeCommand(_currentSheetId, range), "Allow Edit Ranges"))
+        if (!TryExecuteCommand(new AllowEditRangeCommand(_currentSheetId, dialog.Range), "Allow Edit Ranges"))
             return;
 
-        MessageBox.Show($"{range} can now be edited while this sheet is protected.",
+        MessageBox.Show($"{dialog.Range} can now be edited while this sheet is protected.",
             "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Information);
     }
     private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();
@@ -12944,18 +12793,8 @@ public partial class MainWindow : Window
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
         var sheet = _workbook.GetSheet(tab.Id);
-        var defaultValue = sheet?.TabColor is { } color
-            ? ColorInputParser.FormatHexColor(color)
-            : "#217346";
-        var input = PromptForInput("Tab color (#RRGGBB or none):", defaultValue);
-        if (input is null) return;
-
-        if (!ColorInputParser.TryParseOptionalHexColor(input, out var tabColor))
-        {
-            MessageBox.Show("Enter a color as #RRGGBB, or type none.", "Tab Color",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(33, 115, 70), allowNoColor: true, out var tabColor))
             return;
-        }
 
         if (!TryExecuteCommand(new SetSheetTabColorCommand(tab.Id, tabColor), "Tab Color"))
             return;
