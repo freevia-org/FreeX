@@ -113,6 +113,39 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    [Fact]
+    public void PackageSummary_TreatsDocumentPropertiesAsFidelityCriticalParts()
+    {
+        var workbook = new Workbook("DocumentPropertiesCriticalParts");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("document properties"));
+
+        using var package = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, package);
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            ReplacePackageXml(
+                archive,
+                "docProps/core.xml",
+                new XDocument(new XElement(
+                    XName.Get("coreProperties", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                    new XElement(XName.Get("subject", "http://purl.org/dc/elements/1.1/"), "Freexcel parity subject"))));
+            ReplacePackageXml(
+                archive,
+                "docProps/app.xml",
+                new XDocument(new XElement(
+                    XName.Get("Properties", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                    new XElement(XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"), "Freexcel Test Lab"))));
+        }
+
+        package.Position = 0;
+        var summary = CapturePackageSummary(package);
+
+        summary.CriticalParts.Should().Contain("docProps/core.xml");
+        summary.CriticalParts.Should().Contain("docProps/app.xml");
+    }
+
     private static string[] CaptureKnownGapFixtureParts(string id)
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(id);
@@ -436,6 +469,8 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/app.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/custom.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
@@ -463,6 +498,14 @@ public class XlsxCorpusRunnerTests
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        document.Save(stream);
     }
 
     private sealed record WorkbookSummary(
