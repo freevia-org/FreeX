@@ -189,6 +189,34 @@ public partial class FormatCellsDialog : Window
 
     private static string FormatColor(CellColor color) => $"{color.R},{color.G},{color.B}";
 
+    private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgFontColorBox, allowNoColor: false);
+
+    private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgFillColorBox, allowNoColor: true);
+
+    private void DlgBorderTopColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgBorderTopColorBox, allowNoColor: false);
+
+    private void DlgBorderRightColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgBorderRightColorBox, allowNoColor: false);
+
+    private void DlgBorderBottomColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgBorderBottomColorBox, allowNoColor: false);
+
+    private void DlgBorderLeftColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgBorderLeftColorBox, allowNoColor: false);
+
+    private void PickColorInto(TextBox target, bool allowNoColor)
+    {
+        var initial = TryParseColor(target.Text);
+        var dialog = new ColorPickerDialog(initial, allowNoColor) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        target.Text = dialog.SelectedColor is { } color ? FormatColor(color) : "";
+    }
+
     private static CellColor? TryParseColor(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;

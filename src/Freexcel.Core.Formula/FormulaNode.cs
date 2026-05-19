@@ -31,6 +31,28 @@ public sealed record CellRefNode(
 /// <summary>A range reference (e.g. A1:C3, Sheet2!A1:A10).</summary>
 public sealed record RangeRefNode(CellRefNode Start, CellRefNode End, string? SheetName = null) : FormulaNode;
 
+/// <summary>A whole-column range reference (e.g. A:A, Sheet2!A:B).</summary>
+public sealed record FullColumnRangeRefNode(
+    string StartColumnName,
+    string EndColumnName,
+    bool IsStartAbsolute = false,
+    bool IsEndAbsolute = false,
+    string? SheetName = null
+) : FormulaNode
+{
+    public uint StartColumnNumber => Model.CellAddress.ColumnNameToNumber(StartColumnName);
+    public uint EndColumnNumber => Model.CellAddress.ColumnNameToNumber(EndColumnName);
+}
+
+/// <summary>A whole-row range reference (e.g. 1:1, Sheet2!1:2).</summary>
+public sealed record FullRowRangeRefNode(
+    uint StartRow,
+    uint EndRow,
+    bool IsStartAbsolute = false,
+    bool IsEndAbsolute = false,
+    string? SheetName = null
+) : FormulaNode;
+
 /// <summary>A binary operation (e.g. A1 + B1).</summary>
 public sealed record BinaryOpNode(FormulaNode Left, BinaryOperator Operator, FormulaNode Right) : FormulaNode;
 

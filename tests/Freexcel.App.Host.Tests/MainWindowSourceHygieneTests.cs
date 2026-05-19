@@ -250,12 +250,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void MainWindow_DelegatesRgbTextParsingToDrawingInputParser()
+    public void MainWindow_RoutesColorChoicesThroughColorPickerDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().NotContain("input.Split(',')");
-        source.Should().Contain("DrawingInputParser.TryParseRgbColor(input, out var color)");
+        source.Should().Contain("private bool TryShowColorPicker(");
+        source.Should().Contain("new ColorPickerDialog");
+        source.Should().Contain("TryShowColorPicker(\"Font Color\"");
+        source.Should().Contain("TryShowColorPicker(\"Fill Color\"");
     }
 
     [Fact]

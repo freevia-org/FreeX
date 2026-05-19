@@ -4328,6 +4328,13 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SEQUENCE(2,1,1,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
+    public void Sum_FlattensSequenceDynamicArrayResult()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(3,2,1,1))", MakeSheet())
+            .Should().Be(new NumberValue(21));
+    }
+
+    [Fact]
     public void Filter_ByBoolArray_ReturnsMatchingRows()
     {
         var sheet = MakeSheet(
@@ -4475,6 +4482,18 @@ public class FunctionLibraryTests
             (1, 2, ErrorValue.NA));
 
         _eval.Evaluate("=FILTER(A1:A1,B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Sum_FlattensFilterDynamicArrayResult()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3)), (1, 2, new BoolValue(true)),
+            (2, 1, new NumberValue(1)), (2, 2, new BoolValue(false)),
+            (3, 1, new NumberValue(2)), (3, 2, new BoolValue(true)));
+
+        _eval.Evaluate("=SUM(FILTER(A1:A3,B1:B3))", sheet)
+            .Should().Be(new NumberValue(5));
     }
 
     [Fact]

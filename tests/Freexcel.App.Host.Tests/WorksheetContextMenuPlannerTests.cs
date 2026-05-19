@@ -14,10 +14,13 @@ public sealed class WorksheetContextMenuPlannerTests
             "Copy",
             "Paste",
             "Paste Special...",
+            "Insert...",
             "Insert Row Above",
+            "Delete...",
             "Delete Row(s)",
             "Sort A to Z",
             "Filter...",
+            "Clear Filter",
             "Hide Rows",
             "Unhide Rows",
             "Hide Columns",
@@ -26,8 +29,17 @@ public sealed class WorksheetContextMenuPlannerTests
             "Delete Note",
             "Hyperlink...",
             "Format Cells...",
+            "Clear All",
             "Clear Formats",
+            "Clear Comments",
             "Clear Hyperlinks",
             "Clear Contents");
+
+        commands.Single(command => command.Header == "Clear Filter")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearFilter);
+        commands.Single(command => command.Header == "Clear All")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
+        commands.Single(command => command.Header == "Clear Comments")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
     }
 }
