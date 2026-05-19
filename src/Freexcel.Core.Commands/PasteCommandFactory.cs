@@ -46,37 +46,49 @@ public static class PasteCommandFactory
         var targetSheet = workbook.GetSheet(targetSheetId);
         var activeSheetName = targetSheet?.Name ?? "";
 
-        if (options.Transpose || options.Operation != PasteSpecialOperation.None)
+        if (options.Transpose ||
+            options.Operation != PasteSpecialOperation.None ||
+            options.SkipBlanks ||
+            options.ContentKind != PasteSpecialContentKind.Default)
         {
             var specialCells = new List<(CellAddress Source, Cell Cell)>(sourceCells.Count);
             foreach (var (source, sourceCell) in sourceCells)
             {
+                if (options.SkipBlanks && IsBlank(sourceCell))
+                    continue;
+
                 Cell pastedCell;
                 if (options.Operation != PasteSpecialOperation.None)
                 {
                     pastedCell = Cell.FromValue(sourceCell.Value);
                 }
-                else if (options.Transpose && (mode == PasteCellsMode.All || mode == PasteCellsMode.Values || mode == PasteCellsMode.Formulas))
+                else if (mode == PasteCellsMode.Formats)
                 {
-                    var destinationAddress = TransposeDestination(sourceRange, source, targetSheetId, destination);
-                    var destinationStyle = GetDestinationStyle(targetSheet, destinationAddress);
-                    var transposedRowDelta = (int)destinationAddress.Row - (int)source.Row;
-                    var transposedColDelta = (int)destinationAddress.Col - (int)source.Col;
-                    var transposedPasteOp = new PasteOffsetOp(transposedRowDelta, transposedColDelta);
-                    pastedCell = BuildPastedCell(
-                        sourceCell,
-                        mode,
-                        transposedPasteOp,
-                        activeSheetName,
-                        transposedRowDelta,
-                        transposedColDelta,
-                        destinationStyle);
+                    pastedCell = sourceCell.Clone();
                 }
                 else
                 {
-                    pastedCell = mode == PasteCellsMode.Values
-                        ? Cell.FromValue(sourceCell.Value)
-                        : sourceCell.Clone();
+                    var destinationAddress = options.Transpose
+                        ? TransposeDestination(sourceRange, source, targetSheetId, destination)
+                        : Shift(
+                            source,
+                            targetSheetId,
+                            (int)destination.Row - (int)sourceRange.Start.Row,
+                            (int)destination.Col - (int)sourceRange.Start.Col);
+                    var destinationStyle = GetDestinationStyle(targetSheet, destinationAddress);
+                    var pastedRowDelta = (int)destinationAddress.Row - (int)source.Row;
+                    var pastedColDelta = (int)destinationAddress.Col - (int)source.Col;
+                    var pastedPasteOp = new PasteOffsetOp(pastedRowDelta, pastedColDelta);
+                    pastedCell = BuildPastedCell(
+                        workbook,
+                        sourceCell,
+                        mode,
+                        options.ContentKind,
+                        pastedPasteOp,
+                        activeSheetName,
+                        pastedRowDelta,
+                        pastedColDelta,
+                        destinationStyle);
                 }
 
                 specialCells.Add((source, pastedCell));
@@ -98,17 +110,25 @@ public static class PasteCommandFactory
         {
             return new PasteFormatsCommand(
                 targetSheetId,
-                sourceCells.Select(c => (Shift(c.Source, targetSheetId, rowDelta, colDelta), c.Cell.StyleId)).ToList());
+                sourceCells
+                    .Where(c => !options.SkipBlanks || !IsBlank(c.Cell))
+                    .Select(c => (Shift(c.Source, targetSheetId, rowDelta, colDelta), c.Cell.StyleId))
+                    .ToList());
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>(sourceCells.Count);
         foreach (var (source, sourceCell) in sourceCells)
         {
+            if (options.SkipBlanks && IsBlank(sourceCell))
+                continue;
+
             var destinationAddress = Shift(source, targetSheetId, rowDelta, colDelta);
             var destinationStyle = GetDestinationStyle(targetSheet, destinationAddress);
             var pastedCell = BuildPastedCell(
+                workbook,
                 sourceCell,
                 mode,
+                options.ContentKind,
                 pasteOp,
                 activeSheetName,
                 rowDelta,
@@ -123,14 +143,43 @@ public static class PasteCommandFactory
     }
 
     private static Cell BuildPastedCell(
+        Workbook workbook,
         Cell sourceCell,
         PasteCellsMode mode,
+        PasteSpecialContentKind contentKind,
         PasteOffsetOp pasteOp,
         string activeSheetName,
         int rowDelta,
         int colDelta,
         StyleId destinationStyle)
     {
+        if (contentKind == PasteSpecialContentKind.ValuesAndNumberFormats)
+        {
+            var valueCell = Cell.FromValue(sourceCell.Value);
+            valueCell.StyleId = MergeNumberFormat(workbook, destinationStyle, sourceCell.StyleId);
+            return valueCell;
+        }
+
+        if (contentKind == PasteSpecialContentKind.FormulasAndNumberFormats)
+        {
+            var formulaCell = BuildFormulaOrValueCell(
+                sourceCell,
+                pasteOp,
+                activeSheetName,
+                rowDelta,
+                colDelta,
+                destinationStyle);
+            formulaCell.StyleId = MergeNumberFormat(workbook, destinationStyle, sourceCell.StyleId);
+            return formulaCell;
+        }
+
+        if (contentKind == PasteSpecialContentKind.AllExceptBorders)
+        {
+            var pastedCell = BuildAllCell(sourceCell, pasteOp, activeSheetName, rowDelta, colDelta);
+            pastedCell.StyleId = MergeAllExceptBorders(workbook, sourceCell.StyleId, destinationStyle);
+            return pastedCell;
+        }
+
         if (mode == PasteCellsMode.Values)
         {
             var valueCell = Cell.FromValue(sourceCell.Value);
@@ -138,6 +187,20 @@ public static class PasteCommandFactory
             return valueCell;
         }
 
+        if (mode == PasteCellsMode.Formulas)
+            return BuildFormulaOrValueCell(sourceCell, pasteOp, activeSheetName, rowDelta, colDelta, destinationStyle);
+
+        return BuildAllCell(sourceCell, pasteOp, activeSheetName, rowDelta, colDelta);
+    }
+
+    private static Cell BuildFormulaOrValueCell(
+        Cell sourceCell,
+        PasteOffsetOp pasteOp,
+        string activeSheetName,
+        int rowDelta,
+        int colDelta,
+        StyleId destinationStyle)
+    {
         var pastedCell = sourceCell.Clone();
         if (pastedCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
         {
@@ -146,17 +209,52 @@ public static class PasteCommandFactory
                 ?? pastedCell.FormulaText;
         }
 
-        if (mode == PasteCellsMode.Formulas && !pastedCell.HasFormula)
+        if (!pastedCell.HasFormula)
         {
             var valueCell = Cell.FromValue(sourceCell.Value);
             valueCell.StyleId = destinationStyle;
             return valueCell;
         }
 
-        if (mode == PasteCellsMode.Formulas)
-            pastedCell.StyleId = destinationStyle;
+        pastedCell.StyleId = destinationStyle;
 
         return pastedCell;
+    }
+
+    private static Cell BuildAllCell(
+        Cell sourceCell,
+        PasteOffsetOp pasteOp,
+        string activeSheetName,
+        int rowDelta,
+        int colDelta)
+    {
+        var pastedCell = sourceCell.Clone();
+        if (pastedCell.FormulaText is not null && (rowDelta != 0 || colDelta != 0))
+        {
+            pastedCell.FormulaText =
+                FormulaRewriter.Rewrite(pastedCell.FormulaText, pasteOp, activeSheetName)
+                ?? pastedCell.FormulaText;
+        }
+
+        return pastedCell;
+    }
+
+    private static StyleId MergeNumberFormat(Workbook workbook, StyleId destinationStyleId, StyleId sourceStyleId)
+    {
+        var style = workbook.GetStyle(destinationStyleId).Clone();
+        style.NumberFormat = workbook.GetStyle(sourceStyleId).NumberFormat;
+        return workbook.RegisterStyle(style);
+    }
+
+    private static StyleId MergeAllExceptBorders(Workbook workbook, StyleId sourceStyleId, StyleId destinationStyleId)
+    {
+        var style = workbook.GetStyle(sourceStyleId).Clone();
+        var destinationStyle = workbook.GetStyle(destinationStyleId);
+        style.BorderTop = destinationStyle.BorderTop;
+        style.BorderRight = destinationStyle.BorderRight;
+        style.BorderBottom = destinationStyle.BorderBottom;
+        style.BorderLeft = destinationStyle.BorderLeft;
+        return workbook.RegisterStyle(style);
     }
 
     private static CellAddress TransposeDestination(
@@ -174,6 +272,9 @@ public static class PasteCommandFactory
         targetSheet?.GetCell(destinationAddress)?.StyleId
         ?? targetSheet?.GetStyleOnly(destinationAddress.Row, destinationAddress.Col)
         ?? StyleId.Default;
+
+    private static bool IsBlank(Cell cell) =>
+        cell.FormulaText is null && cell.Value is BlankValue;
 
     private static CellAddress Shift(CellAddress source, SheetId targetSheetId, int rowDelta, int colDelta)
     {

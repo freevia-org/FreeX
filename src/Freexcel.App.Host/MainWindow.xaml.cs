@@ -596,21 +596,15 @@ public partial class MainWindow : Window
                 textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        button.HorizontalContentAlignment = level == RibbonCompactLevel.IconOnly
-            ? System.Windows.HorizontalAlignment.Right
-            : System.Windows.HorizontalAlignment.Center;
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
 
         if (button.Content is FrameworkElement content)
-            content.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
-                ? System.Windows.HorizontalAlignment.Right
-                : System.Windows.HorizontalAlignment.Center;
+            content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
 
         foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
         {
             if (stack.Orientation == Orientation.Horizontal)
-                stack.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
-                    ? System.Windows.HorizontalAlignment.Right
-                    : System.Windows.HorizontalAlignment.Center;
+                stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
         }
     }
 
@@ -5835,8 +5829,34 @@ public partial class MainWindow : Window
                 "multiply" => PasteSpecialOperation.Multiply,
                 "divide" => PasteSpecialOperation.Divide,
                 _ => PasteSpecialOperation.None
+            },
+            SkipBlanks: dlg.SkipBlanks,
+            ContentKind: dlg.Mode switch
+            {
+                PasteSpecialDialogMode.AllExceptBorders => PasteSpecialContentKind.AllExceptBorders,
+                PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
+                PasteSpecialDialogMode.ValuesAndNumberFormats => PasteSpecialContentKind.ValuesAndNumberFormats,
+                _ => PasteSpecialContentKind.Default
             });
         var keepColumnWidths = dlg.KeepColumnWidths;
+        if (dlg.Mode == PasteSpecialDialogMode.ColumnWidths)
+        {
+            ExecutePasteColumnWidthsOnly();
+            return;
+        }
+
+        if (dlg.Mode == PasteSpecialDialogMode.Comments)
+        {
+            ExecutePasteComments(options.Transpose);
+            return;
+        }
+
+        if (dlg.Mode == PasteSpecialDialogMode.Validation)
+        {
+            ExecutePasteValidation(options.Transpose);
+            return;
+        }
+
         if (dlg.PastePicture)
         {
             ExecutePasteAsPicture();
@@ -5857,6 +5877,82 @@ public partial class MainWindow : Window
             ExecutePaste(PasteMode.Formats, options, keepColumnWidths);
         else
             ExecutePaste(PasteMode.All, options, keepColumnWidths);
+    }
+
+    private void ExecutePasteColumnWidthsOnly()
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Column Widths",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
+    private void ExecutePasteComments(bool transpose)
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Comments",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteCommentsCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        transpose);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
+    private void ExecutePasteValidation(bool transpose)
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Validation",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteDataValidationCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        transpose);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        UpdateViewport();
+        RefreshToolbar();
     }
 
     private void ExecutePasteAsPicture()
