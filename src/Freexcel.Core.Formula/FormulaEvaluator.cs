@@ -260,8 +260,9 @@ public sealed class FormulaEvaluator
         // Expand range arguments into individual values for aggregate functions,
         // or wrap as RangeValue for structured functions that need 2-D access.
         var expandedArgs = new List<ScalarValue>();
-        foreach (var arg in node.Arguments)
+        for (var argIndex = 0; argIndex < node.Arguments.Count; argIndex++)
         {
+            var arg = node.Arguments[argIndex];
             if (arg is RangeRefNode range)
             {
                 if (range.SheetName is not null && !context.SheetExists(range.SheetName))
@@ -291,6 +292,19 @@ public sealed class FormulaEvaluator
             else if (arg is StringNode directText && IsDirectTextCoercingAggregate(node.FunctionName))
             {
                 expandedArgs.Add(new DirectTextLiteralValue(directText.Value));
+            }
+            else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(node.FunctionName, argIndex))
+            {
+                if (aggregateCell.SheetName is not null && !context.SheetExists(aggregateCell.SheetName))
+                {
+                    expandedArgs.Add(ErrorValue.Ref);
+                    continue;
+                }
+
+                var value = aggregateCell.SheetName is not null
+                    ? context.GetCellValue(aggregateCell.SheetName, aggregateCell.Row, aggregateCell.ColumnNumber)
+                    : context.GetCellValue(aggregateCell.Row, aggregateCell.ColumnNumber);
+                expandedArgs.Add(new ReferencedScalarValue(value));
             }
             else if (arg is CellRefNode cell && IsSingleCellReferenceRangeFunction(node.FunctionName))
             {
@@ -784,6 +798,9 @@ public sealed class FormulaEvaluator
              or "MODE" or "MODE.SNGL"
              or "NPV"
              or "GCD" or "LCM";
+
+    private static bool IsSingleCellReferenceProvenanceArgument(string name, int argIndex) =>
+        IsReferenceProvenanceAggregate(name) && (name != "NPV" || argIndex > 0);
 
     private static bool IsStructuredRangeFunction(string name) =>
         name is "VLOOKUP" or "HLOOKUP" or "INDEX" or "MATCH" or "XMATCH"

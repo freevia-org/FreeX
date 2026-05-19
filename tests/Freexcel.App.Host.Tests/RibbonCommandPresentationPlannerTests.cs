@@ -55,4 +55,17 @@ public sealed class RibbonCommandPresentationPlannerTests
         icon.Glyph.Should().Be(expectedGlyph);
         icon.FontFamily.Source.Should().NotBeNullOrWhiteSpace();
     }
+
+    [Theory]
+    [InlineData("Clipboard", "\uE8C8")]
+    [InlineData("Font", "A")]
+    [InlineData("Editing", "\uE721")]
+    [InlineData("Unknown", "\uE8A5")]
+    public void GetGroupIcon_MapsExcelRibbonGroupsAndProvidesFallback(string groupName, string expectedGlyph)
+    {
+        var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
+
+        icon.Glyph.Should().Be(expectedGlyph);
+        icon.FontFamily.Source.Should().NotBeNullOrWhiteSpace();
+    }
 }

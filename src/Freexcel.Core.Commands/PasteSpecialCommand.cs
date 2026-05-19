@@ -22,7 +22,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _sourceCells;
     private readonly CellAddress _destination;
     private readonly PasteSpecialOptions _options;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Paste Special";
 
@@ -59,7 +59,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         _snapshot = [];
         foreach (var (address, cell) in cells)
         {
-            _snapshot.Add((address, sheet.GetCell(address)?.Clone()));
+            _snapshot.Add((address, sheet.GetCell(address)?.Clone(), sheet.GetStyleOnly(address.Row, address.Col)));
             sheet.SetCell(address, cell);
         }
 
@@ -72,12 +72,20 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (address, oldCell) in _snapshot)
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
+            {
                 sheet.ClearCell(address);
+                if (oldStyleOnly.HasValue)
+                    sheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
+                else
+                    sheet.ClearStyleOnly(address.Row, address.Col);
+            }
             else
+            {
                 sheet.SetCell(address, oldCell.Clone());
+            }
         }
     }
 
@@ -95,6 +103,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             if (_options.Operation != PasteSpecialOperation.None)
             {
                 var existing = sheet.GetCell(destination)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+                existing.StyleId = sheet.GetStyleOnly(destination.Row, destination.Col) ?? existing.StyleId;
                 cell = existing;
                 cell.Value = ApplyOperation(existing.Value, sourceCell.Value, _options.Operation);
                 cell.FormulaText = null;

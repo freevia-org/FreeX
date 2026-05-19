@@ -229,6 +229,10 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void SkewP_SymmetricPopulation_ReturnsZero()
+        => Calc("SKEW.P(-2,-1,0,1,2)").Should().BeApproximately(0.0, 1e-12);
+
+    [Fact]
     public void Skew_TooFewValues_ReturnsDivByZero()
         => CalcError("SKEW(1,2)").Should().Be("#DIV/0!");
 
@@ -255,6 +259,11 @@ public class PhaseBDistributionTests
         double result = Calc("CONFIDENCE.NORM(0.05,2.5,50)");
         result.Should().BeApproximately(0.6929671390, 5e-3);
     }
+
+    [Fact]
+    public void Confidence_LegacyAliasMatchesConfidenceNorm()
+        => Calc("CONFIDENCE(0.05,2.5,50)")
+            .Should().BeApproximately(Calc("CONFIDENCE.NORM(0.05,2.5,50)"), 1e-12);
 
     [Fact]
     public void ConfidenceNorm_InvalidAlpha_ReturnsNum()
@@ -387,6 +396,10 @@ public class PhaseBDistributionTests
         p.Should().BeApproximately(0.9, 1e-6);
     }
 
+    [Fact]
+    public void Gamma_PositiveInteger_ReturnsFactorialMinusOne()
+        => Calc("GAMMA(5)").Should().BeApproximately(24.0, 1e-12);
+
     // ── GAMMALN ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -470,6 +483,45 @@ public class PhaseBDistributionTests
     }
 
     // ── CHISQ.TEST round-trip check ──────────────────────────────────────────
+
+    [Fact]
+    public void FTest_IdenticalSamples_ReturnsOne()
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("S");
+        for (int i = 1; i <= 4; i++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)i, 1), new NumberValue(i));
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)i, 2), new NumberValue(i));
+        }
+
+        var result = _eval.Evaluate("=F.TEST(A1:A4,B1:B4)", sheet, wb);
+
+        result.Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(1.0, 1e-12);
+    }
+
+    [Fact]
+    public void VarS_AndStdevS_UseSampleStatistics()
+    {
+        Calc("VAR.S(1,2,3)").Should().BeApproximately(1.0, 1e-12);
+        Calc("STDEV.S(1,2,3)").Should().BeApproximately(1.0, 1e-12);
+    }
+
+    [Fact]
+    public void ForecastLinear_UsesKnownYThenKnownXArgumentOrder()
+    {
+        var wb = new Workbook();
+        var sheet = wb.AddSheet("S");
+        for (int i = 1; i <= 3; i++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)i, 1), new NumberValue(2 * i + 1));
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)i, 2), new NumberValue(i));
+        }
+
+        var result = _eval.Evaluate("=FORECAST.LINEAR(4,A1:A3,B1:B3)", sheet, wb);
+
+        result.Should().Be(new NumberValue(9));
+    }
 
     [Fact]
     public void ChiSqTest_LargeDivergence_ReturnsSmallPValue()
