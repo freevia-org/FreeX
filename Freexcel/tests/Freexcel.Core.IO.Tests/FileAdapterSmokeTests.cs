@@ -3270,6 +3270,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedWorkbookProtectionMetadata()
+    {
+        var workbook = new Workbook("AdvancedWorkbookProtectionRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedWorkbookProtectionMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protection = workbookXml.Root!.Element(workbookNs + "workbookProtection");
+        protection.Should().NotBeNull();
+        (protection!.Attribute("algorithmName")?.Value).Should().Be("SHA-512");
+        (protection.Attribute("hashValue")?.Value).Should().Be("def456");
+        (protection.Attribute("saltValue")?.Value).Should().Be("salt456");
+        (protection.Attribute("spinCount")?.Value).Should().Be("100000");
+        (protection.Attribute("lockWindows")?.Value).Should().Be("1");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_UnlockedCellStyle()
     {
         var workbook = new Workbook("UnlockedStyleTest");
@@ -9446,6 +9479,29 @@ public class FileAdapterSmokeTests
                 new XAttribute("objects", "1"),
                 new XAttribute("scenarios", "1")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddAdvancedWorkbookProtectionMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Element(workbookNs + "workbookProtection")?.Remove();
+            workbookXml.Root.AddFirst(new XElement(
+                workbookNs + "workbookProtection",
+                new XAttribute("lockStructure", "1"),
+                new XAttribute("lockWindows", "1"),
+                new XAttribute("workbookPassword", "83AF"),
+                new XAttribute("algorithmName", "SHA-512"),
+                new XAttribute("hashValue", "def456"),
+                new XAttribute("saltValue", "salt456"),
+                new XAttribute("spinCount", "100000")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         packageStream.Position = 0;
