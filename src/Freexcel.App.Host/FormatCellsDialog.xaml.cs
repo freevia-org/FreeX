@@ -123,14 +123,7 @@ public partial class FormatCellsDialog : Window
     }
 
     public static int? TryParseSupportedTextRotation(string text)
-    {
-        if (!int.TryParse(text, out var rotation))
-            return null;
-
-        return rotation == 255 || rotation is >= -90 and <= 90
-            ? rotation
-            : null;
-    }
+        => FormatCellsInputParser.TryParseSupportedTextRotation(text);
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
@@ -140,19 +133,16 @@ public partial class FormatCellsDialog : Window
 
         string? numFmt = ResolveNumberFormat(NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex);
 
-        double? fontSize = null;
-        if (double.TryParse(DlgFontSizeBox.Text, out var fs) && fs > 0) fontSize = fs;
+        double? fontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text);
 
         CellHAlign? hAlign = null;
         if (DlgHAlignBox.SelectedItem is string ha && Enum.TryParse(ha, out CellHAlign h)) hAlign = h;
         CellVAlign? vAlign = null;
         if (DlgVAlignBox.SelectedItem is string va && Enum.TryParse(va, out CellVAlign v)) vAlign = v;
 
-        int? indentLevel = null;
-        if (int.TryParse(DlgIndentLevelBox.Text, out var indent))
-            indentLevel = Math.Clamp(indent, 0, 15);
+        int? indentLevel = FormatCellsInputParser.TryParseIndentLevel(DlgIndentLevelBox.Text);
 
-        int? textRotation = TryParseSupportedTextRotation(DlgTextRotationBox.Text);
+        int? textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(DlgTextRotationBox.Text);
 
         CellBorder borderTop = ParseBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, _current.BorderTop);
         CellBorder borderRight = ParseBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, _current.BorderRight);
