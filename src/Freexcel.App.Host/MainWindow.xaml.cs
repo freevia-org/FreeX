@@ -7111,7 +7111,7 @@ public partial class MainWindow : Window
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var input = PromptForInput("Row height (pixels):", "20");
-        if (input is null || !double.TryParse(input, out var h) || h <= 0) return;
+        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var h)) return;
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, h)))
             return;
@@ -7127,7 +7127,7 @@ public partial class MainWindow : Window
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var input = PromptForInput("Column width (character units):", "8");
-        if (input is null || !double.TryParse(input, out var w) || w <= 0) return;
+        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var w)) return;
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, w)))
             return;
