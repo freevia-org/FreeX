@@ -159,7 +159,8 @@ public static class AccessibilityCheckerService
         sheet.Hyperlinks.Keys.Any(address => address.Row == row) ||
         sheet.Pictures.Any(picture => picture.Anchor.Row == row) ||
         sheet.DrawingShapes.Any(shape => shape.Anchor.Row == row) ||
-        sheet.TextBoxes.Any(textBox => textBox.Anchor.Row == row);
+        sheet.TextBoxes.Any(textBox => textBox.Anchor.Row == row) ||
+        sheet.Sparklines.Any(sparkline => sparkline.Location.Row == row);
 
     private static bool ColumnContainsContentOrObjects(Sheet sheet, uint col) =>
         sheet.EnumerateCells().Any(entry => entry.Address.Col == col && IsNonBlank(entry.Cell)) ||
@@ -167,7 +168,8 @@ public static class AccessibilityCheckerService
         sheet.Hyperlinks.Keys.Any(address => address.Col == col) ||
         sheet.Pictures.Any(picture => picture.Anchor.Col == col) ||
         sheet.DrawingShapes.Any(shape => shape.Anchor.Col == col) ||
-        sheet.TextBoxes.Any(textBox => textBox.Anchor.Col == col);
+        sheet.TextBoxes.Any(textBox => textBox.Anchor.Col == col) ||
+        sheet.Sparklines.Any(sparkline => sparkline.Location.Col == col);
 
     private static bool IsNonBlank(Cell cell) =>
         cell.HasFormula ||
