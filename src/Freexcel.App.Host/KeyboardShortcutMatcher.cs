@@ -124,6 +124,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.P)
+        {
+            shortcut = KeyboardCommandShortcut.OpenPrintBackstage;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Alt && effectiveKey == Key.F1)
         {
             shortcut = KeyboardCommandShortcut.InsertEmbeddedChart;
@@ -351,6 +357,7 @@ public enum KeyboardCommandShortcut
     RebuildDependenciesAndCalculate,
     ToggleFormulaBarExpansion,
     QuickAnalysis,
+    OpenPrintBackstage,
     InsertEmbeddedChart,
     InsertChartSheet,
     OpenFormatCellsFont,

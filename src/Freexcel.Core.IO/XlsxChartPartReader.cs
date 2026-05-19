@@ -161,7 +161,17 @@ public static class XlsxChartPartReader
             return;
 
         chart.IsPivotChart = true;
+        chart.PivotSourceSheetName = ExtractPivotSourceSheetName(pivotSourceName);
         chart.PivotTableName = ExtractPivotTableName(pivotSourceName);
+    }
+
+    private static string? ExtractPivotSourceSheetName(string pivotSourceName)
+    {
+        var bangIndex = pivotSourceName.LastIndexOf('!');
+        if (bangIndex <= 0)
+            return null;
+
+        return UnquoteSheetName(pivotSourceName[..bangIndex].Trim());
     }
 
     private static string ExtractPivotTableName(string pivotSourceName)
@@ -169,6 +179,14 @@ public static class XlsxChartPartReader
         var bangIndex = pivotSourceName.LastIndexOf('!');
         var name = bangIndex >= 0 ? pivotSourceName[(bangIndex + 1)..] : pivotSourceName;
         return name.Trim().Trim('\'');
+    }
+
+    private static string UnquoteSheetName(string value)
+    {
+        if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'')
+            return value[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return value;
     }
 
     private static bool TryReadLineLikeChart(
