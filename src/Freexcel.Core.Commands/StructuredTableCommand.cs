@@ -8,15 +8,17 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly string? _styleName;
+    private readonly bool _firstRowHasHeaders;
     private int? _createdTableId;
 
     public string Label => "Create Table";
 
-    public CreateStructuredTableCommand(SheetId sheetId, GridRange range, string? styleName = null)
+    public CreateStructuredTableCommand(SheetId sheetId, GridRange range, string? styleName = null, bool firstRowHasHeaders = true)
     {
         _sheetId = sheetId;
         _range = range;
         _styleName = styleName;
+        _firstRowHasHeaders = firstRowHasHeaders;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -44,7 +46,7 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
             ShowRowStripes = true
         };
 
-        foreach (var column in BuildColumns(sheet, _range))
+        foreach (var column in BuildColumns(sheet, _range, _firstRowHasHeaders))
             table.Columns.Add(column);
 
         sheet.StructuredTables.Add(table);
@@ -78,13 +80,15 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         return $"Table{Guid.NewGuid():N}"[..31];
     }
 
-    private static IEnumerable<StructuredTableColumnModel> BuildColumns(Sheet sheet, GridRange range)
+    private static IEnumerable<StructuredTableColumnModel> BuildColumns(Sheet sheet, GridRange range, bool firstRowHasHeaders)
     {
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ordinal = 1;
         for (var col = range.Start.Col; col <= range.End.Col; col++, ordinal++)
         {
-            var rawName = HeaderText(sheet.GetValue(range.Start.Row, col));
+            var rawName = firstRowHasHeaders
+                ? HeaderText(sheet.GetValue(range.Start.Row, col))
+                : string.Empty;
             var baseName = string.IsNullOrWhiteSpace(rawName)
                 ? $"Column{ordinal.ToString(CultureInfo.InvariantCulture)}"
                 : rawName.Trim();
