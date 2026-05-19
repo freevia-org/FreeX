@@ -235,4 +235,40 @@ public sealed class DataToolDialogTests
         twoVariable.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
         twoVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
     }
+
+    [Fact]
+    public void DataTableDialog_RejectsInvalidFormulaCell()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            DataTableMode.OneVariable,
+            formulaCellText: "not-a-cell",
+            rowInputCellText: "",
+            columnInputCellText: "C1",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid formula cell.");
+    }
+
+    [Fact]
+    public void DataTableDialog_RejectsInvalidOptionalInputCell()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = DataTableDialog.TryParse(
+            sheetId,
+            DataTableMode.OneVariable,
+            formulaCellText: "B2",
+            rowInputCellText: "",
+            columnInputCellText: "not-a-cell",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid column input cell.");
+    }
 }
