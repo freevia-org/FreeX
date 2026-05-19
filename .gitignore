@@ -3,6 +3,9 @@ WeatherApi/bin/
 WeatherApi/obj/
 WeatherDB/obj/
 
+# Freexcel generated artifacts
+Freexcel/artifacts/
+
 # User-specific files
 *.user
 *.suo
