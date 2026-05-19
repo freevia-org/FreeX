@@ -8159,6 +8159,40 @@ public class FileAdapterSmokeTests
             .Which.Name.Should().Be("Table1");
     }
 
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableTotalsRowMetadata()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableTotalsTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeTotalsRow: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.TotalsRowShown.Should().BeTrue();
+        table.Columns.Should().Contain(column =>
+            column.Name == "Category" &&
+            column.TotalsRowLabel == "Total");
+        table.Columns.Should().Contain(column =>
+            column.Name == "Amount" &&
+            column.TotalsRowFunction == "sum");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString();
+        tableXml.Should().Contain("totalsRowShown=\"1\"");
+        tableXml.Should().Contain("totalsRowLabel=\"Total\"");
+        tableXml.Should().Contain("totalsRowFunction=\"sum\"");
+    }
+
     private static Workbook CreateStructuredTableWorkbook(string name)
     {
         var workbook = new Workbook(name);
@@ -8343,7 +8377,7 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalStructuredTablePackage(MemoryStream packageStream)
+    private static void AddMinimalStructuredTablePackage(MemoryStream packageStream, bool includeTotalsRow = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -8376,7 +8410,10 @@ public class FileAdapterSmokeTests
                 new XAttribute("Target", "../tables/table1.xml")));
             ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
 
-            ReplacePackageXml(archive, "xl/tables/table1.xml", XDocument.Parse(MinimalStructuredTableXml));
+            ReplacePackageXml(
+                archive,
+                "xl/tables/table1.xml",
+                XDocument.Parse(includeTotalsRow ? StructuredTableWithTotalsRowXml : MinimalStructuredTableXml));
         }
 
         packageStream.Position = 0;
@@ -9107,6 +9144,26 @@ public class FileAdapterSmokeTests
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
             <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithTotalsRowXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B4"
+               totalsRowShown="1">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category" totalsRowLabel="Total"/>
+            <tableColumn id="2" name="Amount" totalsRowFunction="sum"/>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"

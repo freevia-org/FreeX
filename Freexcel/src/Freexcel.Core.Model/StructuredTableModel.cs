@@ -18,4 +18,8 @@ public sealed class StructuredTableModel
     public List<StructuredTableColumnModel> Columns { get; } = [];
 }
 
-public sealed record StructuredTableColumnModel(int Id, string Name);
+public sealed record StructuredTableColumnModel(
+    int Id,
+    string Name,
+    string? TotalsRowLabel = null,
+    string? TotalsRowFunction = null);
