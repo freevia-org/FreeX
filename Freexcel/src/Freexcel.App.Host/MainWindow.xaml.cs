@@ -11189,6 +11189,9 @@ public partial class MainWindow : Window
     private void ThemeFontsTimesMenuItem_Click(object sender, RoutedEventArgs e) =>
         ApplyWorkbookTheme(_workbook.Theme.WithFonts("Times New Roman", "Times New Roman"));
 
+    private void ThemeFontsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ThemeCustomizeMenuItem_Click(sender, e);
+
     private void ThemeEffectsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
