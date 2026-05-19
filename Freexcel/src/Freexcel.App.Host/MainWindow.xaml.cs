@@ -4628,6 +4628,12 @@ public partial class MainWindow : Window
 
     private void InsertChartOfType(ChartType type)
     {
+        if (!ChartTypeSupport.IsRenderable(type))
+        {
+            ShowDeferredChartFamilyMessage();
+            return;
+        }
+
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Chart",
@@ -8724,6 +8730,14 @@ public partial class MainWindow : Window
     private void ChartBubbleMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Bubble);
     private void ChartRadarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Radar);
     private void ChartStockMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Stock);
+    private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();
+
+    private static void ShowDeferredChartFamilyMessage() =>
+        MessageBox.Show(
+            "This chart family is retained when opening XLSX files, but authoring and rendering are deferred until its data model and renderer are implemented.",
+            "Chart family deferred",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {
