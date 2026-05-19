@@ -198,6 +198,25 @@ public sealed class FormulaAuditingServiceTests
         issue.Description.Should().Contain("blank cells");
     }
 
+    [Theory]
+    [InlineData("1/2/24")]
+    [InlineData("01-02-24")]
+    [InlineData("Jan 2, 24")]
+    public void FindFormulaErrorIssues_ReturnsTextDatesWithTwoDigitYears(string value)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue(value));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A2");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.TwoDigitYearTextDateErrorCode);
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("two-digit year");
+    }
+
     [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledFormulaRefersToBlankCellsRule()
     {
@@ -253,6 +272,18 @@ public sealed class FormulaAuditingServiceTests
         var sheet = wb.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("42"));
         wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.NumberStoredAsTextErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledTwoDigitYearTextDateRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("1/2/24"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.TwoDigitYearTextDateErrorCode);
 
         FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
             .Should().BeEmpty();
@@ -352,6 +383,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
                 (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
+                (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
     }
 
