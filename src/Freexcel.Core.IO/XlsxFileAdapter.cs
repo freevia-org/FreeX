@@ -375,6 +375,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                     states.Add(customView.State with { SheetName = sheet.Name });
                 }
+                foreach (var property in layout.CustomProperties)
+                    sheet.CustomProperties.Add(property);
             }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
@@ -579,6 +581,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<CellAddress> CellWatches,
         IReadOnlyList<WorkbookScenario> Scenarios,
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
+        IReadOnlyList<WorksheetCustomProperty> CustomProperties,
         string? CodeName);
 
     private sealed record XlsxWorkbookCustomView(string Id, string Name);
@@ -2481,6 +2484,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var cellWatches = ReadCellWatches(worksheetXml, worksheetNs);
         var scenarios = ReadWorksheetScenarios(worksheetXml, worksheetNs);
         var customViews = ReadWorksheetCustomViews(worksheetXml, worksheetNs);
+        var customProperties = ReadWorksheetCustomProperties(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -2520,7 +2524,33 @@ public sealed class XlsxFileAdapter : IFileAdapter
             cellWatches,
             scenarios,
             customViews,
+            customProperties,
             codeName);
+    }
+
+    private static IReadOnlyList<WorksheetCustomProperty> ReadWorksheetCustomProperties(
+        XDocument worksheetXml,
+        XNamespace worksheetNs)
+    {
+        var properties = new List<WorksheetCustomProperty>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var customProperty in worksheetXml.Root?
+                     .Element(worksheetNs + "customProperties")?
+                     .Elements(worksheetNs + "customPr") ?? [])
+        {
+            var name = customProperty.Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(name) ||
+                !int.TryParse(customProperty.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ||
+                id <= 0 ||
+                !seen.Add(name))
+            {
+                continue;
+            }
+
+            properties.Add(new WorksheetCustomProperty(name, id));
+        }
+
+        return properties;
     }
 
     private static IReadOnlyList<XlsxWorksheetCustomViewState> ReadWorksheetCustomViews(
@@ -4136,6 +4166,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveCustomViews(packageStream, workbook);
         }
 
+        if (workbook.Sheets.Any(sheet => sheet.CustomProperties.Count > 0))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetCustomProperties(packageStream, workbook);
+        }
+
         packageStream.Position = 0;
         SaveWorkbookTheme(packageStream, workbook.Theme);
 
@@ -5712,6 +5748,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                     continue;
                 }
+                if (sourceBlock.Name == workbookNs + "customProperties")
+                {
+                    if (MergeWorksheetCustomProperties(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        GetModeledCustomPropertyNames(workbook, sheetName)))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
                 if (sourceBlock.Name == workbookNs + "rowBreaks")
                 {
                     if (MergeWorksheetBreaks(
@@ -6215,6 +6264,58 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return customSheetView;
     }
 
+    private static void SaveWorksheetCustomProperties(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            var properties = sheet.CustomProperties
+                .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
+                .GroupBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last())
+                .OrderBy(property => property.Id)
+                .ThenBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (properties.Count == 0 || !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "customProperties")?.Remove();
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
+                workbookNs + "customProperties",
+                properties.Select(property => new XElement(
+                    workbookNs + "customPr",
+                    new XAttribute("name", property.Name),
+                    new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture))))));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
     private static string? NormalizeCustomViewId(string? id)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -6317,6 +6418,21 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 "rowBreaks",
                 "colBreaks",
                 "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            "customProperties" =>
+            [
                 "cellWatches",
                 "ignoredErrors",
                 "smartTags",
@@ -6565,6 +6681,104 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return workbook.CustomViews
             .Select((view, index) => NormalizeCustomViewId(view.Id) ?? CreateDeterministicCustomViewId(view.Name, index))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static HashSet<string> GetModeledCustomPropertyNames(Workbook workbook, string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        return sheet.CustomProperties
+            .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool MergeWorksheetCustomProperties(
+        XElement sourceCustomProperties,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        IReadOnlySet<string> modeledPropertyNames)
+    {
+        var targetCustomProperties = targetRoot.Element(workbookNs + "customProperties");
+        if (targetCustomProperties is null)
+        {
+            var retainedProperties = sourceCustomProperties
+                .Elements(workbookNs + "customPr")
+                .Where(property => !IsSupportedWorksheetCustomProperty(property))
+                .Select(property => new XElement(property))
+                .ToList();
+            if (retainedProperties.Count == 0)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(
+                targetRoot,
+                workbookNs,
+                new XElement(sourceCustomProperties.Name, sourceCustomProperties.Attributes(), retainedProperties));
+            return true;
+        }
+
+        var changed = MergeMissingAttributes(sourceCustomProperties, targetCustomProperties, []);
+        var targetPropertiesByName = targetCustomProperties
+            .Elements(workbookNs + "customPr")
+            .Select(property => new
+            {
+                Name = property.Attribute("name")?.Value,
+                Element = property
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .GroupBy(item => item.Name!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Element, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceProperty in sourceCustomProperties.Elements(workbookNs + "customPr"))
+        {
+            var name = sourceProperty.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name) && targetPropertiesByName.TryGetValue(name, out var targetProperty))
+            {
+                changed |= MergeMissingAttributes(sourceProperty, targetProperty, ["name", "id"]);
+                foreach (var sourceChild in sourceProperty.Elements())
+                {
+                    var targetChild = targetProperty.Elements(sourceChild.Name)
+                        .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+                    if (targetChild is not null)
+                    {
+                        if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                            changed = true;
+                        continue;
+                    }
+
+                    targetProperty.Add(new XElement(sourceChild));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(name) && modeledPropertyNames.Contains(name))
+                continue;
+
+            if (IsSupportedWorksheetCustomProperty(sourceProperty))
+                continue;
+
+            targetCustomProperties.Add(new XElement(sourceProperty));
+            if (!string.IsNullOrWhiteSpace(name))
+                targetPropertiesByName[name] = targetCustomProperties.Elements(workbookNs + "customPr").Last();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool IsSupportedWorksheetCustomProperty(XElement customProperty)
+    {
+        return !string.IsNullOrWhiteSpace(customProperty.Attribute("name")?.Value) &&
+               int.TryParse(
+                   customProperty.Attribute("id")?.Value,
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var id) &&
+               id > 0;
     }
 
     private static bool MergeWorksheetCustomSheetViews(

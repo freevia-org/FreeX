@@ -1349,6 +1349,25 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCustomProperties()
+    {
+        var workbook = new Workbook("WorksheetCustomProperties");
+        var sheet = workbook.AddSheet("Data");
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).CustomProperties.Should()
+            .ContainSingle()
+            .Which.Should().Be(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesInvalidViewPaneState()
     {
         var workbook = new Workbook("ViewPaneSanitizeTest");
@@ -10064,6 +10083,117 @@ public class FileAdapterSmokeTests
         customProperties.Should().NotBeNull();
         customProperties!.ToString().Should().Contain("name=\"FreexcelNativeProperty\"");
         customProperties.ToString().Should().Contain("id=\"1\"");
+        customProperties.ToString().Should().Contain("unsupportedAttr=\"kept\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsWorksheetCustomPropertiesIntoSheetModel()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).CustomProperties.Should()
+            .ContainSingle()
+            .Which.Should().Be(new WorksheetCustomProperty("FreexcelNativeProperty", 1));
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetCustomProperties()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customProperty = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .Single();
+
+        customProperty.Attribute("name")!.Value.Should().Be("FreexcelModeledProperty");
+        customProperty.Attribute("id")!.Value.Should().Be("7");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotDuplicateWorksheetCustomProperties()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customProperties = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .ToList();
+
+        customProperties.Should().ContainSingle();
+        customProperties[0].Attribute("name")!.Value.Should().Be("FreexcelNativeProperty");
+        customProperties[0].Attribute("unsupportedAttr")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetCustomProperty()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).CustomProperties.Clear();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")?
+            .Elements(worksheetNs + "customPr")
+            .Any(property => property.Attribute("name")?.Value == "FreexcelNativeProperty")
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -12758,7 +12888,8 @@ public class FileAdapterSmokeTests
                 new XElement(
                     worksheetNs + "customPr",
                     new XAttribute("name", "FreexcelNativeProperty"),
-                    new XAttribute("id", "1"))));
+                    new XAttribute("id", "1"),
+                    new XAttribute("unsupportedAttr", "kept"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

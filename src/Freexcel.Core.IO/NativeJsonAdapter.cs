@@ -46,6 +46,13 @@ public sealed class NativeJsonAdapter : IFileAdapter
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;
+            foreach (var property in sDto.CustomProperties ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(property?.Name) || property.Id <= 0)
+                    continue;
+
+                sheet.CustomProperties.Add(new WorksheetCustomProperty(property.Name, property.Id));
+            }
             foreach (var entry in sDto.RowHeights ?? [])
                 if (IsValidRowIndex(entry.Index) && IsPositiveFinite(entry.Value))
                     sheet.RowHeights[entry.Index] = entry.Value;
@@ -677,6 +684,14 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected ? s.ProtectionPassword : null,
+                CustomProperties = s.CustomProperties
+                    .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
+                    .Select(property => new WorksheetCustomPropertyDto
+                    {
+                        Name = property.Name,
+                        Id = property.Id
+                    })
+                    .ToList(),
                 RowHeights = s.RowHeights
                     .Where(pair => IsValidRowIndex(pair.Key) && IsPositiveFinite(pair.Value))
                     .Select(pair => new UIntDoubleDto { Index = pair.Key, Value = pair.Value })
@@ -1742,6 +1757,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public string? TabColor { get; set; }
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
+        public List<WorksheetCustomPropertyDto> CustomProperties { get; set; } = [];
         public List<UIntDoubleDto> RowHeights { get; set; } = [];
         public List<UIntDoubleDto> ColumnWidths { get; set; } = [];
         public List<uint> HiddenRows { get; set; } = [];
@@ -1811,6 +1827,12 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public List<ConditionalFormatDto> ConditionalFormats { get; set; } = [];
         public List<CellDto> Cells { get; set; } = [];
         public List<StyleOnlyCellDto> StyleOnlyCells { get; set; } = [];
+    }
+
+    private class WorksheetCustomPropertyDto
+    {
+        public string Name { get; set; } = "";
+        public int Id { get; set; }
     }
 
     private class DataValidationDto
