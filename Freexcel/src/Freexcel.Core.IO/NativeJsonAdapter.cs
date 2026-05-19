@@ -311,7 +311,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     var addr = CellAddress.Parse(cDto.Address, sheet.Id);
                     var cell = cDto.Formula != null
                         ? Cell.FromFormula(cDto.Formula)
-                        : Cell.FromValue(DeserializeValue(cDto.Value, cDto.ValueType));
+                        : Cell.FromValue(NativeJsonScalarValueMapper.Deserialize(cDto.Value, cDto.ValueType));
                     cell.IgnoreFormulaError = cDto.IgnoreFormulaError;
                     if (ToCellStyle(cDto.Style) is { } style)
                         cell.StyleId = workbook.RegisterStyle(style);
@@ -407,7 +407,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 {
                     changes.Add(new ScenarioCellValue(
                         CellAddress.Parse(changeDto.Address, sheet.Id),
-                        DeserializeValue(changeDto.Value, changeDto.ValueType)));
+                        NativeJsonScalarValueMapper.Deserialize(changeDto.Value, changeDto.ValueType)));
                 }
                 catch (FormatException) { /* skip scenarios with unparseable addresses */ }
             }
@@ -471,8 +471,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         {
                             SheetName = sheet.Name,
                             Address = change.Address.ToA1(),
-                            Value = SerializeValue(change.Value),
-                            ValueType = GetValueType(change.Value)
+                            Value = NativeJsonScalarValueMapper.Serialize(change.Value),
+                            ValueType = NativeJsonScalarValueMapper.GetValueType(change.Value)
                         };
                 }).OfType<ScenarioCellDto>().ToList()
             }).Where(scenario => scenario.ChangingCells.Count > 0).ToList(),
@@ -654,8 +654,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 Cells = s.GetUsedCells().Select(pair => new CellDto
                 {
                     Address   = pair.Key.ToA1(),
-                    Value     = SerializeValue(pair.Value.Value),
-                    ValueType = GetValueType(pair.Value.Value),
+                    Value     = NativeJsonScalarValueMapper.Serialize(pair.Value.Value),
+                    ValueType = NativeJsonScalarValueMapper.GetValueType(pair.Value.Value),
                     Formula   = pair.Value.HasFormula ? pair.Value.FormulaText : null,
                     IgnoreFormulaError = pair.Value.IgnoreFormulaError,
                     Style = FromCellStyle(workbook.GetStyle(pair.Value.StyleId))
@@ -935,54 +935,6 @@ public sealed class NativeJsonAdapter : IFileAdapter
         Width = chart.Width,
         Height = chart.Height
     };
-
-    private static string? SerializeValue(ScalarValue value) => value switch
-    {
-        BlankValue  => null,
-        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        BoolValue b   => b.Value ? "TRUE" : "FALSE",
-        TextValue t   => t.Value,
-        ErrorValue e  => e.Code,
-        _             => null,
-    };
-
-    private static string? GetValueType(ScalarValue value) => value switch
-    {
-        NumberValue => "n",
-        BoolValue   => "b",
-        TextValue   => "t",
-        ErrorValue  => "e",
-        _           => null,
-    };
-
-    private static ScalarValue DeserializeValue(string? val, string? type)
-    {
-        if (val == null) return BlankValue.Instance;
-        return type switch
-        {
-            "n" => double.TryParse(val, System.Globalization.NumberStyles.Any,
-                       System.Globalization.CultureInfo.InvariantCulture, out var d)
-                   ? new NumberValue(d) : new TextValue(val),
-            "b" => new BoolValue(val == "TRUE"),
-            "t" => new TextValue(val),
-            "e" => val switch {
-                       "#DIV/0!" => ErrorValue.DivByZero,
-                       "#VALUE!" => ErrorValue.Value,
-                       "#REF!"   => ErrorValue.Ref,
-                       "#NAME?"  => ErrorValue.Name,
-                       "#NULL!"  => ErrorValue.Null,
-                       "#N/A"    => ErrorValue.NA,
-                       "#NUM!"   => ErrorValue.Num,
-                       _         => new ErrorValue(val)
-                   },
-            // Legacy files without ValueType: sniff the value
-            _   => double.TryParse(val, System.Globalization.NumberStyles.Any,
-                       System.Globalization.CultureInfo.InvariantCulture, out var dn)
-                   ? new NumberValue(dn)
-                   : bool.TryParse(val, out var db) ? new BoolValue(db)
-                   : new TextValue(val)
-        };
-    }
 
     private static void SanitizeLoadedChart(ChartModel chart)
     {
