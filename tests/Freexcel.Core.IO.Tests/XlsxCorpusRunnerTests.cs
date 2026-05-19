@@ -95,7 +95,8 @@ public class XlsxCorpusRunnerTests
         {
             using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
             var before = CapturePackageSummary(source);
-            before.CriticalParts.Should().NotBeEmpty(row.Id);
+            var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
+            before.CriticalParts.Should().Contain(fixtureParts, row.Id);
 
             source.Position = 0;
             var workbook = adapter.Load(source);
@@ -110,6 +111,16 @@ public class XlsxCorpusRunnerTests
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
             after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
         }
+    }
+
+    private static string[] CaptureKnownGapFixtureParts(string id)
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(id);
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+        return archive.Entries
+            .Select(entry => entry.FullName.Replace('\\', '/'))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     [Fact]
@@ -405,7 +416,9 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/slicer", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/timeline", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/connections.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/query", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/queries/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/model/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/datamodel/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/powerpivot/", StringComparison.OrdinalIgnoreCase) ||
@@ -416,6 +429,14 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/revisions/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/activeX/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/ctrlProps/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/webextensions/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/webPublishItems.xml", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/diagrams/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
+        path.Equals("docProps/custom.xml", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/embeddings/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customXml/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) ||
