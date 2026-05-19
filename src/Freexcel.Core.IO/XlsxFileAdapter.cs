@@ -4780,11 +4780,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Cast<XElement>()
                 .ToList();
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
+            var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
+                sourceSheetFormatProperties is null &&
                 sourceSheetProtection is null &&
                 sourceSheetViews is null &&
                 sourceExtensionList is null)
@@ -4799,6 +4801,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var changed = false;
             if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetSheetFormatProperties(sourceSheetFormatProperties, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
@@ -4826,6 +4830,50 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetSheetFormatProperties(XElement? sourceSheetFormatProperties, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceSheetFormatProperties is null)
+            return false;
+
+        var targetSheetFormatProperties = targetRoot.Element(workbookNs + "sheetFormatPr");
+        if (targetSheetFormatProperties is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceSheetFormatProperties));
+            return true;
+        }
+
+        string[] nativeOnlyAttributes =
+        [
+            "baseColWidth",
+            "zeroHeight",
+            "thickTop",
+            "thickBottom",
+            "outlineLevelRow",
+            "outlineLevelCol"
+        ];
+        var nativeOnlyAttributeNames = nativeOnlyAttributes
+            .Select(name => XName.Get(name))
+            .ToHashSet();
+
+        var changed = false;
+        foreach (var attribute in sourceSheetFormatProperties.Attributes())
+        {
+            if (targetSheetFormatProperties.Attribute(attribute.Name) is not null &&
+                !nativeOnlyAttributeNames.Contains(attribute.Name))
+            {
+                continue;
+            }
+
+            if (targetSheetFormatProperties.Attribute(attribute.Name)?.Value == attribute.Value)
+                continue;
+
+            targetSheetFormatProperties.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetSheetViews(XElement? sourceSheetViews, XElement targetRoot, XNamespace workbookNs)
