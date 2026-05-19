@@ -1681,6 +1681,16 @@ public static class BuiltInFunctions
         return true;
     }
 
+    private static bool TryNonNegativeOADateToDateTime(ScalarValue v, out DateTime dt)
+    {
+        dt = default;
+        var num = ToNumber(v);
+        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
+            return false;
+        dt = SerialToDate(num);
+        return true;
+    }
+
     private static DateTime OADateToDateTime(ScalarValue v) =>
         DateTime.FromOADate(ToNumber(v));
 
