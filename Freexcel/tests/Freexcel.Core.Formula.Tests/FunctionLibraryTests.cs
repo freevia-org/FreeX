@@ -4518,6 +4518,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Aggregate_FlattensDynamicArrayUnaryMinusResult()
+    {
+        _eval.Evaluate("=SUM(-SEQUENCE(2,2))", MakeSheet()).Should().Be(new NumberValue(-10));
+    }
+
+    [Fact]
+    public void Aggregate_FlattensDynamicArrayPercentResult()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(2,2)%)", MakeSheet()).Should().Be(new NumberValue(0.1));
+    }
+
+    [Fact]
     public void Sum_FlattensFilterDynamicArrayResult()
     {
         var sheet = MakeSheet(

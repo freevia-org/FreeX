@@ -297,7 +297,7 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateUnaryOp(UnaryOpNode node, IEvalContext context)
     {
-        var operand = EvaluateNode(node.Operand, context);
+        var operand = EvaluateArrayOperand(node.Operand, context);
         if (operand is ErrorValue err) return err;
 
         return node.Operator switch
@@ -309,6 +309,9 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue NegateOp(ScalarValue v)
+        => ElementwiseUnaryOp(v, NegateScalarOp);
+
+    private static ScalarValue NegateScalarOp(ScalarValue v)
     {
         var n = CoerceToNumber(v);
         if (n is ErrorValue err) return err;
@@ -316,10 +319,26 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue PercentOp(ScalarValue v)
+        => ElementwiseUnaryOp(v, PercentScalarOp);
+
+    private static ScalarValue PercentScalarOp(ScalarValue v)
     {
         var n = CoerceToNumber(v);
         if (n is ErrorValue err) return err;
         return new NumberValue(((NumberValue)n).Value / 100.0);
+    }
+
+    private static ScalarValue ElementwiseUnaryOp(ScalarValue value, Func<ScalarValue, ScalarValue> scalarOp)
+    {
+        if (value is not RangeValue range)
+            return scalarOp(value);
+
+        var cells = new ScalarValue[range.RowCount, range.ColCount];
+        for (var row = 0; row < range.RowCount; row++)
+            for (var col = 0; col < range.ColCount; col++)
+                cells[row, col] = scalarOp(range.Cells[row, col]);
+
+        return new RangeValue(cells, range.StartRow, range.StartCol) { SheetName = range.SheetName };
     }
 
     private ScalarValue EvaluateFunction(FunctionCallNode node, IEvalContext context)
