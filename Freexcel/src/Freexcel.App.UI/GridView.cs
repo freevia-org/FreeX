@@ -99,6 +99,17 @@ public class GridView : FrameworkElement
         return fontSize;
     }
 
+    public static bool CanOverflowCellText(CellStyle? style, ScalarValue? rawValue, string? displayText, GridRange? merge)
+    {
+        var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
+        return !string.IsNullOrEmpty(displayText) &&
+            style?.WrapText != true &&
+            style?.ShrinkToFit != true &&
+            rawValue is not NumberValue and not DateTimeValue &&
+            !merge.HasValue &&
+            (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
+    }
+
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
     {
         var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
@@ -1509,13 +1520,7 @@ public class GridView : FrameworkElement
 
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge)
     {
-        var style = cell.Style;
-        var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
-        return !string.IsNullOrEmpty(cell.DisplayText) &&
-            style?.WrapText != true &&
-            cell.RawValue is not NumberValue and not DateTimeValue &&
-            !merge.HasValue &&
-            (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
+        return CanOverflowCellText(cell.Style, cell.RawValue, cell.DisplayText, merge);
     }
 
     private static double SumEmptyOverflowColumnWidths(
@@ -3052,8 +3057,7 @@ public class GridView : FrameworkElement
             bool wrapText  = style?.WrapText == true;
 
             double renderWidth = w;
-            bool canOverflow = !wrapText && !isNumeric && !cellMerge.HasValue
-                && (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
+            bool canOverflow = CanOverflowCellText(style, cell.RawValue, cell.DisplayText, cellMerge);
 
             if (canOverflow)
             {
