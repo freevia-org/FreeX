@@ -130,6 +130,73 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey is Key.F or Key.P)
+        {
+            shortcut = KeyboardCommandShortcut.OpenFormatCellsFont;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.G)
+        {
+            shortcut = KeyboardCommandShortcut.WorkbookStatistics;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F2)
+        {
+            shortcut = KeyboardCommandShortcut.NewNote;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.F2)
+        {
+            shortcut = KeyboardCommandShortcut.NewThreadedComment;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F12)
+        {
+            shortcut = KeyboardCommandShortcut.SaveAs;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F10)
+        {
+            shortcut = KeyboardCommandShortcut.ShowKeyTips;
+            return true;
+        }
+
+        if ((modifiers == ModifierKeys.Shift && effectiveKey == Key.F10) ||
+            (modifiers == ModifierKeys.None && effectiveKey == Key.Apps))
+        {
+            shortcut = KeyboardCommandShortcut.OpenContextMenu;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.F2)
+        {
+            shortcut = KeyboardCommandShortcut.EditInFormulaBar;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.F1)
+        {
+            shortcut = KeyboardCommandShortcut.InsertWorksheet;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && effectiveKey is Key.OemPlus or Key.Add)
+        {
+            shortcut = KeyboardCommandShortcut.ZoomIn;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && effectiveKey is Key.OemMinus or Key.Subtract)
+        {
+            shortcut = KeyboardCommandShortcut.ZoomOut;
+            return true;
+        }
+
         return false;
     }
 
@@ -224,7 +291,18 @@ public enum KeyboardCommandShortcut
     ToggleFormulaBarExpansion,
     QuickAnalysis,
     InsertEmbeddedChart,
-    InsertChartSheet
+    InsertChartSheet,
+    OpenFormatCellsFont,
+    WorkbookStatistics,
+    NewNote,
+    NewThreadedComment,
+    SaveAs,
+    ShowKeyTips,
+    OpenContextMenu,
+    EditInFormulaBar,
+    InsertWorksheet,
+    ZoomIn,
+    ZoomOut
 }
 
 public enum BorderKeyboardShortcut

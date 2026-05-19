@@ -9,7 +9,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TabControl Grid.Row="0">
+        <TabControl x:Name="Tabs" Grid.Row="0">
             <!-- Number -->
             <TabItem Header="Number">
                 <StackPanel Margin="8">
