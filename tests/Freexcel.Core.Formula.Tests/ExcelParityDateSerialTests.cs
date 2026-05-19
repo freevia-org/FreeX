@@ -108,6 +108,16 @@ public sealed class ExcelParityDateSerialTests
     }
 
     [Theory]
+    [InlineData("=DATEDIF(DATE(1900,2,28),DATE(1900,3,1),\"YD\")", 2)]
+    [InlineData("=DATEDIF(DATE(1900,1,31),DATE(1900,3,1),\"MD\")", -1)]
+    [InlineData("=DATEDIF(DATE(1900,2,28),DATE(1901,3,1),\"YD\")", 1)]
+    [InlineData("=DATEDIF(DATE(1900,2,28),DATE(1901,3,1),\"MD\")", 1)]
+    public void DatedifRelativeUnits_UseExcelSerialBoundaries(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
     [InlineData("=WORKDAY(DATE(1900,1,1),1)", 2)]
     [InlineData("=WORKDAY(DATE(1900,1,5),1)", 6)]
     [InlineData("=WORKDAY(DATE(1900,1,5),-1)", 4)]
