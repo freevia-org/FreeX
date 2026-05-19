@@ -201,7 +201,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
                     {
                         ApplyChartAnchor(chart, chartPart.Anchor, sheet);
-                    sheet.Charts.Add(chart);
+                        ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
+                        sheet.Charts.Add(chart);
                     }
                 }
                 foreach (var picturePart in layout.PictureParts)
@@ -447,7 +448,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
         string? CodeName);
 
-    private sealed record XlsxChartPackagePart(XDocument Xml, XlsxDrawingAnchor? Anchor);
+    private sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, XlsxDrawingAnchor? Anchor);
 
     private sealed record XlsxPicturePackagePart(
         byte[] ImageBytes,
@@ -2884,6 +2885,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var chartEntry = archive.GetEntry(chartPath);
             if (chartEntry is null)
                 continue;
+            var chartRelationships = archive.GetEntry(GetWorksheetRelsPath(chartPath)) is { } chartRelsEntry
+                ? LoadXml(chartRelsEntry)
+                : null;
 
             var anchor = chartElement
                 .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
@@ -2898,7 +2902,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     .Select(TryReadAbsoluteAnchor)
                     .FirstOrDefault(candidate => candidate is not null);
 
-            charts.Add(new XlsxChartPackagePart(LoadXml(chartEntry), anchor));
+            charts.Add(new XlsxChartPackagePart(LoadXml(chartEntry), chartRelationships, anchor));
         }
 
         return charts;
@@ -3370,6 +3374,23 @@ public sealed class XlsxFileAdapter : IFileAdapter
             chart.Width = width;
         if (height > 0)
             chart.Height = height;
+    }
+
+    private static void ApplyChartExternalDataRelationshipMetadata(ChartModel chart, XlsxChartPackagePart chartPart)
+    {
+        if (chart.ExternalData?.RelationshipId is not { Length: > 0 } relationshipId)
+            return;
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationship = chartPart.Relationships?.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, relationshipId, StringComparison.Ordinal));
+        if (relationship is null)
+            return;
+
+        chart.ExternalData.RelationshipType = relationship.Attribute("Type")?.Value;
+        chart.ExternalData.Target = relationship.Attribute("Target")?.Value;
+        chart.ExternalData.TargetMode = relationship.Attribute("TargetMode")?.Value;
     }
 
     private static void ApplyPictureAnchor(PictureModel picture, XlsxDrawingAnchor? anchor, Sheet sheet)
@@ -7504,6 +7525,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var chartEntry = archive.CreateEntry(chartPath);
             using (var chartStream = chartEntry.Open())
                 ToChartXml(chart, sheet).Save(chartStream);
+            WriteChartExternalDataRelationships(archive, chartPath, chart, packageRelNs);
 
             var chartRelId = $"rIdFreexcelChart{currentChartIndex}";
             drawingRelsXml.Root!.Add(new XElement(
@@ -7570,6 +7592,34 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var updatedWorksheetEntry = archive.CreateEntry(worksheetPath);
         using var worksheetStream = updatedWorksheetEntry.Open();
         worksheetXml.Save(worksheetStream);
+    }
+
+    private static void WriteChartExternalDataRelationships(
+        ZipArchive archive,
+        string chartPath,
+        ChartModel chart,
+        XNamespace packageRelNs)
+    {
+        if (chart.ExternalData is not { } externalData ||
+            string.IsNullOrWhiteSpace(externalData.RelationshipId) ||
+            string.IsNullOrWhiteSpace(externalData.RelationshipType) ||
+            string.IsNullOrWhiteSpace(externalData.Target))
+        {
+            return;
+        }
+
+        var relationship = new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", externalData.RelationshipId),
+            new XAttribute("Type", externalData.RelationshipType),
+            new XAttribute("Target", externalData.Target));
+        if (!string.IsNullOrWhiteSpace(externalData.TargetMode))
+            relationship.SetAttributeValue("TargetMode", externalData.TargetMode);
+
+        ReplacePackageXml(
+            archive,
+            GetWorksheetRelsPath(chartPath),
+            new XDocument(new XElement(packageRelNs + "Relationships", relationship)));
     }
 
     private static XElement ToAbsoluteChartAnchor(
