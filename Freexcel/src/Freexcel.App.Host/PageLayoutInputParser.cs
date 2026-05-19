@@ -3,6 +3,15 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public enum PageBreakInputKind
+{
+    Clear,
+    Row,
+    Column
+}
+
+public sealed record PageBreakInput(PageBreakInputKind Kind, uint? Row = null, uint? Column = null);
+
 public static class PageLayoutInputParser
 {
     public static bool TryParseBreakInput(string input, string keyword, out uint value)
@@ -13,6 +22,32 @@ public static class PageLayoutInputParser
 
         var numberText = input[keyword.Length..].Trim();
         return uint.TryParse(numberText, out value);
+    }
+
+    public static bool TryParsePageBreakInput(string input, out PageBreakInput pageBreak)
+    {
+        var trimmed = input.Trim();
+        if (trimmed.Equals("clear", StringComparison.OrdinalIgnoreCase))
+        {
+            pageBreak = new PageBreakInput(PageBreakInputKind.Clear);
+            return true;
+        }
+
+        if (TryParseBreakInput(trimmed, "row", out var rowBreak))
+        {
+            pageBreak = new PageBreakInput(PageBreakInputKind.Row, Row: rowBreak);
+            return true;
+        }
+
+        if (TryParseBreakInput(trimmed, "col", out var columnBreak) ||
+            TryParseBreakInput(trimmed, "column", out columnBreak))
+        {
+            pageBreak = new PageBreakInput(PageBreakInputKind.Column, Column: columnBreak);
+            return true;
+        }
+
+        pageBreak = new PageBreakInput(PageBreakInputKind.Clear);
+        return false;
     }
 
     public static bool TryParseRepeatRows(string input, out WorksheetRepeatRange? range)

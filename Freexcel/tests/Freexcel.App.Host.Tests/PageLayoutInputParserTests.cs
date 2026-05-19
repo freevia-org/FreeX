@@ -19,6 +19,34 @@ public sealed class PageLayoutInputParserTests
     }
 
     [Theory]
+    [InlineData("clear", PageBreakInputKind.Clear, null, null)]
+    [InlineData("row 5", PageBreakInputKind.Row, 5, null)]
+    [InlineData("col 3", PageBreakInputKind.Column, null, 3)]
+    [InlineData("column 7", PageBreakInputKind.Column, null, 7)]
+    public void TryParsePageBreakInput_ParsesClearRowAndColumnCommands(
+        string input,
+        PageBreakInputKind expectedKind,
+        int? expectedRow,
+        int? expectedColumn)
+    {
+        var result = PageLayoutInputParser.TryParsePageBreakInput(input, out var pageBreak);
+
+        result.Should().BeTrue();
+        pageBreak.Kind.Should().Be(expectedKind);
+        pageBreak.Row.Should().Be(expectedRow is null ? null : (uint)expectedRow.Value);
+        pageBreak.Column.Should().Be(expectedColumn is null ? null : (uint)expectedColumn.Value);
+    }
+
+    [Theory]
+    [InlineData("row x")]
+    [InlineData("columns 4")]
+    [InlineData("break")]
+    public void TryParsePageBreakInput_RejectsMalformedCommands(string input)
+    {
+        PageLayoutInputParser.TryParsePageBreakInput(input, out _).Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData("1:2", true, 1, 2)]
     [InlineData("4", true, 4, 4)]
     [InlineData("5:3", true, 3, 5)]
