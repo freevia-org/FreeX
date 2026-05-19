@@ -2221,7 +2221,12 @@ public partial class MainWindow : Window
                 currentGroup = option.Group;
             }
 
-            var item = new MenuItem { Header = option.Label, Tag = option.Command };
+            var item = new MenuItem
+            {
+                Header = option.Label,
+                Tag = option.Command,
+                ToolTip = option.PreviewText
+            };
             item.Click += QuickAnalysisMenuItem_Click;
             menu.Items.Add(item);
         }
