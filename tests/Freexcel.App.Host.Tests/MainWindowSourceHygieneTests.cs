@@ -440,6 +440,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ConditionalFormatDialogFactory.Create(ruleType, range)");
+        source.Should().NotContain("new ConditionalFormatDialog(ruleType, range)");
+    }
+
+    [Fact]
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
