@@ -4187,7 +4187,41 @@ public partial class MainWindow : Window
         InfoFormat.Text = _currentFilePath is not null
             ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
             : ".xlsx";
+
+        var statistics = WorkbookStatisticsService.GetStatistics(_workbook);
+        InfoCellsWithData.Text = FormatInfoCount(statistics.CellCount);
+        InfoFormulaCount.Text = FormatInfoCount(statistics.FormulaCount);
+        InfoCommentCount.Text = FormatInfoCount(statistics.CommentCount);
+        InfoChartCount.Text = FormatInfoCount(statistics.ChartCount);
+        InfoPictureCount.Text = FormatInfoCount(statistics.PictureCount);
+        InfoShapeCount.Text = FormatInfoCount(statistics.ShapeCount);
+        InfoNamedRangeCount.Text = FormatInfoCount(statistics.NamedRangeCount);
+
+        var workbookProtection = WorkbookProtectionWorkflow.GetUiText(_workbook);
+        InfoWorkbookProtection.Text = _workbook.IsStructureProtected
+            ? $"Workbook structure protected. {workbookProtection.TooltipDescription}"
+            : $"Workbook structure unprotected. {workbookProtection.TooltipDescription}";
+
+        if (_workbook.GetSheet(_currentSheetId) is { } activeSheet)
+        {
+            var sheetProtection = SheetProtectionWorkflow.GetUiText(activeSheet);
+            InfoSheetProtection.Text = activeSheet.IsProtected
+                ? $"Active sheet protected. {sheetProtection.TooltipDescription}"
+                : $"Active sheet unprotected. {sheetProtection.TooltipDescription}";
+        }
+        else
+        {
+            InfoSheetProtection.Text = "No active sheet.";
+        }
+
+        var accessibilityIssueCount = AccessibilityCheckerService.FindIssues(_workbook).Count;
+        InfoAccessibilitySummary.Text = accessibilityIssueCount == 0
+            ? "No accessibility issues found."
+            : $"{accessibilityIssueCount.ToString(CultureInfo.CurrentCulture)} accessibility issue(s) found.";
     }
+
+    private static string FormatInfoCount(int count) =>
+        count.ToString("N0", CultureInfo.CurrentCulture);
 
     private void UpdateSsGreeting()
     {
