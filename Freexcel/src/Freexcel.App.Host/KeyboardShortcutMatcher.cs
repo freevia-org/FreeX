@@ -215,6 +215,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Back)
+        {
+            shortcut = KeyboardCommandShortcut.ScrollActiveCellIntoView;
+            return true;
+        }
+
         return false;
     }
 
@@ -323,7 +329,8 @@ public enum KeyboardCommandShortcut
     ZoomOut,
     CopyFormulaFromAbove,
     CopyValueFromAbove,
-    OpenActiveDropdown
+    OpenActiveDropdown,
+    ScrollActiveCellIntoView
 }
 
 public enum BorderKeyboardShortcut
