@@ -796,7 +796,7 @@
                                         </Button.ContextMenu>
                                         <TextBlock Text="ab&#x2197;" FontSize="10" VerticalAlignment="Center"/>
                                     </Button>
-                                    <ToggleButton x:Name="WrapTextBtn" Width="44" Height="22"
+                                    <ToggleButton x:Name="WrapTextBtn" Width="58" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="WrapTextBtn_Click"
                                                   local:RibbonTooltip.Title="Wrap Text"
@@ -1221,7 +1221,7 @@
                                         </StackPanel>
                                     </Button>
                                     <!-- Sort & Filter -->
-                                    <Button Grid.Row="1" Grid.Column="0" Width="74" Height="30" Margin="1,1" Tag="RibbonCompact:74:30"
+                                    <Button Grid.Row="1" Grid.Column="0" Width="88" Height="30" Margin="1,1" Tag="RibbonCompact:88:30"
                                             Style="{StaticResource RibbonBtn}" Click="SortFilterPickerBtn_Click"
                                             local:RibbonTooltip.Title="Sort &amp; Filter"
                                             local:RibbonTooltip.KeyTip="S"
@@ -1244,7 +1244,7 @@
                                         </StackPanel>
                                     </Button>
                                     <!-- Find & Select -->
-                                    <Button Grid.Row="1" Grid.Column="1" Width="82" Height="30" Margin="1,1" Tag="RibbonCompact:82:30"
+                                    <Button Grid.Row="1" Grid.Column="1" Width="96" Height="30" Margin="1,1" Tag="RibbonCompact:96:30"
                                             Style="{StaticResource RibbonBtn}" Click="FindSelectPickerBtn_Click"
                                             local:RibbonTooltip.Title="Find &amp; Select"
                                             local:RibbonTooltip.KeyTip="FD"
