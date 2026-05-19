@@ -1,6 +1,7 @@
 using Freexcel.Core.Model;
 using Freexcel.Core.Formula;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Freexcel.Core.Commands;
 
@@ -36,6 +37,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
         new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
+        new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
         new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
     ];
 
@@ -122,6 +124,7 @@ public static class FormulaAuditingService
 {
     public const string FormulaRefersToBlankCellsErrorCode = "FormulaRefersToBlankCells";
     public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
+    public const string TwoDigitYearTextDateErrorCode = "TwoDigitYearTextDate";
 
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {
@@ -253,6 +256,9 @@ public static class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode))
             result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));
 
+        if (!workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode))
+            result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));
+
         if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode))
             result.AddRange(FindFormulaRefersToBlankCellsIssues(workbook, sheetId));
 
@@ -266,6 +272,7 @@ public static class FormulaAuditingService
     internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, Cell cell) =>
         cell.Value is ErrorValue ||
         (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
+        (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
         FormulaRefersToBlankCells(workbook, sheetId, cell);
 
     private static bool HasIgnorableLiteralIssue(Cell cell) =>
@@ -320,6 +327,30 @@ public static class FormulaAuditingService
         }
     }
 
+    private static IEnumerable<FormulaErrorIssue> FindTwoDigitYearTextDateIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || cell.HasFormula || cell.Value is not TextValue text || !IsTextDateWithTwoDigitYear(text.Value))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    TwoDigitYearTextDateErrorCode,
+                    null,
+                    "The text date in this cell contains a two-digit year.");
+            }
+        }
+    }
+
     private static bool FormulaRefersToBlankCells(Workbook workbook, SheetId sheetId, Cell cell)
     {
         if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
@@ -344,6 +375,31 @@ public static class FormulaAuditingService
             out var value)
         && !double.IsNaN(value)
         && !double.IsInfinity(value);
+
+    private static bool IsTextDateWithTwoDigitYear(string text)
+    {
+        var value = text.Trim();
+        if (value.Length < 6)
+            return false;
+
+        if (Regex.IsMatch(value, @"^\d{1,2}[/-]\d{1,2}[/-]\d{2}$", RegexOptions.CultureInvariant))
+            return DateTime.TryParseExact(
+                value,
+                ["M/d/yy", "MM/dd/yy", "M-d-yy", "MM-dd-yy"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _);
+
+        if (Regex.IsMatch(value, @"^[A-Za-z]{3,9}\s+\d{1,2},\s*\d{2}$", RegexOptions.CultureInvariant))
+            return DateTime.TryParseExact(
+                value,
+                ["MMM d, yy", "MMM dd, yy", "MMMM d, yy", "MMMM dd, yy"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _);
+
+        return false;
+    }
 
     private static string DescribeError(ErrorValue error) => error.Code switch
     {
