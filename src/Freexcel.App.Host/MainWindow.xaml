@@ -425,8 +425,8 @@
                           TextOptions.TextRenderingMode="ClearType"
                           TextOptions.TextHintingMode="Fixed">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="7"/>
-                            <RowDefinition Height="2"/>
+                            <RowDefinition Height="8"/>
+                            <RowDefinition Height="1"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Border x:Name="TitleBarAppFreeBand"
@@ -439,7 +439,7 @@
                                    Foreground="{StaticResource FreexcelWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
-                                   FontSize="4.8"
+                                   FontSize="5.8"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    TextAlignment="Center"/>
@@ -450,6 +450,7 @@
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="12.5"
+                                   Margin="0,-1,0,0"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    TextAlignment="Center"/>
