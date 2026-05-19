@@ -1026,6 +1026,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             false,
             false,
             tablePath,
+            [],
             []);
         var root = tableXml.Root;
         if (root is null)
@@ -1061,8 +1062,35 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     column.Attribute("totalsRowLabel")?.Value,
                     column.Attribute("totalsRowFunction")?.Value))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
-                .ToList() ?? []);
+                .ToList() ?? [],
+            ReadStructuredTableFilterColumns(root.Element(workbookNs + "autoFilter"), workbookNs));
         return true;
+    }
+
+    private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
+        XElement? autoFilter,
+        XNamespace workbookNs)
+    {
+        if (autoFilter is null)
+            return [];
+
+        return autoFilter
+            .Elements(workbookNs + "filterColumn")
+            .Select(column =>
+            {
+                var filters = column.Element(workbookNs + "filters");
+                return new StructuredTableFilterColumnModel(
+                    ReadIntAttribute(column, "colId") ?? -1,
+                    filters?
+                        .Elements(workbookNs + "filter")
+                        .Select(filter => filter.Attribute("val")?.Value)
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .Select(value => value!)
+                        .ToList() ?? [],
+                    ReadBoolAttribute(filters, "blank"));
+            })
+            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank))
+            .ToList();
     }
 
     private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
@@ -1083,6 +1111,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             PackagePart = pending.PackagePart
         };
         table.Columns.AddRange(pending.Columns);
+        table.FilterColumns.AddRange(pending.FilterColumns);
         return table;
     }
 
@@ -5061,7 +5090,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("ref", table.Range.ToString()),
             new XAttribute("totalsRowShown", table.TotalsRowShown ? "1" : "0"));
         if (table.HasAutoFilter)
-            root.Add(new XElement(workbookNs + "autoFilter", new XAttribute("ref", table.Range.ToString())));
+            root.Add(ToStructuredTableAutoFilterXml(table, workbookNs));
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
@@ -5084,6 +5113,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return new XDocument(root);
     }
+
+    private static XElement ToStructuredTableAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
+        new(
+            workbookNs + "autoFilter",
+            new XAttribute("ref", table.Range.ToString()),
+            table.FilterColumns.Select(filterColumn => new XElement(
+                workbookNs + "filterColumn",
+                new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)),
+                new XElement(
+                    workbookNs + "filters",
+                    filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
+                    filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))))));
 
     private static int ExtractTrailingNumber(string text)
     {
@@ -8908,5 +8949,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         bool ShowRowStripes,
         bool ShowColumnStripes,
         string PackagePart,
-        IReadOnlyList<StructuredTableColumnModel> Columns);
+        IReadOnlyList<StructuredTableColumnModel> Columns,
+        IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
 }
