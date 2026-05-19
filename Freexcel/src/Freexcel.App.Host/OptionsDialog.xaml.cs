@@ -78,8 +78,8 @@ public partial class OptionsDialog : Window
         var opts = new FreexcelOptions
         {
             DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
-            DefaultFontSize   = int.TryParse(OptDefaultFontSize.Text, out var fs) && fs > 0 ? fs : _opts.DefaultFontSize,
-            DefaultSheetCount = int.TryParse(OptSheetCount.Text, out var sc) && sc is >= 1 and <= 255 ? sc : _opts.DefaultSheetCount,
+            DefaultFontSize   = OptionsInputParser.ParseDefaultFontSizeOrFallback(OptDefaultFontSize.Text, _opts.DefaultFontSize),
+            DefaultSheetCount = OptionsInputParser.ParseDefaultSheetCountOrFallback(OptSheetCount.Text, _opts.DefaultSheetCount),
             UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
             AutoCalculate     = OptCalcAuto.IsChecked == true,
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
