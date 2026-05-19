@@ -2381,10 +2381,10 @@
                                         local:RibbonTooltip.Title="Allow Edit Ranges"
                                         local:RibbonTooltip.KeyTip="AR"
                                         local:RibbonTooltip.Description="Add a range that remains editable when the sheet is protected."/>
-                                <Button Content="Share (Excluded)" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
-                                        local:RibbonTooltip.Title="Share Excluded"
+                                <Button Content="Share" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
+                                        local:RibbonTooltip.Title="Share"
                                         local:RibbonTooltip.KeyTip="SH"
-                                        local:RibbonTooltip.Description="Microsoft 365 Share and cloud co-authoring are excluded; save the file and share it outside Freexcel."/>
+                                        local:RibbonTooltip.Description="Save the workbook if needed and open Windows Share for the file."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Protect" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -3352,12 +3352,12 @@
                             Click="SsOpenBtn_Click"
                             local:RibbonTooltip.Title="Open"
                             local:RibbonTooltip.KeyTip="O"/>
-                    <Button Content="Share (Excluded)" HorizontalAlignment="Stretch"
+                    <Button Content="Share" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsShareBtn_Click"
-                            local:RibbonTooltip.Title="Share Excluded"
+                            local:RibbonTooltip.Title="Share"
                             local:RibbonTooltip.KeyTip="SH"
-                            local:RibbonTooltip.Description="Microsoft 365 Share and cloud co-authoring are excluded; save the file and share it outside Freexcel."/>
+                            local:RibbonTooltip.Description="Save the workbook if needed and open Windows Share for the file."/>
 
                     <Rectangle Height="1" Fill="#2C5C40" Margin="0,6"/>
 

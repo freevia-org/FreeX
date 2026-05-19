@@ -3928,6 +3928,27 @@ public class FunctionLibraryTests
         _eval.Evaluate("=T(42)", MakeSheet()).Should().Be(new TextValue(""));
 
     [Fact]
+    public void Hyperlink_ReturnsDisplayTextWhenFriendlyNameIsProvided()
+    {
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\",\"Example\")", MakeSheet())
+            .Should().Be(new TextValue("Example"));
+    }
+
+    [Fact]
+    public void Hyperlink_ReturnsLinkLocationWhenFriendlyNameIsOmitted()
+    {
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\")", MakeSheet())
+            .Should().Be(new TextValue("https://example.com"));
+    }
+
+    [Fact]
+    public void Hyperlink_PropagatesLinkAndFriendlyNameErrors()
+    {
+        _eval.Evaluate("=HYPERLINK(NA(),\"Example\")", MakeSheet()).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\",NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void T_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
@@ -5125,6 +5146,31 @@ public class FunctionLibraryTests
     {
         _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
         _eval.Evaluate("=UNICHAR(9731)", MakeSheet()).Should().Be(new TextValue("\u2603"));
+    }
+
+    [Fact]
+    public void Char_AndCode_MatchExcelAsciiBoundaryBehavior()
+    {
+        _eval.Evaluate("=CHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
+        _eval.Evaluate("=CODE(\"Apple\")", MakeSheet()).Should().Be(new NumberValue(65));
+        _eval.Evaluate("=CHAR(0)", MakeSheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Exact_IsCaseSensitiveAndPropagatesErrors()
+    {
+        _eval.Evaluate("=EXACT(\"Excel\",\"Excel\")", MakeSheet()).Should().Be(new BoolValue(true));
+        _eval.Evaluate("=EXACT(\"Excel\",\"excel\")", MakeSheet()).Should().Be(new BoolValue(false));
+        _eval.Evaluate("=EXACT(NA(),\"x\")", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Today_ReturnsCurrentDateSerialWithoutTime()
+    {
+        _eval.Evaluate("=TODAY()", MakeSheet())
+            .Should()
+            .Be(new DateTimeValue(Math.Floor(DateTime.Today.ToOADate())));
     }
 
     [Fact]

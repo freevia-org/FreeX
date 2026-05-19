@@ -587,4 +587,35 @@ public class PhaseCFinancialTests
         double result = Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)");
         result.Should().BeGreaterThan(0);
     }
+
+    [Fact]
+    public void Accrint_SettlementAfterIssue_ReturnsAccruedInterest()
+    {
+        double result = Calc("ACCRINT(43831,43831,44197,0.05,1000,2)");
+
+        result.Should().BeGreaterThan(0);
+        result.Should().BeLessThanOrEqualTo(1000 * 0.05);
+    }
+
+    [Fact]
+    public void Coupncd_AndCouppcd_BracketSettlementDate()
+    {
+        double settlement = 43831;
+        double maturity = 44197;
+
+        Calc($"COUPPCD({settlement},{maturity},2)").Should().BeLessThanOrEqualTo(settlement);
+        Calc($"COUPNCD({settlement},{maturity},2)").Should().BeGreaterThan(settlement);
+    }
+
+    [Fact]
+    public void Yieldmat_RoundTripsPricematAtPar()
+    {
+        double settlement = 43831;
+        double maturity = 44197;
+        double issue = 43831;
+        double price = Calc($"PRICEMAT({settlement},{maturity},{issue},0.05,0.05)");
+
+        Calc($"YIELDMAT({settlement},{maturity},{issue},0.05,{price.ToString("R")})")
+            .Should().BeApproximately(0.05, 0.001);
+    }
 }

@@ -66,6 +66,63 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteSpecialCellsCommand_AddOperationPreservesStyleOnlyDestination()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        var destinationStyle = wb.RegisterStyle(new CellStyle { Italic = true });
+        sheet.SetStyleOnly(dest.Row, dest.Col, destinationStyle);
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(5)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pasted = sheet.GetCell(dest)!;
+        pasted.Value.Should().Be(new NumberValue(5));
+        pasted.StyleId.Should().Be(destinationStyle);
+    }
+
+    [Fact]
+    public void PasteSpecialCellsCommand_AddOperationUndoRestoresStyleOnlyDestination()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        var destinationStyle = wb.RegisterStyle(new CellStyle { Italic = true });
+        sheet.SetStyleOnly(dest.Row, dest.Col, destinationStyle);
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(5)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.GetCell(dest).Should().BeNull();
+        sheet.GetStyleOnly(dest.Row, dest.Col).Should().Be(destinationStyle);
+    }
+
+    [Fact]
     public void PasteSpecialCellsCommand_DivideByZeroReturnsError()
     {
         var wb = new Workbook("test");
