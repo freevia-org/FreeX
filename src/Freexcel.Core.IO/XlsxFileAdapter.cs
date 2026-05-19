@@ -19,6 +19,30 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
     private static readonly FieldInfo? XlCellValueNumberField =
         typeof(XLCellValue).GetField("_value", BindingFlags.Instance | BindingFlags.NonPublic);
+    private static readonly HashSet<string> ModeledPrintOptionsAttributes = new(StringComparer.Ordinal)
+    {
+        "gridLines",
+        "headings",
+        "horizontalCentered",
+        "verticalCentered"
+    };
+    private static readonly HashSet<string> ModeledPageSetupAttributes = new(StringComparer.Ordinal)
+    {
+        "paperSize",
+        "scale",
+        "firstPageNumber",
+        "fitToWidth",
+        "fitToHeight",
+        "pageOrder",
+        "orientation",
+        "useFirstPageNumber",
+        "blackAndWhite",
+        "draft",
+        "cellComments",
+        "errors",
+        "horizontalDpi",
+        "verticalDpi"
+    };
 
     private const int CategoryAxisId = 48650112;
     private const int ValueAxisId = 48672768;
@@ -5209,9 +5233,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             if (MergeWorksheetSheetFormatProperties(sourceSheetFormatProperties, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetElementAttributes(sourcePrintOptions, targetRoot, workbookNs + "printOptions"))
+            if (MergeWorksheetNativeOnlyElementAttributes(
+                    sourcePrintOptions,
+                    targetRoot,
+                    workbookNs + "printOptions",
+                    ModeledPrintOptionsAttributes))
                 changed = true;
-            if (MergeWorksheetElementAttributes(sourcePageSetup, targetRoot, workbookNs + "pageSetup"))
+            if (MergeWorksheetNativeOnlyElementAttributes(
+                    sourcePageSetup,
+                    targetRoot,
+                    workbookNs + "pageSetup",
+                    ModeledPageSetupAttributes))
                 changed = true;
             if (MergeWorksheetColumnAttributes(sourceColumns, targetRoot, workbookNs))
                 changed = true;
@@ -5587,20 +5619,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
             insertionPoint.AddBeforeSelf(metadataElement);
     }
 
-    private static bool MergeWorksheetElementAttributes(XElement? sourceElement, XElement targetRoot, XName elementName)
+    private static bool MergeWorksheetNativeOnlyElementAttributes(
+        XElement? sourceElement,
+        XElement targetRoot,
+        XName elementName,
+        HashSet<string> modeledAttributeNames)
     {
         if (sourceElement is null)
+            return false;
+
+        var retainedAttributes = sourceElement
+            .Attributes()
+            .Where(attribute => IsNativeOnlyWorksheetAttribute(attribute, modeledAttributeNames))
+            .Select(attribute => new XAttribute(attribute))
+            .ToList();
+        if (retainedAttributes.Count == 0)
             return false;
 
         var targetElement = targetRoot.Element(elementName);
         if (targetElement is null)
         {
-            targetRoot.Add(new XElement(sourceElement));
+            targetRoot.Add(new XElement(elementName, retainedAttributes));
             return true;
         }
 
         var changed = false;
-        foreach (var attribute in sourceElement.Attributes())
+        foreach (var attribute in retainedAttributes)
         {
             if (targetElement.Attribute(attribute.Name) is not null)
                 continue;
@@ -5610,6 +5654,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return changed;
+    }
+
+    private static bool IsNativeOnlyWorksheetAttribute(XAttribute attribute, HashSet<string> modeledAttributeNames)
+    {
+        if (attribute.IsNamespaceDeclaration)
+            return false;
+
+        if (attribute.Name.NamespaceName.Length == 0 &&
+            modeledAttributeNames.Contains(attribute.Name.LocalName))
+        {
+            return false;
+        }
+
+        return attribute.Name != XName.Get(
+            "id",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     }
 
     private static HashSet<uint> GetModeledWorksheetBreakIds(Workbook workbook, string sheetName, bool rowBreaks)
