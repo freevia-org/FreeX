@@ -1,0 +1,278 @@
+using Freexcel.Core.Model;
+
+namespace Freexcel.Core.IO;
+
+internal static class NativeJsonVisualDtoMapper
+{
+    public static PictureDto FromPicture(PictureModel picture) => new()
+    {
+        Anchor = picture.Anchor.ToA1(),
+        Kind = ValidEnumOrDefault(picture.Kind, PictureKind.CellRangeSnapshot),
+        SourceRowCount = picture.SourceRowCount,
+        SourceColumnCount = picture.SourceColumnCount,
+        ImageBase64 = picture.ImageBytes is { Length: > 0 } bytes ? Convert.ToBase64String(bytes) : null,
+        ContentType = picture.ContentType,
+        Width = PositiveFiniteOrDefault(picture.Width, 240),
+        Height = PositiveFiniteOrDefault(picture.Height, 140),
+        RotationDegrees = NormalizeRotation(picture.RotationDegrees),
+        CropLeft = SanitizeCropEdge(picture.CropLeft),
+        CropTop = SanitizeCropEdge(picture.CropTop),
+        CropRight = SanitizeCropEdge(picture.CropRight),
+        CropBottom = SanitizeCropEdge(picture.CropBottom),
+        AltText = picture.AltText,
+        Cells = picture.Cells.Select(cell => new PictureCellDto
+        {
+            RowOffset = cell.RowOffset,
+            ColumnOffset = cell.ColumnOffset,
+            Text = cell.Text
+        }).ToList()
+    };
+
+    public static PictureModel? ToPicture(PictureDto? pictureDto, SheetId sheetId)
+    {
+        if (pictureDto?.Anchor is null)
+            return null;
+
+        try
+        {
+            var picture = new PictureModel
+            {
+                Anchor = CellAddress.Parse(pictureDto.Anchor, sheetId),
+                Kind = ValidEnumOrDefault(pictureDto.Kind, PictureKind.CellRangeSnapshot),
+                SourceRowCount = pictureDto.SourceRowCount,
+                SourceColumnCount = pictureDto.SourceColumnCount,
+                ImageBytes = string.IsNullOrEmpty(pictureDto.ImageBase64) ? null : Convert.FromBase64String(pictureDto.ImageBase64),
+                ContentType = pictureDto.ContentType,
+                Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
+                Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
+                RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
+                CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
+                CropTop = SanitizeCropEdge(pictureDto.CropTop),
+                CropRight = SanitizeCropEdge(pictureDto.CropRight),
+                CropBottom = SanitizeCropEdge(pictureDto.CropBottom),
+                AltText = pictureDto.AltText
+            };
+
+            NormalizePictureCrop(picture);
+            foreach (var cellDto in pictureDto.Cells ?? [])
+                picture.Cells.Add(new PictureCellSnapshot(cellDto.RowOffset, cellDto.ColumnOffset, cellDto.Text ?? ""));
+
+            return picture;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    public static TextBoxDto FromTextBox(TextBoxModel textBox) => new()
+    {
+        Anchor = textBox.Anchor.ToA1(),
+        Text = textBox.Text,
+        Width = PositiveFiniteOrDefault(textBox.Width, 180),
+        Height = PositiveFiniteOrDefault(textBox.Height, 80),
+        RotationDegrees = NormalizeRotation(textBox.RotationDegrees),
+        FillColor = textBox.FillColor is { } fill ? FormatColor(fill) : null,
+        OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
+        FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
+        OutlineThemeColor = FromThemeColorReference(textBox.OutlineThemeColor),
+        AltText = textBox.AltText
+    };
+
+    public static TextBoxModel? ToTextBox(TextBoxDto? textBoxDto, SheetId sheetId)
+    {
+        if (textBoxDto?.Anchor is null)
+            return null;
+
+        try
+        {
+            return new TextBoxModel
+            {
+                Anchor = CellAddress.Parse(textBoxDto.Anchor, sheetId),
+                Text = textBoxDto.Text ?? "",
+                Width = PositiveFiniteOrDefault(textBoxDto.Width, 180),
+                Height = PositiveFiniteOrDefault(textBoxDto.Height, 80),
+                RotationDegrees = NormalizeRotation(textBoxDto.RotationDegrees),
+                FillColor = textBoxDto.FillColor is { } fill ? ParseColor(fill) : null,
+                OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
+                FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
+                OutlineThemeColor = ToThemeColorReference(textBoxDto.OutlineThemeColor),
+                AltText = textBoxDto.AltText
+            };
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    public static DrawingShapeDto FromDrawingShape(DrawingShapeModel shape) => new()
+    {
+        Anchor = shape.Anchor.ToA1(),
+        Kind = ValidEnumOrDefault(shape.Kind, DrawingShapeKind.Rectangle),
+        Width = PositiveFiniteOrDefault(shape.Width, 120),
+        Height = PositiveFiniteOrDefault(shape.Height, 70),
+        RotationDegrees = NormalizeRotation(shape.RotationDegrees),
+        FillColor = shape.FillColor is { } fill ? FormatColor(fill) : null,
+        OutlineColor = shape.OutlineColor is { } outline ? FormatColor(outline) : null,
+        GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
+        FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
+        OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
+        HasShadowEffect = shape.HasShadowEffect,
+        AltText = shape.AltText
+    };
+
+    public static DrawingShapeModel? ToDrawingShape(DrawingShapeDto? shapeDto, SheetId sheetId)
+    {
+        if (shapeDto?.Anchor is null)
+            return null;
+
+        try
+        {
+            return new DrawingShapeModel
+            {
+                Anchor = CellAddress.Parse(shapeDto.Anchor, sheetId),
+                Kind = ValidEnumOrDefault(shapeDto.Kind, DrawingShapeKind.Rectangle),
+                Width = PositiveFiniteOrDefault(shapeDto.Width, 120),
+                Height = PositiveFiniteOrDefault(shapeDto.Height, 70),
+                RotationDegrees = NormalizeRotation(shapeDto.RotationDegrees),
+                FillColor = shapeDto.FillColor is { } fill ? ParseColor(fill) : null,
+                OutlineColor = shapeDto.OutlineColor is { } outline ? ParseColor(outline) : null,
+                GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
+                FillThemeColor = ToThemeColorReference(shapeDto.FillThemeColor),
+                OutlineThemeColor = ToThemeColorReference(shapeDto.OutlineThemeColor),
+                HasShadowEffect = shapeDto.HasShadowEffect,
+                AltText = shapeDto.AltText
+            };
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
+        where TEnum : struct, Enum =>
+        Enum.IsDefined(value) ? value : defaultValue;
+
+    private static double PositiveFiniteOrDefault(double value, double defaultValue) =>
+        double.IsFinite(value) && value > 0 ? value : defaultValue;
+
+    private static double NormalizeRotation(double value)
+    {
+        var normalized = value % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+    }
+
+    private static double SanitizeCropEdge(double value) =>
+        double.IsFinite(value) && value > 0 ? Math.Min(0.99, value) : 0;
+
+    private static void NormalizePictureCrop(PictureModel picture)
+    {
+        if (picture.CropLeft + picture.CropRight >= 1)
+        {
+            picture.CropLeft = 0;
+            picture.CropRight = 0;
+        }
+
+        if (picture.CropTop + picture.CropBottom >= 1)
+        {
+            picture.CropTop = 0;
+            picture.CropBottom = 0;
+        }
+    }
+
+    private static string FormatColor(CellColor color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static CellColor? ParseColor(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        text = text.Trim();
+        if (text.StartsWith("#", StringComparison.Ordinal))
+            text = text[1..];
+
+        if (text.Length != 6 ||
+            !byte.TryParse(text[..2], System.Globalization.NumberStyles.HexNumber, null, out var r) ||
+            !byte.TryParse(text[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g) ||
+            !byte.TryParse(text[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return null;
+        }
+
+        return new CellColor(r, g, b);
+    }
+
+    private static WorkbookThemeColorReference? ToThemeColorReference(ThemeColorReferenceDto? dto) =>
+        dto is not null && Enum.IsDefined(dto.Slot)
+            ? new WorkbookThemeColorReference(dto.Slot, dto.Tint)
+            : null;
+
+    private static ThemeColorReferenceDto? FromThemeColorReference(WorkbookThemeColorReference? reference) =>
+        reference is null
+            ? null
+            : new ThemeColorReferenceDto { Slot = reference.Value.Slot, Tint = reference.Value.Tint };
+}
+
+internal class PictureDto
+{
+    public string? Anchor { get; set; }
+    public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
+    public uint SourceRowCount { get; set; }
+    public uint SourceColumnCount { get; set; }
+    public string? ImageBase64 { get; set; }
+    public string? ContentType { get; set; }
+    public double Width { get; set; } = 240;
+    public double Height { get; set; } = 140;
+    public double RotationDegrees { get; set; }
+    public double CropLeft { get; set; }
+    public double CropTop { get; set; }
+    public double CropRight { get; set; }
+    public double CropBottom { get; set; }
+    public string? AltText { get; set; }
+    public List<PictureCellDto> Cells { get; set; } = [];
+}
+
+internal class PictureCellDto
+{
+    public uint RowOffset { get; set; }
+    public uint ColumnOffset { get; set; }
+    public string? Text { get; set; }
+}
+
+internal class TextBoxDto
+{
+    public string? Anchor { get; set; }
+    public string? Text { get; set; }
+    public double Width { get; set; } = 180;
+    public double Height { get; set; } = 80;
+    public double RotationDegrees { get; set; }
+    public string? FillColor { get; set; }
+    public string? OutlineColor { get; set; }
+    public ThemeColorReferenceDto? FillThemeColor { get; set; }
+    public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
+    public string? AltText { get; set; }
+}
+
+internal class DrawingShapeDto
+{
+    public string? Anchor { get; set; }
+    public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
+    public double Width { get; set; } = 120;
+    public double Height { get; set; } = 70;
+    public double RotationDegrees { get; set; }
+    public string? FillColor { get; set; }
+    public string? OutlineColor { get; set; }
+    public string? GradientFillEndColor { get; set; }
+    public ThemeColorReferenceDto? FillThemeColor { get; set; }
+    public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
+    public bool HasShadowEffect { get; set; }
+    public string? AltText { get; set; }
+}
+
+internal class ThemeColorReferenceDto
+{
+    public WorkbookThemeColorSlot Slot { get; set; }
+    public double Tint { get; set; }
+}
