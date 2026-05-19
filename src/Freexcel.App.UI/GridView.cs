@@ -426,6 +426,15 @@ public class GridView : FrameworkElement
         set => SetValue(ClipboardRangeProperty, value);
     }
 
+    public static readonly DependencyProperty ClipboardIsCutProperty =
+        DependencyProperty.Register(nameof(ClipboardIsCut), typeof(bool), typeof(GridView),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    public bool ClipboardIsCut
+    {
+        get => (bool)GetValue(ClipboardIsCutProperty);
+        set => SetValue(ClipboardIsCutProperty, value);
+    }
+
     private static void OnClipboardRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var gv = (GridView)d;
@@ -2251,22 +2260,26 @@ public class GridView : FrameworkElement
         var cbRange = ClipboardRange;
         if (cbRange == null || Viewport == null) return;
 
-        var (top, left, bottom, right) = GetRangePixels(Viewport, cbRange.Value);
-        if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
+        var rect = CalculateClipboardMarquee(
+            Viewport,
+            cbRange.Value,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight);
+        if (rect is null) return;
 
-        var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
-
-        // Black under-stroke so the dashes are visible on any background color
         var dashBlack = new DashStyle([4.0, 4.0], _marchOffset);
-        var penBlack  = new Pen(new SolidColorBrush(Color.FromRgb(0, 0, 0)), 2.5) { DashStyle = dashBlack };
+        var penBlack = new Pen(new SolidColorBrush(Color.FromRgb(0, 0, 0)), 2.5) { DashStyle = dashBlack };
         penBlack.Freeze();
-        dc.DrawRectangle(null, penBlack, rect);
+        dc.DrawRectangle(null, penBlack, rect.Value);
 
-        // White on-stroke on top
-        var dashWhite = new DashStyle([4.0, 4.0], _marchOffset);
-        var penWhite  = new Pen(new SolidColorBrush(Color.FromRgb(255, 255, 255)), 1.5) { DashStyle = dashWhite };
-        penWhite.Freeze();
-        dc.DrawRectangle(null, penWhite, rect);
+        var overlayBrush = ClipboardIsCut
+            ? new SolidColorBrush(Color.FromRgb(245, 124, 0))
+            : new SolidColorBrush(Color.FromRgb(255, 255, 255));
+        overlayBrush.Freeze();
+        var dashOverlay = new DashStyle([4.0, 4.0], _marchOffset);
+        var penOverlay = new Pen(overlayBrush, 1.5) { DashStyle = dashOverlay };
+        penOverlay.Freeze();
+        dc.DrawRectangle(null, penOverlay, rect.Value);
     }
 
     private void RenderFormulaTraceArrows(DrawingContext dc)
@@ -2582,6 +2595,33 @@ public class GridView : FrameworkElement
     }
 
     public static Rect? CalculateVisibleSelectionRect(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var visibleRows = viewport.RowMetrics
+            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
+            .ToList();
+        var visibleColumns = viewport.ColMetrics
+            .Where(column => column.Col >= range.Start.Col && column.Col <= range.End.Col)
+            .ToList();
+
+        if (visibleRows.Count == 0 || visibleColumns.Count == 0)
+            return null;
+
+        var top = visibleRows.Min(row => row.TopOffset) + columnHeaderHeight;
+        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + columnHeaderHeight;
+        var left = visibleColumns.Min(column => column.LeftOffset) + rowHeaderWidth;
+        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + rowHeaderWidth;
+
+        if (right <= left || bottom <= top)
+            return null;
+
+        return new Rect(new Point(left, top), new Point(right, bottom));
+    }
+
+    public static Rect? CalculateClipboardMarquee(
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,

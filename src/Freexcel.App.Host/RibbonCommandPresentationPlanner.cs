@@ -198,6 +198,40 @@ public static class RibbonCommandPresentationPlanner
         return new("\uE8A5", mdl2);
     }
 
+    public static RibbonCommandIcon GetGroupIcon(string groupName)
+    {
+        var name = groupName.ToLowerInvariant();
+        var segoe = new FontFamily("Segoe UI Symbol");
+        var mdl2 = new FontFamily("Segoe MDL2 Assets");
+
+        if (name.Contains("clipboard")) return new("\uE8C8", mdl2);
+        if (name.Contains("font")) return new("A", segoe);
+        if (name.Contains("alignment")) return new("\uE8E4", mdl2);
+        if (name.Contains("number")) return new("123", segoe);
+        if (name.Contains("style")) return new("\uE790", mdl2);
+        if (name.Contains("cell")) return new("\uE8A9", mdl2);
+        if (name.Contains("editing")) return new("\uE721", mdl2);
+        if (name.Contains("table")) return new("\uE8A9", mdl2);
+        if (name.Contains("chart")) return new("\uE9D2", mdl2);
+        if (name.Contains("illustration")) return new("\uEB9F", mdl2);
+        if (name.Contains("sparklines")) return new("\uE9D9", mdl2);
+        if (name.Contains("page setup")) return new("\uE7C3", mdl2);
+        if (name.Contains("theme")) return new("\uE790", mdl2);
+        if (name.Contains("function") || name.Contains("formula")) return new("fx", segoe);
+        if (name.Contains("defined name")) return new("\uE8EC", mdl2);
+        if (name.Contains("audit")) return new("\u2192", segoe);
+        if (name.Contains("calculation")) return new("\uE895", mdl2);
+        if (name.Contains("sort") || name.Contains("filter")) return new("\uE71C", mdl2);
+        if (name.Contains("data")) return new("\uE8D4", mdl2);
+        if (name.Contains("outline")) return new("\uE9D5", mdl2);
+        if (name.Contains("comment")) return new("\uE90A", mdl2);
+        if (name.Contains("protect")) return new("\uE72E", mdl2);
+        if (name.Contains("view")) return new("\uE80A", mdl2);
+        if (name.Contains("zoom")) return new("\uE8A3", mdl2);
+
+        return new("\uE8A5", mdl2);
+    }
+
     private static bool IsInsertChartType(string name) =>
         name is "column chart" or
                 "stacked column chart" or
