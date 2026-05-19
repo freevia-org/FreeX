@@ -712,7 +712,6 @@ public static class BuiltInFunctions
             if (arg is ReferencedScalarValue referenced)
             {
                 if (TryReferencedNumber(referenced, out _, out var refError)) count++;
-                else if (refError is not null) return refError;
                 continue;
             }
             if (arg is DirectTextLiteralValue direct)
