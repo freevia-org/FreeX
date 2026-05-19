@@ -57,6 +57,18 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && key == Key.Space)
+        {
+            shortcut = KeyboardSelectionShortcut.SelectWholeColumns;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Shift && key == Key.Space)
+        {
+            shortcut = KeyboardSelectionShortcut.SelectWholeRows;
+            return true;
+        }
+
         if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.Multiply or Key.D8)
         {
             shortcut = KeyboardSelectionShortcut.SelectCurrentRegion;
@@ -544,7 +556,9 @@ public enum KeyboardGridShortcut
 public enum KeyboardSelectionShortcut
 {
     SelectAll,
-    SelectCurrentRegion
+    SelectCurrentRegion,
+    SelectWholeColumns,
+    SelectWholeRows
 }
 
 public enum KeyboardCommandShortcut
