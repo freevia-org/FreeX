@@ -6564,16 +6564,14 @@ public partial class MainWindow : Window
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
-        double newSize = style.FontSize switch { < 10 => style.FontSize + 1, < 24 => style.FontSize + 2, _ => style.FontSize + 4 };
-        ApplyFontSizeAndFitRows(newSize);
+        ApplyFontSizeAndFitRows(FontSizePlanner.Increase(style.FontSize));
     }
 
     private void DecreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
-        double newSize = style.FontSize switch { <= 10 => Math.Max(1, style.FontSize - 1), <= 26 => style.FontSize - 2, _ => style.FontSize - 4 };
-        ApplyFontSizeAndFitRows(newSize);
+        ApplyFontSizeAndFitRows(FontSizePlanner.Decrease(style.FontSize));
     }
 
     private void ApplyFontSizeAndFitRows(double fontSize)
@@ -6581,7 +6579,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         ApplyStyleDiff(new StyleDiff(FontSize: fontSize));
 
-        var newHeight = Math.Max(18.0, Math.Ceiling(fontSize * 96.0 / 72.0 + 5.0));
+        var newHeight = FontSizePlanner.EstimateFittingRowHeight(fontSize);
         if (!TryExecuteGroupedSheetCommand("Auto Fit Row Height", sheetId =>
                 new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, newHeight)))
             return;
