@@ -287,6 +287,37 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ChartKeyboardShortcuts_UseSeparateEmbeddedAndChartSheetPaths()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case KeyboardCommandShortcut.InsertEmbeddedChart:");
+        source.Should().Contain("InsertEmbeddedChart();");
+        source.Should().Contain("case KeyboardCommandShortcut.InsertChartSheet:");
+        source.Should().Contain("InsertChartSheet();");
+        source.Should().NotContain(
+            "case KeyboardCommandShortcut.InsertEmbeddedChart:\r\n            case KeyboardCommandShortcut.InsertChartSheet:");
+    }
+
+    [Fact]
+    public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
+        source.Should().Contain("OpenActiveDropdown();");
+    }
+
+    [Fact]
+    public void WorksheetContextMenuQuickAnalysis_ReusesCtrlQPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.QuickAnalysis:");
+        source.Should().Contain("ShowQuickAnalysisMenu();");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
