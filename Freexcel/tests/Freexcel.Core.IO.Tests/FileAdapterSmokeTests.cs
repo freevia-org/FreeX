@@ -7602,6 +7602,70 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFileRecoveryProperties()
+    {
+        var workbook = new Workbook("WorkbookFileRecoveryRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recovery"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileRecoveryProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var recovery = workbookXml.Root!.Element(workbookNs + "fileRecoveryPr");
+        recovery.Should().NotBeNull();
+        recovery!.Attribute("autoRecover")!.Value.Should().Be("1");
+        recovery.Attribute("crashSave")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookSmartTagMetadata()
+    {
+        var workbook = new Workbook("WorkbookSmartTagRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("smart tags"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookSmartTagMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var smartTagProperties = workbookXml.Root!.Element(workbookNs + "smartTagPr");
+        var smartTagTypes = workbookXml.Root.Element(workbookNs + "smartTagTypes");
+        smartTagProperties.Should().NotBeNull();
+        smartTagProperties!.Attribute("embed")!.Value.Should().Be("1");
+        smartTagProperties.Attribute("show")!.Value.Should().Be("all");
+        smartTagTypes.Should().NotBeNull();
+        smartTagTypes!.Element(workbookNs + "smartTagType")!.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags");
+        smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("name")!.Value.Should().Be("place");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -7906,6 +7970,73 @@ public class FileAdapterSmokeTests
         phoneticProperties.Should().NotBeNull();
         phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
         phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSortState()
+    {
+        var workbook = new Workbook("SortStateRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("A"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSortState(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sortState = worksheetXml.Root!.Element(worksheetNs + "sortState");
+        sortState.Should().NotBeNull();
+        sortState!.ToString().Should().Contain("ref=\"A1:A3\"");
+        sortState.ToString().Should().Contain("descending=\"1\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDataConsolidation()
+    {
+        var workbook = new Workbook("DataConsolidationRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetDataConsolidation(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dataConsolidate = worksheetXml.Root!.Element(worksheetNs + "dataConsolidate");
+        dataConsolidate.Should().NotBeNull();
+        dataConsolidate!.Attribute("function")!.Value.Should().Be("sum");
+        dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1");
+        dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
+        dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
     }
 
     [Fact]
@@ -9054,6 +9185,48 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddWorkbookFileRecoveryProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "fileRecoveryPr",
+                new XAttribute("autoRecover", "1"),
+                new XAttribute("crashSave", "1"),
+                new XAttribute("repairLoad", "0")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookSmartTagMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(
+                new XElement(
+                    workbookNs + "smartTagPr",
+                    new XAttribute("embed", "1"),
+                    new XAttribute("show", "all")),
+                new XElement(
+                    workbookNs + "smartTagTypes",
+                    new XElement(
+                        workbookNs + "smartTagType",
+                        new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
+                        new XAttribute("name", "place"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddUnsupportedWorkbookProperties(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -9224,6 +9397,52 @@ public class FileAdapterSmokeTests
                 new XAttribute("fontId", "1"),
                 new XAttribute("type", "fullwidthKatakana"),
                 new XAttribute("alignment", "center")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetSortState(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "sortState",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "sortCondition",
+                    new XAttribute("ref", "A2:A3"),
+                    new XAttribute("descending", "1"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetDataConsolidation(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "dataConsolidate",
+                new XAttribute("function", "sum"),
+                new XAttribute("leftLabels", "1"),
+                new XAttribute("topLabels", "1"),
+                new XAttribute("link", "1"),
+                new XElement(
+                    worksheetNs + "dataRefs",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        worksheetNs + "dataRef",
+                        new XAttribute("ref", "A1:B2"),
+                        new XAttribute("sheet", "Data")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
