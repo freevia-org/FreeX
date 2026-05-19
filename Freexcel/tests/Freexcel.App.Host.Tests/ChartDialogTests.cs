@@ -96,11 +96,11 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
-    public void SelectDataSourceDialog_NormalizesSourceRangeAndSwitchState()
+    public void SelectDataSourceDialog_NormalizesSourceRangeAndCategoryState()
     {
         var result = SelectDataSourceDialog.CreateResult("  A1:D12  ", true);
 
         result.SourceRangeText.Should().Be("A1:D12");
-        result.SwitchRowColumn.Should().BeTrue();
+        result.FirstColumnIsCategories.Should().BeTrue();
     }
 }
