@@ -98,11 +98,15 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
-        if (effectiveKey == Key.F9 &&
-            (modifiers == (ModifierKeys.Control | ModifierKeys.Alt) ||
-             modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)))
+        if (effectiveKey == Key.F9 && modifiers == (ModifierKeys.Control | ModifierKeys.Alt))
         {
             shortcut = KeyboardCommandShortcut.CalculateNow;
+            return true;
+        }
+
+        if (effectiveKey == Key.F9 && modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift))
+        {
+            shortcut = KeyboardCommandShortcut.RebuildDependenciesAndCalculate;
             return true;
         }
 
@@ -342,6 +346,7 @@ public enum KeyboardCommandShortcut
     SpellCheck,
     CalculateNow,
     CalculateSheet,
+    RebuildDependenciesAndCalculate,
     ToggleFormulaBarExpansion,
     QuickAnalysis,
     InsertEmbeddedChart,
