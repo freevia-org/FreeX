@@ -5351,7 +5351,7 @@ public partial class MainWindow : Window
             return;
 
         var sourceCells = clip.Cells
-            .Select(c => (c.Item1, FormatPictureCellText(c.Item2.Value)))
+            .Select(c => (c.Item1, DrawingInputParser.FormatPictureCellText(c.Item2.Value)))
             .ToList();
         IWorkbookCommand CreatePastePictureCommand()
         {
@@ -5371,17 +5371,6 @@ public partial class MainWindow : Window
         UpdateViewport();
         RefreshToolbar();
     }
-
-    private static string FormatPictureCellText(ScalarValue value) =>
-        value switch
-        {
-            BlankValue => "",
-            NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
-            BoolValue b => b.Value ? "TRUE" : "FALSE",
-            TextValue t => t.Value,
-            ErrorValue e => e.Code,
-            _ => value.ToString() ?? ""
-        };
 
     private void ExecutePasteLink(bool transpose, bool keepColumnWidths = false)
     {
