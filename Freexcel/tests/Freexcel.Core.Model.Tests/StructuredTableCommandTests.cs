@@ -63,6 +63,28 @@ public sealed class StructuredTableCommandTests
     }
 
     [Fact]
+    public void CreateStructuredTableCommand_CanCreateDefaultHeadersWhenFirstRowHasNoHeaders()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(120));
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+
+        var outcome = new CreateStructuredTableCommand(
+            sheet.Id,
+            range,
+            "TableStyleLight9",
+            firstRowHasHeaders: false).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.StructuredTables.Single().Columns.Select(column => column.Name)
+            .Should()
+            .Equal("Column1", "Column2");
+    }
+
+    [Fact]
     public void CreateStructuredTableCommand_RejectsInvalidRangesWithoutChangingExistingTables()
     {
         var wb = new Workbook("test");
