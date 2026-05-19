@@ -41,11 +41,38 @@ public static partial class FormulaReferenceCycler
             return true;
         }
 
+        foreach (Match match in ColumnReferenceRegex().Matches(text))
+        {
+            var columnIndex = match.Groups["column"].Index;
+            if (IsInsideStructuredReference(text, columnIndex) || IsInsideStringLiteral(text, columnIndex))
+                continue;
+
+            if (!CaretTouchesMatch(caretIndex, match))
+                continue;
+
+            var qualifier = match.Groups["qualifier"].Value;
+            var columnReference = match.Groups["column"].Value;
+            var secondColumnReference = match.Groups["column2"].Value;
+            if (!TryCycleColumnReference(columnReference, out var cycledColumnReference))
+                continue;
+
+            var cycled = $"{qualifier}{cycledColumnReference}:{CycleMatchingColumnReference(secondColumnReference)}";
+            result = text.Remove(match.Index, match.Length).Insert(match.Index, cycled);
+            selectionStart = match.Index;
+            selectionLength = cycled.Length;
+            return true;
+        }
+
         return false;
     }
 
     private static string CycleMatchingReference(string reference) =>
         TryCycleReference(reference, out var cycled)
+            ? cycled
+            : reference;
+
+    private static string CycleMatchingColumnReference(string reference) =>
+        TryCycleColumnReference(reference, out var cycled)
             ? cycled
             : reference;
 
@@ -109,11 +136,32 @@ public static partial class FormulaReferenceCycler
         return true;
     }
 
+    private static bool TryCycleColumnReference(string reference, out string cycled)
+    {
+        cycled = reference;
+        var match = ColumnPartsRegex().Match(reference);
+        if (!match.Success)
+            return false;
+
+        var column = match.Groups["column"].Value.ToUpperInvariant();
+        if (!IsValidColumnReference(column))
+            return false;
+
+        var absoluteColumn = reference.StartsWith('$');
+        cycled = absoluteColumn ? column : $"${column}";
+        return true;
+    }
+
     private static bool IsValidA1Reference(string column, string rowText)
     {
         if (!uint.TryParse(rowText, out var row) || row is < 1 or > CellAddress.MaxRow)
             return false;
 
+        return IsValidColumnReference(column);
+    }
+
+    private static bool IsValidColumnReference(string column)
+    {
         try
         {
             var col = CellAddress.ColumnNameToNumber(column);
@@ -128,6 +176,12 @@ public static partial class FormulaReferenceCycler
     [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?::(?<cell2>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6}))?(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex A1ReferenceRegex();
 
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<column>\$?[A-Z]{1,3}):(?<column2>\$?[A-Z]{1,3})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex ColumnReferenceRegex();
+
     [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})\$?(?<row>[1-9][0-9]{0,6})$", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex A1PartsRegex();
+
+    [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})$", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex ColumnPartsRegex();
 }
