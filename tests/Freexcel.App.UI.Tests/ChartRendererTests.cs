@@ -1546,6 +1546,85 @@ public sealed class ChartRendererTests
         series.Slices.Should().OnlyContain(slice => slice.Fill == OxyColor.FromRgb(91, 155, 213));
     }
 
+    [Fact]
+    public void RadarRenderer_UsesPolarAxesAndClosesEachSeries()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Radar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Metric"),
+                Cell(1, 2, "Product A"),
+                Cell(1, 3, "Product B"),
+                Cell(2, 1, "Speed"),
+                Cell(2, 2, "4"),
+                Cell(2, 3, "3"),
+                Cell(3, 1, "Cost"),
+                Cell(3, 2, "2"),
+                Cell(3, 3, "5"),
+                Cell(4, 1, "Quality"),
+                Cell(4, 2, "5"),
+                Cell(4, 3, "4")
+            ],
+            [],
+            []));
+
+        model.PlotType.Should().Be(PlotType.Polar);
+        model.Axes.Should().ContainSingle(axis => axis is AngleAxis);
+        model.Axes.Should().ContainSingle(axis => axis is MagnitudeAxis);
+
+        var series = model.Series.Should().HaveCount(2).And.AllBeOfType<LineSeries>().Subject.Cast<LineSeries>().ToList();
+        series[0].Title.Should().Be("Product A");
+        series[0].Points.Should().HaveCount(4);
+        series[0].Points.First().Should().Be(series[0].Points.Last());
+        series[0].Points.Select(point => point.Y).Should().Equal(4, 2, 5, 4);
+    }
+
+    [Fact]
+    public void StockRenderer_UsesHighLowSeriesWithOhlcColumns()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Stock,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 5))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Open"),
+                Cell(1, 3, "High"),
+                Cell(1, 4, "Low"),
+                Cell(1, 5, "Close"),
+                Cell(2, 1, "Mon"),
+                Cell(2, 2, "10"),
+                Cell(2, 3, "15"),
+                Cell(2, 4, "9"),
+                Cell(2, 5, "13"),
+                Cell(3, 1, "Tue"),
+                Cell(3, 2, "13"),
+                Cell(3, 3, "18"),
+                Cell(3, 4, "12"),
+                Cell(3, 5, "16")
+            ],
+            [],
+            []));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<HighLowSeries>().Subject;
+        series.Title.Should().Be("Stock");
+        series.Items.Should().HaveCount(2);
+        series.Items[0].Open.Should().Be(10);
+        series.Items[0].High.Should().Be(15);
+        series.Items[0].Low.Should().Be(9);
+        series.Items[0].Close.Should().Be(13);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport)
     {
         var method = typeof(ChartRenderer).GetMethod(

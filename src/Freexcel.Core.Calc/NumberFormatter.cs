@@ -48,13 +48,19 @@ public static class NumberFormatter
     private static string FormatGeneral(ScalarValue value) => value switch
     {
         NumberValue n   => FormatNumberGeneral(n.Value),
-        DateTimeValue d => DateTime.FromOADate(d.Value).ToString("d", CultureInfo.InvariantCulture),
+        DateTimeValue d => FormatGeneralDateTime(d.Value),
         TextValue t     => t.Value,
         BoolValue b     => b.Value ? "TRUE" : "FALSE",
         ErrorValue e    => e.Code,
         BlankValue      => "",
         _               => ""
     };
+
+    private static string FormatGeneralDateTime(double value)
+    {
+        try { return DateTime.FromOADate(value).ToString("d", CultureInfo.InvariantCulture); }
+        catch { return FormatNumberGeneral(value); }
+    }
 
     private static string FormatNumberGeneral(double value)
     {

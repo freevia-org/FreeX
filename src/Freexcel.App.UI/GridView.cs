@@ -33,11 +33,11 @@ public class GridView : FrameworkElement
     // Row header strip width (vertical column of 1, 2, 3 ... numbers)
     public const double RowHeaderWidth = 30;
     // Dynamic width â€” grows for 4+ digit row numbers; use this for all layout
-    public double ActualRowHeaderWidth => ShowHeaders ? ComputeRowHeaderWidth(Viewport) : 0.0;
+    public double ActualRowHeaderWidth => ShowHeaders ? CalculateRowHeaderWidth(Viewport) : 0.0;
     // Header height exposed for external callers respecting ShowHeaders
     public double EffectiveColHeaderHeight => ShowHeaders ? ColHeaderHeight : 0.0;
 
-    private static double ComputeRowHeaderWidth(ViewportModel? viewport) =>
+    public static double CalculateRowHeaderWidth(ViewportModel? viewport) =>
         viewport?.RowMetrics.Max(r => (uint?)r.Row) switch
         {
             >= 1_000_000 => 54,
@@ -82,6 +82,16 @@ public class GridView : FrameworkElement
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
+
+    public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
+    {
+        var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
+        var horizontalDistance = target.Col > source.End.Col ? target.Col - source.End.Col : 0;
+
+        return verticalDistance >= horizontalDistance
+            ? new CellAddress(target.Sheet, target.Row, source.End.Col)
+            : new CellAddress(target.Sheet, source.End.Row, target.Col);
+    }
 
     private static Pen MakeResizeLinePen()
     {
@@ -740,7 +750,7 @@ public class GridView : FrameworkElement
                 }
 
                 if (newTarget.HasValue)
-                    _autofillTarget = newTarget;
+                    _autofillTarget = ConstrainAutofillTarget(src, newTarget.Value);
             }
 
             InvalidateVisual();
@@ -1176,8 +1186,8 @@ public class GridView : FrameworkElement
             {
                 var pinnedColumns = splitPanes.LeftColumns ?? [];
                 verticalX = pinnedColumns.Count > 0
-                    ? ComputeRowHeaderWidth(viewport) + pinnedColumns.Sum(column => column.Width)
-                    : viewport.ColMetrics.FirstOrDefault(column => column.Col == splitColumn)?.LeftOffset + ComputeRowHeaderWidth(viewport);
+                    ? CalculateRowHeaderWidth(viewport) + pinnedColumns.Sum(column => column.Width)
+                    : viewport.ColMetrics.FirstOrDefault(column => column.Col == splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
             }
         }
 
@@ -1221,7 +1231,7 @@ public class GridView : FrameworkElement
             bottomLeftRows.Count > 0)
         {
             var track = new Rect(
-                Math.Max(ComputeRowHeaderWidth(viewport), leftX - SplitScrollbarThickness),
+                Math.Max(CalculateRowHeaderWidth(viewport), leftX - SplitScrollbarThickness),
                 bottomY,
                 SplitScrollbarThickness,
                 Math.Max(0, actualHeight - bottomY));
@@ -1414,7 +1424,7 @@ public class GridView : FrameworkElement
         var topRightColumnLookup = topRightColumns.ToDictionary(column => column.Col);
         var dividerLayout = CalculateSplitDividerLayout(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? ColHeaderHeight;
-        var verticalX = dividerLayout.VerticalX ?? ComputeRowHeaderWidth(viewport);
+        var verticalX = dividerLayout.VerticalX ?? CalculateRowHeaderWidth(viewport);
         var layouts = new List<SplitPaneCellLayout>();
         var occupied = new HashSet<(uint Row, uint Col)>(
             (splitPanes.Cells ?? [])
@@ -1452,7 +1462,7 @@ public class GridView : FrameworkElement
             }
 
             var x = isLeftPane
-                ? ComputeRowHeaderWidth(viewport) + column.LeftOffset
+                ? CalculateRowHeaderWidth(viewport) + column.LeftOffset
                 : verticalX + column.LeftOffset;
             var y = isTopPane
                 ? ColHeaderHeight + row.TopOffset
@@ -1543,7 +1553,7 @@ public class GridView : FrameworkElement
 
     public static CellAddress? HitTestViewportCell(ViewportModel viewport, SheetId sheetId, Point pos)
     {
-        if (pos.X < ComputeRowHeaderWidth(viewport) || pos.Y < ColHeaderHeight)
+        if (pos.X < CalculateRowHeaderWidth(viewport) || pos.Y < ColHeaderHeight)
             return null;
 
         if (viewport.SplitPanes is { } splitPanes)
@@ -1574,12 +1584,12 @@ public class GridView : FrameworkElement
                 : ColHeaderHeight;
             var colOrigin = region is SplitPaneRegion.TopRight or SplitPaneRegion.BottomRight && verticalX.HasValue
                 ? verticalX.Value
-                : ComputeRowHeaderWidth(viewport);
+                : CalculateRowHeaderWidth(viewport);
 
             return HitTestMetrics(sheetId, pos, rows, cols, rowOrigin, colOrigin);
         }
 
-        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, ColHeaderHeight, ComputeRowHeaderWidth(viewport));
+        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, ColHeaderHeight, CalculateRowHeaderWidth(viewport));
     }
 
     public static SplitPaneRegion HitTestSplitPaneRegion(ViewportModel viewport, Point pos)
@@ -1632,7 +1642,7 @@ public class GridView : FrameworkElement
             ? FindSplitRow(splitPanes.TopRows ?? [], viewport.RowMetrics, pos.Y)
             : null;
         uint? column = handle is SplitDividerHandle.Vertical or SplitDividerHandle.Intersection
-            ? FindSplitColumn(splitPanes.LeftColumns ?? [], viewport.ColMetrics, pos.X, ComputeRowHeaderWidth(viewport))
+            ? FindSplitColumn(splitPanes.LeftColumns ?? [], viewport.ColMetrics, pos.X, CalculateRowHeaderWidth(viewport))
             : null;
 
         return new SplitDividerDragTarget(row, column);
@@ -1813,9 +1823,10 @@ public class GridView : FrameworkElement
             var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
             var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
             DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);
+            DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape);
             var pen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1.5);
             pen.Freeze();
-            var fill = MakeBrushAlpha(32, colors.Fill.R, colors.Fill.G, colors.Fill.B);
+            var fill = CreateDrawingShapeFill(shape, colors.Fill);
             switch (shape.Kind)
             {
                 case DrawingShapeKind.Rectangle:
@@ -1829,6 +1840,47 @@ public class GridView : FrameworkElement
                     break;
             }
             if (rotationPushed) dc.Pop();
+        }
+    }
+
+    private static Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
+    {
+        if (shape.GradientFillEndColor is { } endColor && shape.Kind != DrawingShapeKind.Line)
+        {
+            var brush = new LinearGradientBrush(
+                Color.FromArgb(72, startColor.R, startColor.G, startColor.B),
+                Color.FromArgb(72, endColor.R, endColor.G, endColor.B),
+                new Point(0, 0),
+                new Point(1, 1));
+            brush.Freeze();
+            return brush;
+        }
+
+        return MakeBrushAlpha(32, startColor.R, startColor.G, startColor.B);
+    }
+
+    private static void DrawShapeAuthoredEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    {
+        if (!shape.HasShadowEffect)
+            return;
+
+        var shadowRect = rect;
+        shadowRect.Offset(3, 3);
+        var shadowBrush = MakeBrushAlpha(58, 0, 0, 0);
+        var shadowPen = new Pen(shadowBrush, 2);
+        shadowPen.Freeze();
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(shadowBrush, null, shadowRect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(shadowBrush, null, new Point(shadowRect.Left + shadowRect.Width / 2, shadowRect.Top + shadowRect.Height / 2), shadowRect.Width / 2, shadowRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
+                break;
         }
     }
 
@@ -1921,7 +1973,24 @@ public class GridView : FrameworkElement
             if (picture.Kind == PictureKind.Image &&
                 TryLoadPictureImage(picture, out var image))
             {
-                dc.DrawImage(image, rect);
+                if (HasPictureCrop(picture))
+                {
+                    var brush = new ImageBrush(image)
+                    {
+                        Stretch = Stretch.Fill,
+                        ViewboxUnits = BrushMappingMode.RelativeToBoundingBox,
+                        Viewbox = new Rect(
+                            picture.CropLeft,
+                            picture.CropTop,
+                            Math.Max(0.01, 1 - picture.CropLeft - picture.CropRight),
+                            Math.Max(0.01, 1 - picture.CropTop - picture.CropBottom))
+                    };
+                    dc.DrawRectangle(brush, null, rect);
+                }
+                else
+                {
+                    dc.DrawImage(image, rect);
+                }
                 dc.DrawRectangle(null, borderPen, rect);
                 if (Math.Abs(picture.RotationDegrees) > 0.0001)
                     dc.Pop();
@@ -1978,6 +2047,12 @@ public class GridView : FrameworkElement
                 dc.Pop();
         }
     }
+
+    private static bool HasPictureCrop(PictureModel picture) =>
+        picture.CropLeft > 0 ||
+        picture.CropTop > 0 ||
+        picture.CropRight > 0 ||
+        picture.CropBottom > 0;
 
     private void RenderWorksheetBackground(DrawingContext dc)
     {
@@ -2271,7 +2346,7 @@ public class GridView : FrameworkElement
             return false;
         }
 
-        rect = new Rect(col.LeftOffset + ComputeRowHeaderWidth(viewport), row.TopOffset + ColHeaderHeight, col.Width, row.Height);
+        rect = new Rect(col.LeftOffset + CalculateRowHeaderWidth(viewport), row.TopOffset + ColHeaderHeight, col.Width, row.Height);
         return true;
     }
 
@@ -2506,6 +2581,33 @@ public class GridView : FrameworkElement
         return (top, left, bottom, right);
     }
 
+    public static Rect? CalculateVisibleSelectionRect(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var visibleRows = viewport.RowMetrics
+            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
+            .ToList();
+        var visibleColumns = viewport.ColMetrics
+            .Where(column => column.Col >= range.Start.Col && column.Col <= range.End.Col)
+            .ToList();
+
+        if (visibleRows.Count == 0 || visibleColumns.Count == 0)
+            return null;
+
+        var top = visibleRows.Min(row => row.TopOffset) + columnHeaderHeight;
+        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + columnHeaderHeight;
+        var left = visibleColumns.Min(column => column.LeftOffset) + rowHeaderWidth;
+        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + rowHeaderWidth;
+
+        if (right <= left || bottom <= top)
+            return null;
+
+        return new Rect(new Point(left, top), new Point(right, bottom));
+    }
+
     private void RenderSelection(DrawingContext dc)
     {
         if (Viewport == null) return;
@@ -2531,18 +2633,16 @@ public class GridView : FrameworkElement
         var cols  = Viewport.ColMetrics;
         if (rows.Count == 0 || cols.Count == 0) return;
 
-        if (range.End.Row < rows[0].Row || range.Start.Row > rows[^1].Row) return;
-        if (range.End.Col < cols[0].Col || range.Start.Col > cols[^1].Col) return;
-
         var (top, left, bottom, right) = GetRangePixels(Viewport, range);
+        var rect = CalculateVisibleSelectionRect(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+        if (rect is null) return;
 
-        double drawTop    = top    ?? EffectiveColHeaderHeight;
-        double drawBottom = bottom ?? ActualHeight;
-        double drawLeft   = left   ?? ActualRowHeaderWidth;
-        double drawRight  = right  ?? ActualWidth;
+        double drawTop    = rect.Value.Top;
+        double drawBottom = rect.Value.Bottom;
+        double drawLeft   = rect.Value.Left;
+        double drawRight  = rect.Value.Right;
 
-        var rect = new Rect(new Point(drawLeft, drawTop), new Point(drawRight, drawBottom));
-        dc.DrawRectangle(SelectionBrush, null, rect);
+        dc.DrawRectangle(SelectionBrush, null, rect.Value);
 
         if (top.HasValue)    dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawRight, drawTop));
         if (bottom.HasValue) dc.DrawLine(SelectionPen, new Point(drawLeft,  drawBottom), new Point(drawRight, drawBottom));
@@ -2705,10 +2805,8 @@ public class GridView : FrameworkElement
                 textBrush,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-            if (style?.Strikethrough == true)
-                text.SetTextDecorations(TextDecorations.Strikethrough);
-            if (style?.Underline == true && style?.Strikethrough != true)
-                text.SetTextDecorations(TextDecorations.Underline);
+            if (BuildTextDecorations(style) is { } decorations)
+                text.SetTextDecorations(decorations);
 
             var indentPx = (style?.IndentLevel ?? 0) * 8.0;
             var textX = hAlign switch
@@ -2742,7 +2840,7 @@ public class GridView : FrameworkElement
         var horizontalY = layout.HorizontalY ?? actualHeight;
         var verticalX = layout.VerticalX ?? actualWidth;
         var top = ColHeaderHeight;
-        var left = ComputeRowHeaderWidth(viewport);
+        var left = CalculateRowHeaderWidth(viewport);
         var right = Math.Max(verticalX, actualWidth);
         var bottom = Math.Max(horizontalY, actualHeight);
 
@@ -2917,16 +3015,12 @@ public class GridView : FrameworkElement
                 typeface, fontSize, textBrush,
                 VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-            if (style?.Strikethrough == true)
-                text.SetTextDecorations(TextDecorations.Strikethrough);
-            if (style?.Underline == true && style?.Strikethrough != true)
-                text.SetTextDecorations(TextDecorations.Underline);
-            if (style?.DoubleUnderline == true && style?.Strikethrough != true)
-                text.SetTextDecorations(TextDecorations.Underline);
+            if (BuildTextDecorations(style) is { } decorations)
+                text.SetTextDecorations(decorations);
 
             if (wrapText)
             {
-                text.MaxTextWidth  = Math.Max(1, colMetric.Width - 4);
+                text.MaxTextWidth  = Math.Max(1, rect.Width - 4);
                 text.TextAlignment = hAlign switch
                 {
                     CellHAlign.Center => System.Windows.TextAlignment.Center,
@@ -2938,10 +3032,10 @@ public class GridView : FrameworkElement
             double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             double textX = hAlign switch
             {
-                CellHAlign.Right  => rect.Right - Math.Min(text.Width, colMetric.Width - 2) - 2,
-                CellHAlign.Center => rect.Left  + (colMetric.Width - text.Width) / 2,
+                CellHAlign.Right  => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
+                CellHAlign.Center => rect.Left  + (rect.Width - text.Width) / 2,
                 CellHAlign.General when isNumeric
-                                  => rect.Right - Math.Min(text.Width, colMetric.Width - 2) - 2,
+                                  => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
                 _                 => rect.Left + 2 + indentPx
             };
 
@@ -2992,6 +3086,22 @@ public class GridView : FrameworkElement
             thickness) { DashStyle = dash };
 
         dc.DrawLine(pen, p1, p2);
+    }
+
+    public static TextDecorationCollection? BuildTextDecorations(CellStyle? style)
+    {
+        if (style is null)
+            return null;
+
+        var decorations = new TextDecorationCollection();
+        if (style.Underline || style.DoubleUnderline)
+            foreach (var decoration in TextDecorations.Underline)
+                decorations.Add(decoration);
+        if (style.Strikethrough)
+            foreach (var decoration in TextDecorations.Strikethrough)
+                decorations.Add(decoration);
+
+        return decorations.Count == 0 ? null : decorations;
     }
 }
 

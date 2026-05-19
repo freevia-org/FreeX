@@ -169,3 +169,72 @@ public sealed class RotatePictureCommand : IWorkbookCommand
         return normalized < 0 ? normalized + 360 : normalized;
     }
 }
+
+public sealed class SetPictureCropCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _pictureId;
+    private readonly double _left;
+    private readonly double _top;
+    private readonly double _right;
+    private readonly double _bottom;
+    private (double Left, double Top, double Right, double Bottom) _previous;
+    private bool _applied;
+
+    public string Label => "Crop Picture";
+
+    public SetPictureCropCommand(SheetId sheetId, Guid pictureId, double left, double top, double right, double bottom)
+    {
+        _sheetId = sheetId;
+        _pictureId = pictureId;
+        _left = left;
+        _top = top;
+        _right = right;
+        _bottom = bottom;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (!IsValidCrop(_left, _top, _right, _bottom))
+            return new CommandOutcome(false, "Picture crop values must be finite percentages between 0 and 100%, with visible width and height remaining.");
+
+        var sheet = ctx.GetSheet(_sheetId);
+        var picture = sheet.Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null)
+            return new CommandOutcome(false, "Picture was not found.");
+        if (picture.Kind != PictureKind.Image)
+            return new CommandOutcome(false, "Only inserted image pictures can be cropped.");
+
+        _previous = (picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
+        picture.CropLeft = _left;
+        picture.CropTop = _top;
+        picture.CropRight = _right;
+        picture.CropBottom = _bottom;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [picture.Anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied) return;
+        var picture = ctx.GetSheet(_sheetId).Pictures.FirstOrDefault(p => p.Id == _pictureId);
+        if (picture is null) return;
+        picture.CropLeft = _previous.Left;
+        picture.CropTop = _previous.Top;
+        picture.CropRight = _previous.Right;
+        picture.CropBottom = _previous.Bottom;
+        _applied = false;
+    }
+
+    private static bool IsValidCrop(double left, double top, double right, double bottom) =>
+        double.IsFinite(left) &&
+        double.IsFinite(top) &&
+        double.IsFinite(right) &&
+        double.IsFinite(bottom) &&
+        left >= 0 &&
+        top >= 0 &&
+        right >= 0 &&
+        bottom >= 0 &&
+        left + right < 1 &&
+        top + bottom < 1;
+}
