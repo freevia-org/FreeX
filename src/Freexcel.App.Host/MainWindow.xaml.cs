@@ -11129,40 +11129,50 @@ public partial class MainWindow : Window
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (sender is Button btn && btn.ContextMenu is { } cm)
+        {
+            cm.PlacementTarget = btn;
+            cm.IsOpen = true;
+        }
+    }
+
+    private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
+    {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
         var selected = SheetGrid.SelectedRange?.Start;
-        var defaultValue = selected is { } address
-            ? $"row {Math.Max(2, address.Row)}"
-            : "clear";
-        var input = PromptForInput("Page break: row N, col N, or clear:", defaultValue);
-        if (input is null) return;
+        if (selected is null) return;
+        var address = selected.Value;
 
         var rowBreaks = sheet.RowPageBreaks.ToList();
         var columnBreaks = sheet.ColumnPageBreaks.ToList();
-        var trimmed = input.Trim();
-        if (trimmed.Equals("clear", StringComparison.OrdinalIgnoreCase))
-        {
-            rowBreaks.Clear();
-            columnBreaks.Clear();
-        }
-        else if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak))
-        {
-            rowBreaks.Add(rowBreak);
-        }
-        else if (PageLayoutInputParser.TryParseBreakInput(trimmed, "col", out var columnBreak) ||
-                 PageLayoutInputParser.TryParseBreakInput(trimmed, "column", out columnBreak))
-        {
-            columnBreaks.Add(columnBreak);
-        }
-        else
-        {
-            MessageBox.Show("Enter row N, col N, or clear.", "Page Breaks", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
 
+        rowBreaks.Add(Math.Max(2u, address.Row));
+        columnBreaks.Add(Math.Max(2u, address.Col));
         TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+    }
+
+    private void RemovePageBreakMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var selected = SheetGrid.SelectedRange?.Start;
+        if (selected is null) return;
+        var address = selected.Value;
+
+        var rowBreaks = sheet.RowPageBreaks.ToList();
+        var columnBreaks = sheet.ColumnPageBreaks.ToList();
+
+        rowBreaks.Remove(Math.Max(2u, address.Row));
+        columnBreaks.Remove(Math.Max(2u, address.Col));
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+    }
+
+    private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
     }
 
     private void PrintTitlesBtn_Click(object sender, RoutedEventArgs e)

@@ -2006,7 +2006,15 @@
                                 <Button Content="Breaks" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageBreaksBtn_Click"
                                         local:RibbonTooltip.Title="Breaks"
                                         local:RibbonTooltip.KeyTip="B"
-                                        local:RibbonTooltip.Description="Insert or clear manual page breaks for printing."/>
+                                        local:RibbonTooltip.Description="Insert, remove, or reset manual page breaks for printing.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Insert Page Break" local:RibbonTooltip.KeyTip="I" Click="InsertPageBreakMenuItem_Click"/>
+                                            <MenuItem Header="Remove Page Break" local:RibbonTooltip.KeyTip="R" Click="RemovePageBreakMenuItem_Click"/>
+                                            <MenuItem Header="Reset All Page Breaks" local:RibbonTooltip.KeyTip="A" Click="ResetAllPageBreaksMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="Print Titles" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PrintTitlesBtn_Click"
                                         local:RibbonTooltip.Title="Print Titles"
                                         local:RibbonTooltip.KeyTip="T"
