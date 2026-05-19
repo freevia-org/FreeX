@@ -210,6 +210,38 @@ public class DataValidationTests
     }
 
     [Fact]
+    public void GetListItems_ParsesQuotedInlineItemsContainingCommas()
+    {
+        var (_, sheet) = MakeWorkbook();
+        var dv = new DataValidation
+        {
+            Type = DvType.List,
+            Formula1 = "Apple,\"Banana, ripe\",Cherry",
+            ShowDropdown = true
+        };
+
+        var items = DataValidationService.GetListItems(dv, sheet);
+
+        items.Should().Equal("Apple", "Banana, ripe", "Cherry");
+    }
+
+    [Fact]
+    public void Validate_ListInlineSource_AcceptsQuotedItemContainingComma()
+    {
+        var (_, sheet) = MakeWorkbook();
+        var dv = new DataValidation
+        {
+            Type = DvType.List,
+            Formula1 = "Apple,\"Banana, ripe\",Cherry",
+            AllowBlank = true
+        };
+
+        var result = DataValidationService.Validate(dv, new TextValue("Banana, ripe"));
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void GetListItems_ReturnsEmptyWhenDropdownArrowIsHidden()
     {
         var (_, sheet) = MakeWorkbook();
