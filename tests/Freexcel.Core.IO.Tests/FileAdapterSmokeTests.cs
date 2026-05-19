@@ -3386,6 +3386,73 @@ public class FileAdapterSmokeTests
         protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
         protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
         protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
+        protectedRange.Element(worksheetNs + "extLst").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedProtectedRange()
+    {
+        var workbook = new Workbook("ProtectedRangeRemovalTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddProtectedRangeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.AllowEditRanges.Should().ContainSingle();
+        loadedSheet.AllowEditRanges.Clear();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "protectedRanges")?
+            .Elements(worksheetNs + "protectedRange")
+            .Should()
+            .BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RetainsNativeOnlyMultiAreaProtectedRange()
+    {
+        var workbook = new Workbook("ProtectedRangeNativeOnlyTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMultiAreaProtectedRangeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AllowEditRanges.Should().BeEmpty();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protectedRange = worksheetXml.Root!
+            .Element(worksheetNs + "protectedRanges")!
+            .Element(worksheetNs + "protectedRange");
+        protectedRange.Should().NotBeNull();
+        protectedRange!.Attribute("sqref")!.Value.Should().Be("B2 C3");
+        protectedRange.Attribute("name")!.Value.Should().Be("NativeMultiAreaRange");
+        protectedRange.Attribute("password")!.Value.Should().Be("1234");
     }
 
     [Fact]
@@ -11451,7 +11518,32 @@ public class FileAdapterSmokeTests
                     new XAttribute("name", "NativeEditableRange"),
                     new XAttribute("sqref", "B2:C3"),
                     new XAttribute("password", "ABCD"),
-                    new XAttribute("securityDescriptor", "D:PAI"))));
+                    new XAttribute("securityDescriptor", "D:PAI"),
+                    new XElement(
+                        worksheetNs + "extLst",
+                        new XElement(
+                            worksheetNs + "ext",
+                            new XAttribute("uri", "{FREEXCEL-PROTECTED-RANGE-TEST}"))))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMultiAreaProtectedRangeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "protectedRanges",
+                new XElement(
+                    worksheetNs + "protectedRange",
+                    new XAttribute("name", "NativeMultiAreaRange"),
+                    new XAttribute("sqref", "B2 C3"),
+                    new XAttribute("password", "1234"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

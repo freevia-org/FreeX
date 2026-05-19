@@ -2420,18 +2420,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (string.IsNullOrWhiteSpace(sqref))
                 continue;
 
-            foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (tokens.Length != 1)
+                continue;
+
+            if (TryParseSqrefToken(tokens[0], tempSheet, out var range))
             {
-                try
-                {
-                    ranges.Add(token.Contains(':', StringComparison.Ordinal)
-                        ? GridRange.Parse(token, tempSheet)
-                        : new GridRange(CellAddress.Parse(token, tempSheet), CellAddress.Parse(token, tempSheet)));
-                }
-                catch
-                {
-                    // Skip malformed allow-edit references.
-                }
+                ranges.Add(range);
             }
         }
 
@@ -5230,10 +5225,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
-                if (sourceBlock.Name == workbookNs + "protectedRanges" &&
-                    MergeWorksheetProtectedRanges(sourceBlock, targetRoot, workbookNs))
+                if (sourceBlock.Name == workbookNs + "protectedRanges")
                 {
-                    changed = true;
+                    if (MergeWorksheetProtectedRanges(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        GetModeledAllowEditRangeReferences(workbook, sheetName)))
+                    {
+                        changed = true;
+                    }
+
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "rowBreaks")
@@ -6066,62 +6068,132 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return $"{element.Name}\u001f{address}";
     }
 
-    private static bool MergeWorksheetProtectedRanges(XElement sourceProtectedRanges, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeWorksheetProtectedRanges(
+        XElement sourceProtectedRanges,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        IReadOnlySet<string> modeledSqrefs)
     {
         var targetProtectedRanges = targetRoot.Element(workbookNs + "protectedRanges");
-        if (targetProtectedRanges is null)
-        {
-            targetRoot.Add(new XElement(sourceProtectedRanges));
-            return true;
-        }
 
         var changed = false;
-        var targetBySqref = targetProtectedRanges
-            .Elements(workbookNs + "protectedRange")
-            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
-            .ToDictionary(
-                element => element.Attribute("sqref")!.Value,
-                element => element,
-                StringComparer.OrdinalIgnoreCase);
+        var targetBySqref = targetProtectedRanges is null
+            ? new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase)
+            : targetProtectedRanges
+                .Elements(workbookNs + "protectedRange")
+                .Select(element => (Element: element, Key: CanonicalSupportedProtectedRangeSqref(element)))
+                .Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
+                .GroupBy(pair => pair.Key!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.First().Element,
+                    StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceRange in sourceProtectedRanges.Elements(workbookNs + "protectedRange"))
         {
-            var sqref = sourceRange.Attribute("sqref")?.Value;
-            if (string.IsNullOrWhiteSpace(sqref) || !targetBySqref.TryGetValue(sqref, out var targetRange))
+            var sourceSqref = CanonicalSupportedProtectedRangeSqref(sourceRange);
+            if (!string.IsNullOrWhiteSpace(sourceSqref))
             {
-                targetProtectedRanges.Add(new XElement(sourceRange));
-                changed = true;
+                if (!modeledSqrefs.Contains(sourceSqref) ||
+                    !targetBySqref.TryGetValue(sourceSqref, out var targetRange))
+                {
+                    continue;
+                }
+
+                if (MergeProtectedRangeMetadata(sourceRange, targetRange))
+                    changed = true;
                 continue;
             }
 
-            foreach (var sourceAttribute in sourceRange.Attributes())
+            if (targetProtectedRanges is null)
             {
-                if (sourceAttribute.Name == "sqref")
-                    continue;
-
-                if (targetRange.Attribute(sourceAttribute.Name)?.Value == sourceAttribute.Value)
-                    continue;
-
-                targetRange.SetAttributeValue(sourceAttribute.Name, sourceAttribute.Value);
+                targetProtectedRanges = new XElement(workbookNs + "protectedRanges");
+                targetRoot.Add(targetProtectedRanges);
                 changed = true;
             }
 
-            var existingChildNames = targetRange
-                .Elements()
-                .Select(element => element.Name)
-                .ToHashSet();
-            foreach (var sourceChild in sourceRange.Elements())
+            if (!HasEquivalentProtectedRange(targetProtectedRanges, sourceRange, workbookNs))
             {
-                if (existingChildNames.Contains(sourceChild.Name))
-                    continue;
-
-                targetRange.Add(new XElement(sourceChild));
-                existingChildNames.Add(sourceChild.Name);
+                targetProtectedRanges.Add(new XElement(sourceRange));
                 changed = true;
             }
         }
 
         return changed;
+    }
+
+    private static IReadOnlySet<string> GetModeledAllowEditRangeReferences(Workbook workbook, string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        return sheet is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : sheet.AllowEditRanges
+                .Select(range => range.ToString())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? CanonicalSupportedProtectedRangeSqref(XElement protectedRange)
+    {
+        var sqref = protectedRange.Attribute("sqref")?.Value;
+        if (string.IsNullOrWhiteSpace(sqref))
+            return null;
+
+        var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length != 1)
+            return null;
+
+        return TryParseSqrefToken(tokens[0], SheetId.New(), out var range)
+            ? range.ToString()
+            : null;
+    }
+
+    private static bool MergeProtectedRangeMetadata(XElement sourceRange, XElement targetRange)
+    {
+        var changed = false;
+        foreach (var sourceAttribute in sourceRange.Attributes())
+        {
+            if (sourceAttribute.Name == "sqref")
+                continue;
+
+            if (targetRange.Attribute(sourceAttribute.Name)?.Value == sourceAttribute.Value)
+                continue;
+
+            targetRange.SetAttributeValue(sourceAttribute.Name, sourceAttribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetRange
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceRange.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetRange.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool HasEquivalentProtectedRange(
+        XElement targetProtectedRanges,
+        XElement sourceRange,
+        XNamespace workbookNs)
+    {
+        var sourceSqref = sourceRange.Attribute("sqref")?.Value;
+        var sourceName = sourceRange.Attribute("name")?.Value;
+        return targetProtectedRanges
+            .Elements(workbookNs + "protectedRange")
+            .Any(targetRange =>
+                (!string.IsNullOrWhiteSpace(sourceSqref) &&
+                 string.Equals(targetRange.Attribute("sqref")?.Value, sourceSqref, StringComparison.OrdinalIgnoreCase)) ||
+                (string.IsNullOrWhiteSpace(sourceSqref) &&
+                 !string.IsNullOrWhiteSpace(sourceName) &&
+                 string.Equals(targetRange.Attribute("name")?.Value, sourceName, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool MergeWorksheetSheetProtection(XElement? sourceSheetProtection, XElement targetRoot, XNamespace workbookNs)
