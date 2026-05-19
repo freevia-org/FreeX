@@ -8,6 +8,27 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class ConditionalFormatDialogTests
 {
+    [Theory]
+    [InlineData("Top 10%", true, true)]
+    [InlineData("Bottom 10%", false, true)]
+    [InlineData("Below Average", false, false)]
+    public void TopBottomParityRule_CreatesExpectedConditionalFormat(string ruleType, bool aboveAverage, bool topBottomPercent)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(ruleType, RangeFor(SheetId.New())));
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(ruleType.Contains("Average") ? CfRuleType.AboveAverage : CfRuleType.Top10);
+            dialog.ResultRule.AboveAverage.Should().Be(aboveAverage);
+            dialog.ResultRule.TopBottomPercent.Should().Be(topBottomPercent);
+
+            dialog.Close();
+        });
+    }
+
     [Fact]
     public void IconSetRule_CreatesIconSetWithoutFormatIfTrue()
     {
