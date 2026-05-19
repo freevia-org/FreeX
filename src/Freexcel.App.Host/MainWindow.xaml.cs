@@ -5863,6 +5863,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.Filter:
                 FilterButton_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.ClearFilter:
+                ClearFilterButton_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.HideRows:
                 ExecuteRowsHidden(hidden: true);
                 break;
