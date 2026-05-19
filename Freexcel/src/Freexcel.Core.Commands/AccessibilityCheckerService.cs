@@ -5,7 +5,8 @@ namespace Freexcel.Core.Commands;
 public enum AccessibilityIssueKind
 {
     MergedCells,
-    MissingAltText
+    MissingAltText,
+    ChartMissingTitle
 }
 
 public sealed record AccessibilityIssue(
@@ -40,6 +41,16 @@ public static class AccessibilityCheckerService
 
             foreach (var textBox in sheet.TextBoxes.Where(t => string.IsNullOrWhiteSpace(t.AltText)))
                 issues.Add(MissingAltText(sheet, textBox.Anchor, "Text box"));
+
+            foreach (var chart in sheet.Charts.Where(c => string.IsNullOrWhiteSpace(c.Title)))
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.ChartMissingTitle,
+                    sheet.Id,
+                    sheet.Name,
+                    FormatRange(chart.DataRange),
+                    "Chart is missing a title."));
+            }
         }
 
         return issues;
