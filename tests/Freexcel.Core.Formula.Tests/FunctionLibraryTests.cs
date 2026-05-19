@@ -4364,6 +4364,39 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Iferror_CatchesFilterNoMatchesCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=IFERROR(FILTER(A1:A1,B1:B1),\"fallback\")", sheet)
+            .Should().Be(new TextValue("fallback"));
+    }
+
+    [Fact]
+    public void Ifna_DoesNotCatchFilterNoMatchesCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=IFNA(FILTER(A1:A1,B1:B1),\"fallback\")", sheet)
+            .Should().Be(new ErrorValue("#CALC!"));
+    }
+
+    [Fact]
+    public void Choose_DoesNotEvaluateUnselectedFilterCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=CHOOSE(2,FILTER(A1:A1,B1:B1),42)", sheet)
+            .Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void Filter_MultiColumn_PreservesAllColumns()
     {
         var sheet = MakeSheet(
