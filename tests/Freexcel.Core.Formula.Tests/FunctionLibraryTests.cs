@@ -598,6 +598,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void CriteriaWildcards_MatchExcelTextOnlyAndOperatorPatterns()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("Alpha")), (1, 2, new NumberValue(10)),
+            (2, 1, new TextValue("Beta")), (2, 2, new NumberValue(20)),
+            (3, 1, new NumberValue(123)), (3, 2, new NumberValue(30)),
+            (4, 1, new BoolValue(true)), (4, 2, new NumberValue(40)));
+
+        _eval.Evaluate("=COUNTIF(A1:A5,\"*\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=COUNTIF(A1:A5,\"=A*\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=COUNTIF(A1:A5,\"<>A*\")", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=SUMIF(A1:A5,\"=A*\",B1:B5)", sheet).Should().Be(new NumberValue(10));
+        _eval.Evaluate("=SUMIF(A1:A5,\"<>A*\",B1:B5)", sheet).Should().Be(new NumberValue(90));
+    }
+
+    [Fact]
     public void Countif_CriteriaError_PropagatesError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)));
