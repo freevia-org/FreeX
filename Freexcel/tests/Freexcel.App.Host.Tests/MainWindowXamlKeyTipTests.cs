@@ -86,6 +86,44 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageOptionsEntryPoint_IsNamedCommandForUiAutomation()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var optionsButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "SsOptionsBtn_Click");
+
+        optionsButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("SsOptionsNavBtn");
+        optionsButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Options");
+        optionsButton.Attribute("AutomationProperties.HelpText")?.Value.Should().Contain("Freexcel settings");
+        optionsButton.Attribute("IsTabStop")?.Value.Should().Be("True");
+    }
+
+    [Fact]
+    public void MainWindowPreviewKeys_HandleWorksheetKeytipAndContextMenuEntryPoints()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("this.PreviewKeyDown += MainWindow_PreviewKeyDown;");
+        source.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
+        source.Should().Contain("KeyboardCommandShortcut.OpenContextMenu");
+    }
+
+    [Fact]
+    public void EscapeFromVisibleBackstage_ReturnsToWorkbookBeforeTransientCancellation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("IsStartScreenVisible()");
+        source.Should().Contain("HideStartScreen();");
+        source.IndexOf("HideStartScreen();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf("CancelCopyAndTransientModes();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BackstageExportEntryPoint_DisclosesXpsBackedPdfExport()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

@@ -144,6 +144,7 @@ public partial class MainWindow : Window
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.MouseWheel += SheetGrid_MouseWheel;
+        this.PreviewKeyDown += MainWindow_PreviewKeyDown;
         this.KeyDown += MainWindow_KeyDown;
         this.KeyUp += MainWindow_KeyUp;
         this.Deactivated += MainWindow_Deactivated;
@@ -1705,6 +1706,34 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is TextBox or ComboBox)
+            return;
+
+        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None && IsStartScreenVisible())
+        {
+            HideStartScreen();
+            e.Handled = true;
+            return;
+        }
+
+        if (!KeyboardShortcutMatcher.TryGetCommandShortcut(
+                e.Key,
+                e.SystemKey,
+                Keyboard.Modifiers,
+                out var commandShortcut))
+        {
+            return;
+        }
+
+        if (commandShortcut is not (KeyboardCommandShortcut.ShowKeyTips or KeyboardCommandShortcut.OpenContextMenu))
+            return;
+
+        ExecuteCommandShortcut(commandShortcut, sender, e);
+        e.Handled = true;
+    }
+
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
@@ -1735,6 +1764,13 @@ public partial class MainWindow : Window
 
             if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
             {
+                if (IsStartScreenVisible())
+                {
+                    HideStartScreen();
+                    e.Handled = true;
+                    return;
+                }
+
                 CancelCopyAndTransientModes();
                 e.Handled = true;
                 return;
