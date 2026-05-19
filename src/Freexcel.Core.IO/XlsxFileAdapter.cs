@@ -4641,8 +4641,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Where(element => element is not null)
                 .Cast<XElement>()
                 .ToList();
+            var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
-            if (sourceBlocks.Count == 0 && sourceExtensionList is null)
+            if (sourceBlocks.Count == 0 && sourceSheetProperties is null && sourceExtensionList is null)
                 continue;
 
             var targetWorksheetXml = LoadXml(targetWorksheetEntry);
@@ -4651,6 +4652,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
 
             var changed = false;
+            if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
+                changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
                 if (targetRoot.Element(sourceBlock.Name) is not null)
@@ -4666,6 +4669,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetSheetProperties(XElement? sourceSheetProperties, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceSheetProperties is null)
+            return false;
+
+        var targetSheetProperties = targetRoot.Element(workbookNs + "sheetPr");
+        if (targetSheetProperties is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceSheetProperties));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceSheetProperties.Attributes())
+        {
+            if (targetSheetProperties.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetSheetProperties.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetSheetProperties
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceSheetProperties.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetSheetProperties.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)

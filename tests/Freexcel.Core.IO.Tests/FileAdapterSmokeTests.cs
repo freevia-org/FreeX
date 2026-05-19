@@ -7583,6 +7583,38 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorksheetSheetProperties()
+    {
+        var workbook = new Workbook("SheetPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("sheet properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedWorksheetSheetProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+        sheetPr.Should().NotBeNull();
+        sheetPr!.Attribute("filterMode").Should().NotBeNull();
+        sheetPr.Attribute("filterMode")!.Value.Should().Be("1");
+        sheetPr.Element(worksheetNs + "pageSetUpPr").Should().NotBeNull();
+        sheetPr.Element(worksheetNs + "pageSetUpPr")!.Attribute("autoPageBreaks")!.Value.Should().Be("0");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -8717,6 +8749,34 @@ public class FileAdapterSmokeTests
                         worksheetNs + "inputCells",
                         new XAttribute("r", "A1"),
                         new XAttribute("val", "42")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedWorksheetSheetProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetPr = worksheetXml.Root!.Element(worksheetNs + "sheetPr");
+            if (sheetPr is null)
+            {
+                sheetPr = new XElement(worksheetNs + "sheetPr");
+                worksheetXml.Root!.AddFirst(sheetPr);
+            }
+
+            sheetPr.SetAttributeValue("filterMode", "1");
+            if (sheetPr.Element(worksheetNs + "pageSetUpPr") is null)
+            {
+                sheetPr.Add(new XElement(
+                    worksheetNs + "pageSetUpPr",
+                    new XAttribute("autoPageBreaks", "0")));
+            }
+
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
