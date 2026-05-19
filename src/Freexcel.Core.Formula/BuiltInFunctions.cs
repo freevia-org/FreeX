@@ -6618,16 +6618,44 @@ public static class BuiltInFunctions
     private static double NormSCdf(double z) => 0.5 * (1.0 + Erf(z / Math.Sqrt(2.0)));
     private static double NormSPdf(double z) => Math.Exp(-0.5 * z * z) / Math.Sqrt(2.0 * Math.PI);
 
-    /// <summary>Inverse standard-normal CDF (rational approximation).</summary>
+    /// <summary>Inverse standard-normal CDF (Acklam rational approximation with CDF refinement).</summary>
     private static double NormSInv(double p)
     {
         if (p <= 0 || p >= 1) throw new FormulaEvalException("#NUM!", "probability out of range");
         if (p == 0.5) return 0.0;
-        double t = p < 0.5 ? Math.Sqrt(-2.0 * Math.Log(p)) : Math.Sqrt(-2.0 * Math.Log(1.0 - p));
-        const double c0 = 2.515517, c1 = 0.802853, c2 = 0.010328;
-        const double d1 = 1.432788, d2 = 0.189269, d3 = 0.001308;
-        double x = t - (c0 + c1 * t + c2 * t * t) / (1.0 + d1 * t + d2 * t * t + d3 * t * t * t);
-        return p < 0.5 ? -x : x;
+
+        const double plow = 0.02425;
+        const double phigh = 1.0 - plow;
+        double x;
+
+        if (p < plow)
+        {
+            double q = Math.Sqrt(-2.0 * Math.Log(p));
+            x = (((((-0.007784894002430293 * q - 0.3223964580411365) * q - 2.400758277161838) * q - 2.549732539343734) * q + 4.374664141464968) * q + 2.938163982698783) /
+                ((((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q + 3.754408661907416) * q + 1.0);
+        }
+        else if (p <= phigh)
+        {
+            double q = p - 0.5;
+            double r = q * q;
+            x = (((((-39.69683028665376 * r + 220.9460984245205) * r - 275.9285104469687) * r + 138.3577518672690) * r - 30.66479806614716) * r + 2.506628277459239) * q /
+                (((((-54.47609879822406 * r + 161.5858368580409) * r - 155.6989798598866) * r + 66.80131188771972) * r - 13.28068155288572) * r + 1.0);
+        }
+        else
+        {
+            double q = Math.Sqrt(-2.0 * Math.Log(1.0 - p));
+            x = -(((((-0.007784894002430293 * q - 0.3223964580411365) * q - 2.400758277161838) * q - 2.549732539343734) * q + 4.374664141464968) * q + 2.938163982698783) /
+                ((((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q + 3.754408661907416) * q + 1.0);
+        }
+
+        for (int i = 0; i < 2; i++)
+        {
+            double pdf = NormSPdf(x);
+            if (pdf == 0 || !double.IsFinite(pdf)) break;
+            x -= (NormSCdf(x) - p) / pdf;
+        }
+
+        return x;
     }
 
     /// <summary>Lanczos approximation for ln(Gamma(x)), x > 0.</summary>
