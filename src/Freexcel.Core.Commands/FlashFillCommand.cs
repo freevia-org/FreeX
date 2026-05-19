@@ -139,7 +139,7 @@ public sealed class FlashFillCommand : IWorkbookCommand
         IReadOnlyList<string> exampleOutputs,
         IReadOnlyList<uint> rowsToFill)
     {
-        if (_fillColIndex < 3)
+        if (_fillColIndex < 3 || _sourceColIndex != _fillColIndex - 1)
             return null;
 
         var leftCol0 = _fillColIndex - 2;
