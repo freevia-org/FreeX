@@ -8,7 +8,8 @@ public enum AccessibilityIssueKind
     MissingAltText,
     GenericAltText,
     ChartMissingTitle,
-    HyperlinkDisplayTextIsUrl
+    HyperlinkDisplayTextIsUrl,
+    DefaultWorksheetName
 }
 
 public sealed record AccessibilityIssue(
@@ -46,6 +47,16 @@ public static class AccessibilityCheckerService
         var issues = new List<AccessibilityIssue>();
         foreach (var sheet in workbook.Sheets)
         {
+            if (IsDefaultWorksheetName(sheet.Name))
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.DefaultWorksheetName,
+                    sheet.Id,
+                    sheet.Name,
+                    sheet.Name,
+                    "Worksheet tab names should describe their contents."));
+            }
+
             foreach (var range in sheet.MergedRegions)
             {
                 issues.Add(new AccessibilityIssue(
@@ -148,6 +159,10 @@ public static class AccessibilityCheckerService
 
     private static bool IsNumberSuffix(string text, string prefix) =>
         int.TryParse(text[prefix.Length..], out _);
+
+    private static bool IsDefaultWorksheetName(string name) =>
+        name.StartsWith("Sheet", StringComparison.OrdinalIgnoreCase) &&
+        int.TryParse(name["Sheet".Length..], out _);
 
     private static string FormatRange(GridRange range) =>
         range.Start == range.End
