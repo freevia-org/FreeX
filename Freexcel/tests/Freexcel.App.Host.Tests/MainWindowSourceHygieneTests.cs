@@ -26,6 +26,7 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RibbonCommandPresentationPlanner.cs"));
 
+        File.Exists(Path.Combine(appHostDirectory, "RibbonIconFactory.cs")).Should().BeTrue();
         iconResources.Should().Contain("FreexcelRibbonLargeIconSlot");
         iconResources.Should().Contain("FreexcelRibbonSmallIconSlot");
         iconResources.Should().Contain("FreexcelRibbonLargeLabel");
@@ -34,9 +35,15 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
         source.Should().Contain("NormalizeExistingRibbonIconText();");
         source.Should().Contain("GetRibbonIconAccentBrushes");
+        source.Should().Contain("RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush)");
+        source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
+        source.Should().NotContain("icon.Glyph");
         source.Should().Contain("RibbonCommandIconAccent.Chart");
         source.Should().Contain("HorizontalAlignment.Left");
 
+        planner.Should().Contain("RibbonCommandIconKind.ChartColumn");
+        planner.Should().NotContain("FontFamily");
+        planner.Should().NotContain("Glyph");
         planner.Should().Contain("RibbonCommandIconAccent.Chart");
         planner.Should().Contain("RibbonCommandIconAccent.Data");
         planner.Should().Contain("RibbonCommandIconAccent.Warning");
@@ -106,8 +113,13 @@ public sealed class MainWindowSourceHygieneTests
         File.Exists(Path.Combine(appHostDirectory, "Resources", "Freexcel.ico")).Should().BeTrue();
         xaml.Should().Contain("Icon=\"Resources/Freexcel.ico\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppFreeBand\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppX\"");
         xaml.Should().Contain("<TextBlock Text=\"FREE\"");
         xaml.Should().Contain("<TextBlock Text=\"X\"");
+        xaml.Should().Contain("<RowDefinition Height=\"7\"/>");
+        xaml.Should().Contain("<RowDefinition Height=\"2\"/>");
+        xaml.Should().Contain("<RowDefinition Height=\"*\"/>");
         xaml.Should().NotContain("<Image Source=\"Resources/Freexcel.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreexcelGreenBrush}\"");
         theme.Should().Contain("x:Key=\"FreexcelTitleBarBrush\"");
