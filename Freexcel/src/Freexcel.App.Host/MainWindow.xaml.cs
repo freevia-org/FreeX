@@ -276,6 +276,7 @@ public partial class MainWindow : Window
         var fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
         var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
         var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
+        ApplyHomeRibbonBreakpointOverrides(availableWidth.Value, groups, plannedStates);
         ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
 
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
@@ -338,6 +339,31 @@ public partial class MainWindow : Window
         }
 
         return false;
+    }
+
+    private static void ApplyHomeRibbonBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<FrameworkElement> groups,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth > 1320)
+            return;
+
+        var stylesIndex = -1;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (string.Equals(GetRibbonGroupName(groups[i]), "Styles", StringComparison.Ordinal))
+            {
+                stylesIndex = i;
+                break;
+            }
+        }
+
+        if (stylesIndex < 0)
+            return;
+
+        for (var i = stylesIndex; i < states.Length; i++)
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
