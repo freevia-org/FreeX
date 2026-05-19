@@ -67,7 +67,8 @@ public partial class MainWindow : Window
     private bool _formatPainterActive;
     private bool _formatPainterPersistent;
     private bool _formatPainterTargetSelectionActive;
-    private StyleId _formatPainterStyleId;
+    private SheetId? _formatPainterSourceSheetId;
+    private GridRange? _formatPainterSourceRange;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
     private bool _suppressZoomSync;
@@ -268,11 +269,32 @@ public partial class MainWindow : Window
             : ribbonScrollViewer?.ViewportWidth;
         if (availableWidth is null or <= 0)
             availableWidth = RibbonTabs.ActualWidth > 0 ? RibbonTabs.ActualWidth : activePanel.ActualWidth;
+        if (RibbonTabs.ActualWidth > 0)
+            availableWidth = Math.Min(availableWidth.Value, Math.Max(0, RibbonTabs.ActualWidth - 12));
 
+        var fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
         var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
-        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups);
-        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
+        ApplyHomeRibbonBreakpointOverrides(availableWidth.Value, groups, plannedStates);
+        ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+        SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
+        while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
+               CollapseOneMoreRibbonGroup(plannedStates))
+        {
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
+        }
+
+        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        _ribbonCompact = compacted;
+    }
+
+    private static void ApplyRibbonAdaptiveStates(
+        IReadOnlyList<FrameworkElement> groups,
+        IReadOnlyList<Button> collapsedButtons,
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates)
+    {
         for (var i = 0; i < groups.Count; i++)
         {
             collapsedButtons[i].Visibility = Visibility.Collapsed;
@@ -295,8 +317,109 @@ public partial class MainWindow : Window
                     break;
             }
         }
+    }
 
-        _ribbonCompact = compacted;
+    private static bool RibbonRowOverflows(StackPanel activePanel, double availableWidth)
+    {
+        activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
+    }
+
+    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states)
+    {
+        for (var i = states.Length - 1; i >= 0; i--)
+        {
+            if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
+    {
+        var veryNarrow = availableWidth <= 700;
+        foreach (var button in collapsedButtons)
+        {
+            button.Width = veryNarrow ? 46 : 56;
+            button.Margin = veryNarrow ? new Thickness(0) : new Thickness(1, 0, 3, 0);
+            button.Padding = veryNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
+
+            var textBlocks = button.Content is StackPanel panel
+                ? panel.Children.OfType<TextBlock>()
+                : EnumerateVisualDescendants(button).OfType<TextBlock>();
+
+            foreach (var textBlock in textBlocks)
+            {
+                if (textBlock.Tag?.ToString() == "RibbonLabel")
+                {
+                    textBlock.Visibility = veryNarrow ? Visibility.Collapsed : Visibility.Visible;
+                    textBlock.FontSize = veryNarrow ? 9 : 10;
+                    textBlock.MaxWidth = veryNarrow ? 44 : 52;
+                }
+                else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
+                {
+                    textBlock.FontSize = veryNarrow ? 18 : 22;
+                }
+            }
+        }
+    }
+
+    private static void ApplyHomeRibbonBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<FrameworkElement> groups,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth <= 700)
+        {
+            for (var i = 0; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 900 &&
+            TryFindRibbonGroupIndex(groups, "Font", out var fontIndex))
+        {
+            for (var i = fontIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1120 &&
+            TryFindRibbonGroupIndex(groups, "Alignment", out var alignmentIndex))
+        {
+            for (var i = alignmentIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1320 &&
+            TryFindRibbonGroupIndex(groups, "Styles", out var stylesIndex))
+        {
+            for (var i = stylesIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
+    private static bool TryFindRibbonGroupIndex(
+        IReadOnlyList<FrameworkElement> groups,
+        string groupName,
+        out int index)
+    {
+        for (var i = 0; i < groups.Count; i++)
+        {
+            if (string.Equals(GetRibbonGroupName(groups[i]), groupName, StringComparison.Ordinal))
+            {
+                index = i;
+                return true;
+            }
+        }
+
+        index = -1;
+        return false;
     }
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
@@ -317,6 +440,25 @@ public partial class MainWindow : Window
         SetRibbonGroupCompact(group, level);
         group.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return Math.Max(0, group.DesiredSize.Width);
+    }
+
+    private static double MeasureRibbonFixedChromeWidth(StackPanel panel)
+    {
+        var fixedWidth = 0.0;
+        foreach (var child in panel.Children.OfType<FrameworkElement>())
+        {
+            if (child.Visibility != Visibility.Visible ||
+                child is Grid ||
+                IsRibbonCollapsedGroupButton(child))
+            {
+                continue;
+            }
+
+            child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            fixedWidth += child.DesiredSize.Width;
+        }
+
+        return fixedWidth;
     }
 
     private static List<Button> InsertRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
@@ -578,7 +720,7 @@ public partial class MainWindow : Window
                     button.Width = level switch
                     {
                         RibbonCompactLevel.Full => fullWidth,
-                        RibbonCompactLevel.SmallWithLabels => Math.Max(compactWidth + 28, Math.Ceiling(fullWidth * 0.72)),
+                        RibbonCompactLevel.SmallWithLabels => fullWidth,
                         _ => compactWidth
                     };
                 }
@@ -677,8 +819,18 @@ public partial class MainWindow : Window
         NormalizeRibbonCommandButtons();
         ConfigureInsertRibbonSurface();
         AlignRibbonIconColumns();
+        DisableRibbonScrollBars();
         ApplyToolbarDropdownWhiteBackgrounds();
         UpdateRibbonCompactMode(force: forceCompact);
+    }
+
+    private void DisableRibbonScrollBars()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
@@ -5763,10 +5915,8 @@ public partial class MainWindow : Window
     private void CaptureFormatPainterSource(bool persistent)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        _formatPainterStyleId = sheet?.GetCell(range.Start)?.StyleId
-            ?? sheet?.GetStyleOnly(range.Start.Row, range.Start.Col)
-            ?? StyleId.Default;
+        _formatPainterSourceSheetId = _currentSheetId;
+        _formatPainterSourceRange = range;
         _formatPainterActive = true;
         _formatPainterPersistent = persistent;
     }
@@ -5776,21 +5926,35 @@ public partial class MainWindow : Window
         _formatPainterActive = false;
         _formatPainterPersistent = false;
         _formatPainterTargetSelectionActive = false;
+        _formatPainterSourceSheetId = null;
+        _formatPainterSourceRange = null;
     }
 
     private bool TryApplyFormatPainter(GridRange targetRange)
     {
         if (!_formatPainterActive) return false;
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
+        if (_formatPainterSourceSheetId is not { } sourceSheetId ||
+            _formatPainterSourceRange is not { } sourceRange ||
+            _workbook.GetSheet(sourceSheetId) is not { } sourceSheet)
         {
             if (!_formatPainterPersistent)
                 CancelFormatPainter();
             return true;
         }
 
-        var command = FormatPainterCommandFactory.Create(_workbook, _formatPainterStyleId, targetRange);
+        IWorkbookCommand CreateCommand(SheetId sheetId)
+        {
+            var sheetTargetRange = new GridRange(
+                new CellAddress(sheetId, targetRange.Start.Row, targetRange.Start.Col),
+                new CellAddress(sheetId, targetRange.End.Row, targetRange.End.Col));
+            return FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, sheetTargetRange);
+        }
+
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var command = targetSheetIds.Count > 1
+            ? new CompositeWorkbookCommand("Format Painter", targetSheetIds.Select(CreateCommand).ToList())
+            : FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange);
         if (!TryExecuteCommand(command, "Format Painter"))
         {
             if (!_formatPainterPersistent)

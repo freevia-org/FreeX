@@ -18,7 +18,7 @@ public sealed class CommandParityStatusTests
             ("Copy (Ctrl+C)", "Implemented"),
             ("Paste (Ctrl+V)", "Partial"),
             ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture)", "Partial"),
-            ("Format Painter", "Partial"),
+            ("Format Painter", "Implemented"),
             ("Distributed/Justify alignment", "Partial"),
             ("Shrink to Fit", "Partial"),
             ("Format Cells Alignment dialog", "Partial"),

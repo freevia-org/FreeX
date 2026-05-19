@@ -55,4 +55,22 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
     }
+
+    [Fact]
+    public void Plan_ReservesFixedChromeWidthForDividersAndPadding()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Clipboard", 100, 100, 62, 50),
+            new RibbonAdaptiveGroup("Font", 200, 200, 96, 52),
+            new RibbonAdaptiveGroup("Alignment", 180, 180, 88, 56)
+        };
+
+        var states = RibbonAdaptiveLayoutPlanner.Plan(500, groups, fixedChromeWidth: 50);
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly);
+    }
 }
