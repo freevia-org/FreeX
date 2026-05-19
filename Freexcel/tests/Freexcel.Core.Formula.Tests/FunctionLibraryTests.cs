@@ -3951,6 +3951,14 @@ public class FunctionLibraryTests
         _eval.Evaluate("=TEXTJOIN(\"\",TRUE,A1)", sheet).Should().Be(new TextValue(text));
     }
 
+    [Fact]
+    public void CharAndCode_UseWindowsAnsiMappingForEuro()
+    {
+        _eval.Evaluate("=CHAR(128)", MakeSheet()).Should().Be(new TextValue("€"));
+        _eval.Evaluate("=CODE(\"€\")", MakeSheet()).Should().Be(new NumberValue(128));
+        _eval.Evaluate("=CODE(CHAR(128))", MakeSheet()).Should().Be(new NumberValue(128));
+    }
+
     [Fact] public void T_Text_ReturnsText() =>
         _eval.Evaluate("=T(\"hello\")", MakeSheet()).Should().Be(new TextValue("hello"));
 
