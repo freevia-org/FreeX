@@ -8007,6 +8007,38 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSheetFormatMetadata()
+    {
+        var workbook = new Workbook("WorksheetSheetFormatMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sheet format"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSheetFormatMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetFormat = worksheetXml.Root!.Element(worksheetNs + "sheetFormatPr");
+        sheetFormat.Should().NotBeNull();
+        sheetFormat!.Attribute("baseColWidth")!.Value.Should().Be("12");
+        sheetFormat.Attribute("zeroHeight")!.Value.Should().Be("1");
+        sheetFormat.Attribute("thickTop")!.Value.Should().Be("1");
+        sheetFormat.Attribute("outlineLevelRow")!.Value.Should().Be("3");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
     {
         var workbook = new Workbook("ScenariosRetentionTest");
@@ -9732,6 +9764,30 @@ public class FileAdapterSmokeTests
                 new XAttribute("view", "pageBreakPreview"),
                 new XAttribute("topLeftCell", "C3"),
                 new XAttribute("zoomScale", "80")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetSheetFormatMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetFormat = worksheetXml.Root!.Element(worksheetNs + "sheetFormatPr");
+            if (sheetFormat is null)
+            {
+                sheetFormat = new XElement(worksheetNs + "sheetFormatPr");
+                worksheetXml.Root!.AddFirst(sheetFormat);
+            }
+
+            sheetFormat.SetAttributeValue("baseColWidth", "12");
+            sheetFormat.SetAttributeValue("zeroHeight", "1");
+            sheetFormat.SetAttributeValue("thickTop", "1");
+            sheetFormat.SetAttributeValue("outlineLevelRow", "3");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
