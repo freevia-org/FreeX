@@ -216,6 +216,23 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void AccessibilityTooltip_DisclosesCurrentCheckerCoverage()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var accessibilityButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
+
+        var description = accessibilityButton.Attribute(local + "RibbonTooltip.Description")?.Value;
+        description.Should().Contain("merged cells");
+        description.Should().Contain("alternate text");
+        description.Should().Contain("charts without titles");
+    }
+
+    [Fact]
     public void AllowEditRangesTooltip_DisclosesAddRangePromptWorkflow()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -781,6 +798,37 @@ public sealed class MainWindowXamlKeyTipTests
             .ToList();
 
         duplicates.Should().BeEmpty("menu-level keytips must be unique for deterministic staged Alt routing");
+    }
+
+    [Fact]
+    public void ErrorCheckingButton_ExposesOptionsEntryPoint()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var errorCheckingButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Error Checking");
+
+        var menuItems = errorCheckingButton
+            .Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value
+            })
+            .ToList();
+
+        menuItems.Should().Contain(item =>
+            item.Header == "Error Checking..." &&
+            item.KeyTip == "E" &&
+            item.Click == "ErrorCheckBtn_Click");
+        menuItems.Should().Contain(item =>
+            item.Header == "Error Checking Options..." &&
+            item.KeyTip == "O" &&
+            item.Click == "SsOptionsBtn_Click");
     }
 
     [Fact]

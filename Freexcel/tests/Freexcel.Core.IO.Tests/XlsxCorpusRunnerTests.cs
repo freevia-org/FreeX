@@ -39,6 +39,7 @@ public class XlsxCorpusRunnerTests
                 CaptureSummary(workbook),
                 options => options.WithStrictOrdering(),
                 row.Id);
+            AssertExpectedFeatureTags(row, loaded);
         }
     }
 
@@ -107,6 +108,44 @@ public class XlsxCorpusRunnerTests
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
             saved.Position = 0;
+            var after = CapturePackageSummary(saved);
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
+            after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+        }
+    }
+
+    [Fact]
+    public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-metadata-pass")
+            .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+            var before = CapturePackageSummary(source);
+            var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
+            before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+
+            source.Position = 0;
+            XlsxFeatureInspector.Inspect(source).HasUnsupportedFeatures.Should().BeFalse(row.Id);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freexcel-metadata-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            AssertPackageHealth(saved, row.Id);
             var after = CapturePackageSummary(saved);
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
@@ -380,17 +419,95 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("hyperlinks"))
             summary.Sheets.Sum(sheet => sheet.HyperlinkCount).Should().BeGreaterThan(0, row.Id);
 
+        if (tags.Contains("comments") || tags.Contains("notes"))
+            summary.Sheets.Sum(sheet => sheet.CommentCount).Should().BeGreaterThan(0, row.Id);
+
         if (tags.Contains("merged-cells"))
             summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("formulas"))
+            summary.Sheets.Sum(sheet => sheet.FormulaCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("cross-sheet"))
+        {
+            summary.SheetCount.Should().BeGreaterThan(1, row.Id);
+            workbook.Sheets
+                .SelectMany(sheet => sheet.EnumerateCells())
+                .Count(item => item.Cell.FormulaText?.Contains('!') == true)
+                .Should().BeGreaterThan(0, row.Id);
+        }
+
+        if (tags.Contains("named-ranges"))
+            summary.NamedRangeCount.Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("data-validation"))
+            summary.Sheets.Sum(sheet => sheet.DataValidationCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("conditional-formatting"))
+            summary.Sheets.Sum(sheet => sheet.ConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("color-scales"))
+            summary.Sheets.Sum(sheet => sheet.ColorScaleConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("data-bars"))
+            summary.Sheets.Sum(sheet => sheet.DataBarConditionalFormatCount).Should().BeGreaterThan(0, row.Id);
 
         if (tags.Contains("charts") && !tags.Contains("unsupported-chart-family"))
             summary.Sheets.Sum(sheet => sheet.ChartCount).Should().BeGreaterThan(0, row.Id);
 
-        if (tags.Contains("styles") || tags.Contains("formatting"))
-            summary.Sheets.Sum(sheet => sheet.StyleOnlyCellCount).Should().BeGreaterThanOrEqualTo(0, row.Id);
+        if (row.SourceType == "generated" && (tags.Contains("styles") || tags.Contains("formatting")))
+            (workbook.Sheets.Sum(sheet => sheet.EnumerateCells().Count(item => item.Cell.StyleId != StyleId.Default)) +
+             summary.Sheets.Sum(sheet => sheet.StyleOnlyCellCount)).Should().BeGreaterThan(0, row.Id);
 
         if (tags.Contains("cell-types"))
             summary.Sheets.Sum(sheet => sheet.CellCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("text-boxes"))
+            summary.Sheets.Sum(sheet => sheet.TextBoxCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("shapes"))
+            summary.Sheets.Sum(sheet => sheet.DrawingShapeCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("images"))
+            summary.Sheets.Sum(sheet => sheet.PictureCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("sparklines"))
+            summary.Sheets.Sum(sheet => sheet.SparklineCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("pivottables"))
+            summary.Sheets.Sum(sheet => sheet.PivotTableCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("pivot-caches"))
+            summary.PivotCacheCount.Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("structured-tables") || tags.Contains("listobjects") || tags.Contains("tables"))
+            summary.Sheets.Sum(sheet => sheet.StructuredTableCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("protection"))
+        {
+            summary.IsStructureProtected.Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.IsProtected).Should().BeTrue(row.Id);
+            summary.Sheets.Sum(sheet => sheet.AllowEditRangeCount).Should().BeGreaterThan(0, row.Id);
+        }
+
+        if (tags.Contains("page-setup"))
+        {
+            summary.Sheets.Any(sheet => sheet.HasPrintArea || sheet.HasPrintTitleRows || sheet.HasPrintTitleColumns).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PageOrientation == WorksheetPageOrientation.Landscape).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PaperSize == WorksheetPaperSize.Letter).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PageMargins == WorksheetPageMargins.Narrow).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.ScaleToFit.FitToPagesWide == 1 && sheet.ScaleToFit.FitToPagesTall == 1).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.PrintGridlines && sheet.PrintHeadings).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.HasPageHeader).Should().BeTrue(row.Id);
+            summary.Sheets.Any(sheet => sheet.HasPageFooter).Should().BeTrue(row.Id);
+        }
+
+        if (tags.Contains("structure"))
+        {
+            summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
+            summary.Sheets.Any(sheet => sheet.FrozenRows > 0 || sheet.FrozenCols > 0).Should().BeTrue(row.Id);
+            summary.Sheets.Sum(sheet => sheet.HiddenRowCount + sheet.HiddenColumnCount).Should().BeGreaterThan(0, row.Id);
+        }
     }
 
     private static WorkbookSummary CaptureSummary(Workbook workbook) =>
@@ -410,6 +527,8 @@ public class XlsxCorpusRunnerTests
             sheet.MergedRegions.Count,
             sheet.DataValidations.Count,
             sheet.ConditionalFormats.Count,
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.ColorScale),
+            sheet.ConditionalFormats.Count(format => format.RuleType == CfRuleType.DataBar),
             sheet.Comments.Count,
             sheet.Hyperlinks.Count,
             sheet.Charts.Count,
@@ -427,6 +546,14 @@ public class XlsxCorpusRunnerTests
             sheet.PrintArea is not null,
             sheet.PrintTitleRows is not null,
             sheet.PrintTitleColumns is not null,
+            sheet.PageOrientation,
+            sheet.PaperSize,
+            sheet.PageMargins,
+            sheet.ScaleToFit,
+            sheet.PrintGridlines,
+            sheet.PrintHeadings,
+            !sheet.PageHeader.Equals(new WorksheetHeaderFooter("", "", "")),
+            !sheet.PageFooter.Equals(new WorksheetHeaderFooter("", "", "")),
             sheet.RowPageBreaks.Count,
             sheet.ColumnPageBreaks.Count,
             sheet.FrozenRows,
@@ -592,6 +719,7 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/app.xml", StringComparison.OrdinalIgnoreCase) ||
@@ -663,6 +791,8 @@ public class XlsxCorpusRunnerTests
         int MergedRegionCount,
         int DataValidationCount,
         int ConditionalFormatCount,
+        int ColorScaleConditionalFormatCount,
+        int DataBarConditionalFormatCount,
         int CommentCount,
         int HyperlinkCount,
         int ChartCount,
@@ -680,6 +810,14 @@ public class XlsxCorpusRunnerTests
         bool HasPrintArea,
         bool HasPrintTitleRows,
         bool HasPrintTitleColumns,
+        WorksheetPageOrientation PageOrientation,
+        WorksheetPaperSize PaperSize,
+        WorksheetPageMargins PageMargins,
+        WorksheetScaleToFit ScaleToFit,
+        bool PrintGridlines,
+        bool PrintHeadings,
+        bool HasPageHeader,
+        bool HasPageFooter,
         int RowPageBreakCount,
         int ColumnPageBreakCount,
         uint FrozenRows,
