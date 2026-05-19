@@ -8111,6 +8111,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPageSetupNativeAttributes()
+    {
+        var workbook = new Workbook("WorksheetPageSetupNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page setup"));
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PrintQualityDpi = 600;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPageSetupNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull();
+        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
+        pageSetup.Attribute("copies")!.Value.Should().Be("3");
+        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
     {
         var workbook = new Workbook("ScenariosRetentionTest");
@@ -9920,6 +9953,29 @@ public class FileAdapterSmokeTests
 
             printOptions.SetAttributeValue("gridLinesSet", "1");
             printOptions.SetAttributeValue("customAttr", "print-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPageSetupNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+            if (pageSetup is null)
+            {
+                pageSetup = new XElement(worksheetNs + "pageSetup");
+                worksheetXml.Root!.Add(pageSetup);
+            }
+
+            pageSetup.SetAttributeValue("usePrinterDefaults", "1");
+            pageSetup.SetAttributeValue("copies", "3");
+            pageSetup.SetAttributeValue("customAttr", "page-setup-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
