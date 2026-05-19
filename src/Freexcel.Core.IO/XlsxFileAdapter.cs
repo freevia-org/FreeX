@@ -75,6 +75,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var structuredTableMetadata = LoadStructuredTableMetadata(packageStream);
         packageStream.Position = 0;
+        var pivotTableStyleMetadata = LoadPivotTableStyleMetadata(packageStream);
+        packageStream.Position = 0;
         var xlsxCustomViews = LoadWorkbookCustomViews(packageStream);
 
         packageStream.Position = 0;
@@ -104,6 +106,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbook.Timelines.Add(timeline);
         foreach (var externalLink in externalLinkMetadata)
             workbook.ExternalLinks.Add(externalLink);
+        foreach (var pivotTableStyle in pivotTableStyleMetadata)
+            workbook.PivotTableStyles.Add(pivotTableStyle);
 
         var loadedScenarioNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);
@@ -229,7 +233,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
                     {
                         ApplyChartAnchor(chart, chartPart.Anchor, sheet);
-                    sheet.Charts.Add(chart);
+                        ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
+                        sheet.Charts.Add(chart);
                     }
                 }
                 foreach (var picturePart in layout.PictureParts)
@@ -561,7 +566,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<CellAddress> ExpandedCells,
         IReadOnlyList<GridRange> ExistingCellOnlyRanges);
 
-    private sealed record XlsxChartPackagePart(XDocument Xml, XlsxDrawingAnchor? Anchor);
+    private sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, XlsxDrawingAnchor? Anchor);
 
     private sealed record XlsxPicturePackagePart(
         byte[] ImageBytes,
@@ -1374,6 +1379,59 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs),
             ReadPivotSorts(root.Element(workbookNs + "pivotSorts"), workbookNs));
         return true;
+    }
+
+    private static List<PivotTableStyleModel> LoadPivotTableStyleMetadata(Stream xlsxStream)
+    {
+        var result = new List<PivotTableStyleModel>();
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return result;
+
+            var stylesXml = LoadXml(stylesEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var styleElement in stylesXml.Root?
+                         .Element(workbookNs + "tableStyles")?
+                         .Elements(workbookNs + "tableStyle") ?? [])
+            {
+                var name = styleElement.Attribute("name")?.Value;
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                var appliesToPivotTables = ReadBoolAttribute(styleElement, "pivot");
+                if (!appliesToPivotTables)
+                    continue;
+
+                var model = new PivotTableStyleModel
+                {
+                    Name = name,
+                    AppliesToPivotTables = true,
+                    AppliesToTables = ReadBoolAttribute(styleElement, "table")
+                };
+                foreach (var element in styleElement.Elements(workbookNs + "tableStyleElement"))
+                {
+                    var type = element.Attribute("type")?.Value;
+                    if (string.IsNullOrWhiteSpace(type))
+                        continue;
+
+                    model.Elements.Add(new PivotTableStyleElementModel(
+                        type,
+                        ReadIntAttribute(element, "dxfId"),
+                        ReadIntAttribute(element, "size")));
+                }
+
+                result.Add(model);
+            }
+        }
+        catch
+        {
+            return result;
+        }
+
+        return result;
     }
 
     private static List<PivotFieldModel> ReadPivotFieldIndexes(XElement? fieldsElement, XNamespace workbookNs)
@@ -3095,6 +3153,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var chartEntry = archive.GetEntry(chartPath);
             if (chartEntry is null)
                 continue;
+            var chartRelationships = archive.GetEntry(GetWorksheetRelsPath(chartPath)) is { } chartRelsEntry
+                ? LoadXml(chartRelsEntry)
+                : null;
 
             var anchor = chartElement
                 .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
@@ -3109,7 +3170,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     .Select(TryReadAbsoluteAnchor)
                     .FirstOrDefault(candidate => candidate is not null);
 
-            charts.Add(new XlsxChartPackagePart(LoadXml(chartEntry), anchor));
+            charts.Add(new XlsxChartPackagePart(LoadXml(chartEntry), chartRelationships, anchor));
         }
 
         return charts;
@@ -3583,6 +3644,26 @@ public sealed class XlsxFileAdapter : IFileAdapter
             chart.Height = height;
     }
 
+    private static void ApplyChartExternalDataRelationshipMetadata(ChartModel chart, XlsxChartPackagePart chartPart)
+    {
+        if (chart.ExternalData?.RelationshipId is not { Length: > 0 } relationshipId)
+            return;
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationship = chartPart.Relationships?.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("Id")?.Value,
+                relationshipId,
+                StringComparison.Ordinal));
+        if (relationship is null)
+            return;
+
+        chart.ExternalData.RelationshipType = relationship.Attribute("Type")?.Value;
+        chart.ExternalData.Target = relationship.Attribute("Target")?.Value;
+        chart.ExternalData.TargetMode = relationship.Attribute("TargetMode")?.Value;
+    }
+
     private static void ApplyPictureAnchor(PictureModel picture, XlsxDrawingAnchor? anchor, Sheet sheet)
     {
         if (anchor is null)
@@ -4044,6 +4125,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveStructuredTables(packageStream, workbook);
         }
 
+        if (workbook.PivotTableStyles.Count > 0)
+        {
+            packageStream.Position = 0;
+            SavePivotTableStyles(packageStream, workbook);
+        }
+
         if (!SourcePackages.TryGetValue(workbook, out _) &&
             workbook.PivotCaches.Count > 0 &&
             workbook.Sheets.Any(sheet => sheet.PivotTables.Count > 0))
@@ -4271,6 +4358,62 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetTableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
         return changed;
     }
+
+    private static void SavePivotTableStyles(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var stylesEntry = archive.GetEntry("xl/styles.xml");
+        if (stylesEntry is null)
+            return;
+
+        var stylesXml = LoadXml(stylesEntry);
+        var targetRoot = stylesXml.Root;
+        if (targetRoot is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableStyles = targetRoot.Element(workbookNs + "tableStyles");
+        if (tableStyles is null)
+        {
+            tableStyles = new XElement(workbookNs + "tableStyles");
+            targetRoot.Add(tableStyles);
+        }
+
+        var existingStylesByName = tableStyles
+            .Elements(workbookNs + "tableStyle")
+            .Select(element => (Name: element.Attribute("name")?.Value, Element: element))
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Name))
+            .ToDictionary(pair => pair.Name!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var style in workbook.PivotTableStyles.Where(style => !string.IsNullOrWhiteSpace(style.Name)))
+        {
+            var styleXml = ToPivotTableStyleXml(style, workbookNs);
+            if (existingStylesByName.TryGetValue(style.Name, out var existingStyle))
+                existingStyle.ReplaceWith(styleXml);
+            else
+                tableStyles.Add(styleXml);
+        }
+
+        tableStyles.SetAttributeValue(
+            "count",
+            tableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
+        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+    }
+
+    private static XElement ToPivotTableStyleXml(PivotTableStyleModel style, XNamespace workbookNs) =>
+        new(
+            workbookNs + "tableStyle",
+            new XAttribute("name", style.Name),
+            new XAttribute("pivot", style.AppliesToPivotTables ? "1" : "0"),
+            new XAttribute("table", style.AppliesToTables ? "1" : "0"),
+            new XAttribute("count", style.Elements.Count.ToString(CultureInfo.InvariantCulture)),
+            style.Elements
+                .Where(element => !string.IsNullOrWhiteSpace(element.Type))
+                .Select(element => new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", element.Type),
+                    element.DifferentialFormatId is { } dxfId ? new XAttribute("dxfId", dxfId.ToString(CultureInfo.InvariantCulture)) : null,
+                    element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null)));
 
     private static void SaveSlicerTimelines(Stream xlsxStream, Workbook workbook)
     {
@@ -8926,6 +9069,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var chartEntry = archive.CreateEntry(chartPath);
             using (var chartStream = chartEntry.Open())
                 ToChartXml(chart, sheet).Save(chartStream);
+            WriteChartExternalDataRelationships(archive, chartPath, chart, packageRelNs);
 
             var chartRelId = $"rIdFreexcelChart{currentChartIndex}";
             drawingRelsXml.Root!.Add(new XElement(
@@ -9393,14 +9537,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
         var plotCharts = ToPlotChartXml(chart, sheet, chartNs, drawingNs).ToList();
 
         return new XDocument(
-            new XElement(chartNs + "chartSpace",
-                new XAttribute(XNamespace.Xmlns + "c", chartNs),
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                ToChartAreaShapeProperties(chart, chartNs, drawingNs),
+                new XElement(chartNs + "chartSpace",
+                    new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                    new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                    chart.ExternalData?.RelationshipId is null ? null : new XAttribute(XNamespace.Xmlns + "r", relNs),
+                    chart.Uses1904DateSystem ? new XElement(chartNs + "date1904", new XAttribute("val", "1")) : null,
+                    string.IsNullOrWhiteSpace(chart.Language) ? null : new XElement(chartNs + "lang", new XAttribute("val", chart.Language)),
+                    chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
+                    ToChartColorMapOverrideXml(chart, chartNs, drawingNs),
+                    chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
+                    ToChartProtectionXml(chart, chartNs),
+                    ToChartExternalDataXml(chart, chartNs, relNs),
+                    ToChartPrintSettingsXml(chart, chartNs),
+                    ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",
                     string.IsNullOrWhiteSpace(chart.Title)
@@ -9409,6 +9563,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
                     ToPivotFormatsXml(chart, chartNs),
                     new XElement(chartNs + "plotArea",
+                        ToManualLayoutXml(chart.PlotAreaLayout, chartNs),
                         plotCharts,
                         ShouldWriteChartAxes(chart.Type)
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
@@ -10133,6 +10288,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return new XElement(chartNs + "legend",
             new XElement(chartNs + "legendPos",
                 new XAttribute("val", ToXlsxLegendPosition(chart.LegendPosition))),
+            ToManualLayoutXml(chart.LegendLayout, chartNs),
             new XElement(chartNs + "overlay",
                 new XAttribute("val", chart.LegendOverlay ? "1" : "0")),
             ToShapeProperties(
@@ -10145,6 +10301,38 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 chart.LegendBorderThickness),
             ToLegendTextProperties(chart, chartNs, drawingNs));
     }
+
+    private static XElement? ToManualLayoutXml(ChartManualLayoutModel? layout, XNamespace chartNs)
+    {
+        if (layout is null ||
+            string.IsNullOrWhiteSpace(layout.LayoutTarget) &&
+            string.IsNullOrWhiteSpace(layout.XMode) &&
+            string.IsNullOrWhiteSpace(layout.YMode) &&
+            string.IsNullOrWhiteSpace(layout.WidthMode) &&
+            string.IsNullOrWhiteSpace(layout.HeightMode) &&
+            layout.X is null &&
+            layout.Y is null &&
+            layout.Width is null &&
+            layout.Height is null)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "layout",
+            new XElement(chartNs + "manualLayout",
+                string.IsNullOrWhiteSpace(layout.LayoutTarget) ? null : new XElement(chartNs + "layoutTarget", new XAttribute("val", layout.LayoutTarget)),
+                string.IsNullOrWhiteSpace(layout.XMode) ? null : new XElement(chartNs + "xMode", new XAttribute("val", layout.XMode)),
+                string.IsNullOrWhiteSpace(layout.YMode) ? null : new XElement(chartNs + "yMode", new XAttribute("val", layout.YMode)),
+                string.IsNullOrWhiteSpace(layout.WidthMode) ? null : new XElement(chartNs + "wMode", new XAttribute("val", layout.WidthMode)),
+                string.IsNullOrWhiteSpace(layout.HeightMode) ? null : new XElement(chartNs + "hMode", new XAttribute("val", layout.HeightMode)),
+                layout.X is { } x ? new XElement(chartNs + "x", new XAttribute("val", ToChartLayoutDecimal(x))) : null,
+                layout.Y is { } y ? new XElement(chartNs + "y", new XAttribute("val", ToChartLayoutDecimal(y))) : null,
+                layout.Width is { } width ? new XElement(chartNs + "w", new XAttribute("val", ToChartLayoutDecimal(width))) : null,
+                layout.Height is { } height ? new XElement(chartNs + "h", new XAttribute("val", ToChartLayoutDecimal(height))) : null));
+    }
+
+    private static string ToChartLayoutDecimal(double value) =>
+        value.ToString("0.###############", CultureInfo.InvariantCulture);
 
     private static XElement? ToLegendTextProperties(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
