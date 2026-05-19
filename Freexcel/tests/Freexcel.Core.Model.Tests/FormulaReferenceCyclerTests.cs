@@ -108,6 +108,38 @@ public class FormulaReferenceCyclerTests
         selectionLength.Should().Be(12);
     }
 
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesFullRowReferenceAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(1:1)",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM($1:$1)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(5);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesSheetQualifiedFullRowReference()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(Sheet2!1:1)",
+            caretIndex: 13,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM(Sheet2!$1:$1)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(12);
+    }
+
     [Theory]
     [InlineData("=Sheet2!A1", 9, "=Sheet2!$A$1", 1, 11)]
     [InlineData("='Sales FY26'!A1", 14, "='Sales FY26'!$A$1", 1, 17)]
