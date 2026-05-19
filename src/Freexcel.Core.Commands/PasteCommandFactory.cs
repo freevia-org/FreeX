@@ -56,7 +56,7 @@ public static class PasteCommandFactory
                 {
                     pastedCell = Cell.FromValue(sourceCell.Value);
                 }
-                else if (options.Transpose && (mode == PasteCellsMode.Values || mode == PasteCellsMode.Formulas))
+                else if (options.Transpose && (mode == PasteCellsMode.All || mode == PasteCellsMode.Values || mode == PasteCellsMode.Formulas))
                 {
                     var destinationAddress = TransposeDestination(sourceRange, source, targetSheetId, destination);
                     var destinationStyle = GetDestinationStyle(targetSheet, destinationAddress);

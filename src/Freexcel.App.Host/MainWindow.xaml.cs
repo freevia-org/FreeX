@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     private string? _currentFilePath;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     private bool _formatPainterActive;
+    private bool _formatPainterPersistent;
     private StyleId _formatPainterStyleId;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
@@ -1560,8 +1561,16 @@ public partial class MainWindow : Window
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+        int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
 
-        CellAddress? target = e.Key switch
+        CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            e.Key,
+            e.SystemKey,
+            Keyboard.Modifiers,
+            current,
+            colPageSize);
+
+        target ??= e.Key switch
         {
             Key.Up    => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
                                   : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
@@ -1627,6 +1636,37 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
                 ChartColumnMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.OpenFormatCellsFont:
+                OpenFormatCellsDialog(FormatCellsDialogTab.Font);
+                break;
+            case KeyboardCommandShortcut.WorkbookStatistics:
+                WorkbookStatisticsBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.NewNote:
+            case KeyboardCommandShortcut.NewThreadedComment:
+                ReviewNewCommentBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.SaveAs:
+                SaveWorkbookWithDialog();
+                break;
+            case KeyboardCommandShortcut.ShowKeyTips:
+                EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+                break;
+            case KeyboardCommandShortcut.OpenContextMenu:
+                OpenKeyboardContextMenu();
+                break;
+            case KeyboardCommandShortcut.EditInFormulaBar:
+                EditActiveCellInFormulaBar();
+                break;
+            case KeyboardCommandShortcut.InsertWorksheet:
+                AddSheetButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ZoomIn:
+                ZoomInBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ZoomOut:
+                ZoomOutBtn_Click(sender, e);
                 break;
         }
     }
@@ -2317,9 +2357,25 @@ public partial class MainWindow : Window
             ShowInlineEditor(_selectionAnchor.Value);
         else
         {
-            FormulaBar.Focus();
-            FormulaBar.CaretIndex = FormulaBar.Text.Length;
+            FocusFormulaBarAtEnd();
         }
+    }
+
+    private void EditActiveCellInFormulaBar()
+    {
+        if (SheetGrid.SelectedRange?.Start is { } address)
+        {
+            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);
+            FormulaBar.Text = FormatFormulaBarText(cell, address);
+        }
+
+        FocusFormulaBarAtEnd();
+    }
+
+    private void FocusFormulaBarAtEnd()
+    {
+        FormulaBar.Focus();
+        FormulaBar.CaretIndex = FormulaBar.Text.Length;
     }
 
     private void ShowInlineEditor(CellAddress addr)
@@ -2590,7 +2646,7 @@ public partial class MainWindow : Window
     {
         ClearClipboardVisualState();
         _internalClipboard = null;
-        _formatPainterActive = false;
+        CancelFormatPainter();
     }
 
     private void ClearClipboardVisualState()
@@ -4902,13 +4958,19 @@ public partial class MainWindow : Window
         AddItem("Delete Row(s)",    DeleteSelectedRows);
         AddItem("Delete Column(s)", DeleteSelectedColumns);
         menu.Items.Add(new Separator());
-        AddItem("Format Cells...",  OpenFormatCellsDialog);
+        AddItem("Format Cells...",  () => OpenFormatCellsDialog());
         menu.Items.Add(new Separator());
         AddItem("Clear Contents",   ExecuteClearSelection);
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
         menu.IsOpen = true;
+    }
+
+    private void OpenKeyboardContextMenu()
+    {
+        var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
+        OnGridContextMenuRequested(address, default);
     }
 
     private void InsertRows(uint beforeRow)
@@ -5117,13 +5179,13 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private void OpenFormatCellsDialog()
+    private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
         var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
-        var dlg = new FormatCellsDialog(currentStyle) { Owner = this };
+        var dlg = new FormatCellsDialog(currentStyle, initialTab) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
         ApplyStyleDiff(dlg.ResultDiff);
     }
@@ -5654,19 +5716,38 @@ public partial class MainWindow : Window
 
     private void FormatPainterBtn_Click(object sender, RoutedEventArgs e)
     {
+        CaptureFormatPainterSource(persistent: false);
+    }
+
+    private void FormatPainterBtn_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        CaptureFormatPainterSource(persistent: true);
+    }
+
+    private void CaptureFormatPainterSource(bool persistent)
+    {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         _formatPainterStyleId = sheet?.GetCell(range.Start)?.StyleId
             ?? sheet?.GetStyleOnly(range.Start.Row, range.Start.Col)
             ?? StyleId.Default;
         _formatPainterActive = true;
+        _formatPainterPersistent = persistent;
+    }
+
+    private void CancelFormatPainter()
+    {
+        _formatPainterActive = false;
+        _formatPainterPersistent = false;
     }
 
     // Call from cell-click path: if painter active, apply stored style
     private bool TryApplyFormatPainter(CellAddress addr)
     {
         if (!_formatPainterActive) return false;
-        _formatPainterActive = false;
+        if (!_formatPainterPersistent)
+            CancelFormatPainter();
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return true;
