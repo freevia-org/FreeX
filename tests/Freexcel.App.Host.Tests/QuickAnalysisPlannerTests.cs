@@ -34,6 +34,7 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.Top10,
                 QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
+                QuickAnalysisCommand.StackedColumnChart,
                 QuickAnalysisCommand.BarChart,
                 QuickAnalysisCommand.AreaChart,
                 QuickAnalysisCommand.ScatterChart,
