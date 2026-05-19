@@ -4487,10 +4487,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
+        var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
         var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
         if (sourceExtensionList is null &&
             sourceDefinedNames is null &&
             sourceBookViews is null &&
+            sourceCustomWorkbookViews is null &&
             sourceWorkbookProperties is null)
         {
             return;
@@ -4506,6 +4508,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             changed = true;
         if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
             changed = true;
+        if (MergeWorkbookChildBlock(sourceCustomWorkbookViews, targetRoot, workbookNs + "customWorkbookViews"))
+            changed = true;
         if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
             changed = true;
         if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
@@ -4513,6 +4517,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (changed)
             ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
+    private static bool MergeWorkbookChildBlock(XElement? sourceBlock, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlock is null || targetRoot.Element(blockName) is not null)
+            return false;
+
+        targetRoot.Add(new XElement(sourceBlock));
+        return true;
     }
 
     private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)

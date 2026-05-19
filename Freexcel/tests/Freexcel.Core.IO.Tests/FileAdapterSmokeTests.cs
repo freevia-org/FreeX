@@ -7457,6 +7457,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesCustomWorkbookViews()
+    {
+        var workbook = new Workbook("CustomWorkbookViewsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom view"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddCustomWorkbookViews(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customViews = workbookXml.Root!.Element(workbookNs + "customWorkbookViews");
+        customViews.Should().NotBeNull();
+        customViews!.ToString().Should().Contain("FreexcelView");
+        customViews.ToString().Should().Contain("guid=\"{22222222-2222-2222-2222-222222222222}\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -8843,6 +8873,30 @@ public class FileAdapterSmokeTests
                 new XAttribute("tabRatio", "700"),
                 new XAttribute("firstSheet", "0"),
                 new XAttribute("activeTab", "0")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddCustomWorkbookViews(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "customWorkbookViews",
+                new XElement(
+                    workbookNs + "customWorkbookView",
+                    new XAttribute("name", "FreexcelView"),
+                    new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                    new XAttribute("autoUpdate", "0"),
+                    new XAttribute("mergeInterval", "0"),
+                    new XAttribute("personalView", "0"),
+                    new XAttribute("includePrintSettings", "1"),
+                    new XAttribute("includeHiddenRowCol", "1"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
