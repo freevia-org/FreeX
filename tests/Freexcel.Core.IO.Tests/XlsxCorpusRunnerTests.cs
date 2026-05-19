@@ -223,7 +223,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
-            [XlsxUnsupportedFeatureKind.ConditionalFormats] = "unsupported conditional-format rule disclosed",
             [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
