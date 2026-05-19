@@ -2325,6 +2325,9 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.StackedColumnChart:
                 ChartStackedColumnMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.PercentStackedColumnChart:
+                ChartPercentStackedColumnMenuItem_Click(sender, e);
+                break;
             case QuickAnalysisCommand.LineChart:
                 ChartLineMenuItem_Click(sender, e);
                 break;
@@ -2333,6 +2336,12 @@ public partial class MainWindow : Window
                 break;
             case QuickAnalysisCommand.BarChart:
                 ChartBarMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.StackedBarChart:
+                ChartStackedBarMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.PercentStackedBarChart:
+                ChartPercentStackedBarMenuItem_Click(sender, e);
                 break;
             case QuickAnalysisCommand.AreaChart:
                 ChartAreaMenuItem_Click(sender, e);
