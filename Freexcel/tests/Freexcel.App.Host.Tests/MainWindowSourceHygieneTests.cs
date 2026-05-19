@@ -24,10 +24,27 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         xaml.Should().Contain("x:Name=\"SaveQatBtn\"");
-        xaml.Should().Contain("FreexcelQatIcon");
+        xaml.Should().Contain("FreexcelQatOnAccentIcon");
         xaml.Should().NotContain("Content=\"💾\"");
         xaml.Should().NotContain("Content=\"↩\"");
         xaml.Should().NotContain("Content=\"↪\"");
+    }
+
+    [Fact]
+    public void MainWindow_UsesVisibleFreexcelBrandingAndWindowIcon()
+    {
+        var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
+        var projectPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Freexcel.App.Host.csproj");
+        var appHostDirectory = Directory.GetParent(mainWindowPath)!.FullName;
+        var theme = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "ThemeResources.xaml"));
+        var xaml = File.ReadAllText(mainWindowPath);
+        var project = File.ReadAllText(projectPath);
+
+        File.Exists(Path.Combine(appHostDirectory, "Resources", "Freexcel.ico")).Should().BeTrue();
+        xaml.Should().Contain("Icon=\"Resources/Freexcel.ico\"");
+        theme.Should().Contain("x:Key=\"FreexcelTitleBarBrush\"");
+        xaml.Should().Contain("Background=\"{StaticResource FreexcelTitleBarBrush}\"");
+        project.Should().Contain("<ApplicationIcon>Resources\\Freexcel.ico</ApplicationIcon>");
     }
 
     [Fact]
@@ -69,14 +86,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AutoFitMenuHandlers_UseSizingServiceAndSetExplicitSizes()
+    public void AutoFitMenuHandlers_UsePlannerAndPerTargetExplicitSizes()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
-        source.Should().Contain("AutoFitSizingService.EstimateRowHeight");
-        source.Should().Contain("AutoFitSizingService.EstimateColumnWidth");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
+        source.Should().Contain("AutoFitPlanner.PlanRowHeights");
+        source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size)");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        source.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
+        source.Should().NotContain("return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
         source.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
         source.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
     }
