@@ -12,9 +12,33 @@ public sealed class PrintPreviewDialog : Window
         Width = 900;
         Height = 700;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = new DocumentViewer { Document = document };
+
+        var root = new DockPanel();
+        var toolbar = new ToolBar
+        {
+            Padding = new Thickness(4),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var printButton = new Button
+        {
+            Content = "Print...",
+            Padding = new Thickness(12, 4, 12, 4)
+        };
+        printButton.Click += (_, _) => ShowNativePrintDialog(document);
+        toolbar.Items.Add(printButton);
+        DockPanel.SetDock(toolbar, Dock.Top);
+        root.Children.Add(toolbar);
+        root.Children.Add(new DocumentViewer { Document = document });
+        Content = root;
     }
 
     public static string CreateTitle(string workbookName) =>
         $"Print Preview - {workbookName.Trim()}";
+
+    private static void ShowNativePrintDialog(FixedDocument document)
+    {
+        var dialog = new PrintDialog();
+        if (dialog.ShowDialog() == true)
+            dialog.PrintDocument(document.DocumentPaginator, "Freexcel worksheet");
+    }
 }

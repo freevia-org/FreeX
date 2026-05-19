@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -47,5 +48,15 @@ public class ExportPlannerTests
     public void PrintPreviewDialog_CreateTitle_IncludesWorkbookName()
     {
         PrintPreviewDialog.CreateTitle("Book1").Should().Be("Print Preview - Book1");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ContainsNativePrintCommandButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"Print...\"");
+        source.Should().Contain("ShowNativePrintDialog");
+        source.Should().Contain("PrintDocument(document.DocumentPaginator");
     }
 }
