@@ -2226,6 +2226,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.OpenActiveDropdown:
                 OpenActiveDropdown();
                 break;
+            case KeyboardCommandShortcut.SelectVisibleCellsOnly:
+                SelectGoToSpecialMatches(GoToSpecialKind.VisibleCellsOnly, showEmptyMessage: true);
+                break;
             case KeyboardCommandShortcut.ScrollActiveCellIntoView:
                 ScrollActiveCellIntoView();
                 break;
@@ -7830,10 +7833,26 @@ public partial class MainWindow : Window
 
         var kind = GoToSpecialInputParser.Parse(input);
 
+        SelectGoToSpecialMatches(kind, showEmptyMessage: true, sheet, range);
+    }
+
+    private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+        var range = SheetGrid.SelectedRange ?? sheet.GetUsedRange() ??
+            new GridRange(new CellAddress(_currentSheetId, 1, 1), new CellAddress(_currentSheetId, 1, 1));
+
+        SelectGoToSpecialMatches(kind, showEmptyMessage, sheet, range);
+    }
+
+    private void SelectGoToSpecialMatches(GoToSpecialKind kind, bool showEmptyMessage, Sheet sheet, GridRange range)
+    {
         var matches = GoToSpecialService.Find(sheet, range, kind);
         if (matches.Count == 0)
         {
-            MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (showEmptyMessage)
+                MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 

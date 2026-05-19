@@ -234,6 +234,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.Oem1)
+        {
+            shortcut = KeyboardCommandShortcut.SelectVisibleCellsOnly;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Control && effectiveKey == Key.Back)
         {
             shortcut = KeyboardCommandShortcut.ScrollActiveCellIntoView;
@@ -382,6 +388,7 @@ public enum KeyboardCommandShortcut
     CopyFormulaFromAbove,
     CopyValueFromAbove,
     OpenActiveDropdown,
+    SelectVisibleCellsOnly,
     ScrollActiveCellIntoView,
     CycleSelectionCorner,
     SelectDirectPrecedents,

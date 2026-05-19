@@ -111,6 +111,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectDependents)]
     [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllPrecedents)]
     [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllDependents)]
+    [InlineData(Key.None, Key.Oem1, ModifierKeys.Alt, KeyboardCommandShortcut.SelectVisibleCellsOnly)]
     public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
         Key key,
         Key systemKey,
