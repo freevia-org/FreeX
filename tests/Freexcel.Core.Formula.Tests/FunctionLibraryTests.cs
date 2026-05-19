@@ -1569,6 +1569,14 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUND(1234,-2)", sheet).Should().Be(new NumberValue(1200));
     }
 
+    [Fact]
+    public void Round_ExcessiveDigits_ClampsLikeExcel()
+    {
+        _eval.Evaluate("=ROUND(1.2345,16)", MakeSheet()).Should().Be(new NumberValue(1.2345));
+        _eval.Evaluate("=ROUND(12345,-16)", MakeSheet()).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
     // ── CEILING ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -2825,8 +2833,8 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUNDDOWN(A1,2)", sheet).Should().Be(ErrorValue.Num);
     }
 
-    [Fact] public void Rounddown_ExcessiveDigits_ReturnsNumError() =>
-        _eval.Evaluate("=ROUNDDOWN(1,309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    [Fact] public void Rounddown_ExcessiveDigits_ClampsLikeExcel() =>
+        _eval.Evaluate("=ROUNDDOWN(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
     [Fact] public void Roundup_1_21_1_Returns1_3() =>
         _eval.Evaluate("=ROUNDUP(1.21,1)", MakeSheet()).Should().Be(new NumberValue(1.3));
@@ -2839,8 +2847,8 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUNDUP(A1,2)", sheet).Should().Be(ErrorValue.Num);
     }
 
-    [Fact] public void Roundup_ExcessiveDigits_ReturnsNumError() =>
-        _eval.Evaluate("=ROUNDUP(1,309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    [Fact] public void Roundup_ExcessiveDigits_ClampsLikeExcel() =>
+        _eval.Evaluate("=ROUNDUP(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
     [Fact] public void Trunc_1_29_1_Returns1_2() =>
         _eval.Evaluate("=TRUNC(1.29,1)", MakeSheet()).Should().Be(new NumberValue(1.2));
@@ -2853,8 +2861,8 @@ public class FunctionLibraryTests
         _eval.Evaluate("=TRUNC(A1,2)", sheet).Should().Be(ErrorValue.Num);
     }
 
-    [Fact] public void Trunc_ExcessiveDigits_ReturnsNumError() =>
-        _eval.Evaluate("=TRUNC(1,309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    [Fact] public void Trunc_ExcessiveDigits_ClampsLikeExcel() =>
+        _eval.Evaluate("=TRUNC(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
     [Fact] public void Mround_14_5_Returns15() =>
         _eval.Evaluate("=MROUND(14,5)", MakeSheet()).Should().Be(new NumberValue(15));
