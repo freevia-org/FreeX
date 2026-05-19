@@ -7370,6 +7370,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesPrinterSettingsPackageAndWorksheetReference()
+    {
+        var workbook = new Workbook("PrinterSettingsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("print me"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPrinterSettingsPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/printerSettings/printerSettings1.bin").Should().NotBeNull();
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        worksheetXml.Root!.Element(worksheetNs + "pageSetup")!
+            .Attribute(relNs + "id")!
+            .Value.Should().Be("rIdPrinterSettings1");
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString().Should().Contain("../printerSettings/printerSettings1.bin");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -8257,6 +8290,54 @@ public class FileAdapterSmokeTests
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain"),
                 new XAttribute("Target", "calcChain.xml")));
             ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalPrinterSettingsPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/printerSettings/printerSettings1.bin",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+            if (pageSetup is null)
+            {
+                pageSetup = new XElement(worksheetNs + "pageSetup", new XAttribute("paperSize", "1"), new XAttribute("orientation", "portrait"));
+                worksheetXml.Root.Add(pageSetup);
+            }
+
+            pageSetup.SetAttributeValue(relNs + "id", "rIdPrinterSettings1");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdPrinterSettings1"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings"),
+                new XAttribute("Target", "../printerSettings/printerSettings1.bin")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            archive.GetEntry("xl/printerSettings/printerSettings1.bin")?.Delete();
+            var settingsEntry = archive.CreateEntry("xl/printerSettings/printerSettings1.bin");
+            using var settingsStream = settingsEntry.Open();
+            settingsStream.Write([0x46, 0x58, 0x4C, 0x50, 0x52, 0x4E]);
         }
 
         packageStream.Position = 0;
