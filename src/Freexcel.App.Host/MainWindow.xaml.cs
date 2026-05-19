@@ -4671,7 +4671,7 @@ public partial class MainWindow : Window
         if (_suppressToolbarSync) return;
         var enabled = UnderlineButton.IsChecked == true;
         SetToolbarToggleStates(strike: enabled ? false : null);
-        ApplyStyleDiff(new StyleDiff(Underline: enabled, Strikethrough: enabled ? false : null));
+        ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled));
     }
 
     private void StrikeButton_Click(object sender, RoutedEventArgs e)
@@ -4679,7 +4679,7 @@ public partial class MainWindow : Window
         if (_suppressToolbarSync) return;
         var enabled = StrikeButton.IsChecked == true;
         SetToolbarToggleStates(underline: enabled ? false : null);
-        ApplyStyleDiff(new StyleDiff(Strikethrough: enabled, Underline: enabled ? false : null, DoubleUnderline: enabled ? false : null));
+        ApplyStyleDiff(CellStyleDiffPlanner.StrikethroughDiff(enabled));
     }
 
     private void AlignLeftBtn_Click(object sender, RoutedEventArgs e)
@@ -4972,14 +4972,14 @@ public partial class MainWindow : Window
         if (shortcut == FontToggleShortcut.Underline)
         {
             SetToolbarToggleStates(underline: enabled, strike: enabled ? false : null);
-            ApplyStyleDiff(new StyleDiff(Underline: enabled, Strikethrough: enabled ? false : null));
+            ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled));
             return;
         }
 
         if (shortcut == FontToggleShortcut.Strikethrough)
         {
             SetToolbarToggleStates(strike: enabled, underline: enabled ? false : null);
-            ApplyStyleDiff(new StyleDiff(Strikethrough: enabled, Underline: enabled ? false : null, DoubleUnderline: enabled ? false : null));
+            ApplyStyleDiff(CellStyleDiffPlanner.StrikethroughDiff(enabled));
             return;
         }
 
@@ -5826,7 +5826,7 @@ public partial class MainWindow : Window
         var isOn = (sender as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked == true;
         if (isOn)
             SetToolbarToggleStates(underline: false, strike: false);
-        ApplyStyleDiff(new StyleDiff(DoubleUnderline: isOn, Underline: isOn ? false : null, Strikethrough: isOn ? false : null));
+        ApplyStyleDiff(CellStyleDiffPlanner.DoubleUnderlineDiff(isOn));
     }
 
     private void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -6478,7 +6478,7 @@ public partial class MainWindow : Window
                         "Clear All",
                         [
                             new ClearContentsCommand(sheetId, currentRange),
-                            new ApplyStyleCommand(sheetId, currentRange, ClearFormatsDiff())
+                            new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff())
                         ]);
                 },
                 out var outcome))
@@ -6527,18 +6527,8 @@ public partial class MainWindow : Window
     private void ClearFormats()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        ApplyStyleDiff(ClearFormatsDiff());
+        ApplyStyleDiff(CellStyleDiffPlanner.ClearFormatsDiff());
     }
-
-    private static StyleDiff ClearFormatsDiff() =>
-        new(
-            Bold: false, Italic: false, Underline: false, DoubleUnderline: false, Strikethrough: false,
-            FontName: "Calibri", FontSize: 11, ClearFill: true, NumberFormat: "General",
-            HAlign: CellHAlign.General, VAlign: CellVAlign.Bottom, WrapText: false, IndentLevel: 0,
-            BorderTop: new CellBorder(BorderStyle.None),
-            BorderBottom: new CellBorder(BorderStyle.None),
-            BorderLeft: new CellBorder(BorderStyle.None),
-            BorderRight: new CellBorder(BorderStyle.None));
 
     // ── Insert tab ────────────────────────────────────────────────────────────
 
