@@ -24,13 +24,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         workbook.StructureProtectionPassword = dto.IsStructureProtected ? dto.StructureProtectionPassword : null;
         if (dto.WindowArrangement is { } arrangement && Enum.IsDefined(arrangement))
             workbook.WindowArrangement = arrangement;
-        if (dto.CalculationMode is { } calculationMode && Enum.IsDefined(calculationMode))
-            workbook.CalculationMode = calculationMode;
-        workbook.FullCalculationOnLoad = dto.FullCalculationOnLoad;
-        workbook.ForceFullCalculation = dto.ForceFullCalculation;
-        workbook.IterativeCalculation = dto.IterativeCalculation;
-        workbook.MaxCalculationIterations = dto.MaxCalculationIterations;
-        workbook.MaxCalculationChange = dto.MaxCalculationChange;
+        ApplyCalculationOptions(dto, workbook);
         foreach (var errorCode in dto.DisabledFormulaErrorCodes ?? [])
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
@@ -553,12 +547,6 @@ public sealed class NativeJsonAdapter : IFileAdapter
             IsStructureProtected = workbook.IsStructureProtected,
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
-            CalculationMode = ValidEnumOrDefault(workbook.CalculationMode, WorkbookCalculationMode.Automatic),
-            FullCalculationOnLoad = workbook.FullCalculationOnLoad,
-            ForceFullCalculation = workbook.ForceFullCalculation,
-            IterativeCalculation = workbook.IterativeCalculation,
-            MaxCalculationIterations = workbook.MaxCalculationIterations,
-            MaxCalculationChange = workbook.MaxCalculationChange,
             DisabledFormulaErrorCodes = workbook.DisabledFormulaErrorCodes
                 .Where(IsSupportedFormulaErrorCode)
                 .OrderBy(code => code)
@@ -911,7 +899,31 @@ public sealed class NativeJsonAdapter : IFileAdapter
             }).ToList()
         };
 
+        PopulateCalculationOptions(workbook, dto);
+
         JsonSerializer.Serialize(stream, dto, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static void ApplyCalculationOptions(WorkbookDto dto, Workbook workbook)
+    {
+        if (dto.CalculationMode is { } calculationMode && Enum.IsDefined(calculationMode))
+            workbook.CalculationMode = calculationMode;
+
+        workbook.FullCalculationOnLoad = dto.FullCalculationOnLoad;
+        workbook.ForceFullCalculation = dto.ForceFullCalculation;
+        workbook.IterativeCalculation = dto.IterativeCalculation;
+        workbook.MaxCalculationIterations = dto.MaxCalculationIterations;
+        workbook.MaxCalculationChange = dto.MaxCalculationChange;
+    }
+
+    private static void PopulateCalculationOptions(Workbook workbook, WorkbookDto dto)
+    {
+        dto.CalculationMode = ValidEnumOrDefault(workbook.CalculationMode, WorkbookCalculationMode.Automatic);
+        dto.FullCalculationOnLoad = workbook.FullCalculationOnLoad;
+        dto.ForceFullCalculation = workbook.ForceFullCalculation;
+        dto.IterativeCalculation = workbook.IterativeCalculation;
+        dto.MaxCalculationIterations = workbook.MaxCalculationIterations;
+        dto.MaxCalculationChange = workbook.MaxCalculationChange;
     }
 
     private static string? SerializeValue(ScalarValue value) => value switch
