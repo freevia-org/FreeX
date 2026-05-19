@@ -1057,7 +1057,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Elements(workbookNs + "tableColumn")
                 .Select(column => new StructuredTableColumnModel(
                     ReadIntAttribute(column, "id") ?? 0,
-                    column.Attribute("name")?.Value ?? ""))
+                    column.Attribute("name")?.Value ?? "",
+                    column.Attribute("totalsRowLabel")?.Value,
+                    column.Attribute("totalsRowFunction")?.Value))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? []);
         return true;
@@ -5066,7 +5068,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             columns.Select(column => new XElement(
                 workbookNs + "tableColumn",
                 new XAttribute("id", column.Id),
-                new XAttribute("name", column.Name)))));
+                new XAttribute("name", column.Name),
+                string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
+                string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction)))));
         if (!string.IsNullOrWhiteSpace(table.StyleName))
         {
             root.Add(new XElement(
