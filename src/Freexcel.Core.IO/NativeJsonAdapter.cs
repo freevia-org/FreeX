@@ -9,6 +9,9 @@ namespace Freexcel.Core.IO;
 /// </summary>
 public sealed class NativeJsonAdapter : IFileAdapter
 {
+    private const string NumberStoredAsTextCode = "NumberStoredAsText";
+    private const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
+
     public string Extension => ".fxl";
     public string FormatName => "Freexcel Workbook";
 
@@ -1282,7 +1285,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
         string.Equals(errorCode, ErrorValue.Num.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Null.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Spill.Code, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(errorCode, ErrorValue.Circular.Code, StringComparison.OrdinalIgnoreCase);
+        string.Equals(errorCode, ErrorValue.Circular.Code, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(errorCode, NumberStoredAsTextCode, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(errorCode, FormulaRefersToBlankCellsCode, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsSupportedDataValidation(DataValidation validation) =>
         Enum.IsDefined(validation.Type) &&
