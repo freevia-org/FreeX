@@ -275,6 +275,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 foreach (var pivotTable in pivotTables)
                     sheet.PivotTables.Add(ToPivotTableModel(pivotTable, sheet.Id));
             }
+            ResolvePivotChartCacheBindings(workbook, sheet);
             if (structuredTableMetadata.TablesBySheetName.TryGetValue(xlSheet.Name, out var structuredTables))
             {
                 foreach (var structuredTable in structuredTables)
@@ -1527,6 +1528,49 @@ public sealed class XlsxFileAdapter : IFileAdapter
         pivotTable.LabelFilters.AddRange(pending.LabelFilters);
         pivotTable.Sorts.AddRange(pending.Sorts);
         return pivotTable;
+    }
+
+    private static void ResolvePivotChartCacheBindings(Workbook workbook, Sheet chartSheet)
+    {
+        if (chartSheet.Charts.Count == 0)
+            return;
+
+        foreach (var chart in chartSheet.Charts)
+        {
+            if (!chart.IsPivotChart ||
+                chart.PivotCacheId is not null ||
+                string.IsNullOrWhiteSpace(chart.PivotTableName))
+            {
+                continue;
+            }
+
+            if (TryFindPivotTableForChart(workbook, chartSheet, chart, out var pivotTable))
+                chart.PivotCacheId = pivotTable.CacheId;
+        }
+    }
+
+    private static bool TryFindPivotTableForChart(
+        Workbook workbook,
+        Sheet chartSheet,
+        ChartModel chart,
+        out PivotTableModel pivotTable)
+    {
+        if (!string.IsNullOrWhiteSpace(chart.PivotSourceSheetName))
+        {
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (!string.Equals(sheet.Name, chart.PivotSourceSheetName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+                    string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase))!;
+                return pivotTable is not null;
+            }
+        }
+
+        pivotTable = chartSheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase))!;
+        return pivotTable is not null;
     }
 
     private static int? ReadIntAttribute(XElement element, string attributeName) =>
@@ -7803,8 +7847,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return null;
 
+        var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+            ? sheet.Name
+            : chart.PivotSourceSheetName!;
         return new XElement(chartNs + "pivotSource",
-            new XElement(chartNs + "name", $"{QuoteSheetName(sheet.Name)}!{chart.PivotTableName}"),
+            new XElement(chartNs + "name", $"{QuoteSheetName(sourceSheetName)}!{chart.PivotTableName}"),
             new XElement(chartNs + "fmtId", new XAttribute("val", "0")));
     }
 
