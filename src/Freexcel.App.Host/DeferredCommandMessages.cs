@@ -27,7 +27,7 @@ public static class DeferredCommandMessages
     public static DeferredCommandMessage PivotTableModelFirst() =>
         new(
             "PivotTable",
-            "Freexcel loads and saves PivotTable and pivot caches metadata, creates and refreshes worksheet-range PivotTables from same-sheet or cross-sheet sources, supports Field List layout editing, GETPIVOTDATA, PivotChart field-button filtering and chart-type changes, Insert Slicer/Timeline authoring, slicer/timeline filtering, and preserves native PivotTable package parts where possible. Exact full-gallery PivotStyle theme semantics, full PivotChart Tools layout/design editing, native slicer/timeline drawing relationship fidelity, and native pivot cache edge cases remain partial.");
+            "Freexcel loads and saves PivotTable and pivot caches metadata, creates and refreshes worksheet-range PivotTables from same-sheet or cross-sheet sources, supports Field List layout editing, GETPIVOTDATA, PivotChart field-button filtering and chart-type changes, Insert Slicer/Timeline authoring, slicer/timeline filtering, and preserves native PivotTable package parts where possible. Exact full-gallery PivotStyle theme semantics, full PivotChart Tools layout/design editing, and external/OLAP/data-model pivot cache behavior remain partial or excluded.");
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
     {
@@ -58,16 +58,11 @@ public static class DeferredCommandMessages
     public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
     {
         XlsxUnsupportedFeatureKind.Macros => "VBA macros (excluded)",
-        XlsxUnsupportedFeatureKind.PivotTables => "PivotTables/pivot caches",
         XlsxUnsupportedFeatureKind.Charts => "XLSX chart package parts",
-        XlsxUnsupportedFeatureKind.Slicers => "slicers",
-        XlsxUnsupportedFeatureKind.Timelines => "timelines",
-        XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
         XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
         XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
         XlsxUnsupportedFeatureKind.ConditionalFormats => "unsupported conditional formatting",
         XlsxUnsupportedFeatureKind.DrawingObjects => "drawing objects",
-        XlsxUnsupportedFeatureKind.Sparklines => "sparklines",
         XlsxUnsupportedFeatureKind.PowerQuery => "Power Query queries (excluded)",
         XlsxUnsupportedFeatureKind.DataModel => "Data Model / Power Pivot (excluded)",
         XlsxUnsupportedFeatureKind.LinkedDataTypes => "Microsoft linked data types (excluded)",
@@ -80,8 +75,6 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.LiveWebQueries => "live web queries / web publishing",
         XlsxUnsupportedFeatureKind.SensitivityLabels => "sensitivity labels / IRM metadata",
         XlsxUnsupportedFeatureKind.SmartArtDiagrams => "SmartArt diagrams",
-        XlsxUnsupportedFeatureKind.PrinterSettings => "printer settings",
-        XlsxUnsupportedFeatureKind.StructuredTables => "structured Excel tables",
         XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => "chart sheets / dialog sheets / macro sheets",
         _ => kind.ToString()
     };

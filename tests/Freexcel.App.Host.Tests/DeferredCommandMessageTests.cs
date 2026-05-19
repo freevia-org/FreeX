@@ -69,7 +69,7 @@ public sealed class DeferredCommandMessageTests
     {
         var report = new XlsxFeatureReport([
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Slicers, "xl/slicers/slicer1.xml")
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.SmartArtDiagrams, "xl/diagrams/data1.xml")
         ]);
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureSaveWarning(report);
@@ -77,7 +77,7 @@ public sealed class DeferredCommandMessageTests
         message.Title.Should().Be("Unsupported XLSX Features");
         message.Body.Should().Contain("does not preserve yet");
         message.Body.Should().Contain("VBA macros (excluded)");
-        message.Body.Should().Contain("slicers");
+        message.Body.Should().Contain("SmartArt diagrams");
         message.Body.Should().Contain("Continue saving?");
     }
 
@@ -86,7 +86,7 @@ public sealed class DeferredCommandMessageTests
     {
         var report = new XlsxFeatureReport([
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Macros, "xl/vbaProject.bin"),
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Timelines, "xl/timelines/timeline1.xml")
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.LiveWebQueries, "xl/webPublishItems.xml")
         ]);
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
@@ -94,7 +94,7 @@ public sealed class DeferredCommandMessageTests
         message.Title.Should().Be("Unsupported XLSX Features Detected");
         message.Body.Should().Contain("opened this workbook");
         message.Body.Should().Contain("VBA macros (excluded)");
-        message.Body.Should().Contain("timelines");
+        message.Body.Should().Contain("live web queries / web publishing");
         message.Body.Should().Contain("may be removed if you save");
     }
 
@@ -117,14 +117,14 @@ public sealed class DeferredCommandMessageTests
         var report = new XlsxFeatureReport([
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.ConditionalFormats, "xl/worksheets/sheet1.xml"),
             new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.DrawingObjects, "xl/drawings/drawing1.xml"),
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.Sparklines, "xl/worksheets/sheet1.xml")
+            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.CustomXmlParts, "customXml/item1.xml")
         ]);
 
         var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
 
         message.Body.Should().Contain("unsupported conditional formatting");
         message.Body.Should().Contain("drawing objects");
-        message.Body.Should().Contain("sparklines");
+        message.Body.Should().Contain("custom XML parts");
     }
 
     [Fact]
@@ -262,27 +262,25 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
-    public void UnsupportedXlsxFeatureWarning_NamesPrinterSettings()
+    public void UnsupportedXlsxFeatureKinds_DoNotIncludePrinterSettings()
     {
-        var report = new XlsxFeatureReport([
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.PrinterSettings, "xl/printerSettings/printerSettings1.bin")
-        ]);
-
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
-
-        message.Body.Should().Contain("printer settings");
+        Enum.GetNames<XlsxUnsupportedFeatureKind>().Should().NotContain("PrinterSettings",
+            "printer settings are retained and should not trigger unsupported-feature warnings");
     }
 
     [Fact]
-    public void UnsupportedXlsxFeatureWarning_NamesStructuredTables()
+    public void UnsupportedXlsxFeatureKinds_DoNotIncludeSupportedMetadataPassFeatures()
     {
-        var report = new XlsxFeatureReport([
-            new XlsxUnsupportedFeature(XlsxUnsupportedFeatureKind.StructuredTables, "xl/tables/table1.xml")
-        ]);
+        var unsupportedKindNames = Enum.GetNames<XlsxUnsupportedFeatureKind>();
 
-        var message = DeferredCommandMessages.UnsupportedXlsxFeatureOpenWarning(report);
-
-        message.Body.Should().Contain("structured Excel tables");
+        unsupportedKindNames.Should().NotContain([
+            "PivotTables",
+            "Slicers",
+            "Timelines",
+            "ExternalLinks",
+            "Sparklines",
+            "StructuredTables"
+        ], "these XLSX features now load/save or retain native metadata and should not trigger stale unsupported-feature warnings");
     }
 
     [Fact]
