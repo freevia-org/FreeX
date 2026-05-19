@@ -1800,30 +1800,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.PageUp && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                SelectAdjacentVisibleSheetGroup(-1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageDown && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                SelectAdjacentVisibleSheetGroup(1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageUp && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ActivateAdjacentVisibleSheet(-1);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.PageDown && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ActivateAdjacentVisibleSheet(1);
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.IsCtrlPlus(e.Key, e.SystemKey, Keyboard.Modifiers))
             {
                 ExecuteKeyboardInsert();
@@ -2083,6 +2059,18 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.ToggleShowFormulas:
                 ShowFormulasBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ActivatePreviousSheet:
+                ActivateAdjacentVisibleSheet(-1);
+                break;
+            case KeyboardCommandShortcut.ActivateNextSheet:
+                ActivateAdjacentVisibleSheet(1);
+                break;
+            case KeyboardCommandShortcut.SelectPreviousSheetGroup:
+                SelectAdjacentVisibleSheetGroup(-1);
+                break;
+            case KeyboardCommandShortcut.SelectNextSheetGroup:
+                SelectAdjacentVisibleSheetGroup(1);
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);

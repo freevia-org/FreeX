@@ -136,6 +136,30 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.PageUp)
+        {
+            shortcut = KeyboardCommandShortcut.ActivatePreviousSheet;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.PageDown)
+        {
+            shortcut = KeyboardCommandShortcut.ActivateNextSheet;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.PageUp)
+        {
+            shortcut = KeyboardCommandShortcut.SelectPreviousSheetGroup;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.PageDown)
+        {
+            shortcut = KeyboardCommandShortcut.SelectNextSheetGroup;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -482,6 +506,10 @@ public enum KeyboardCommandShortcut
     InsertCurrentDate,
     InsertCurrentTime,
     ToggleShowFormulas,
+    ActivatePreviousSheet,
+    ActivateNextSheet,
+    SelectPreviousSheetGroup,
+    SelectNextSheetGroup,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,
