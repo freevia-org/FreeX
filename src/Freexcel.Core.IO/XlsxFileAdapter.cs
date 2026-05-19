@@ -5236,10 +5236,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     changed = true;
                     continue;
                 }
-                if ((sourceBlock.Name == workbookNs + "rowBreaks" || sourceBlock.Name == workbookNs + "colBreaks") &&
-                    MergeWorksheetBreaks(sourceBlock, targetRoot, workbookNs))
+                if (sourceBlock.Name == workbookNs + "rowBreaks")
                 {
-                    changed = true;
+                    if (MergeWorksheetBreaks(
+                            sourceBlock,
+                            targetRoot,
+                            workbookNs,
+                            GetModeledWorksheetBreakIds(workbook, sheetName, rowBreaks: true),
+                            CellAddress.MaxRow))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
+                if (sourceBlock.Name == workbookNs + "colBreaks")
+                {
+                    if (MergeWorksheetBreaks(
+                            sourceBlock,
+                            targetRoot,
+                            workbookNs,
+                            GetModeledWorksheetBreakIds(workbook, sheetName, rowBreaks: false),
+                            CellAddress.MaxCol))
+                    {
+                        changed = true;
+                    }
+
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
@@ -5588,12 +5610,39 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return changed;
     }
 
-    private static bool MergeWorksheetBreaks(XElement sourceBreaks, XElement targetRoot, XNamespace workbookNs)
+    private static HashSet<uint> GetModeledWorksheetBreakIds(Workbook workbook, string sheetName, bool rowBreaks)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return [];
+
+        var maxBreakId = rowBreaks ? CellAddress.MaxRow : CellAddress.MaxCol;
+        return (rowBreaks ? sheet.RowPageBreaks : sheet.ColumnPageBreaks)
+            .Where(id => IsSupportedWorksheetBreakId(id, maxBreakId))
+            .ToHashSet();
+    }
+
+    private static bool MergeWorksheetBreaks(
+        XElement sourceBreaks,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        HashSet<uint> modeledBreakIds,
+        uint maxBreakId)
     {
         var targetBreaks = targetRoot.Element(sourceBreaks.Name);
         if (targetBreaks is null)
         {
-            targetRoot.Add(new XElement(sourceBreaks));
+            var retainedBreaks = sourceBreaks
+                .Elements(workbookNs + "brk")
+                .Where(sourceBreak =>
+                    !TryGetSupportedWorksheetBreakId(sourceBreak, maxBreakId, out var sourceId) ||
+                    modeledBreakIds.Contains(sourceId))
+                .Select(sourceBreak => new XElement(sourceBreak))
+                .ToList();
+            if (retainedBreaks.Count == 0)
+                return false;
+
+            targetRoot.Add(new XElement(sourceBreaks.Name, sourceBreaks.Attributes(), retainedBreaks));
             return true;
         }
 
@@ -5607,36 +5656,82 @@ public sealed class XlsxFileAdapter : IFileAdapter
             changed = true;
         }
 
-        var targetBreaksById = targetBreaks
+        var targetBreaksBySupportedId = targetBreaks
+            .Elements(workbookNs + "brk")
+            .Select(element => new
+            {
+                Element = element,
+                Parsed = TryGetSupportedWorksheetBreakId(element, maxBreakId, out var id),
+                Id = id
+            })
+            .Where(entry => entry.Parsed)
+            .GroupBy(entry => entry.Id)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Element);
+        var targetBreaksByRawId = targetBreaks
             .Elements(workbookNs + "brk")
             .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("id")?.Value))
+            .GroupBy(element => element.Attribute("id")!.Value, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
-                element => element.Attribute("id")!.Value,
+                group => group.Key,
+                group => group.First(),
                 StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceBreak in sourceBreaks.Elements(workbookNs + "brk"))
         {
             var id = sourceBreak.Attribute("id")?.Value;
-            if (string.IsNullOrWhiteSpace(id) || !targetBreaksById.TryGetValue(id, out var targetBreak))
+            if (TryGetSupportedWorksheetBreakId(sourceBreak, maxBreakId, out var sourceId))
             {
+                if (!modeledBreakIds.Contains(sourceId))
+                    continue;
+
+                if (targetBreaksBySupportedId.TryGetValue(sourceId, out var targetBreak))
+                {
+                    changed |= MergeMissingAttributes(sourceBreak, targetBreak);
+                    continue;
+                }
+
                 targetBreaks.Add(new XElement(sourceBreak));
+                var addedBreak = targetBreaks.Elements(workbookNs + "brk").Last();
+                targetBreaksBySupportedId[sourceId] = addedBreak;
                 if (!string.IsNullOrWhiteSpace(id))
-                    targetBreaksById[id] = targetBreaks.Elements(workbookNs + "brk").Last();
+                    targetBreaksByRawId[id] = addedBreak;
                 changed = true;
                 continue;
             }
 
-            foreach (var attribute in sourceBreak.Attributes())
+            if (!string.IsNullOrWhiteSpace(id) &&
+                targetBreaksByRawId.ContainsKey(id))
             {
-                if (targetBreak.Attribute(attribute.Name) is not null)
-                    continue;
-
-                targetBreak.SetAttributeValue(attribute.Name, attribute.Value);
-                changed = true;
+                continue;
             }
+
+            targetBreaks.Add(new XElement(sourceBreak));
+            if (!string.IsNullOrWhiteSpace(id))
+                targetBreaksByRawId[id] = targetBreaks.Elements(workbookNs + "brk").Last();
+            changed = true;
         }
 
         return changed;
+    }
+
+    private static bool TryGetSupportedWorksheetBreakId(XElement breakElement, uint maxBreakId, out uint id)
+    {
+        id = 0;
+        var rawId = breakElement.Attribute("id")?.Value;
+        if (string.IsNullOrWhiteSpace(rawId) ||
+            !uint.TryParse(rawId, NumberStyles.None, CultureInfo.InvariantCulture, out id))
+        {
+            return false;
+        }
+
+        return IsSupportedWorksheetBreakId(id, maxBreakId);
+    }
+
+    private static bool IsSupportedWorksheetBreakId(uint id, uint maxBreakId)
+    {
+        return id >= 2 && id <= maxBreakId;
     }
 
     private static bool MergeWorksheetIgnoredErrors(XElement sourceIgnoredErrors, XElement targetRoot, XNamespace workbookNs)
