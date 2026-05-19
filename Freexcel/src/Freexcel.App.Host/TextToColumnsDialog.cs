@@ -71,18 +71,6 @@ public sealed class TextToColumnsDialog : Window
         }
     }
 
-    internal static StackPanel CreateButtonRow(Action accept)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        ok.Click += (_, _) => accept();
-        row.Children.Add(ok);
-        row.Children.Add(new Button { Content = "Cancel", Width = 72, IsCancel = true });
-        return row;
-    }
+    internal static StackPanel CreateButtonRow(Action accept) =>
+        DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
 }
