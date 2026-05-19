@@ -53,11 +53,12 @@ public static partial class FormulaReferenceCycler
 
             var qualifier = match.Groups["qualifier"].Value;
             var columnReference = match.Groups["column"].Value;
+            var secondQualifier = match.Groups["qualifier2"].Value;
             var secondColumnReference = match.Groups["column2"].Value;
             if (!TryCycleColumnReference(columnReference, out var cycledColumnReference))
                 continue;
 
-            var cycled = $"{qualifier}{cycledColumnReference}:{CycleMatchingColumnReference(secondColumnReference)}";
+            var cycled = $"{qualifier}{cycledColumnReference}:{secondQualifier}{CycleMatchingColumnReference(secondColumnReference)}";
             result = text.Remove(match.Index, match.Length).Insert(match.Index, cycled);
             selectionStart = match.Index;
             selectionLength = cycled.Length;
@@ -75,11 +76,12 @@ public static partial class FormulaReferenceCycler
 
             var qualifier = match.Groups["qualifier"].Value;
             var rowReference = match.Groups["row"].Value;
+            var secondQualifier = match.Groups["qualifier2"].Value;
             var secondRowReference = match.Groups["row2"].Value;
             if (!TryCycleRowReference(rowReference, out var cycledRowReference))
                 continue;
 
-            var cycled = $"{qualifier}{cycledRowReference}:{CycleMatchingRowReference(secondRowReference)}";
+            var cycled = $"{qualifier}{cycledRowReference}:{secondQualifier}{CycleMatchingRowReference(secondRowReference)}";
             result = text.Remove(match.Index, match.Length).Insert(match.Index, cycled);
             selectionStart = match.Index;
             selectionLength = cycled.Length;
@@ -223,10 +225,10 @@ public static partial class FormulaReferenceCycler
     [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?::(?<qualifier2>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell2>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6}))?(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex A1ReferenceRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<column>\$?[A-Z]{1,3}):(?<column2>\$?[A-Z]{1,3})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<column>\$?[A-Z]{1,3}):(?<qualifier2>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<column2>\$?[A-Z]{1,3})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex ColumnReferenceRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<row>\$?[1-9][0-9]{0,6}):(?<row2>\$?[1-9][0-9]{0,6})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<row>\$?[1-9][0-9]{0,6}):(?<qualifier2>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<row2>\$?[1-9][0-9]{0,6})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex RowReferenceRegex();
 
     [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})\$?(?<row>[1-9][0-9]{0,6})$", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
