@@ -182,37 +182,15 @@ internal static class NativeJsonVisualDtoMapper
         }
     }
 
-    private static string FormatColor(CellColor color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+    private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);
 
-    private static CellColor? ParseColor(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        text = text.Trim();
-        if (text.StartsWith("#", StringComparison.Ordinal))
-            text = text[1..];
-
-        if (text.Length != 6 ||
-            !byte.TryParse(text[..2], System.Globalization.NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(text[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(text[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            return null;
-        }
-
-        return new CellColor(r, g, b);
-    }
+    private static CellColor? ParseColor(string text) => NativeJsonColorMapper.ParseColor(text);
 
     private static WorkbookThemeColorReference? ToThemeColorReference(ThemeColorReferenceDto? dto) =>
-        dto is not null && Enum.IsDefined(dto.Slot)
-            ? new WorkbookThemeColorReference(dto.Slot, dto.Tint)
-            : null;
+        NativeJsonColorMapper.ToThemeColorReference(dto);
 
     private static ThemeColorReferenceDto? FromThemeColorReference(WorkbookThemeColorReference? reference) =>
-        reference is null
-            ? null
-            : new ThemeColorReferenceDto { Slot = reference.Value.Slot, Tint = reference.Value.Tint };
+        NativeJsonColorMapper.FromThemeColorReference(reference);
 }
 
 internal class PictureDto
