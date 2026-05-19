@@ -5470,7 +5470,7 @@ public partial class MainWindow : Window
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.Hyperlink:
-                HyperlinkBtn_Click(this, new RoutedEventArgs());
+                InsertLinkBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.FormatCells:
                 OpenFormatCellsDialog();

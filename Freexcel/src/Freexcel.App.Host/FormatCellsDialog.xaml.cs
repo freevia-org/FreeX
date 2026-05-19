@@ -10,6 +10,8 @@ public partial class FormatCellsDialog : Window
 {
     public StyleDiff? ResultDiff { get; private set; }
 
+    private readonly CellStyle _current;
+
     private static readonly string[] NumberFormatCodes =
         ["General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@"];
 
@@ -19,10 +21,11 @@ public partial class FormatCellsDialog : Window
 
     public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
+        _current = current.Clone();
         InitializeComponent();
         Loaded += (_, _) =>
         {
-            Populate(current);
+            Populate(_current);
             Tabs.SelectedIndex = (int)initialTab;
         };
     }
@@ -31,8 +34,15 @@ public partial class FormatCellsDialog : Window
     {
         NumberFormatCombo.ItemsSource = NumberFormatLabels;
         var idx = Array.IndexOf(NumberFormatCodes, s.NumberFormat);
-        NumberFormatCombo.SelectedIndex = idx >= 0 ? idx : 0;
-        if (idx < 0) NumberFormatCombo.Text = s.NumberFormat;
+        if (idx >= 0)
+        {
+            NumberFormatCombo.SelectedIndex = idx;
+        }
+        else
+        {
+            NumberFormatCombo.SelectedIndex = -1;
+            NumberFormatCombo.Text = s.NumberFormat;
+        }
 
         DlgFontNameBox.ItemsSource  = new[] { "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana" };
         DlgFontNameBox.SelectedItem = s.FontName;
@@ -41,13 +51,14 @@ public partial class FormatCellsDialog : Window
         DlgBoldCheck.IsChecked      = s.Bold;
         DlgItalicCheck.IsChecked    = s.Italic;
         DlgUnderlineCheck.IsChecked = s.Underline;
-        DlgStrikeCheck.IsChecked    = s.Strikethrough;
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
+        DlgStrikeCheck.IsChecked    = s.Strikethrough;
         DlgFontColorBox.Text        = $"{s.FontColor.R},{s.FontColor.G},{s.FontColor.B}";
 
         DlgFillColorBox.Text = s.FillColor.HasValue
             ? $"{s.FillColor.Value.R},{s.FillColor.Value.G},{s.FillColor.Value.B}"
             : "";
+        DlgClearFillCheck.IsChecked = false;
 
         DlgHAlignBox.ItemsSource  = Enum.GetNames(typeof(CellHAlign));
         DlgHAlignBox.SelectedItem = s.HorizontalAlignment.ToString();
@@ -55,20 +66,54 @@ public partial class FormatCellsDialog : Window
         DlgVAlignBox.SelectedItem = s.VerticalAlignment.ToString();
         DlgWrapTextCheck.IsChecked = s.WrapText;
         DlgShrinkToFitCheck.IsChecked = s.ShrinkToFit;
+        DlgIndentLevelBox.Text = s.IndentLevel.ToString();
+        DlgTextRotationBox.Text = s.TextRotation.ToString();
+
+        PopulateBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, s.BorderTop);
+        PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight);
+        PopulateBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, s.BorderBottom);
+        PopulateBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, s.BorderLeft);
+
+        DlgLockedCheck.IsChecked = s.Locked;
     }
 
     private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
+
+    public static string? ResolveNumberFormat(string text, int selectedIndex)
+    {
+        var trimmedText = text.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmedText)
+            && (selectedIndex < 0
+                || selectedIndex >= NumberFormatCodes.Length
+                || (trimmedText != NumberFormatLabels[selectedIndex]
+                    && trimmedText != NumberFormatCodes[selectedIndex])))
+        {
+            return trimmedText;
+        }
+
+        if (selectedIndex >= 0 && selectedIndex < NumberFormatCodes.Length)
+            return NumberFormatCodes[selectedIndex];
+
+        return string.IsNullOrWhiteSpace(trimmedText) ? null : trimmedText;
+    }
+
+    public static int? TryParseSupportedTextRotation(string text)
+    {
+        if (!int.TryParse(text, out var rotation))
+            return null;
+
+        return rotation == 255 || rotation is >= -90 and <= 90
+            ? rotation
+            : null;
+    }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
         CellColor? fontColor = TryParseColor(DlgFontColorBox.Text);
         CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
+        bool clearFill = DlgClearFillCheck.IsChecked == true;
 
-        string? numFmt = null;
-        if (NumberFormatCombo.SelectedIndex >= 0 && NumberFormatCombo.SelectedIndex < NumberFormatCodes.Length)
-            numFmt = NumberFormatCodes[NumberFormatCombo.SelectedIndex];
-        else if (!string.IsNullOrWhiteSpace(NumberFormatCombo.Text))
-            numFmt = NumberFormatCombo.Text;
+        string? numFmt = ResolveNumberFormat(NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex);
 
         double? fontSize = null;
         if (double.TryParse(DlgFontSizeBox.Text, out var fs) && fs > 0) fontSize = fs;
@@ -78,25 +123,67 @@ public partial class FormatCellsDialog : Window
         CellVAlign? vAlign = null;
         if (DlgVAlignBox.SelectedItem is string va && Enum.TryParse(va, out CellVAlign v)) vAlign = v;
 
+        int? indentLevel = null;
+        if (int.TryParse(DlgIndentLevelBox.Text, out var indent))
+            indentLevel = Math.Clamp(indent, 0, 15);
+
+        int? textRotation = TryParseSupportedTextRotation(DlgTextRotationBox.Text);
+
+        CellBorder borderTop = ParseBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, _current.BorderTop);
+        CellBorder borderRight = ParseBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, _current.BorderRight);
+        CellBorder borderBottom = ParseBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, _current.BorderBottom);
+        CellBorder borderLeft = ParseBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, _current.BorderLeft);
+
         ResultDiff = new StyleDiff(
-            Bold:          DlgBoldCheck.IsChecked,
-            Italic:        DlgItalicCheck.IsChecked,
-            Underline:     DlgUnderlineCheck.IsChecked,
-            Strikethrough: DlgStrikeCheck.IsChecked,
+            Bold:            DlgBoldCheck.IsChecked,
+            Italic:          DlgItalicCheck.IsChecked,
+            Underline:       DlgUnderlineCheck.IsChecked,
+            Strikethrough:   DlgStrikeCheck.IsChecked,
+            FontName:        DlgFontNameBox.SelectedItem as string,
+            FontSize:        fontSize,
+            FontColor:       fontColor,
+            FillColor:       clearFill ? null : fillColor,
+            HAlign:          hAlign,
+            VAlign:          vAlign,
+            WrapText:        DlgWrapTextCheck.IsChecked,
+            ShrinkToFit:     DlgShrinkToFitCheck.IsChecked,
+            NumberFormat:    numFmt,
             DoubleUnderline: DlgDoubleUnderlineCheck.IsChecked,
-            FontName:      DlgFontNameBox.SelectedItem as string,
-            FontSize:      fontSize,
-            FontColor:     fontColor,
-            FillColor:     fillColor,
-            HAlign:        hAlign,
-            VAlign:        vAlign,
-            WrapText:      DlgWrapTextCheck.IsChecked,
-            ShrinkToFit:   DlgShrinkToFitCheck.IsChecked,
-            NumberFormat:  numFmt
+            IndentLevel:     indentLevel,
+            TextRotation:    textRotation,
+            BorderTop:       borderTop,
+            BorderRight:     borderRight,
+            BorderBottom:    borderBottom,
+            BorderLeft:      borderLeft,
+            Locked:          DlgLockedCheck.IsChecked,
+            ClearFill:       clearFill ? true : null
         );
 
         DialogResult = true;
     }
+
+    private static void PopulateBorder(ComboBox styleBox, TextBox colorBox, CellBorder border)
+    {
+        styleBox.ItemsSource = Enum.GetNames(typeof(BorderStyle));
+        styleBox.SelectedItem = border.Style.ToString();
+        colorBox.Text = FormatColor(border.Color);
+    }
+
+    private static CellBorder ParseBorder(ComboBox styleBox, TextBox colorBox, CellBorder current)
+    {
+        var style = current.Style;
+        if (styleBox.SelectedItem is string selectedStyle
+            && Enum.TryParse(selectedStyle, out BorderStyle parsedStyle)
+            && Enum.IsDefined(parsedStyle))
+        {
+            style = parsedStyle;
+        }
+
+        var color = TryParseColor(colorBox.Text) ?? current.Color;
+        return new CellBorder(style, color);
+    }
+
+    private static string FormatColor(CellColor color) => $"{color.R},{color.G},{color.B}";
 
     private static CellColor? TryParseColor(string text)
     {
@@ -114,7 +201,9 @@ public partial class FormatCellsDialog : Window
 public enum FormatCellsDialogTab
 {
     Number,
+    Alignment,
     Font,
     Fill,
-    Alignment
+    Border,
+    Protection
 }
