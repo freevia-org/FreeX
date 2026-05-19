@@ -17,6 +17,8 @@ public sealed class CellStyleDiffPlannerTests
         diff.Underline.Should().BeFalse();
         diff.DoubleUnderline.Should().BeFalse();
         diff.Strikethrough.Should().BeFalse();
+        diff.Superscript.Should().BeFalse();
+        diff.Subscript.Should().BeFalse();
         diff.FontName.Should().Be("Calibri");
         diff.FontSize.Should().Be(11);
         diff.ClearFill.Should().BeTrue();
@@ -24,11 +26,14 @@ public sealed class CellStyleDiffPlannerTests
         diff.HAlign.Should().Be(CellHAlign.General);
         diff.VAlign.Should().Be(CellVAlign.Bottom);
         diff.WrapText.Should().BeFalse();
+        diff.ShrinkToFit.Should().BeFalse();
         diff.IndentLevel.Should().Be(0);
+        diff.TextRotation.Should().Be(0);
         diff.BorderTop.Should().Be(new CellBorder(BorderStyle.None));
         diff.BorderRight.Should().Be(new CellBorder(BorderStyle.None));
         diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.None));
         diff.BorderLeft.Should().Be(new CellBorder(BorderStyle.None));
+        diff.Locked.Should().BeTrue();
     }
 
     [Theory]
@@ -70,6 +75,40 @@ public sealed class CellStyleDiffPlannerTests
         diff.Should().Be(CellStyleDiffPlanner.ClearFormatsDiff());
     }
 
+    [Fact]
+    public void CellStylePreset_Normal_AppliesDefaultsToVisibleAndProtectionFields()
+    {
+        var styled = new CellStyle
+        {
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            DoubleUnderline = true,
+            Strikethrough = true,
+            Superscript = true,
+            FontName = "Aptos",
+            FontSize = 18,
+            FontColor = new CellColor(12, 34, 56),
+            FillColor = new CellColor(90, 91, 92),
+            NumberFormat = "$#,##0.00",
+            HorizontalAlignment = CellHAlign.Center,
+            VerticalAlignment = CellVAlign.Top,
+            WrapText = true,
+            ShrinkToFit = true,
+            IndentLevel = 3,
+            TextRotation = 45,
+            BorderTop = new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)),
+            BorderRight = new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)),
+            BorderBottom = new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)),
+            BorderLeft = new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)),
+            Locked = false
+        };
+
+        var result = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Normal).ApplyTo(styled);
+
+        result.Should().Be(CellStyle.Default);
+    }
+
     [Theory]
     [InlineData(CellStylePreset.Input, 255, 255, 204, false, "#,##0.00")]
     [InlineData(CellStylePreset.Output, 242, 242, 242, true, "#,##0.00")]
@@ -106,6 +145,22 @@ public sealed class CellStyleDiffPlannerTests
             diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(128, 128, 128)));
             diff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(128, 128, 128)));
         }
+    }
+
+    [Fact]
+    public void CellStylePreset_LinkedCell_ClearsConflictingTextDecorations()
+    {
+        var styled = new CellStyle
+        {
+            DoubleUnderline = true,
+            Strikethrough = true
+        };
+
+        var result = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.LinkedCell).ApplyTo(styled);
+
+        result.Underline.Should().BeTrue();
+        result.DoubleUnderline.Should().BeFalse();
+        result.Strikethrough.Should().BeFalse();
     }
 
     [Fact]
