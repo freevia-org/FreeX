@@ -28,4 +28,62 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="TextAlignment" Value="Center"/>
     </Style>
+
+    <Style x:Key="FreexcelRibbonLargeIconSlot" TargetType="Border">
+        <Setter Property="Width" Value="34"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,1,0,2"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonMediumIconSlot" BasedOn="{StaticResource FreexcelRibbonLargeIconSlot}" TargetType="Border">
+        <Setter Property="Width" Value="28"/>
+        <Setter Property="Height" Value="24"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonSmallIconSlot" TargetType="Border">
+        <Setter Property="Width" Value="18"/>
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="CornerRadius" Value="2"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,4,0"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonLargeIconText" BasedOn="{StaticResource FreexcelRibbonGlyph}" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="23"/>
+        <Setter Property="LineHeight" Value="24"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonMediumIconText" BasedOn="{StaticResource FreexcelRibbonGlyph}" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="19"/>
+        <Setter Property="LineHeight" Value="20"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonSmallIconText" BasedOn="{StaticResource FreexcelRibbonGlyph}" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="LineHeight" Value="14"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonLargeLabel" TargetType="TextBlock">
+        <Setter Property="Tag" Value="RibbonLabel"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="MaxWidth" Value="72"/>
+    </Style>
+
+    <Style x:Key="FreexcelRibbonSmallLabel" BasedOn="{StaticResource FreexcelRibbonLargeLabel}" TargetType="TextBlock">
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+        <Setter Property="TextAlignment" Value="Left"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="MaxWidth" Value="110"/>
+    </Style>
 </ResourceDictionary>
