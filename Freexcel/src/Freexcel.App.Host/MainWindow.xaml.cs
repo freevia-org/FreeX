@@ -11814,6 +11814,16 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
 
+    private void ArrangeAllContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var current = _workbook.WindowArrangement.ToString();
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal);
+    }
+
     private void ArrangeAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as System.Windows.Controls.MenuItem)?.Tag is not string tag ||
