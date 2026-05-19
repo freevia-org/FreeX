@@ -8676,6 +8676,40 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MergesRangeIgnoredErrorsWithoutDuplicateCells()
+    {
+        var workbook = new Workbook("IgnoredErrorsRangeRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("00456"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A1:B1", ("numberStoredAsText", "1"), ("twoDigitTextYear", "1"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        ignoredErrors.Should().NotBeNull();
+        var entries = ignoredErrors!.Elements(worksheetNs + "ignoredError").ToList();
+
+        entries.Select(entry => entry.Attribute("sqref")?.Value).Should().BeEquivalentTo(["A1", "B1"]);
+        entries.Select(entry => entry.Attribute("numberStoredAsText")?.Value).Should().OnlyContain(value => value == "1");
+        entries.Select(entry => entry.Attribute("twoDigitTextYear")?.Value).Should().OnlyContain(value => value == "1");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_IgnoredErrors_SetIgnoreFormulaErrorForSingleRefsAndRanges()
     {
         var workbook = new Workbook("IgnoredErrorsLoadTest");
