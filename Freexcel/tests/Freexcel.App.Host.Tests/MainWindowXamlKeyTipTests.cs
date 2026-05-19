@@ -259,7 +259,7 @@ public sealed class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var splitButton = document
-            .Descendants(presentation + "Button")
+            .Descendants(presentation + "ToggleButton")
             .Single(element => element.Attribute("Click")?.Value == "SplitViewBtn_Click");
 
         splitButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clears frozen panes");

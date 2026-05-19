@@ -3917,6 +3917,8 @@ public partial class MainWindow : Window
                 ViewHeadersChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
+            if (SplitViewBtn is not null)
+                SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
         }
         finally
         {
