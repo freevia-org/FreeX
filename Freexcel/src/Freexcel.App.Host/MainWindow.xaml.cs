@@ -55,6 +55,7 @@ public partial class MainWindow : Window
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
+    private bool _endMode;
     private bool _dragSelectActive;
     private Freexcel.App.UI.SplitPaneRegion _activeSplitPaneRegion = Freexcel.App.UI.SplitPaneRegion.BottomRight;
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
@@ -1236,6 +1237,13 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(e.Key, Keyboard.Modifiers, _endMode, out var nextEndMode))
+            {
+                SetEndMode(nextEndMode);
+                e.Handled = true;
+                return;
+            }
+
             if (Keyboard.Modifiers == ModifierKeys.Alt &&
                 RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
                 TryHandleTopLevelRibbonKeyTip(keyTip))
@@ -1581,6 +1589,7 @@ public partial class MainWindow : Window
 
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         bool extendSelection = ExcelSelectionModePlanner.ShouldExtendSelection(_selectionMode, Keyboard.Modifiers);
+        bool useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(e.Key, Keyboard.Modifiers, _endMode);
         bool ctrlHeld  = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
         // When Shift or F8 extend mode is active the moving end is _selectionCursor; otherwise it's the active cell.
@@ -1601,13 +1610,13 @@ public partial class MainWindow : Window
 
         target ??= e.Key switch
         {
-            Key.Up    => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
+            Key.Up    => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
                                   : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
-            Key.Down  => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
+            Key.Down  => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
                                   : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Left  => ctrlHeld ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
+            Key.Left  => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
                                   : new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
-            Key.Right => ctrlHeld ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
+            Key.Right => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
                                   : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
 
             Key.Home     => new CellAddress(_currentSheetId, ctrlHeld ? 1u : current.Row, 1u),
@@ -1625,6 +1634,9 @@ public partial class MainWindow : Window
         };
 
         if (target == null) return;
+
+        if (_endMode)
+            SetEndMode(false);
 
         // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
@@ -2721,11 +2733,14 @@ public partial class MainWindow : Window
         _internalClipboard = null;
         CancelFormatPainter();
         SetSelectionMode(ExcelSelectionMode.Normal);
+        SetEndMode(false);
     }
 
     private void SetSelectionMode(ExcelSelectionMode mode)
     {
         _selectionMode = mode;
+        if (mode != ExcelSelectionMode.Normal)
+            _endMode = false;
         if (StatusStatsPanel is not null)
             StatusStatsPanel.Visibility = Visibility.Collapsed;
         if (StatusReadyText is null)
@@ -2738,6 +2753,20 @@ public partial class MainWindow : Window
             ExcelSelectionMode.Add => "Add to Selection",
             _ => "Ready"
         };
+    }
+
+    private void SetEndMode(bool enabled)
+    {
+        _endMode = enabled;
+        if (enabled)
+            _selectionMode = ExcelSelectionMode.Normal;
+        if (StatusStatsPanel is not null)
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+        if (StatusReadyText is null)
+            return;
+
+        StatusReadyText.Visibility = Visibility.Visible;
+        StatusReadyText.Text = enabled ? "End Mode" : "Ready";
     }
 
     private void ClearClipboardVisualState()
