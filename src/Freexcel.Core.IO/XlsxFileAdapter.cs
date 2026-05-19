@@ -4785,6 +4785,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
             var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
             var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
+            var sourceColumns = sourceWorksheetXml.Root?.Element(workbookNs + "cols");
             var sourceSheetData = sourceWorksheetXml.Root?.Element(workbookNs + "sheetData");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
@@ -4794,6 +4795,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sourceSheetFormatProperties is null &&
                 sourcePrintOptions is null &&
                 sourcePageSetup is null &&
+                sourceColumns is null &&
                 sourceSheetData is null &&
                 sourceSheetProtection is null &&
                 sourceSheetViews is null &&
@@ -4815,6 +4817,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (MergeWorksheetElementAttributes(sourcePrintOptions, targetRoot, workbookNs + "printOptions"))
                 changed = true;
             if (MergeWorksheetElementAttributes(sourcePageSetup, targetRoot, workbookNs + "pageSetup"))
+                changed = true;
+            if (MergeWorksheetColumnAttributes(sourceColumns, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetRowAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
@@ -4851,6 +4855,53 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
+
+    private static bool MergeWorksheetColumnAttributes(XElement? sourceColumns, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceColumns is null)
+            return false;
+
+        var targetColumns = targetRoot.Element(workbookNs + "cols");
+        if (targetColumns is null)
+            return false;
+
+        var targetColumnsByRange = targetColumns
+            .Elements(workbookNs + "col")
+            .Where(column => !string.IsNullOrWhiteSpace(column.Attribute("min")?.Value) &&
+                             !string.IsNullOrWhiteSpace(column.Attribute("max")?.Value))
+            .ToDictionary(ColumnRangeKey, StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceColumn in sourceColumns.Elements(workbookNs + "col"))
+        {
+            var key = ColumnRangeKey(sourceColumn);
+            if (string.IsNullOrWhiteSpace(key) ||
+                !targetColumnsByRange.TryGetValue(key, out var targetColumn))
+            {
+                continue;
+            }
+
+            foreach (var attribute in sourceColumn.Attributes())
+            {
+                if (targetColumn.Attribute(attribute.Name) is not null)
+                    continue;
+
+                targetColumn.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
+
+        static string ColumnRangeKey(XElement column)
+        {
+            var min = column.Attribute("min")?.Value;
+            var max = column.Attribute("max")?.Value;
+            return string.IsNullOrWhiteSpace(min) || string.IsNullOrWhiteSpace(max)
+                ? string.Empty
+                : $"{min}:{max}";
         }
     }
 

@@ -8211,6 +8211,40 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetColumnNativeAttributes()
+    {
+        var workbook = new Workbook("WorksheetColumnNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Column metadata"));
+        sheet.ColumnWidths[2] = 14.0;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetColumnNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 2), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var column = worksheetXml.Root!
+            .Element(worksheetNs + "cols")!
+            .Elements(worksheetNs + "col")
+            .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
+        column.Attribute("bestFit")!.Value.Should().Be("1");
+        column.Attribute("phonetic")!.Value.Should().Be("1");
+        column.Attribute("customAttr")!.Value.Should().Be("column-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
     {
         var workbook = new Workbook("ScenariosRetentionTest");
@@ -10084,6 +10118,26 @@ public class FileAdapterSmokeTests
             cell.SetAttributeValue("vm", "1");
             cell.SetAttributeValue("ph", "1");
             cell.SetAttributeValue("customAttr", "cell-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetColumnNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var columns = worksheetXml.Root!.Element(worksheetNs + "cols");
+            columns.Should().NotBeNull();
+            var column = columns!.Elements(worksheetNs + "col")
+                .Single(element => element.Attribute("min")?.Value == "2" && element.Attribute("max")?.Value == "2");
+            column.SetAttributeValue("bestFit", "1");
+            column.SetAttributeValue("phonetic", "1");
+            column.SetAttributeValue("customAttr", "column-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
