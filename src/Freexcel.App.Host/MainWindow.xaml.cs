@@ -1813,12 +1813,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.F4 && Keyboard.Modifiers == ModifierKeys.None)
-            {
-                ExecuteRepeatLast();
-                e.Handled = true;
-                return;
-            }
         }
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
@@ -2148,6 +2142,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.ClearSelectionAndEdit:
                 ExecuteClearSelection();
                 EnterEditMode();
+                break;
+            case KeyboardCommandShortcut.RepeatLastAction:
+                ExecuteRepeatLast();
                 break;
         }
     }

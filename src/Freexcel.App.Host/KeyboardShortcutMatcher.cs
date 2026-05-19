@@ -487,6 +487,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F4)
+        {
+            shortcut = KeyboardCommandShortcut.RepeatLastAction;
+            return true;
+        }
+
         return false;
     }
 
@@ -646,7 +652,8 @@ public enum KeyboardCommandShortcut
     SelectCellsWithComments,
     EditCell,
     ClearSelection,
-    ClearSelectionAndEdit
+    ClearSelectionAndEdit,
+    RepeatLastAction
 }
 
 public enum BorderKeyboardShortcut
