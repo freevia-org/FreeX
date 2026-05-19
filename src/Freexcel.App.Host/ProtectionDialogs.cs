@@ -24,19 +24,8 @@ public static class ProtectionDialogPlanner
             ? new ProtectionDialogResult(ProtectionDialogMode.Unprotect, null)
             : new ProtectionDialogResult(ProtectionDialogMode.Protect, password);
 
-    public static bool TryParseAllowEditRange(string text, SheetId sheetId, out GridRange range)
-    {
-        try
-        {
-            range = GridRange.Parse(text.Trim(), sheetId);
-            return true;
-        }
-        catch
-        {
-            range = default;
-            return false;
-        }
-    }
+    public static bool TryParseAllowEditRange(string text, SheetId sheetId, out GridRange range) =>
+        ProtectionInputParser.TryParseAllowEditRange(text, sheetId, out range);
 }
 
 public sealed class PasswordProtectionDialog : Window
