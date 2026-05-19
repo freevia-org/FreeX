@@ -7960,6 +7960,48 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesStylesheetNativeMetadata()
+    {
+        var workbook = new Workbook("StylesheetNativeMetadataRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("style metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddStylesheetNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var colors = stylesXml.Root!.Element(workbookNs + "colors");
+        colors.Should().NotBeNull();
+        colors!.ToString().Should().Contain("rgb=\"FF010203\"");
+
+        var tableStyles = stylesXml.Root!.Element(workbookNs + "tableStyles");
+        tableStyles.Should().NotBeNull();
+        tableStyles!.Attribute("defaultPivotStyle").Should().NotBeNull();
+        tableStyles.Attribute("defaultPivotStyle")!.Value.Should().Be("PivotStyleMedium9");
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Any(element => element.Attribute("name")?.Value == "FreexcelNativeTableStyle")
+            .Should().BeTrue();
+
+        var extensionList = stylesXml.Root!.Element(workbookNs + "extLst");
+        extensionList.Should().NotBeNull();
+        extensionList!.ToString().Should().Contain("{FFEEDDCC-7788-6655-4433-22110099AABB}");
+        extensionList.ToString().Should().Contain("FreexcelNativeStylesExtension");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -10159,6 +10201,52 @@ public class FileAdapterSmokeTests
             calcPr.SetAttributeValue("fullPrecision", "0");
             calcPr.SetAttributeValue("concurrentCalc", "1");
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddStylesheetNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            stylesXml.Root!.Elements(workbookNs + "colors").Remove();
+            stylesXml.Root.Add(new XElement(
+                workbookNs + "colors",
+                new XElement(
+                    workbookNs + "indexedColors",
+                    new XElement(workbookNs + "rgbColor", new XAttribute("rgb", "FF010203")))));
+
+            var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
+            if (tableStyles is null)
+            {
+                tableStyles = new XElement(workbookNs + "tableStyles");
+                stylesXml.Root.Add(tableStyles);
+            }
+
+            tableStyles.SetAttributeValue("defaultPivotStyle", "PivotStyleMedium9");
+            tableStyles.Add(new XElement(
+                workbookNs + "tableStyle",
+                new XAttribute("name", "FreexcelNativeTableStyle"),
+                new XAttribute("pivot", "0"),
+                new XAttribute("table", "1"),
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "wholeTable"),
+                    new XAttribute("dxfId", "0"))));
+
+            stylesXml.Root.Elements(workbookNs + "extLst").Remove();
+            stylesXml.Root.Add(new XElement(
+                workbookNs + "extLst",
+                new XElement(
+                    workbookNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-7788-6655-4433-22110099AABB}"),
+                    new XElement(workbookNs + "FreexcelNativeStylesExtension"))));
+            ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
         }
 
         packageStream.Position = 0;
