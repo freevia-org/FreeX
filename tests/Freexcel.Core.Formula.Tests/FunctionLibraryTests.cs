@@ -3048,6 +3048,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Networkdays_Early1900Holiday_UsesExcelSerialCalendar()
+    {
+        var sheet = MakeSheet((1, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=NETWORKDAYS(DATE(1900,1,1),DATE(1900,1,1),A1:A1)", sheet).Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
     public void Networkdays_HolidaysError_PropagatesError()
     {
         double mon = new DateTime(2024, 1, 8).ToOADate();
