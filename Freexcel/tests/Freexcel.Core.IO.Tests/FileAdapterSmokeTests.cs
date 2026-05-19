@@ -7465,6 +7465,37 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MergesUnknownWorksheetExtensionListEntries()
+    {
+        var workbook = new Workbook("WorksheetExtensionRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(3));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalSparklineWorksheetExtension(source, includeUnknownExtension: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).Sparklines.Should().ContainSingle();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString().Should().Contain("sparklineGroups");
+        worksheetXml.ToString().Should().Contain("{FFEEDDCC-BBAA-9988-7766-554433221100}");
+        worksheetXml.ToString().Should().Contain("FreexcelUnknownWorksheetExtension");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -8793,16 +8824,25 @@ public class FileAdapterSmokeTests
         0x42, 0x60, 0x82
     ];
 
-    private static void AddMinimalSparklineWorksheetExtension(MemoryStream packageStream)
+    private static void AddMinimalSparklineWorksheetExtension(MemoryStream packageStream, bool includeUnknownExtension = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+            XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
             XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Elements(worksheetNs + "extLst").Remove();
-            worksheetXml.Root!.Add(new XElement(
+            var sparkline = new XElement(
+                x14Ns + "sparkline",
+                new XElement(xmNs + "f", "Sheet1!A1:C1"),
+                new XElement(xmNs + "sqref", "D1"));
+            var sparklineGroup = new XElement(
+                x14Ns + "sparklineGroup",
+                new XAttribute("type", "column"),
+                new XElement(x14Ns + "sparklines", sparkline));
+            var extLst = new XElement(
                 worksheetNs + "extLst",
                 new XElement(
                     worksheetNs + "ext",
@@ -8811,15 +8851,19 @@ public class FileAdapterSmokeTests
                         x14Ns + "sparklineGroups",
                         new XAttribute(XNamespace.Xmlns + "x14", x14Ns),
                         new XAttribute(XNamespace.Xmlns + "xm", xmNs),
-                        new XElement(
-                            x14Ns + "sparklineGroup",
-                            new XAttribute("type", "column"),
-                            new XElement(
-                                x14Ns + "sparklines",
-                                new XElement(
-                                    x14Ns + "sparkline",
-                                    new XElement(xmNs + "f", "Sheet1!A1:C1"),
-                                    new XElement(xmNs + "sqref", "D1"))))))));
+                        sparklineGroup)));
+            if (includeUnknownExtension)
+            {
+                extLst.Add(new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FFEEDDCC-BBAA-9988-7766-554433221100}"),
+                    new XElement(
+                        x15Ns + "futureMetadata",
+                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                        new XAttribute("name", "FreexcelUnknownWorksheetExtension"))));
+            }
+
+            worksheetXml.Root!.Add(extLst);
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
