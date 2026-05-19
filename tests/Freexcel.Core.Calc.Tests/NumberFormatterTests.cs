@@ -36,9 +36,23 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]
+    [InlineData("0.00E+00\" kg\"", 1200, "1.20E+03 kg")]
     [InlineData("0.00E+00", 1200, "1.20E+03")]
     [InlineData("0.00E-00", 1200, "1.20E03")]
+    [InlineData("0*-", 12, "12")]
     public void CustomNumberSubset_FormatsVariableDecimalsFractionsAndScientific(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("0.00;0.00", -1.25, "1.25")]
+    [InlineData("0.00;-0.00", -1.25, "-1.25")]
+    [InlineData("# ?/?;# ?/?", -0.125, "1/8")]
+    [InlineData("# ?/?;-# ?/?", -0.125, "-1/8")]
+    public void CustomNumberSubset_FormatsNegativeSectionsUsingAbsoluteValue(string format, double value, string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);
 
