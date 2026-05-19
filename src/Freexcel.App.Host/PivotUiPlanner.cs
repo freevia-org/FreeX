@@ -100,6 +100,135 @@ public static class PivotUiPlanner
         return $"PivotTable{Guid.NewGuid():N}"[..31];
     }
 
+    public static string UnquoteSheetName(string sheetName)
+    {
+        if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')
+            return sheetName[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return sheetName;
+    }
+
+    public static string QuoteSheetNameForReference(string sheetName)
+    {
+        if (sheetName.All(ch => char.IsLetterOrDigit(ch) || ch == '_'))
+            return sheetName;
+
+        return $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
+    }
+
+    public static PivotDataFieldModel CreateDefaultDataField(
+        Sheet sheet,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        int sourceFieldIndex)
+    {
+        var caption = FieldCaption(headers, sourceFieldIndex);
+        var summaryFunction = IsNumericSourceField(sheet, pivotTable, sourceFieldIndex) ? "sum" : "count";
+        var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
+        return new PivotDataFieldModel(sourceFieldIndex, displayName, summaryFunction);
+    }
+
+    public static bool IsNumericSourceField(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
+    {
+        var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
+        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
+        {
+            if (sheet.GetValue(row, sourceColumn) is NumberValue or DateTimeValue)
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryParseLabelFilter(string input, int sourceFieldIndex, out PivotLabelFilterModel filter)
+    {
+        filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.Contains, "");
+        var normalized = input.Trim();
+        if (normalized.StartsWith("<>", StringComparison.Ordinal))
+        {
+            filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.DoesNotEqual, normalized[2..].Trim());
+            return !string.IsNullOrWhiteSpace(filter.Value);
+        }
+
+        var parts = normalized.Split(':', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1]))
+            return false;
+
+        var kind = parts[0].ToLowerInvariant() switch
+        {
+            "equals" or "=" => PivotLabelFilterKind.Equals,
+            "notequals" or "not" or "<>" => PivotLabelFilterKind.DoesNotEqual,
+            "begins" or "beginswith" => PivotLabelFilterKind.BeginsWith,
+            "ends" or "endswith" => PivotLabelFilterKind.EndsWith,
+            "contains" => PivotLabelFilterKind.Contains,
+            "notcontains" => PivotLabelFilterKind.DoesNotContain,
+            _ => PivotLabelFilterKind.Contains
+        };
+        filter = new PivotLabelFilterModel(sourceFieldIndex, kind, parts[1]);
+        return true;
+    }
+
+    public static bool TryParseValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
+    {
+        filter = new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, SourceFieldIndex: sourceFieldIndex);
+        var normalized = input.Trim();
+        if (TryParseTopBottomValueFilter(normalized, sourceFieldIndex, out filter))
+            return true;
+
+        var operators = new[]
+        {
+            (Text: ">=", Kind: PivotValueFilterKind.GreaterThanOrEqual),
+            (Text: "<=", Kind: PivotValueFilterKind.LessThanOrEqual),
+            (Text: "<>", Kind: PivotValueFilterKind.DoesNotEqual),
+            (Text: ">", Kind: PivotValueFilterKind.GreaterThan),
+            (Text: "<", Kind: PivotValueFilterKind.LessThan),
+            (Text: "=", Kind: PivotValueFilterKind.Equals)
+        };
+        foreach (var op in operators)
+        {
+            if (!normalized.StartsWith(op.Text, StringComparison.Ordinal))
+                continue;
+
+            if (!double.TryParse(
+                    normalized[op.Text.Length..].Trim(),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var value))
+            {
+                return false;
+            }
+
+            filter = new PivotValueFilterModel(0, op.Kind, ComparisonValue: value, SourceFieldIndex: sourceFieldIndex);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseTopBottomValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
+    {
+        filter = new PivotValueFilterModel(0, PivotValueFilterKind.Top, SourceFieldIndex: sourceFieldIndex);
+        var parts = input.Split(':', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 ||
+            !int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var count) ||
+            count <= 0)
+        {
+            return false;
+        }
+
+        var kind = parts[0].ToLowerInvariant() switch
+        {
+            "top" => PivotValueFilterKind.Top,
+            "bottom" => PivotValueFilterKind.Bottom,
+            _ => (PivotValueFilterKind?)null
+        };
+        if (kind is null)
+            return false;
+
+        filter = new PivotValueFilterModel(0, kind.Value, Count: count, SourceFieldIndex: sourceFieldIndex);
+        return true;
+    }
+
     public static string? ResolvePivotChartFieldButtonCaption(
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,

@@ -120,4 +120,81 @@ public static class ChartOptionCycler
             _ => ChartType.Column
         };
     }
+
+    public static bool TryGetAxisBounds(Sheet sheet, ChartModel chart, bool useXAxis, out double minimum, out double maximum)
+    {
+        minimum = 0;
+        maximum = 0;
+        var values = new List<double>();
+        var startRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
+        if (startRow > chart.DataRange.End.Row)
+            return false;
+
+        if (useXAxis)
+        {
+            var xColumns = ChartTypeSupport.GetXAxisValueColumns(chart);
+            foreach (var xColumn in xColumns)
+            {
+                for (var row = startRow; row <= chart.DataRange.End.Row; row++)
+                {
+                    if (sheet.GetValue(row, xColumn) is NumberValue number)
+                        values.Add(number.Value);
+                }
+            }
+        }
+        else
+        {
+            var yColumns = ChartTypeSupport.GetYAxisValueColumns(chart);
+            for (var row = startRow; row <= chart.DataRange.End.Row; row++)
+            {
+                foreach (var col in yColumns)
+                {
+                    if (sheet.GetValue(row, col) is NumberValue number)
+                        values.Add(number.Value);
+                }
+            }
+        }
+
+        if (values.Count == 0)
+            return false;
+
+        minimum = values.Min();
+        maximum = values.Max();
+        if (Math.Abs(maximum - minimum) < double.Epsilon)
+        {
+            minimum -= 1;
+            maximum += 1;
+        }
+
+        return true;
+    }
+
+    public static int GetSeriesCount(ChartModel chart) => ChartTypeSupport.GetDataSeriesCount(chart);
+
+    public static (bool ShowSecondaryAxis, int[] SeriesIndexes) GetNextSecondaryAxisSeries(ChartModel chart, int seriesCount)
+    {
+        if (!chart.ShowSecondaryAxis)
+            return (true, [1]);
+
+        if (chart.SecondaryAxisSeriesIndexes.Count == 0)
+            return (false, []);
+
+        var current = chart.SecondaryAxisSeriesIndexes.Min();
+        if (current + 1 < seriesCount)
+            return (true, [current + 1]);
+
+        return (true, []);
+    }
+
+    public static int[] GetNextComboLineSeries(ChartModel chart, int seriesCount)
+    {
+        if (!chart.UseComboLineForSecondarySeries || chart.ComboLineSeriesIndexes.Count == 0)
+            return [1];
+
+        var current = chart.ComboLineSeriesIndexes.Min();
+        if (current + 1 < seriesCount)
+            return [current + 1];
+
+        return [];
+    }
 }

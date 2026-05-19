@@ -65,4 +65,25 @@ public sealed class DrawingInputParserTests
         if (expected)
             color.Should().Be(new CellColor(r, g, b));
     }
+
+    [Fact]
+    public void FormatPictureCellText_MapsScalarValuesToExcelDisplayText()
+    {
+        var priorCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+
+            DrawingInputParser.FormatPictureCellText(BlankValue.Instance).Should().Be("");
+            DrawingInputParser.FormatPictureCellText(new NumberValue(12.5)).Should().Be("12.5");
+            DrawingInputParser.FormatPictureCellText(new BoolValue(true)).Should().Be("TRUE");
+            DrawingInputParser.FormatPictureCellText(new BoolValue(false)).Should().Be("FALSE");
+            DrawingInputParser.FormatPictureCellText(new TextValue("East")).Should().Be("East");
+            DrawingInputParser.FormatPictureCellText(new ErrorValue("#DIV/0!")).Should().Be("#DIV/0!");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = priorCulture;
+        }
+    }
 }

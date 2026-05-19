@@ -270,11 +270,29 @@ public partial class MainWindow : Window
             : ribbonScrollViewer?.ViewportWidth;
         if (availableWidth is null or <= 0)
             availableWidth = RibbonTabs.ActualWidth > 0 ? RibbonTabs.ActualWidth : activePanel.ActualWidth;
+        if (RibbonTabs.ActualWidth > 0)
+            availableWidth = Math.Min(availableWidth.Value, Math.Max(0, RibbonTabs.ActualWidth - 12));
 
+        var fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
         var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
-        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups);
-        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
+        ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
 
+        while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
+               CollapseOneMoreRibbonGroup(plannedStates))
+        {
+            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+        }
+
+        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        _ribbonCompact = compacted;
+    }
+
+    private static void ApplyRibbonAdaptiveStates(
+        IReadOnlyList<FrameworkElement> groups,
+        IReadOnlyList<Button> collapsedButtons,
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates)
+    {
         for (var i = 0; i < groups.Count; i++)
         {
             collapsedButtons[i].Visibility = Visibility.Collapsed;
@@ -297,8 +315,29 @@ public partial class MainWindow : Window
                     break;
             }
         }
+    }
 
-        _ribbonCompact = compacted;
+    private static bool RibbonRowOverflows(StackPanel activePanel, double availableWidth)
+    {
+        activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
+    }
+
+    private static bool CollapseOneMoreRibbonGroup(RibbonAdaptiveGroupState[] states)
+    {
+        for (var i = states.Length - 1; i >= 0; i--)
+        {
+            if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+
+            if (i == 0 && states.Length > 1)
+                return false;
+
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return true;
+        }
+
+        return false;
     }
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
@@ -319,6 +358,25 @@ public partial class MainWindow : Window
         SetRibbonGroupCompact(group, level);
         group.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return Math.Max(0, group.DesiredSize.Width);
+    }
+
+    private static double MeasureRibbonFixedChromeWidth(StackPanel panel)
+    {
+        var fixedWidth = 0.0;
+        foreach (var child in panel.Children.OfType<FrameworkElement>())
+        {
+            if (child.Visibility != Visibility.Visible ||
+                child is Grid ||
+                IsRibbonCollapsedGroupButton(child))
+            {
+                continue;
+            }
+
+            child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            fixedWidth += child.DesiredSize.Width;
+        }
+
+        return fixedWidth;
     }
 
     private static List<Button> InsertRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
@@ -580,7 +638,7 @@ public partial class MainWindow : Window
                     button.Width = level switch
                     {
                         RibbonCompactLevel.Full => fullWidth,
-                        RibbonCompactLevel.SmallWithLabels => Math.Max(compactWidth + 28, Math.Ceiling(fullWidth * 0.72)),
+                        RibbonCompactLevel.SmallWithLabels => fullWidth,
                         _ => compactWidth
                     };
                 }
@@ -679,8 +737,18 @@ public partial class MainWindow : Window
         NormalizeRibbonCommandButtons();
         ConfigureInsertRibbonSurface();
         AlignRibbonIconColumns();
+        DisableRibbonScrollBars();
         ApplyToolbarDropdownWhiteBackgrounds();
         UpdateRibbonCompactMode(force: forceCompact);
+    }
+
+    private void DisableRibbonScrollBars()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
@@ -4353,49 +4421,6 @@ public partial class MainWindow : Window
         Func<SheetId, IWorkbookCommand> createCommand) =>
         TryExecuteGroupedSheetCommand(title, createCommand, out _);
 
-    private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
-        new(new CellAddress(sheetId, range.Start.Row, range.Start.Col),
-            new CellAddress(sheetId, range.End.Row, range.End.Col));
-
-    private static ConditionalFormat CloneConditionalFormatForSheet(ConditionalFormat source, SheetId sheetId) =>
-        new()
-        {
-            AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            UseThreeColorScale = source.UseThreeColorScale,
-            DataBarColor = source.DataBarColor,
-            AboveAverage = source.AboveAverage,
-            FormulaText  = source.FormulaText,
-            StopIfTrue   = source.StopIfTrue
-        };
-
-    private static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId) =>
-        new()
-        {
-            AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage
-        };
-
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
@@ -4678,7 +4703,7 @@ public partial class MainWindow : Window
 
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, CloneConditionalFormatForSheet(cf, sheetId))))
+                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(cf, sheetId))))
             return;
         UpdateViewport();
     }
@@ -4703,7 +4728,7 @@ public partial class MainWindow : Window
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Clear Data Validation",
-                    sheetId => new ClearDataValidationCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                    sheetId => new ClearDataValidationCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
                 return;
 
             UpdateViewport();
@@ -4719,8 +4744,8 @@ public partial class MainWindow : Window
                 "Data Validation",
                 sheetId =>
                 {
-                    var rule = CloneDataValidationForSheet(dv, sheetId);
-                    rule.AppliesTo = RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
+                    rule.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
                     return new SetDataValidationCommand(sheetId, rule);
                 }))
             return;
@@ -4816,24 +4841,12 @@ public partial class MainWindow : Window
 
         if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            int newLevel = GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
+            int newLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
             return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
         }
 
-        int rowLevel = GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
+        int rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
         return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
-    }
-
-    private static int GetNextOutlineLevel(uint start, uint end, IReadOnlyDictionary<uint, int> outlineLevels)
-    {
-        int maxExisting = 0;
-        for (uint index = start; index <= end; index++)
-        {
-            if (outlineLevels.TryGetValue(index, out var level) && level > maxExisting)
-                maxExisting = level;
-        }
-
-        return Math.Min(maxExisting + 1, 8);
     }
 
     private void NamedRangesButton_Click(object sender, RoutedEventArgs e)
@@ -4866,7 +4879,7 @@ public partial class MainWindow : Window
         if (_suppressToolbarSync) return;
         var enabled = UnderlineButton.IsChecked == true;
         SetToolbarToggleStates(strike: enabled ? false : null);
-        ApplyStyleDiff(new StyleDiff(Underline: enabled, Strikethrough: enabled ? false : null));
+        ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled));
     }
 
     private void StrikeButton_Click(object sender, RoutedEventArgs e)
@@ -4874,7 +4887,7 @@ public partial class MainWindow : Window
         if (_suppressToolbarSync) return;
         var enabled = StrikeButton.IsChecked == true;
         SetToolbarToggleStates(underline: enabled ? false : null);
-        ApplyStyleDiff(new StyleDiff(Strikethrough: enabled, Underline: enabled ? false : null, DoubleUnderline: enabled ? false : null));
+        ApplyStyleDiff(CellStyleDiffPlanner.StrikethroughDiff(enabled));
     }
 
     private void AlignLeftBtn_Click(object sender, RoutedEventArgs e)
@@ -4950,7 +4963,7 @@ public partial class MainWindow : Window
             var commands = targetSheetIds
                 .SelectMany(sheetId =>
                 {
-                    var sheetRange = RemapRangeToSheet(range, sheetId);
+                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
                     return new IWorkbookCommand[]
                     {
                         new MergeCellsCommand(sheetId, sheetRange),
@@ -5192,14 +5205,14 @@ public partial class MainWindow : Window
         if (shortcut == FontToggleShortcut.Underline)
         {
             SetToolbarToggleStates(underline: enabled, strike: enabled ? false : null);
-            ApplyStyleDiff(new StyleDiff(Underline: enabled, Strikethrough: enabled ? false : null));
+            ApplyStyleDiff(CellStyleDiffPlanner.UnderlineDiff(enabled));
             return;
         }
 
         if (shortcut == FontToggleShortcut.Strikethrough)
         {
             SetToolbarToggleStates(strike: enabled, underline: enabled ? false : null);
-            ApplyStyleDiff(new StyleDiff(Strikethrough: enabled, Underline: enabled ? false : null, DoubleUnderline: enabled ? false : null));
+            ApplyStyleDiff(CellStyleDiffPlanner.StrikethroughDiff(enabled));
             return;
         }
 
@@ -5255,7 +5268,7 @@ public partial class MainWindow : Window
                      "Insert Cells",
                      sheetId => new InsertCellsCommand(
                          sheetId,
-                         RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                         GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
                          InsertCellsShiftDirection.Down)))
         {
             return;
@@ -5295,7 +5308,7 @@ public partial class MainWindow : Window
                      "Delete Cells",
                      sheetId => new DeleteCellsCommand(
                          sheetId,
-                         RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                         GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
                          DeleteCellsShiftDirection.Up)))
         {
             return;
@@ -5774,7 +5787,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Clear Contents",
-                sheetId => new ClearContentsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                sheetId => new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
                 out var outcome))
             return;
 
@@ -6086,7 +6099,7 @@ public partial class MainWindow : Window
             return;
 
         var sourceCells = clip.Cells
-            .Select(c => (c.Item1, FormatPictureCellText(c.Item2.Value)))
+            .Select(c => (c.Item1, DrawingInputParser.FormatPictureCellText(c.Item2.Value)))
             .ToList();
         IWorkbookCommand CreatePastePictureCommand()
         {
@@ -6106,17 +6119,6 @@ public partial class MainWindow : Window
         UpdateViewport();
         RefreshToolbar();
     }
-
-    private static string FormatPictureCellText(ScalarValue value) =>
-        value switch
-        {
-            BlankValue => "",
-            NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.CurrentCulture),
-            BoolValue b => b.Value ? "TRUE" : "FALSE",
-            TextValue t => t.Value,
-            ErrorValue e => e.Code,
-            _ => value.ToString() ?? ""
-        };
 
     private void ExecutePasteLink(bool transpose, bool keepColumnWidths = false)
     {
@@ -6189,7 +6191,7 @@ public partial class MainWindow : Window
         var isOn = (sender as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked == true;
         if (isOn)
             SetToolbarToggleStates(underline: false, strike: false);
-        ApplyStyleDiff(new StyleDiff(DoubleUnderline: isOn, Underline: isOn ? false : null, Strikethrough: isOn ? false : null));
+        ApplyStyleDiff(CellStyleDiffPlanner.DoubleUnderlineDiff(isOn));
     }
 
     private void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -6213,9 +6215,9 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         ApplyStyleDiff(new StyleDiff(FontSize: fontSize));
 
-        var height = Math.Max(18.0, Math.Ceiling(fontSize * 96.0 / 72.0 + 5.0));
+        var newHeight = Math.Max(18.0, Math.Ceiling(fontSize * 96.0 / 72.0 + 5.0));
         if (!TryExecuteGroupedSheetCommand("Auto Fit Row Height", sheetId =>
-                new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)))
+                new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, newHeight)))
             return;
 
         UpdateViewport();
@@ -6347,7 +6349,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteGroupedSheetCommand(
                 "Clear Conditional Formatting",
-                sheetId => new ClearConditionalFormatsCommand(sheetId, RemapRangeToSheet(range, sheetId))))
+                sheetId => new ClearConditionalFormatsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))))
             return;
         UpdateViewport();
     }
@@ -6363,7 +6365,7 @@ public partial class MainWindow : Window
                 sheetId =>
                 {
                     var remapped = newRules
-                        .Select(r => CloneConditionalFormatForSheet(r, sheetId))
+                        .Select(r => GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId))
                         .ToList();
                     return new ReplaceAllConditionalFormatsCommand(sheetId, remapped);
                 }))
@@ -6378,7 +6380,7 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() != true || dlg.ResultRule is null) return;
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, CloneConditionalFormatForSheet(dlg.ResultRule, sheetId))))
+                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(dlg.ResultRule, sheetId))))
             return;
         UpdateViewport();
     }
@@ -6556,10 +6558,13 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new FailedWorkbookCommand("Sheet not found.");
 
-        var height = AutoFitSizingService.EstimateRowHeight(
-            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Rows),
+        var plans = AutoFitPlanner.PlanRowHeights(
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
-        return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height);
+
+        return CreateAutoFitRowHeightCommand(sheetId, plans);
     }
 
     private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
@@ -6568,37 +6573,44 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new FailedWorkbookCommand("Sheet not found.");
 
-        var width = AutoFitSizingService.EstimateColumnWidth(
-            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Columns),
+        var plans = AutoFitPlanner.PlanColumnWidths(
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultColumnWidth);
-        return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width);
+
+        return CreateAutoFitColumnWidthCommand(sheetId, plans);
     }
 
-    private enum AutoFitAxis
+    private static IWorkbookCommand CreateAutoFitRowHeightCommand(
+        SheetId sheetId,
+        IReadOnlyList<AutoFitSizePlan> plans)
     {
-        Rows,
-        Columns
+        if (plans.Count == 1)
+            return new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
+
+        return new CompositeWorkbookCommand(
+            "Auto Row Height",
+            plans.Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
     }
 
-    private IEnumerable<string> CollectAutoFitDisplayTexts(Sheet sheet, GridRange range, AutoFitAxis axis)
+    private static IWorkbookCommand CreateAutoFitColumnWidthCommand(
+        SheetId sheetId,
+        IReadOnlyList<AutoFitSizePlan> plans)
     {
-        var usedRange = sheet.GetUsedRange();
-        if (usedRange is null)
-            yield break;
+        if (plans.Count == 1)
+            return new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
 
-        var rowStart = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.Start.Row : range.Start.Row;
-        var rowEnd = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.End.Row : range.End.Row;
-        var colStart = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.Start.Col : range.Start.Col;
-        var colEnd = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.End.Col : range.End.Col;
+        return new CompositeWorkbookCommand(
+            "Auto Column Width",
+            plans.Select(plan => (IWorkbookCommand)new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
+    }
 
-        foreach (var (address, cell) in sheet.GetUsedCells())
-        {
-            if (address.Row < rowStart || address.Row > rowEnd ||
-                address.Col < colStart || address.Col > colEnd)
-                continue;
-
-            yield return GetAutoFitDisplayText(sheet, cell);
-        }
+    private string? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
+    {
+        return sheet.GetCell(row, col) is { } cell
+            ? GetAutoFitDisplayText(sheet, cell)
+            : null;
     }
 
     private string GetAutoFitDisplayText(Sheet sheet, Cell cell)
@@ -6657,7 +6669,7 @@ public partial class MainWindow : Window
                 currentRange =>
                 {
                     var addr = currentRange.Start;
-                    var formula = BuildAutoSumFormula(func, addr);
+                    var formula = AutoSumFormulaPlanner.BuildFormula(_workbook.GetSheet(_currentSheetId), func, addr);
                     var edits = new List<(CellAddress Address, Cell NewCell)> { (addr, Cell.FromFormula(formula)) };
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
@@ -6670,31 +6682,6 @@ public partial class MainWindow : Window
         RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
         SetActiveCell(new CellAddress(_currentSheetId, range.Start.Row + 1, range.Start.Col));
         UpdateViewport();
-    }
-
-    private string BuildAutoSumFormula(string func, CellAddress addr)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return $"{func}({CellAddress.NumberToColumnName(addr.Col)}{Math.Max(1, addr.Row - 1)}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row})";
-
-        uint topRow = addr.Row;
-        while (topRow > 1 && sheet.GetValue(topRow - 1, addr.Col) is NumberValue) topRow--;
-        if (topRow == addr.Row)
-        {
-            uint leftCol = addr.Col;
-            while (leftCol > 1 && sheet.GetValue(addr.Row, leftCol - 1) is NumberValue) leftCol--;
-            if (leftCol < addr.Col)
-            {
-                var leftRangeRef = $"{CellAddress.NumberToColumnName(leftCol)}{addr.Row}:{CellAddress.NumberToColumnName(addr.Col - 1)}{addr.Row}";
-                return $"{func}({leftRangeRef})";
-            }
-        }
-
-        var rangeStr = topRow < addr.Row
-            ? $"{CellAddress.NumberToColumnName(addr.Col)}{topRow}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row - 1}"
-            : $"{CellAddress.NumberToColumnName(addr.Col)}{Math.Max(1, addr.Row - 1)}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row}";
-        return $"{func}({rangeStr})";
     }
 
     private void AutoSumSumMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("SUM");
@@ -6723,7 +6710,7 @@ public partial class MainWindow : Window
 
     private void ExecuteFillCells(FillCellsDirection direction)
     {
-        if (SheetGrid.SelectedRange is not { } range || !CanFill(range, direction))
+        if (SheetGrid.SelectedRange is not { } range || !FillSeriesPlanner.CanFill(range, direction))
             return;
 
         var title = direction switch
@@ -6737,18 +6724,13 @@ public partial class MainWindow : Window
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 title,
-                sheetId => new FillCellsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
+                sheetId => new FillCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
                 out var outcome))
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
-
-    private static bool CanFill(GridRange range, FillCellsDirection direction) =>
-        direction is FillCellsDirection.Down or FillCellsDirection.Up
-            ? range.RowCount >= 2
-            : range.ColCount >= 2;
 
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -6765,7 +6747,10 @@ public partial class MainWindow : Window
                 range,
                 currentRange =>
                 {
-                    var edits = BuildFillSeriesEdits(currentRange, step);
+                    var currentSheet = _workbook.GetSheet(_currentSheetId);
+                    List<(CellAddress Address, Cell NewCell)> edits = currentSheet is null
+                        ? []
+                        : FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, step);
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
@@ -6776,33 +6761,6 @@ public partial class MainWindow : Window
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
-    }
-
-    private List<(CellAddress Address, Cell NewCell)> BuildFillSeriesEdits(GridRange range, double step)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var startValue = sheet?.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
-        if (startValue is null)
-            return [];
-
-        var edits = new List<(CellAddress, Cell)>();
-        var value = startValue.Value;
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
-            {
-                if (r == range.Start.Row && c == range.Start.Col)
-                {
-                    value += step;
-                    continue;
-                }
-
-                edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(new NumberValue(value))));
-                value += step;
-            }
-        }
-
-        return edits;
     }
 
     private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();
@@ -6890,15 +6848,7 @@ public partial class MainWindow : Window
         var input = PromptForInput("Go To Special (blanks/constants/formulas/comments/validation/visible):", "blanks");
         if (input is null) return;
 
-        var kind = input.Trim().ToLowerInvariant() switch
-        {
-            "constant" or "constants" => GoToSpecialKind.Constants,
-            "formula" or "formulas" => GoToSpecialKind.Formulas,
-            "comment" or "comments" => GoToSpecialKind.Comments,
-            "validation" or "data validation" => GoToSpecialKind.DataValidation,
-            "visible" or "visible cells" => GoToSpecialKind.VisibleCellsOnly,
-            _ => GoToSpecialKind.Blanks
-        };
+        var kind = GoToSpecialInputParser.Parse(input);
 
         var matches = GoToSpecialService.Find(sheet, range, kind);
         if (matches.Count == 0)
@@ -6932,12 +6882,12 @@ public partial class MainWindow : Window
                 "Clear All",
                 sheetId =>
                 {
-                    var currentRange = RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    var currentRange = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
                     return new CompositeWorkbookCommand(
                         "Clear All",
                         [
                             new ClearContentsCommand(sheetId, currentRange),
-                            new ApplyStyleCommand(sheetId, currentRange, ClearFormatsDiff())
+                            new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff())
                         ]);
                 },
                 out var outcome))
@@ -6976,7 +6926,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Clear Contents",
-                sheetId => new ClearContentsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                sheetId => new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
                 out var outcome))
             return;
 
@@ -6986,18 +6936,8 @@ public partial class MainWindow : Window
     private void ClearFormats()
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        ApplyStyleDiff(ClearFormatsDiff());
+        ApplyStyleDiff(CellStyleDiffPlanner.ClearFormatsDiff());
     }
-
-    private static StyleDiff ClearFormatsDiff() =>
-        new(
-            Bold: false, Italic: false, Underline: false, DoubleUnderline: false, Strikethrough: false,
-            FontName: "Calibri", FontSize: 11, ClearFill: true, NumberFormat: "General",
-            HAlign: CellHAlign.General, VAlign: CellVAlign.Bottom, WrapText: false, IndentLevel: 0,
-            BorderTop: new CellBorder(BorderStyle.None),
-            BorderBottom: new CellBorder(BorderStyle.None),
-            BorderLeft: new CellBorder(BorderStyle.None),
-            BorderRight: new CellBorder(BorderStyle.None));
 
     // ── Insert tab ────────────────────────────────────────────────────────────
 
@@ -7806,7 +7746,7 @@ public partial class MainWindow : Window
             if (sourceIndex is null)
                 return;
 
-            var zone = IsNumericPivotSourceField(sheet, pivotTable, sourceIndex.Value)
+            var zone = PivotUiPlanner.IsNumericSourceField(sheet, pivotTable, sourceIndex.Value)
                 ? PivotFieldDropZone.Values
                 : PivotFieldDropZone.Rows;
             MovePivotFieldToZone(caption, zone, -1);
@@ -8029,10 +7969,7 @@ public partial class MainWindow : Window
             case PivotFieldDropZone.Values:
                 if (dataFields.All(dataField => dataField.SourceFieldIndex != sourceIndex.Value))
                 {
-                    var caption = PivotUiPlanner.FieldCaption(headers, sourceIndex.Value);
-                    var summaryFunction = IsNumericPivotSourceField(sheet, pivotTable, sourceIndex.Value) ? "sum" : "count";
-                    var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
-                    dataFields.Add(new PivotDataFieldModel(sourceIndex.Value, displayName, summaryFunction));
+                    dataFields.Add(PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value));
                 }
                 break;
         }
@@ -8083,7 +8020,7 @@ public partial class MainWindow : Window
                 InsertAt(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Values:
-                var valueField = draggedDataField ?? CreateDefaultPivotDataField(sheet, pivotTable, headers, sourceIndex.Value);
+                var valueField = draggedDataField ?? PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value);
                 InsertAt(dataFields, valueField, insertIndex);
                 break;
         }
@@ -8229,7 +8166,7 @@ public partial class MainWindow : Window
         var bangIndex = normalized.LastIndexOf('!');
         if (bangIndex >= 0)
         {
-            var sheetName = UnquoteSheetName(normalized[..bangIndex].Trim());
+            var sheetName = PivotUiPlanner.UnquoteSheetName(normalized[..bangIndex].Trim());
             var sheet = _workbook.Sheets.FirstOrDefault(item =>
                 string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase));
             if (sheet is null)
@@ -8262,31 +8199,7 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(range.Start.Sheet);
         return sheet is null || sheet.Id == _currentSheetId
             ? reference
-            : $"{QuoteSheetNameForReference(sheet.Name)}!{reference}";
-    }
-
-    private static string UnquoteSheetName(string sheetName)
-    {
-        if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')
-            return sheetName[1..^1].Replace("''", "'", StringComparison.Ordinal);
-
-        return sheetName;
-    }
-
-    private static string QuoteSheetNameForReference(string sheetName)
-    {
-        if (sheetName.All(ch => char.IsLetterOrDigit(ch) || ch == '_'))
-            return sheetName;
-
-        return $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
-    }
-
-    private static PivotDataFieldModel CreateDefaultPivotDataField(Sheet sheet, PivotTableModel pivotTable, IReadOnlyList<string> headers, int sourceFieldIndex)
-    {
-        var caption = PivotUiPlanner.FieldCaption(headers, sourceFieldIndex);
-        var summaryFunction = IsNumericPivotSourceField(sheet, pivotTable, sourceFieldIndex) ? "sum" : "count";
-        var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
-        return new PivotDataFieldModel(sourceFieldIndex, displayName, summaryFunction);
+            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheet.Name)}!{reference}";
     }
 
     private static void InsertAt<T>(List<T> items, T item, int index)
@@ -8310,107 +8223,6 @@ public partial class MainWindow : Window
         if (ReferenceEquals(list, PivotAvailableFieldsList))
             return PivotFieldDropZone.Available;
         return null;
-    }
-
-    private static bool IsNumericPivotSourceField(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
-    {
-        var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
-        {
-            if (sheet.GetValue(row, sourceColumn) is NumberValue or DateTimeValue)
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParsePivotLabelFilter(string input, int sourceFieldIndex, out PivotLabelFilterModel filter)
-    {
-        filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.Contains, "");
-        var normalized = input.Trim();
-        if (normalized.StartsWith("<>", StringComparison.Ordinal))
-        {
-            filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.DoesNotEqual, normalized[2..].Trim());
-            return !string.IsNullOrWhiteSpace(filter.Value);
-        }
-
-        var parts = normalized.Split(':', 2, StringSplitOptions.TrimEntries);
-        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1]))
-            return false;
-
-        var kind = parts[0].ToLowerInvariant() switch
-        {
-            "equals" or "=" => PivotLabelFilterKind.Equals,
-            "notequals" or "not" or "<>" => PivotLabelFilterKind.DoesNotEqual,
-            "begins" or "beginswith" => PivotLabelFilterKind.BeginsWith,
-            "ends" or "endswith" => PivotLabelFilterKind.EndsWith,
-            "contains" => PivotLabelFilterKind.Contains,
-            "notcontains" => PivotLabelFilterKind.DoesNotContain,
-            _ => PivotLabelFilterKind.Contains
-        };
-        filter = new PivotLabelFilterModel(sourceFieldIndex, kind, parts[1]);
-        return true;
-    }
-
-    private static bool TryParsePivotValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
-    {
-        filter = new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, SourceFieldIndex: sourceFieldIndex);
-        var normalized = input.Trim();
-        if (TryParseTopBottomPivotValueFilter(normalized, sourceFieldIndex, out filter))
-            return true;
-
-        var operators = new[]
-        {
-            (Text: ">=", Kind: PivotValueFilterKind.GreaterThanOrEqual),
-            (Text: "<=", Kind: PivotValueFilterKind.LessThanOrEqual),
-            (Text: "<>", Kind: PivotValueFilterKind.DoesNotEqual),
-            (Text: ">", Kind: PivotValueFilterKind.GreaterThan),
-            (Text: "<", Kind: PivotValueFilterKind.LessThan),
-            (Text: "=", Kind: PivotValueFilterKind.Equals)
-        };
-        foreach (var op in operators)
-        {
-            if (!normalized.StartsWith(op.Text, StringComparison.Ordinal))
-                continue;
-
-            if (!double.TryParse(
-                    normalized[op.Text.Length..].Trim(),
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var value))
-            {
-                return false;
-            }
-
-            filter = new PivotValueFilterModel(0, op.Kind, ComparisonValue: value, SourceFieldIndex: sourceFieldIndex);
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParseTopBottomPivotValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
-    {
-        filter = new PivotValueFilterModel(0, PivotValueFilterKind.Top, SourceFieldIndex: sourceFieldIndex);
-        var parts = input.Split(':', 2, StringSplitOptions.TrimEntries);
-        if (parts.Length != 2 ||
-            !int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var count) ||
-            count <= 0)
-        {
-            return false;
-        }
-
-        var kind = parts[0].ToLowerInvariant() switch
-        {
-            "top" => PivotValueFilterKind.Top,
-            "bottom" => PivotValueFilterKind.Bottom,
-            _ => (PivotValueFilterKind?)null
-        };
-        if (kind is null)
-            return false;
-
-        filter = new PivotValueFilterModel(0, kind.Value, Count: count, SourceFieldIndex: sourceFieldIndex);
-        return true;
     }
 
     private enum PivotFieldDropZone
@@ -8639,7 +8451,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableChartLayout(
                 caption,
                 "Insert or select a chart before changing point data-label formatting.",
-                chart => GetChartSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
+                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
                 "Add chart data points before changing point data-label formatting.",
                 chart =>
                 {
@@ -8910,7 +8722,7 @@ public partial class MainWindow : Window
                 "Secondary Axis",
                 "Insert or select a chart before changing secondary axes.",
                 chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) &&
-                         (chart.ShowSecondaryAxis || GetChartSeriesCount(chart) >= 2),
+                         (chart.ShowSecondaryAxis || ChartOptionCycler.GetSeriesCount(chart) >= 2),
                 "Secondary value axes require a supported chart with at least two data series.",
                 chart => new ChartLayoutOptions(
                     ShowSecondaryAxis: !chart.ShowSecondaryAxis,
@@ -9220,7 +9032,7 @@ public partial class MainWindow : Window
                 ? new ChartLayoutOptions(XAxisLogScale: enableLog)
                 : new ChartLayoutOptions(YAxisLogScale: enableLog);
 
-            if (enableLog && TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            if (enableLog && ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
             {
                 var positiveMinimum = minimum > 0 ? minimum : 1;
                 var positiveMaximum = maximum > positiveMinimum ? maximum : positiveMinimum * 10;
@@ -9269,7 +9081,7 @@ public partial class MainWindow : Window
                     ? new ChartLayoutOptions(ClearXAxisBounds: true)
                     : new ChartLayoutOptions(ClearYAxisBounds: true);
             }
-            else if (TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            else if (ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
             {
                 var majorUnit = Math.Max(double.Epsilon, (maximum - minimum) / 5);
                 var minorUnit = Math.Max(double.Epsilon, majorUnit / 2);
@@ -9296,64 +9108,16 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private static bool TryGetChartAxisBounds(Sheet sheet, ChartModel chart, bool useXAxis, out double minimum, out double maximum)
-    {
-        minimum = 0;
-        maximum = 0;
-        var values = new List<double>();
-        var startRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        if (startRow > chart.DataRange.End.Row)
-            return false;
-
-        if (useXAxis)
-        {
-            var xColumns = ChartTypeSupport.GetXAxisValueColumns(chart);
-            foreach (var xColumn in xColumns)
-            {
-                for (var row = startRow; row <= chart.DataRange.End.Row; row++)
-                {
-                    if (sheet.GetValue(row, xColumn) is NumberValue number)
-                        values.Add(number.Value);
-                }
-            }
-        }
-        else
-        {
-            var yColumns = ChartTypeSupport.GetYAxisValueColumns(chart);
-            for (var row = startRow; row <= chart.DataRange.End.Row; row++)
-            {
-                foreach (var col in yColumns)
-                {
-                    if (sheet.GetValue(row, col) is NumberValue number)
-                        values.Add(number.Value);
-                }
-            }
-        }
-
-        if (values.Count == 0)
-            return false;
-
-        minimum = values.Min();
-        maximum = values.Max();
-        if (Math.Abs(maximum - minimum) < double.Epsilon)
-        {
-            minimum -= 1;
-            maximum += 1;
-        }
-
-        return true;
-    }
-
     private void ChartSecondaryAxisSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Secondary Axis Series",
                 "Insert or select a chart before changing secondary-axis series.",
-                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && GetChartSeriesCount(chart) >= 2,
+                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && ChartOptionCycler.GetSeriesCount(chart) >= 2,
                 "Secondary value axes require a supported chart with at least two data series.",
                 chart =>
                 {
-                    var next = GetNextSecondaryAxisSeries(chart, GetChartSeriesCount(chart));
+                    var next = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
                     return new ChartLayoutOptions(
                         ShowSecondaryAxis: next.ShowSecondaryAxis,
                         SecondaryAxisSeriesIndexes: next.SeriesIndexes);
@@ -9361,38 +9125,6 @@ public partial class MainWindow : Window
             return;
 
         UpdateViewport();
-    }
-
-    private static int GetChartSeriesCount(ChartModel chart)
-    {
-        return ChartTypeSupport.GetDataSeriesCount(chart);
-    }
-
-    private static (bool ShowSecondaryAxis, int[] SeriesIndexes) GetNextSecondaryAxisSeries(ChartModel chart, int seriesCount)
-    {
-        if (!chart.ShowSecondaryAxis)
-            return (true, [1]);
-
-        if (chart.SecondaryAxisSeriesIndexes.Count == 0)
-            return (false, []);
-
-        var current = chart.SecondaryAxisSeriesIndexes.Min();
-        if (current + 1 < seriesCount)
-            return (true, [current + 1]);
-
-        return (true, []);
-    }
-
-    private static int[] GetNextComboLineSeries(ChartModel chart, int seriesCount)
-    {
-        if (!chart.UseComboLineForSecondarySeries || chart.ComboLineSeriesIndexes.Count == 0)
-            return [1];
-
-        var current = chart.ComboLineSeriesIndexes.Min();
-        if (current + 1 < seriesCount)
-            return [current + 1];
-
-        return [];
     }
 
     private void ChartComboBtn_Click(object sender, RoutedEventArgs e)
@@ -9420,7 +9152,7 @@ public partial class MainWindow : Window
                 "Combo line overlays require a supported chart with at least two data series.",
                 chart =>
                 {
-                    var nextIndexes = GetNextComboLineSeries(chart, GetChartSeriesCount(chart));
+                    var nextIndexes = ChartOptionCycler.GetNextComboLineSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
                     return new ChartLayoutOptions(
                         UseComboLineForSecondarySeries: nextIndexes.Length > 0,
                         ComboLineSeriesIndexes: nextIndexes);
@@ -9508,7 +9240,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableChartLayout(
                 caption,
                 "Insert or select a chart before changing series formatting.",
-                chart => GetChartSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
+                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
                 unsupportedMessage ?? "Add data series before changing series formatting.",
                 chart =>
                 {
@@ -10434,7 +10166,7 @@ public partial class MainWindow : Window
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Print Area", sheetId => new SetPrintAreaCommand(sheetId, RemapRangeToSheet(range, sheetId))))
+        if (!TryExecuteGroupedSheetCommand("Print Area", sheetId => new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))))
             return;
         RefreshStatusBar();
     }
@@ -11042,19 +10774,7 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new EditCellsCommand(_currentSheetId, []);
 
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            var cellVal = sheet.GetValue(r, range.Start.Col) as TextValue;
-            if (cellVal is null) continue;
-            var parts = cellVal.Value.Split(delimiter);
-            for (int i = 0; i < parts.Length; i++)
-            {
-                var addr = new CellAddress(_currentSheetId, r, range.Start.Col + (uint)i);
-                ScalarValue val = double.TryParse(parts[i].Trim(), out var d) ? new NumberValue(d) : new TextValue(parts[i].Trim());
-                edits.Add((addr, Cell.FromValue(val)));
-            }
-        }
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, delimiter);
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1
@@ -12448,3 +12168,4 @@ public partial class MainWindow : Window
         }
     }
 }
+

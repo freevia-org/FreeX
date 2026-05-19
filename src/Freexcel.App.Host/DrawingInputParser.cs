@@ -50,4 +50,15 @@ public static class DrawingInputParser
         color = default;
         return false;
     }
+
+    public static string FormatPictureCellText(ScalarValue value) =>
+        value switch
+        {
+            BlankValue => "",
+            NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            TextValue text => text.Value,
+            ErrorValue error => error.Code,
+            _ => value.ToString() ?? ""
+        };
 }
