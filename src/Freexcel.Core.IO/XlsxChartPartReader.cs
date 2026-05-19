@@ -63,9 +63,22 @@ public static class XlsxChartPartReader
             return false;
 
         if (read)
+        {
+            ApplyChartStyleMetadata(chartXml, chart);
             ApplyPivotSourceMetadata(chartXml, chart);
+        }
 
         return read;
+    }
+
+    private static void ApplyChartStyleMetadata(XDocument chartXml, ChartModel chart)
+    {
+        var styleValue = chartXml.Root?
+            .Element(ChartNs + "style")?
+            .Attribute("val")?
+            .Value;
+        if (int.TryParse(styleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleId))
+            chart.ChartStyleId = styleId;
     }
 
     private static (XElement Element, ChartType Type)? FindDeferredAdvancedChart(XElement? plotArea)

@@ -566,6 +566,15 @@ internal static class XlsxCorpusFixtureFactory
         cache.Fields.Add(new PivotCacheFieldModel("Category"));
         cache.Fields.Add(new PivotCacheFieldModel("Amount", 4));
         workbook.PivotCaches.Add(cache);
+        var style = new PivotTableStyleModel
+        {
+            Name = "FreexcelCorpusPivotStyle",
+            AppliesToPivotTables = true,
+            AppliesToTables = false
+        };
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
+        style.Elements.Add(new PivotTableStyleElementModel("firstRowStripe", 1, 1));
+        workbook.PivotTableStyles.Add(style);
 
         var pivot = new PivotTableModel
         {
@@ -573,7 +582,9 @@ internal static class XlsxCorpusFixtureFactory
             CacheId = 1,
             SourceRange = Range(sheet, "A1", "B3"),
             TargetRange = Range(sheet, "A5", "B8"),
-            PackagePart = "xl/pivotTables/pivotTable1.xml"
+            PackagePart = "xl/pivotTables/pivotTable1.xml",
+            StyleName = "FreexcelCorpusPivotStyle",
+            ShowRowStripes = true
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
