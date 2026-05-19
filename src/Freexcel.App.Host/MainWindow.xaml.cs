@@ -7462,12 +7462,18 @@ public partial class MainWindow : Window
             2 => "TableStyleDark1",
             _ => "TableStyleLight9"
         };
+        var dialog = new CreateTableDialog(_currentSheetId, FormatRangeReference(range.Start, range.End), tableStyleName) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null)
+            return;
+
+        range = dialog.Result.Range;
         if (!TryExecuteGroupedSheetCommand(
                 "Format as Table",
                 sheetId => new CreateStructuredTableCommand(
                     sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId),
-                    tableStyleName)))
+                    GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId),
+                    dialog.Result.TableStyleName,
+                    dialog.Result.FirstRowHasHeaders)))
             return;
 
         var (headerFill, oddFill, evenFill) = variant switch
