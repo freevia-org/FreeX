@@ -1349,6 +1349,63 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCustomProperties()
+    {
+        var workbook = new Workbook("WorksheetCustomProperties");
+        var sheet = workbook.AddSheet("Data");
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).CustomProperties.Should()
+            .ContainSingle()
+            .Which.Should().Be(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCalculationProperties()
+    {
+        var workbook = new Workbook("WorksheetCalculationProperties");
+        workbook.AddSheet("Data").FullCalculationOnLoad = true;
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("WorksheetPhoneticProperties");
+        workbook.AddSheet("Data").PhoneticProperties = new WorksheetPhoneticProperties(
+            "1",
+            "fullwidthKatakana",
+            "center");
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).PhoneticProperties.Should().Be(new WorksheetPhoneticProperties(
+            "1",
+            "fullwidthKatakana",
+            "center"));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesInvalidViewPaneState()
     {
         var workbook = new Workbook("ViewPaneSanitizeTest");
@@ -9937,6 +9994,103 @@ public class FileAdapterSmokeTests
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
         sheetCalcPr.Should().NotBeNull();
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsWorksheetCalculationPropertiesIntoSheetModel()
+    {
+        var workbook = new Workbook("CalculationPropertiesLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCalculationProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetCalculationProperties()
+    {
+        var workbook = new Workbook("CalculationPropertiesSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+        sheet.FullCalculationOnLoad = true;
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull();
+        sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesWorksheetCalculationPropertiesBeforeSheetProtection()
+    {
+        var workbook = new Workbook("CalculationPropertiesProtectedSheetOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+        sheet.FullCalculationOnLoad = true;
+        sheet.IsProtected = true;
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var childNames = worksheetXml.Root!
+            .Elements()
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        childNames.IndexOf("sheetCalcPr").Should().BeLessThan(childNames.IndexOf("sheetProtection"));
+        worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr")!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetCalculationProperty()
+    {
+        var workbook = new Workbook("CalculationPropertiesRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCalculationProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).FullCalculationOnLoad = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull();
+        sheetCalcPr!.Attribute("fullCalcOnLoad").Should().BeNull();
+        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999");
     }
 
     [Fact]
@@ -9967,6 +10121,143 @@ public class FileAdapterSmokeTests
         phoneticProperties.Should().NotBeNull();
         phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
         phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+        phoneticProperties.Attribute("alignment")!.Value.Should().Be("center");
+        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsWorksheetPhoneticPropertiesIntoSheetModel()
+    {
+        var workbook = new Workbook("PhoneticPropertiesLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).PhoneticProperties.Should().Be(new WorksheetPhoneticProperties(
+            "1",
+            "fullwidthKatakana",
+            "center"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+
+        phoneticProperties.Should().NotBeNull();
+        phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
+        phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+        phoneticProperties.Attribute("alignment")!.Value.Should().Be("center");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesProtectedRangesBeforeWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesProtectedRangeOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
+        sheet.AllowEditRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1)));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var childNames = worksheetXml.Root!
+            .Elements()
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        childNames.IndexOf("protectedRanges").Should().BeLessThan(childNames.IndexOf("phoneticPr"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotDuplicateWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Elements(worksheetNs + "phoneticPr").ToList();
+
+        phoneticProperties.Should().ContainSingle();
+        phoneticProperties[0].Attribute("fontId")!.Value.Should().Be("1");
+        phoneticProperties[0].Attribute("nativeOnly")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).PhoneticProperties = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+
+        phoneticProperties.Should().NotBeNull();
+        phoneticProperties!.Attribute("fontId").Should().BeNull();
+        phoneticProperties.Attribute("type").Should().BeNull();
+        phoneticProperties.Attribute("alignment").Should().BeNull();
+        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -10064,6 +10355,117 @@ public class FileAdapterSmokeTests
         customProperties.Should().NotBeNull();
         customProperties!.ToString().Should().Contain("name=\"FreexcelNativeProperty\"");
         customProperties.ToString().Should().Contain("id=\"1\"");
+        customProperties.ToString().Should().Contain("unsupportedAttr=\"kept\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsWorksheetCustomPropertiesIntoSheetModel()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).CustomProperties.Should()
+            .ContainSingle()
+            .Which.Should().Be(new WorksheetCustomProperty("FreexcelNativeProperty", 1));
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetCustomProperties()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("FreexcelModeledProperty", 7));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customProperty = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .Single();
+
+        customProperty.Attribute("name")!.Value.Should().Be("FreexcelModeledProperty");
+        customProperty.Attribute("id")!.Value.Should().Be("7");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotDuplicateWorksheetCustomProperties()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customProperties = worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")!
+            .Elements(worksheetNs + "customPr")
+            .ToList();
+
+        customProperties.Should().ContainSingle();
+        customProperties[0].Attribute("name")!.Value.Should().Be("FreexcelNativeProperty");
+        customProperties[0].Attribute("unsupportedAttr")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetCustomProperty()
+    {
+        var workbook = new Workbook("WorksheetCustomPropertiesRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("custom property"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCustomProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).CustomProperties.Clear();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        worksheetXml.Root!
+            .Element(worksheetNs + "customProperties")?
+            .Elements(worksheetNs + "customPr")
+            .Any(property => property.Attribute("name")?.Value == "FreexcelNativeProperty")
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -12675,7 +13077,8 @@ public class FileAdapterSmokeTests
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sheetCalcPr",
-                new XAttribute("fullCalcOnLoad", "1")));
+                new XAttribute("fullCalcOnLoad", "1"),
+                new XAttribute("calcId", "999")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -12693,7 +13096,8 @@ public class FileAdapterSmokeTests
                 worksheetNs + "phoneticPr",
                 new XAttribute("fontId", "1"),
                 new XAttribute("type", "fullwidthKatakana"),
-                new XAttribute("alignment", "center")));
+                new XAttribute("alignment", "center"),
+                new XAttribute("nativeOnly", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
@@ -12758,7 +13162,8 @@ public class FileAdapterSmokeTests
                 new XElement(
                     worksheetNs + "customPr",
                     new XAttribute("name", "FreexcelNativeProperty"),
-                    new XAttribute("id", "1"))));
+                    new XAttribute("id", "1"),
+                    new XAttribute("unsupportedAttr", "kept"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
