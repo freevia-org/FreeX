@@ -7403,6 +7403,37 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomSheetViews()
+    {
+        var workbook = new Workbook("CustomSheetViewsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalCustomSheetViews(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var customSheetViews = worksheetXml.Root!.Element(worksheetNs + "customSheetViews");
+        customSheetViews.Should().NotBeNull();
+        customSheetViews!.ToString().Should().Contain("{11111111-1111-1111-1111-111111111111}");
+        customSheetViews.ToString().Should().Contain("topLeftCell=\"B2\"");
+        customSheetViews.ToString().Should().Contain("showGridLines=\"0\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -8405,6 +8436,34 @@ public class FileAdapterSmokeTests
             var settingsEntry = archive.CreateEntry("xl/printerSettings/printerSettings1.bin");
             using var settingsStream = settingsEntry.Open();
             settingsStream.Write([0x46, 0x58, 0x4C, 0x50, 0x52, 0x4E]);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalCustomSheetViews(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "customSheetViews",
+                new XElement(
+                    worksheetNs + "customSheetView",
+                    new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                    new XAttribute("scale", "120"),
+                    new XAttribute("showGridLines", "0"),
+                    new XAttribute("showRowCol", "0"),
+                    new XAttribute("state", "visible"),
+                    new XElement(
+                        worksheetNs + "pane",
+                        new XAttribute("xSplit", "1"),
+                        new XAttribute("ySplit", "1"),
+                        new XAttribute("topLeftCell", "B2"),
+                        new XAttribute("activePane", "bottomRight")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         packageStream.Position = 0;

@@ -3745,6 +3745,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
         PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
+        PreserveWorksheetCustomSheetViews(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
     }
 
@@ -4468,6 +4469,65 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
             targetPageSetup.SetAttributeValue(relNs + "id", targetRelId);
+            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+        }
+    }
+
+    private static void PreserveWorksheetCustomSheetViews(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
+            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+        {
+            return;
+        }
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var sourceWorkbookRels = LoadRelationshipTargets(
+            sourceArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var targetWorkbookRels = LoadRelationshipTargets(
+            targetArchive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+
+        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
+        {
+            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+                continue;
+
+            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
+                continue;
+
+            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
+            var sourceCustomSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "customSheetViews");
+            if (sourceCustomSheetViews is null)
+                continue;
+
+            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
+            var targetRoot = targetWorksheetXml.Root;
+            if (targetRoot is null || targetRoot.Element(workbookNs + "customSheetViews") is not null)
+                continue;
+
+            targetRoot.Add(new XElement(sourceCustomSheetViews));
             ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
