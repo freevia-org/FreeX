@@ -70,6 +70,8 @@ public sealed class DrawingInputParserTests
     [InlineData("320x180", true, 320, 180)]
     [InlineData("320 x 180", true, 320, 180)]
     [InlineData("12.5x8.25", true, 12.5, 8.25)]
+    [InlineData("NaNx180", false, 0, 0)]
+    [InlineData("320xInfinity", false, 0, 0)]
     [InlineData("320", false, 0, 0)]
     [InlineData("x180", false, 0, 0)]
     [InlineData("320x", false, 0, 0)]

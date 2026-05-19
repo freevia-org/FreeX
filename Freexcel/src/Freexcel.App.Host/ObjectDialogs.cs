@@ -100,10 +100,7 @@ public sealed class ObjectSizeDialog : Window
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
     {
         result = new ObjectSizeDialogResult(0, 0);
-        var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var width) ||
-            !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var height) ||
+        if (!DrawingInputParser.TryParseSize(input, out var width, out var height) ||
             width <= 0 ||
             height <= 0)
         {
@@ -157,7 +154,7 @@ public sealed class RotationDialog : Window
     public static bool TryParseRotation(string input, out RotationDialogResult result)
     {
         result = new RotationDialogResult(0);
-        if (!double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        if (!DrawingInputParser.TryParseRotationDegrees(input, out var value))
             return false;
 
         result = new RotationDialogResult(value);
@@ -202,20 +199,9 @@ public sealed class PictureCropDialog : Window
     {
         result = new PictureCropDialogResult(0, 0, 0, 0);
         error = null;
-        var parts = input.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 4 ||
-            !DrawingInputParser.TryParseCropPercent(parts[0], out var left) ||
-            !DrawingInputParser.TryParseCropPercent(parts[1], out var top) ||
-            !DrawingInputParser.TryParseCropPercent(parts[2], out var right) ||
-            !DrawingInputParser.TryParseCropPercent(parts[3], out var bottom))
+        if (!DrawingInputParser.TryParseCropPercents(input, out var left, out var top, out var right, out var bottom))
         {
             error = "Enter four crop percentages.";
-            return false;
-        }
-
-        if (left + right >= 1 || top + bottom >= 1)
-        {
-            error = "Crop values must leave a visible picture area.";
             return false;
         }
 
@@ -257,10 +243,7 @@ public sealed class ShapeGradientDialog : Window
     {
         result = new ShapeGradientDialogResult(new CellColor(0, 0, 0), new CellColor(0, 0, 0));
         error = null;
-        var parts = input.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !DrawingInputParser.TryParseRgbColor(parts[0], out var startColor) ||
-            !DrawingInputParser.TryParseRgbColor(parts[1], out var endColor))
+        if (!DrawingInputParser.TryParseGradientColors(input, out var startColor, out var endColor))
         {
             error = "Enter two RGB colors separated by a semicolon.";
             return false;

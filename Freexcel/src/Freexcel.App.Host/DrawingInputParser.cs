@@ -58,8 +58,8 @@ public static class DrawingInputParser
 
         var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2 ||
-            !double.TryParse(parts[0], out width) ||
-            !double.TryParse(parts[1], out height))
+            !TryParseFiniteDouble(parts[0], out width) ||
+            !TryParseFiniteDouble(parts[1], out height))
         {
             width = 0;
             height = 0;
@@ -71,8 +71,7 @@ public static class DrawingInputParser
 
     public static bool TryParseRotationDegrees(string input, out double rotation)
     {
-        if (double.TryParse(input.Trim(), out var parsed) &&
-            double.IsFinite(parsed))
+        if (TryParseFiniteDouble(input, out var parsed))
         {
             rotation = parsed;
             return true;
@@ -134,4 +133,20 @@ public static class DrawingInputParser
             ErrorValue error => error.Code,
             _ => value.ToString() ?? ""
         };
+
+    private static bool TryParseFiniteDouble(string input, out double value)
+    {
+        if (!double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out value) &&
+            !double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            value = 0;
+            return false;
+        }
+
+        if (double.IsFinite(value))
+            return true;
+
+        value = 0;
+        return false;
+    }
 }
