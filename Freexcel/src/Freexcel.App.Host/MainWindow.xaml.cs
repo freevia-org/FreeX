@@ -86,7 +86,6 @@ public partial class MainWindow : Window
     private bool _slicerTimelinePaneDismissed;
 
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells, bool IsCut = false);
-    private sealed record PivotFieldListItem(string Caption, bool IsChecked);
     private InternalClipboard? _internalClipboard;
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
@@ -7595,7 +7594,7 @@ public partial class MainWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed ||
             sender is not ListBox list ||
-            GetPivotListItemCaption(list.SelectedItem) is not { } caption)
+            PivotUiPlanner.GetFieldListCaption(list.SelectedItem) is not { } caption)
         {
             return;
         }
@@ -7903,17 +7902,17 @@ public partial class MainWindow : Window
         switch (targetZone)
         {
             case PivotFieldDropZone.Rows:
-                InsertAt(rowFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                PivotUiPlanner.InsertOrAppend(rowFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Columns:
-                InsertAt(columnFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                PivotUiPlanner.InsertOrAppend(columnFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Filters:
-                InsertAt(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                PivotUiPlanner.InsertOrAppend(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Values:
                 var valueField = draggedDataField ?? PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value);
-                InsertAt(dataFields, valueField, insertIndex);
+                PivotUiPlanner.InsertOrAppend(dataFields, valueField, insertIndex);
                 break;
         }
 
@@ -8004,20 +8003,12 @@ public partial class MainWindow : Window
 
         foreach (var list in new[] { PivotAvailableFieldsList, PivotRowsList, PivotColumnsList, PivotValuesList, PivotFiltersList })
         {
-            if (GetPivotListItemCaption(list.SelectedItem) is { } value)
+            if (PivotUiPlanner.GetFieldListCaption(list.SelectedItem) is { } value)
                 return value;
         }
 
         return null;
     }
-
-    private static string? GetPivotListItemCaption(object? item) =>
-        item switch
-        {
-            string value when !string.IsNullOrWhiteSpace(value) => value,
-            PivotFieldListItem field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
-            _ => null
-        };
 
     private Sheet GetPivotSourceSheet(Sheet fallbackSheet, PivotTableModel pivotTable) =>
         _workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
@@ -8092,14 +8083,6 @@ public partial class MainWindow : Window
         return sheet is null || sheet.Id == _currentSheetId
             ? reference
             : $"{PivotUiPlanner.QuoteSheetNameForReference(sheet.Name)}!{reference}";
-    }
-
-    private static void InsertAt<T>(List<T> items, T item, int index)
-    {
-        if (index < 0 || index > items.Count)
-            items.Add(item);
-        else
-            items.Insert(index, item);
     }
 
     private PivotFieldDropZone? GetPivotFieldDropZone(ListBox list)
