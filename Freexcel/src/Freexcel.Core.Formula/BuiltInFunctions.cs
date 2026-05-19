@@ -2381,7 +2381,7 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
         if (text.Length == 0) return ErrorValue.Value;
-        return new NumberValue(text[0]);
+        return new NumberValue(CharToExcelAnsiCode(text[0]));
     }
 
     private static ScalarValue Char(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2391,8 +2391,72 @@ public static class BuiltInFunctions
         if (!double.IsFinite(n)) return ErrorValue.Value;
         int code = (int)n;
         if (code <= 0 || code > 255) return ErrorValue.Value;
-        return new TextValue(((char)code).ToString());
+        return new TextValue(ExcelAnsiCodeToChar(code).ToString());
     }
+
+    private static char ExcelAnsiCodeToChar(int code) => code switch
+    {
+        128 => '\u20AC',
+        130 => '\u201A',
+        131 => '\u0192',
+        132 => '\u201E',
+        133 => '\u2026',
+        134 => '\u2020',
+        135 => '\u2021',
+        136 => '\u02C6',
+        137 => '\u2030',
+        138 => '\u0160',
+        139 => '\u2039',
+        140 => '\u0152',
+        142 => '\u017D',
+        145 => '\u2018',
+        146 => '\u2019',
+        147 => '\u201C',
+        148 => '\u201D',
+        149 => '\u2022',
+        150 => '\u2013',
+        151 => '\u2014',
+        152 => '\u02DC',
+        153 => '\u2122',
+        154 => '\u0161',
+        155 => '\u203A',
+        156 => '\u0153',
+        158 => '\u017E',
+        159 => '\u0178',
+        _ => (char)code
+    };
+
+    private static int CharToExcelAnsiCode(char ch) => ch switch
+    {
+        '\u20AC' => 128,
+        '\u201A' => 130,
+        '\u0192' => 131,
+        '\u201E' => 132,
+        '\u2026' => 133,
+        '\u2020' => 134,
+        '\u2021' => 135,
+        '\u02C6' => 136,
+        '\u2030' => 137,
+        '\u0160' => 138,
+        '\u2039' => 139,
+        '\u0152' => 140,
+        '\u017D' => 142,
+        '\u2018' => 145,
+        '\u2019' => 146,
+        '\u201C' => 147,
+        '\u201D' => 148,
+        '\u2022' => 149,
+        '\u2013' => 150,
+        '\u2014' => 151,
+        '\u02DC' => 152,
+        '\u2122' => 153,
+        '\u0161' => 154,
+        '\u203A' => 155,
+        '\u0153' => 156,
+        '\u017E' => 158,
+        '\u0178' => 159,
+        _ => ch
+    };
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 5 – Count: COUNTBLANK
