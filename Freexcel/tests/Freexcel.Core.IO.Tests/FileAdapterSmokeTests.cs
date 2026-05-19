@@ -7950,6 +7950,41 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetDataConsolidation()
+    {
+        var workbook = new Workbook("DataConsolidationRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetDataConsolidation(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var dataConsolidate = worksheetXml.Root!.Element(worksheetNs + "dataConsolidate");
+        dataConsolidate.Should().NotBeNull();
+        dataConsolidate!.Attribute("function")!.Value.Should().Be("sum");
+        dataConsolidate.Attribute("leftLabels")!.Value.Should().Be("1");
+        dataConsolidate.ToString().Should().Contain("ref=\"A1:B2\"");
+        dataConsolidate.ToString().Should().Contain("sheet=\"Data\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -9327,6 +9362,32 @@ public class FileAdapterSmokeTests
                     worksheetNs + "sortCondition",
                     new XAttribute("ref", "A2:A3"),
                     new XAttribute("descending", "1"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetDataConsolidation(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "dataConsolidate",
+                new XAttribute("function", "sum"),
+                new XAttribute("leftLabels", "1"),
+                new XAttribute("topLabels", "1"),
+                new XAttribute("link", "1"),
+                new XElement(
+                    worksheetNs + "dataRefs",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        worksheetNs + "dataRef",
+                        new XAttribute("ref", "A1:B2"),
+                        new XAttribute("sheet", "Data")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
