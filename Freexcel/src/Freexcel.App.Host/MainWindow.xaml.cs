@@ -10132,7 +10132,11 @@ public partial class MainWindow : Window
     private void InsertSparkline(string type)
     {
         var selected = SheetGrid.SelectedRange;
-        var dialog = new SparklineDialog(selected?.ToString() ?? "", "", ToSparklineKindChoice(type)) { Owner = this };
+        var dialog = new SparklineDialog(
+            selected?.ToString() ?? "",
+            "",
+            SparklineInputParser.ParseDialogKindChoice(type))
+        { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -10148,12 +10152,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var kind = dialog.Result.Kind switch
-        {
-            SparklineKindChoice.Column => SparklineKind.Column,
-            SparklineKindChoice.WinLoss => SparklineKind.WinLoss,
-            _ => SparklineKind.Line
-        };
+        var kind = SparklineInputParser.ToModelKind(dialog.Result.Kind);
 
         var fallbackLocationRange = new GridRange(location, location);
         if (!TryExecuteRepeatableCurrentRangeCommand(
@@ -10166,14 +10165,6 @@ public partial class MainWindow : Window
         EnsureCellVisible(location);
         UpdateViewport();
     }
-
-    private static SparklineKindChoice ToSparklineKindChoice(string type) =>
-        type switch
-        {
-            "column" => SparklineKindChoice.Column,
-            "winloss" => SparklineKindChoice.WinLoss,
-            _ => SparklineKindChoice.Line
-        };
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
     {
