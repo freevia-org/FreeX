@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using Freexcel.Core.Model;
 
@@ -38,45 +37,20 @@ public partial class PivotValueFilterDialog : Window
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
         var option = Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)];
-        if (option.UsesCount)
+        if (!PivotValueFilterInputParser.TryCreateFilter(
+                option.Kind,
+                option.UsesCount,
+                ValueFilterValueBox.Text,
+                ValueFilterValue2Box.Text,
+                _sourceFieldIndex,
+                out var filter,
+                out var error))
         {
-            if (!int.TryParse(ValueFilterValueBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count <= 0)
-            {
-                MessageBox.Show(this, "Enter a positive item count.", "Value Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            ResultFilter = new PivotValueFilterModel(0, option.Kind, Count: count, SourceFieldIndex: _sourceFieldIndex);
-            DialogResult = true;
+            MessageBox.Show(this, error ?? "Enter a valid value filter.", "Value Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (option.Kind is PivotValueFilterKind.AboveAverage or PivotValueFilterKind.BelowAverage)
-        {
-            ResultFilter = new PivotValueFilterModel(0, option.Kind, SourceFieldIndex: _sourceFieldIndex);
-            DialogResult = true;
-            return;
-        }
-
-        if (!double.TryParse(ValueFilterValueBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-        {
-            MessageBox.Show(this, "Enter a numeric comparison value.", "Value Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        double? value2 = null;
-        if (option.Kind is PivotValueFilterKind.Between or PivotValueFilterKind.NotBetween)
-        {
-            if (!double.TryParse(ValueFilterValue2Box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedValue2))
-            {
-                MessageBox.Show(this, "Enter a numeric ending comparison value.", "Value Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            value2 = parsedValue2;
-        }
-
-        ResultFilter = new PivotValueFilterModel(0, option.Kind, ComparisonValue: value, ComparisonValue2: value2, SourceFieldIndex: _sourceFieldIndex);
+        ResultFilter = filter;
         DialogResult = true;
     }
 }
