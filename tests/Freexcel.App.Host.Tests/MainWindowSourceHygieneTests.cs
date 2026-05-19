@@ -204,6 +204,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "QuickAnalysisPlanner.cs"));
+
+        source.Should().Contain("ToolTip = option.PreviewText");
+        planner.Should().Contain("QuickAnalysisPreviewKind");
+    }
+
+    [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));

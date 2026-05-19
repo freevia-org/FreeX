@@ -11,41 +11,70 @@ public static class QuickAnalysisPlanner
 
         return
         [
-            new("Formatting", "Data Bars", QuickAnalysisCommand.DataBar),
-            new("Formatting", "Color Scale", QuickAnalysisCommand.ColorScale),
-            new("Formatting", "Icon Set", QuickAnalysisCommand.IconSet),
-            new("Formatting", "Greater Than...", QuickAnalysisCommand.GreaterThan),
-            new("Formatting", "Top 10...", QuickAnalysisCommand.Top10),
-            new("Formatting", "Clear Conditional Formatting", QuickAnalysisCommand.ClearConditionalFormatting),
-            new("Charts", "Column", QuickAnalysisCommand.ColumnChart),
-            new("Charts", "Stacked Column", QuickAnalysisCommand.StackedColumnChart),
-            new("Charts", "100% Stacked Column", QuickAnalysisCommand.PercentStackedColumnChart),
-            new("Charts", "Line", QuickAnalysisCommand.LineChart),
-            new("Charts", "Pie", QuickAnalysisCommand.PieChart),
-            new("Charts", "Doughnut", QuickAnalysisCommand.DoughnutChart),
-            new("Charts", "Bar", QuickAnalysisCommand.BarChart),
-            new("Charts", "Stacked Bar", QuickAnalysisCommand.StackedBarChart),
-            new("Charts", "100% Stacked Bar", QuickAnalysisCommand.PercentStackedBarChart),
-            new("Charts", "Area", QuickAnalysisCommand.AreaChart),
-            new("Charts", "Scatter", QuickAnalysisCommand.ScatterChart),
-            new("Charts", "Bubble", QuickAnalysisCommand.BubbleChart),
-            new("Charts", "Radar", QuickAnalysisCommand.RadarChart),
-            new("Charts", "Stock", QuickAnalysisCommand.StockChart),
-            new("Totals", "Sum", QuickAnalysisCommand.Sum),
-            new("Totals", "Average", QuickAnalysisCommand.Average),
-            new("Totals", "Count", QuickAnalysisCommand.Count),
-            new("Totals", "Max", QuickAnalysisCommand.Max),
-            new("Totals", "Min", QuickAnalysisCommand.Min),
-            new("Tables", "Format as Table", QuickAnalysisCommand.FormatAsTable),
-            new("Tables", "PivotTable", QuickAnalysisCommand.PivotTable),
-            new("Sparklines", "Line", QuickAnalysisCommand.LineSparkline),
-            new("Sparklines", "Column", QuickAnalysisCommand.ColumnSparkline),
-            new("Sparklines", "Win/Loss", QuickAnalysisCommand.WinLossSparkline)
+            Format("Data Bars", QuickAnalysisCommand.DataBar, "Preview data bars across the selected values."),
+            Format("Color Scale", QuickAnalysisCommand.ColorScale, "Preview a two-color scale across the selected values."),
+            Format("Icon Set", QuickAnalysisCommand.IconSet, "Preview icon indicators for high, middle, and low values."),
+            Format("Greater Than...", QuickAnalysisCommand.GreaterThan, "Preview a greater-than conditional format."),
+            Format("Top 10...", QuickAnalysisCommand.Top10, "Preview highlighting for the top ten selected values."),
+            Format("Clear Conditional Formatting", QuickAnalysisCommand.ClearConditionalFormatting, "Preview removing conditional formats from the selection."),
+            Chart("Column", QuickAnalysisCommand.ColumnChart, "Preview a clustered column chart from the selected range."),
+            Chart("Stacked Column", QuickAnalysisCommand.StackedColumnChart, "Preview a stacked column chart from the selected range."),
+            Chart("100% Stacked Column", QuickAnalysisCommand.PercentStackedColumnChart, "Preview a 100% stacked column chart from the selected range."),
+            Chart("Line", QuickAnalysisCommand.LineChart, "Preview a line chart from the selected range."),
+            Chart("Pie", QuickAnalysisCommand.PieChart, "Preview a pie chart from the selected range."),
+            Chart("Doughnut", QuickAnalysisCommand.DoughnutChart, "Preview a doughnut chart from the selected range."),
+            Chart("Bar", QuickAnalysisCommand.BarChart, "Preview a clustered bar chart from the selected range."),
+            Chart("Stacked Bar", QuickAnalysisCommand.StackedBarChart, "Preview a stacked bar chart from the selected range."),
+            Chart("100% Stacked Bar", QuickAnalysisCommand.PercentStackedBarChart, "Preview a 100% stacked bar chart from the selected range."),
+            Chart("Area", QuickAnalysisCommand.AreaChart, "Preview an area chart from the selected range."),
+            Chart("Scatter", QuickAnalysisCommand.ScatterChart, "Preview a scatter chart from the selected range."),
+            Chart("Bubble", QuickAnalysisCommand.BubbleChart, "Preview a bubble chart from the selected range."),
+            Chart("Radar", QuickAnalysisCommand.RadarChart, "Preview a radar chart from the selected range."),
+            Chart("Stock", QuickAnalysisCommand.StockChart, "Preview a stock chart from the selected range."),
+            Total("Sum", QuickAnalysisCommand.Sum, "Preview sum totals next to the selected range."),
+            Total("Average", QuickAnalysisCommand.Average, "Preview average totals next to the selected range."),
+            Total("Count", QuickAnalysisCommand.Count, "Preview count totals next to the selected range."),
+            Total("Max", QuickAnalysisCommand.Max, "Preview maximum totals next to the selected range."),
+            Total("Min", QuickAnalysisCommand.Min, "Preview minimum totals next to the selected range."),
+            Table("Format as Table", QuickAnalysisCommand.FormatAsTable, "Preview formatting the selection as a table."),
+            Table("PivotTable", QuickAnalysisCommand.PivotTable, "Preview creating a PivotTable from the selected range."),
+            Sparkline("Line", QuickAnalysisCommand.LineSparkline, "Preview line sparklines beside the selected range."),
+            Sparkline("Column", QuickAnalysisCommand.ColumnSparkline, "Preview column sparklines beside the selected range."),
+            Sparkline("Win/Loss", QuickAnalysisCommand.WinLossSparkline, "Preview win/loss sparklines beside the selected range.")
         ];
     }
+
+    private static QuickAnalysisOption Format(string label, QuickAnalysisCommand command, string previewText) =>
+        new("Formatting", label, command, QuickAnalysisPreviewKind.ConditionalFormat, previewText);
+
+    private static QuickAnalysisOption Chart(string label, QuickAnalysisCommand command, string previewText) =>
+        new("Charts", label, command, QuickAnalysisPreviewKind.Chart, previewText);
+
+    private static QuickAnalysisOption Total(string label, QuickAnalysisCommand command, string previewText) =>
+        new("Totals", label, command, QuickAnalysisPreviewKind.Total, previewText);
+
+    private static QuickAnalysisOption Table(string label, QuickAnalysisCommand command, string previewText) =>
+        new("Tables", label, command, QuickAnalysisPreviewKind.Table, previewText);
+
+    private static QuickAnalysisOption Sparkline(string label, QuickAnalysisCommand command, string previewText) =>
+        new("Sparklines", label, command, QuickAnalysisPreviewKind.Sparkline, previewText);
 }
 
-public sealed record QuickAnalysisOption(string Group, string Label, QuickAnalysisCommand Command);
+public sealed record QuickAnalysisOption(
+    string Group,
+    string Label,
+    QuickAnalysisCommand Command,
+    QuickAnalysisPreviewKind PreviewKind,
+    string PreviewText);
+
+public enum QuickAnalysisPreviewKind
+{
+    ConditionalFormat,
+    Chart,
+    Total,
+    Table,
+    Sparkline
+}
 
 public enum QuickAnalysisCommand
 {
