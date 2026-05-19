@@ -2824,7 +2824,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
         if (returnType == 21)
-            return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
+            return new NumberValue(ExcelIsoWeeknum(dt));
 
         int firstDay = returnType switch
         {
@@ -2848,7 +2848,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (!TryOADateToDateTime(args[0], out var dt)) return ErrorValue.Num;
-        return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
+        return new NumberValue(ExcelIsoWeeknum(dt));
     }
 
     private static ScalarValue Workday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -5075,6 +5075,19 @@ public static class BuiltInFunctions
     {
         int serial = (int)Math.Floor(DateToSerial(date));
         return ((serial + 5) % 7 + 7) % 7;
+    }
+
+    private static int ExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
+
+    private static int ExcelIsoWeeknum(DateTime date)
+    {
+        int serial = (int)Math.Floor(DateToSerial(date));
+        int dowMon0 = ExcelDowToMonIndex(serial);
+        int thursdaySerial = serial + (3 - dowMon0);
+        int weekYear = SerialToDate(thursdaySerial).Year;
+        int jan4Serial = (int)Math.Floor(DateToSerial(new DateTime(weekYear, 1, 4)));
+        int week1MondaySerial = jan4Serial - ExcelDowToMonIndex(jan4Serial);
+        return (serial - week1MondaySerial) / 7 + 1;
     }
 
     private static HashSet<DateTime> CollectHolidays(ScalarValue? arg)
