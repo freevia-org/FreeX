@@ -63,6 +63,18 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssues_PreservesTextOrderForMultipleIssuesInSameCell()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("recieve teh adn occured"));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => issue.Word).Should().Equal("recieve", "teh", "adn", "occured");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_ReplacesAllKnownWholeWordsPreservingCapitalization()
     {
         var wb = new Workbook("test");
