@@ -1896,18 +1896,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.SystemKey == Key.Right && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
-            {
-                GroupRowsBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.SystemKey == Key.Left && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
-            {
-                UngroupRowsBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.IsCtrlPlus(e.Key, e.SystemKey, Keyboard.Modifiers))
             {
                 ExecuteKeyboardInsert();
@@ -2179,6 +2167,12 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.AutoSum:
                 InsertAutoSumFormula("SUM");
+                break;
+            case KeyboardCommandShortcut.GroupSelection:
+                GroupRowsBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.UngroupSelection:
+                UngroupRowsBtn_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.OpenFormatCellsFont:
                 OpenFormatCellsDialog(FormatCellsDialogTab.Font);

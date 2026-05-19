@@ -92,6 +92,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.F11, Key.None, ModifierKeys.None, KeyboardCommandShortcut.InsertChartSheet)]
     [InlineData(Key.None, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
     [InlineData(Key.None, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.None, Key.Right, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.GroupSelection)]
+    [InlineData(Key.None, Key.Left, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.UngroupSelection)]
     [InlineData(Key.F, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
     [InlineData(Key.P, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
     [InlineData(Key.G, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.WorkbookStatistics)]
