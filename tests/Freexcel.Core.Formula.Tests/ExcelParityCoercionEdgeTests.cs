@@ -31,6 +31,7 @@ public sealed class ExcelParityCoercionEdgeTests
 
         _eval.Evaluate("=SUM(A1:A3)", sheet).Should().Be(new NumberValue(3));
         _eval.Evaluate("=AVERAGE(A1:A3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=NPV(0,A3)", sheet).Should().Be(new NumberValue(0));
         _eval.Evaluate("=COUNT(A1:A3)", sheet).Should().Be(new NumberValue(1));
         _eval.Evaluate("=COUNTA(A1:A3)", sheet).Should().Be(new NumberValue(3));
     }
@@ -46,7 +47,7 @@ public sealed class ExcelParityCoercionEdgeTests
     }
 
     [Fact]
-    public void AggregateRanges_PropagateErrorsInsteadOfIgnoringThem()
+    public void AggregateRanges_HandleErrorsByFunctionSemantics()
     {
         var sheet = Sheet(
             (1, 1, new NumberValue(1)),
@@ -54,7 +55,8 @@ public sealed class ExcelParityCoercionEdgeTests
 
         _eval.Evaluate("=SUM(A1:A2)", sheet).Should().Be(ErrorValue.NA);
         _eval.Evaluate("=AVERAGE(A1:A2)", sheet).Should().Be(ErrorValue.NA);
-        _eval.Evaluate("=COUNT(A1:A2)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=COUNT(A2)", sheet).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=COUNT(A1:A2)", sheet).Should().Be(new NumberValue(1));
         _eval.Evaluate("=MIN(A1:A2)", sheet).Should().Be(ErrorValue.NA);
         _eval.Evaluate("=MAX(A1:A2)", sheet).Should().Be(ErrorValue.NA);
     }
