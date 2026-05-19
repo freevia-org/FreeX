@@ -277,6 +277,10 @@ public sealed class XlsxChartPartReaderTests
               <c:lang val="en-US"/>
               <c:style val="42"/>
               <c:protection chartObject="1" data="1" formatting="0" selection="1" userInterface="1"/>
+              <c:printSettings>
+                <c:pageMargins l="0.7" r="0.7" t="0.75" b="0.75" header="0.3" footer="0.3"/>
+                <c:pageSetup paperSize="9" orientation="landscape" copies="2" blackAndWhite="1" draft="0"/>
+              </c:printSettings>
               <c:pivotSource>
                 <c:name>Data!PivotTable1</c:name>
                 <c:fmtId val="0"/>
@@ -314,6 +318,26 @@ public sealed class XlsxChartPartReaderTests
         chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
         chart.Uses1904DateSystem.Should().BeTrue();
         chart.Language.Should().Be("en-US");
+        chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
+        {
+            PageMargins = new ChartPageMarginsModel
+            {
+                Left = 0.7,
+                Right = 0.7,
+                Top = 0.75,
+                Bottom = 0.75,
+                Header = 0.3,
+                Footer = 0.3
+            },
+            PageSetup = new ChartPageSetupModel
+            {
+                PaperSize = "9",
+                Orientation = "landscape",
+                Copies = 2,
+                BlackAndWhite = true,
+                Draft = false
+            }
+        });
         chart.Protection.Should().BeEquivalentTo(new ChartProtectionModel
         {
             ChartObject = true,
