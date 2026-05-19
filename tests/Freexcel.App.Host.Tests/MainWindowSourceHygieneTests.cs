@@ -77,8 +77,14 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
+        source.Should().Contain("private SheetId? _formatPainterSourceSheetId;");
+        source.Should().Contain("private GridRange? _formatPainterSourceRange;");
         source.Should().Contain("private bool _formatPainterTargetSelectionActive;");
         source.Should().Contain("TryApplyFormatPainter(GridRange targetRange)");
+        source.Should().Contain("_formatPainterSourceRange = range;");
+        source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
+        source.Should().Contain("FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange)");
+        source.Should().Contain("new CompositeWorkbookCommand(\"Format Painter\", targetSheetIds.Select(CreateCommand).ToList())");
         source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
         source.Should().Contain("selectedRange.Contains(newAddr)");
         source.Should().Contain("TryApplyFormatPainter(selectedRange)");

@@ -69,7 +69,8 @@ public partial class MainWindow : Window
     private bool _formatPainterActive;
     private bool _formatPainterPersistent;
     private bool _formatPainterTargetSelectionActive;
-    private StyleId _formatPainterStyleId;
+    private SheetId? _formatPainterSourceSheetId;
+    private GridRange? _formatPainterSourceRange;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
     private bool _suppressZoomSync;
@@ -285,11 +286,13 @@ public partial class MainWindow : Window
         var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
         ApplyHomeRibbonBreakpointOverrides(availableWidth.Value, groups, plannedStates);
         ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+        SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
         while (RibbonRowOverflows(activePanel, availableWidth.Value) &&
                CollapseOneMoreRibbonGroup(plannedStates))
         {
             ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
+            SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
         }
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
@@ -348,29 +351,87 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
+    {
+        var veryNarrow = availableWidth <= 700;
+        foreach (var button in collapsedButtons)
+        {
+            button.Width = veryNarrow ? 46 : 56;
+            button.Margin = veryNarrow ? new Thickness(0) : new Thickness(1, 0, 3, 0);
+            button.Padding = veryNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
+
+            var textBlocks = button.Content is StackPanel panel
+                ? panel.Children.OfType<TextBlock>()
+                : EnumerateVisualDescendants(button).OfType<TextBlock>();
+
+            foreach (var textBlock in textBlocks)
+            {
+                if (textBlock.Tag?.ToString() == "RibbonLabel")
+                {
+                    textBlock.Visibility = veryNarrow ? Visibility.Collapsed : Visibility.Visible;
+                    textBlock.FontSize = veryNarrow ? 9 : 10;
+                    textBlock.MaxWidth = veryNarrow ? 44 : 52;
+                }
+                else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
+                {
+                    textBlock.FontSize = veryNarrow ? 18 : 22;
+                }
+            }
+        }
+    }
+
     private static void ApplyHomeRibbonBreakpointOverrides(
         double availableWidth,
         IReadOnlyList<FrameworkElement> groups,
         RibbonAdaptiveGroupState[] states)
     {
-        if (availableWidth > 1320)
+        if (availableWidth <= 700)
+        {
+            for (var i = 0; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
             return;
+        }
 
-        var stylesIndex = -1;
+        if (availableWidth <= 900 &&
+            TryFindRibbonGroupIndex(groups, "Font", out var fontIndex))
+        {
+            for (var i = fontIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1120 &&
+            TryFindRibbonGroupIndex(groups, "Alignment", out var alignmentIndex))
+        {
+            for (var i = alignmentIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1320 &&
+            TryFindRibbonGroupIndex(groups, "Styles", out var stylesIndex))
+        {
+            for (var i = stylesIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
+    private static bool TryFindRibbonGroupIndex(
+        IReadOnlyList<FrameworkElement> groups,
+        string groupName,
+        out int index)
+    {
         for (var i = 0; i < groups.Count; i++)
         {
-            if (string.Equals(GetRibbonGroupName(groups[i]), "Styles", StringComparison.Ordinal))
+            if (string.Equals(GetRibbonGroupName(groups[i]), groupName, StringComparison.Ordinal))
             {
-                stylesIndex = i;
-                break;
+                index = i;
+                return true;
             }
         }
 
-        if (stylesIndex < 0)
-            return;
-
-        for (var i = stylesIndex; i < states.Length; i++)
-            states[i] = RibbonAdaptiveGroupState.Collapsed;
+        index = -1;
+        return false;
     }
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
@@ -5347,32 +5408,77 @@ public partial class MainWindow : Window
             SetActiveCell(actualAddr);
 
         var menu = new ContextMenu();
-        void AddItem(string header, Action action)
+        foreach (var command in WorksheetContextMenuPlanner.BuildCommands())
         {
-            var item = new MenuItem { Header = header };
-            item.Click += (_, _) => action();
+            if (command.IsSeparator)
+            {
+                menu.Items.Add(new Separator());
+                continue;
+            }
+
+            var item = new MenuItem { Header = command.Header };
+            item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, actualAddr);
             menu.Items.Add(item);
         }
-
-        AddItem("Cut",   () => ExecuteCopy(isCut: true));
-        AddItem("Copy",  () => ExecuteCopy());
-        AddItem("Paste", () => ExecutePaste());
-        menu.Items.Add(new Separator());
-        AddItem("Insert Row Above",    () => InsertRows(actualAddr.Row));
-        AddItem("Insert Row Below",    () => InsertRows(actualAddr.Row + 1));
-        AddItem("Insert Column Left",  () => InsertColumns(actualAddr.Col));
-        AddItem("Insert Column Right", () => InsertColumns(actualAddr.Col + 1));
-        menu.Items.Add(new Separator());
-        AddItem("Delete Row(s)",    DeleteSelectedRows);
-        AddItem("Delete Column(s)", DeleteSelectedColumns);
-        menu.Items.Add(new Separator());
-        AddItem("Format Cells...",  () => OpenFormatCellsDialog());
-        menu.Items.Add(new Separator());
-        AddItem("Clear Contents",   ExecuteClearSelection);
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
         menu.IsOpen = true;
+    }
+
+    private void ExecuteWorksheetContextMenuAction(WorksheetContextMenuAction action, CellAddress address)
+    {
+        switch (action)
+        {
+            case WorksheetContextMenuAction.Cut:
+                ExecuteCopy(isCut: true);
+                break;
+            case WorksheetContextMenuAction.Copy:
+                ExecuteCopy();
+                break;
+            case WorksheetContextMenuAction.Paste:
+                ExecutePaste();
+                break;
+            case WorksheetContextMenuAction.InsertRowAbove:
+                InsertRows(address.Row);
+                break;
+            case WorksheetContextMenuAction.InsertRowBelow:
+                InsertRows(address.Row + 1);
+                break;
+            case WorksheetContextMenuAction.InsertColumnLeft:
+                InsertColumns(address.Col);
+                break;
+            case WorksheetContextMenuAction.InsertColumnRight:
+                InsertColumns(address.Col + 1);
+                break;
+            case WorksheetContextMenuAction.DeleteRows:
+                DeleteSelectedRows();
+                break;
+            case WorksheetContextMenuAction.DeleteColumns:
+                DeleteSelectedColumns();
+                break;
+            case WorksheetContextMenuAction.SortAscending:
+                SortAscButton_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.SortDescending:
+                SortDescButton_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.Filter:
+                FilterButton_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.NewNote:
+                ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.Hyperlink:
+                HyperlinkBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.FormatCells:
+                OpenFormatCellsDialog();
+                break;
+            case WorksheetContextMenuAction.ClearContents:
+                ExecuteClearSelection();
+                break;
+        }
     }
 
     private void OpenKeyboardContextMenu()
@@ -6157,10 +6263,8 @@ public partial class MainWindow : Window
     private void CaptureFormatPainterSource(bool persistent)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        _formatPainterStyleId = sheet?.GetCell(range.Start)?.StyleId
-            ?? sheet?.GetStyleOnly(range.Start.Row, range.Start.Col)
-            ?? StyleId.Default;
+        _formatPainterSourceSheetId = _currentSheetId;
+        _formatPainterSourceRange = range;
         _formatPainterActive = true;
         _formatPainterPersistent = persistent;
     }
@@ -6170,21 +6274,35 @@ public partial class MainWindow : Window
         _formatPainterActive = false;
         _formatPainterPersistent = false;
         _formatPainterTargetSelectionActive = false;
+        _formatPainterSourceSheetId = null;
+        _formatPainterSourceRange = null;
     }
 
     private bool TryApplyFormatPainter(GridRange targetRange)
     {
         if (!_formatPainterActive) return false;
 
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
+        if (_formatPainterSourceSheetId is not { } sourceSheetId ||
+            _formatPainterSourceRange is not { } sourceRange ||
+            _workbook.GetSheet(sourceSheetId) is not { } sourceSheet)
         {
             if (!_formatPainterPersistent)
                 CancelFormatPainter();
             return true;
         }
 
-        var command = FormatPainterCommandFactory.Create(_workbook, _formatPainterStyleId, targetRange);
+        IWorkbookCommand CreateCommand(SheetId sheetId)
+        {
+            var sheetTargetRange = new GridRange(
+                new CellAddress(sheetId, targetRange.Start.Row, targetRange.Start.Col),
+                new CellAddress(sheetId, targetRange.End.Row, targetRange.End.Col));
+            return FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, sheetTargetRange);
+        }
+
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var command = targetSheetIds.Count > 1
+            ? new CompositeWorkbookCommand("Format Painter", targetSheetIds.Select(CreateCommand).ToList())
+            : FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange);
         if (!TryExecuteCommand(command, "Format Painter"))
         {
             if (!_formatPainterPersistent)

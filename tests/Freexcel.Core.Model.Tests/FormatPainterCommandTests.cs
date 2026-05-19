@@ -104,6 +104,49 @@ public sealed class FormatPainterCommandTests
         sheet.GetStyleOnly(3, 3).Should().BeNull();
     }
 
+    [Fact]
+    public void CreateApplyFormatPainterCommand_RepeatsMultiCellSourcePatternAcrossTargetRange()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceTopLeft = new CellAddress(sheet.Id, 1, 1);
+        var sourceBottomRight = new CellAddress(sheet.Id, 2, 2);
+        var targetTopLeft = new CellAddress(sheet.Id, 4, 4);
+        var targetBottomRight = new CellAddress(sheet.Id, 6, 6);
+        var red = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 199, 206) });
+        var green = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(198, 239, 206) });
+        var blue = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(189, 215, 238) });
+        var yellow = wb.RegisterStyle(new CellStyle { FillColor = new CellColor(255, 235, 156) });
+        sheet.SetStyleOnly(1, 1, red);
+        sheet.SetStyleOnly(1, 2, green);
+        sheet.SetStyleOnly(2, 1, blue);
+        sheet.SetStyleOnly(2, 2, yellow);
+
+        var command = FormatPainterCommandFactory.Create(
+            wb,
+            sheet,
+            new GridRange(sourceTopLeft, sourceBottomRight),
+            new GridRange(targetTopLeft, targetBottomRight));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        StyleId StyleAt(uint row, uint col) =>
+            sheet.GetCell(new CellAddress(sheet.Id, row, col))?.StyleId
+            ?? sheet.GetStyleOnly(row, col)
+            ?? StyleId.Default;
+
+        StyleAt(4, 4).Should().Be(red);
+        StyleAt(4, 5).Should().Be(green);
+        StyleAt(4, 6).Should().Be(red);
+        StyleAt(5, 4).Should().Be(blue);
+        StyleAt(5, 5).Should().Be(yellow);
+        StyleAt(5, 6).Should().Be(blue);
+        StyleAt(6, 4).Should().Be(red);
+        StyleAt(6, 5).Should().Be(green);
+        StyleAt(6, 6).Should().Be(red);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
