@@ -9278,6 +9278,50 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void MoveChartBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Move Chart", out var chart))
+            return;
+
+        var currentSheet = _workbook.GetSheet(_currentSheetId);
+        if (currentSheet is null)
+            return;
+
+        var dialog = new MoveChartDialog(currentSheet.Name) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet)
+        {
+            if (!TryExecuteCommand(new MoveChartToNewSheetCommand(_currentSheetId, chart.Id, dialog.Result.TargetName), "Move Chart"))
+                return;
+
+            var createdSheet = _workbook.GetSheet(dialog.Result.TargetName);
+            if (createdSheet is not null)
+                _currentSheetId = createdSheet.Id;
+        }
+        else
+        {
+            var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
+            if (targetSheet is null)
+            {
+                MessageBox.Show("Target sheet was not found.", "Move Chart", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!TryExecuteCommand(new MoveChartCommand(_currentSheetId, chart.Id, targetSheet.Id), "Move Chart"))
+                return;
+
+            _currentSheetId = targetSheet.Id;
+        }
+
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        RefreshSheetTabs();
+        UpdateViewport();
+    }
+
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
