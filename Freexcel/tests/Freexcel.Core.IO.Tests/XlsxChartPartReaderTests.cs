@@ -294,6 +294,12 @@ public sealed class XlsxChartPartReaderTests
               <c:roundedCorners val="1"/>
               <c:chart>
                 <c:autoTitleDeleted val="1"/>
+                <c:pivotFmts>
+                  <c:pivotFmt>
+                    <c:idx val="0"/>
+                    <c:spPr><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></c:spPr>
+                  </c:pivotFmt>
+                </c:pivotFmts>
                 <c:plotArea>
                   <c:layout>
                     <c:manualLayout>
@@ -349,6 +355,8 @@ public sealed class XlsxChartPartReaderTests
 
         chart.IsPivotChart.Should().BeTrue();
         chart.PivotTableName.Should().Be("PivotTable1");
+        chart.PivotFormatsXml.Should().Contain("pivotFmt");
+        chart.PivotFormatsXml.Should().Contain("4472C4");
         chart.ChartStyleId.Should().Be(42);
         chart.RoundedCorners.Should().BeTrue();
         chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Span);

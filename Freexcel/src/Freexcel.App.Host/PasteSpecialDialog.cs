@@ -11,6 +11,7 @@ public enum PasteSpecialDialogMode
     Formats,
     Comments,
     Validation,
+    AllUsingSourceTheme,
     AllExceptBorders,
     ColumnWidths,
     FormulasAndNumberFormats,
@@ -27,6 +28,7 @@ public sealed class PasteSpecialDialog : Window
     private readonly RadioButton _rbFormulas;
     private readonly RadioButton _rbComments;
     private readonly RadioButton _rbValidation;
+    private readonly RadioButton _rbAllUsingSourceTheme;
     private readonly RadioButton _rbAllExceptBorders;
     private readonly RadioButton _rbColumnWidths;
     private readonly RadioButton _rbFormulasAndNumberFormats;
@@ -46,6 +48,7 @@ public sealed class PasteSpecialDialog : Window
         _ when _rbFormats.IsChecked == true => PasteSpecialDialogMode.Formats,
         _ when _rbComments.IsChecked == true => PasteSpecialDialogMode.Comments,
         _ when _rbValidation.IsChecked == true => PasteSpecialDialogMode.Validation,
+        _ when _rbAllUsingSourceTheme.IsChecked == true => PasteSpecialDialogMode.AllUsingSourceTheme,
         _ when _rbAllExceptBorders.IsChecked == true => PasteSpecialDialogMode.AllExceptBorders,
         _ when _rbColumnWidths.IsChecked == true => PasteSpecialDialogMode.ColumnWidths,
         _ when _rbFormulasAndNumberFormats.IsChecked == true => PasteSpecialDialogMode.FormulasAndNumberFormats,
@@ -68,7 +71,7 @@ public sealed class PasteSpecialDialog : Window
     public PasteSpecialDialog()
     {
         Title = "Paste Special";
-        Width = 360; Height = 560;
+        Width = 360; Height = 590;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -80,6 +83,7 @@ public sealed class PasteSpecialDialog : Window
         _rbFormats  = new RadioButton { Content = "Formats only",   Margin = new Thickness(0, 0, 0, 6) };
         _rbComments = new RadioButton { Content = "Comments and notes", Margin = new Thickness(0, 0, 0, 6) };
         _rbValidation = new RadioButton { Content = "Validation", Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllUsingSourceTheme = new RadioButton { Content = "All using source theme", Margin = new Thickness(0, 0, 0, 6) };
         _rbAllExceptBorders = new RadioButton { Content = "All except borders", Margin = new Thickness(0, 0, 0, 6) };
         _rbColumnWidths = new RadioButton { Content = "Column widths", Margin = new Thickness(0, 0, 0, 6) };
         _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number formats", Margin = new Thickness(0, 0, 0, 6) };
@@ -101,6 +105,7 @@ public sealed class PasteSpecialDialog : Window
         stack.Children.Add(_rbFormats);
         stack.Children.Add(_rbComments);
         stack.Children.Add(_rbValidation);
+        stack.Children.Add(_rbAllUsingSourceTheme);
         stack.Children.Add(_rbAllExceptBorders);
         stack.Children.Add(_rbColumnWidths);
         stack.Children.Add(_rbFormulasAndNumberFormats);

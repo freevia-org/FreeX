@@ -71,4 +71,25 @@ public sealed class QuickAnalysisPlannerTests
                 "Radar",
                 "Stock");
     }
+
+    [Fact]
+    public void BuildOptions_AttachesHoverPreviewMetadataToEachOption()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+
+        var options = QuickAnalysisPlanner.BuildOptions(selection);
+
+        options.Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.PreviewText));
+        options.Single(option => option.Command == QuickAnalysisCommand.DataBar)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.ConditionalFormat);
+        options.Single(option => option.Command == QuickAnalysisCommand.ColumnChart)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Chart);
+        options.Single(option => option.Command == QuickAnalysisCommand.Sum)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Total);
+        options.Single(option => option.Command == QuickAnalysisCommand.FormatAsTable)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Table);
+        options.Single(option => option.Command == QuickAnalysisCommand.LineSparkline)
+            .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Sparkline);
+    }
 }
