@@ -37,12 +37,11 @@ public sealed class MainWindowInfoPanelTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
-        source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
-        source.Should().Contain("WorkbookProtectionWorkflow.GetUiText(_workbook)");
-        source.Should().Contain("SheetProtectionWorkflow.GetUiText(activeSheet)");
-        source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook).Count");
+        source.Should().Contain("InfoPanelSummaryPlanner.Create(");
+        source.Should().Contain("_workbook.GetSheet(_currentSheetId)");
         source.Should().Contain("InfoCellsWithData.Text");
+        source.Should().Contain("InfoWorkbookProtection.Text");
+        source.Should().Contain("InfoSheetProtection.Text");
         source.Should().Contain("InfoAccessibilitySummary.Text");
-        source.Should().Contain("No active sheet");
     }
 }
