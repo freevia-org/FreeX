@@ -19,8 +19,10 @@ public sealed class WorksheetContextMenuPlannerTests
             "Delete...",
             "Delete Row(s)",
             "Sort A to Z",
+            "Custom Sort...",
             "Filter...",
             "Clear Filter",
+            "Reapply Filter",
             "Pick From Drop-down List...",
             "Quick Analysis",
             "Hide Rows",
@@ -49,6 +51,10 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.PickFromDropDown);
         commands.Single(command => command.Header == "Quick Analysis")
             .Action.Should().Be(WorksheetContextMenuAction.QuickAnalysis);
+        commands.Single(command => command.Header == "Custom Sort...")
+            .Action.Should().Be(WorksheetContextMenuAction.CustomSort);
+        commands.Single(command => command.Header == "Reapply Filter")
+            .Action.Should().Be(WorksheetContextMenuAction.ReapplyFilter);
         commands.Single(command => command.Header == "AutoFit Row Height")
             .Action.Should().Be(WorksheetContextMenuAction.AutoFitRowHeight);
         commands.Single(command => command.Header == "Row Height...")
