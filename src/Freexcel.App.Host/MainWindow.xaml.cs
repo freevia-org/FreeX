@@ -1727,32 +1727,38 @@ public partial class MainWindow : Window
                 CycleSelectionCorner();
                 break;
             case KeyboardCommandShortcut.SelectDirectPrecedents:
-                SelectFormulaAuditCells(selectDependents: false);
+                SelectFormulaAuditCells(selectDependents: false, includeTransitive: false);
                 break;
             case KeyboardCommandShortcut.SelectDirectDependents:
-                SelectFormulaAuditCells(selectDependents: true);
+                SelectFormulaAuditCells(selectDependents: true, includeTransitive: false);
+                break;
+            case KeyboardCommandShortcut.SelectAllPrecedents:
+                SelectFormulaAuditCells(selectDependents: false, includeTransitive: true);
+                break;
+            case KeyboardCommandShortcut.SelectAllDependents:
+                SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
                 break;
         }
     }
 
-    private void SelectFormulaAuditCells(bool selectDependents)
+    private void SelectFormulaAuditCells(bool selectDependents, bool includeTransitive)
     {
         if (SheetGrid.SelectedRange is not { } range)
             return;
 
         var activeCell = _selectionCursor ?? _selectionAnchor ?? range.Start;
-        var matches = (selectDependents
-                ? FormulaAuditingService.GetDirectDependents(_workbook, activeCell)
-                : FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell))
+        var matches = GetFormulaAuditMatches(activeCell, selectDependents, includeTransitive)
             .Where(address => address.Sheet == _currentSheetId)
+            .Distinct()
             .ToList();
 
         if (matches.Count == 0)
         {
             StatusReadyText.Visibility = Visibility.Visible;
+            var depth = includeTransitive ? "traceable" : "direct";
             StatusReadyText.Text = selectDependents
-                ? "No direct dependents on this sheet"
-                : "No direct precedents on this sheet";
+                ? $"No {depth} dependents on this sheet"
+                : $"No {depth} precedents on this sheet";
             return;
         }
 
@@ -1769,6 +1775,26 @@ public partial class MainWindow : Window
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
+    }
+
+    private IReadOnlyList<CellAddress> GetFormulaAuditMatches(
+        CellAddress activeCell,
+        bool selectDependents,
+        bool includeTransitive)
+    {
+        if (!includeTransitive)
+        {
+            return selectDependents
+                ? FormulaAuditingService.GetDirectDependents(_workbook, activeCell)
+                : FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell);
+        }
+
+        var arrows = selectDependents
+            ? FormulaAuditingService.GetDependentTraceArrows(_workbook, activeCell)
+            : FormulaAuditingService.GetPrecedentTraceArrows(_workbook, activeCell);
+        return arrows
+            .Select(arrow => selectDependents ? arrow.To : arrow.From)
+            .ToList();
     }
 
     private void CycleSelectionCorner()
