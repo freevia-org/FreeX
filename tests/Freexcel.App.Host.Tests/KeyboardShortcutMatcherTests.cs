@@ -77,6 +77,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.D, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FillDown)]
     [InlineData(Key.R, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FillRight)]
     [InlineData(Key.E, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.FlashFill)]
+    [InlineData(Key.OemSemicolon, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.InsertCurrentDate)]
+    [InlineData(Key.OemSemicolon, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.InsertCurrentTime)]
     [InlineData(Key.F3, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertFunction)]
     [InlineData(Key.F7, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SpellCheck)]
     [InlineData(Key.F4, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CloseWorkbook)]

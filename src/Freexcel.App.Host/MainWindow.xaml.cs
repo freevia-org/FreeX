@@ -1860,18 +1860,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.OemSemicolon && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                InsertCurrentDateOrTime(insertTime: false);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.OemSemicolon && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                InsertCurrentDateOrTime(insertTime: true);
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.IsCtrlPlus(e.Key, e.SystemKey, Keyboard.Modifiers))
             {
                 ExecuteKeyboardInsert();
@@ -2112,6 +2100,12 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.FlashFill:
                 TryFlashFill();
+                break;
+            case KeyboardCommandShortcut.InsertCurrentDate:
+                InsertCurrentDateOrTime(insertTime: false);
+                break;
+            case KeyboardCommandShortcut.InsertCurrentTime:
+                InsertCurrentDateOrTime(insertTime: true);
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);

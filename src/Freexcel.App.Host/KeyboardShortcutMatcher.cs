@@ -100,6 +100,18 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemSemicolon)
+        {
+            shortcut = KeyboardCommandShortcut.InsertCurrentDate;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemSemicolon)
+        {
+            shortcut = KeyboardCommandShortcut.InsertCurrentTime;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -433,6 +445,8 @@ public enum KeyboardCommandShortcut
     FillDown,
     FillRight,
     FlashFill,
+    InsertCurrentDate,
+    InsertCurrentTime,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,
