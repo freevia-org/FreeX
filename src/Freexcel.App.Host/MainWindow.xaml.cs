@@ -621,16 +621,7 @@ public partial class MainWindow : Window
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock
-                    {
-                        Text = icon.Glyph,
-                        Tag = "RibbonIcon",
-                        FontFamily = icon.FontFamily,
-                        FontSize = 22,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                        TextAlignment = TextAlignment.Center,
-                        Margin = new Thickness(0, 2, 0, 1)
-                    },
+                    RibbonIconFactory.CreateIcon(icon, 22, BrushFromRgb(31, 31, 31)),
                     new TextBlock
                     {
                         Text = groupName,
@@ -641,14 +632,7 @@ public partial class MainWindow : Window
                         MaxWidth = 52,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center
                     },
-                    new TextBlock
-                    {
-                        Text = "\uE70D",
-                        Tag = "RibbonIcon",
-                        FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                        FontSize = 8,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-                    }
+                    RibbonIconFactory.CreateIcon(new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown), 8, BrushFromRgb(31, 31, 31))
                 }
             }
         };
@@ -966,7 +950,7 @@ public partial class MainWindow : Window
             ConfigureInsertRibbonSurface();
             NormalizeRibbonCommandGroups();
             AlignRibbonIconColumns();
-            DisableRibbonScrollBars();
+            HideRibbonScrollBars();
             ApplyToolbarDropdownWhiteBackgrounds();
             UpdateRibbonCompactMode(force: forceCompact);
         }
@@ -976,13 +960,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void DisableRibbonScrollBars()
+    private void HideRibbonScrollBars()
     {
         if (RibbonTabs is null)
             return;
 
         foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
-            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
@@ -1102,12 +1086,10 @@ public partial class MainWindow : Window
 
     private void NormalizeExistingRibbonIconText()
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
+        foreach (var button in EnumerateVisualDescendants(this).OfType<ButtonBase>())
         {
             var tall = button is FrameworkElement element && element.Height >= 46;
+            ReplaceRibbonGlyphIcons(button.Content, button, tall);
             foreach (var textBlock in EnumerateRibbonTextContent(button.Content))
             {
                 if (string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
@@ -1124,10 +1106,7 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                var family = textBlock.FontFamily?.Source ?? "";
-                var isIcon = string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal) ||
-                             family.Contains("Segoe MDL2", StringComparison.OrdinalIgnoreCase) ||
-                             family.Contains("Segoe UI Symbol", StringComparison.OrdinalIgnoreCase);
+                var isIcon = string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
                 if (!isIcon)
                     continue;
 
@@ -1139,6 +1118,73 @@ public partial class MainWindow : Window
                 textBlock.TextAlignment = TextAlignment.Center;
             }
         }
+    }
+
+    private static void ReplaceRibbonGlyphIcons(object? content, ButtonBase owner, bool tall)
+    {
+        switch (content)
+        {
+            case null:
+                return;
+            case TextBlock textBlock when IsRibbonIconTextBlock(textBlock):
+                owner.Content = CreateStaticRibbonVectorIcon(owner, textBlock, tall);
+                return;
+            case Panel panel:
+                for (var i = 0; i < panel.Children.Count; i++)
+                {
+                    if (panel.Children[i] is TextBlock childText && IsRibbonIconTextBlock(childText))
+                    {
+                        var replacement = CreateStaticRibbonVectorIcon(owner, childText, tall);
+                        panel.Children.RemoveAt(i);
+                        panel.Children.Insert(i, replacement);
+                        continue;
+                    }
+
+                    ReplaceRibbonGlyphIcons(panel.Children[i], owner, tall);
+                }
+
+                return;
+            case Decorator decorator:
+                if (decorator.Child is TextBlock decoratorText && IsRibbonIconTextBlock(decoratorText))
+                    decorator.Child = CreateStaticRibbonVectorIcon(owner, decoratorText, tall);
+                else
+                    ReplaceRibbonGlyphIcons(decorator.Child, owner, tall);
+                return;
+            case ContentControl contentControl when !ReferenceEquals(contentControl, owner):
+                if (contentControl.Content is TextBlock contentText && IsRibbonIconTextBlock(contentText))
+                    contentControl.Content = CreateStaticRibbonVectorIcon(owner, contentText, tall);
+                else
+                    ReplaceRibbonGlyphIcons(contentControl.Content, owner, tall);
+                return;
+        }
+    }
+
+    private static bool IsRibbonIconTextBlock(TextBlock textBlock)
+    {
+        return string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
+    }
+
+    private static FrameworkElement CreateStaticRibbonVectorIcon(ButtonBase owner, TextBlock source, bool tall)
+    {
+        var title = owner is FrameworkElement element
+            ? RibbonTooltip.GetTitle(element)
+            : null;
+        var commandName = !string.IsNullOrWhiteSpace(title)
+            ? title
+            : owner.Name;
+        if (string.IsNullOrWhiteSpace(commandName))
+            commandName = source.Text;
+
+        var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
+        var iconSize = tall
+            ? 22
+            : Math.Max(11, Math.Min(16, source.FontSize is > 0 ? source.FontSize : 13));
+        var vector = RibbonIconFactory.CreateIcon(icon, iconSize, source.Foreground);
+        vector.Tag = "RibbonIcon";
+        vector.HorizontalAlignment = source.HorizontalAlignment;
+        vector.VerticalAlignment = source.VerticalAlignment;
+        vector.Margin = source.Margin;
+        return vector;
     }
 
     private static IEnumerable<TextBlock> EnumerateRibbonTextContent(object? content)
@@ -1237,22 +1283,11 @@ public partial class MainWindow : Window
         var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
-        var iconBlock = new TextBlock
+        var iconSize = layoutKind switch
         {
-            Text = icon.Glyph,
-            Tag = "RibbonIcon",
-            FontFamily = icon.FontFamily,
-            FontSize = layoutKind switch
-            {
-                RibbonCommandLayoutKind.Large => 23,
-                RibbonCommandLayoutKind.Medium => 19,
-                _ => 12
-            },
-            Foreground = glyphBrush,
-            LineHeight = layoutKind is RibbonCommandLayoutKind.Large ? 24 : layoutKind is RibbonCommandLayoutKind.Medium ? 20 : 14,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            TextAlignment = TextAlignment.Center
+            RibbonCommandLayoutKind.Large => 23,
+            RibbonCommandLayoutKind.Medium => 19,
+            _ => 12
         };
         var iconSlot = new Border
         {
@@ -1272,7 +1307,7 @@ public partial class MainWindow : Window
             Background = slotBackground,
             BorderBrush = slotBorder,
             BorderThickness = slotBorder is null ? new Thickness(0) : new Thickness(1),
-            Child = iconBlock,
+            Child = RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush),
             SnapsToDevicePixels = true,
             HorizontalAlignment = tall ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
@@ -4212,12 +4247,13 @@ public partial class MainWindow : Window
 
     private void UpdateInfoView()
     {
-        InfoWorkbookName.Text = _workbook.Name;
-        InfoFilePath.Text = _currentFilePath ?? "Not saved yet";
-        InfoSheetCount.Text = _workbook.Sheets.Count.ToString();
-        InfoFormat.Text = _currentFilePath is not null
-            ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
-            : ".xlsx";
+        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath);
+        InfoWorkbookName.Text = plan.WorkbookName;
+        InfoFilePath.Text = plan.FilePath;
+        InfoSheetCount.Text = plan.SheetCount;
+        InfoFormat.Text = plan.Format;
+        InfoStatisticsSummary.Text = plan.StatisticsSummary;
+        InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
     }
 
     private void UpdateSsGreeting()
