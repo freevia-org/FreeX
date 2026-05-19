@@ -27,6 +27,16 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.V, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.V, ModifierKeys.Control, false)]
+    [InlineData(Key.V, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.C, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, ModifierKeys modifiers, bool expected)
+    {
+        KeyboardShortcutMatcher.IsPasteSpecialShortcut(key, modifiers).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(Key.D9, ModifierKeys.Control, KeyboardGridShortcut.HideRows)]
     [InlineData(Key.NumPad9, ModifierKeys.Control, KeyboardGridShortcut.HideRows)]
     [InlineData(Key.D9, ModifierKeys.Control | ModifierKeys.Shift, KeyboardGridShortcut.UnhideRows)]
@@ -40,6 +50,46 @@ public sealed class KeyboardShortcutMatcherTests
         result.Should().Be(expected is not null);
         if (expected is not null)
             shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.Space, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectAll)]
+    [InlineData(Key.Multiply, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
+    [InlineData(Key.D8, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
+    [InlineData(Key.Space, ModifierKeys.Control, null)]
+    [InlineData(Key.D8, ModifierKeys.Control, null)]
+    public void TryGetSelectionShortcut_MapsExcelSelectionShortcuts(Key key, ModifierKeys modifiers, KeyboardSelectionShortcut? expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetSelectionShortcut(key, modifiers, out var shortcut);
+
+        result.Should().Be(expected is not null);
+        if (expected is not null)
+            shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.T, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
+    [InlineData(Key.L, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
+    [InlineData(Key.F3, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertFunction)]
+    [InlineData(Key.F7, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SpellCheck)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.None, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.CalculateSheet)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.CalculateNow)]
+    [InlineData(Key.U, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFormulaBarExpansion)]
+    [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
+    [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
+    [InlineData(Key.F11, Key.None, ModifierKeys.None, KeyboardCommandShortcut.InsertChartSheet)]
+    public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        KeyboardCommandShortcut expected)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out var shortcut);
+
+        result.Should().BeTrue();
+        shortcut.Should().Be(expected);
     }
 
     [Theory]
