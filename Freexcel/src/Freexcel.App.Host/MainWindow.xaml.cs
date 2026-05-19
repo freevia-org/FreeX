@@ -1938,12 +1938,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.W && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                Close();
-                e.Handled = true;
-                return;
-            }
         }
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
@@ -2160,6 +2154,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.SpellCheck:
                 SpellCheckBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.CloseWorkbook:
+                Close();
                 break;
             case KeyboardCommandShortcut.CalculateNow:
                 CalcNowBtn_Click(sender, e);

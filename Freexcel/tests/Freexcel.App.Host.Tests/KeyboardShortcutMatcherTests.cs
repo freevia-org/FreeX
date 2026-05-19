@@ -75,6 +75,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.L, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
     [InlineData(Key.F3, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.InsertFunction)]
     [InlineData(Key.F7, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SpellCheck)]
+    [InlineData(Key.F4, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CloseWorkbook)]
+    [InlineData(Key.W, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CloseWorkbook)]
     [InlineData(Key.F9, Key.None, ModifierKeys.None, KeyboardCommandShortcut.CalculateNow)]
     [InlineData(Key.F9, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.CalculateSheet)]
     [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.CalculateNow)]
