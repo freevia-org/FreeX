@@ -7971,20 +7971,23 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
         var plotCharts = ToPlotChartXml(chart, sheet, chartNs, drawingNs).ToList();
 
         return new XDocument(
-            new XElement(chartNs + "chartSpace",
-                new XAttribute(XNamespace.Xmlns + "c", chartNs),
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                chart.Uses1904DateSystem ? new XElement(chartNs + "date1904", new XAttribute("val", "1")) : null,
+                new XElement(chartNs + "chartSpace",
+                    new XAttribute(XNamespace.Xmlns + "c", chartNs),
+                    new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                    chart.ExternalData?.RelationshipId is null ? null : new XAttribute(XNamespace.Xmlns + "r", relNs),
+                    chart.Uses1904DateSystem ? new XElement(chartNs + "date1904", new XAttribute("val", "1")) : null,
                 string.IsNullOrWhiteSpace(chart.Language) ? null : new XElement(chartNs + "lang", new XAttribute("val", chart.Language)),
                 chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
                 ToChartColorMapOverrideXml(chart, chartNs, drawingNs),
-                chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
-                ToChartProtectionXml(chart, chartNs),
-                ToChartPrintSettingsXml(chart, chartNs),
+                    chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
+                    ToChartProtectionXml(chart, chartNs),
+                    ToChartExternalDataXml(chart, chartNs, relNs),
+                    ToChartPrintSettingsXml(chart, chartNs),
                 ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",
@@ -8009,6 +8012,23 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ? null
             : new XElement(chartNs + "dispBlanksAs",
                 new XAttribute("val", chart.BlankDisplayMode == ChartBlankDisplayMode.Span ? "span" : "zero"));
+
+    private static XElement? ToChartExternalDataXml(ChartModel chart, XNamespace chartNs, XNamespace relNs)
+    {
+        if (chart.ExternalData is not { } externalData)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(externalData.RelationshipId) && externalData.AutoUpdate is null)
+            return null;
+
+        return new XElement(chartNs + "externalData",
+            string.IsNullOrWhiteSpace(externalData.RelationshipId)
+                ? null
+                : new XAttribute(relNs + "id", externalData.RelationshipId),
+            externalData.AutoUpdate is { } autoUpdate
+                ? new XElement(chartNs + "autoUpdate", new XAttribute("val", autoUpdate ? "1" : "0"))
+                : null);
+    }
 
     private static XElement? ToChartColorMapOverrideXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
