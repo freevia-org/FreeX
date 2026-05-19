@@ -71,6 +71,17 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SplitRibbonCommand_ReflectsActiveSplitState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("<ToggleButton x:Name=\"SplitViewBtn\"");
+        xaml.Should().Contain("Style=\"{StaticResource RibbonToggleBtn}\"");
+        source.Should().Contain("SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null");
+    }
+
+    [Fact]
     public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

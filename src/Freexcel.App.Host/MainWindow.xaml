@@ -2586,10 +2586,10 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button Content="Split" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SplitViewBtn_Click"
-                                        local:RibbonTooltip.Title="Split"
-                                        local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
+                                <ToggleButton x:Name="SplitViewBtn" Content="Split" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="SplitViewBtn_Click"
+                                              local:RibbonTooltip.Title="Split"
+                                              local:RibbonTooltip.KeyTip="S"
+                                              local:RibbonTooltip.Description="Split the worksheet at the selected cell, or remove the current split; creating a split clears frozen panes."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Freeze Panes" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
