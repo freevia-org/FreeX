@@ -1,3 +1,4 @@
+using System.Globalization;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -86,6 +87,38 @@ public static class PageLayoutInputParser
             }
         }
 
+        return false;
+    }
+
+    public static string FormatScaleToFit(WorksheetScaleToFit scaleToFit) =>
+        scaleToFit.ScalePercent.HasValue
+            ? scaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture)
+            : $"{scaleToFit.FitToPagesWide ?? 1}x{scaleToFit.FitToPagesTall ?? 1}";
+
+    public static bool TryParseScaleToFit(string input, out WorksheetScaleToFit scaleToFit)
+    {
+        var trimmed = input.Trim();
+        if (trimmed.Contains('x', StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = trimmed.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 &&
+                int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) &&
+                int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var tall) &&
+                wide > 0 &&
+                tall > 0)
+            {
+                scaleToFit = new WorksheetScaleToFit(null, wide, tall);
+                return true;
+            }
+        }
+        else if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var percent) &&
+                 percent is >= 10 and <= 400)
+        {
+            scaleToFit = new WorksheetScaleToFit(percent, null, null);
+            return true;
+        }
+
+        scaleToFit = WorksheetScaleToFit.Default;
         return false;
     }
 

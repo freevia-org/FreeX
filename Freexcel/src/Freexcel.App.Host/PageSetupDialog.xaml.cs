@@ -70,9 +70,7 @@ public partial class PageSetupDialog : Window
         FooterMarginBox.Text = FooterMargin.ToString(CultureInfo.InvariantCulture);
         CenterHorizontallyBox.IsChecked = CenterHorizontally;
         CenterVerticallyBox.IsChecked = CenterVertically;
-        ScaleBox.Text = ScaleToFit.ScalePercent.HasValue
-            ? ScaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture)
-            : $"{ScaleToFit.FitToPagesWide ?? 1}x{ScaleToFit.FitToPagesTall ?? 1}";
+        ScaleBox.Text = PageLayoutInputParser.FormatScaleToFit(ScaleToFit);
         FirstPageNumberBox.Text = FirstPageNumber?.ToString(CultureInfo.InvariantCulture) ?? "";
         PrintQualityBox.Text = PrintQualityDpi?.ToString(CultureInfo.InvariantCulture) ?? "";
         RowsRepeatBox.Text = PrintTitleRows is { } rows ? $"{rows.Start}:{rows.End}" : "";
@@ -120,7 +118,7 @@ public partial class PageSetupDialog : Window
             return;
         }
 
-        if (!TryParseScale(ScaleBox.Text, out var scaleToFit))
+        if (!PageLayoutInputParser.TryParseScaleToFit(ScaleBox.Text, out var scaleToFit))
         {
             MessageBox.Show(this, "Enter scaling as percent 10-400 or pages wide x tall, for example 1x1.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -227,30 +225,6 @@ public partial class PageSetupDialog : Window
             return true;
         }
 
-        return false;
-    }
-
-    private static bool TryParseScale(string input, out WorksheetScaleToFit scaleToFit)
-    {
-        var trimmed = input.Trim();
-        if (trimmed.Contains('x', StringComparison.OrdinalIgnoreCase))
-        {
-            var parts = trimmed.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 2 &&
-                int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) &&
-                int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var tall))
-            {
-                scaleToFit = new WorksheetScaleToFit(null, wide, tall);
-                return wide > 0 && tall > 0;
-            }
-        }
-        else if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var percent))
-        {
-            scaleToFit = new WorksheetScaleToFit(percent, null, null);
-            return percent is >= 10 and <= 400;
-        }
-
-        scaleToFit = WorksheetScaleToFit.Default;
         return false;
     }
 
