@@ -4267,6 +4267,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_TextIncludeCell_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("keep")), (1, 2, new TextValue("x")),
+            (2, 1, new TextValue("drop")), (2, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=FILTER(A1:A2,B1:B2,\"empty\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Filter_MismatchedIncludeRows_ReturnsValueError()
     {
         var sheet = MakeSheet(
