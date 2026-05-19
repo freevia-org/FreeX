@@ -76,6 +76,7 @@ public partial class MainWindow : Window
     private bool _suppressZoomSync;
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
+    private bool _normalizingRibbonSurface;
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private WatchWindowDialog? _watchWindowDialog;
@@ -274,7 +275,7 @@ public partial class MainWindow : Window
         var fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
         var adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
         var plannedStates = RibbonAdaptiveLayoutPlanner.Plan(availableWidth.Value, adaptiveGroups, fixedChromeWidth).ToArray();
-        ApplyHomeRibbonBreakpointOverrides(availableWidth.Value, groups, plannedStates);
+        ApplyRibbonBreakpointOverrides(availableWidth.Value, groups, plannedStates);
         ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates);
         SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth.Value);
 
@@ -331,9 +332,6 @@ public partial class MainWindow : Window
             if (states[i] == RibbonAdaptiveGroupState.Collapsed)
                 continue;
 
-            if (i == 0 && states.Length > 1)
-                return false;
-
             states[i] = RibbonAdaptiveGroupState.Collapsed;
             return true;
         }
@@ -370,7 +368,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void ApplyHomeRibbonBreakpointOverrides(
+    private static void ApplyRibbonBreakpointOverrides(
         double availableWidth,
         IReadOnlyList<FrameworkElement> groups,
         RibbonAdaptiveGroupState[] states)
@@ -382,6 +380,60 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (IsHomeRibbonGroupSet(groups))
+        {
+            ApplyHomeRibbonBreakpointOverrides(availableWidth, groups, states);
+            return;
+        }
+
+        if (IsInsertRibbonGroupSet(groups))
+        {
+            ApplyInsertRibbonBreakpointOverrides(availableWidth, groups, states);
+            return;
+        }
+
+        var collapseFrom = availableWidth switch
+        {
+            <= 900 => 0,
+            <= 1120 => 1,
+            <= 1320 => 2,
+            _ => -1
+        };
+
+        if (collapseFrom < 0 || collapseFrom >= states.Length)
+            return;
+
+        for (var i = collapseFrom; i < states.Length; i++)
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+    }
+
+    private static bool IsHomeRibbonGroupSet(IReadOnlyList<FrameworkElement> groups) =>
+        groups.Count >= 7 &&
+        TryFindRibbonGroupIndex(groups, "Clipboard", out _) &&
+        TryFindRibbonGroupIndex(groups, "Font", out _) &&
+        TryFindRibbonGroupIndex(groups, "Alignment", out _) &&
+        TryFindRibbonGroupIndex(groups, "Number", out _);
+
+    private static bool IsInsertRibbonGroupSet(IReadOnlyList<FrameworkElement> groups) =>
+        groups.Count >= 4 && TryFindRibbonGroupIndex(groups, "Tables", out _);
+
+    private static void ApplyInsertRibbonBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<FrameworkElement> groups,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth <= 1600)
+        {
+            for (var i = 1; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
+    private static void ApplyHomeRibbonBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<FrameworkElement> groups,
+        RibbonAdaptiveGroupState[] states)
+    {
         if (availableWidth <= 900 &&
             TryFindRibbonGroupIndex(groups, "Font", out var fontIndex))
         {
@@ -664,10 +716,24 @@ public partial class MainWindow : Window
 
     private static string GetRibbonGroupName(FrameworkElement group)
     {
+        if (group is Grid grid)
+        {
+            foreach (var border in grid.Children.OfType<Border>())
+            {
+                if (Grid.GetRow(border) == 1 &&
+                    border.Child is TextBlock groupLabel &&
+                    !string.IsNullOrWhiteSpace(groupLabel.Text))
+                {
+                    return groupLabel.Text.Trim();
+                }
+            }
+        }
+
         var label = EnumerateVisualDescendants(group)
             .OfType<TextBlock>()
             .LastOrDefault(textBlock => FindVisualAncestor<Border>(textBlock) is not null &&
-                                        FindVisualAncestor<ButtonBase>(textBlock) is null);
+                                        FindVisualAncestor<ButtonBase>(textBlock) is null &&
+                                        textBlock.Style is not null);
 
         return string.IsNullOrWhiteSpace(label?.Text) ? "Commands" : label.Text.Trim();
     }
@@ -689,12 +755,18 @@ public partial class MainWindow : Window
             return HomeRibbonPanel;
         }
 
-        return EnumerateVisualDescendants(tabItem)
+        var contentRoot = GetRibbonTabContentRoot(tabItem);
+        return EnumerateVisualDescendants(contentRoot)
+            .Concat(EnumerateLogicalDescendants(contentRoot))
             .OfType<StackPanel>()
+            .Distinct()
             .OrderByDescending(panel => panel.Children.OfType<Grid>().Count())
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
-                                     panel.Children.OfType<Grid>().Count() >= 2);
+                                     panel.Children.OfType<Grid>().Any());
     }
+
+    private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>
+        tabItem.Content as DependencyObject ?? tabItem;
 
     private enum RibbonCompactLevel
     {
@@ -813,17 +885,28 @@ public partial class MainWindow : Window
             button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
         }
 
-        NormalizeRibbonCommandGroups();
     }
 
     private void NormalizeRibbonSurface(bool forceCompact = false)
     {
-        NormalizeRibbonCommandButtons();
-        ConfigureInsertRibbonSurface();
-        AlignRibbonIconColumns();
-        DisableRibbonScrollBars();
-        ApplyToolbarDropdownWhiteBackgrounds();
-        UpdateRibbonCompactMode(force: forceCompact);
+        if (_normalizingRibbonSurface)
+            return;
+
+        _normalizingRibbonSurface = true;
+        try
+        {
+            NormalizeRibbonCommandButtons();
+            ConfigureInsertRibbonSurface();
+            NormalizeRibbonCommandGroups();
+            AlignRibbonIconColumns();
+            DisableRibbonScrollBars();
+            ApplyToolbarDropdownWhiteBackgrounds();
+            UpdateRibbonCompactMode(force: forceCompact);
+        }
+        finally
+        {
+            _normalizingRibbonSurface = false;
+        }
     }
 
     private void DisableRibbonScrollBars()
@@ -837,7 +920,10 @@ public partial class MainWindow : Window
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
-        Dispatcher.BeginInvoke((Action)(() => NormalizeRibbonSurface(forceCompact: true)));
+        NormalizeRibbonSurface(forceCompact: true);
+        Dispatcher.BeginInvoke(
+            (Action)(() => NormalizeRibbonSurface(forceCompact: true)),
+            DispatcherPriority.Loaded);
     }
 
     private void ConfigureInsertRibbonSurface()
@@ -849,12 +935,79 @@ public partial class MainWindow : Window
         if (insertTab is null)
             return;
 
-        foreach (var button in EnumerateVisualDescendants(insertTab).OfType<Button>())
+        var contentRoot = GetRibbonTabContentRoot(insertTab);
+        foreach (var button in EnumerateVisualDescendants(contentRoot)
+                     .Concat(EnumerateLogicalDescendants(contentRoot))
+                     .OfType<Button>()
+                     .Distinct())
         {
-            var title = RibbonTooltip.GetTitle(button) ?? "";
-            if (RibbonCommandPresentationPlanner.ShouldHideFromInsertRibbon(title))
+            var title = GetRibbonButtonTitleOrLabel(button);
+            var groupName = FindRibbonOwningGroupName(button);
+            if ((string.Equals(groupName, "Charts", StringComparison.Ordinal) &&
+                 !RibbonCommandPresentationPlanner.IsInsertRibbonChartCommand(title)) ||
+                RibbonCommandPresentationPlanner.ShouldHideFromInsertRibbon(title))
+            {
                 button.Visibility = Visibility.Collapsed;
+            }
         }
+    }
+
+    private static string FindRibbonOwningGroupName(DependencyObject element)
+    {
+        var current = element;
+        while (current is not null)
+        {
+            if (current is Grid grid &&
+                grid.Children.OfType<Border>().Any(border => Grid.GetRow(border) == 1))
+            {
+                return GetRibbonGroupName(grid);
+            }
+
+            current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+        }
+
+        return "";
+    }
+
+    private static string GetRibbonButtonTitleOrLabel(ButtonBase button)
+    {
+        var title = RibbonTooltip.GetTitle(button);
+        if (!string.IsNullOrWhiteSpace(title))
+            return title.Trim();
+
+        if (button.Content is string text && !string.IsNullOrWhiteSpace(text))
+            return text.Trim();
+
+        var label = FindRibbonContentLabel(button.Content);
+
+        return label ?? "";
+    }
+
+    private static string? FindRibbonContentLabel(object? content)
+    {
+        if (content is TextBlock textBlock &&
+            string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(textBlock.Text))
+        {
+            return textBlock.Text.Trim();
+        }
+
+        if (content is Panel panel)
+        {
+            foreach (var child in panel.Children)
+            {
+                if (FindRibbonContentLabel(child) is { } label)
+                    return label;
+            }
+        }
+
+        if (content is ContentControl contentControl &&
+            !ReferenceEquals(contentControl.Content, content))
+        {
+            return FindRibbonContentLabel(contentControl.Content);
+        }
+
+        return null;
     }
 
     private void AlignRibbonIconColumns()
@@ -1030,31 +1183,63 @@ public partial class MainWindow : Window
         if (RibbonTabs is null)
             return;
 
-        foreach (var panel in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
+        NormalizeRibbonCommandColumns();
+    }
+
+    private void NormalizeRibbonCommandColumns()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        var panels = EnumerateVisualDescendants(RibbonTabs)
+            .OfType<StackPanel>()
+            .Where(panel => panel != HomeRibbonPanel &&
+                            panel.Orientation == Orientation.Vertical &&
+                            FindVisualAncestor<ButtonBase>(panel) is null)
+            .ToList();
+
+        foreach (var panel in panels)
         {
-            if (panel == HomeRibbonPanel)
+            var directButtons = panel.Children.OfType<Button>().Where(button => button.Visibility == Visibility.Visible).ToList();
+            if (directButtons.Count <= 3)
                 continue;
 
-            var directButtons = panel.Children.OfType<Button>().ToList();
-            if (directButtons.Count == 0)
+            var parent = VisualTreeHelper.GetParent(panel) ?? LogicalTreeHelper.GetParent(panel);
+            if (parent is not Panel parentPanel)
                 continue;
 
-            var tallButtonCount = directButtons.Count(b => b.Height >= 46);
-            if (tallButtonCount == 0)
+            var index = parentPanel.Children.IndexOf(panel);
+            if (index < 0)
                 continue;
 
-            panel.Orientation = Orientation.Horizontal;
-            panel.VerticalAlignment = System.Windows.VerticalAlignment.Center;
-        }
+            var row = Grid.GetRow(panel);
+            var column = Grid.GetColumn(panel);
+            var rowSpan = Grid.GetRowSpan(panel);
+            var columnSpan = Grid.GetColumnSpan(panel);
+            var margin = panel.Margin;
+            var verticalAlignment = panel.VerticalAlignment;
+            var horizontalAlignment = panel.HorizontalAlignment;
 
-        foreach (var grid in EnumerateVisualDescendants(RibbonTabs).OfType<UniformGrid>())
-        {
-            var directButtons = grid.Children.OfType<Button>().ToList();
-            if (directButtons.Count == 0 || directButtons.All(b => b.Height < 46))
-                continue;
+            panel.Children.Clear();
+            var grid = new UniformGrid
+            {
+                Rows = 3,
+                Columns = (int)Math.Ceiling(directButtons.Count / 3.0),
+                Margin = margin,
+                VerticalAlignment = verticalAlignment,
+                HorizontalAlignment = horizontalAlignment
+            };
 
-            grid.Rows = 1;
-            grid.Columns = directButtons.Count;
+            Grid.SetRow(grid, row);
+            Grid.SetColumn(grid, column);
+            Grid.SetRowSpan(grid, rowSpan);
+            Grid.SetColumnSpan(grid, columnSpan);
+
+            foreach (var button in directButtons)
+                grid.Children.Add(button);
+
+            parentPanel.Children.RemoveAt(index);
+            parentPanel.Children.Insert(index, grid);
         }
     }
 
@@ -2639,6 +2824,20 @@ public partial class MainWindow : Window
             yield return child;
 
             foreach (var descendant in EnumerateVisualDescendants(child))
+                yield return descendant;
+        }
+    }
+
+    private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not DependencyObject dependencyObject)
+                continue;
+
+            yield return dependencyObject;
+
+            foreach (var descendant in EnumerateLogicalDescendants(dependencyObject))
                 yield return descendant;
         }
     }
