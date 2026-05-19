@@ -322,9 +322,29 @@ public sealed class ManageConditionalFormatsDialog : Window
             MidColor      = src.MidColor,
             MaxColor      = src.MaxColor,
             UseThreeColorScale = src.UseThreeColorScale,
+            MinThresholdType = src.MinThresholdType,
+            MinThresholdValue = src.MinThresholdValue,
+            MidThresholdType = src.MidThresholdType,
+            MidThresholdValue = src.MidThresholdValue,
+            MaxThresholdType = src.MaxThresholdType,
+            MaxThresholdValue = src.MaxThresholdValue,
             DataBarColor  = src.DataBarColor,
+            DataBarMinThresholdType = src.DataBarMinThresholdType,
+            DataBarMinThresholdValue = src.DataBarMinThresholdValue,
+            DataBarMaxThresholdType = src.DataBarMaxThresholdType,
+            DataBarMaxThresholdValue = src.DataBarMaxThresholdValue,
+            DataBarShowValue = src.DataBarShowValue,
+            DataBarMinLength = src.DataBarMinLength,
+            DataBarMaxLength = src.DataBarMaxLength,
             AboveAverage  = src.AboveAverage,
             FormulaText   = src.FormulaText,
+            IconSetStyle = src.IconSetStyle,
+            IconSetShowValue = src.IconSetShowValue,
+            IconSetReverse = src.IconSetReverse,
+            TopBottomRank = src.TopBottomRank,
+            TopBottomPercent = src.TopBottomPercent,
+            TextRuleText = src.TextRuleText,
+            DateOccurringPeriod = src.DateOccurringPeriod,
             StopIfTrue    = src.StopIfTrue,
         };
         return cf;
@@ -342,13 +362,25 @@ public sealed class ManageConditionalFormatsDialog : Window
     public static string DescribeRule(ConditionalFormat cf) => cf.RuleType switch
     {
         CfRuleType.Formula     => $"Formula: ={cf.FormulaText}",
-        CfRuleType.DataBar     => "Data Bar",
-        CfRuleType.ColorScale  => "Color Scale",
+        CfRuleType.DataBar     => cf.DataBarShowValue ? "Data Bar" : "Data Bar (bar only)",
+        CfRuleType.ColorScale  => cf.UseThreeColorScale ? "3-Color Scale" : "2-Color Scale",
+        CfRuleType.IconSet     => BuildIconSetDescription(cf),
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
-        CfRuleType.Top10       => cf.AboveAverage ? "Top 10" : "Bottom 10",
+        CfRuleType.Top10       => $"{(cf.AboveAverage ? "Top" : "Bottom")} {cf.TopBottomRank}{(cf.TopBottomPercent ? "%" : "")}",
         CfRuleType.CellValue   => BuildCellValueDescription(cf),
         _ => cf.RuleType.ToString()
     };
+
+    private static string BuildIconSetDescription(ConditionalFormat cf)
+    {
+        var style = string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle;
+        var flags = new List<string>();
+        if (cf.IconSetReverse) flags.Add("reverse");
+        if (!cf.IconSetShowValue) flags.Add("icons only");
+        return flags.Count == 0
+            ? $"Icon Set: {style}"
+            : $"Icon Set: {style} ({string.Join(", ", flags)})";
+    }
 
     private static string BuildCellValueDescription(ConditionalFormat cf)
     {
@@ -373,6 +405,8 @@ public sealed class ManageConditionalFormatsDialog : Window
 
     public static Brush PreviewBrush(ConditionalFormat cf)
     {
+        if (cf.RuleType == CfRuleType.IconSet)
+            return Brushes.LightGray;
         if (cf.FormatIfTrue?.FillColor is { } fc)
             return new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
         return Brushes.LightGray;
