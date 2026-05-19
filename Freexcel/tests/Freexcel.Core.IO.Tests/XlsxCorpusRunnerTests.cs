@@ -113,6 +113,18 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedUnsupportedChartFixture_UsesCurrentlyUnsupportedChartFamily()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage("generated-unsupported-chart-001");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!).ToString();
+
+        chartXml.Should().Contain("surfaceChart");
+        chartXml.Should().NotContain("radarChart", "radar charts are supported now and should not anchor the unsupported-chart fixture");
+    }
+
+    [Fact]
     public void LocalPrivateCorpusRows_AreSkippedWhenFilesAreAbsent()
     {
         var workspace = FindWorkspaceRoot();
@@ -429,6 +441,12 @@ public class XlsxCorpusRunnerTests
             .Where(target => !target!.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
             .Select(target => $"{relsEntry.FullName.Replace('\\', '/')}=>{target!.Replace('\\', '/')}")
             .ToArray() ?? [];
+    }
+
+    private static XDocument LoadPackageXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
     }
 
     private sealed record WorkbookSummary(
