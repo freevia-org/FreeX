@@ -1772,24 +1772,6 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                SaveButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.O && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                OpenButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                CreateNewWorkbook();
-                e.Handled = true;
-                return;
-            }
             if ((e.Key == Key.D1 || e.Key == Key.NumPad1) && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 OpenFormatCellsDialog();
@@ -2086,6 +2068,15 @@ public partial class MainWindow : Window
     {
         switch (shortcut)
         {
+            case KeyboardCommandShortcut.NewWorkbook:
+                CreateNewWorkbook();
+                break;
+            case KeyboardCommandShortcut.OpenWorkbook:
+                OpenButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.SaveWorkbook:
+                SaveButton_Click(sender, e);
+                break;
             case KeyboardCommandShortcut.CreateTable:
                 TableBtn_Click(sender, e);
                 break;

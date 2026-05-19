@@ -70,6 +70,24 @@ public static class KeyboardShortcutMatcher
     {
         shortcut = default;
         var effectiveKey = key == Key.None ? systemKey : key;
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.N)
+        {
+            shortcut = KeyboardCommandShortcut.NewWorkbook;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.O)
+        {
+            shortcut = KeyboardCommandShortcut.OpenWorkbook;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.S)
+        {
+            shortcut = KeyboardCommandShortcut.SaveWorkbook;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Control && effectiveKey is Key.T or Key.L)
         {
             shortcut = KeyboardCommandShortcut.CreateTable;
@@ -440,6 +458,9 @@ public enum KeyboardSelectionShortcut
 
 public enum KeyboardCommandShortcut
 {
+    NewWorkbook,
+    OpenWorkbook,
+    SaveWorkbook,
     CreateTable,
     InsertHyperlink,
     FillDown,
