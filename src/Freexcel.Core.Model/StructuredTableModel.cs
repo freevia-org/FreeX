@@ -16,6 +16,7 @@ public sealed class StructuredTableModel
     public bool ShowColumnStripes { get; init; }
     public string PackagePart { get; init; } = "";
     public List<StructuredTableColumnModel> Columns { get; } = [];
+    public List<StructuredTableFilterColumnModel> FilterColumns { get; } = [];
 }
 
 public sealed record StructuredTableColumnModel(
@@ -23,3 +24,8 @@ public sealed record StructuredTableColumnModel(
     string Name,
     string? TotalsRowLabel = null,
     string? TotalsRowFunction = null);
+
+public sealed record StructuredTableFilterColumnModel(
+    int ColumnId,
+    IReadOnlyList<string> Values,
+    bool IncludeBlank = false);
