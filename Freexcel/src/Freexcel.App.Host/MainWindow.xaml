@@ -432,22 +432,34 @@
                           TextOptions.TextFormattingMode="Display"
                           TextOptions.TextRenderingMode="ClearType"
                           TextOptions.TextHintingMode="Fixed">
-                        <TextBlock Text="X"
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="7"/>
+                            <RowDefinition Height="2"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border x:Name="TitleBarAppFreeBand"
+                                Grid.Row="0"
+                                Background="#2FA466"
+                                CornerRadius="1,1,0,0"
+                                Margin="1,1,1,0"/>
+                        <TextBlock Text="FREE"
+                                   Grid.Row="0"
                                    Foreground="{StaticResource FreexcelWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
-                                   FontSize="13"
+                                   FontSize="4.8"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    TextAlignment="Center"/>
-                        <TextBlock Text="FREE"
+                        <TextBlock x:Name="TitleBarAppX"
+                                   Grid.Row="2"
+                                   Text="X"
                                    Foreground="{StaticResource FreexcelWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
-                                   FontSize="4.5"
+                                   FontSize="12.5"
                                    HorizontalAlignment="Center"
-                                   VerticalAlignment="Top"
-                                   Margin="0,1,0,0"
+                                   VerticalAlignment="Center"
                                    TextAlignment="Center"/>
                     </Grid>
                 </Border>
