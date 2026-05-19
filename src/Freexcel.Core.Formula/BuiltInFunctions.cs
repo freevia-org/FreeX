@@ -7011,17 +7011,60 @@ public static class BuiltInFunctions
 
     // ── Numerical primitives ─────────────────────────────────────────────────
 
-    /// <summary>Horner's-polynomial approximation for erf(x).</summary>
-    private static double Erf(double x)
+    /// <summary>Complementary error function using a Chebyshev approximation.</summary>
+    private static double Erfc(double x)
     {
-        const double a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
-                     a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-        int sign = x < 0 ? -1 : 1;
-        x = Math.Abs(x);
-        double t = 1.0 / (1.0 + p * x);
-        double y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.Exp(-x * x);
-        return sign * y;
+        double z = Math.Abs(x);
+        double t = 2.0 / (2.0 + z);
+        double ty = 4.0 * t - 2.0;
+        double d = 0.0;
+        double dd = 0.0;
+        ReadOnlySpan<double> coefficients =
+        [
+            -1.3026537197817094,
+             0.64196979235649026,
+             0.019476473204185836,
+            -0.009561514786808631,
+            -0.000946595344482036,
+             0.000366839497852761,
+             0.000042523324806907,
+            -0.000020278578112534,
+            -0.000001624290004647,
+             0.00000130365583558,
+             0.000000015626441722,
+            -0.000000085238095915,
+             0.000000006529054439,
+             0.000000005059343495,
+            -0.000000000991364156,
+            -0.000000000227365122,
+             0.000000000096467911,
+             0.000000000002394038,
+            -0.000000000006886027,
+             0.000000000000894487,
+             0.000000000000313092,
+            -0.000000000000112708,
+             0.000000000000000381,
+             0.000000000000007106,
+            -0.000000000000001523,
+            -0.000000000000000094,
+             0.000000000000000121,
+            -0.000000000000000028
+        ];
+
+        for (int j = coefficients.Length - 1; j > 0; j--)
+        {
+            double previous = d;
+            d = ty * d - dd + coefficients[j];
+            dd = previous;
+        }
+
+        double result = t * Math.Exp(-z * z + 0.5 * (coefficients[0] + ty * d) - dd);
+        return x >= 0.0 ? result : 2.0 - result;
     }
+
+    /// <summary>Error function used by normal distribution helpers.</summary>
+    private static double Erf(double x)
+        => x >= 0.0 ? 1.0 - Erfc(x) : Erfc(-x) - 1.0;
 
     private static double NormSCdf(double z) => 0.5 * (1.0 + Erf(z / Math.Sqrt(2.0)));
     private static double NormSPdf(double z) => Math.Exp(-0.5 * z * z) / Math.Sqrt(2.0 * Math.PI);

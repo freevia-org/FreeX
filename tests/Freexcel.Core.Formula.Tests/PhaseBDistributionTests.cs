@@ -261,6 +261,11 @@ public class PhaseBDistributionTests
     }
 
     [Fact]
+    public void ConfidenceNorm_MatchesExcelCachedResult()
+        => Calc("CONFIDENCE.NORM(0.05,2.5,50)")
+            .Should().BeApproximately(0.69295191217483865, 1e-12);
+
+    [Fact]
     public void Confidence_LegacyAliasMatchesConfidenceNorm()
         => Calc("CONFIDENCE(0.05,2.5,50)")
             .Should().BeApproximately(Calc("CONFIDENCE.NORM(0.05,2.5,50)"), 1e-12);
