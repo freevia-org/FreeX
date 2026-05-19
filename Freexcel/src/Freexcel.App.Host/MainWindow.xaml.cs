@@ -6119,11 +6119,11 @@ public partial class MainWindow : Window
         };
         if (saveDlg.ShowDialog() != true) return;
 
-        var ext = System.IO.Path.GetExtension(saveDlg.FileName).ToLowerInvariant();
-        if (ext == ".pdf")
-            ExportViaPrintToPdf(saveDlg.FileName);
+        var request = ExportPlanner.PlanExport(saveDlg.FileName);
+        if (request.Format == ExportFormat.PdfViaWindowsPrinter)
+            ExportViaPrintToPdf(request.Path);
         else
-            ExportAsXps(saveDlg.FileName);
+            ExportAsXps(request.Path);
     }
 
     /// <summary>
@@ -6142,35 +6142,33 @@ public partial class MainWindow : Window
         }
         catch
         {
-            // Print-spooler unavailable — fall through to XPS fallback
+            // Print-spooler unavailable; fall through to XPS fallback.
         }
 
         if (pdfQueue != null)
         {
             // The WPF PrintDialog API can target a specific queue but cannot programmatically
             // set the output file path for the Microsoft Print to PDF virtual printer through
-            // the managed API alone. We fall back to XPS (which Windows can open/convert to PDF).
-            var xpsPath = System.IO.Path.ChangeExtension(pdfPath, ".xps");
-            ExportAsXps(xpsPath);
-            MessageBox.Show(
-                $"Saved as XPS: {xpsPath}\n\n" +
-                "Open the file in XPS Viewer and print to any PDF printer, " +
-                "or use File → Print and select 'Microsoft Print to PDF' to save directly as PDF.",
-                "Export PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // the managed API alone. Keep the file export path deterministic by writing XPS.
+            ExportPdfFallbackAsXps(pdfPath);
         }
         else
         {
-            // No PDF printer found; just save XPS
-            var xpsPath = System.IO.Path.ChangeExtension(pdfPath, ".xps");
-            ExportAsXps(xpsPath);
-            MessageBox.Show(
-                $"No PDF printer found on this system.\n\nSaved as XPS: {xpsPath}",
-                "Export PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            ExportPdfFallbackAsXps(pdfPath);
         }
+    }
+
+    private void ExportPdfFallbackAsXps(string pdfPath)
+    {
+        var xpsPath = ExportPlanner.GetFallbackXpsPath(pdfPath);
+        if (!ExportAsXps(xpsPath, showSuccessMessage: false))
+            return;
+
+        MessageBox.Show(
+            $"{ExportPlanner.PdfFallbackMessage}\n\nSaved XPS file:\n{xpsPath}",
+            "Export PDF",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     /// <summary>
@@ -12363,7 +12361,7 @@ public partial class MainWindow : Window
         { FileName = AppInfo.FeedbackUrl, UseShellExecute = true });
     }
 
-    private void ExportAsXps(string xpsPath)
+    private bool ExportAsXps(string xpsPath, bool showSuccessMessage = true)
     {
         try
         {
@@ -12392,11 +12390,16 @@ public partial class MainWindow : Window
             writer.Write(doc.DocumentPaginator);
             // xpsDoc closed by 'using'
 
-            MessageBox.Show(
-                $"Saved XPS file:\n{xpsPath}",
-                "Export XPS",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            if (showSuccessMessage)
+            {
+                MessageBox.Show(
+                    $"Saved XPS file:\n{xpsPath}",
+                    "Export XPS",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+
+            return true;
         }
         catch (Exception ex)
         {
@@ -12405,6 +12408,7 @@ public partial class MainWindow : Window
                 "Export Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+            return false;
         }
     }
 }
