@@ -7994,6 +7994,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             : null,
                         ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
                     ToLegendXml(chart, chartNs, drawingNs),
+                    chart.ShowDataInHiddenRowsAndColumns ? new XElement(chartNs + "plotVisOnly", new XAttribute("val", "0")) : null,
                     ToBlankDisplayXml(chart, chartNs),
                     chart.ShowDataLabelsOverMaximum ? new XElement(chartNs + "showDLblsOverMax", new XAttribute("val", "1")) : null)));
     }

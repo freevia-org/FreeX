@@ -291,6 +291,7 @@ public sealed class XlsxChartPartReaderTests
                     </c:ser>
                   </c:barChart>
                 </c:plotArea>
+                <c:plotVisOnly val="0"/>
                 <c:dispBlanksAs val="span"/>
                 <c:showDLblsOverMax val="1"/>
               </c:chart>
@@ -307,6 +308,7 @@ public sealed class XlsxChartPartReaderTests
         chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Span);
         chart.ShowDataLabelsOverMaximum.Should().BeTrue();
         chart.AutoTitleDeleted.Should().BeTrue();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
     }
 
     [Fact]
