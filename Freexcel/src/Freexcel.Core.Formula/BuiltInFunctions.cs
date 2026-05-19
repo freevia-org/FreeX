@@ -1668,6 +1668,16 @@ public static class BuiltInFunctions
         return true;
     }
 
+    private static bool TryNonNegativeOADateToDateTime(ScalarValue v, out DateTime dt)
+    {
+        dt = default;
+        var num = ToNumber(v);
+        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
+            return false;
+        dt = SerialToDate(num);
+        return true;
+    }
+
     private static DateTime OADateToDateTime(ScalarValue v) =>
         DateTime.FromOADate(ToNumber(v));
 
@@ -1695,19 +1705,19 @@ public static class BuiltInFunctions
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Hour) : ErrorValue.Num;
+        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Hour) : ErrorValue.Num;
     }
 
     private static ScalarValue Minute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Minute) : ErrorValue.Num;
+        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Minute) : ErrorValue.Num;
     }
 
     private static ScalarValue Second(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Second) : ErrorValue.Num;
+        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Second) : ErrorValue.Num;
     }
 
     private static ScalarValue Weekday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2768,10 +2778,11 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
         if (args[2] is ErrorValue e2) return e2;
-        double h = ToNumber(args[0]), m = ToNumber(args[1]), s = ToNumber(args[2]);
-        if (!double.IsFinite(h) || !double.IsFinite(m) || !double.IsFinite(s)) return ErrorValue.Num;
-        if (h < 0 || m < 0 || s < 0) return ErrorValue.Num;
-        if (h > 32767 || m > 32767 || s > 32767) return ErrorValue.Num;
+        double rawH = ToNumber(args[0]), rawM = ToNumber(args[1]), rawS = ToNumber(args[2]);
+        if (!double.IsFinite(rawH) || !double.IsFinite(rawM) || !double.IsFinite(rawS)) return ErrorValue.Num;
+        if (rawH < 0 || rawM < 0 || rawS < 0) return ErrorValue.Num;
+        if (rawH > 32767 || rawM > 32767 || rawS > 32767) return ErrorValue.Num;
+        int h = (int)rawH, m = (int)rawM, s = (int)rawS;
         double frac = (h * 3600 + m * 60 + s) / 86400.0;
         return new NumberValue(frac - Math.Floor(frac));
     }
