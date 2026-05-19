@@ -273,6 +273,8 @@ public sealed class XlsxChartPartReaderTests
         var chartXml = XDocument.Parse("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:date1904 val="1"/>
+              <c:lang val="en-US"/>
               <c:style val="42"/>
               <c:protection chartObject="1" data="1" formatting="0" selection="1" userInterface="1"/>
               <c:pivotSource>
@@ -310,6 +312,8 @@ public sealed class XlsxChartPartReaderTests
         chart.ShowDataLabelsOverMaximum.Should().BeTrue();
         chart.AutoTitleDeleted.Should().BeTrue();
         chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        chart.Uses1904DateSystem.Should().BeTrue();
+        chart.Language.Should().Be("en-US");
         chart.Protection.Should().BeEquivalentTo(new ChartProtectionModel
         {
             ChartObject = true,

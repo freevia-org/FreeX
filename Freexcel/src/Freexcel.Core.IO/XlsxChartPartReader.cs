@@ -74,6 +74,16 @@ public static class XlsxChartPartReader
 
     private static void ApplyChartStyleMetadata(XDocument chartXml, ChartModel chart)
     {
+        chart.Uses1904DateSystem = IsTrue(chartXml.Root?
+            .Element(ChartNs + "date1904")?
+            .Attribute("val")?
+            .Value);
+
+        chart.Language = chartXml.Root?
+            .Element(ChartNs + "lang")?
+            .Attribute("val")?
+            .Value;
+
         var styleValue = chartXml.Root?
             .Element(ChartNs + "style")?
             .Attribute("val")?
