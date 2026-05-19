@@ -104,7 +104,7 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_ExternalLinkEmbeddedObjectAndCustomXml_DetectsUnsupportedFeatures()
+    public void Inspect_ExternalLinkEmbeddedObjectAndCustomXml_DoesNotWarnForRetainedCustomXml()
     {
         using var package = CreatePackage(
             "xl/externalLinks/externalLink1.xml",
@@ -114,7 +114,7 @@ public class XlsxFeatureInspectorTests
         var report = XlsxFeatureInspector.Inspect(package);
 
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.EmbeddedObjects);
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomXmlParts);
+        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.CustomXmlParts);
     }
 
     [Fact]
