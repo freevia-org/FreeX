@@ -3899,7 +3899,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
         PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
-        PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive);
+        PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive, workbook);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
     }
 
@@ -5113,7 +5113,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static void PreserveWorksheetMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
+    private static void PreserveWorksheetMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -5249,7 +5249,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "cellWatches" &&
-                    MergeWorksheetCellWatches(sourceBlock, targetRoot, workbookNs))
+                    MergeWorksheetCellWatches(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        GetModeledCellWatchReferences(workbook, sheetName)))
                 {
                     changed = true;
                     continue;
@@ -5520,19 +5524,34 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace workbookNs,
         XElement metadataElement)
     {
-        string[] laterWorksheetElements =
-        [
-            "smartTags",
-            "drawing",
-            "legacyDrawing",
-            "legacyDrawingHF",
-            "picture",
-            "oleObjects",
-            "controls",
-            "webPublishItems",
-            "tableParts",
-            "extLst"
-        ];
+        var laterWorksheetElements = metadataElement.Name.LocalName == "cellWatches"
+            ? new[]
+            {
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            }
+            : new[]
+            {
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            };
 
         var insertionPoint = worksheetRoot.Elements()
             .FirstOrDefault(element =>
@@ -5694,12 +5713,39 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return changed;
     }
 
-    private static bool MergeWorksheetCellWatches(XElement sourceCellWatches, XElement targetRoot, XNamespace workbookNs)
+    private static HashSet<string> GetModeledCellWatchReferences(Workbook workbook, string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        return workbook.WatchedCells
+            .Where(address => address.Sheet == sheet.Id)
+            .Select(address => address.ToA1())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool MergeWorksheetCellWatches(
+        XElement sourceCellWatches,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        HashSet<string> modeledReferences)
     {
         var targetCellWatches = targetRoot.Element(workbookNs + "cellWatches");
         if (targetCellWatches is null)
         {
-            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, new XElement(sourceCellWatches));
+            var retainedUnsupported = sourceCellWatches
+                .Elements(workbookNs + "cellWatch")
+                .Where(element => !IsSupportedCellWatchReference(element.Attribute("r")?.Value))
+                .Select(element => new XElement(element))
+                .ToList();
+            if (retainedUnsupported.Count == 0)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(
+                targetRoot,
+                workbookNs,
+                new XElement(workbookNs + "cellWatches", retainedUnsupported));
             return true;
         }
 
@@ -5712,10 +5758,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
         foreach (var sourceCellWatch in sourceCellWatches.Elements(workbookNs + "cellWatch"))
         {
             var reference = sourceCellWatch.Attribute("r")?.Value;
-            if (!string.IsNullOrWhiteSpace(reference) &&
-                targetByReference.TryGetValue(reference, out var targetCellWatch))
+            if (IsSupportedCellWatchReference(reference))
             {
-                changed |= MergeMissingAttributes(sourceCellWatch, targetCellWatch);
+                if (modeledReferences.Contains(reference!) &&
+                    targetByReference.TryGetValue(reference!, out var targetCellWatch))
+                {
+                    changed |= MergeMissingAttributes(sourceCellWatch, targetCellWatch);
+                }
+
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(reference) &&
+                targetByReference.ContainsKey(reference))
+            {
                 continue;
             }
 
@@ -5726,6 +5782,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return changed;
+    }
+
+    private static bool IsSupportedCellWatchReference(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return false;
+
+        return CellAddress.TryParse(reference, SheetId.New(), out _);
     }
 
     private static bool TryParseSqrefCells(string? sqref, SheetId sheet, out HashSet<CellAddress> cells)
