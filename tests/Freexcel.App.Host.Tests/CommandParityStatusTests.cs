@@ -16,17 +16,18 @@ public sealed class CommandParityStatusTests
             ("Export to PDF/XPS", "Partial"),
             ("Cut (Ctrl+X)", "Implemented"),
             ("Copy (Ctrl+C)", "Implemented"),
-            ("Paste (Ctrl+V)", "Partial"),
-            ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture)", "Partial"),
+            ("Paste (Ctrl+V)", "Implemented"),
+            ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture)", "Implemented"),
             ("Format Painter", "Implemented"),
-            ("Distributed/Justify alignment", "Partial"),
-            ("Shrink to Fit", "Partial"),
-            ("Format Cells Alignment dialog", "Partial"),
+            ("Distributed/Justify alignment", "Implemented"),
+            ("Shrink to Fit", "Implemented"),
+            ("Format Cells Alignment dialog", "Implemented"),
             ("Custom Number Format", "Partial"),
             ("Full Excel locale/accounting fidelity", "Partial"),
-            ("AutoFit Row/Column", "Partial"),
-            ("Format Cells dialog (Ctrl+1)", "Partial"),
-            ("Flash Fill", "Partial")
+            ("AutoFit Row/Column", "Implemented"),
+            ("Format Cells dialog (Ctrl+1)", "Implemented"),
+            ("Flash Fill", "Partial"),
+            ("Share", "Partial")
         ];
 
         var tableRows = ParseMarkdownTableRows(doc);

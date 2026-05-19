@@ -805,12 +805,12 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(number)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(number);
         if (digits >= 0)
             return NumberResult(Math.Round(number, digits, MidpointRounding.AwayFromZero));
 
-        double factor = Math.Pow(10, -digits);
-        return NumberResult(Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor);
+        return NumberResult(RoundWithExcelDigits(number, digits));
     }
 
     private static ScalarValue NumberResult(double value) =>
@@ -870,6 +870,7 @@ public static class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
+        count = ExtendPastTrailingHighSurrogate(text, count);
         return TextResult(text[..count]);
     }
 
@@ -883,7 +884,22 @@ public static class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        return TextResult(count == 0 ? "" : text[^count..]);
+        int start = RetreatBeforeLeadingLowSurrogate(text, text.Length - count);
+        return TextResult(text[start..]);
+    }
+
+    private static int ExtendPastTrailingHighSurrogate(string text, int length)
+    {
+        if (length > 0 && length < text.Length && char.IsHighSurrogate(text[length - 1]) && char.IsLowSurrogate(text[length]))
+            return length + 1;
+        return length;
+    }
+
+    private static int RetreatBeforeLeadingLowSurrogate(string text, int start)
+    {
+        if (start > 0 && start < text.Length && char.IsLowSurrogate(text[start]) && char.IsHighSurrogate(text[start - 1]))
+            return start - 1;
+        return start;
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -1114,6 +1130,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue table) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
 
         var lookupValue = args[0];
         double rawMatchType = args.Count > 2 ? ToNumber(args[2]) : 1;
@@ -1338,12 +1355,15 @@ public static class BuiltInFunctions
             return ApplyComparisonCriteria(cellValue, op, rhs);
         }
 
-        // Plain text (supports wildcards * and ?)
-        var cellText = cellValue is TextValue tv ? tv.Value :
+        // Plain wildcard criteria in Excel match text cells only.
+        if (IsWildcardCriteria(crit))
+            return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
+
+        var cellText = cellValue is TextValue text ? text.Value :
                        TryCellNumber(cellValue, out double numericValue) ? numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture) :
                        cellValue is BoolValue bv ? (bv.Value ? "TRUE" : "FALSE") :
                        "";
-        return WildcardMatch(cellText, crit, ignoreCase: true);
+        return string.Equals(cellText, crit, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ApplyComparisonCriteria(ScalarValue cellValue, string op, string rhs)
@@ -1364,6 +1384,13 @@ public static class BuiltInFunctions
                 _    => false
             };
         }
+
+        if (IsWildcardCriteria(rhs) && op is "=" or "<>")
+        {
+            bool matches = cellValue is TextValue textValue && WildcardMatch(textValue.Value, rhs, ignoreCase: true);
+            return op == "=" ? matches : !matches;
+        }
+
         // Text comparison
         var cellText = cellValue is TextValue tv ? tv.Value : ToText(cellValue);
         int cmp = string.Compare(cellText, rhs, StringComparison.OrdinalIgnoreCase);
@@ -1377,6 +1404,18 @@ public static class BuiltInFunctions
             "<>" => cmp != 0,
             _    => false
         };
+    }
+
+    private static bool IsWildcardCriteria(string criteria)
+    {
+        for (int i = 0; i < criteria.Length; i++)
+        {
+            char ch = criteria[i];
+            if (ch is '*' or '?') return true;
+            if (ch == '~' && i + 1 < criteria.Length && (criteria[i + 1] is '*' or '?' or '~')) return true;
+        }
+
+        return false;
     }
 
     private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
@@ -1434,8 +1473,144 @@ public static class BuiltInFunctions
     private static string FormatNumberInline(double value, string fmt)
     {
         if (string.IsNullOrEmpty(fmt)) return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (TryFormatDateTimeInline(value, fmt, out var dateText)) return dateText;
         try { return value.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture); }
         catch { return value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+    }
+
+    private static bool TryFormatDateTimeInline(double value, string fmt, out string text)
+    {
+        text = string.Empty;
+        if (!LooksLikeDateTimeFormat(fmt)) return false;
+
+        try
+        {
+            var dt = SerialToDate(value);
+            text = dt.ToString(ToDotNetDateTimeFormat(fmt), CultureInfo.GetCultureInfo("en-US"));
+            return true;
+        }
+        catch
+        {
+            text = string.Empty;
+            return false;
+        }
+    }
+
+    private static bool LooksLikeDateTimeFormat(string fmt) =>
+        fmt.Contains("AM/PM", StringComparison.OrdinalIgnoreCase)
+        || fmt.Any(c => c is 'y' or 'Y' or 'h' or 'H')
+        || LooksLikeMonthFormat(fmt)
+        || LooksLikeDayFormat(fmt);
+
+    private static bool LooksLikeMonthFormat(string fmt)
+    {
+        for (int i = 0; i < fmt.Length; i++)
+        {
+            if (fmt[i] is not ('m' or 'M')) continue;
+            var prev = PreviousNonSpace(fmt, i);
+            var next = NextNonSpace(fmt, i + CountSame(fmt, i));
+            if (prev is '/' or '-' or '\0' || next is '/' or '-' or '\0') return true;
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeDayFormat(string fmt)
+    {
+        for (int i = 0; i < fmt.Length; i++)
+        {
+            if (fmt[i] is not ('d' or 'D')) continue;
+            var prev = PreviousNonSpace(fmt, i);
+            var next = NextNonSpace(fmt, i + CountSame(fmt, i));
+            if (prev is '/' or '-' or ',' || next is '/' or '-' or ',') return true;
+        }
+
+        return false;
+    }
+
+    private static string ToDotNetDateTimeFormat(string fmt)
+    {
+        var sb = new System.Text.StringBuilder(fmt.Length);
+        bool lastWasHour = false;
+        bool lastWasMinute = false;
+
+        for (int i = 0; i < fmt.Length;)
+        {
+            if (MatchesAt(fmt, i, "AM/PM"))
+            {
+                sb.Append("tt");
+                i += 5;
+                lastWasHour = lastWasMinute = false;
+                continue;
+            }
+
+            char ch = fmt[i];
+            int count = CountSame(fmt, i);
+            switch (char.ToLowerInvariant(ch))
+            {
+                case 'y':
+                    sb.Append(count <= 2 ? "yy" : "yyyy");
+                    lastWasHour = lastWasMinute = false;
+                    break;
+                case 'd':
+                    sb.Append(new string('d', Math.Min(count, 4)));
+                    lastWasHour = lastWasMinute = false;
+                    break;
+                case 'h':
+                    sb.Append(count <= 1 ? "h" : "hh");
+                    lastWasHour = true;
+                    lastWasMinute = false;
+                    break;
+                case 's':
+                    sb.Append(count <= 1 ? "s" : "ss");
+                    lastWasHour = false;
+                    lastWasMinute = false;
+                    break;
+                case 'm':
+                    bool minute = lastWasHour || lastWasMinute || PreviousNonSpace(fmt, i) == ':' || NextNonSpace(fmt, i + count) == ':';
+                    sb.Append(minute
+                        ? count <= 1 ? "m" : "mm"
+                        : count switch { 1 => "M", 2 => "MM", 3 => "MMM", _ => "MMMM" });
+                    lastWasHour = false;
+                    lastWasMinute = minute;
+                    break;
+                default:
+                    sb.Append(ch);
+                    lastWasHour = ch == ':' && lastWasHour;
+                    lastWasMinute = ch == ':' && lastWasMinute;
+                    break;
+            }
+
+            i += count;
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool MatchesAt(string text, int index, string value) =>
+        index + value.Length <= text.Length
+        && string.Compare(text, index, value, 0, value.Length, StringComparison.OrdinalIgnoreCase) == 0;
+
+    private static int CountSame(string text, int index)
+    {
+        char ch = char.ToLowerInvariant(text[index]);
+        int end = index + 1;
+        while (end < text.Length && char.ToLowerInvariant(text[end]) == ch) end++;
+        return end - index;
+    }
+
+    private static char PreviousNonSpace(string text, int index)
+    {
+        for (int i = index - 1; i >= 0; i--)
+            if (!char.IsWhiteSpace(text[i])) return text[i];
+        return '\0';
+    }
+
+    private static char NextNonSpace(string text, int index)
+    {
+        for (int i = index; i < text.Length; i++)
+            if (!char.IsWhiteSpace(text[i])) return text[i];
+        return '\0';
     }
 
     private static readonly Regex MultiSpaceRegex = new(@" {2,}", RegexOptions.Compiled);
@@ -1608,14 +1783,31 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[0] is NumberValue nv) return nv;
         var text = ToText(args[0]).Trim();
+        var usCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
         if (text.EndsWith('%') &&
             double.TryParse(text[..^1].Trim(), System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var pct))
+                usCulture, out var pct))
             return new NumberValue(pct / 100.0);
         if (double.TryParse(text, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var d))
+                usCulture, out var d))
             return new NumberValue(d);
+        if (TryParseExcelFakeLeapDayValueText(text, usCulture, out var fakeLeapSerial))
+            return new NumberValue(fakeLeapSerial);
+        if (DateTime.TryParse(text, usCulture,
+                System.Globalization.DateTimeStyles.None, out var dt))
+            return new NumberValue(IsTimeOnlyText(text) ? dt.TimeOfDay.TotalDays : DateToSerial(dt));
         return ErrorValue.Value;
+    }
+
+    private static bool IsTimeOnlyText(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Contains('/') || trimmed.Contains('-')) return false;
+        if (Regex.IsMatch(trimmed, @"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)", RegexOptions.IgnoreCase))
+            return false;
+
+        return trimmed.Contains(':')
+            || Regex.IsMatch(trimmed, @"\b(?:am|pm)\b", RegexOptions.IgnoreCase);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1681,6 +1873,21 @@ public static class BuiltInFunctions
         return true;
     }
 
+    private static bool TryNonNegativeSerialToTimeParts(ScalarValue v, out int hour, out int minute, out int second)
+    {
+        hour = minute = second = 0;
+        var num = ToNumber(v);
+        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
+            return false;
+
+        var fraction = num - Math.Floor(num);
+        var totalSeconds = (int)Math.Floor(fraction * 86400.0 + 1e-9) % 86400;
+        hour = totalSeconds / 3600;
+        minute = totalSeconds % 3600 / 60;
+        second = totalSeconds % 60;
+        return true;
+    }
+
     private static DateTime OADateToDateTime(ScalarValue v) =>
         DateTime.FromOADate(ToNumber(v));
 
@@ -1711,19 +1918,19 @@ public static class BuiltInFunctions
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Hour) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out var hour, out _, out _) ? new NumberValue(hour) : ErrorValue.Num;
     }
 
     private static ScalarValue Minute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Minute) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out _, out var minute, out _) ? new NumberValue(minute) : ErrorValue.Num;
     }
 
     private static ScalarValue Second(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Second) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out _, out _, out var second) ? new NumberValue(second) : ErrorValue.Num;
     }
 
     private static ScalarValue Weekday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2376,7 +2583,7 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
         if (text.Length == 0) return ErrorValue.Value;
-        return new NumberValue(text[0]);
+        return new NumberValue(CharToExcelAnsiCode(text[0]));
     }
 
     private static ScalarValue Char(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2386,8 +2593,72 @@ public static class BuiltInFunctions
         if (!double.IsFinite(n)) return ErrorValue.Value;
         int code = (int)n;
         if (code <= 0 || code > 255) return ErrorValue.Value;
-        return new TextValue(((char)code).ToString());
+        return new TextValue(ExcelAnsiCodeToChar(code).ToString());
     }
+
+    private static char ExcelAnsiCodeToChar(int code) => code switch
+    {
+        128 => '\u20AC',
+        130 => '\u201A',
+        131 => '\u0192',
+        132 => '\u201E',
+        133 => '\u2026',
+        134 => '\u2020',
+        135 => '\u2021',
+        136 => '\u02C6',
+        137 => '\u2030',
+        138 => '\u0160',
+        139 => '\u2039',
+        140 => '\u0152',
+        142 => '\u017D',
+        145 => '\u2018',
+        146 => '\u2019',
+        147 => '\u201C',
+        148 => '\u201D',
+        149 => '\u2022',
+        150 => '\u2013',
+        151 => '\u2014',
+        152 => '\u02DC',
+        153 => '\u2122',
+        154 => '\u0161',
+        155 => '\u203A',
+        156 => '\u0153',
+        158 => '\u017E',
+        159 => '\u0178',
+        _ => (char)code
+    };
+
+    private static int CharToExcelAnsiCode(char ch) => ch switch
+    {
+        '\u20AC' => 128,
+        '\u201A' => 130,
+        '\u0192' => 131,
+        '\u201E' => 132,
+        '\u2026' => 133,
+        '\u2020' => 134,
+        '\u2021' => 135,
+        '\u02C6' => 136,
+        '\u2030' => 137,
+        '\u0160' => 138,
+        '\u2039' => 139,
+        '\u0152' => 140,
+        '\u017D' => 142,
+        '\u2018' => 145,
+        '\u2019' => 146,
+        '\u201C' => 147,
+        '\u201D' => 148,
+        '\u2022' => 149,
+        '\u2013' => 150,
+        '\u2014' => 151,
+        '\u02DC' => 152,
+        '\u2122' => 153,
+        '\u0161' => 154,
+        '\u203A' => 155,
+        '\u0153' => 156,
+        '\u017E' => 158,
+        '\u0178' => 159,
+        _ => ch
+    };
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 5 – Count: COUNTBLANK
@@ -2462,8 +2733,10 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
     }
 
@@ -2475,8 +2748,10 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
     }
 
@@ -2491,9 +2766,11 @@ public static class BuiltInFunctions
             var rawDigits = ToNumber(args[1]);
             if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
             digits = (int)Math.Truncate(rawDigits);
-            if (digits < -15 || digits > 15) return ErrorValue.Num;
         }
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult(Math.Truncate(n * factor) / factor);
     }
 
@@ -2813,10 +3090,29 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
+        if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
+    }
+
+    private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
+    {
+        serial = 0;
+        var trimmed = text.Trim();
+        var match = Regex.Match(trimmed, @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+
+        serial = 60;
+        if (match.Groups[1].Success)
+        {
+            if (!DateTime.TryParse(match.Groups[1].Value, culture, DateTimeStyles.None, out var time))
+                return false;
+            serial += time.TimeOfDay.TotalDays;
+        }
+
+        return true;
     }
 
     private static ScalarValue Eomonth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -3661,7 +3957,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
         if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
 
-        double rounded = decimals is >= -15 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
+        double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
         return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
@@ -3761,6 +4057,10 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+
+        if (args.Count == 2 && lookupVec.RowCount > 1 && lookupVec.ColCount > 1)
+            return LookupArrayForm(args[0], lookupVec);
+
         var lookupFlat = lookupVec.Flatten();
         if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
         var resultFlat = args.Count > 2 && args[2] is RangeValue rv
@@ -3776,6 +4076,24 @@ public static class BuiltInFunctions
         }
         if (matchIdx < 0) return ErrorValue.NA;
         return matchIdx < resultFlat.Count ? resultFlat[matchIdx] : ErrorValue.NA;
+    }
+
+    private static ScalarValue LookupArrayForm(ScalarValue lookupVal, RangeValue array)
+    {
+        bool searchFirstRow = array.ColCount > array.RowCount;
+        var lookupVector = searchFirstRow ? array.GetRow(1) : array.GetColumn(1);
+        var resultVector = searchFirstRow ? array.GetRow(array.RowCount) : array.GetColumn(array.ColCount);
+
+        int matchIdx = -1;
+        for (int i = 0; i < lookupVector.Count; i++)
+        {
+            if (lookupVector[i] is ErrorValue lErr) return lErr;
+            if (CompareScalar(lookupVector[i], lookupVal) <= 0)
+                matchIdx = i;
+        }
+
+        if (matchIdx < 0) return ErrorValue.NA;
+        return matchIdx < resultVector.Count ? resultVector[matchIdx] : ErrorValue.NA;
     }
 
     private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
@@ -3826,7 +4144,7 @@ public static class BuiltInFunctions
         if (args[0] is not RangeValue arr) return ErrorValue.Value;
         if (args[1] is ErrorValue includeError) return includeError;
         if (args[1] is not RangeValue include) return ErrorValue.Value;
-        var ifEmpty = args.Count > 2 ? args[2] : new TextValue("");
+        var ifEmpty = args.Count > 2 ? args[2] : ErrorValue.Calc;
 
         if (include.ColCount == 1 && include.RowCount == arr.RowCount)
             return FilterRows(arr, include, ifEmpty);
@@ -3844,7 +4162,8 @@ public static class BuiltInFunctions
         {
             var v = include.Cells[i, 0];
             if (v is ErrorValue e) return e;
-            if (IsFilterIncluded(v)) matchedRows.Add(i);
+            if (!TryFilterIncluded(v, out bool included)) return ErrorValue.Value;
+            if (included) matchedRows.Add(i);
         }
 
         if (matchedRows.Count == 0)
@@ -3864,7 +4183,8 @@ public static class BuiltInFunctions
         {
             var v = include.Cells[0, c];
             if (v is ErrorValue e) return e;
-            if (IsFilterIncluded(v)) matchedCols.Add(c);
+            if (!TryFilterIncluded(v, out bool included)) return ErrorValue.Value;
+            if (included) matchedCols.Add(c);
         }
 
         if (matchedCols.Count == 0)
@@ -3877,13 +4197,32 @@ public static class BuiltInFunctions
         return new RangeValue(result);
     }
 
-    private static bool IsFilterIncluded(ScalarValue value) =>
-        value is BoolValue { Value: true } || (TryCellNumber(value, out double number) && number != 0);
+    private static bool TryFilterIncluded(ScalarValue value, out bool included)
+    {
+        included = false;
+        if (value is BlankValue) return true;
+        if (value is BoolValue b)
+        {
+            included = b.Value;
+            return true;
+        }
+
+        if (TryCellNumber(value, out double number))
+        {
+            included = number != 0;
+            return true;
+        }
+
+        return false;
+    }
 
     private static ScalarValue FilterEmptyResult(ScalarValue ifEmpty) =>
-        ifEmpty is RangeValue rvEmpty
-            ? rvEmpty
-            : new RangeValue(new ScalarValue[1, 1] { { ifEmpty } });
+        ifEmpty switch
+        {
+            ErrorValue e => e,
+            RangeValue rvEmpty => rvEmpty,
+            _ => new RangeValue(new ScalarValue[1, 1] { { ifEmpty } })
+        };
 
     private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -4765,6 +5104,9 @@ public static class BuiltInFunctions
 
         // Strip whitespace (Excel allows whitespace anywhere)
         text = text.Replace(" ", "").Replace("\t", "");
+        bool accountingNegative = text.StartsWith('(') && text.EndsWith(')');
+        if (accountingNegative)
+            text = text[1..^1];
 
         // Trailing percent
         int pctCount = 0;
@@ -4785,6 +5127,7 @@ public static class BuiltInFunctions
             return ErrorValue.Value;
 
         for (int i = 0; i < pctCount; i++) v /= 100.0;
+        if (accountingNegative) v = -v;
         return NumberResult(v);
     }
 
@@ -5234,7 +5577,8 @@ public static class BuiltInFunctions
             "#NUM!"   => new NumberValue(6),
             "#N/A"    => new NumberValue(7),
             "#GETTING_DATA" => new NumberValue(8),
-            "#SPILL!" => new NumberValue(14),
+            "#SPILL!" => new NumberValue(9),
+            "#CALC!" => new NumberValue(14),
             _ => ErrorValue.NA
         };
     }

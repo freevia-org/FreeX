@@ -25,6 +25,8 @@ public static class XlsxChartPartReader
         var areaChart = areaCharts.FirstOrDefault();
         var radarCharts = plotArea?.Elements(ChartNs + "radarChart").ToList() ?? [];
         var stockCharts = plotArea?.Elements(ChartNs + "stockChart").ToList() ?? [];
+        var deferredAdvancedChart = HasDirectSupportedChart(plotArea) ? null : FindDeferredAdvancedChart(plotArea);
+        var threeDColumnChart = plotArea?.Element(ChartNs + "bar3DChart");
         var bubbleChart = plotArea?.Element(ChartNs + "bubbleChart");
         var pieChart = plotArea?.Element(ChartNs + "pieChart");
         var doughnutChart = plotArea?.Element(ChartNs + "doughnutChart");
@@ -51,6 +53,10 @@ public static class XlsxChartPartReader
             read = TryReadLineLikeChart(chartXml, plotArea, radarCharts, sheetId, ChartType.Radar, out chart);
         else if (stockCharts.Count > 0)
             read = TryReadLineLikeChart(chartXml, plotArea, stockCharts, sheetId, ChartType.Stock, out chart);
+        else if (threeDColumnChart is not null)
+            read = TryReadDeferredAdvancedChart(chartXml, threeDColumnChart, sheetId, ChartType.ThreeDColumn, out chart);
+        else if (deferredAdvancedChart is { } advanced)
+            read = TryReadDeferredAdvancedChart(chartXml, advanced.Element, sheetId, advanced.Type, out chart);
         else if (barChart is not null)
             read = TryReadBarChart(chartXml, plotArea, barCharts, sheetId, out chart);
         else
@@ -60,6 +66,89 @@ public static class XlsxChartPartReader
             ApplyPivotSourceMetadata(chartXml, chart);
 
         return read;
+    }
+
+    private static (XElement Element, ChartType Type)? FindDeferredAdvancedChart(XElement? plotArea)
+    {
+        if (plotArea is null)
+            return null;
+
+        foreach (var element in plotArea.Descendants())
+        {
+            var chartType = element.Name.LocalName switch
+            {
+                "surfaceChart" => ChartType.Surface,
+                "surface3DChart" => ChartType.Surface,
+                "treemapChart" => ChartType.Treemap,
+                "sunburstChart" => ChartType.Sunburst,
+                "histogramChart" => HasDescendant(element, "paretoLine") ? ChartType.Pareto : ChartType.Histogram,
+                "boxWhiskerChart" => ChartType.BoxAndWhisker,
+                "waterfallChart" => ChartType.Waterfall,
+                "funnelChart" => ChartType.Funnel,
+                _ => (ChartType?)null
+            };
+            if (chartType is { } type)
+                return (element, type);
+        }
+
+        var mapChart = plotArea
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName is "geoChart" or "mapChart" or "regionMapChart");
+        return mapChart is null ? null : (mapChart, ChartType.Map);
+    }
+
+    private static bool HasDirectSupportedChart(XElement? plotArea) =>
+        plotArea?.Elements().Any(element => element.Name.LocalName is
+            "areaChart" or
+            "barChart" or
+            "bubbleChart" or
+            "doughnutChart" or
+            "lineChart" or
+            "ofPieChart" or
+            "pieChart" or
+            "radarChart" or
+            "scatterChart" or
+            "stockChart") == true;
+
+    private static bool TryReadDeferredAdvancedChart(
+        XDocument chartXml,
+        XElement plotChart,
+        SheetId sheetId,
+        ChartType chartType,
+        out ChartModel chart)
+    {
+        var ranges = new List<GridRange>();
+        var hasTitleRange = false;
+        var hasCategoryRange = false;
+        var result = new ChartModel
+        {
+            Type = chartType,
+            Title = ReadTitle(chartXml)
+        };
+
+        foreach (var series in plotChart.Descendants().Where(element => element.Name.LocalName == "ser"))
+        {
+            hasTitleRange |= HasSeriesRangeFormula(series, "tx");
+            hasCategoryRange |= HasSeriesRangeFormula(series, "cat");
+            foreach (var formula in ReadSeriesRangeFormulas(series))
+            {
+                if (TryParseFormulaRange(formula, sheetId, out var range))
+                    ranges.Add(range);
+            }
+        }
+
+        if (ranges.Count == 0)
+        {
+            chart = new ChartModel();
+            return false;
+        }
+
+        result.DataRange = UnionRanges(ranges);
+        result.FirstRowIsHeader = hasTitleRange;
+        result.FirstColIsCategories = hasCategoryRange;
+        SanitizeLoadedChart(result);
+        chart = result;
+        return true;
     }
 
     private static void ApplyPivotSourceMetadata(XDocument chartXml, ChartModel chart)
@@ -72,7 +161,17 @@ public static class XlsxChartPartReader
             return;
 
         chart.IsPivotChart = true;
+        chart.PivotSourceSheetName = ExtractPivotSourceSheetName(pivotSourceName);
         chart.PivotTableName = ExtractPivotTableName(pivotSourceName);
+    }
+
+    private static string? ExtractPivotSourceSheetName(string pivotSourceName)
+    {
+        var bangIndex = pivotSourceName.LastIndexOf('!');
+        if (bangIndex <= 0)
+            return null;
+
+        return UnquoteSheetName(pivotSourceName[..bangIndex].Trim());
     }
 
     private static string ExtractPivotTableName(string pivotSourceName)
@@ -80,6 +179,14 @@ public static class XlsxChartPartReader
         var bangIndex = pivotSourceName.LastIndexOf('!');
         var name = bangIndex >= 0 ? pivotSourceName[(bangIndex + 1)..] : pivotSourceName;
         return name.Trim().Trim('\'');
+    }
+
+    private static string UnquoteSheetName(string value)
+    {
+        if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'')
+            return value[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return value;
     }
 
     private static bool TryReadLineLikeChart(
@@ -1625,7 +1732,7 @@ public static class XlsxChartPartReader
     }
 
     private static int ReadSeriesIndex(XElement series, int fallback) =>
-        int.TryParse(series.Element(ChartNs + "idx")?.Attribute("val")?.Value, out var index)
+        int.TryParse(ElementByLocalName(series, "idx")?.Attribute("val")?.Value, out var index)
             ? index
             : fallback;
 
@@ -1653,9 +1760,9 @@ public static class XlsxChartPartReader
         ReadSeriesRangeFormulas(series, "tx", "cat", "val");
 
     private static bool HasSeriesRangeFormula(XElement series, string containerName) =>
-        series
-            .Element(ChartNs + containerName)?
-            .Descendants(ChartNs + "f")
+        ElementByLocalName(series, containerName)?
+            .Descendants()
+            .Where(element => element.Name.LocalName == "f")
             .Any(element => !string.IsNullOrWhiteSpace(element.Value)) == true;
 
     private static IEnumerable<string> ReadSeriesRangeFormulas(XElement series, params string[] containerNames)
@@ -1663,8 +1770,10 @@ public static class XlsxChartPartReader
         foreach (var containerName in containerNames)
         {
             foreach (var formula in series
-                         .Element(ChartNs + containerName)?
-                         .Descendants(ChartNs + "f")
+                         .Elements()
+                         .FirstOrDefault(element => element.Name.LocalName == containerName)?
+                         .Descendants()
+                         .Where(element => element.Name.LocalName == "f")
                          .Select(element => element.Value)
                          .Where(text => !string.IsNullOrWhiteSpace(text))
                      ?? [])
@@ -1673,6 +1782,12 @@ public static class XlsxChartPartReader
             }
         }
     }
+
+    private static XElement? ElementByLocalName(XElement element, string localName) =>
+        element.Elements().FirstOrDefault(child => child.Name.LocalName == localName);
+
+    private static bool HasDescendant(XElement element, string localName) =>
+        element.Descendants().Any(descendant => descendant.Name.LocalName == localName);
 
     private static bool TryReadSeriesFill(XElement series, int seriesIndex, out ChartSeriesFormat format)
     {

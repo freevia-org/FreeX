@@ -56,6 +56,9 @@ public static class ChartRenderer
 
     private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
+        if (!ChartTypeSupport.IsRenderable(chart.Type))
+            return null;
+
         var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
 
         uint startRow = chart.DataRange.Start.Row;

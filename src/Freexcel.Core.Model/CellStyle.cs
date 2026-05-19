@@ -85,6 +85,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Strikethrough text.</summary>
     public bool Strikethrough { get; set; }
 
+    /// <summary>Superscript text.</summary>
+    public bool Superscript { get; set; }
+
+    /// <summary>Subscript text.</summary>
+    public bool Subscript { get; set; }
+
     /// <summary>Font color.</summary>
     public CellColor FontColor { get; set; } = CellColor.Black;
 
@@ -142,6 +148,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         Italic = Italic,
         Underline = Underline,
         Strikethrough = Strikethrough,
+        Superscript = Superscript,
+        Subscript = Subscript,
         FontColor = FontColor,
         FillColor = FillColor,
         BorderTop = BorderTop,
@@ -173,6 +181,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && Italic == other.Italic
             && Underline == other.Underline
             && Strikethrough == other.Strikethrough
+            && Superscript == other.Superscript
+            && Subscript == other.Subscript
             && FontColor == other.FontColor
             && FillColor == other.FillColor
             && BorderTop == other.BorderTop
@@ -200,6 +210,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(Italic);
         h.Add(Underline);
         h.Add(Strikethrough);
+        h.Add(Superscript);
+        h.Add(Subscript);
         h.Add(FontColor);
         h.Add(FillColor);
         h.Add(BorderTop);
@@ -228,6 +240,8 @@ public record StyleDiff(
     bool? Italic                = null,
     bool? Underline             = null,
     bool? Strikethrough         = null,
+    bool? Superscript           = null,
+    bool? Subscript             = null,
     string? FontName            = null,
     double? FontSize            = null,
     CellColor? FontColor        = null,
@@ -254,6 +268,8 @@ public record StyleDiff(
         Italic:          style.Italic,
         Underline:       style.Underline,
         Strikethrough:   style.Strikethrough,
+        Superscript:     style.Superscript,
+        Subscript:       style.Subscript,
         FontName:        style.FontName,
         FontSize:        style.FontSize,
         FontColor:       style.FontColor,
@@ -281,6 +297,18 @@ public record StyleDiff(
         if (Italic         is not null) s.Italic        = Italic.Value;
         if (Underline      is not null) s.Underline     = Underline.Value;
         if (Strikethrough  is not null) s.Strikethrough = Strikethrough.Value;
+        if (Superscript    is not null)
+        {
+            s.Superscript = Superscript.Value;
+            if (Superscript.Value)
+                s.Subscript = false;
+        }
+        if (Subscript      is not null)
+        {
+            s.Subscript = Subscript.Value;
+            if (Subscript.Value)
+                s.Superscript = false;
+        }
         if (FontName       is not null) s.FontName      = FontName;
         if (FontSize       is not null) s.FontSize      = FontSize.Value;
         if (FontColor      is not null) s.FontColor     = FontColor.Value;

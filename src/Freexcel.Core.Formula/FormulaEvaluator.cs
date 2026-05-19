@@ -411,6 +411,8 @@ public sealed class FormulaEvaluator
         "#NULL!" => ErrorValue.Null,
         "#N/A" => ErrorValue.NA,
         "#NUM!" => ErrorValue.Num,
+        "#SPILL!" => ErrorValue.Spill,
+        "#CALC!" => ErrorValue.Calc,
         _ => ErrorValue.Value
     };
 
