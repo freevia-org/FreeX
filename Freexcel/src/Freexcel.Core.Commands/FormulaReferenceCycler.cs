@@ -32,9 +32,10 @@ public static partial class FormulaReferenceCycler
                 continue;
 
             var secondCellReference = match.Groups["cell2"].Value;
+            var secondQualifier = match.Groups["qualifier2"].Value;
             var cycled = string.IsNullOrEmpty(secondCellReference)
                 ? $"{qualifier}{cycledCellReference}"
-                : $"{qualifier}{cycledCellReference}:{CycleMatchingReference(secondCellReference)}";
+                : $"{qualifier}{cycledCellReference}:{secondQualifier}{CycleMatchingReference(secondCellReference)}";
             result = text.Remove(match.Index, match.Length).Insert(match.Index, cycled);
             selectionStart = match.Index;
             selectionLength = cycled.Length;
@@ -219,7 +220,7 @@ public static partial class FormulaReferenceCycler
         }
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?::(?<cell2>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6}))?(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?::(?<qualifier2>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell2>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6}))?(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex A1ReferenceRegex();
 
     [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<column>\$?[A-Z]{1,3}):(?<column2>\$?[A-Z]{1,3})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
