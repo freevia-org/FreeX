@@ -6784,16 +6784,8 @@ public partial class MainWindow : Window
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
-        var viewer = new System.Windows.Controls.DocumentViewer { Document = doc };
-        var previewWin = new Window
-        {
-            Title = $"Print Preview — {_workbook.Name}",
-            Width = 900, Height = 700,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = this,
-            Content = viewer
-        };
-        previewWin.ShowDialog();
+        var dialog = new PrintPreviewDialog(_workbook.Name, doc) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
