@@ -452,6 +452,21 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ChartFormattingCommands_OpenExplicitFormatDialogs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new ChartDataLabelsDialog(chart)");
+        source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");
+        source.Should().Contain("new ChartAxisFormatDialog(chart, useXAxis)");
+        source.Should().Contain("new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart))");
+        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Labels\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Trendline\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(useXAxis ? \"Format X Axis\" : \"Format Y Axis\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Series\"");
+    }
+
+    [Fact]
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
