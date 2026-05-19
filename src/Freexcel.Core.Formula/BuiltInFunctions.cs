@@ -870,6 +870,7 @@ public static class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
+        count = ExtendPastTrailingHighSurrogate(text, count);
         return TextResult(text[..count]);
     }
 
@@ -883,7 +884,22 @@ public static class BuiltInFunctions
         var count = (int)rawCount;
         if (count < 0) return ErrorValue.Value;
         count = Math.Min(count, text.Length);
-        return TextResult(count == 0 ? "" : text[^count..]);
+        int start = RetreatBeforeLeadingLowSurrogate(text, text.Length - count);
+        return TextResult(text[start..]);
+    }
+
+    private static int ExtendPastTrailingHighSurrogate(string text, int length)
+    {
+        if (length > 0 && length < text.Length && char.IsHighSurrogate(text[length - 1]) && char.IsLowSurrogate(text[length]))
+            return length + 1;
+        return length;
+    }
+
+    private static int RetreatBeforeLeadingLowSurrogate(string text, int start)
+    {
+        if (start > 0 && start < text.Length && char.IsLowSurrogate(text[start]) && char.IsHighSurrogate(text[start - 1]))
+            return start - 1;
+        return start;
     }
 
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>

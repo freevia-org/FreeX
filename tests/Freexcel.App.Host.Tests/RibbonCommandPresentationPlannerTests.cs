@@ -27,6 +27,16 @@ public sealed class RibbonCommandPresentationPlannerTests
     }
 
     [Theory]
+    [InlineData("Column Chart", true)]
+    [InlineData("Column", true)]
+    [InlineData("Trend Order", false)]
+    [InlineData("R-squared", false)]
+    public void IsInsertRibbonChartCommand_AllowsOnlyInsertChartTypes(string title, bool expected)
+    {
+        RibbonCommandPresentationPlanner.IsInsertRibbonChartCommand(title).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("RibbonCompact:74:38", true, 74, 38)]
     [InlineData("RibbonCompact:58.5:30", true, 58.5, 30)]
     [InlineData("Other:74:38", false, 0, 0)]
