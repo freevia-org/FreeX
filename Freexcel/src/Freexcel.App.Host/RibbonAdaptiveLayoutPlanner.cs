@@ -36,6 +36,54 @@ public static class RibbonAdaptiveLayoutPlanner
         return states;
     }
 
+    public static IReadOnlyList<RibbonAdaptiveGroupState> ApplyBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates)
+    {
+        var states = plannedStates.ToArray();
+        if (availableWidth <= 700)
+        {
+            for (var i = 0; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return states;
+        }
+
+        if (IsHomeRibbonGroupSet(groupNames))
+        {
+            ApplyHomeBreakpointOverrides(availableWidth, groupNames, states);
+            return states;
+        }
+
+        if (IsInsertRibbonGroupSet(groupNames))
+        {
+            ApplyInsertBreakpointOverrides(availableWidth, states);
+            return states;
+        }
+
+        if (IsFormulasRibbonGroupSet(groupNames))
+        {
+            ApplyFormulasBreakpointOverrides(availableWidth, groupNames, states);
+            return states;
+        }
+
+        var collapseFrom = availableWidth switch
+        {
+            <= 900 => 0,
+            <= 1120 => 1,
+            <= 1320 => 2,
+            _ => -1
+        };
+
+        if (collapseFrom < 0 || collapseFrom >= states.Length)
+            return states;
+
+        for (var i = collapseFrom; i < states.Length; i++)
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+
+        return states;
+    }
+
     private static bool Fits(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
@@ -56,6 +104,117 @@ public static class RibbonAdaptiveLayoutPlanner
     {
         for (var i = count - 1; i >= 0; i--)
             yield return i;
+    }
+
+    private static bool IsHomeRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 7 &&
+        TryFindGroupIndex(groupNames, "Clipboard", out _) &&
+        TryFindGroupIndex(groupNames, "Font", out _) &&
+        TryFindGroupIndex(groupNames, "Alignment", out _) &&
+        TryFindGroupIndex(groupNames, "Number", out _);
+
+    private static bool IsInsertRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 4 && TryFindGroupIndex(groupNames, "Tables", out _);
+
+    private static bool IsFormulasRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 4 &&
+        TryFindGroupIndex(groupNames, "Function Library", out _) &&
+        TryFindGroupIndex(groupNames, "Formula Auditing", out _);
+
+    private static void ApplyInsertBreakpointOverrides(
+        double availableWidth,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth <= 1600)
+        {
+            for (var i = 1; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
+    private static void ApplyFormulasBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth <= 900)
+        {
+            for (var i = 0; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1120)
+        {
+            for (var i = 1; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+        else if (availableWidth <= 1320)
+        {
+            for (var i = 2; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+
+        if (availableWidth <= 1500 &&
+            TryFindGroupIndex(groupNames, "Function Library", out var functionLibraryIndex))
+        {
+            states[functionLibraryIndex] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
+    private static void ApplyHomeBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth is > 1320 and <= 1500 &&
+            TryFindGroupIndex(groupNames, "Editing", out var editingIndex))
+        {
+            for (var i = editingIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 900 &&
+            TryFindGroupIndex(groupNames, "Font", out var fontIndex))
+        {
+            for (var i = fontIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1120 &&
+            TryFindGroupIndex(groupNames, "Alignment", out var alignmentIndex))
+        {
+            for (var i = alignmentIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1320 &&
+            TryFindGroupIndex(groupNames, "Styles", out var stylesIndex))
+        {
+            for (var i = stylesIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
+    private static bool TryFindGroupIndex(
+        IReadOnlyList<string> groupNames,
+        string groupName,
+        out int index)
+    {
+        for (var i = 0; i < groupNames.Count; i++)
+        {
+            if (string.Equals(groupNames[i], groupName, StringComparison.Ordinal))
+            {
+                index = i;
+                return true;
+            }
+        }
+
+        index = -1;
+        return false;
     }
 }
 

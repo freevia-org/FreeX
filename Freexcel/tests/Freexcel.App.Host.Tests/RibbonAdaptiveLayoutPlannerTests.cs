@@ -73,4 +73,65 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.IconOnly);
     }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_CollapsesAllGroupsAtVeryNarrowWidths()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            700,
+            ["Clipboard", "Font", "Alignment"],
+            [RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.IconOnly]);
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_AppliesHomeTabExcelLikeBreakpoints()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 7).ToArray());
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_AppliesFormulasFunctionLibraryBreakpoint()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1500,
+            ["Function Library", "Defined Names", "Formula Auditing", "Calculation"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 4).ToArray());
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full);
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_AppliesGenericCollapseFromRules()
+    {
+        var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
+            1120,
+            ["Review", "Comments", "Protect"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 3).ToArray());
+
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
 }
