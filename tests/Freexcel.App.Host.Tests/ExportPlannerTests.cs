@@ -24,7 +24,48 @@ public class ExportPlannerTests
     {
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
-        request.Should().Be(new ExportRequest(@"C:\temp\report.pdf", ExportFormat.PdfViaWindowsPrinter));
+        request.Should().Be(new ExportRequest(
+            @"C:\temp\report.pdf",
+            ExportFormat.PdfViaWindowsPrinter,
+            ExportOptions.ExcelLikeDefault,
+            @"C:\temp\report.xps"));
+        request.UsesXpsFallback.Should().BeTrue();
+        request.ActualPath.Should().Be(@"C:\temp\report.xps");
+    }
+
+    [Fact]
+    public void PlanExport_XpsRequestKeepsRequestedPathAndDoesNotUseFallback()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report.xps");
+
+        request.Should().Be(new ExportRequest(
+            @"C:\temp\report.xps",
+            ExportFormat.Xps,
+            ExportOptions.ExcelLikeDefault,
+            null));
+        request.UsesXpsFallback.Should().BeFalse();
+        request.ActualPath.Should().Be(@"C:\temp\report.xps");
+    }
+
+    [Fact]
+    public void ExportOptions_DefaultsToActiveSheetWithoutDocumentProperties()
+    {
+        ExportOptions.ExcelLikeDefault.Should().Be(new ExportOptions(
+            ExportContentScope.ActiveSheet,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false));
+
+        ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
+            .Should().Be("Active sheet only; document properties are not included.");
+    }
+
+    [Fact]
+    public void DescribeRequest_ExplainsPdfFallbackAndSupportedOptions()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
+
+        ExportPlanner.DescribeRequest(request).Should().Be(
+            "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.\n\nOptions: Active sheet only; document properties are not included.");
     }
 
     [Theory]

@@ -296,4 +296,15 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
     }
+
+    [Fact]
+    public void ExportWorkflow_SurfacesPlannedOptionsAndFallbackPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ExportViaPrintToPdf(request)");
+        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
+        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("request.ActualPath");
+    }
 }

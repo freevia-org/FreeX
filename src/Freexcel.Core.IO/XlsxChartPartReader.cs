@@ -90,6 +90,11 @@ public static class XlsxChartPartReader
     private static void ApplyChartBehaviorMetadata(XDocument chartXml, ChartModel chart)
     {
         var chartElement = chartXml.Root?.Element(ChartNs + "chart");
+        chart.AutoTitleDeleted = IsTrue(chartElement?
+            .Element(ChartNs + "autoTitleDeleted")?
+            .Attribute("val")?
+            .Value);
+
         chart.BlankDisplayMode = chartElement?
             .Element(ChartNs + "dispBlanksAs")?
             .Attribute("val")?
