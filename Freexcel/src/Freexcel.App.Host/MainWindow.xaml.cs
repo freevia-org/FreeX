@@ -4037,13 +4037,7 @@ public partial class MainWindow : Window
 
     private void UpdateSsGreeting()
     {
-        var hour = DateTime.Now.Hour;
-        SsGreeting.Text = hour switch
-        {
-            < 12 => "Good morning",
-            < 17 => "Good afternoon",
-            _    => "Good evening"
-        };
+        SsGreeting.Text = BackstageGreetingFormatter.FormatGreeting(DateTime.Now);
     }
 
     private bool _showingPinnedList;
