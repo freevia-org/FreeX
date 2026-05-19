@@ -44,6 +44,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("NumberFormatOptions.Select(option => option.Label)");
+        source.Should().Contain("NumberFormatOptions[NumberFormatBox.SelectedIndex].Code");
+        source.Should().Contain("Accounting ($#,##0.00)");
+        source.Should().Contain("Fraction (# ?/?)");
+        source.Should().Contain("Scientific (0.00E+00)");
+        source.Should().Contain("\"# ?/?\"");
+        source.Should().Contain("\"0.00E+00\"");
+    }
+
+    [Fact]
     public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
