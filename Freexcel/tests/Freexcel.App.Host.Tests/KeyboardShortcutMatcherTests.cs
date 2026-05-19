@@ -103,6 +103,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Decimal, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CycleSelectionCorner)]
     [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectPrecedents)]
     [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectDependents)]
+    [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllPrecedents)]
+    [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllDependents)]
     public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
         Key key,
         Key systemKey,
