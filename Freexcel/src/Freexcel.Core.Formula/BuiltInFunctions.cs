@@ -805,12 +805,12 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(number)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(number);
         if (digits >= 0)
             return NumberResult(Math.Round(number, digits, MidpointRounding.AwayFromZero));
 
-        double factor = Math.Pow(10, -digits);
-        return NumberResult(Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor);
+        return NumberResult(RoundWithExcelDigits(number, digits));
     }
 
     private static ScalarValue NumberResult(double value) =>
@@ -2705,8 +2705,10 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
     }
 
@@ -2718,8 +2720,10 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
     }
 
@@ -2734,9 +2738,11 @@ public static class BuiltInFunctions
             var rawDigits = ToNumber(args[1]);
             if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
             digits = (int)Math.Truncate(rawDigits);
-            if (digits < -15 || digits > 15) return ErrorValue.Num;
         }
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult(Math.Truncate(n * factor) / factor);
     }
 
