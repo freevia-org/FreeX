@@ -64,7 +64,11 @@ public sealed partial class CustomViewsDialog : Window
 
     private void AddButton_Click(object sender, RoutedEventArgs e)
     {
-        var name = PromptForViewName($"Custom View {_workbook.CustomViews.Count + 1}");
+        var dialog = new CustomViewNameDialog($"Custom View {_workbook.CustomViews.Count + 1}") { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var name = dialog.Result.ViewName;
         if (string.IsNullOrWhiteSpace(name)) return;
 
         var outcome = _commandBus.Execute(_workbook.Id, new SaveCustomViewCommand(name));
@@ -103,53 +107,69 @@ public sealed partial class CustomViewsDialog : Window
             break;
         }
     }
-
-    private string? PromptForViewName(string defaultValue)
-    {
-        var dialog = new Window
-        {
-            Title = "Add View",
-            Owner = this,
-            Width = 320,
-            Height = 140,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize,
-            ShowInTaskbar = false
-        };
-
-        var grid = new Grid { Margin = new Thickness(12) };
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var label = new TextBlock { Text = "Name:", Margin = new Thickness(0, 0, 0, 4) };
-        var textBox = new System.Windows.Controls.TextBox { Text = defaultValue };
-        var buttons = new StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 72, IsCancel = true };
-        ok.Click += (_, _) => dialog.DialogResult = true;
-        buttons.Children.Add(ok);
-        buttons.Children.Add(cancel);
-
-        Grid.SetRow(label, 0);
-        Grid.SetRow(textBox, 1);
-        Grid.SetRow(buttons, 2);
-        grid.Children.Add(label);
-        grid.Children.Add(textBox);
-        grid.Children.Add(buttons);
-        dialog.Content = grid;
-
-        textBox.SelectAll();
-        return dialog.ShowDialog() == true ? textBox.Text.Trim() : null;
-    }
 }
 
 internal sealed class CustomViewViewModel(string name, int sheetCount)
 {
     public string Name { get; } = name;
     public int SheetCount { get; } = sheetCount;
+}
+
+public sealed record CustomViewNameDialogResult(string ViewName);
+
+public sealed class CustomViewNameDialog : Window
+{
+    private readonly TextBox _nameBox = new();
+
+    public CustomViewNameDialogResult Result { get; private set; }
+
+    public CustomViewNameDialog(string defaultValue)
+    {
+        Result = CreateResult(defaultValue);
+        Title = "Add View";
+        Width = 320;
+        Height = 140;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+
+        var grid = new Grid { Margin = new Thickness(12) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var label = new TextBlock { Text = "Name:", Margin = new Thickness(0, 0, 0, 4) };
+        _nameBox.Text = Result.ViewName;
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "Cancel", Width = 72, IsCancel = true };
+        ok.Click += (_, _) => Accept();
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+
+        Grid.SetRow(label, 0);
+        Grid.SetRow(_nameBox, 1);
+        Grid.SetRow(buttons, 2);
+        grid.Children.Add(label);
+        grid.Children.Add(_nameBox);
+        grid.Children.Add(buttons);
+        Content = grid;
+
+        Loaded += (_, _) => _nameBox.SelectAll();
+    }
+
+    public static CustomViewNameDialogResult CreateResult(string viewName) => new(viewName.Trim());
+
+    private void Accept()
+    {
+        Result = CreateResult(_nameBox.Text);
+        if (string.IsNullOrWhiteSpace(Result.ViewName))
+            return;
+
+        DialogResult = true;
+    }
 }
