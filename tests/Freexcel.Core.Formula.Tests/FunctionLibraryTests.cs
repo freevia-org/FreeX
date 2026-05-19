@@ -4291,6 +4291,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_NoMatchesWithoutIfEmpty_ReturnsCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=FILTER(A1:A1,B1:B1)", sheet).Should().Be(new ErrorValue("#CALC!"));
+        _eval.Evaluate("=ERROR.TYPE(FILTER(A1:A1,B1:B1))", sheet).Should().Be(new NumberValue(14));
+    }
+
+    [Fact]
     public void Filter_MultiColumn_PreservesAllColumns()
     {
         var sheet = MakeSheet(
