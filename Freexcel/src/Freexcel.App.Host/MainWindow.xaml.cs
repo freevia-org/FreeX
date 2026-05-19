@@ -11492,7 +11492,7 @@ public partial class MainWindow : Window
         if (normalizedAction.Equals("replace all", StringComparison.OrdinalIgnoreCase) ||
             normalizedAction.Equals("all", StringComparison.OrdinalIgnoreCase))
         {
-            var edits = BuildSpellCheckEdits(plan);
+            var edits = SpellCheckService.BuildCorrectionCellEdits(plan);
             if (edits.Count == 0)
             {
                 MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -11531,11 +11531,6 @@ public partial class MainWindow : Window
         UpdateViewport();
         RefreshStatusBar();
     }
-
-    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckEdits(SpellingCorrectionPlan plan) =>
-        plan.Edits
-            .Select(edit => (edit.Address, Cell.FromValue(new TextValue(edit.CorrectedText))))
-            .ToList();
 
     private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
         TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");

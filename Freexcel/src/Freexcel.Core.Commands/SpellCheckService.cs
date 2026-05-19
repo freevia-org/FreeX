@@ -106,6 +106,11 @@ public static partial class SpellCheckService
         return new SpellingCorrectionPlan(edits, issueCount);
     }
 
+    public static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildCorrectionCellEdits(SpellingCorrectionPlan plan) =>
+        plan.Edits
+            .Select(edit => (edit.Address, Cell.FromValue(new TextValue(edit.CorrectedText))))
+            .ToList();
+
     public static string ApplyCorrection(SpellingIssue issue, string replacement)
     {
         var correctedReplacement = MatchCapitalization(issue.Word, replacement);
