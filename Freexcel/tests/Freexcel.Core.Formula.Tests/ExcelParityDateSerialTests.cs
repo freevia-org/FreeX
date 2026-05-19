@@ -79,5 +79,17 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=WORKDAY(DATE(1900,1,1),1)", 2)]
+    [InlineData("=WORKDAY(DATE(1900,1,5),1)", 6)]
+    [InlineData("=WORKDAY(DATE(1900,1,5),-1)", 4)]
+    [InlineData("=WORKDAY.INTL(DATE(1900,1,1),1,\"0000011\")", 2)]
+    [InlineData("=WORKDAY.INTL(DATE(1900,1,5),1,\"0000011\")", 6)]
+    [InlineData("=WORKDAY.INTL(DATE(1900,1,5),-1,\"0000011\")", 4)]
+    public void WorkdayFunctions_ReturnExcelSerialNumbers(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 }

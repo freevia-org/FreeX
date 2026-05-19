@@ -2878,12 +2878,11 @@ public static class BuiltInFunctions
         while (remaining > 0)
         {
             current = current.AddDays(sign);
-            if (current.DayOfWeek != DayOfWeek.Saturday &&
-                current.DayOfWeek != DayOfWeek.Sunday &&
+            if (ExcelDowToMonIndex(current) < 5 &&
                 !holidays.Contains(current.Date))
                 remaining--;
         }
-        return new NumberValue(current.ToOADate());
+        return new NumberValue(DateToSerial(current));
     }
 
     private static ScalarValue Networkdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -5058,6 +5057,12 @@ public static class BuiltInFunctions
         _                   => 6 // Sunday
     };
 
+    private static int ExcelDowToMonIndex(DateTime date)
+    {
+        int serial = (int)Math.Floor(DateToSerial(date));
+        return ((serial + 5) % 7 + 7) % 7;
+    }
+
     private static HashSet<DateTime> CollectHolidays(ScalarValue? arg)
     {
         var holidays = new HashSet<DateTime>();
@@ -5065,11 +5070,11 @@ public static class BuiltInFunctions
         {
             foreach (var v in rv.Flatten())
                 if (TryCellNumber(v, out double serial))
-                    holidays.Add(DateTime.FromOADate(serial).Date);
+                    holidays.Add(SerialToDate(serial).Date);
         }
         else if (arg is not null && TryCellNumber(arg, out double s))
         {
-            holidays.Add(DateTime.FromOADate(s).Date);
+            holidays.Add(SerialToDate(s).Date);
         }
         return holidays;
     }
@@ -5124,11 +5129,11 @@ public static class BuiltInFunctions
         while (remaining > 0)
         {
             current = current.AddDays(sign);
-            if (mask![DowToMonIndex(current.DayOfWeek)]) continue;
+            if (mask![ExcelDowToMonIndex(current)]) continue;
             if (holidays.Contains(current.Date)) continue;
             remaining--;
         }
-        return new NumberValue(current.ToOADate());
+        return new NumberValue(DateToSerial(current));
     }
 
     // ════════════════════════════════════════════════════════════════════════
