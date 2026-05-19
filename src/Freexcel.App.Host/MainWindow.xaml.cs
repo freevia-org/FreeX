@@ -10036,19 +10036,7 @@ public partial class MainWindow : Window
     private PictureModel? GetTargetPicture(SheetId sheetId)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        if (sheet is null || sheet.Pictures.Count == 0)
-            return null;
-
-        if (SheetGrid.SelectedRange is { } range)
-        {
-            var anchored = sheet.Pictures.LastOrDefault(p =>
-                p.Anchor.Row == range.Start.Row &&
-                p.Anchor.Col == range.Start.Col);
-            if (anchored is not null)
-                return anchored;
-        }
-
-        return sheet.Pictures[^1];
+        return DrawingTargetResolver.GetTargetPicture(sheet, SheetGrid.SelectedRange?.Start);
     }
 
     private void HeaderFooterBtn_Click(object sender, RoutedEventArgs e)
@@ -10361,19 +10349,7 @@ public partial class MainWindow : Window
     private DrawingShapeModel? GetTargetDrawingShape(SheetId sheetId)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        if (sheet is null || sheet.DrawingShapes.Count == 0)
-            return null;
-
-        if (SheetGrid.SelectedRange is { } range)
-        {
-            var anchored = sheet.DrawingShapes.LastOrDefault(item =>
-                item.Anchor.Row == range.Start.Row &&
-                item.Anchor.Col == range.Start.Col);
-            if (anchored is not null)
-                return anchored;
-        }
-
-        return sheet.DrawingShapes[^1];
+        return DrawingTargetResolver.GetTargetDrawingShape(sheet, SheetGrid.SelectedRange?.Start);
     }
 
     private DrawingObjectTarget? GetTargetDrawingObject(
@@ -10381,81 +10357,8 @@ public partial class MainWindow : Window
         DrawingObjectTargetKind? preferredKind = null)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        if (sheet is null)
-            return null;
-
-        if (preferredKind is null or DrawingObjectTargetKind.Shape && TryGetTargetShape(sheet, out var shape))
-            return new DrawingObjectTarget(DrawingObjectTargetKind.Shape, shape.Id, shape.Anchor, shape.Width, shape.Height, shape.RotationDegrees, shape.FillColor, shape.OutlineColor);
-
-        if (preferredKind is null or DrawingObjectTargetKind.TextBox && TryGetTargetTextBox(sheet, out var textBox))
-            return new DrawingObjectTarget(DrawingObjectTargetKind.TextBox, textBox.Id, textBox.Anchor, textBox.Width, textBox.Height, textBox.RotationDegrees, textBox.FillColor, textBox.OutlineColor);
-
-        return null;
+        return DrawingTargetResolver.GetTargetDrawingObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
     }
-
-    private bool TryGetTargetShape(Sheet sheet, out DrawingShapeModel shape)
-    {
-        if (SheetGrid.SelectedRange is { } range)
-        {
-            var anchored = sheet.DrawingShapes.LastOrDefault(item =>
-                item.Anchor.Row == range.Start.Row &&
-                item.Anchor.Col == range.Start.Col);
-            if (anchored is not null)
-            {
-                shape = anchored;
-                return true;
-            }
-        }
-
-        if (sheet.DrawingShapes.Count > 0)
-        {
-            shape = sheet.DrawingShapes[^1];
-            return true;
-        }
-
-        shape = null!;
-        return false;
-    }
-
-    private bool TryGetTargetTextBox(Sheet sheet, out TextBoxModel textBox)
-    {
-        if (SheetGrid.SelectedRange is { } range)
-        {
-            var anchored = sheet.TextBoxes.LastOrDefault(item =>
-                item.Anchor.Row == range.Start.Row &&
-                item.Anchor.Col == range.Start.Col);
-            if (anchored is not null)
-            {
-                textBox = anchored;
-                return true;
-            }
-        }
-
-        if (sheet.TextBoxes.Count > 0)
-        {
-            textBox = sheet.TextBoxes[^1];
-            return true;
-        }
-
-        textBox = null!;
-        return false;
-    }
-
-    private enum DrawingObjectTargetKind
-    {
-        Shape,
-        TextBox
-    }
-
-    private sealed record DrawingObjectTarget(
-        DrawingObjectTargetKind Kind,
-        Guid Id,
-        CellAddress Anchor,
-        double Width,
-        double Height,
-        double RotationDegrees,
-        CellColor? FillColor,
-        CellColor? OutlineColor);
 
     private enum RibbonKeyTipScope
     {
