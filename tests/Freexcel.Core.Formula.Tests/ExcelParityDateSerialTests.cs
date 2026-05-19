@@ -103,5 +103,17 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=WEEKNUM(DATE(1900,1,1),1)", 1)]
+    [InlineData("=WEEKNUM(DATE(1900,1,7),1)", 1)]
+    [InlineData("=WEEKNUM(DATE(1900,1,8),1)", 2)]
+    [InlineData("=WEEKNUM(DATE(1900,1,1),2)", 1)]
+    [InlineData("=WEEKNUM(DATE(1900,1,7),2)", 2)]
+    [InlineData("=WEEKNUM(DATE(1900,1,8),2)", 2)]
+    public void Weeknum_UsesExcelSerialWeekdays(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 }
