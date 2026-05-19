@@ -481,6 +481,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if ((modifiers & ModifierKeys.Control) == 0 && effectiveKey == Key.Back)
+        {
+            shortcut = KeyboardCommandShortcut.ClearSelectionAndEdit;
+            return true;
+        }
+
         return false;
     }
 
@@ -639,7 +645,8 @@ public enum KeyboardCommandShortcut
     SelectAllDependents,
     SelectCellsWithComments,
     EditCell,
-    ClearSelection
+    ClearSelection,
+    ClearSelectionAndEdit
 }
 
 public enum BorderKeyboardShortcut
