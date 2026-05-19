@@ -8406,48 +8406,18 @@ public partial class MainWindow : Window
     }
 
     private bool TryParseWorkbookRange(SheetId defaultSheetId, string input, out GridRange range)
-    {
-        range = default;
-        var normalized = input.Trim();
-        var sheetId = defaultSheetId;
-        var bangIndex = normalized.LastIndexOf('!');
-        if (bangIndex >= 0)
-        {
-            var sheetName = PivotUiPlanner.UnquoteSheetName(normalized[..bangIndex].Trim());
-            var sheet = _workbook.Sheets.FirstOrDefault(item =>
-                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase));
-            if (sheet is null)
-                return false;
-
-            sheetId = sheet.Id;
-            normalized = normalized[(bangIndex + 1)..].Trim();
-        }
-
-        var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length is 0 or > 2)
-            return false;
-
-        try
-        {
-            var start = CellAddress.Parse(parts[0], sheetId);
-            var end = parts.Length == 1 ? start : CellAddress.Parse(parts[1], sheetId);
-            range = new GridRange(start, end);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WorkbookRangeTextCodec.TryParse(
+            defaultSheetId,
+            input,
+            sheetName => _workbook.Sheets.FirstOrDefault(item =>
+                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id,
+            out range);
 
     private string FormatWorkbookRange(GridRange range)
-    {
-        var reference = $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        var sheet = _workbook.GetSheet(range.Start.Sheet);
-        return sheet is null || sheet.Id == _currentSheetId
-            ? reference
-            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheet.Name)}!{reference}";
-    }
+        => WorkbookRangeTextCodec.Format(
+            range,
+            _currentSheetId,
+            sheetId => _workbook.GetSheet(sheetId)?.Name);
 
     private PivotFieldDropZone? GetPivotFieldDropZone(ListBox list)
     {
