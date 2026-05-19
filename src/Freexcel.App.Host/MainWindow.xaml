@@ -1930,6 +1930,7 @@
                                             <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeFontsOfficeMenuItem_Click"/>
                                             <MenuItem Header="Arial" local:RibbonTooltip.KeyTip="A" Click="ThemeFontsArialMenuItem_Click"/>
                                             <MenuItem Header="Times New Roman" local:RibbonTooltip.KeyTip="T" Click="ThemeFontsTimesMenuItem_Click"/>
+                                            <MenuItem Header="Customize Fonts..." local:RibbonTooltip.KeyTip="U" Click="ThemeFontsCustomizeMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
