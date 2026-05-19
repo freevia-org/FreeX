@@ -9641,29 +9641,19 @@ public partial class MainWindow : Window
         var targetInput = PromptForInput("Location cell (e.g. F1):", "");
         if (targetInput is null) return;
 
-        GridRange dataRange;
-        try
-        {
-            dataRange = GridRange.Parse(rangeInput, _currentSheetId);
-        }
-        catch
+        if (!SparklineInputParser.TryParseDataRange(rangeInput, _currentSheetId, out var dataRange))
         {
             MessageBox.Show("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (!CellAddress.TryParse(targetInput, _currentSheetId, out var location))
+        if (!SparklineInputParser.TryParseLocation(targetInput, _currentSheetId, out var location))
         {
             MessageBox.Show("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        var kind = type switch
-        {
-            "column" => SparklineKind.Column,
-            "winloss" => SparklineKind.WinLoss,
-            _ => SparklineKind.Line
-        };
+        var kind = SparklineInputParser.ParseKind(type);
 
         var fallbackLocationRange = new GridRange(location, location);
         if (!TryExecuteRepeatableCurrentRangeCommand(
