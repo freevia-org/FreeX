@@ -1778,7 +1778,7 @@ public partial class MainWindow : Window
                 FormulaBarExpandBtn_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.QuickAnalysis:
-                StatusReadyText.Text = "Quick Analysis is not available in Freexcel.";
+                ShowQuickAnalysisMenu();
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
@@ -1841,6 +1841,101 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.SelectAllDependents:
                 SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
+                break;
+        }
+    }
+
+    private void ShowQuickAnalysisMenu()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var options = QuickAnalysisPlanner.BuildOptions(range);
+        if (options.Count == 0)
+        {
+            StatusReadyText.Text = "Select a range to use Quick Analysis.";
+            return;
+        }
+
+        var menu = new ContextMenu
+        {
+            PlacementTarget = SheetGrid,
+            Placement = PlacementMode.MousePoint
+        };
+
+        string? currentGroup = null;
+        foreach (var option in options)
+        {
+            if (currentGroup != option.Group)
+            {
+                if (currentGroup is not null)
+                    menu.Items.Add(new Separator());
+
+                menu.Items.Add(new MenuItem
+                {
+                    Header = option.Group,
+                    IsEnabled = false
+                });
+                currentGroup = option.Group;
+            }
+
+            var item = new MenuItem { Header = option.Label, Tag = option.Command };
+            item.Click += QuickAnalysisMenuItem_Click;
+            menu.Items.Add(item);
+        }
+
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>().Where(item => item.IsEnabled));
+        menu.IsOpen = true;
+    }
+
+    private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: QuickAnalysisCommand command })
+            return;
+
+        switch (command)
+        {
+            case QuickAnalysisCommand.DataBar:
+                ShowCfDialog("Data Bar");
+                break;
+            case QuickAnalysisCommand.ColorScale:
+                ShowCfDialog("Color Scale");
+                break;
+            case QuickAnalysisCommand.GreaterThan:
+                ShowCfDialog("Greater Than");
+                break;
+            case QuickAnalysisCommand.ColumnChart:
+                ChartColumnMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.LineChart:
+                ChartLineMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.PieChart:
+                ChartPieMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.Sum:
+                AutoSumSumMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.Average:
+                AutoSumAvgMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.Count:
+                AutoSumCountMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.FormatAsTable:
+                TableBtn_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.PivotTable:
+                PivotTableBtn_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.LineSparkline:
+                SparklineLineBtn_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.ColumnSparkline:
+                SparklineColumnBtn_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.WinLossSparkline:
+                SparklineWinLossBtn_Click(sender, e);
                 break;
         }
     }
