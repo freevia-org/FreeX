@@ -4723,7 +4723,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "sheetCalcPr",
             workbookNs + "phoneticPr",
             workbookNs + "sortState",
-            workbookNs + "dataConsolidate"
+            workbookNs + "dataConsolidate",
+            workbookNs + "legacyDrawingHF"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
