@@ -130,6 +130,24 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxFileAdapter_Load_InvalidDateSerialFallsBackToNumber()
+    {
+        using var xl = new XLWorkbook();
+        var ws = xl.Worksheets.Add("Sheet1");
+        ws.Cell("A1").Value = 9_999_999d;
+        ws.Cell("A1").Style.DateFormat.Format = "m/d/yyyy";
+
+        using var stream = new MemoryStream();
+        xl.SaveAs(stream);
+        stream.Position = 0;
+
+        var loaded = new XlsxFileAdapter().Load(stream);
+
+        loaded.GetSheetAt(0).GetValue(1, 1)
+            .Should().Be(new NumberValue(9_999_999d));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WatchedCells()
     {
         var workbook = new Workbook("WatchTest");
@@ -1684,6 +1702,10 @@ public class FileAdapterSmokeTests
             Width = 90,
             Height = 60,
             RotationDegrees = 30,
+            CropLeft = 0.1,
+            CropTop = 0.2,
+            CropRight = 0.15,
+            CropBottom = 0.05,
             AltText = "Product photo"
         });
 
@@ -1701,6 +1723,10 @@ public class FileAdapterSmokeTests
         picture.Width.Should().Be(90);
         picture.Height.Should().Be(60);
         picture.RotationDegrees.Should().Be(30);
+        picture.CropLeft.Should().Be(0.1);
+        picture.CropTop.Should().Be(0.2);
+        picture.CropRight.Should().Be(0.15);
+        picture.CropBottom.Should().Be(0.05);
         picture.AltText.Should().Be("Product photo");
     }
 
@@ -1729,6 +1755,35 @@ public class FileAdapterSmokeTests
         picture.Width.Should().Be(120);
         picture.Height.Should().Be(80);
         picture.AltText.Should().Be("Native picture");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsPictureCropFromSourceRectangle()
+    {
+        var workbook = new Workbook("PictureXlsxCropLoadTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Has picture"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPicturePackage(
+            source,
+            MinimalPngBytes(),
+            cropLeft: 0.1,
+            cropTop: 0.2,
+            cropRight: 0.15,
+            cropBottom: 0.05);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var picture = loaded.GetSheetAt(0).Pictures.Should().ContainSingle().Subject;
+        picture.CropLeft.Should().Be(0.1);
+        picture.CropTop.Should().Be(0.2);
+        picture.CropRight.Should().Be(0.15);
+        picture.CropBottom.Should().Be(0.05);
     }
 
     [Fact]
@@ -1808,6 +1863,52 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_RoundTrip_ImagePicture_SavesCropAsSourceRectangle()
+    {
+        var workbook = new Workbook("PictureXlsxCropSaveTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 3),
+            Kind = PictureKind.Image,
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png",
+            Width = 120,
+            Height = 80,
+            CropLeft = 0.1,
+            CropTop = 0.2,
+            CropRight = 0.15,
+            CropBottom = 0.05,
+            AltText = "Cropped picture"
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var srcRect = drawingXml.Descendants(drawingNs + "srcRect").Should().ContainSingle().Subject;
+            srcRect.Attribute("l")?.Value.Should().Be("10000");
+            srcRect.Attribute("t")?.Value.Should().Be("20000");
+            srcRect.Attribute("r")?.Value.Should().Be("15000");
+            srcRect.Attribute("b")?.Value.Should().Be("5000");
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var picture = loaded.GetSheetAt(0).Pictures.Should().ContainSingle().Subject;
+        picture.CropLeft.Should().Be(0.1);
+        picture.CropTop.Should().Be(0.2);
+        picture.CropRight.Should().Be(0.15);
+        picture.CropBottom.Should().Be(0.05);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorksheetBackgroundImage()
     {
         var workbook = new Workbook("BackgroundTest");
@@ -1877,8 +1978,10 @@ public class FileAdapterSmokeTests
             RotationDegrees = 45,
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
+            GradientFillEndColor = new CellColor(240, 245, 250),
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
+            HasShadowEffect = true,
             AltText = "Approval marker"
         });
 
@@ -1910,8 +2013,10 @@ public class FileAdapterSmokeTests
         shape.RotationDegrees.Should().Be(45);
         shape.FillColor.Should().Be(new CellColor(200, 210, 220));
         shape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
+        shape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5));
         shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5));
+        shape.HasShadowEffect.Should().BeTrue();
         shape.AltText.Should().Be("Approval marker");
     }
 
@@ -1947,7 +2052,9 @@ public class FileAdapterSmokeTests
         shape.Width.Should().BeApproximately(120, 0.1);
         shape.Height.Should().BeApproximately(80, 0.1);
         shape.FillColor.Should().Be(new CellColor(221, 238, 255));
+        shape.GradientFillEndColor.Should().Be(new CellColor(238, 248, 255));
         shape.OutlineColor.Should().Be(new CellColor(17, 34, 51));
+        shape.HasShadowEffect.Should().BeTrue();
     }
 
     [Fact]
@@ -1973,6 +2080,8 @@ public class FileAdapterSmokeTests
             Height = 90,
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
+            GradientFillEndColor = new CellColor(240, 245, 250),
+            HasShadowEffect = true,
             AltText = "Approval marker"
         });
 
@@ -1989,13 +2098,18 @@ public class FileAdapterSmokeTests
             drawingXml.Descendants(xdr + "sp").Should().HaveCount(2);
             drawingXml.Descendants(a + "t").Select(e => e.Value).Should().Contain("Review note");
             drawingXml.Descendants(a + "prstGeom").Select(e => e.Attribute("prst")?.Value).Should().Contain("ellipse");
+            drawingXml.Descendants(a + "gradFill").Should().ContainSingle();
+            drawingXml.Descendants(a + "outerShdw").Should().ContainSingle();
         }
 
         ms.Position = 0;
         var loaded = adapter.Load(ms);
         var loadedSheet = loaded.GetSheetAt(0);
         loadedSheet.TextBoxes.Should().ContainSingle().Which.Text.Should().Be("Review note");
-        loadedSheet.DrawingShapes.Should().ContainSingle().Which.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedShape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
+        loadedShape.HasShadowEffect.Should().BeTrue();
     }
 
     [Fact]
@@ -2617,6 +2731,57 @@ public class FileAdapterSmokeTests
         loadedSheet.FrozenCols.Should().Be(1);
         loadedSheet.SplitRow.Should().BeNull();
         loadedSheet.SplitColumn.Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_FreezePaneTopLeftDoesNotBecomeWorksheetViewport()
+    {
+        var workbook = new Workbook("FreezePaneViewStateTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("visible"));
+        sheet.FrozenRows = 1;
+        sheet.FrozenCols = 1;
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            XDocument document;
+            using (var entryStream = entry.Open())
+                document = XDocument.Load(entryStream);
+
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var sheetView = document.Root!
+                .Element(worksheetNs + "sheetViews")!
+                .Element(worksheetNs + "sheetView")!;
+            sheetView.SetAttributeValue("topLeftCell", "C7");
+            sheetView.Element(worksheetNs + "pane")!.SetAttributeValue("topLeftCell", "B2");
+            sheetView.Elements(worksheetNs + "selection").Remove();
+            sheetView.Add(new XElement(
+                worksheetNs + "selection",
+                new XAttribute("pane", "bottomRight"),
+                new XAttribute("activeCell", "D9"),
+                new XAttribute("sqref", "D9")));
+
+            entry.Delete();
+            var updated = archive.CreateEntry("xl/worksheets/sheet1.xml");
+            using var updatedStream = updated.Open();
+            document.Save(updatedStream);
+        }
+        ms.Position = 0;
+
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+
+        loadedSheet.FrozenRows.Should().Be(1);
+        loadedSheet.FrozenCols.Should().Be(1);
+        loadedSheet.ViewTopRow.Should().Be(7);
+        loadedSheet.ViewLeftCol.Should().Be(3);
+        loadedSheet.ActiveRow.Should().Be(9);
+        loadedSheet.ActiveCol.Should().Be(4);
     }
 
     [Fact]
@@ -7402,6 +7567,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesNativePivotCacheRecordsRelationship()
+    {
+        var workbook = new Workbook("PivotCacheRecordsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, includeCacheRecords: true);
+
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 10, 1), new TextValue("ordinary edit"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        archive.GetEntry("xl/pivotCache/pivotCacheRecords1.xml").Should().NotBeNull();
+        var contentTypes = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!).ToString();
+        contentTypes.Should().Contain("/xl/pivotCache/pivotCacheRecords1.xml");
+        var cacheRels = LoadPackageXml(archive.GetEntry("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels")!).ToString();
+        cacheRels.Should().Contain("pivotCacheRecords1.xml");
+        var recordsXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheRecords1.xml")!).ToString();
+        recordsXml.Should().Contain("<r>");
+        recordsXml.Should().Contain("<x v=\"0\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_RoundTripsExpandedPivotTableFields()
     {
         var workbook = new Workbook("ExpandedPivotXlsxTest");
@@ -7970,7 +8165,13 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalPicturePackage(MemoryStream packageStream, byte[] imageBytes)
+    private static void AddMinimalPicturePackage(
+        MemoryStream packageStream,
+        byte[] imageBytes,
+        double cropLeft = 0,
+        double cropTop = 0,
+        double cropRight = 0,
+        double cropBottom = 0)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -8032,6 +8233,13 @@ public class FileAdapterSmokeTests
                                 new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                             new XElement(spreadsheetDrawingNs + "blipFill",
                                 new XElement(drawingNs + "blip", new XAttribute(relNs + "embed", "rIdFreexcelPictureImage")),
+                                HasPictureCrop(cropLeft, cropTop, cropRight, cropBottom)
+                                    ? new XElement(drawingNs + "srcRect",
+                                        new XAttribute("l", ToSourceRectanglePercent(cropLeft)),
+                                        new XAttribute("t", ToSourceRectanglePercent(cropTop)),
+                                        new XAttribute("r", ToSourceRectanglePercent(cropRight)),
+                                        new XAttribute("b", ToSourceRectanglePercent(cropBottom)))
+                                    : null,
                                 new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                             new XElement(spreadsheetDrawingNs + "spPr",
                                 new XElement(drawingNs + "xfrm"),
@@ -8055,6 +8263,12 @@ public class FileAdapterSmokeTests
 
         packageStream.Position = 0;
     }
+
+    private static bool HasPictureCrop(double left, double top, double right, double bottom) =>
+        left > 0 || top > 0 || right > 0 || bottom > 0;
+
+    private static string ToSourceRectanglePercent(double ratio) =>
+        ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000)).ToString(CultureInfo.InvariantCulture);
 
     private static void AddMinimalShapePackage(MemoryStream packageStream)
     {
@@ -8132,8 +8346,22 @@ public class FileAdapterSmokeTests
                             new XElement(spreadsheetDrawingNs + "spPr",
                                 new XElement(drawingNs + "xfrm"),
                                 new XElement(drawingNs + "prstGeom", new XAttribute("prst", "ellipse"), new XElement(drawingNs + "avLst")),
-                                new XElement(drawingNs + "solidFill", new XElement(drawingNs + "srgbClr", new XAttribute("val", "DDEEFF"))),
-                                new XElement(drawingNs + "ln", new XElement(drawingNs + "solidFill", new XElement(drawingNs + "srgbClr", new XAttribute("val", "112233")))))),
+                                new XElement(drawingNs + "gradFill",
+                                    new XElement(drawingNs + "gsLst",
+                                        new XElement(drawingNs + "gs",
+                                            new XAttribute("pos", "0"),
+                                            new XElement(drawingNs + "srgbClr", new XAttribute("val", "DDEEFF"))),
+                                        new XElement(drawingNs + "gs",
+                                            new XAttribute("pos", "100000"),
+                                            new XElement(drawingNs + "srgbClr", new XAttribute("val", "EEF8FF")))),
+                                    new XElement(drawingNs + "lin", new XAttribute("ang", "5400000"), new XAttribute("scaled", "1"))),
+                                new XElement(drawingNs + "ln", new XElement(drawingNs + "solidFill", new XElement(drawingNs + "srgbClr", new XAttribute("val", "112233")))),
+                                new XElement(drawingNs + "effectLst",
+                                    new XElement(drawingNs + "outerShdw",
+                                        new XAttribute("blurRad", "40000"),
+                                        new XAttribute("dist", "20000"),
+                                        new XAttribute("dir", "5400000"),
+                                        new XElement(drawingNs + "srgbClr", new XAttribute("val", "808080")))))),
                         new XElement(spreadsheetDrawingNs + "clientData"))));
             ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
         }
@@ -8187,7 +8415,7 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalPivotTablePackage(MemoryStream packageStream)
+    private static void AddMinimalPivotTablePackage(MemoryStream packageStream, bool includeCacheRecords = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -8198,6 +8426,8 @@ public class FileAdapterSmokeTests
 
             var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
             AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/pivotCache/pivotCacheDefinition1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
+            if (includeCacheRecords)
+                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/pivotCache/pivotCacheRecords1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml");
             AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/pivotTables/pivotTable1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
 
@@ -8249,6 +8479,17 @@ public class FileAdapterSmokeTests
             ReplacePackageXml(archive, "xl/pivotTables/_rels/pivotTable1.xml.rels", pivotTableRelsXml);
 
             ReplacePackageXml(archive, "xl/pivotCache/pivotCacheDefinition1.xml", XDocument.Parse(MinimalPivotCacheDefinitionXml));
+            if (includeCacheRecords)
+            {
+                var cacheRelsXml = new XDocument(
+                    new XElement(packageRelNs + "Relationships",
+                        new XElement(packageRelNs + "Relationship",
+                            new XAttribute("Id", "rIdFreexcelPivotCacheRecords"),
+                            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords"),
+                            new XAttribute("Target", "pivotCacheRecords1.xml"))));
+                ReplacePackageXml(archive, "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels", cacheRelsXml);
+                ReplacePackageXml(archive, "xl/pivotCache/pivotCacheRecords1.xml", XDocument.Parse(MinimalPivotCacheRecordsXml));
+            }
             ReplacePackageXml(archive, "xl/pivotTables/pivotTable1.xml", XDocument.Parse(MinimalPivotTableDefinitionXml));
         }
 
@@ -8516,6 +8757,19 @@ public class FileAdapterSmokeTests
             </cacheField>
           </cacheFields>
         </pivotCacheDefinition>
+        """;
+
+    private const string MinimalPivotCacheRecordsXml = """
+        <pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2">
+          <r>
+            <x v="0"/>
+            <n v="10"/>
+          </r>
+          <r>
+            <x v="1"/>
+            <n v="20"/>
+          </r>
+        </pivotCacheRecords>
         """;
 
     private const string MinimalStructuredTableXml = """

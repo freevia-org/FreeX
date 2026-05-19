@@ -72,6 +72,38 @@ public class XlsxFeatureInspectorTests
         report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
     }
 
+    [Theory]
+    [InlineData("surfaceChart")]
+    [InlineData("histogramChart")]
+    [InlineData("waterfallChart")]
+    [InlineData("treemapChart")]
+    [InlineData("sunburstChart")]
+    [InlineData("boxWhiskerChart")]
+    [InlineData("funnelChart")]
+    [InlineData("mapChart")]
+    public void Inspect_AdvancedUnmodeledChartFamilies_ReportUnsupportedChart(string chartElementName)
+    {
+        using var package = CreatePackageWithContent(("xl/charts/chart1.xml", $$"""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:{{chartElementName}}>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                    </c:ser>
+                  </c:{{chartElementName}}>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
     [Fact]
     public void Inspect_ExternalLinkEmbeddedObjectAndCustomXml_DetectsUnsupportedFeatures()
     {
