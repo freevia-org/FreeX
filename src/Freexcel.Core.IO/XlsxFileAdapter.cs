@@ -4784,6 +4784,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
             var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
+            var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
@@ -4791,6 +4792,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
                 sourcePrintOptions is null &&
+                sourcePageSetup is null &&
                 sourceSheetProtection is null &&
                 sourceSheetViews is null &&
                 sourceExtensionList is null)
@@ -4809,6 +4811,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (MergeWorksheetSheetFormatProperties(sourceSheetFormatProperties, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetElementAttributes(sourcePrintOptions, targetRoot, workbookNs + "printOptions"))
+                changed = true;
+            if (MergeWorksheetElementAttributes(sourcePageSetup, targetRoot, workbookNs + "pageSetup"))
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
