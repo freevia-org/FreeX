@@ -7577,6 +7577,40 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookSmartTagMetadata()
+    {
+        var workbook = new Workbook("WorkbookSmartTagRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("smart tags"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookSmartTagMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var smartTagProperties = workbookXml.Root!.Element(workbookNs + "smartTagPr");
+        var smartTagTypes = workbookXml.Root.Element(workbookNs + "smartTagTypes");
+        smartTagProperties.Should().NotBeNull();
+        smartTagProperties!.Attribute("embed")!.Value.Should().Be("1");
+        smartTagProperties.Attribute("show")!.Value.Should().Be("all");
+        smartTagTypes.Should().NotBeNull();
+        smartTagTypes!.Element(workbookNs + "smartTagType")!.Attribute("namespaceUri")!.Value.Should().Be("urn:schemas-microsoft-com:office:smarttags");
+        smartTagTypes.Element(workbookNs + "smartTagType")!.Attribute("name")!.Value.Should().Be("place");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -9073,6 +9107,30 @@ public class FileAdapterSmokeTests
                 new XAttribute("autoRecover", "1"),
                 new XAttribute("crashSave", "1"),
                 new XAttribute("repairLoad", "0")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookSmartTagMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(
+                new XElement(
+                    workbookNs + "smartTagPr",
+                    new XAttribute("embed", "1"),
+                    new XAttribute("show", "all")),
+                new XElement(
+                    workbookNs + "smartTagTypes",
+                    new XElement(
+                        workbookNs + "smartTagType",
+                        new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
+                        new XAttribute("name", "place"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
