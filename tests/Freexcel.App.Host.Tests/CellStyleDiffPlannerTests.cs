@@ -61,4 +61,74 @@ public sealed class CellStyleDiffPlannerTests
         diff.Underline.Should().BeFalse();
         diff.Strikethrough.Should().BeFalse();
     }
+
+    [Fact]
+    public void CellStylePreset_Normal_ClearsSupportedStyleFields()
+    {
+        var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Normal);
+
+        diff.Should().Be(CellStyleDiffPlanner.ClearFormatsDiff());
+    }
+
+    [Theory]
+    [InlineData(CellStylePreset.Input, 255, 255, 204, false, "#,##0.00")]
+    [InlineData(CellStylePreset.Output, 242, 242, 242, true, "#,##0.00")]
+    [InlineData(CellStylePreset.Calculation, 242, 220, 219, true, "#,##0.00")]
+    [InlineData(CellStylePreset.CheckCell, 252, 228, 214, true, "General")]
+    [InlineData(CellStylePreset.LinkedCell, 221, 235, 247, false, "General")]
+    [InlineData(CellStylePreset.ExplanatoryText, 242, 242, 242, false, "General")]
+    public void CellStylePreset_ModelingPresets_HaveExpectedStyleTraits(
+        CellStylePreset preset,
+        byte fillR,
+        byte fillG,
+        byte fillB,
+        bool bold,
+        string numberFormat)
+    {
+        var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset);
+
+        diff.FillColor.Should().Be(new CellColor(fillR, fillG, fillB));
+        diff.Bold.Should().Be(bold);
+        diff.NumberFormat.Should().Be(numberFormat);
+    }
+
+    [Fact]
+    public void CellStylePreset_InputOutputAndCalculation_UseReadableBorders()
+    {
+        var presets = new[] { CellStylePreset.Input, CellStylePreset.Output, CellStylePreset.Calculation };
+
+        foreach (var preset in presets)
+        {
+            var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset);
+
+            diff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(128, 128, 128)));
+            diff.BorderRight.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(128, 128, 128)));
+            diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(128, 128, 128)));
+            diff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(128, 128, 128)));
+        }
+    }
+
+    [Fact]
+    public void CellStylePreset_Accent20Presets_DifferByFillColorAndUseReadableFontAndBorder()
+    {
+        var presets = new[]
+        {
+            CellStylePreset.Accent1_20,
+            CellStylePreset.Accent2_20,
+            CellStylePreset.Accent3_20,
+            CellStylePreset.Accent4_20,
+            CellStylePreset.Accent5_20,
+            CellStylePreset.Accent6_20
+        };
+
+        var diffs = presets.Select(CellStyleDiffPlanner.GetCellStylePresetDiff).ToList();
+
+        diffs.Select(diff => diff.FillColor).Should().OnlyHaveUniqueItems();
+        diffs.Should().AllSatisfy(diff =>
+        {
+            diff.FontColor.Should().Be(CellColor.Black);
+            diff.BorderBottom.Should().NotBeNull();
+            diff.BorderBottom!.Value.Style.Should().Be(BorderStyle.Thin);
+        });
+    }
 }
