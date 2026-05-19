@@ -42,7 +42,10 @@ public sealed class MainWindowSourceHygieneTests
 
         File.Exists(Path.Combine(appHostDirectory, "Resources", "Freexcel.ico")).Should().BeTrue();
         xaml.Should().Contain("Icon=\"Resources/Freexcel.ico\"");
-        xaml.Should().Contain("<Image Source=\"Resources/Freexcel.ico\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
+        xaml.Should().Contain("<TextBlock Text=\"FREE\"");
+        xaml.Should().Contain("<TextBlock Text=\"X\"");
+        xaml.Should().NotContain("<Image Source=\"Resources/Freexcel.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreexcelGreenBrush}\"");
         theme.Should().Contain("x:Key=\"FreexcelTitleBarBrush\"");
         xaml.Should().Contain("Background=\"{StaticResource FreexcelTitleBarBrush}\"");
