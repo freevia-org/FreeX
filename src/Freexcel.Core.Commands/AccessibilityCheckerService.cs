@@ -6,6 +6,7 @@ public enum AccessibilityIssueKind
 {
     MergedCells,
     MissingAltText,
+    GenericAltText,
     ChartMissingTitle,
     HyperlinkDisplayTextIsUrl
 }
@@ -29,6 +30,17 @@ public static class AccessibilityCheckerService
         "learn more"
     };
 
+    private static readonly HashSet<string> GenericAltTexts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image",
+        "picture",
+        "photo",
+        "shape",
+        "text box",
+        "object",
+        "graphic"
+    };
+
     public static IReadOnlyList<AccessibilityIssue> FindIssues(Workbook workbook)
     {
         var issues = new List<AccessibilityIssue>();
@@ -44,14 +56,14 @@ public static class AccessibilityCheckerService
                     "Merged cells can make worksheet navigation harder for assistive technologies."));
             }
 
-            foreach (var picture in sheet.Pictures.Where(p => string.IsNullOrWhiteSpace(p.AltText)))
-                issues.Add(MissingAltText(sheet, picture.Anchor, "Picture"));
+            foreach (var picture in sheet.Pictures)
+                AddAltTextIssue(issues, sheet, picture.Anchor, "Picture", picture.AltText);
 
-            foreach (var shape in sheet.DrawingShapes.Where(s => string.IsNullOrWhiteSpace(s.AltText)))
-                issues.Add(MissingAltText(sheet, shape.Anchor, "Shape"));
+            foreach (var shape in sheet.DrawingShapes)
+                AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText);
 
-            foreach (var textBox in sheet.TextBoxes.Where(t => string.IsNullOrWhiteSpace(t.AltText)))
-                issues.Add(MissingAltText(sheet, textBox.Anchor, "Text box"));
+            foreach (var textBox in sheet.TextBoxes)
+                AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText);
 
             foreach (var (address, target) in sheet.Hyperlinks)
             {
@@ -88,6 +100,25 @@ public static class AccessibilityCheckerService
         anchor.ToA1(),
         $"{objectType} is missing alternate text.");
 
+    private static void AddAltTextIssue(List<AccessibilityIssue> issues, Sheet sheet, CellAddress anchor, string objectType, string? altText)
+    {
+        if (string.IsNullOrWhiteSpace(altText))
+        {
+            issues.Add(MissingAltText(sheet, anchor, objectType));
+            return;
+        }
+
+        if (IsGenericAltText(altText))
+        {
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.GenericAltText,
+                sheet.Id,
+                sheet.Name,
+                anchor.ToA1(),
+                $"{objectType} alternate text should describe the object."));
+        }
+    }
+
     private static bool IsDescriptiveHyperlinkText(string displayText, string target)
     {
         var text = displayText.Trim();
@@ -104,6 +135,19 @@ public static class AccessibilityCheckerService
              uri.Scheme == Uri.UriSchemeMailto ||
              uri.Scheme == Uri.UriSchemeFtp)) ||
         text.StartsWith("www.", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsGenericAltText(string altText)
+    {
+        var text = altText.Trim();
+        return GenericAltTexts.Contains(text) ||
+            text.StartsWith("picture ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "picture ") ||
+            text.StartsWith("image ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "image ") ||
+            text.StartsWith("shape ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "shape ") ||
+            text.StartsWith("text box ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "text box ");
+    }
+
+    private static bool IsNumberSuffix(string text, string prefix) =>
+        int.TryParse(text[prefix.Length..], out _);
 
     private static string FormatRange(GridRange range) =>
         range.Start == range.End
