@@ -20,6 +20,8 @@ public sealed class WorksheetContextMenuPlannerTests
             "New Note",
             "Hyperlink...",
             "Format Cells...",
+            "Clear Formats",
+            "Clear Hyperlinks",
             "Clear Contents");
     }
 }
