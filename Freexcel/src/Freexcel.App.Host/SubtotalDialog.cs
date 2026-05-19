@@ -72,23 +72,21 @@ public sealed class SubtotalDialog : Window
 
     private void Accept()
     {
-        try
-        {
-            var columns = _subtotalColumnsBox.Text
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(uint.Parse);
-            Result = CreateResult(
-                uint.Parse(_groupColumnBox.Text),
-                columns,
+        if (!SubtotalDialogInputParser.TryParse(
+                _groupColumnBox.Text,
+                _subtotalColumnsBox.Text,
                 _functionBox.Text,
                 _replaceBox.IsChecked == true,
                 _pageBreakBox.IsChecked == true,
-                _summaryBelowBox.IsChecked == true);
-            DialogResult = true;
-        }
-        catch (Exception ex)
+                _summaryBelowBox.IsChecked == true,
+                out var result,
+                out var error))
         {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, error ?? "Enter valid subtotal options.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
+
+        Result = result;
+        DialogResult = true;
     }
 }
