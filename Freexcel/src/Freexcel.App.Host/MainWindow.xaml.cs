@@ -5538,7 +5538,8 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
-        if (SelectionRangeService.IsWholeRowSelection(range))
+        var plan = KeyboardInsertDeletePlanner.PlanInsert(range);
+        if (plan == KeyboardInsertDeletePlan.Rows)
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Insert Row",
@@ -5549,7 +5550,7 @@ public partial class MainWindow : Window
                     }))
                 return;
         }
-        else if (SelectionRangeService.IsWholeColumnSelection(range))
+        else if (plan == KeyboardInsertDeletePlan.Columns)
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Insert Column",
@@ -5560,12 +5561,7 @@ public partial class MainWindow : Window
                     }))
                 return;
         }
-        else if (!TryExecuteRepeatableGroupedSheetCommand(
-                     "Insert Cells",
-                     sheetId => new InsertCellsCommand(
-                         sheetId,
-                         GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                         InsertCellsShiftDirection.Down)))
+        else if (!ExecuteKeyboardInsertCellsWithPrompt(range))
         {
             return;
         }
@@ -5578,7 +5574,8 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
-        if (SelectionRangeService.IsWholeRowSelection(range))
+        var plan = KeyboardInsertDeletePlanner.PlanDelete(range);
+        if (plan == KeyboardInsertDeletePlan.Rows)
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Delete Row",
@@ -5589,7 +5586,7 @@ public partial class MainWindow : Window
                     }))
                 return;
         }
-        else if (SelectionRangeService.IsWholeColumnSelection(range))
+        else if (plan == KeyboardInsertDeletePlan.Columns)
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Delete Column",
@@ -5600,18 +5597,45 @@ public partial class MainWindow : Window
                     }))
                 return;
         }
-        else if (!TryExecuteRepeatableGroupedSheetCommand(
-                     "Delete Cells",
-                     sheetId => new DeleteCellsCommand(
-                         sheetId,
-                         GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                         DeleteCellsShiftDirection.Up)))
+        else if (!ExecuteKeyboardDeleteCellsWithPrompt(range))
         {
             return;
         }
 
         RecalculateWorkbook();
         UpdateViewport();
+    }
+
+    private bool ExecuteKeyboardInsertCellsWithPrompt(GridRange range)
+    {
+        var input = PromptForInput("Shift cells (right/down):", "right");
+        if (input is null) return false;
+
+        var direction = input.Trim().Equals("down", StringComparison.OrdinalIgnoreCase)
+            ? InsertCellsShiftDirection.Down
+            : InsertCellsShiftDirection.Right;
+        return TryExecuteRepeatableGroupedSheetCommand(
+            "Insert Cells",
+            sheetId => new InsertCellsCommand(
+                sheetId,
+                GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                direction));
+    }
+
+    private bool ExecuteKeyboardDeleteCellsWithPrompt(GridRange range)
+    {
+        var input = PromptForInput("Shift cells (left/up):", "left");
+        if (input is null) return false;
+
+        var direction = input.Trim().Equals("up", StringComparison.OrdinalIgnoreCase)
+            ? DeleteCellsShiftDirection.Up
+            : DeleteCellsShiftDirection.Left;
+        return TryExecuteRepeatableGroupedSheetCommand(
+            "Delete Cells",
+            sheetId => new DeleteCellsCommand(
+                sheetId,
+                GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                direction));
     }
 
     private void ExecuteRowsHidden(bool hidden)
