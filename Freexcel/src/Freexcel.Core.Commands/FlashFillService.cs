@@ -192,10 +192,15 @@ public static class FlashFillService
 
     private static Func<string, string?>? TryInitials(IReadOnlyList<(string Source, string Expected)> examples)
     {
-        if (!examples.All(e => TryGetDelimitedInitials(e.Source, out var initials) && initials == e.Expected))
-            return null;
+        foreach (var delimiter in Delimiters)
+        {
+            if (examples.All(e => TryGetDelimitedInitials(e.Source, delimiter, out var initials) && initials == e.Expected))
+            {
+                return s => TryGetDelimitedInitials(s, delimiter, out var initials) ? initials : null;
+            }
+        }
 
-        return s => TryGetDelimitedInitials(s, out var initials) ? initials : null;
+        return null;
     }
 
     private static Func<string, string?>? TryPrefixTrim(IReadOnlyList<(string Source, string Expected)> examples)
@@ -336,20 +341,17 @@ public static class FlashFillService
         return textInfo.ToTitleCase(s.ToLowerInvariant());
     }
 
-    private static bool TryGetDelimitedInitials(string source, out string initials)
+    private static bool TryGetDelimitedInitials(string source, char delimiter, out string initials)
     {
-        foreach (var delimiter in Delimiters)
+        var parts = source.Split(delimiter, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
         {
-            var parts = source.Split(delimiter, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
-                continue;
-
-            initials = string.Concat(parts.Select(GetFirstInitial));
-            return true;
+            initials = string.Empty;
+            return false;
         }
 
-        initials = string.Empty;
-        return false;
+        initials = string.Concat(parts.Select(GetFirstInitial));
+        return true;
     }
 
     private static string GetFirstInitial(string value) =>
