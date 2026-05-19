@@ -43,13 +43,44 @@ public static class PasteCommandFactory
         PasteCellsMode mode,
         PasteSpecialOptions options)
     {
+        var targetSheet = workbook.GetSheet(targetSheetId);
+        var activeSheetName = targetSheet?.Name ?? "";
+
         if (options.Transpose || options.Operation != PasteSpecialOperation.None)
         {
-            var specialCells = sourceCells
-                .Select(c => (c.Source, mode == PasteCellsMode.Values || options.Operation != PasteSpecialOperation.None
-                    ? Cell.FromValue(c.Cell.Value)
-                    : c.Cell.Clone()))
-                .ToList();
+            var specialCells = new List<(CellAddress Source, Cell Cell)>(sourceCells.Count);
+            foreach (var (source, sourceCell) in sourceCells)
+            {
+                Cell pastedCell;
+                if (options.Operation != PasteSpecialOperation.None)
+                {
+                    pastedCell = Cell.FromValue(sourceCell.Value);
+                }
+                else if (options.Transpose && (mode == PasteCellsMode.Values || mode == PasteCellsMode.Formulas))
+                {
+                    var destinationAddress = TransposeDestination(sourceRange, source, targetSheetId, destination);
+                    var destinationStyle = GetDestinationStyle(targetSheet, destinationAddress);
+                    var transposedRowDelta = (int)destinationAddress.Row - (int)source.Row;
+                    var transposedColDelta = (int)destinationAddress.Col - (int)source.Col;
+                    var transposedPasteOp = new PasteOffsetOp(transposedRowDelta, transposedColDelta);
+                    pastedCell = BuildPastedCell(
+                        sourceCell,
+                        mode,
+                        transposedPasteOp,
+                        activeSheetName,
+                        transposedRowDelta,
+                        transposedColDelta,
+                        destinationStyle);
+                }
+                else
+                {
+                    pastedCell = mode == PasteCellsMode.Values
+                        ? Cell.FromValue(sourceCell.Value)
+                        : sourceCell.Clone();
+                }
+
+                specialCells.Add((source, pastedCell));
+            }
 
             return new PasteSpecialCellsCommand(
                 targetSheetId,
@@ -62,8 +93,6 @@ public static class PasteCommandFactory
         var rowDelta = (int)destination.Row - (int)sourceRange.Start.Row;
         var colDelta = (int)destination.Col - (int)sourceRange.Start.Col;
         var pasteOp = new PasteOffsetOp(rowDelta, colDelta);
-        var targetSheet = workbook.GetSheet(targetSheetId);
-        var activeSheetName = targetSheet?.Name ?? "";
 
         if (mode == PasteCellsMode.Formats)
         {
@@ -76,10 +105,7 @@ public static class PasteCommandFactory
         foreach (var (source, sourceCell) in sourceCells)
         {
             var destinationAddress = Shift(source, targetSheetId, rowDelta, colDelta);
-            var destinationStyle =
-                targetSheet?.GetCell(destinationAddress)?.StyleId
-                ?? targetSheet?.GetStyleOnly(destinationAddress.Row, destinationAddress.Col)
-                ?? StyleId.Default;
+            var destinationStyle = GetDestinationStyle(targetSheet, destinationAddress);
             var pastedCell = BuildPastedCell(
                 sourceCell,
                 mode,
@@ -132,6 +158,22 @@ public static class PasteCommandFactory
 
         return pastedCell;
     }
+
+    private static CellAddress TransposeDestination(
+        GridRange sourceRange,
+        CellAddress source,
+        SheetId targetSheetId,
+        CellAddress destination)
+    {
+        var rowOffset = source.Row - sourceRange.Start.Row;
+        var colOffset = source.Col - sourceRange.Start.Col;
+        return new CellAddress(targetSheetId, destination.Row + colOffset, destination.Col + rowOffset);
+    }
+
+    private static StyleId GetDestinationStyle(Sheet? targetSheet, CellAddress destinationAddress) =>
+        targetSheet?.GetCell(destinationAddress)?.StyleId
+        ?? targetSheet?.GetStyleOnly(destinationAddress.Row, destinationAddress.Col)
+        ?? StyleId.Default;
 
     private static CellAddress Shift(CellAddress source, SheetId targetSheetId, int rowDelta, int colDelta)
     {
