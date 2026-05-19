@@ -1014,7 +1014,10 @@ public sealed class MainWindowXamlKeyTipTests
         effectsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         effectsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Subtle", "Refined");
+            .Should().Equal("Office", "Subtle", "Refined", "Customize Effects...");
+        effectsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Effects...")
+            .Attribute("Click")?.Value.Should().Be("ThemeEffectsCustomizeMenuItem_Click");
     }
 
     [Fact]
