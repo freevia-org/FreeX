@@ -123,6 +123,46 @@ public sealed class XlsxChartPartReaderTests
             new CellAddress(sheetId, 4, 2)));
     }
 
+    [Fact]
+    public void TryReadSupportedChart_DoesNotLetAdvancedExtensionOverrideDirectSupportedChart()
+    {
+        var sheetId = SheetId.New();
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:f>Sheet1!$B$1</c:f></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                  <c:extLst>
+                    <c:ext uri="{C3380CC4-5D6E-409C-BE32-E72D297353CC}">
+                      <cx:treemapChart>
+                        <cx:ser>
+                          <cx:val><cx:numRef><cx:f>Sheet1!$D$2:$D$4</cx:f></cx:numRef></cx:val>
+                        </cx:ser>
+                      </cx:treemapChart>
+                    </c:ext>
+                  </c:extLst>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Column);
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("radarChart", ChartType.Radar)]
     [InlineData("stockChart", ChartType.Stock)]
