@@ -288,7 +288,7 @@ public static class KeyboardShortcutMatcher
 
         if (modifiers == ModifierKeys.Control && effectiveKey == Key.P)
         {
-            shortcut = KeyboardCommandShortcut.OpenPrintBackstage;
+            shortcut = KeyboardCommandShortcut.OpenPrintPreview;
             return true;
         }
 
@@ -620,7 +620,7 @@ public enum KeyboardCommandShortcut
     ToggleFormulaBarExpansion,
     ToggleFilter,
     QuickAnalysis,
-    OpenPrintBackstage,
+    OpenPrintPreview,
     PasteValues,
     GoTo,
     InsertEmbeddedChart,
