@@ -6056,15 +6056,7 @@ public partial class MainWindow : Window
         var input = PromptForInput("Go To Special (blanks/constants/formulas/comments/validation/visible):", "blanks");
         if (input is null) return;
 
-        var kind = input.Trim().ToLowerInvariant() switch
-        {
-            "constant" or "constants" => GoToSpecialKind.Constants,
-            "formula" or "formulas" => GoToSpecialKind.Formulas,
-            "comment" or "comments" => GoToSpecialKind.Comments,
-            "validation" or "data validation" => GoToSpecialKind.DataValidation,
-            "visible" or "visible cells" => GoToSpecialKind.VisibleCellsOnly,
-            _ => GoToSpecialKind.Blanks
-        };
+        var kind = GoToSpecialInputParser.Parse(input);
 
         var matches = GoToSpecialService.Find(sheet, range, kind);
         if (matches.Count == 0)
