@@ -7978,6 +7978,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XElement(chartNs + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "c", chartNs),
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                chart.Uses1904DateSystem ? new XElement(chartNs + "date1904", new XAttribute("val", "1")) : null,
+                string.IsNullOrWhiteSpace(chart.Language) ? null : new XElement(chartNs + "lang", new XAttribute("val", chart.Language)),
                 chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
                 chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
                 ToChartProtectionXml(chart, chartNs),
