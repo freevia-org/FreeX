@@ -26,6 +26,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
             workbook.WindowArrangement = arrangement;
         if (dto.CalculationMode is { } calculationMode && Enum.IsDefined(calculationMode))
             workbook.CalculationMode = calculationMode;
+        workbook.FullCalculationOnLoad = dto.FullCalculationOnLoad;
+        workbook.ForceFullCalculation = dto.ForceFullCalculation;
+        workbook.IterativeCalculation = dto.IterativeCalculation;
+        workbook.MaxCalculationIterations = dto.MaxCalculationIterations;
+        workbook.MaxCalculationChange = dto.MaxCalculationChange;
         foreach (var errorCode in dto.DisabledFormulaErrorCodes ?? [])
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
@@ -607,6 +612,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
             StructureProtectionPassword = workbook.IsStructureProtected ? workbook.StructureProtectionPassword : null,
             WindowArrangement = ValidEnumOrDefault(workbook.WindowArrangement, WorkbookWindowArrangement.Tiled),
             CalculationMode = ValidEnumOrDefault(workbook.CalculationMode, WorkbookCalculationMode.Automatic),
+            FullCalculationOnLoad = workbook.FullCalculationOnLoad,
+            ForceFullCalculation = workbook.ForceFullCalculation,
+            IterativeCalculation = workbook.IterativeCalculation,
+            MaxCalculationIterations = workbook.MaxCalculationIterations,
+            MaxCalculationChange = workbook.MaxCalculationChange,
             DisabledFormulaErrorCodes = workbook.DisabledFormulaErrorCodes
                 .Where(IsSupportedFormulaErrorCode)
                 .OrderBy(code => code)
@@ -1632,6 +1642,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public string? StructureProtectionPassword { get; set; }
         public WorkbookWindowArrangement? WindowArrangement { get; set; }
         public WorkbookCalculationMode? CalculationMode { get; set; }
+        public bool FullCalculationOnLoad { get; set; }
+        public bool ForceFullCalculation { get; set; }
+        public bool IterativeCalculation { get; set; }
+        public int? MaxCalculationIterations { get; set; }
+        public double? MaxCalculationChange { get; set; }
         public List<string> DisabledFormulaErrorCodes { get; set; } = [];
         public List<NamedRangeDto> NamedRanges { get; set; } = [];
         public List<CustomViewDto> CustomViews { get; set; } = [];
