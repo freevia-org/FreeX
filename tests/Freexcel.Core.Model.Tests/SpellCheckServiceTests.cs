@@ -95,6 +95,21 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void BuildCorrectionCellEdits_ConvertsPlannedCorrectionsToTextCells()
+    {
+        var address = new CellAddress(SheetId.New(), 2, 3);
+        var plan = new SpellingCorrectionPlan(
+            [new SpellingCorrectionEdit(address, "teh", "the", 1)],
+            IssueCount: 1);
+
+        var edits = SpellCheckService.BuildCorrectionCellEdits(plan);
+
+        edits.Should().ContainSingle();
+        edits[0].Address.Should().Be(address);
+        edits[0].NewCell.Value.Should().Be(new TextValue("the"));
+    }
+
+    [Fact]
     public void ApplyCorrection_ReplacesWholeWordAndPreservesCapitalization()
     {
         var issue = new SpellingIssue(
