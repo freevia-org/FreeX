@@ -73,6 +73,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
             sheet.ShowFormulas = sDto.ShowFormulas ?? false;
             sheet.FrozenRows = ValidFrozenRowsOrZero(sDto.FrozenRows);
             sheet.FrozenCols = ValidFrozenColumnsOrZero(sDto.FrozenCols);
+            sheet.ViewTopRow = ValidRowPaneOrNull(sDto.ViewTopRow);
+            sheet.ViewLeftCol = ValidColumnPaneOrNull(sDto.ViewLeftCol);
+            sheet.ActiveRow = ValidRowPaneOrNull(sDto.ActiveRow);
+            sheet.ActiveCol = ValidColumnPaneOrNull(sDto.ActiveCol);
             sheet.SplitRow = sheet.FrozenRows > 0 || sheet.FrozenCols > 0
                 ? null
                 : ValidRowPaneOrNull(sDto.SplitRow);
@@ -209,8 +213,13 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
                         Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
                         RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
+                        CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
+                        CropTop = SanitizeCropEdge(pictureDto.CropTop),
+                        CropRight = SanitizeCropEdge(pictureDto.CropRight),
+                        CropBottom = SanitizeCropEdge(pictureDto.CropBottom),
                         AltText = pictureDto.AltText
                     };
+                    NormalizePictureCrop(picture);
                     foreach (var cellDto in pictureDto.Cells ?? [])
                         picture.Cells.Add(new PictureCellSnapshot(cellDto.RowOffset, cellDto.ColumnOffset, cellDto.Text ?? ""));
                     sheet.Pictures.Add(picture);
@@ -252,8 +261,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         RotationDegrees = NormalizeRotation(shapeDto.RotationDegrees),
                         FillColor = shapeDto.FillColor is { } shapeFill ? ParseColor(shapeFill) : null,
                         OutlineColor = shapeDto.OutlineColor is { } shapeOutline ? ParseColor(shapeOutline) : null,
+                        GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
                         FillThemeColor = ToThemeColorReference(shapeDto.FillThemeColor),
                         OutlineThemeColor = ToThemeColorReference(shapeDto.OutlineThemeColor),
+                        HasShadowEffect = shapeDto.HasShadowEffect,
                         AltText = shapeDto.AltText
                     });
                 }
@@ -680,6 +691,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 ShowFormulas = s.ShowFormulas,
                 FrozenRows = ValidFrozenRowsOrZero(s.FrozenRows),
                 FrozenCols = ValidFrozenColumnsOrZero(s.FrozenCols),
+                ViewTopRow = ValidRowPaneOrNull(s.ViewTopRow),
+                ViewLeftCol = ValidColumnPaneOrNull(s.ViewLeftCol),
+                ActiveRow = ValidRowPaneOrNull(s.ActiveRow),
+                ActiveCol = ValidColumnPaneOrNull(s.ActiveCol),
                 SplitRow = ValidFrozenRowsOrZero(s.FrozenRows) > 0 || ValidFrozenColumnsOrZero(s.FrozenCols) > 0
                     ? null
                     : ValidRowPaneOrNull(s.SplitRow),
@@ -764,6 +779,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     Width = PositiveFiniteOrDefault(picture.Width, 240),
                     Height = PositiveFiniteOrDefault(picture.Height, 140),
                     RotationDegrees = NormalizeRotation(picture.RotationDegrees),
+                    CropLeft = SanitizeCropEdge(picture.CropLeft),
+                    CropTop = SanitizeCropEdge(picture.CropTop),
+                    CropRight = SanitizeCropEdge(picture.CropRight),
+                    CropBottom = SanitizeCropEdge(picture.CropBottom),
                     AltText = picture.AltText,
                     Cells = picture.Cells.Select(cell => new PictureCellDto
                     {
@@ -794,8 +813,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     RotationDegrees = NormalizeRotation(shape.RotationDegrees),
                     FillColor = shape.FillColor is { } shapeFill ? FormatColor(shapeFill) : null,
                     OutlineColor = shape.OutlineColor is { } shapeOutline ? FormatColor(shapeOutline) : null,
+                    GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
                     FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
                     OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
+                    HasShadowEffect = shape.HasShadowEffect,
                     AltText = shape.AltText
                 }).ToList(),
                 Sparklines = s.Sparklines
@@ -1475,6 +1496,24 @@ public sealed class NativeJsonAdapter : IFileAdapter
         return normalized < 0 ? normalized + 360 : normalized;
     }
 
+    private static double SanitizeCropEdge(double value) =>
+        double.IsFinite(value) && value > 0 ? Math.Min(0.99, value) : 0;
+
+    private static void NormalizePictureCrop(PictureModel picture)
+    {
+        if (picture.CropLeft + picture.CropRight >= 1)
+        {
+            picture.CropLeft = 0;
+            picture.CropRight = 0;
+        }
+
+        if (picture.CropTop + picture.CropBottom >= 1)
+        {
+            picture.CropTop = 0;
+            picture.CropBottom = 0;
+        }
+    }
+
     private static ChartPointDataLabelFormat ClampPointDataLabelFormat(ChartPointDataLabelFormat format) =>
         format with
         {
@@ -1688,6 +1727,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool? ShowFormulas { get; set; }
         public uint FrozenRows { get; set; }
         public uint FrozenCols { get; set; }
+        public uint? ViewTopRow { get; set; }
+        public uint? ViewLeftCol { get; set; }
+        public uint? ActiveRow { get; set; }
+        public uint? ActiveCol { get; set; }
         public uint? SplitRow { get; set; }
         public uint? SplitColumn { get; set; }
         public string? PrintArea { get; set; }
@@ -1879,6 +1922,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public double Width { get; set; } = 240;
         public double Height { get; set; } = 140;
         public double RotationDegrees { get; set; }
+        public double CropLeft { get; set; }
+        public double CropTop { get; set; }
+        public double CropRight { get; set; }
+        public double CropBottom { get; set; }
         public string? AltText { get; set; }
         public List<PictureCellDto> Cells { get; set; } = [];
     }
@@ -1906,8 +1953,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public double RotationDegrees { get; set; }
         public string? FillColor { get; set; }
         public string? OutlineColor { get; set; }
+        public string? GradientFillEndColor { get; set; }
         public ThemeColorReferenceDto? FillThemeColor { get; set; }
         public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
+        public bool HasShadowEffect { get; set; }
         public string? AltText { get; set; }
     }
 

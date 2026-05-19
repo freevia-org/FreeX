@@ -22,6 +22,116 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_NearLastRowAlignsBottomEdgeToWorksheetBoundary()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultRowHeight = 20;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(CellAddress.MaxRow - 3, 1, 60, 300));
+
+        viewport.RowMetrics.Select(r => r.Row)
+            .Should().Equal(CellAddress.MaxRow - 2, CellAddress.MaxRow - 1, CellAddress.MaxRow);
+        viewport.RowMetrics[^1].TopOffset.Should().Be(40);
+        (viewport.RowMetrics[^1].TopOffset + viewport.RowMetrics[^1].Height).Should().Be(60);
+    }
+
+    [Fact]
+    public void GetViewport_NearLastRowKeepsLastRowFullyVisibleWhenHeightsDoNotFitExactly()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultRowHeight = 25;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(CellAddress.MaxRow - 3, 1, 60, 300));
+
+        viewport.RowMetrics.Select(r => r.Row)
+            .Should().Equal(CellAddress.MaxRow - 2, CellAddress.MaxRow - 1, CellAddress.MaxRow);
+        viewport.RowMetrics[0].TopOffset.Should().Be(-15);
+        (viewport.RowMetrics[^1].TopOffset + viewport.RowMetrics[^1].Height).Should().Be(60);
+    }
+
+    [Fact]
+    public void GetViewport_NearLastColumnAlignsRightEdgeToWorksheetBoundary()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultColumnWidth = 10;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, CellAddress.MaxCol - 2, 100, 160));
+
+        viewport.ColMetrics.Select(c => c.Col)
+            .Should().Equal(CellAddress.MaxCol - 1, CellAddress.MaxCol);
+        viewport.ColMetrics[^1].LeftOffset.Should().Be(80);
+        (viewport.ColMetrics[^1].LeftOffset + viewport.ColMetrics[^1].Width).Should().Be(160);
+    }
+
+    [Fact]
+    public void GetViewport_NearLastColumnKeepsLastColumnFullyVisibleWhenWidthsDoNotFitExactly()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultColumnWidth = 8.75;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, CellAddress.MaxCol - 3, 100, 160));
+
+        viewport.ColMetrics.Select(c => c.Col)
+            .Should().Equal(CellAddress.MaxCol - 2, CellAddress.MaxCol - 1, CellAddress.MaxCol);
+        viewport.ColMetrics[0].LeftOffset.Should().Be(-50);
+        (viewport.ColMetrics[^1].LeftOffset + viewport.ColMetrics[^1].Width).Should().Be(160);
+    }
+
+    [Fact]
+    public void GetViewport_WithFrozenRowsKeepsFrozenRowsFixedWhileBodyScrolls()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultRowHeight = 20;
+        sheet.FrozenRows = 1;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(20, 1, 60, 300));
+
+        viewport.RowMetrics.Select(r => r.Row).Should().StartWith([1u, 20u, 21u]);
+        viewport.RowMetrics[0].TopOffset.Should().Be(0);
+        viewport.RowMetrics[1].TopOffset.Should().Be(20);
+        viewport.FrozenPanes.Should().Be(new FrozenPaneState(1, 0));
+    }
+
+    [Fact]
+    public void GetViewport_WithFrozenColumnsKeepsFrozenColumnsFixedWhileBodyScrolls()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DefaultColumnWidth = 10;
+        sheet.FrozenCols = 1;
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 20, 100, 240));
+
+        viewport.ColMetrics.Select(c => c.Col).Should().StartWith([1u, 20u, 21u]);
+        viewport.ColMetrics[0].LeftOffset.Should().Be(0);
+        viewport.ColMetrics[1].LeftOffset.Should().Be(80);
+        viewport.FrozenPanes.Should().Be(new FrozenPaneState(0, 1));
+    }
+
+    [Fact]
     public void HitTest_SkipsHiddenRowsAndColumns()
     {
         var workbook = new Workbook("test");

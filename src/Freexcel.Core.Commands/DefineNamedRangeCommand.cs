@@ -77,3 +77,168 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
             ctx.Workbook.DefineNamedRange(_name, _previousRange);
     }
 }
+
+public sealed class CreateNamedRangesFromSelectionCommand : IWorkbookCommand
+{
+    private readonly GridRange _selection;
+    private readonly bool _useTopRow;
+    private readonly bool _useLeftColumn;
+    private readonly bool _useBottomRow;
+    private readonly bool _useRightColumn;
+    private Dictionary<string, GridRange>? _snapshot;
+
+    public string Label => "Create Names from Selection";
+
+    public CreateNamedRangesFromSelectionCommand(
+        GridRange selection,
+        bool UseTopRow,
+        bool UseLeftColumn,
+        bool UseBottomRow,
+        bool UseRightColumn)
+    {
+        _selection = selection;
+        _useTopRow = UseTopRow;
+        _useLeftColumn = UseLeftColumn;
+        _useBottomRow = UseBottomRow;
+        _useRightColumn = UseRightColumn;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (!_useTopRow && !_useLeftColumn && !_useBottomRow && !_useRightColumn)
+            return new CommandOutcome(false, "Select at least one label position.");
+        if (_selection.Start.Sheet != _selection.End.Sheet)
+            return new CommandOutcome(false, "Create from Selection requires a single-sheet range.");
+
+        var sheet = ctx.GetSheet(_selection.Start.Sheet);
+        var definitions = BuildDefinitions(ctx.Workbook, sheet).ToList();
+        if (definitions.Count == 0)
+            return new CommandOutcome(false, "No valid labels were found in the selection.");
+
+        _snapshot = ctx.Workbook.NamedRanges.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, range) in definitions)
+            ctx.Workbook.DefineNamedRange(name, range);
+        return new CommandOutcome(true, AffectedCells: definitions.Select(d => d.Range.Start).ToList());
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_snapshot is null)
+            return;
+
+        ctx.Workbook.NamedRanges.Clear();
+        foreach (var (name, range) in _snapshot)
+            ctx.Workbook.NamedRanges[name] = range;
+    }
+
+    private IEnumerable<(string Name, GridRange Range)> BuildDefinitions(Workbook workbook, Sheet sheet)
+    {
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (_useTopRow && _selection.RowCount > 1)
+        {
+            for (var col = _selection.Start.Col; col <= _selection.End.Col; col++)
+            {
+                if (TryCreateName(workbook, sheet, _selection.Start.Row, col, usedNames, out var name))
+                    yield return (name, new GridRange(
+                        new CellAddress(sheet.Id, _selection.Start.Row + 1, col),
+                        new CellAddress(sheet.Id, _selection.End.Row, col)));
+            }
+        }
+
+        if (_useBottomRow && _selection.RowCount > 1)
+        {
+            for (var col = _selection.Start.Col; col <= _selection.End.Col; col++)
+            {
+                if (TryCreateName(workbook, sheet, _selection.End.Row, col, usedNames, out var name))
+                    yield return (name, new GridRange(
+                        new CellAddress(sheet.Id, _selection.Start.Row, col),
+                        new CellAddress(sheet.Id, _selection.End.Row - 1, col)));
+            }
+        }
+
+        if (_useLeftColumn && _selection.ColCount > 1)
+        {
+            for (var row = _selection.Start.Row; row <= _selection.End.Row; row++)
+            {
+                if (TryCreateName(workbook, sheet, row, _selection.Start.Col, usedNames, out var name))
+                    yield return (name, new GridRange(
+                        new CellAddress(sheet.Id, row, _selection.Start.Col + 1),
+                        new CellAddress(sheet.Id, row, _selection.End.Col)));
+            }
+        }
+
+        if (_useRightColumn && _selection.ColCount > 1)
+        {
+            for (var row = _selection.Start.Row; row <= _selection.End.Row; row++)
+            {
+                if (TryCreateName(workbook, sheet, row, _selection.End.Col, usedNames, out var name))
+                    yield return (name, new GridRange(
+                        new CellAddress(sheet.Id, row, _selection.Start.Col),
+                        new CellAddress(sheet.Id, row, _selection.End.Col - 1)));
+            }
+        }
+    }
+
+    private static bool TryCreateName(
+        Workbook workbook,
+        Sheet sheet,
+        uint row,
+        uint col,
+        HashSet<string> usedNames,
+        out string name)
+    {
+        name = "";
+        var label = GetLabelText(sheet.GetCell(row, col)?.Value);
+        if (string.IsNullOrWhiteSpace(label))
+            return false;
+
+        var candidate = SanitizeName(label);
+        if (string.IsNullOrWhiteSpace(candidate))
+            return false;
+        if (workbook.ValidateNamedRangeName(candidate) is not null)
+            candidate = "_" + candidate;
+
+        name = MakeUnique(workbook, candidate, usedNames);
+        usedNames.Add(name);
+        return true;
+    }
+
+    private static string GetLabelText(ScalarValue? value) => value switch
+    {
+        TextValue text => text.Value,
+        NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        _ => ""
+    };
+
+    private static string SanitizeName(string label)
+    {
+        var chars = label.Trim()
+            .Select(ch => char.IsLetterOrDigit(ch) || ch is '_' or '.' ? ch : '_')
+            .ToArray();
+        var name = new string(chars);
+        while (name.Contains("__", StringComparison.Ordinal))
+            name = name.Replace("__", "_", StringComparison.Ordinal);
+        name = name.Trim('_');
+        if (name.Length == 0)
+            return "";
+        if (!char.IsLetter(name[0]) && name[0] != '_')
+            name = "_" + name;
+        return name.Length > 255 ? name[..255] : name;
+    }
+
+    private static string MakeUnique(Workbook workbook, string baseName, HashSet<string> usedNames)
+    {
+        var name = baseName;
+        var suffix = 2;
+        while (usedNames.Contains(name) || workbook.ValidateNamedRangeName(name) is not null)
+        {
+            var suffixText = "_" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var maxBaseLength = Math.Max(1, 255 - suffixText.Length);
+            name = (baseName.Length > maxBaseLength ? baseName[..maxBaseLength] : baseName) + suffixText;
+            suffix++;
+        }
+        return name;
+    }
+}

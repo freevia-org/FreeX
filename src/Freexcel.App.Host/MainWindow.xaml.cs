@@ -7012,7 +7012,7 @@ public partial class MainWindow : Window
             if (sourceIndex is null)
                 return;
 
-            var zone = IsNumericPivotSourceField(sheet, pivotTable, sourceIndex.Value)
+            var zone = PivotUiPlanner.IsNumericSourceField(sheet, pivotTable, sourceIndex.Value)
                 ? PivotFieldDropZone.Values
                 : PivotFieldDropZone.Rows;
             MovePivotFieldToZone(caption, zone, -1);
@@ -7235,10 +7235,7 @@ public partial class MainWindow : Window
             case PivotFieldDropZone.Values:
                 if (dataFields.All(dataField => dataField.SourceFieldIndex != sourceIndex.Value))
                 {
-                    var caption = PivotUiPlanner.FieldCaption(headers, sourceIndex.Value);
-                    var summaryFunction = IsNumericPivotSourceField(sheet, pivotTable, sourceIndex.Value) ? "sum" : "count";
-                    var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
-                    dataFields.Add(new PivotDataFieldModel(sourceIndex.Value, displayName, summaryFunction));
+                    dataFields.Add(PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value));
                 }
                 break;
         }
@@ -7289,7 +7286,7 @@ public partial class MainWindow : Window
                 InsertAt(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Values:
-                var valueField = draggedDataField ?? CreateDefaultPivotDataField(sheet, pivotTable, headers, sourceIndex.Value);
+                var valueField = draggedDataField ?? PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value);
                 InsertAt(dataFields, valueField, insertIndex);
                 break;
         }
@@ -7435,7 +7432,7 @@ public partial class MainWindow : Window
         var bangIndex = normalized.LastIndexOf('!');
         if (bangIndex >= 0)
         {
-            var sheetName = UnquoteSheetName(normalized[..bangIndex].Trim());
+            var sheetName = PivotUiPlanner.UnquoteSheetName(normalized[..bangIndex].Trim());
             var sheet = _workbook.Sheets.FirstOrDefault(item =>
                 string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase));
             if (sheet is null)
@@ -7468,31 +7465,7 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(range.Start.Sheet);
         return sheet is null || sheet.Id == _currentSheetId
             ? reference
-            : $"{QuoteSheetNameForReference(sheet.Name)}!{reference}";
-    }
-
-    private static string UnquoteSheetName(string sheetName)
-    {
-        if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')
-            return sheetName[1..^1].Replace("''", "'", StringComparison.Ordinal);
-
-        return sheetName;
-    }
-
-    private static string QuoteSheetNameForReference(string sheetName)
-    {
-        if (sheetName.All(ch => char.IsLetterOrDigit(ch) || ch == '_'))
-            return sheetName;
-
-        return $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'";
-    }
-
-    private static PivotDataFieldModel CreateDefaultPivotDataField(Sheet sheet, PivotTableModel pivotTable, IReadOnlyList<string> headers, int sourceFieldIndex)
-    {
-        var caption = PivotUiPlanner.FieldCaption(headers, sourceFieldIndex);
-        var summaryFunction = IsNumericPivotSourceField(sheet, pivotTable, sourceFieldIndex) ? "sum" : "count";
-        var displayName = summaryFunction == "sum" ? $"Sum of {caption}" : $"Count of {caption}";
-        return new PivotDataFieldModel(sourceFieldIndex, displayName, summaryFunction);
+            : $"{PivotUiPlanner.QuoteSheetNameForReference(sheet.Name)}!{reference}";
     }
 
     private static void InsertAt<T>(List<T> items, T item, int index)
@@ -7516,107 +7489,6 @@ public partial class MainWindow : Window
         if (ReferenceEquals(list, PivotAvailableFieldsList))
             return PivotFieldDropZone.Available;
         return null;
-    }
-
-    private static bool IsNumericPivotSourceField(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
-    {
-        var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
-        {
-            if (sheet.GetValue(row, sourceColumn) is NumberValue or DateTimeValue)
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParsePivotLabelFilter(string input, int sourceFieldIndex, out PivotLabelFilterModel filter)
-    {
-        filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.Contains, "");
-        var normalized = input.Trim();
-        if (normalized.StartsWith("<>", StringComparison.Ordinal))
-        {
-            filter = new PivotLabelFilterModel(sourceFieldIndex, PivotLabelFilterKind.DoesNotEqual, normalized[2..].Trim());
-            return !string.IsNullOrWhiteSpace(filter.Value);
-        }
-
-        var parts = normalized.Split(':', 2, StringSplitOptions.TrimEntries);
-        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[1]))
-            return false;
-
-        var kind = parts[0].ToLowerInvariant() switch
-        {
-            "equals" or "=" => PivotLabelFilterKind.Equals,
-            "notequals" or "not" or "<>" => PivotLabelFilterKind.DoesNotEqual,
-            "begins" or "beginswith" => PivotLabelFilterKind.BeginsWith,
-            "ends" or "endswith" => PivotLabelFilterKind.EndsWith,
-            "contains" => PivotLabelFilterKind.Contains,
-            "notcontains" => PivotLabelFilterKind.DoesNotContain,
-            _ => PivotLabelFilterKind.Contains
-        };
-        filter = new PivotLabelFilterModel(sourceFieldIndex, kind, parts[1]);
-        return true;
-    }
-
-    private static bool TryParsePivotValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
-    {
-        filter = new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, SourceFieldIndex: sourceFieldIndex);
-        var normalized = input.Trim();
-        if (TryParseTopBottomPivotValueFilter(normalized, sourceFieldIndex, out filter))
-            return true;
-
-        var operators = new[]
-        {
-            (Text: ">=", Kind: PivotValueFilterKind.GreaterThanOrEqual),
-            (Text: "<=", Kind: PivotValueFilterKind.LessThanOrEqual),
-            (Text: "<>", Kind: PivotValueFilterKind.DoesNotEqual),
-            (Text: ">", Kind: PivotValueFilterKind.GreaterThan),
-            (Text: "<", Kind: PivotValueFilterKind.LessThan),
-            (Text: "=", Kind: PivotValueFilterKind.Equals)
-        };
-        foreach (var op in operators)
-        {
-            if (!normalized.StartsWith(op.Text, StringComparison.Ordinal))
-                continue;
-
-            if (!double.TryParse(
-                    normalized[op.Text.Length..].Trim(),
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var value))
-            {
-                return false;
-            }
-
-            filter = new PivotValueFilterModel(0, op.Kind, ComparisonValue: value, SourceFieldIndex: sourceFieldIndex);
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParseTopBottomPivotValueFilter(string input, int sourceFieldIndex, out PivotValueFilterModel filter)
-    {
-        filter = new PivotValueFilterModel(0, PivotValueFilterKind.Top, SourceFieldIndex: sourceFieldIndex);
-        var parts = input.Split(':', 2, StringSplitOptions.TrimEntries);
-        if (parts.Length != 2 ||
-            !int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var count) ||
-            count <= 0)
-        {
-            return false;
-        }
-
-        var kind = parts[0].ToLowerInvariant() switch
-        {
-            "top" => PivotValueFilterKind.Top,
-            "bottom" => PivotValueFilterKind.Bottom,
-            _ => (PivotValueFilterKind?)null
-        };
-        if (kind is null)
-            return false;
-
-        filter = new PivotValueFilterModel(0, kind.Value, Count: count, SourceFieldIndex: sourceFieldIndex);
-        return true;
     }
 
     private enum PivotFieldDropZone

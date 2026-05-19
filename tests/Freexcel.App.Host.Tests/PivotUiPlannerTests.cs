@@ -103,6 +103,76 @@ public sealed class PivotUiPlannerTests
         PivotUiPlanner.GenerateUniquePivotTableName(sheet).Should().Be("PivotTable3");
     }
 
+    [Theory]
+    [InlineData("Sheet1", "Sheet1")]
+    [InlineData("'Sales Q1'", "Sales Q1")]
+    [InlineData("'Bob''s Sheet'", "Bob's Sheet")]
+    public void UnquoteSheetName_RemovesExcelQuotes(string input, string expected)
+    {
+        PivotUiPlanner.UnquoteSheetName(input).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Sheet1", "Sheet1")]
+    [InlineData("Sales_Q1", "Sales_Q1")]
+    [InlineData("Sales Q1", "'Sales Q1'")]
+    [InlineData("Bob's Sheet", "'Bob''s Sheet'")]
+    public void QuoteSheetNameForReference_QuotesOnlyWhenNeeded(string input, string expected)
+    {
+        PivotUiPlanner.QuoteSheetNameForReference(input).Should().Be(expected);
+    }
+
+    [Fact]
+    public void CreateDefaultDataField_UsesSumForNumericSourceAndCountForTextSource()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var pivot = CreatePivot(sheetId: sheet.Id);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+
+        PivotUiPlanner.CreateDefaultDataField(sheet, pivot, ["Region", "Amount"], 1)
+            .Should()
+            .Be(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        PivotUiPlanner.CreateDefaultDataField(sheet, pivot, ["Region", "Amount"], 0)
+            .Should()
+            .Be(new PivotDataFieldModel(0, "Count of Region", "count"));
+    }
+
+    [Theory]
+    [InlineData("contains:East", PivotLabelFilterKind.Contains, "East")]
+    [InlineData("begins:Q", PivotLabelFilterKind.BeginsWith, "Q")]
+    [InlineData("<>West", PivotLabelFilterKind.DoesNotEqual, "West")]
+    public void TryParseLabelFilter_ParsesExcelStyleFilterText(string input, PivotLabelFilterKind expectedKind, string expectedValue)
+    {
+        PivotUiPlanner.TryParseLabelFilter(input, 2, out var filter).Should().BeTrue();
+        filter.SourceFieldIndex.Should().Be(2);
+        filter.Kind.Should().Be(expectedKind);
+        filter.Value.Should().Be(expectedValue);
+    }
+
+    [Theory]
+    [InlineData(">10", PivotValueFilterKind.GreaterThan, 10)]
+    [InlineData("<=5.5", PivotValueFilterKind.LessThanOrEqual, 5.5)]
+    [InlineData("<>0", PivotValueFilterKind.DoesNotEqual, 0)]
+    public void TryParseValueFilter_ParsesComparisonOperators(string input, PivotValueFilterKind expectedKind, double expectedValue)
+    {
+        PivotUiPlanner.TryParseValueFilter(input, 3, out var filter).Should().BeTrue();
+        filter.SourceFieldIndex.Should().Be(3);
+        filter.Kind.Should().Be(expectedKind);
+        filter.ComparisonValue.Should().Be(expectedValue);
+    }
+
+    [Theory]
+    [InlineData("top:10", PivotValueFilterKind.Top, 10)]
+    [InlineData("bottom:3", PivotValueFilterKind.Bottom, 3)]
+    public void TryParseValueFilter_ParsesTopBottomFilters(string input, PivotValueFilterKind expectedKind, int expectedCount)
+    {
+        PivotUiPlanner.TryParseValueFilter(input, 4, out var filter).Should().BeTrue();
+        filter.SourceFieldIndex.Should().Be(4);
+        filter.Kind.Should().Be(expectedKind);
+        filter.Count.Should().Be(expectedCount);
+    }
+
     [Fact]
     public void SetFieldSelectedItems_UpdatesMatchingFieldOnly()
     {

@@ -9,7 +9,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogList_ExposesAccessibleName()
     {
-        var xaml = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "CustomViewsDialog.xaml"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml"));
 
         xaml.Should().Contain("AutomationProperties.Name=\"Custom views\"");
         xaml.Should().Contain("AutomationProperties.HelpText=\"Shows saved workbook views");
@@ -18,7 +18,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void ShowButton_IsDefaultDialogAction()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "CustomViewsDialog.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var showButton = document
@@ -28,17 +28,4 @@ public sealed class CustomViewsDialogXamlTests
         showButton.Attribute("IsDefault")?.Value.Should().Be("True");
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-            current = current.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find {Path.Combine(parts)} from {AppContext.BaseDirectory}");
-    }
 }

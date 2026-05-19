@@ -394,7 +394,7 @@ internal sealed class RuleDescriptionConverter : System.Windows.Data.IValueConve
         => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.DescribeRule(cf) : "";
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => throw new NotSupportedException();
+        => Binding.DoNothing;
 }
 
 internal sealed class PreviewBrushConverter : System.Windows.Data.IValueConverter
@@ -403,7 +403,7 @@ internal sealed class PreviewBrushConverter : System.Windows.Data.IValueConverte
         => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.PreviewBrush(cf) : Brushes.LightGray;
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => throw new NotSupportedException();
+        => Binding.DoNothing;
 }
 
 internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
@@ -412,5 +412,5 @@ internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
         => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.AppliesToString(cf.AppliesTo) : "";
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => throw new NotSupportedException();
+        => Binding.DoNothing;
 }

@@ -147,6 +147,12 @@ public static class ChartRenderer
             return bubbleModel;
         }
 
+        if (chart.Type == ChartType.Radar)
+            return BuildRadarModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+
+        if (chart.Type == ChartType.Stock)
+            return BuildStockModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+
         // Column / Line: one series per data column
         List<DataPoint>? firstSeriesPoints = null;
         for (uint col = dataStartCol; col <= endCol; col++)
@@ -385,6 +391,129 @@ public static class ChartRenderer
 
         AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
         ApplyAxisBounds(model, chart);
+        return model;
+    }
+
+    private static PlotModel BuildRadarModel(
+        ChartModel chart,
+        PlotModel model,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyList<string> categories,
+        uint dataStartRow,
+        uint endRow,
+        uint dataStartCol,
+        uint endCol,
+        uint headerRow,
+        WorkbookTheme theme)
+    {
+        model.PlotType = PlotType.Polar;
+        var pointCount = Math.Max(1, categories.Count);
+        model.Axes.Add(new AngleAxis
+        {
+            StartAngle = 90,
+            EndAngle = 450,
+            Minimum = 0,
+            Maximum = 360,
+            MajorStep = 360.0 / pointCount,
+            MinorStep = 360.0 / pointCount,
+            LabelFormatter = angle =>
+            {
+                var index = (int)Math.Round((((angle % 360) + 360) % 360) / (360.0 / pointCount));
+                index %= pointCount;
+                return index >= 0 && index < categories.Count ? categories[index] : "";
+            }
+        });
+        model.Axes.Add(new MagnitudeAxis { Minimum = 0, Title = chart.YAxisTitle });
+
+        for (uint col = dataStartCol; col <= endCol; col++)
+        {
+            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol);
+            var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var header)
+                ? header.DisplayText
+                : $"Series {seriesIndex + 1}";
+            var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
+            series.MarkerType = MarkerType.Circle;
+
+            DataPoint? firstPoint = null;
+            var i = 0;
+            for (uint row = dataStartRow; row <= endRow; row++, i++)
+            {
+                if (!cellLookup.TryGetValue((row, col), out var cell) ||
+                    !double.TryParse(cell.DisplayText, out var value))
+                    continue;
+
+                var point = new DataPoint(i * 360.0 / pointCount, value);
+                firstPoint ??= point;
+                series.Points.Add(point);
+            }
+
+            if (firstPoint is { } closedPoint && series.Points.Count > 1)
+                series.Points.Add(closedPoint);
+
+            model.Series.Add(series);
+        }
+
+        return model;
+    }
+
+    private static PlotModel BuildStockModel(
+        ChartModel chart,
+        PlotModel model,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        IReadOnlyList<string> categories,
+        uint dataStartRow,
+        uint endRow,
+        uint dataStartCol,
+        uint endCol,
+        uint headerRow,
+        WorkbookTheme theme)
+    {
+        model.Axes.Add(new LinearAxis
+        {
+            Position = AxisPosition.Bottom,
+            Title = chart.XAxisTitle,
+            Minimum = -0.5,
+            Maximum = Math.Max(0.5, categories.Count - 0.5),
+            MajorStep = 1,
+            MinorStep = 1,
+            LabelFormatter = value =>
+            {
+                var index = (int)Math.Round(value);
+                return index >= 0 && index < categories.Count ? categories[index] : "";
+            }
+        });
+        model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
+
+        var valueColumnCount = endCol >= dataStartCol ? endCol - dataStartCol + 1 : 0;
+        var hasOpenColumn = valueColumnCount >= 4;
+        var highCol = hasOpenColumn ? dataStartCol + 1 : dataStartCol;
+        var lowCol = hasOpenColumn ? dataStartCol + 2 : dataStartCol + 1;
+        var closeCol = hasOpenColumn ? dataStartCol + 3 : dataStartCol + 2;
+        if (valueColumnCount < 3 || closeCol > endCol)
+            return model;
+
+        var series = new HighLowSeries
+        {
+            Title = "Stock",
+            StrokeThickness = 1.5,
+            Color = OxyColors.Black
+        };
+
+        for (uint row = dataStartRow; row <= endRow; row++)
+        {
+            var index = row - dataStartRow;
+            if (!TryGetNumericCell(cellLookup, row, highCol, out var high) ||
+                !TryGetNumericCell(cellLookup, row, lowCol, out var low) ||
+                !TryGetNumericCell(cellLookup, row, closeCol, out var close))
+                continue;
+
+            var open = hasOpenColumn && TryGetNumericCell(cellLookup, row, dataStartCol, out var parsedOpen)
+                ? parsedOpen
+                : close;
+            series.Items.Add(new HighLowItem(index, high, low, open, close));
+        }
+
+        model.Series.Add(series);
         return model;
     }
 
