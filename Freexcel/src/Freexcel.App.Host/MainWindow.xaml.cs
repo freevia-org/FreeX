@@ -10659,6 +10659,9 @@ public partial class MainWindow : Window
     private void ThemeColorsGrayscaleMenuItem_Click(object sender, RoutedEventArgs e) =>
         ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyGrayscaleColors(_workbook.Theme).WithName(_workbook.Theme.Name));
 
+    private void ThemeColorsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ThemeCustomizeMenuItem_Click(sender, e);
+
     private void ThemeFontsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)

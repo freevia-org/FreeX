@@ -914,7 +914,10 @@ public sealed class MainWindowXamlKeyTipTests
         colorsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         colorsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Freexcel Colorful", "Grayscale");
+            .Should().Equal("Office", "Freexcel Colorful", "Grayscale", "Customize Colors...");
+        colorsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Colors...")
+            .Attribute("Click")?.Value.Should().Be("ThemeColorsCustomizeMenuItem_Click");
     }
 
     [Fact]

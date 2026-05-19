@@ -1917,6 +1917,7 @@
                                             <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeColorsOfficeMenuItem_Click"/>
                                             <MenuItem Header="Freexcel Colorful" local:RibbonTooltip.KeyTip="C" Click="ThemeColorsColorfulMenuItem_Click"/>
                                             <MenuItem Header="Grayscale" local:RibbonTooltip.KeyTip="G" Click="ThemeColorsGrayscaleMenuItem_Click"/>
+                                            <MenuItem Header="Customize Colors..." local:RibbonTooltip.KeyTip="U" Click="ThemeColorsCustomizeMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
