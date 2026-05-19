@@ -173,3 +173,181 @@ public sealed class PivotChartTypeDialog : Window
 
     public static PivotChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
 }
+
+public sealed record PivotTableOptionsDialogResult(
+    bool ShowRowGrandTotals,
+    bool ShowColumnGrandTotals,
+    bool ShowSubtotals,
+    PivotSubtotalPlacement SubtotalPlacement,
+    bool RepeatItemLabels,
+    bool BlankLineAfterItems,
+    string StyleName,
+    bool ShowRowHeaders,
+    bool ShowColumnHeaders,
+    bool ShowRowStripes,
+    bool ShowColumnStripes,
+    PivotReportLayout ReportLayout);
+
+public sealed class PivotTableOptionsDialog : Window
+{
+    private static readonly string[] StyleNames =
+    [
+        "PivotStyleLight16",
+        "PivotStyleMedium2",
+        "PivotStyleMedium9",
+        "PivotStyleDark4"
+    ];
+
+    private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show row grand totals" };
+    private readonly CheckBox _columnGrandTotalsBox = new() { Content = "Show column grand totals" };
+    private readonly CheckBox _subtotalsBox = new() { Content = "Show subtotals" };
+    private readonly ComboBox _subtotalPlacementBox = new();
+    private readonly CheckBox _repeatItemLabelsBox = new() { Content = "Repeat item labels" };
+    private readonly CheckBox _blankLineBox = new() { Content = "Insert blank line after each item" };
+    private readonly ComboBox _reportLayoutBox = new();
+    private readonly ComboBox _styleBox = new();
+    private readonly CheckBox _rowHeadersBox = new() { Content = "Row headers" };
+    private readonly CheckBox _columnHeadersBox = new() { Content = "Column headers" };
+    private readonly CheckBox _rowStripesBox = new() { Content = "Banded rows" };
+    private readonly CheckBox _columnStripesBox = new() { Content = "Banded columns" };
+
+    public PivotTableOptionsDialogResult Result { get; private set; }
+
+    public PivotTableOptionsDialog(PivotTableModel pivotTable)
+    {
+        Result = FromPivotTable(pivotTable);
+        Title = "PivotTable Options";
+        Width = 430;
+        Height = 520;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+        Content = CreateContent();
+        Load(Result);
+    }
+
+    public static PivotTableOptionsDialogResult FromPivotTable(PivotTableModel pivotTable) =>
+        CreateResult(
+            pivotTable.ShowRowGrandTotals,
+            pivotTable.ShowColumnGrandTotals,
+            pivotTable.ShowSubtotals,
+            pivotTable.SubtotalPlacement,
+            pivotTable.RepeatItemLabels,
+            pivotTable.BlankLineAfterItems,
+            pivotTable.StyleName,
+            pivotTable.ShowRowHeaders,
+            pivotTable.ShowColumnHeaders,
+            pivotTable.ShowRowStripes,
+            pivotTable.ShowColumnStripes,
+            pivotTable.ReportLayout);
+
+    public static PivotTableOptionsDialogResult CreateResult(
+        bool showRowGrandTotals,
+        bool showColumnGrandTotals,
+        bool showSubtotals,
+        PivotSubtotalPlacement subtotalPlacement,
+        bool repeatItemLabels,
+        bool blankLineAfterItems,
+        string styleName,
+        bool showRowHeaders,
+        bool showColumnHeaders,
+        bool showRowStripes,
+        bool showColumnStripes,
+        PivotReportLayout reportLayout) =>
+        new(
+            showRowGrandTotals,
+            showColumnGrandTotals,
+            showSubtotals,
+            subtotalPlacement,
+            repeatItemLabels,
+            blankLineAfterItems,
+            string.IsNullOrWhiteSpace(styleName) ? "PivotStyleLight16" : styleName.Trim(),
+            showRowHeaders,
+            showColumnHeaders,
+            showRowStripes,
+            showColumnStripes,
+            reportLayout);
+
+    private StackPanel CreateContent()
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        AddSectionHeader(stack, "Layout");
+        AddCheckBox(stack, _rowGrandTotalsBox);
+        AddCheckBox(stack, _columnGrandTotalsBox);
+        AddCheckBox(stack, _subtotalsBox);
+        AddCombo(stack, "Subtotal placement", _subtotalPlacementBox, Enum.GetValues<PivotSubtotalPlacement>());
+        AddCombo(stack, "Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
+        AddCheckBox(stack, _repeatItemLabelsBox);
+        AddCheckBox(stack, _blankLineBox);
+
+        AddSectionHeader(stack, "Style");
+        AddCombo(stack, "PivotTable style", _styleBox, StyleNames);
+        AddCheckBox(stack, _rowHeadersBox);
+        AddCheckBox(stack, _columnHeadersBox);
+        AddCheckBox(stack, _rowStripesBox);
+        AddCheckBox(stack, _columnStripesBox);
+
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return stack;
+    }
+
+    private static void AddSectionHeader(Panel stack, string text) =>
+        stack.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+    private static void AddCheckBox(Panel stack, CheckBox checkBox)
+    {
+        checkBox.Margin = new Thickness(0, 0, 0, 6);
+        stack.Children.Add(checkBox);
+    }
+
+    private static void AddCombo<T>(Panel stack, string label, ComboBox comboBox, IEnumerable<T> items)
+    {
+        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
+        comboBox.ItemsSource = items;
+        comboBox.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(comboBox);
+    }
+
+    private void Load(PivotTableOptionsDialogResult result)
+    {
+        _rowGrandTotalsBox.IsChecked = result.ShowRowGrandTotals;
+        _columnGrandTotalsBox.IsChecked = result.ShowColumnGrandTotals;
+        _subtotalsBox.IsChecked = result.ShowSubtotals;
+        _subtotalPlacementBox.SelectedItem = result.SubtotalPlacement;
+        _repeatItemLabelsBox.IsChecked = result.RepeatItemLabels;
+        _blankLineBox.IsChecked = result.BlankLineAfterItems;
+        _reportLayoutBox.SelectedItem = result.ReportLayout;
+        _styleBox.SelectedItem = StyleNames.Contains(result.StyleName) ? result.StyleName : StyleNames[0];
+        _rowHeadersBox.IsChecked = result.ShowRowHeaders;
+        _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
+        _rowStripesBox.IsChecked = result.ShowRowStripes;
+        _columnStripesBox.IsChecked = result.ShowColumnStripes;
+    }
+
+    private void Accept()
+    {
+        Result = CreateResult(
+            _rowGrandTotalsBox.IsChecked == true,
+            _columnGrandTotalsBox.IsChecked == true,
+            _subtotalsBox.IsChecked == true,
+            _subtotalPlacementBox.SelectedItem is PivotSubtotalPlacement subtotalPlacement
+                ? subtotalPlacement
+                : PivotSubtotalPlacement.Bottom,
+            _repeatItemLabelsBox.IsChecked == true,
+            _blankLineBox.IsChecked == true,
+            _styleBox.SelectedItem?.ToString() ?? "PivotStyleLight16",
+            _rowHeadersBox.IsChecked == true,
+            _columnHeadersBox.IsChecked == true,
+            _rowStripesBox.IsChecked == true,
+            _columnStripesBox.IsChecked == true,
+            _reportLayoutBox.SelectedItem is PivotReportLayout reportLayout
+                ? reportLayout
+                : PivotReportLayout.Tabular);
+        DialogResult = true;
+    }
+}

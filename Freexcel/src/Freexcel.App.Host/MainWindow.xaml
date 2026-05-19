@@ -2897,15 +2897,15 @@
                                     <Button Content="Grand Totals" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGrandTotalsBtn_Click"
                                             local:RibbonTooltip.Title="Grand Totals"
                                             local:RibbonTooltip.KeyTip="G"
-                                            local:RibbonTooltip.Description="Cycle grand totals for the selected PivotTable."/>
+                                            local:RibbonTooltip.Description="Open PivotTable layout and style options."/>
                                     <Button Content="Subtotals" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotSubtotalsBtn_Click"
                                             local:RibbonTooltip.Title="Subtotals"
                                             local:RibbonTooltip.KeyTip="S"
-                                            local:RibbonTooltip.Description="Cycle subtotals for the selected PivotTable."/>
+                                            local:RibbonTooltip.Description="Open PivotTable layout and style options."/>
                                     <Button Content="Report Layout" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotReportLayoutBtn_Click"
                                             local:RibbonTooltip.Title="Report Layout"
                                             local:RibbonTooltip.KeyTip="L"
-                                            local:RibbonTooltip.Description="Switch PivotTable report layout options."/>
+                                            local:RibbonTooltip.Description="Open PivotTable layout and style options."/>
                                     <Button Content="Blank Rows" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBlankRowsBtn_Click"
                                             local:RibbonTooltip.Title="Blank Rows"
                                             local:RibbonTooltip.KeyTip="B"
@@ -2921,7 +2921,7 @@
                                         <Button Content="Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotStyleGalleryBtn_Click"
                                                 local:RibbonTooltip.Title="PivotTable Styles"
                                                 local:RibbonTooltip.KeyTip="Y"
-                                                local:RibbonTooltip.Description="Cycle PivotTable style gallery choices."/>
+                                                local:RibbonTooltip.Description="Open PivotTable layout and style options."/>
                                         <Button Content="Banded Rows" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotBandedRowsBtn_Click"
                                                 local:RibbonTooltip.Title="Banded Rows"
                                                 local:RibbonTooltip.KeyTip="R"

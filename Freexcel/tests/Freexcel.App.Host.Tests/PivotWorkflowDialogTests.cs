@@ -76,4 +76,77 @@ public sealed class PivotWorkflowDialogTests
                 .Be(new PivotChartTypeDialogResult(ChartType.StackedColumn));
         });
     }
+
+    [Fact]
+    public void PivotTableOptionsDialog_CreateResult_CapturesModeledLayoutAndStyleSettings()
+    {
+        var result = PivotTableOptionsDialog.CreateResult(
+            showRowGrandTotals: true,
+            showColumnGrandTotals: false,
+            showSubtotals: true,
+            subtotalPlacement: PivotSubtotalPlacement.Top,
+            repeatItemLabels: false,
+            blankLineAfterItems: true,
+            styleName: "  PivotStyleMedium9  ",
+            showRowHeaders: false,
+            showColumnHeaders: true,
+            showRowStripes: true,
+            showColumnStripes: false,
+            reportLayout: PivotReportLayout.Outline);
+
+        result.Should().Be(new PivotTableOptionsDialogResult(
+            true,
+            false,
+            true,
+            PivotSubtotalPlacement.Top,
+            false,
+            true,
+            "PivotStyleMedium9",
+            false,
+            true,
+            true,
+            false,
+            PivotReportLayout.Outline));
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_FromPivotTable_UsesCurrentPivotSettings()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            ShowRowGrandTotals = false,
+            ShowColumnGrandTotals = true,
+            ShowSubtotals = true,
+            SubtotalPlacement = PivotSubtotalPlacement.Top,
+            RepeatItemLabels = false,
+            BlankLineAfterItems = true,
+            ReportLayout = PivotReportLayout.Compact,
+            StyleName = "PivotStyleDark4",
+            ShowRowHeaders = true,
+            ShowColumnHeaders = false,
+            ShowRowStripes = true,
+            ShowColumnStripes = true
+        };
+
+        PivotTableOptionsDialog.FromPivotTable(pivotTable)
+            .Should()
+            .Be(new PivotTableOptionsDialogResult(
+                false,
+                true,
+                true,
+                PivotSubtotalPlacement.Top,
+                false,
+                true,
+                "PivotStyleDark4",
+                true,
+                false,
+                true,
+                true,
+                PivotReportLayout.Compact));
+    }
 }
