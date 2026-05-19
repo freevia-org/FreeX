@@ -119,6 +119,54 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void FillFromColumns_LastFirstWithComma_CombinesSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["Lovelace, Ada", "Hopper, Grace"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["Turing, Alan"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastWithPeriod_CombinesSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["ada", "lovelace"],
+                ["grace", "hopper"]
+            ],
+            ["ada.lovelace", "grace.hopper"],
+            [
+                ["alan", "turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alan.turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastInitials_BuildsInitials()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["AL", "GH"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["AT"], o => o.WithStrictOrdering());
+    }
+
     // ── Prefix / suffix trim ──────────────────────────────────────────────────
 
     [Fact]
