@@ -990,8 +990,11 @@
                                             </MenuItem>
                                             <MenuItem Header="Top/Bottom Rules" local:RibbonTooltip.KeyTip="T">
                                                 <MenuItem Header="Top 10 Items..."        local:RibbonTooltip.KeyTip="TT" Click="CfTop10MenuItem_Click"/>
+                                                <MenuItem Header="Top 10%..."             local:RibbonTooltip.KeyTip="TP" Click="CfTop10PercentMenuItem_Click"/>
                                                 <MenuItem Header="Bottom 10 Items..."     local:RibbonTooltip.KeyTip="TB" Click="CfBottom10MenuItem_Click"/>
+                                                <MenuItem Header="Bottom 10%..."          local:RibbonTooltip.KeyTip="BP" Click="CfBottom10PercentMenuItem_Click"/>
                                                 <MenuItem Header="Above Average..."       local:RibbonTooltip.KeyTip="TA" Click="CfAboveAvgMenuItem_Click"/>
+                                                <MenuItem Header="Below Average..."       local:RibbonTooltip.KeyTip="TL" Click="CfBelowAvgMenuItem_Click"/>
                                             </MenuItem>
                                             <MenuItem Header="Data Bars..."               local:RibbonTooltip.KeyTip="D" Click="CfDataBarMenuItem_Click"/>
                                             <MenuItem Header="Color Scales..."            local:RibbonTooltip.KeyTip="C" Click="CfColorScaleMenuItem_Click"/>
