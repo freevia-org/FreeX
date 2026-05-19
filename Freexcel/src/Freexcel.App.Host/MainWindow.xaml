@@ -140,7 +140,7 @@
         <!-- Ribbon tab item style — flat, green underline when selected -->
         <Style TargetType="TabItem">
             <Setter Property="Padding" Value="10,5"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Margin" Value="0"/>
@@ -610,7 +610,13 @@
                                                   local:RibbonTooltip.Title="Strikethrough"
                                                   local:RibbonTooltip.KeyTip="4"
                                                   local:RibbonTooltip.Description="Draw a line through the middle of the selected text.">
-                                        <TextBlock Text="S" TextDecorations="Strikethrough"/>
+                                        <TextBlock Text="S">
+                                            <TextBlock.TextDecorations>
+                                                <TextDecorationCollection>
+                                                    <TextDecoration Location="Strikethrough"/>
+                                                </TextDecorationCollection>
+                                            </TextBlock.TextDecorations>
+                                        </TextBlock>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
                                     <Button Width="30" Height="22" Style="{StaticResource RibbonIconButton}"
@@ -695,7 +701,6 @@
                                                   local:RibbonTooltip.KeyTip="AT"
                                                   local:RibbonTooltip.Description="Align the contents to the top of the cell.">
                                         <Grid Width="16" Height="16">
-                                            <Border BorderBrush="#111" BorderThickness="1"/>
                                             <StackPanel Margin="3,2,3,0" VerticalAlignment="Top">
                                                 <Rectangle Height="1" Fill="#111" Margin="0,0,0,2"/>
                                                 <Rectangle Height="1" Fill="#111" Margin="2,0,0,0"/>
@@ -709,7 +714,6 @@
                                                   local:RibbonTooltip.KeyTip="AM"
                                                   local:RibbonTooltip.Description="Align the contents between the top and bottom of the cell.">
                                         <Grid Width="16" Height="16">
-                                            <Border BorderBrush="#111" BorderThickness="1"/>
                                             <StackPanel Margin="3,0" VerticalAlignment="Center">
                                                 <Rectangle Height="1" Fill="#111" Margin="0,0,0,2"/>
                                                 <Rectangle Height="1" Fill="#111" Margin="2,0,0,0"/>
@@ -723,7 +727,6 @@
                                                   local:RibbonTooltip.KeyTip="AB"
                                                   local:RibbonTooltip.Description="Align the contents to the bottom of the cell.">
                                         <Grid Width="16" Height="16">
-                                            <Border BorderBrush="#111" BorderThickness="1"/>
                                             <StackPanel Margin="3,0,3,2" VerticalAlignment="Bottom">
                                                 <Rectangle Height="1" Fill="#111" Margin="0,0,0,2"/>
                                                 <Rectangle Height="1" Fill="#111" Margin="2,0,0,0"/>
@@ -1329,6 +1332,14 @@
                                         local:RibbonTooltip.Title="Area Chart"
                                         local:RibbonTooltip.KeyTip="A"
                                         local:RibbonTooltip.Description="Insert an area chart to show trends with filled areas."/>
+                                <Button Content="Radar" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartRadarMenuItem_Click"
+                                        local:RibbonTooltip.Title="Radar Chart"
+                                        local:RibbonTooltip.KeyTip="RD"
+                                        local:RibbonTooltip.Description="Insert a radar chart to compare multiple values across categories."/>
+                                <Button Content="Stock" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStockMenuItem_Click"
+                                        local:RibbonTooltip.Title="Stock Chart"
+                                        local:RibbonTooltip.KeyTip="ST"
+                                        local:RibbonTooltip.Description="Insert a stock chart from high-low-close or open-high-low-close data."/>
                                 <Button Content="Data Labels" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
                                         local:RibbonTooltip.Title="Data Labels"
                                         local:RibbonTooltip.KeyTip="DL"
@@ -1639,6 +1650,10 @@
                                         local:RibbonTooltip.Title="Rotate Picture"
                                         local:RibbonTooltip.KeyTip="PR"
                                         local:RibbonTooltip.Description="Rotate the selected or most recent picture."/>
+                                <Button Content="Crop"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
+                                        local:RibbonTooltip.Title="Crop Picture"
+                                        local:RibbonTooltip.KeyTip="CR"
+                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge."/>
                             </UniformGrid>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Objects" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1718,6 +1733,18 @@
                                         local:RibbonTooltip.Title="Object Outline"
                                         local:RibbonTooltip.KeyTip="O"
                                         local:RibbonTooltip.Description="Change the outline color of the selected drawing object."/>
+                                <Button Content="Crop" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
+                                        local:RibbonTooltip.Title="Crop Picture"
+                                        local:RibbonTooltip.KeyTip="C"
+                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge."/>
+                                <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
+                                        local:RibbonTooltip.Title="Shape Gradient"
+                                        local:RibbonTooltip.KeyTip="G"
+                                        local:RibbonTooltip.Description="Apply a two-color gradient fill to the selected shape."/>
+                                <Button Content="Effects" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectEffectsBtn_Click"
+                                        local:RibbonTooltip.Title="Shape Effects"
+                                        local:RibbonTooltip.KeyTip="FX"
+                                        local:RibbonTooltip.Description="Toggle a shadow effect on the selected shape."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Format" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1979,6 +2006,10 @@
                                         local:RibbonTooltip.Title="Define Name"
                                         local:RibbonTooltip.KeyTip="DN"
                                         local:RibbonTooltip.Description="Assign a name to a cell or range so you can refer to it in formulas."/>
+                                <Button Content="Create from Selection" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CreateNamesFromSelectionBtn_Click"
+                                        local:RibbonTooltip.Title="Create from Selection"
+                                        local:RibbonTooltip.KeyTip="CS"
+                                        local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
                                 <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
                                         local:RibbonTooltip.Title="Use in Formula"
                                         local:RibbonTooltip.KeyTip="UF"
@@ -2131,6 +2162,10 @@
                                             <TextBlock Text="Clear Filter" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
+                                    <Button Content="Advanced" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
+                                            local:RibbonTooltip.Title="Advanced Filter"
+                                            local:RibbonTooltip.KeyTip="A"
+                                            local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere."/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Sort &amp; Filter" Style="{StaticResource GroupLbl}"/></Border>
@@ -2810,6 +2845,9 @@
                                 <CheckBox Content="{Binding Caption}"
                                           IsChecked="{Binding IsChecked}"
                                           Click="PivotAvailableFieldCheckBox_Click"
+                                          local:RibbonTooltip.Title="{Binding Caption}"
+                                          local:RibbonTooltip.KeyTip="F"
+                                          local:RibbonTooltip.Description="Add or remove this field from the active PivotTable layout."
                                           AutomationProperties.Name="{Binding Caption}"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -2994,6 +3032,7 @@
                                             <Button Content="Clear Filter"
                                                     Tag="{Binding Name}"
                                                     Click="SlicerClearButton_Click"
+                                                    AutomationProperties.Name="Clear Filter"
                                                     Margin="0,6,0,0"
                                                     MinHeight="24"/>
                                         </StackPanel>
@@ -3015,8 +3054,10 @@
                                                 <TextBox x:Name="TimelineEndBox" Text="{Binding SelectedEndDate, UpdateSourceTrigger=PropertyChanged}" Margin="3,0,0,0"/>
                                             </UniformGrid>
                                             <UniformGrid Columns="2" Margin="0,6,0,0">
-                                                <Button Content="Apply" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"/>
-                                                <Button Content="Clear" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"/>
+                                            <Button Content="Apply" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"
+                                                    AutomationProperties.Name="Apply timeline filter"/>
+                                            <Button Content="Clear" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"
+                                                    AutomationProperties.Name="Clear timeline filter"/>
                                             </UniformGrid>
                                         </StackPanel>
                                     </Border>
@@ -3121,7 +3162,7 @@
                                                 <RowDefinition Height="Auto"/>
                                                 <RowDefinition Height="2"/>
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="{Binding Name}" FontSize="12">
+                                            <TextBlock Text="{Binding Name}" FontSize="13">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="FontWeight" Value="Normal"/>
@@ -3225,6 +3266,34 @@
         <!-- ═══════════════════════════════════════════════════════════════
              START SCREEN — full-window overlay shown at launch / via ← Home
              ═══════════════════════════════════════════════════════════════ -->
+        <Border x:Name="OpenProgressOverlay"
+                Grid.Row="1" Grid.RowSpan="5"
+                Panel.ZIndex="260"
+                Background="#80FFFFFF"
+                Visibility="Collapsed">
+            <Border Width="360" Padding="22" Background="White"
+                    BorderBrush="#D0D0D0" BorderThickness="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="OpenProgressTitle"
+                               Text="Opening workbook"
+                               FontSize="16" Foreground="#1F1F1F"
+                               Margin="0,0,0,10"/>
+                    <ProgressBar x:Name="OpenProgressBar"
+                                 Height="5"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 IsIndeterminate="True"
+                                 Foreground="#217346"
+                                 AutomationProperties.Name="Opening Progress"/>
+                    <TextBlock x:Name="OpenProgressDetail"
+                               Text="Reading file..."
+                               FontSize="12" Foreground="#666"
+                               Margin="0,10,0,0"/>
+                </StackPanel>
+            </Border>
+        </Border>
+
         <Grid x:Name="StartScreenOverlay"
               Grid.Row="1" Grid.RowSpan="5"
               Panel.ZIndex="200"
@@ -3515,6 +3584,7 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="150"/>
+                                                <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal">
                                                 <Border Width="26" Height="30" Background="#217346"
@@ -3537,6 +3607,17 @@
                                                        Text="{Binding LastOpenedText}"
                                                        FontSize="12" Foreground="#666"
                                                        VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Width="24" Height="24"
+                                                    Style="{StaticResource RibbonBtn}"
+                                                    Click="SsPinItem_Click"
+                                                    local:RibbonTooltip.Title="Pin File"
+                                                    local:RibbonTooltip.KeyTip="PI"
+                                                    local:RibbonTooltip.Description="Pin or unpin this workbook in the recent files list."
+                                                    AutomationProperties.Name="Pin file"
+                                                    ToolTip="Pin to list">
+                                                <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="12" HorizontalAlignment="Center"/>
+                                            </Button>
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
@@ -3579,6 +3660,7 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="150"/>
+                                                <ColumnDefinition Width="36"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Orientation="Horizontal">
                                                 <Border Width="26" Height="30" Background="#217346"
@@ -3601,6 +3683,17 @@
                                                        Text="{Binding LastOpenedText}"
                                                        FontSize="12" Foreground="#666"
                                                        VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2" Width="24" Height="24"
+                                                    Style="{StaticResource RibbonBtn}"
+                                                    Click="SsUnpinItem_Click"
+                                                    local:RibbonTooltip.Title="Unpin File"
+                                                    local:RibbonTooltip.KeyTip="UP"
+                                                    local:RibbonTooltip.Description="Remove this workbook from the pinned files list."
+                                                    AutomationProperties.Name="Unpin file"
+                                                    ToolTip="Unpin from list">
+                                                <TextBlock Text="&#xE77A;" FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="12" HorizontalAlignment="Center"/>
+                                            </Button>
                                         </Grid>
                                     </Button>
                                 </DataTemplate>

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using Freexcel.Core.Model;
@@ -14,6 +15,8 @@ namespace Freexcel.Core.IO;
 public sealed class XlsxFileAdapter : IFileAdapter
 {
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
+    private static readonly FieldInfo? XlCellValueNumberField =
+        typeof(XLCellValue).GetField("_value", BindingFlags.Instance | BindingFlags.NonPublic);
 
     private const int CategoryAxisId = 48650112;
     private const int ValueAxisId = 48672768;
@@ -84,13 +87,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     cell = Cell.FromFormula(xlCell.FormulaA1);
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
-                    var cached = MapValue(xlCell.Value);
+                    var cached = MapValue(xlCell);
                     if (cached is not BlankValue)
                         cell.Value = cached;
                 }
                 else
                 {
-                    cell = Cell.FromValue(MapValue(xlCell.Value));
+                    cell = Cell.FromValue(MapValue(xlCell));
                 }
 
                 var style = MapStyle(xlCell.Style, workbook.Theme);
@@ -199,7 +202,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         Kind = PictureKind.Image,
                         ImageBytes = picturePart.ImageBytes.ToArray(),
                         ContentType = picturePart.ContentType,
-                        AltText = picturePart.AltText
+                        AltText = picturePart.AltText,
+                        CropLeft = picturePart.CropLeft,
+                        CropTop = picturePart.CropTop,
+                        CropRight = picturePart.CropRight,
+                        CropBottom = picturePart.CropBottom
                     };
                     ApplyPictureAnchor(picture, picturePart.Anchor, sheet);
                     sheet.Pictures.Add(picture);
@@ -233,7 +240,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         AltText = shapePart.AltText,
                         RotationDegrees = shapePart.RotationDegrees,
                         FillColor = shapePart.FillColor,
-                        OutlineColor = shapePart.OutlineColor
+                        OutlineColor = shapePart.OutlineColor,
+                        GradientFillEndColor = shapePart.GradientFillEndColor,
+                        HasShadowEffect = shapePart.HasShadowEffect
                     };
                     ApplyDrawingShapeAnchor(shape, shapePart.Anchor, sheet);
                     sheet.DrawingShapes.Add(shape);
@@ -281,6 +290,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (splitColumn > 0)
                     sheet.SplitColumn = splitColumn;
             }
+            sheet.ViewTopRow = layout?.ViewTopRow;
+            sheet.ViewLeftCol = layout?.ViewLeftCol;
+            sheet.ActiveRow = layout?.ActiveRow;
+            sheet.ActiveCol = layout?.ActiveCol;
 
             try { LoadPrintArea(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
@@ -403,6 +416,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string? PaneState,
         uint? PaneRowSplit,
         uint? PaneColumnSplit,
+        uint? ViewTopRow,
+        uint? ViewLeftCol,
+        uint? ActiveRow,
+        uint? ActiveCol,
         WorksheetBackgroundImage? BackgroundImage,
         Dictionary<uint, int> RowOutlineLevels,
         Dictionary<uint, int> ColOutlineLevels,
@@ -422,7 +439,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         byte[] ImageBytes,
         string ContentType,
         string? AltText,
-        XlsxDrawingAnchor? Anchor);
+        XlsxDrawingAnchor? Anchor,
+        double CropLeft,
+        double CropTop,
+        double CropRight,
+        double CropBottom);
 
     private sealed record XlsxTextBoxPackagePart(
         string Text,
@@ -438,7 +459,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XlsxDrawingAnchor? Anchor,
         double RotationDegrees,
         CellColor? FillColor,
-        CellColor? OutlineColor);
+        CellColor? OutlineColor,
+        CellColor? GradientFillEndColor,
+        bool HasShadowEffect);
 
     private sealed record XlsxDrawingAnchor(
         uint FromRowZeroBased,
@@ -2100,6 +2123,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
         var pane = sheetView?.Element(worksheetNs + "pane");
+        var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
+        var activeCell = ParseOptionalCellReference(
+            sheetView?
+                .Elements(worksheetNs + "selection")
+                .Select(selection => selection.Attribute("activeCell")?.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
         var background = ReadWorksheetBackground(archive, worksheetPath, worksheetXml);
         var chartParts = ReadWorksheetChartParts(archive, worksheetPath, worksheetXml);
         var pictureParts = ReadWorksheetPictureParts(archive, worksheetPath, worksheetXml);
@@ -2126,6 +2155,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
+            viewTopLeft?.Row,
+            viewTopLeft?.Col,
+            activeCell?.Row,
+            activeCell?.Col,
             background,
             rowOutlineLevels,
             colOutlineLevels,
@@ -2503,6 +2536,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return null;
     }
 
+    private static CellAddress? ParseOptionalCellReference(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return null;
+
+        return CellAddress.TryParse(reference.Split(':')[0], SheetId.New(), out var address)
+            ? address
+            : null;
+    }
+
     private static bool IsTruthy(string? value) =>
         value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
@@ -2734,15 +2777,36 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Descendants(spreadsheetDrawingNs + "cNvPr")
                 .Select(element => element.Attribute("descr")?.Value)
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            var sourceRectangle = pictureElement
+                .Element(spreadsheetDrawingNs + "blipFill")?
+                .Element(drawingNs + "srcRect");
 
             pictures.Add(new XlsxPicturePackagePart(
                 ms.ToArray(),
                 GetContentTypeFromPath(imagePath),
                 altText,
-                anchor));
+                anchor,
+                ReadSourceRectangleRatio(sourceRectangle, "l"),
+                ReadSourceRectangleRatio(sourceRectangle, "t"),
+                ReadSourceRectangleRatio(sourceRectangle, "r"),
+                ReadSourceRectangleRatio(sourceRectangle, "b")));
         }
 
         return pictures;
+    }
+
+    private static double ReadSourceRectangleRatio(XElement? sourceRectangle, string attributeName)
+    {
+        if (!double.TryParse(
+                sourceRectangle?.Attribute(attributeName)?.Value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var value))
+        {
+            return 0;
+        }
+
+        return Math.Clamp(value / 100000d, 0, 1);
     }
 
     private static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadWorksheetShapeParts(
@@ -2779,8 +2843,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
             var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
             var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
-            var fillColor = ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "solidFill"), drawingNs);
+            var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
+            var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "solidFill"), drawingNs);
             var outlineColor = ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill"), drawingNs);
+            var hasShadowEffect = spPr?
+                .Element(drawingNs + "effectLst")?
+                .Element(drawingNs + "outerShdw") is not null;
             var text = string.Concat(shapeElement
                 .Element(spreadsheetDrawingNs + "txBody")?
                 .Descendants(drawingNs + "t")
@@ -2797,7 +2865,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Attribute("prst")?
                 .Value;
             if (ToDrawingShapeKind(preset) is { } kind)
-                shapes.Add(new XlsxShapePackagePart(kind, altText, anchor, rotation, fillColor, outlineColor));
+                shapes.Add(new XlsxShapePackagePart(
+                    kind,
+                    altText,
+                    anchor,
+                    rotation,
+                    fillColor,
+                    outlineColor,
+                    gradientFill.EndColor,
+                    hasShadowEffect));
         }
 
         return (textBoxes, shapes);
@@ -2855,6 +2931,30 @@ public sealed class XlsxFileAdapter : IFileAdapter
                byte.TryParse(value[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)
             ? new CellColor(r, g, b)
             : null;
+    }
+
+    private static (CellColor? StartColor, CellColor? EndColor) ReadDrawingGradientFillColors(
+        XElement? gradientFill,
+        XNamespace drawingNs)
+    {
+        var colors = gradientFill?
+            .Element(drawingNs + "gsLst")?
+            .Elements(drawingNs + "gs")
+            .Select(gs => new
+            {
+                Position = int.TryParse(gs.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pos)
+                    ? pos
+                    : 0,
+                Color = ReadDrawingSolidFillColor(gs, drawingNs)
+            })
+            .Where(item => item.Color is not null)
+            .OrderBy(item => item.Position)
+            .Select(item => item.Color)
+            .ToList();
+
+        return colors is { Count: >= 2 }
+            ? (colors[0], colors[^1])
+            : (colors?.FirstOrDefault(), null);
     }
 
     private static DrawingShapeKind? ToDrawingShapeKind(string? preset) =>
@@ -3453,6 +3553,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
                 sheet.ZoomPercent != 100 ||
                 sheet.ShowFormulas ||
+                sheet.ViewTopRow.HasValue ||
+                sheet.ViewLeftCol.HasValue ||
+                sheet.ActiveRow.HasValue ||
+                sheet.ActiveCol.HasValue ||
                 (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
                  (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))))
         {
@@ -5789,6 +5893,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
                     new XElement(drawingNs + "blip", new XAttribute(relNs + "embed", imageRelId)),
+                    HasPictureCrop(picture)
+                        ? new XElement(drawingNs + "srcRect",
+                            new XAttribute("l", ToSourceRectanglePercent(picture.CropLeft)),
+                            new XAttribute("t", ToSourceRectanglePercent(picture.CropTop)),
+                            new XAttribute("r", ToSourceRectanglePercent(picture.CropRight)),
+                            new XAttribute("b", ToSourceRectanglePercent(picture.CropBottom)))
+                        : null,
                     new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                 new XElement(spreadsheetDrawingNs + "spPr",
                     new XElement(drawingNs + "xfrm"),
@@ -5796,6 +5907,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
             new XElement(spreadsheetDrawingNs + "clientData"));
+
+    private static bool HasPictureCrop(PictureModel picture) =>
+        picture.CropLeft > 0 ||
+        picture.CropTop > 0 ||
+        picture.CropRight > 0 ||
+        picture.CropBottom > 0;
+
+    private static string ToSourceRectanglePercent(double ratio) =>
+        ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000d)).ToString(CultureInfo.InvariantCulture);
 
     private static XElement ToOneCellTextBoxAnchor(
         TextBoxModel textBox,
@@ -5856,7 +5976,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     shape.OutlineThemeColor,
                     shape.OutlineColor,
                     spreadsheetDrawingNs,
-                    drawingNs)),
+                    drawingNs,
+                    shape.GradientFillEndColor,
+                    shape.HasShadowEffect)),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
     private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
@@ -5874,7 +5996,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         WorkbookThemeColorReference? outlineThemeColor,
         CellColor? outlineColor,
         XNamespace spreadsheetDrawingNs,
-        XNamespace drawingNs)
+        XNamespace drawingNs,
+        CellColor? gradientFillEndColor = null,
+        bool hasShadowEffect = false)
     {
         var rotation = NormalizeRotation(rotationDegrees);
         return new XElement(spreadsheetDrawingNs + "spPr",
@@ -5883,9 +6007,36 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
-            ToSolidFill(fillThemeColor, fillColor, drawingNs),
-            ToLineProperties(outlineThemeColor, outlineColor, drawingNs));
+            gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
+                ? ToGradientFill(gradientStartColor, gradientEndColor, drawingNs)
+                : ToSolidFill(fillThemeColor, fillColor, drawingNs),
+            ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
+            hasShadowEffect ? ToOuterShadowEffect(drawingNs) : null);
     }
+
+    private static XElement ToGradientFill(CellColor startColor, CellColor endColor, XNamespace drawingNs) =>
+        new(drawingNs + "gradFill",
+            new XElement(drawingNs + "gsLst",
+                new XElement(drawingNs + "gs",
+                    new XAttribute("pos", "0"),
+                    ToRgbColorElement(startColor, drawingNs)),
+                new XElement(drawingNs + "gs",
+                    new XAttribute("pos", "100000"),
+                    ToRgbColorElement(endColor, drawingNs))),
+            new XElement(drawingNs + "lin",
+                new XAttribute("ang", "5400000"),
+                new XAttribute("scaled", "1")));
+
+    private static XElement ToOuterShadowEffect(XNamespace drawingNs) =>
+        new(drawingNs + "effectLst",
+            new XElement(drawingNs + "outerShdw",
+                new XAttribute("blurRad", "40000"),
+                new XAttribute("dist", "20000"),
+                new XAttribute("dir", "5400000"),
+                ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
+
+    private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>
+        new(drawingNs + "srgbClr", new XAttribute("val", FormatThemeColor(color)));
 
     private static XElement? ToLineProperties(
         WorkbookThemeColorReference? outlineThemeColor,
@@ -7347,6 +7498,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
                 sheet.ZoomPercent != 100 ||
                 sheet.ShowFormulas ||
+                sheet.ViewTopRow.HasValue ||
+                sheet.ViewLeftCol.HasValue ||
+                sheet.ActiveRow.HasValue ||
+                sheet.ActiveCol.HasValue ||
                 (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
                  (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)))
             .ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -7399,6 +7554,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         sheetView.SetAttributeValue("showRuler", sheet.ShowRulers ? null : "0");
         sheetView.SetAttributeValue("zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent);
         sheetView.SetAttributeValue("showFormulas", sheet.ShowFormulas ? "1" : null);
+        sheetView.SetAttributeValue("topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
+        if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
+        {
+            sheetView.Elements(worksheetNs + "selection").Remove();
+            sheetView.Add(new XElement(
+                worksheetNs + "selection",
+                new XAttribute("activeCell", activeCell),
+                new XAttribute("sqref", activeCell)));
+        }
 
         if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
             (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
@@ -7417,15 +7581,62 @@ public sealed class XlsxFileAdapter : IFileAdapter
         worksheetXml.Save(stream);
     }
 
+    private static string? ToOptionalA1(uint? row, uint? col)
+    {
+        return row is > 0 and <= CellAddress.MaxRow &&
+               col is > 0 and <= CellAddress.MaxCol
+            ? $"{CellAddress.NumberToColumnName(col.Value)}{row.Value}"
+            : null;
+    }
+
+    private static ScalarValue MapValue(IXLCell xlCell)
+    {
+        if (xlCell.Value.IsDateTime)
+        {
+            try { return DateTimeValue.FromDateTime(xlCell.GetDateTime()); }
+            catch (ArgumentException)
+            {
+                return TryGetUnifiedNumber(xlCell.Value, out var serial)
+                    ? new NumberValue(serial)
+                    : ErrorValue.Num;
+            }
+        }
+
+        return MapValue(xlCell.Value);
+    }
+
     private static ScalarValue MapValue(XLCellValue xlValue)
     {
         if (xlValue.IsBlank) return BlankValue.Instance;
         if (xlValue.IsNumber) return new NumberValue(xlValue.GetNumber());
         if (xlValue.IsText) return new TextValue(xlValue.GetText());
         if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
-        if (xlValue.IsDateTime) return DateTimeValue.FromDateTime(xlValue.GetDateTime());
+        if (xlValue.IsDateTime)
+        {
+            try { return DateTimeValue.FromDateTime(xlValue.GetDateTime()); }
+            catch (ArgumentException)
+            {
+                try { return new NumberValue(xlValue.GetNumber()); }
+                catch { return ErrorValue.Num; }
+            }
+        }
         if (xlValue.IsError) return MapErrorValue(xlValue.GetError());
         return new TextValue(xlValue.ToString());
+    }
+
+    private static bool TryGetUnifiedNumber(XLCellValue value, out double number)
+    {
+        number = 0;
+        if (!value.IsUnifiedNumber || XlCellValueNumberField is null)
+            return false;
+
+        if (XlCellValueNumberField.GetValue(value) is double raw)
+        {
+            number = raw;
+            return true;
+        }
+
+        return false;
     }
 
     private static XLCellValue MapValueInverse(ScalarValue value) => value switch

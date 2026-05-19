@@ -18,8 +18,8 @@ public sealed class ViewportService : IViewportService
         }
 
         var cells = new List<DisplayCell>();
-        var rowMetrics = BuildRowMetrics(sheet, request.TopRow, CellAddress.MaxRow, request.AvailableHeight);
-        var colMetrics = BuildColMetrics(sheet, request.LeftCol, CellAddress.MaxCol, request.AvailableWidth);
+        var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
+        var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth);
 
         // Pre-compute CF aggregates (average/min/max) once per frame rather than per cell.
         var cfCache = PrecomputeCfAggregates(sheet);
@@ -186,6 +186,46 @@ public sealed class ViewportService : IViewportService
     private static bool IsRowHidden(Sheet sheet, uint row) =>
         sheet.IsRowEffectivelyHidden(row);
 
+    private static List<RowMetric> BuildFrozenAwareRowMetrics(Sheet sheet, uint startRow, double availableHeight)
+    {
+        var frozenRows = Math.Min(sheet.FrozenRows, CellAddress.MaxRow);
+        if (frozenRows == 0)
+            return BuildRowMetrics(sheet, startRow, CellAddress.MaxRow, availableHeight);
+
+        var pinnedRows = BuildRowMetrics(sheet, 1, frozenRows, availableHeight);
+        var pinnedHeight = pinnedRows.Sum(row => row.Height);
+        var remainingHeight = Math.Max(0, availableHeight - pinnedHeight);
+        var bodyStart = Math.Max(startRow, frozenRows + 1);
+        var bodyRows = remainingHeight > 0 && bodyStart <= CellAddress.MaxRow
+            ? OffsetRows(BuildRowMetrics(sheet, bodyStart, CellAddress.MaxRow, remainingHeight), pinnedHeight)
+            : [];
+
+        return pinnedRows.Concat(bodyRows).ToList();
+    }
+
+    private static List<ColMetric> BuildFrozenAwareColMetrics(Sheet sheet, uint startCol, double availableWidth)
+    {
+        var frozenCols = Math.Min(sheet.FrozenCols, CellAddress.MaxCol);
+        if (frozenCols == 0)
+            return BuildColMetrics(sheet, startCol, CellAddress.MaxCol, availableWidth);
+
+        var pinnedColumns = BuildColMetrics(sheet, 1, frozenCols, availableWidth);
+        var pinnedWidth = pinnedColumns.Sum(column => column.Width);
+        var remainingWidth = Math.Max(0, availableWidth - pinnedWidth);
+        var bodyStart = Math.Max(startCol, frozenCols + 1);
+        var bodyColumns = remainingWidth > 0 && bodyStart <= CellAddress.MaxCol
+            ? OffsetColumns(BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth), pinnedWidth)
+            : [];
+
+        return pinnedColumns.Concat(bodyColumns).ToList();
+    }
+
+    private static List<RowMetric> OffsetRows(IReadOnlyList<RowMetric> rows, double topOffset) =>
+        rows.Select(row => row with { TopOffset = row.TopOffset + topOffset }).ToList();
+
+    private static List<ColMetric> OffsetColumns(IReadOnlyList<ColMetric> columns, double leftOffset) =>
+        columns.Select(column => column with { LeftOffset = column.LeftOffset + leftOffset }).ToList();
+
     private static List<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
     {
         var rowMetrics = new List<RowMetric>();
@@ -193,6 +233,10 @@ public sealed class ViewportService : IViewportService
             return rowMetrics;
 
         var maxRow = Math.Min(endRow, CellAddress.MaxRow);
+        var terminalRows = BuildTerminalRowMetrics(sheet, startRow, maxRow, availableHeight);
+        if (terminalRows is not null)
+            return terminalRows;
+
         double topOffset = 0;
         for (uint row = startRow; row <= maxRow; row++)
         {
@@ -213,6 +257,10 @@ public sealed class ViewportService : IViewportService
             return colMetrics;
 
         var maxCol = Math.Min(endCol, CellAddress.MaxCol);
+        var terminalColumns = BuildTerminalColMetrics(sheet, startCol, maxCol, availableWidth);
+        if (terminalColumns is not null)
+            return terminalColumns;
+
         double leftOffset = 0;
         for (uint col = startCol; col <= maxCol; col++)
         {
@@ -224,6 +272,98 @@ public sealed class ViewportService : IViewportService
         }
 
         return colMetrics;
+    }
+
+    private static List<RowMetric>? BuildTerminalRowMetrics(
+        Sheet sheet,
+        uint requestedStartRow,
+        uint maxRow,
+        double availableHeight)
+    {
+        if (availableHeight <= 0 || maxRow < CellAddress.MaxRow)
+            return null;
+
+        var rows = new List<(uint Row, double Height)>();
+        double totalHeight = 0;
+        for (uint row = maxRow; row >= 1; row--)
+        {
+            if (!IsRowHidden(sheet, row))
+            {
+                var height = sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
+                rows.Add((row, height));
+                totalHeight += height;
+                if (totalHeight >= availableHeight)
+                    break;
+            }
+
+            if (row == 1)
+                break;
+        }
+
+        rows.Reverse();
+        if (rows.Count == 0)
+            return null;
+
+        var firstTerminalRow = rows[0].Row;
+        var terminalThreshold = firstTerminalRow > 1 ? firstTerminalRow - 1 : 1;
+        if (requestedStartRow < terminalThreshold)
+            return null;
+
+        var metrics = new List<RowMetric>(rows.Count);
+        var topOffset = availableHeight - totalHeight;
+        foreach (var (row, height) in rows)
+        {
+            metrics.Add(new RowMetric(row, height, topOffset));
+            topOffset += height;
+        }
+
+        return metrics;
+    }
+
+    private static List<ColMetric>? BuildTerminalColMetrics(
+        Sheet sheet,
+        uint requestedStartCol,
+        uint maxCol,
+        double availableWidth)
+    {
+        if (availableWidth <= 0 || maxCol < CellAddress.MaxCol)
+            return null;
+
+        var columns = new List<(uint Col, double Width)>();
+        double totalWidth = 0;
+        for (uint col = maxCol; col >= 1; col--)
+        {
+            if (!sheet.IsColEffectivelyHidden(col))
+            {
+                var width = sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
+                columns.Add((col, width));
+                totalWidth += width;
+                if (totalWidth >= availableWidth)
+                    break;
+            }
+
+            if (col == 1)
+                break;
+        }
+
+        columns.Reverse();
+        if (columns.Count == 0)
+            return null;
+
+        var firstTerminalColumn = columns[0].Col;
+        var terminalThreshold = firstTerminalColumn > 1 ? firstTerminalColumn - 1 : 1;
+        if (requestedStartCol < terminalThreshold)
+            return null;
+
+        var metrics = new List<ColMetric>(columns.Count);
+        var leftOffset = availableWidth - totalWidth;
+        foreach (var (col, width) in columns)
+        {
+            metrics.Add(new ColMetric(col, width, leftOffset));
+            leftOffset += width;
+        }
+
+        return metrics;
     }
 
     private static List<DisplayCell> BuildSplitPaneCells(

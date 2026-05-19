@@ -9,7 +9,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageInfoVersion_MatchesAboutDialogVersion()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document
@@ -22,7 +22,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageInfo_DoesNotAdvertiseCloudDocumentManagement()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var cloudCopy = document
@@ -39,7 +39,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageInfo_DoesNotAdvertiseDocumentInspector()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var inspectorCopy = document
@@ -54,9 +54,24 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageRecentList_ProvidesVisiblePinAndUnpinButtons()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var visibleButtons = document
+            .Descendants(presentation + "Button")
+            .Select(element => element.Attribute("Click")?.Value)
+            .ToList();
+
+        visibleButtons.Should().Contain("SsPinItem_Click", "pinning should not be hidden behind a context menu");
+        visibleButtons.Should().Contain("SsUnpinItem_Click", "pinned files need a visible unpin affordance");
+    }
+
+    [Fact]
     public void BackstageAccountEntryPoint_DisclosesLocalAccountDecision()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -73,7 +88,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageExportEntryPoint_DisclosesXpsBackedPdfExport()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -91,7 +106,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ReviewShowComments_DisclosesDialogListBehavior()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -107,7 +122,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ReviewCommentCommands_DiscloseSimpleCellNotesRatherThanThreadedComments()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -140,7 +155,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void SpellingTooltip_DisclosesKnownCorrectionsBaseline()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -156,7 +171,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void AllowEditRangesTooltip_DisclosesAddRangePromptWorkflow()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -173,7 +188,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void AltTextTooltip_DisclosesSelectedCellAnchoredObjectTarget()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -187,7 +202,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ArrangeAllTooltip_DisclosesStoredArrangementState()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -203,7 +218,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ZoomToSelectionTooltip_DisclosesGridViewportFit()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -218,7 +233,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void SplitTooltip_DisclosesFrozenPaneCleanup()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -232,7 +247,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void FreezePanesTooltip_DisclosesSplitPaneCleanup()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -246,7 +261,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ProtectSheetTooltip_DisclosesSetProtectionWorkflow()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -263,7 +278,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ProtectWorkbookTooltip_DisclosesStructureProtectionWorkflow()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -279,7 +294,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void TitledRibbonControls_HaveAltKeyTips()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
 
         var missing = document
@@ -295,7 +310,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonTabs_DoNotReuseCommandKeyTipsWithinTheSameTab()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -316,7 +331,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void KeyedRibbonDropDowns_HaveKeyTipsForDirectMenuItems()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -336,7 +351,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void AllContextMenuCommands_HaveKeyTipsForDirectMenuItems()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -353,7 +368,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageCommandButtons_HaveAltKeyTips()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -379,7 +394,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageMouseOnlyCommands_AreNotUsedForRecentPinnedTabs()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -402,7 +417,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageCommands_DoNotReuseKeyTips()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -426,7 +441,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void StatusBarZoomCommandButtons_HaveAltKeyTips()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -443,7 +458,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonCheckBoxCommands_HaveTooltipTitlesDescriptionsAndKeyTips()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -466,7 +481,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonComboBoxCommands_HaveAccessibleNamesMatchingTooltipTitles()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -485,7 +500,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void NonRibbonTooltipClickButtons_HaveAccessibleNames()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -507,7 +522,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void StatusBarZoomSlider_HasAccessibleRangeMetadata()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -536,7 +551,7 @@ public sealed class MainWindowXamlKeyTipTests
         string expectedName,
         string expectedHelpText)
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -556,7 +571,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void BackstageSearchBox_HasAccessibleNameAndHelpText()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -581,7 +596,7 @@ public sealed class MainWindowXamlKeyTipTests
         string expectedName,
         string expectedHelpText)
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -601,7 +616,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void NestedRibbonMenuItems_HaveStagedKeyTips()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -620,7 +635,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonMenus_DoNotReuseKeyTipsWithinTheSameMenu()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -642,7 +657,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void DeferredCommandButtons_DescribeDeferredStatusInTooltip()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -661,7 +676,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemesButton_OpensWorkbookThemeMenu()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -682,7 +697,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeColorsButton_OpensColorSchemeMenu()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -700,7 +715,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeFontsButton_OpensFontPairMenu()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -718,7 +733,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PageLayoutThemeEffectsButton_OpensEffectSetMenu()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -736,7 +751,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ShareCommandButtons_DiscloseExcludedStatusBeforeClick()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -757,7 +772,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ExternalTemplateEntryPoint_DisclosesExcludedStatusBeforeClick()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -782,7 +797,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -798,7 +813,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableRefreshEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -814,7 +829,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableShowDetailsEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -830,7 +845,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("e.ClickCount == 2");
         source.Should().Contain("TryShowPivotTableDetails(showMessage: false)");
@@ -839,7 +854,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotChartEntryPoint_IsAvailableOnInsertRibbon()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -856,7 +871,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_HasExcelLikeZonesAndCommands()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -892,7 +907,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("RefreshPivotFieldListPane()");
         source.Should().Contain("ConfigurePivotTableLayoutCommand");
@@ -903,7 +918,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_ExposesFieldDropdownCommands()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -932,14 +947,14 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableValueFieldSettings_UsesExcelStyleDialog()
     {
-        var mainWindowSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
-        var dialogXaml = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var dialogXaml = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         mainWindowSource.Should().Contain("new PivotValueFieldSettingsDialog(current, headers)");
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
-        var dialogSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
         dialogSource.Should().Contain("% of Grand Total");
         dialogSource.Should().Contain("% of Row Total");
         dialogSource.Should().Contain("% of Column Total");
@@ -972,8 +987,8 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_SupportsDragDropReordering()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -998,8 +1013,8 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableAvailableFields_ExposeExcelStyleCheckboxToggles()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -1022,8 +1037,8 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableSelectItems_UsesCheckboxFilterDialog()
     {
-        var mainWindowSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
-        var dialogXaml = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
+        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var dialogXaml = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -1046,9 +1061,9 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableRuleFilters_UseDialogChrome()
     {
-        var mainWindowSource = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
-        var labelDialog = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml"));
-        var valueDialog = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml"));
+        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var labelDialog = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml"));
+        var valueDialog = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         mainWindowSource.Should().Contain("new PivotLabelFilterDialog");
@@ -1058,14 +1073,14 @@ public sealed class MainWindowXamlKeyTipTests
 
         labelDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should().Contain(["LabelFilterKindBox", "LabelFilterValueBox", "LabelFilterValue2Box"]);
-        File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml.cs"))
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotLabelFilterDialog.xaml.cs"))
             .Should()
             .Contain("PivotLabelFilterKind.Between")
             .And.Contain("PivotLabelFilterKind.GreaterThan")
             .And.Contain("PivotLabelFilterKind.LessThan");
         valueDialog.Descendants().Select(element => element.Attribute(xaml + "Name")?.Value)
             .Should().Contain(["ValueFilterKindBox", "ValueFilterValueBox", "ValueFilterValue2Box"]);
-        File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml.cs"))
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotValueFilterDialog.xaml.cs"))
             .Should()
             .Contain("PivotValueFilterKind.Between")
             .And.Contain("PivotValueFilterKind.NotBetween")
@@ -1076,7 +1091,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotChartFieldButtons_RouteToPivotFieldMenus()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("SheetGrid.PivotChartFieldButtonRequested += OnPivotChartFieldButtonRequested");
         source.Should().Contain("OnPivotChartFieldButtonRequested");
@@ -1089,8 +1104,8 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void SlicerTimelinePane_ExposesInteractivePivotFilters()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -1119,7 +1134,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableContextualTabs_ExposeAnalyzeAndDesignCommands()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -1167,7 +1182,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableContextualLayoutCommands_RouteThroughUndoableOptionsCommand()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("ApplyPivotOptions(");
         source.Should().Contain("new ConfigurePivotTableOptionsCommand");
@@ -1177,7 +1192,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableChangeDataSource_RoutesThroughUndoableSourceCommand()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("new ChangePivotTableSourceCommand");
         source.Should().Contain("TryParseWorkbookRange");
@@ -1187,18 +1202,4 @@ public sealed class MainWindowXamlKeyTipTests
     private static bool ContainsExcludedStatus(string? value) =>
         value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
 
-    private static string FindWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
 }

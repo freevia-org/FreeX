@@ -220,6 +220,88 @@ public sealed class ShapeCommandTests
         shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
     }
 
+    [Fact]
+    public void SetDrawingShapeColorsCommand_ClearsGradientFillAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FillColor = new CellColor(10, 20, 30),
+            GradientFillEndColor = new CellColor(200, 210, 220)
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new SetDrawingShapeColorsCommand(
+            sheet.Id,
+            shape.Id,
+            new CellColor(40, 50, 60),
+            null);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.FillColor.Should().Be(new CellColor(40, 50, 60));
+        shape.GradientFillEndColor.Should().BeNull();
+
+        command.Revert(ctx);
+
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+    }
+
+    [Fact]
+    public void SetDrawingShapeGradientCommand_SetsGradientAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FillColor = new CellColor(10, 20, 30)
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new SetDrawingShapeGradientCommand(
+            sheet.Id,
+            shape.Id,
+            new CellColor(100, 110, 120),
+            new CellColor(200, 210, 220));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.FillColor.Should().Be(new CellColor(100, 110, 120));
+        shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+
+        command.Revert(ctx);
+
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.GradientFillEndColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void SetDrawingShapeEffectCommand_TogglesShadowAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            HasShadowEffect = true
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new SetDrawingShapeEffectCommand(sheet.Id, shape.Id, hasShadowEffect: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.HasShadowEffect.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        shape.HasShadowEffect.Should().BeTrue();
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
