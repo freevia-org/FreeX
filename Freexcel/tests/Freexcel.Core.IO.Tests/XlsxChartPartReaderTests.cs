@@ -278,6 +278,7 @@ public sealed class XlsxChartPartReaderTests
                 <c:name>Data!PivotTable1</c:name>
                 <c:fmtId val="0"/>
               </c:pivotSource>
+              <c:roundedCorners val="1"/>
               <c:chart>
                 <c:plotArea>
                   <c:barChart>
@@ -299,6 +300,7 @@ public sealed class XlsxChartPartReaderTests
         chart.IsPivotChart.Should().BeTrue();
         chart.PivotTableName.Should().Be("PivotTable1");
         chart.ChartStyleId.Should().Be(42);
+        chart.RoundedCorners.Should().BeTrue();
     }
 
     [Fact]
