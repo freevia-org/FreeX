@@ -204,76 +204,18 @@ public sealed class NativeJsonAdapter : IFileAdapter
             }
             foreach (var pictureDto in sDto.Pictures ?? [])
             {
-                if (pictureDto?.Anchor is null) continue;
-                try
-                {
-                    var picture = new PictureModel
-                    {
-                        Anchor = CellAddress.Parse(pictureDto.Anchor, sheet.Id),
-                        Kind = ValidEnumOrDefault(pictureDto.Kind, PictureKind.CellRangeSnapshot),
-                        SourceRowCount = pictureDto.SourceRowCount,
-                        SourceColumnCount = pictureDto.SourceColumnCount,
-                        ImageBytes = string.IsNullOrEmpty(pictureDto.ImageBase64) ? null : Convert.FromBase64String(pictureDto.ImageBase64),
-                        ContentType = pictureDto.ContentType,
-                        Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
-                        Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
-                        RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
-                        CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
-                        CropTop = SanitizeCropEdge(pictureDto.CropTop),
-                        CropRight = SanitizeCropEdge(pictureDto.CropRight),
-                        CropBottom = SanitizeCropEdge(pictureDto.CropBottom),
-                        AltText = pictureDto.AltText
-                    };
-                    NormalizePictureCrop(picture);
-                    foreach (var cellDto in pictureDto.Cells ?? [])
-                        picture.Cells.Add(new PictureCellSnapshot(cellDto.RowOffset, cellDto.ColumnOffset, cellDto.Text ?? ""));
+                if (NativeJsonVisualDtoMapper.ToPicture(pictureDto, sheet.Id) is { } picture)
                     sheet.Pictures.Add(picture);
-                }
-                catch (FormatException) { /* skip pictures with unparseable anchors */ }
             }
             foreach (var textBoxDto in sDto.TextBoxes ?? [])
             {
-                if (textBoxDto?.Anchor is null) continue;
-                try
-                {
-                    sheet.TextBoxes.Add(new TextBoxModel
-                    {
-                        Anchor = CellAddress.Parse(textBoxDto.Anchor, sheet.Id),
-                        Text = textBoxDto.Text ?? "",
-                        Width = PositiveFiniteOrDefault(textBoxDto.Width, 180),
-                        Height = PositiveFiniteOrDefault(textBoxDto.Height, 80),
-                        RotationDegrees = NormalizeRotation(textBoxDto.RotationDegrees),
-                        FillColor = textBoxDto.FillColor is { } textFill ? ParseColor(textFill) : null,
-                        OutlineColor = textBoxDto.OutlineColor is { } textOutline ? ParseColor(textOutline) : null,
-                        FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
-                        OutlineThemeColor = ToThemeColorReference(textBoxDto.OutlineThemeColor),
-                        AltText = textBoxDto.AltText
-                    });
-                }
-                catch (FormatException) { /* skip text boxes with unparseable anchors */ }
+                if (NativeJsonVisualDtoMapper.ToTextBox(textBoxDto, sheet.Id) is { } textBox)
+                    sheet.TextBoxes.Add(textBox);
             }
             foreach (var shapeDto in sDto.DrawingShapes ?? [])
             {
-                if (shapeDto?.Anchor is null) continue;
-                try
-                {
-                    sheet.DrawingShapes.Add(new DrawingShapeModel
-                    {
-                        Anchor = CellAddress.Parse(shapeDto.Anchor, sheet.Id),
-                        Kind = ValidEnumOrDefault(shapeDto.Kind, DrawingShapeKind.Rectangle),
-                        Width = PositiveFiniteOrDefault(shapeDto.Width, 120),
-                        Height = PositiveFiniteOrDefault(shapeDto.Height, 70),
-                        RotationDegrees = NormalizeRotation(shapeDto.RotationDegrees),
-                        FillColor = shapeDto.FillColor is { } shapeFill ? ParseColor(shapeFill) : null,
-                        OutlineColor = shapeDto.OutlineColor is { } shapeOutline ? ParseColor(shapeOutline) : null,
-                        GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
-                        FillThemeColor = ToThemeColorReference(shapeDto.FillThemeColor),
-                        OutlineThemeColor = ToThemeColorReference(shapeDto.OutlineThemeColor),
-                        HasShadowEffect = shapeDto.HasShadowEffect,
-                        AltText = shapeDto.AltText
-                    });
-                }
-                catch (FormatException) { /* skip shapes with unparseable anchors */ }
+                if (NativeJsonVisualDtoMapper.ToDrawingShape(shapeDto, sheet.Id) is { } shape)
+                    sheet.DrawingShapes.Add(shape);
             }
             foreach (var sparklineDto in sDto.Sparklines ?? [])
             {
@@ -778,57 +720,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         FileName = background.FileName
                     }
                     : null,
-                Pictures = s.Pictures.Select(picture => new PictureDto
-                {
-                    Anchor = picture.Anchor.ToA1(),
-                    Kind = ValidEnumOrDefault(picture.Kind, PictureKind.CellRangeSnapshot),
-                    SourceRowCount = picture.SourceRowCount,
-                    SourceColumnCount = picture.SourceColumnCount,
-                    ImageBase64 = picture.ImageBytes is { Length: > 0 } bytes ? Convert.ToBase64String(bytes) : null,
-                    ContentType = picture.ContentType,
-                    Width = PositiveFiniteOrDefault(picture.Width, 240),
-                    Height = PositiveFiniteOrDefault(picture.Height, 140),
-                    RotationDegrees = NormalizeRotation(picture.RotationDegrees),
-                    CropLeft = SanitizeCropEdge(picture.CropLeft),
-                    CropTop = SanitizeCropEdge(picture.CropTop),
-                    CropRight = SanitizeCropEdge(picture.CropRight),
-                    CropBottom = SanitizeCropEdge(picture.CropBottom),
-                    AltText = picture.AltText,
-                    Cells = picture.Cells.Select(cell => new PictureCellDto
-                    {
-                        RowOffset = cell.RowOffset,
-                        ColumnOffset = cell.ColumnOffset,
-                        Text = cell.Text
-                    }).ToList()
-                }).ToList(),
-                TextBoxes = s.TextBoxes.Select(textBox => new TextBoxDto
-                {
-                    Anchor = textBox.Anchor.ToA1(),
-                    Text = textBox.Text,
-                    Width = PositiveFiniteOrDefault(textBox.Width, 180),
-                    Height = PositiveFiniteOrDefault(textBox.Height, 80),
-                    RotationDegrees = NormalizeRotation(textBox.RotationDegrees),
-                    FillColor = textBox.FillColor is { } textFill ? FormatColor(textFill) : null,
-                    OutlineColor = textBox.OutlineColor is { } textOutline ? FormatColor(textOutline) : null,
-                    FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
-                    OutlineThemeColor = FromThemeColorReference(textBox.OutlineThemeColor),
-                    AltText = textBox.AltText
-                }).ToList(),
-                DrawingShapes = s.DrawingShapes.Select(shape => new DrawingShapeDto
-                {
-                    Anchor = shape.Anchor.ToA1(),
-                    Kind = ValidEnumOrDefault(shape.Kind, DrawingShapeKind.Rectangle),
-                    Width = PositiveFiniteOrDefault(shape.Width, 120),
-                    Height = PositiveFiniteOrDefault(shape.Height, 70),
-                    RotationDegrees = NormalizeRotation(shape.RotationDegrees),
-                    FillColor = shape.FillColor is { } shapeFill ? FormatColor(shapeFill) : null,
-                    OutlineColor = shape.OutlineColor is { } shapeOutline ? FormatColor(shapeOutline) : null,
-                    GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
-                    FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
-                    OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
-                    HasShadowEffect = shape.HasShadowEffect,
-                    AltText = shape.AltText
-                }).ToList(),
+                Pictures = s.Pictures.Select(NativeJsonVisualDtoMapper.FromPicture).ToList(),
+                TextBoxes = s.TextBoxes.Select(NativeJsonVisualDtoMapper.FromTextBox).ToList(),
+                DrawingShapes = s.DrawingShapes.Select(NativeJsonVisualDtoMapper.FromDrawingShape).ToList(),
                 Sparklines = s.Sparklines
                     .Where(sparkline =>
                         sparkline.DataRange.Start.Sheet == s.Id &&
@@ -1936,68 +1830,6 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public string ImageBase64 { get; set; } = "";
         public string ContentType { get; set; } = "image/png";
         public string? FileName { get; set; }
-    }
-
-    private class PictureDto
-    {
-        public string? Anchor { get; set; }
-        public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
-        public uint SourceRowCount { get; set; }
-        public uint SourceColumnCount { get; set; }
-        public string? ImageBase64 { get; set; }
-        public string? ContentType { get; set; }
-        public double Width { get; set; } = 240;
-        public double Height { get; set; } = 140;
-        public double RotationDegrees { get; set; }
-        public double CropLeft { get; set; }
-        public double CropTop { get; set; }
-        public double CropRight { get; set; }
-        public double CropBottom { get; set; }
-        public string? AltText { get; set; }
-        public List<PictureCellDto> Cells { get; set; } = [];
-    }
-
-    private class TextBoxDto
-    {
-        public string? Anchor { get; set; }
-        public string? Text { get; set; }
-        public double Width { get; set; } = 180;
-        public double Height { get; set; } = 80;
-        public double RotationDegrees { get; set; }
-        public string? FillColor { get; set; }
-        public string? OutlineColor { get; set; }
-        public ThemeColorReferenceDto? FillThemeColor { get; set; }
-        public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
-        public string? AltText { get; set; }
-    }
-
-    private class DrawingShapeDto
-    {
-        public string? Anchor { get; set; }
-        public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
-        public double Width { get; set; } = 120;
-        public double Height { get; set; } = 70;
-        public double RotationDegrees { get; set; }
-        public string? FillColor { get; set; }
-        public string? OutlineColor { get; set; }
-        public string? GradientFillEndColor { get; set; }
-        public ThemeColorReferenceDto? FillThemeColor { get; set; }
-        public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
-        public bool HasShadowEffect { get; set; }
-        public string? AltText { get; set; }
-    }
-
-    private class ThemeColorReferenceDto
-    {
-        public WorkbookThemeColorSlot Slot { get; set; }
-        public double Tint { get; set; }
-    }
-
-    private class PictureCellDto
-    {
-        public uint RowOffset { get; set; }
-        public uint ColumnOffset { get; set; }
-        public string? Text { get; set; }
     }
 
     private class SparklineDto
