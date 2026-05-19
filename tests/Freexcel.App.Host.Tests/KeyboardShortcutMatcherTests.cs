@@ -82,6 +82,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.U, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFormulaBarExpansion)]
     [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
     [InlineData(Key.P, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenPrintBackstage)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.PasteValues)]
     [InlineData(Key.F5, Key.None, ModifierKeys.None, KeyboardCommandShortcut.GoTo)]
     [InlineData(Key.G, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.GoTo)]
     [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
