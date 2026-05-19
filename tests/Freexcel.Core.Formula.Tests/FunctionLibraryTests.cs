@@ -1119,6 +1119,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Value_ParsesCurrencyThousandsAndDateText()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=VALUE(\"$1,234.50\")", sheet).Should().Be(new NumberValue(1234.5));
+        _eval.Evaluate("=VALUE(\"1/2/2024\")", sheet).Should().Be(new NumberValue(45293));
+    }
+
+    [Fact]
     public void Value_InvalidText_ReturnsValueError()
     {
         var sheet = MakeSheet();

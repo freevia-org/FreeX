@@ -1608,13 +1608,17 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[0] is NumberValue nv) return nv;
         var text = ToText(args[0]).Trim();
+        var usCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
         if (text.EndsWith('%') &&
             double.TryParse(text[..^1].Trim(), System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var pct))
+                usCulture, out var pct))
             return new NumberValue(pct / 100.0);
         if (double.TryParse(text, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var d))
+                usCulture, out var d))
             return new NumberValue(d);
+        if (DateTime.TryParse(text, usCulture,
+                System.Globalization.DateTimeStyles.None, out var dt))
+            return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
 
