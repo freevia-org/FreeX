@@ -2,6 +2,8 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
+public sealed record PivotFieldListItem(string Caption, bool IsChecked);
+
 public static class PivotUiPlanner
 {
     public static string FieldCaption(IReadOnlyList<string> headers, int sourceFieldIndex) =>
@@ -271,4 +273,20 @@ public static class PivotUiPlanner
                 }
                 : field)
             .ToList();
+
+    public static string? GetFieldListCaption(object? item) =>
+        item switch
+        {
+            string value when !string.IsNullOrWhiteSpace(value) => value,
+            PivotFieldListItem field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
+            _ => null
+        };
+
+    public static void InsertOrAppend<T>(List<T> items, T item, int index)
+    {
+        if (index < 0 || index > items.Count)
+            items.Add(item);
+        else
+            items.Insert(index, item);
+    }
 }

@@ -189,6 +189,28 @@ public sealed class PivotUiPlannerTests
         updated[1].SelectedItems.Should().Equal("Q1");
     }
 
+    [Fact]
+    public void GetFieldListCaption_ReadsStringOrFieldListItemAndIgnoresBlankCaptions()
+    {
+        PivotUiPlanner.GetFieldListCaption("Region").Should().Be("Region");
+        PivotUiPlanner.GetFieldListCaption(new PivotFieldListItem("Amount", true)).Should().Be("Amount");
+        PivotUiPlanner.GetFieldListCaption(new PivotFieldListItem("  ", false)).Should().BeNull();
+        PivotUiPlanner.GetFieldListCaption(null).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(-1, new[] { "A", "B", "X" })]
+    [InlineData(1, new[] { "A", "X", "B" })]
+    [InlineData(3, new[] { "A", "B", "X" })]
+    public void InsertOrAppend_InsertsOnlyInsideExistingListBounds(int index, string[] expected)
+    {
+        var items = new List<string> { "A", "B" };
+
+        PivotUiPlanner.InsertOrAppend(items, "X", index);
+
+        items.Should().Equal(expected);
+    }
+
     private static PivotTableModel CreatePivot(string name = "Pivot", uint targetRow = 5, SheetId? sheetId = null)
     {
         sheetId ??= SheetId.New();
