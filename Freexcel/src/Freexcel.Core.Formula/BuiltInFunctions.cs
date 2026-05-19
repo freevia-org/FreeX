@@ -1791,6 +1791,8 @@ public static class BuiltInFunctions
         if (double.TryParse(text, System.Globalization.NumberStyles.Any,
                 usCulture, out var d))
             return new NumberValue(d);
+        if (TryParseExcelFakeLeapDayValueText(text, usCulture, out var fakeLeapSerial))
+            return new NumberValue(fakeLeapSerial);
         if (DateTime.TryParse(text, usCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(IsTimeOnlyText(text) ? dt.TimeOfDay.TotalDays : DateToSerial(dt));
@@ -3073,19 +3075,29 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
-        if (IsExcelFakeLeapDayText(text)) return new NumberValue(60);
+        if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
 
-    private static bool IsExcelFakeLeapDayText(string text)
+    private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {
+        serial = 0;
         var trimmed = text.Trim();
-        return string.Equals(trimmed, "2/29/1900", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "02/29/1900", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "1900-02-29", StringComparison.OrdinalIgnoreCase);
+        var match = Regex.Match(trimmed, @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+
+        serial = 60;
+        if (match.Groups[1].Success)
+        {
+            if (!DateTime.TryParse(match.Groups[1].Value, culture, DateTimeStyles.None, out var time))
+                return false;
+            serial += time.TimeOfDay.TotalDays;
+        }
+
+        return true;
     }
 
     private static ScalarValue Eomonth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
