@@ -76,6 +76,8 @@ public sealed class ExcelParityDateSerialTests
     [Theory]
     [InlineData("=DATEVALUE(\"1/1/1900\")", 1)]
     [InlineData("=DATEVALUE(\"2/28/1900\")", 59)]
+    [InlineData("=DATEVALUE(\"2/29/1900\")", 60)]
+    [InlineData("=DATEVALUE(\"1900-02-29\")", 60)]
     [InlineData("=DATEVALUE(\"3/1/1900\")", 61)]
     [InlineData("=DATEVALUE(\"2024-01-15\")", 45306)]
     public void DateValue_ReturnsExcelSerialNumbers(string formula, double expected)

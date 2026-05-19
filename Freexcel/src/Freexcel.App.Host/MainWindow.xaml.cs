@@ -5580,6 +5580,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.Paste:
                 ExecutePaste();
                 break;
+            case WorksheetContextMenuAction.PasteSpecial:
+                PasteSpecialBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.InsertRowAbove:
                 InsertRows(address.Row);
                 break;

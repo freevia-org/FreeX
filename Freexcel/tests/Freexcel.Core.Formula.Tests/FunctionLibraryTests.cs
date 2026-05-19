@@ -1169,6 +1169,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Value_ParsesTimeAndDateTimeText()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=VALUE(\"1:30 PM\")", sheet).Should().Be(new NumberValue(0.5625));
+        _eval.Evaluate("=VALUE(\"1/2/2024 6:00 AM\")", sheet)
+            .Should().Be(new NumberValue(new DateTime(2024, 1, 2, 6, 0, 0).ToOADate()));
+    }
+
+    [Fact]
+    public void Value_ParsesExcelFakeLeapDayText()
+    {
+        _eval.Evaluate("=VALUE(\"2/29/1900\")", MakeSheet()).Should().Be(new NumberValue(60));
+        _eval.Evaluate("=VALUE(\"1900-02-29\")", MakeSheet()).Should().Be(new NumberValue(60));
+        _eval.Evaluate("=VALUE(\"2/29/1900 6:00 AM\")", MakeSheet()).Should().Be(new NumberValue(60.25));
+    }
+
+    [Fact]
     public void Value_InvalidText_ReturnsValueError()
     {
         var sheet = MakeSheet();
@@ -1567,6 +1585,14 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=ROUND(1234,-2)", sheet).Should().Be(new NumberValue(1200));
+    }
+
+    [Fact]
+    public void Round_ExcessiveDigits_ClampsLikeExcel()
+    {
+        _eval.Evaluate("=ROUND(1.2345,16)", MakeSheet()).Should().Be(new NumberValue(1.2345));
+        _eval.Evaluate("=ROUND(12345,-16)", MakeSheet()).Should().Be(new NumberValue(0));
+        _eval.Evaluate("=ROUND(1,309)", MakeSheet()).Should().Be(new NumberValue(1));
     }
 
     // ── CEILING ───────────────────────────────────────────────────────────────
@@ -2825,8 +2851,8 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUNDDOWN(A1,2)", sheet).Should().Be(ErrorValue.Num);
     }
 
-    [Fact] public void Rounddown_ExcessiveDigits_ReturnsNumError() =>
-        _eval.Evaluate("=ROUNDDOWN(1,309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    [Fact] public void Rounddown_ExcessiveDigits_ClampsLikeExcel() =>
+        _eval.Evaluate("=ROUNDDOWN(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
     [Fact] public void Roundup_1_21_1_Returns1_3() =>
         _eval.Evaluate("=ROUNDUP(1.21,1)", MakeSheet()).Should().Be(new NumberValue(1.3));
@@ -2839,8 +2865,8 @@ public class FunctionLibraryTests
         _eval.Evaluate("=ROUNDUP(A1,2)", sheet).Should().Be(ErrorValue.Num);
     }
 
-    [Fact] public void Roundup_ExcessiveDigits_ReturnsNumError() =>
-        _eval.Evaluate("=ROUNDUP(1,309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    [Fact] public void Roundup_ExcessiveDigits_ClampsLikeExcel() =>
+        _eval.Evaluate("=ROUNDUP(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
     [Fact] public void Trunc_1_29_1_Returns1_2() =>
         _eval.Evaluate("=TRUNC(1.29,1)", MakeSheet()).Should().Be(new NumberValue(1.2));
@@ -2853,8 +2879,8 @@ public class FunctionLibraryTests
         _eval.Evaluate("=TRUNC(A1,2)", sheet).Should().Be(ErrorValue.Num);
     }
 
-    [Fact] public void Trunc_ExcessiveDigits_ReturnsNumError() =>
-        _eval.Evaluate("=TRUNC(1,309)", MakeSheet()).Should().Be(ErrorValue.Num);
+    [Fact] public void Trunc_ExcessiveDigits_ClampsLikeExcel() =>
+        _eval.Evaluate("=TRUNC(1.2345,309)", MakeSheet()).Should().Be(new NumberValue(1.2345));
 
     [Fact] public void Mround_14_5_Returns15() =>
         _eval.Evaluate("=MROUND(14,5)", MakeSheet()).Should().Be(new NumberValue(15));
@@ -4051,6 +4077,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Fixed_ExcessiveNegativeDecimals_RoundsToZeroLikeExcel()
+    {
+        _eval.Evaluate("=FIXED(1,-309,TRUE)", MakeSheet()).Should().Be(new TextValue("0"));
+    }
+
+    [Fact]
     public void Fixed_DecimalsError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -4095,6 +4127,12 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=DOLLAR(1234.567,-1)", sheet).Should().Be(new TextValue("$1,230"));
+    }
+
+    [Fact]
+    public void Dollar_ExcessiveNegativeDecimals_RoundsToZeroLikeExcel()
+    {
+        _eval.Evaluate("=DOLLAR(1,-309)", MakeSheet()).Should().Be(new TextValue("$0"));
     }
 
     [Fact]
@@ -5339,6 +5377,21 @@ public class FunctionLibraryTests
     public void Numbervalue_TrailingPercent_DividesBy100() =>
         _eval.Evaluate("=NUMBERVALUE(\"10%\")", MakeSheet())
             .Should().Be(new NumberValue(0.1));
+
+    [Fact]
+    public void Numbervalue_AccountingParentheses_ReturnsNegativeNumber() =>
+        _eval.Evaluate("=NUMBERVALUE(\"(1)\")", MakeSheet())
+            .Should().Be(new NumberValue(-1));
+
+    [Fact]
+    public void Numbervalue_AccountingParenthesesWithPercent_ReturnsNegativePercent() =>
+        _eval.Evaluate("=NUMBERVALUE(\"(10%)\")", MakeSheet())
+            .Should().Be(new NumberValue(-0.1));
+
+    [Fact]
+    public void Numbervalue_LocalizedAccountingParentheses_ReturnsNegativeNumber() =>
+        _eval.Evaluate("=NUMBERVALUE(\"(1.234,56)\",\",\",\".\")", MakeSheet())
+            .Should().Be(new NumberValue(-1234.56));
 
     [Fact]
     public void Numbervalue_InvalidSeparators_ReturnsValueError() =>
