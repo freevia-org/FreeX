@@ -57,4 +57,22 @@ public sealed class CommentNavigationPlannerTests
             .Should()
             .Be(string.Join(Environment.NewLine, "A1: First", "B3: Later"));
     }
+
+    [Fact]
+    public void GetDefaultCommentText_ReturnsExistingCommentForSelectedCell()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [address] = "Existing note"
+        };
+
+        CommentNavigationPlanner.GetDefaultCommentText(comments, address)
+            .Should()
+            .Be("Existing note");
+        CommentNavigationPlanner.GetDefaultCommentText(comments, new CellAddress(sheetId, 3, 3))
+            .Should()
+            .BeEmpty();
+    }
 }
