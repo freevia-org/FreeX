@@ -291,13 +291,13 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_PrinterSettingsPackage_DetectsPrinterSettings()
+    public void Inspect_PrinterSettingsPackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/printerSettings/printerSettings1.bin");
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.PrinterSettings);
+        report.HasUnsupportedFeatures.Should().BeFalse("printer settings package parts are retained through XLSX save");
     }
 
     [Fact]

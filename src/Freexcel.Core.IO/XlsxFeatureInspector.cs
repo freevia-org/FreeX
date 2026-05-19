@@ -170,7 +170,6 @@ public static class XlsxFeatureInspector
 
         if (normalized.StartsWith("xl/printersettings/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.PrinterSettings);
             yield break;
         }
 
