@@ -731,7 +731,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ReadBoolAttribute(sharedItems, "containsBlank"),
                     ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
                     ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false)));
+                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false),
+                    ReadBoolAttribute(sharedItems, "containsMixedTypes"),
+                    ReadBoolAttribute(sharedItems, "containsSemiMixedTypes"),
+                    ReadBoolAttribute(sharedItems, "containsNonDate"),
+                    ReadBoolAttribute(sharedItems, "containsInteger"),
+                    ReadBoolAttribute(sharedItems, "longText"),
+                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "minValue"),
+                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "maxValue"),
+                    sharedItems?.Attribute("minDate")?.Value,
+                    sharedItems?.Attribute("maxDate")?.Value));
             }
 
             result.Add(cache);
@@ -5330,7 +5339,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
             field.ContainsBlank ? new XAttribute("containsBlank", "1") : null,
             field.ContainsString ? new XAttribute("containsString", "1") : null,
             field.ContainsNumber ? new XAttribute("containsNumber", "1") : null,
-            field.ContainsDate ? new XAttribute("containsDate", "1") : null);
+            field.ContainsDate ? new XAttribute("containsDate", "1") : null,
+            field.ContainsMixedTypes ? new XAttribute("containsMixedTypes", "1") : null,
+            field.ContainsSemiMixedTypes ? new XAttribute("containsSemiMixedTypes", "1") : null,
+            field.ContainsNonDate ? new XAttribute("containsNonDate", "1") : null,
+            field.ContainsInteger ? new XAttribute("containsInteger", "1") : null,
+            field.ContainsLongText ? new XAttribute("longText", "1") : null,
+            field.MinValue is { } minValue ? new XAttribute("minValue", minValue.ToString(CultureInfo.InvariantCulture)) : null,
+            field.MaxValue is { } maxValue ? new XAttribute("maxValue", maxValue.ToString(CultureInfo.InvariantCulture)) : null,
+            !string.IsNullOrWhiteSpace(field.MinDate) ? new XAttribute("minDate", field.MinDate) : null,
+            !string.IsNullOrWhiteSpace(field.MaxDate) ? new XAttribute("maxDate", field.MaxDate) : null);
 
     private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
         new(new XElement(packageRelNs + "Relationships"));

@@ -7567,6 +7567,52 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsPivotCacheSharedItemEdgeMetadata()
+    {
+        var workbook = new Workbook("PivotSharedItemEdgeMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotCacheDefinitionXml: PivotCacheDefinitionWithSharedItemEdgeMetadataXml);
+
+        var loaded = adapter.Load(source);
+
+        var fields = loaded.PivotCaches.Should().ContainSingle().Subject.Fields;
+        var mixed = fields[0];
+        mixed.ContainsMixedTypes.Should().BeTrue();
+        mixed.ContainsSemiMixedTypes.Should().BeTrue();
+        mixed.ContainsLongText.Should().BeTrue();
+        var numeric = fields[1];
+        numeric.ContainsInteger.Should().BeTrue();
+        numeric.ContainsNonDate.Should().BeTrue();
+        numeric.MinValue.Should().Be(10);
+        numeric.MaxValue.Should().Be(20);
+        var date = fields[2];
+        date.ContainsDate.Should().BeTrue();
+        date.MinDate.Should().Be("2026-01-01T00:00:00");
+        date.MaxDate.Should().Be("2026-03-31T00:00:00");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
+        cacheXml.Should().Contain("containsMixedTypes=\"1\"");
+        cacheXml.Should().Contain("containsSemiMixedTypes=\"1\"");
+        cacheXml.Should().Contain("longText=\"1\"");
+        cacheXml.Should().Contain("containsInteger=\"1\"");
+        cacheXml.Should().Contain("containsNonDate=\"1\"");
+        cacheXml.Should().Contain("minValue=\"10\"");
+        cacheXml.Should().Contain("maxValue=\"20\"");
+        cacheXml.Should().Contain("minDate=\"2026-01-01T00:00:00\"");
+        cacheXml.Should().Contain("maxDate=\"2026-03-31T00:00:00\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesNativePivotCacheRecordsRelationship()
     {
         var workbook = new Workbook("PivotCacheRecordsRetentionTest");
@@ -8453,7 +8499,10 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalPivotTablePackage(MemoryStream packageStream, bool includeCacheRecords = false)
+    private static void AddMinimalPivotTablePackage(
+        MemoryStream packageStream,
+        bool includeCacheRecords = false,
+        string? pivotCacheDefinitionXml = null)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -8516,7 +8565,7 @@ public class FileAdapterSmokeTests
                         new XAttribute("Target", "../pivotCache/pivotCacheDefinition1.xml"))));
             ReplacePackageXml(archive, "xl/pivotTables/_rels/pivotTable1.xml.rels", pivotTableRelsXml);
 
-            ReplacePackageXml(archive, "xl/pivotCache/pivotCacheDefinition1.xml", XDocument.Parse(MinimalPivotCacheDefinitionXml));
+            ReplacePackageXml(archive, "xl/pivotCache/pivotCacheDefinition1.xml", XDocument.Parse(pivotCacheDefinitionXml ?? MinimalPivotCacheDefinitionXml));
             if (includeCacheRecords)
             {
                 var cacheRelsXml = new XDocument(
@@ -8852,6 +8901,49 @@ public class FileAdapterSmokeTests
               <sharedItems containsNumber="1" count="2">
                 <n v="10"/>
                 <n v="20"/>
+              </sharedItems>
+            </cacheField>
+          </cacheFields>
+        </pivotCacheDefinition>
+        """;
+
+    private const string PivotCacheDefinitionWithSharedItemEdgeMetadataXml = """
+        <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              refreshedBy="Freexcel Test"
+                              refreshOnLoad="0"
+                              recordCount="2">
+          <cacheSource type="worksheet">
+            <worksheetSource ref="A1:C3" sheet="Data"/>
+          </cacheSource>
+          <cacheFields count="3">
+            <cacheField name="Mixed" numFmtId="0">
+              <sharedItems containsString="1"
+                           containsMixedTypes="1"
+                           containsSemiMixedTypes="1"
+                           longText="1"
+                           count="2">
+                <s v="Short"/>
+                <s v="Long text sample"/>
+              </sharedItems>
+            </cacheField>
+            <cacheField name="Amount" numFmtId="0">
+              <sharedItems containsNumber="1"
+                           containsNonDate="1"
+                           containsInteger="1"
+                           minValue="10"
+                           maxValue="20"
+                           count="2">
+                <n v="10"/>
+                <n v="20"/>
+              </sharedItems>
+            </cacheField>
+            <cacheField name="Date" numFmtId="14">
+              <sharedItems containsDate="1"
+                           minDate="2026-01-01T00:00:00"
+                           maxDate="2026-03-31T00:00:00"
+                           count="2">
+                <d v="2026-01-01T00:00:00"/>
+                <d v="2026-03-31T00:00:00"/>
               </sharedItems>
             </cacheField>
           </cacheFields>
