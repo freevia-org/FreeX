@@ -7884,6 +7884,38 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSortState()
+    {
+        var workbook = new Workbook("SortStateRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("A"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSortState(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sortState = worksheetXml.Root!.Element(worksheetNs + "sortState");
+        sortState.Should().NotBeNull();
+        sortState!.ToString().Should().Contain("ref=\"A1:A3\"");
+        sortState.ToString().Should().Contain("descending=\"1\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -9217,6 +9249,26 @@ public class FileAdapterSmokeTests
                 new XAttribute("fontId", "1"),
                 new XAttribute("type", "fullwidthKatakana"),
                 new XAttribute("alignment", "center")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetSortState(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "sortState",
+                new XAttribute("ref", "A1:A3"),
+                new XElement(
+                    worksheetNs + "sortCondition",
+                    new XAttribute("ref", "A2:A3"),
+                    new XAttribute("descending", "1"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
