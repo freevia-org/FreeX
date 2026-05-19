@@ -115,4 +115,35 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
         source.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
     }
+
+    [Fact]
+    public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        source.Should().Contain("ShowDeferredChartFamilyMessage");
+        source.Should().Contain("retained when opening XLSX files");
+        source.Should().NotContain("InsertChartOfType(ChartType.Surface)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Treemap)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Sunburst)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Histogram)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Pareto)");
+        source.Should().NotContain("InsertChartOfType(ChartType.BoxAndWhisker)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Waterfall)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Funnel)");
+        source.Should().NotContain("InsertChartOfType(ChartType.Map)");
+        source.Should().NotContain("InsertChartOfType(ChartType.ThreeDColumn)");
+        xaml.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        xaml.Should().Contain("Surface");
+        xaml.Should().Contain("Treemap");
+        xaml.Should().Contain("Sunburst");
+        xaml.Should().Contain("Histogram");
+        xaml.Should().Contain("Pareto");
+        xaml.Should().Contain("Box Plot");
+        xaml.Should().Contain("Waterfall");
+        xaml.Should().Contain("Funnel");
+        xaml.Should().Contain("Map");
+        xaml.Should().Contain("3D Column");
+    }
 }
