@@ -1355,12 +1355,15 @@ public static class BuiltInFunctions
             return ApplyComparisonCriteria(cellValue, op, rhs);
         }
 
-        // Plain text (supports wildcards * and ?)
-        var cellText = cellValue is TextValue tv ? tv.Value :
+        // Plain wildcard criteria in Excel match text cells only.
+        if (IsWildcardCriteria(crit))
+            return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
+
+        var cellText = cellValue is TextValue text ? text.Value :
                        TryCellNumber(cellValue, out double numericValue) ? numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture) :
                        cellValue is BoolValue bv ? (bv.Value ? "TRUE" : "FALSE") :
                        "";
-        return WildcardMatch(cellText, crit, ignoreCase: true);
+        return string.Equals(cellText, crit, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ApplyComparisonCriteria(ScalarValue cellValue, string op, string rhs)
@@ -1381,6 +1384,13 @@ public static class BuiltInFunctions
                 _    => false
             };
         }
+
+        if (IsWildcardCriteria(rhs) && op is "=" or "<>")
+        {
+            bool matches = cellValue is TextValue textValue && WildcardMatch(textValue.Value, rhs, ignoreCase: true);
+            return op == "=" ? matches : !matches;
+        }
+
         // Text comparison
         var cellText = cellValue is TextValue tv ? tv.Value : ToText(cellValue);
         int cmp = string.Compare(cellText, rhs, StringComparison.OrdinalIgnoreCase);
@@ -1394,6 +1404,18 @@ public static class BuiltInFunctions
             "<>" => cmp != 0,
             _    => false
         };
+    }
+
+    private static bool IsWildcardCriteria(string criteria)
+    {
+        for (int i = 0; i < criteria.Length; i++)
+        {
+            char ch = criteria[i];
+            if (ch is '*' or '?') return true;
+            if (ch == '~' && i + 1 < criteria.Length && (criteria[i + 1] is '*' or '?' or '~')) return true;
+        }
+
+        return false;
     }
 
     private static readonly ConcurrentDictionary<(string Pattern, bool IgnoreCase), Regex> WildcardCache = new();
