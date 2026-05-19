@@ -5607,6 +5607,18 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.Filter:
                 FilterButton_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.HideRows:
+                ExecuteRowsHidden(hidden: true);
+                break;
+            case WorksheetContextMenuAction.UnhideRows:
+                ExecuteRowsHidden(hidden: false);
+                break;
+            case WorksheetContextMenuAction.HideColumns:
+                ExecuteColumnsHidden(hidden: true);
+                break;
+            case WorksheetContextMenuAction.UnhideColumns:
+                ExecuteColumnsHidden(hidden: false);
+                break;
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
