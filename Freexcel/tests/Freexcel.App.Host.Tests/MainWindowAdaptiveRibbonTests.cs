@@ -28,6 +28,39 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void IconOnlyRibbonCommandsRemainCenterAligned()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var label = new TextBlock { Text = "Paste", Tag = "RibbonLabel" };
+            var content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                Children = { new TextBlock { Text = "\uE16D", Tag = "RibbonIcon" }, label }
+            };
+            var button = new Button
+            {
+                Tag = "RibbonCompact:72:32",
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Right,
+                Content = content
+            };
+
+            var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
+            var iconOnly = Enum.Parse(compactLevel, "IconOnly");
+            var setCompact = typeof(MainWindow)
+                .GetMethod("SetRibbonButtonCompact", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonButtonCompact");
+
+            setCompact.Invoke(null, [button, iconOnly]);
+
+            button.HorizontalContentAlignment.Should().Be(System.Windows.HorizontalAlignment.Center);
+            content.HorizontalAlignment.Should().Be(System.Windows.HorizontalAlignment.Center);
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
