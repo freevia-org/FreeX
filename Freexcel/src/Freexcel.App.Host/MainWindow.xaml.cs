@@ -2247,6 +2247,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.SelectAllDependents:
                 SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
                 break;
+            case KeyboardCommandShortcut.SelectCellsWithComments:
+                SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true);
+                break;
         }
     }
 

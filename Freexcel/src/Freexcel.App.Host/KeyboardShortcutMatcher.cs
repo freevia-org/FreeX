@@ -276,6 +276,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.O)
+        {
+            shortcut = KeyboardCommandShortcut.SelectCellsWithComments;
+            return true;
+        }
+
         return false;
     }
 
@@ -394,7 +400,8 @@ public enum KeyboardCommandShortcut
     SelectDirectPrecedents,
     SelectDirectDependents,
     SelectAllPrecedents,
-    SelectAllDependents
+    SelectAllDependents,
+    SelectCellsWithComments
 }
 
 public enum BorderKeyboardShortcut
