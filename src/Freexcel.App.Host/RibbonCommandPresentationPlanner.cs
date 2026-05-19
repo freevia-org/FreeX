@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Windows.Media;
 
 namespace Freexcel.App.Host;
 
@@ -87,172 +86,186 @@ public static class RibbonCommandPresentationPlanner
     public static RibbonCommandIcon GetIcon(string commandName)
     {
         var name = commandName.ToLowerInvariant();
-        var segoe = new FontFamily("Segoe UI Symbol");
-        var mdl2 = new FontFamily("Segoe MDL2 Assets");
 
-        if (name.Contains("pivottable")) return new("\uE9D2", mdl2, RibbonCommandIconAccent.Green);
-        if (name == "table") return new("\uE8A9", mdl2, RibbonCommandIconAccent.Green);
-        if (name.Contains("column chart") || name.Contains("bar chart")) return new("\uE9D2", mdl2, RibbonCommandIconAccent.Chart);
-        if (name.Contains("line chart") || name.Contains("trendline")) return new("\uE9D9", mdl2, RibbonCommandIconAccent.Chart);
-        if (name.Contains("pie chart") || name.Contains("doughnut")) return new("\u25D4", segoe, RibbonCommandIconAccent.Chart);
-        if (name.Contains("scatter") || name.Contains("bubble")) return new("\u2219", segoe, RibbonCommandIconAccent.Chart);
-        if (name.Contains("area chart")) return new("\u25F0", segoe, RibbonCommandIconAccent.Chart);
-        if (name.Contains("data label")) return new("\uE8D2", mdl2, RibbonCommandIconAccent.Chart);
-        if (name.Contains("axis") || name.Contains("legend") || name.Contains("plot") || name.Contains("series")) return new("\uE9D2", mdl2, RibbonCommandIconAccent.Chart);
-        if (name.Contains("chart")) return new("\uE9D2", mdl2, RibbonCommandIconAccent.Chart);
-        if (name.Contains("sparkline")) return new("\uE9D9", mdl2, RibbonCommandIconAccent.Chart);
-        if (name.Contains("link")) return new("\uE71B", mdl2);
-        if (name.Contains("delete note") || name.Contains("delete comment")) return new("\uE74D", mdl2);
-        if (name.Contains("previous comment") || name.Contains("previous note")) return new("\uE76B", mdl2);
-        if (name.Contains("next comment") || name.Contains("next note")) return new("\uE76C", mdl2);
-        if (name.Contains("note") || name.Contains("comment")) return new("\uE90A", mdl2);
-        if (name.Contains("symbol")) return new("\u03A9", segoe);
-        if (name.Contains("picture")) return new("\uEB9F", mdl2);
-        if (name.Contains("rectangle")) return new("\u25AD", segoe);
-        if (name.Contains("ellipse")) return new("\u25EF", segoe);
-        if (name == "line") return new("\u2571", segoe);
-        if (name.Contains("text box")) return new("\uE8D2", mdl2);
-        if (name.Contains("bring forward")) return new("\uE74A", mdl2);
-        if (name.Contains("send backward")) return new("\uE74B", mdl2);
-        if (name.Contains("size")) return new("\uE922", mdl2);
-        if (name.Contains("rotate")) return new("\uE7AD", mdl2);
-        if (name.Contains("fill")) return new("\uE771", mdl2, RibbonCommandIconAccent.Fill);
-        if (name.Contains("outline") || name.Contains("border")) return new("\uE76F", mdl2, RibbonCommandIconAccent.Border);
+        if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
+        if (name.Contains("undo")) return new(RibbonCommandIconKind.Undo);
+        if (name.Contains("redo")) return new(RibbonCommandIconKind.Redo);
+        if (name.Contains("cut")) return new(RibbonCommandIconKind.Cut);
+        if (name.Contains("copy")) return new(RibbonCommandIconKind.Copy);
+        if (name.Contains("format painter")) return new(RibbonCommandIconKind.FormatPainter);
+        if (name.Contains("paste")) return new(RibbonCommandIconKind.Paste);
+        if (name.Contains("bold")) return new(RibbonCommandIconKind.Bold);
+        if (name.Contains("italic")) return new(RibbonCommandIconKind.Italic);
+        if (name.Contains("underline")) return new(RibbonCommandIconKind.Underline);
+        if (name.Contains("strikethrough")) return new(RibbonCommandIconKind.Strikethrough);
+        if (name.Contains("merge")) return new(RibbonCommandIconKind.Merge);
+        if (name.Contains("wrap")) return new(RibbonCommandIconKind.Wrap);
+        if (name.Contains("align")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("accounting") || name.Contains("currency")) return new(RibbonCommandIconKind.Currency);
+        if (name.Contains("percent")) return new(RibbonCommandIconKind.Percent);
+        if (name.Contains("comma style")) return new(RibbonCommandIconKind.Comma);
+        if (name.Contains("decimal")) return new(RibbonCommandIconKind.Decimal);
+        if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
+        if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+        if (name.Contains("column chart") || name.Contains("bar chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+        if (name.Contains("line chart") || name.Contains("trendline")) return new(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart);
+        if (name.Contains("pie chart") || name.Contains("doughnut")) return new(RibbonCommandIconKind.ChartPie, RibbonCommandIconAccent.Chart);
+        if (name.Contains("scatter") || name.Contains("bubble")) return new(RibbonCommandIconKind.ChartScatter, RibbonCommandIconAccent.Chart);
+        if (name.Contains("area chart")) return new(RibbonCommandIconKind.ChartArea, RibbonCommandIconAccent.Chart);
+        if (name.Contains("data label")) return new(RibbonCommandIconKind.Label, RibbonCommandIconAccent.Chart);
+        if (name.Contains("axis") || name.Contains("legend") || name.Contains("plot") || name.Contains("series")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+        if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
+        if (name.Contains("sparkline")) return new(RibbonCommandIconKind.Sparkline, RibbonCommandIconAccent.Chart);
+        if (name.Contains("link")) return new(RibbonCommandIconKind.Link);
+        if (name.Contains("delete note") || name.Contains("delete comment")) return new(RibbonCommandIconKind.Delete);
+        if (name.Contains("previous comment") || name.Contains("previous note")) return new(RibbonCommandIconKind.Previous);
+        if (name.Contains("next comment") || name.Contains("next note")) return new(RibbonCommandIconKind.Next);
+        if (name.Contains("note") || name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
+        if (name.Contains("symbol")) return new(RibbonCommandIconKind.Symbol);
+        if (name.Contains("picture")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("rectangle")) return new(RibbonCommandIconKind.Rectangle);
+        if (name.Contains("ellipse")) return new(RibbonCommandIconKind.Ellipse);
+        if (name == "line") return new(RibbonCommandIconKind.Line);
+        if (name.Contains("text box")) return new(RibbonCommandIconKind.TextBox);
+        if (name.Contains("bring forward")) return new(RibbonCommandIconKind.BringForward);
+        if (name.Contains("send backward")) return new(RibbonCommandIconKind.SendBackward);
+        if (name.Contains("size")) return new(RibbonCommandIconKind.Size);
+        if (name.Contains("rotate")) return new(RibbonCommandIconKind.Rotate);
+        if (name.Contains("fill")) return new(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill);
+        if (name.Contains("outline") || name.Contains("border")) return new(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
 
-        if (name.Contains("theme")) return new("\uE790", mdl2, RibbonCommandIconAccent.Theme);
-        if (name.Contains("color")) return new("\uE790", mdl2, RibbonCommandIconAccent.Color);
-        if (name.Contains("font")) return new("A", segoe);
-        if (name.Contains("effect")) return new("\u2728", segoe);
-        if (name.Contains("background")) return new("\uE91B", mdl2);
-        if (name.Contains("margin")) return new("\uE8A9", mdl2);
-        if (name.Contains("orientation")) return new("\uE8AB", mdl2);
-        if (name.Contains("paper") || name.Contains("page setup")) return new("\uE7C3", mdl2);
-        if (name.Contains("scale to fit")) return new("\uE8A3", mdl2);
-        if (name.Contains("print area")) return new("\uE8A9", mdl2);
-        if (name.Contains("print title")) return new("\uE8EC", mdl2);
-        if (name.Contains("print")) return new("\uE749", mdl2);
-        if (name.Contains("break")) return new("\uE8A6", mdl2);
-        if (name.Contains("header") || name.Contains("footer")) return new("\uE8C1", mdl2);
-        if (name.Contains("gridlines")) return new("\uE80A", mdl2);
-        if (name.Contains("headings")) return new("\uE8EC", mdl2);
+        if (name.Contains("theme")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
+        if (name.Contains("color")) return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
+        if (name.Contains("font")) return new(RibbonCommandIconKind.Font);
+        if (name.Contains("effect")) return new(RibbonCommandIconKind.Effects);
+        if (name.Contains("background")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("margin")) return new(RibbonCommandIconKind.Margins);
+        if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
+        if (name.Contains("paper") || name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
+        if (name.Contains("scale to fit")) return new(RibbonCommandIconKind.Scale);
+        if (name.Contains("print area")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("print title")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("print")) return new(RibbonCommandIconKind.Print);
+        if (name.Contains("break")) return new(RibbonCommandIconKind.PageBreak);
+        if (name.Contains("header") || name.Contains("footer")) return new(RibbonCommandIconKind.HeaderFooter);
+        if (name.Contains("gridlines")) return new(RibbonCommandIconKind.Grid);
+        if (name.Contains("headings")) return new(RibbonCommandIconKind.Label);
 
-        if (name.Contains("insert function")) return new("fx", segoe);
-        if (name.Contains("autosum")) return new("\u03A3", segoe);
-        if (name.Contains("recent")) return new("\uE823", mdl2);
-        if (name.Contains("financial")) return new("\uE8A6", mdl2);
-        if (name.Contains("math")) return new("\u221A", segoe);
-        if (name.Contains("text function")) return new("T", segoe);
-        if (name.Contains("date")) return new("\uE787", mdl2);
-        if (name.Contains("logical")) return new("\uE8AB", mdl2);
-        if (name.Contains("lookup")) return new("\uE721", mdl2);
-        if (name.Contains("more function")) return new("\uE712", mdl2);
-        if (name.Contains("define name")) return new("\uE8EC", mdl2);
-        if (name.Contains("name manager")) return new("\uE8FD", mdl2);
-        if (name.Contains("use in formula")) return new("\uE8EC", mdl2);
-        if (name.Contains("create from selection")) return new("\uE8EC", mdl2);
-        if (name.Contains("trace precedent")) return new("\u2190", segoe);
-        if (name.Contains("trace dependent")) return new("\u2192", segoe);
-        if (name.Contains("remove arrow")) return new("\uE74D", mdl2);
-        if (name.Contains("show formula")) return new("\uE8D2", mdl2);
-        if (name.Contains("error checking")) return new("\uE783", mdl2, RibbonCommandIconAccent.Warning);
-        if (name.Contains("evaluate formula")) return new("\uE9D9", mdl2);
-        if (name.Contains("watch")) return new("\uE7B3", mdl2);
-        if (name.Contains("calculate")) return new("\uE895", mdl2);
+        if (name.Contains("insert function")) return new(RibbonCommandIconKind.Function);
+        if (name.Contains("autosum")) return new(RibbonCommandIconKind.Sum);
+        if (name.Contains("recent")) return new(RibbonCommandIconKind.Recent);
+        if (name.Contains("financial")) return new(RibbonCommandIconKind.Financial);
+        if (name.Contains("math")) return new(RibbonCommandIconKind.Math);
+        if (name.Contains("text function")) return new(RibbonCommandIconKind.TextFunction);
+        if (name.Contains("date")) return new(RibbonCommandIconKind.Date);
+        if (name.Contains("logical")) return new(RibbonCommandIconKind.Logical);
+        if (name.Contains("lookup")) return new(RibbonCommandIconKind.Search);
+        if (name.Contains("more function")) return new(RibbonCommandIconKind.More);
+        if (name.Contains("define name")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("name manager")) return new(RibbonCommandIconKind.List);
+        if (name.Contains("use in formula")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("create from selection")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("trace precedent")) return new(RibbonCommandIconKind.Previous);
+        if (name.Contains("trace dependent")) return new(RibbonCommandIconKind.Next);
+        if (name.Contains("remove arrow")) return new(RibbonCommandIconKind.Delete);
+        if (name.Contains("show formula")) return new(RibbonCommandIconKind.TextBox);
+        if (name.Contains("error checking")) return new(RibbonCommandIconKind.Warning, RibbonCommandIconAccent.Warning);
+        if (name.Contains("evaluate formula")) return new(RibbonCommandIconKind.Sparkline);
+        if (name.Contains("watch")) return new(RibbonCommandIconKind.Watch);
+        if (name.Contains("calculate")) return new(RibbonCommandIconKind.Refresh);
 
-        if (name.Contains("get data")) return new("\uE8D4", mdl2, RibbonCommandIconAccent.Data);
-        if (name.Contains("refresh")) return new("\uE72C", mdl2, RibbonCommandIconAccent.Data);
-        if (name.Contains("sort ascending")) return new("A\u2193Z", segoe);
-        if (name.Contains("sort descending")) return new("Z\u2193A", segoe);
-        if (name.Contains("sort")) return new("\uE8CB", mdl2);
-        if (name.Contains("filter")) return new("\uE71C", mdl2);
-        if (name.Contains("text to columns")) return new("\uE8EC", mdl2);
-        if (name.Contains("flash fill")) return new("\uE945", mdl2);
-        if (name.Contains("remove duplicate")) return new("\uE74D", mdl2);
-        if (name.Contains("validation")) return new("\uE73E", mdl2, RibbonCommandIconAccent.Warning);
-        if (name.Contains("consolidate")) return new("\uE8B7", mdl2);
-        if (name.Contains("data table")) return new("\uE8A9", mdl2);
-        if (name.Contains("analyze data")) return new("\uE9D2", mdl2, RibbonCommandIconAccent.Data);
-        if (name.Contains("data model")) return new("\uE8B7", mdl2, RibbonCommandIconAccent.Data);
-        if (name.Contains("subtotal")) return new("\u03A3", segoe);
-        if (name.Contains("goal seek") || name.Contains("scenario") || name.Contains("what-if")) return new("\uE9CE", mdl2);
-        if (name.Contains("forecast")) return new("\uE9D2", mdl2);
-        if (name.Contains("group")) return new("\uE9D5", mdl2);
-        if (name.Contains("ungroup")) return new("\uE9D6", mdl2);
-        if (name.Contains("collapse")) return new("\uE70D", mdl2);
-        if (name.Contains("expand")) return new("\uE70E", mdl2);
+        if (name.Contains("get data")) return new(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data);
+        if (name.Contains("refresh")) return new(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data);
+        if (name.Contains("sort ascending")) return new(RibbonCommandIconKind.SortAscending);
+        if (name.Contains("sort descending")) return new(RibbonCommandIconKind.SortDescending);
+        if (name.Contains("sort")) return new(RibbonCommandIconKind.Sort);
+        if (name.Contains("filter")) return new(RibbonCommandIconKind.Filter);
+        if (name.Contains("text to columns")) return new(RibbonCommandIconKind.TextColumns);
+        if (name.Contains("flash fill")) return new(RibbonCommandIconKind.Flash);
+        if (name.Contains("remove duplicate")) return new(RibbonCommandIconKind.Delete);
+        if (name.Contains("validation")) return new(RibbonCommandIconKind.Warning, RibbonCommandIconAccent.Warning);
+        if (name.Contains("consolidate")) return new(RibbonCommandIconKind.Consolidate);
+        if (name.Contains("data table")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("analyze data")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
+        if (name.Contains("data model")) return new(RibbonCommandIconKind.Consolidate, RibbonCommandIconAccent.Data);
+        if (name.Contains("subtotal")) return new(RibbonCommandIconKind.Sum);
+        if (name.Contains("goal seek") || name.Contains("scenario") || name.Contains("what-if")) return new(RibbonCommandIconKind.Target);
+        if (name.Contains("forecast")) return new(RibbonCommandIconKind.ChartLine);
+        if (name.Contains("group")) return new(RibbonCommandIconKind.Group);
+        if (name.Contains("ungroup")) return new(RibbonCommandIconKind.Ungroup);
+        if (name.Contains("collapse")) return new(RibbonCommandIconKind.Collapse);
+        if (name.Contains("expand")) return new(RibbonCommandIconKind.Expand);
 
-        if (name.Contains("spelling")) return new("abc\u2713", segoe);
-        if (name.Contains("thesaurus")) return new("\uE82D", mdl2);
-        if (name.Contains("translate")) return new("\uE8C1", mdl2);
-        if (name.Contains("show changes")) return new("\uE8A7", mdl2);
-        if (name.Contains("workbook statistics")) return new("\uE9D2", mdl2);
-        if (name.Contains("accessibility")) return new("\uE776", mdl2, RibbonCommandIconAccent.Warning);
-        if (name.Contains("alt text")) return new("\uE8D2", mdl2);
-        if (name.Contains("previous")) return new("\uE76B", mdl2);
-        if (name.Contains("next")) return new("\uE76C", mdl2);
-        if (name.Contains("protect")) return new("\uE72E", mdl2, RibbonCommandIconAccent.Protect);
-        if (name.Contains("share")) return new("\uE72D", mdl2, RibbonCommandIconAccent.Data);
-        if (name.Contains("hide ink")) return new("\uE76B", mdl2);
+        if (name.Contains("spelling")) return new(RibbonCommandIconKind.Spelling);
+        if (name.Contains("thesaurus")) return new(RibbonCommandIconKind.Book);
+        if (name.Contains("translate")) return new(RibbonCommandIconKind.Translate);
+        if (name.Contains("show changes")) return new(RibbonCommandIconKind.History);
+        if (name.Contains("workbook statistics")) return new(RibbonCommandIconKind.ChartColumn);
+        if (name.Contains("accessibility")) return new(RibbonCommandIconKind.Accessibility, RibbonCommandIconAccent.Warning);
+        if (name.Contains("alt text")) return new(RibbonCommandIconKind.TextBox);
+        if (name.Contains("previous")) return new(RibbonCommandIconKind.Previous);
+        if (name.Contains("next")) return new(RibbonCommandIconKind.Next);
+        if (name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
+        if (name.Contains("share")) return new(RibbonCommandIconKind.Share, RibbonCommandIconAccent.Data);
+        if (name.Contains("hide ink")) return new(RibbonCommandIconKind.Previous);
 
-        if (name.Contains("normal")) return new("\uE80A", mdl2);
-        if (name.Contains("page break")) return new("\uE8A6", mdl2);
-        if (name.Contains("page layout")) return new("\uE7C3", mdl2);
-        if (name.Contains("custom view")) return new("\uE890", mdl2);
-        if (name.Contains("sheet view")) return new("\uE8A9", mdl2);
-        if (name.Contains("ruler")) return new("\uE7F7", mdl2);
-        if (name.Contains("formula bar")) return new("fx", segoe);
-        if (name.Contains("freeze")) return new("\uE8A9", mdl2);
-        if (name.Contains("split")) return new("\uE8A6", mdl2);
-        if (name.Contains("zoom")) return new("\uE8A3", mdl2);
-        if (name.Contains("new window")) return new("\uE78B", mdl2);
-        if (name.Contains("arrange")) return new("\uE8A6", mdl2);
-        if (name.Contains("side by side") || name.Contains("synchronous") || name.Contains("reset window") || name.Contains("switch window")) return new("\uE8A7", mdl2);
-        if (name.Contains("macro")) return new("\uE8D4", mdl2);
+        if (name.Contains("normal")) return new(RibbonCommandIconKind.Grid);
+        if (name.Contains("page break")) return new(RibbonCommandIconKind.PageBreak);
+        if (name.Contains("page layout")) return new(RibbonCommandIconKind.Page);
+        if (name.Contains("custom view")) return new(RibbonCommandIconKind.View);
+        if (name.Contains("sheet view")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("ruler")) return new(RibbonCommandIconKind.Ruler);
+        if (name.Contains("formula bar")) return new(RibbonCommandIconKind.Function);
+        if (name.Contains("freeze")) return new(RibbonCommandIconKind.Freeze);
+        if (name.Contains("split")) return new(RibbonCommandIconKind.PageBreak);
+        if (name.Contains("zoom")) return new(RibbonCommandIconKind.Zoom);
+        if (name.Contains("new window")) return new(RibbonCommandIconKind.Window);
+        if (name.Contains("arrange")) return new(RibbonCommandIconKind.PageBreak);
+        if (name.Contains("side by side") || name.Contains("synchronous") || name.Contains("reset window") || name.Contains("switch window")) return new(RibbonCommandIconKind.History);
+        if (name.Contains("macro")) return new(RibbonCommandIconKind.GetData);
 
-        if (name.Contains("contact support")) return new("\uE8F2", mdl2);
-        if (name.Contains("training")) return new("\uE82D", mdl2);
-        if (name.Contains("community")) return new("\uE716", mdl2);
-        if (name.Contains("blog")) return new("\uE8A5", mdl2);
-        if (name.Contains("mobile")) return new("\uE8EA", mdl2);
-        if (name.Contains("help")) return new("\uE897", mdl2, RibbonCommandIconAccent.Help);
-        if (name.Contains("about")) return new("\uE946", mdl2, RibbonCommandIconAccent.Help);
-        if (name.Contains("feedback")) return new("\uE939", mdl2, RibbonCommandIconAccent.Help);
+        if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help);
+        if (name.Contains("training")) return new(RibbonCommandIconKind.Book);
+        if (name.Contains("community")) return new(RibbonCommandIconKind.Share);
+        if (name.Contains("blog")) return new(RibbonCommandIconKind.Generic);
+        if (name.Contains("mobile")) return new(RibbonCommandIconKind.Window);
+        if (name.Contains("help")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
+        if (name.Contains("about")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
+        if (name.Contains("feedback")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
 
-        return new("\uE8A5", mdl2);
+        return new(RibbonCommandIconKind.Generic);
     }
 
     public static RibbonCommandIcon GetGroupIcon(string groupName)
     {
         var name = groupName.ToLowerInvariant();
-        var segoe = new FontFamily("Segoe UI Symbol");
-        var mdl2 = new FontFamily("Segoe MDL2 Assets");
 
-        if (name.Contains("clipboard")) return new("\uE8C8", mdl2);
-        if (name.Contains("font")) return new("A", segoe);
-        if (name.Contains("alignment")) return new("\uE8E4", mdl2);
-        if (name.Contains("number")) return new("123", segoe);
-        if (name.Contains("style")) return new("\uE790", mdl2);
-        if (name.Contains("cell")) return new("\uE8A9", mdl2);
-        if (name.Contains("editing")) return new("\uE721", mdl2);
-        if (name.Contains("table")) return new("\uE8A9", mdl2);
-        if (name.Contains("chart")) return new("\uE9D2", mdl2);
-        if (name.Contains("illustration")) return new("\uEB9F", mdl2);
-        if (name.Contains("sparklines")) return new("\uE9D9", mdl2);
-        if (name.Contains("page setup")) return new("\uE7C3", mdl2);
-        if (name.Contains("theme")) return new("\uE790", mdl2);
-        if (name.Contains("function") || name.Contains("formula")) return new("fx", segoe);
-        if (name.Contains("defined name")) return new("\uE8EC", mdl2);
-        if (name.Contains("audit")) return new("\u2192", segoe);
-        if (name.Contains("calculation")) return new("\uE895", mdl2);
-        if (name.Contains("sort") || name.Contains("filter")) return new("\uE71C", mdl2);
-        if (name.Contains("data")) return new("\uE8D4", mdl2);
-        if (name.Contains("outline")) return new("\uE9D5", mdl2);
-        if (name.Contains("comment")) return new("\uE90A", mdl2);
-        if (name.Contains("protect")) return new("\uE72E", mdl2);
-        if (name.Contains("view")) return new("\uE80A", mdl2);
-        if (name.Contains("zoom")) return new("\uE8A3", mdl2);
+        if (name.Contains("clipboard")) return new(RibbonCommandIconKind.Paste);
+        if (name.Contains("font")) return new(RibbonCommandIconKind.Font);
+        if (name.Contains("alignment")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("number")) return new(RibbonCommandIconKind.Number);
+        if (name.Contains("style")) return new(RibbonCommandIconKind.Theme);
+        if (name.Contains("cell")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("editing")) return new(RibbonCommandIconKind.Search);
+        if (name.Contains("table")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("chart")) return new(RibbonCommandIconKind.ChartColumn);
+        if (name.Contains("illustration")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("sparklines")) return new(RibbonCommandIconKind.Sparkline);
+        if (name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
+        if (name.Contains("theme")) return new(RibbonCommandIconKind.Theme);
+        if (name.Contains("function") || name.Contains("formula")) return new(RibbonCommandIconKind.Function);
+        if (name.Contains("defined name")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("audit")) return new(RibbonCommandIconKind.Next);
+        if (name.Contains("calculation")) return new(RibbonCommandIconKind.Refresh);
+        if (name.Contains("sort") || name.Contains("filter")) return new(RibbonCommandIconKind.Filter);
+        if (name.Contains("data")) return new(RibbonCommandIconKind.GetData);
+        if (name.Contains("outline")) return new(RibbonCommandIconKind.Group);
+        if (name.Contains("comment")) return new(RibbonCommandIconKind.Comment);
+        if (name.Contains("protect")) return new(RibbonCommandIconKind.Protect);
+        if (name.Contains("view")) return new(RibbonCommandIconKind.Grid);
+        if (name.Contains("zoom")) return new(RibbonCommandIconKind.Zoom);
 
-        return new("\uE8A5", mdl2);
+        return new(RibbonCommandIconKind.Generic);
     }
 
     private static bool IsInsertChartType(string name) =>
@@ -370,9 +383,112 @@ public enum RibbonCommandLayoutKind
 }
 
 public sealed record RibbonCommandIcon(
-    string Glyph,
-    FontFamily FontFamily,
+    RibbonCommandIconKind Kind,
     RibbonCommandIconAccent Accent = RibbonCommandIconAccent.None);
+
+public enum RibbonCommandIconKind
+{
+    Generic,
+    Accessibility,
+    Align,
+    Book,
+    Border,
+    Bold,
+    BringForward,
+    ChartArea,
+    PivotTable,
+    Table,
+    ChartColumn,
+    ChartLine,
+    ChartPie,
+    ChartScatter,
+    Collapse,
+    Color,
+    Comma,
+    Comment,
+    Consolidate,
+    Copy,
+    Currency,
+    Cut,
+    Date,
+    Decimal,
+    Delete,
+    Effects,
+    Ellipse,
+    Expand,
+    Feedback,
+    Fill,
+    Filter,
+    FormatPainter,
+    Financial,
+    Flash,
+    Font,
+    Freeze,
+    Function,
+    GetData,
+    Grid,
+    Group,
+    HeaderFooter,
+    Help,
+    History,
+    Info,
+    Italic,
+    Label,
+    Line,
+    Link,
+    List,
+    Logical,
+    Margins,
+    Math,
+    Merge,
+    More,
+    Next,
+    Number,
+    Orientation,
+    Page,
+    PageBreak,
+    Paste,
+    Percent,
+    Picture,
+    Previous,
+    Print,
+    Protect,
+    Recent,
+    Rectangle,
+    Redo,
+    Refresh,
+    Rotate,
+    Ruler,
+    Save,
+    Scale,
+    Search,
+    SendBackward,
+    Share,
+    Size,
+    Sort,
+    SortAscending,
+    SortDescending,
+    Sparkline,
+    Spelling,
+    Strikethrough,
+    Sum,
+    Symbol,
+    Target,
+    TextBox,
+    TextColumns,
+    TextFunction,
+    Theme,
+    Translate,
+    Underline,
+    Undo,
+    Ungroup,
+    View,
+    Warning,
+    Watch,
+    Window,
+    Wrap,
+    Zoom
+}
 
 public enum RibbonCommandIconAccent
 {
