@@ -147,8 +147,8 @@
 
         <!-- Ribbon tab item style — flat, green underline when selected -->
         <Style TargetType="TabItem">
-            <Setter Property="Padding" Value="10,5"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="7,4"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Margin" Value="0"/>
@@ -506,6 +506,11 @@
                     SelectionChanged="RibbonTabs_SelectionChanged">
 
             <!-- ── FILE — clicking opens the overlay; handler immediately switches back to Home -->
+            <TabControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
             <TabItem x:Name="FileTab" Header="File" local:RibbonTooltip.KeyTip="F"/>
 
             <!-- ── HOME ──────────────────────────────────────────────── -->
@@ -1287,28 +1292,28 @@
                         <!-- ▌Tables ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="PivotTable" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
+                            <UniformGrid Grid.Row="0" Rows="3" Columns="2" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="PivotTable" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
                                         local:RibbonTooltip.Title="PivotTable"
                                         local:RibbonTooltip.KeyTip="P"
                                         local:RibbonTooltip.Description="Create a PivotTable from the selected range."/>
-                                <Button Content="Refresh Pivot" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
-                                        local:RibbonTooltip.Title="Refresh PivotTable"
-                                        local:RibbonTooltip.KeyTip="RP"
-                                        local:RibbonTooltip.Description="Refresh the selected PivotTable from its source data."/>
-                                <Button Content="Show Details" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
-                                        local:RibbonTooltip.Title="Show Details"
-                                        local:RibbonTooltip.KeyTip="PD"
-                                        local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
-                                <Button Content="PivotChart" Width="112" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
-                                        local:RibbonTooltip.Title="PivotChart"
-                                        local:RibbonTooltip.KeyTip="PV"
-                                        local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
-                                <Button Content="Table"      Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
+                                <Button Content="Table" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableBtn_Click"
                                         local:RibbonTooltip.Title="Table"
                                         local:RibbonTooltip.KeyTip="T"
                                         local:RibbonTooltip.Description="Create a table to manage and analyze related data."/>
-                            </StackPanel>
+                                <Button Content="Refresh Pivot" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
+                                        local:RibbonTooltip.Title="Refresh PivotTable"
+                                        local:RibbonTooltip.KeyTip="RP"
+                                        local:RibbonTooltip.Description="Refresh the selected PivotTable from its source data."/>
+                                <Button Content="Show Details" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
+                                        local:RibbonTooltip.Title="Show Details"
+                                        local:RibbonTooltip.KeyTip="PD"
+                                        local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
+                                <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
+                                        local:RibbonTooltip.Title="PivotChart"
+                                        local:RibbonTooltip.KeyTip="PV"
+                                        local:RibbonTooltip.Description="Insert a chart bound to the selected PivotTable."/>
+                            </UniformGrid>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tables" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
