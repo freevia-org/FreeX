@@ -9865,14 +9865,7 @@ public partial class MainWindow : Window
         var input = PromptForInput("Crop percentages (left, top, right, bottom). Use 0,0,0,0 to reset:", defaultText);
         if (input is null) return;
 
-        var parts = input.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 4 ||
-            !DrawingInputParser.TryParseCropPercent(parts[0], out var left) ||
-            !DrawingInputParser.TryParseCropPercent(parts[1], out var top) ||
-            !DrawingInputParser.TryParseCropPercent(parts[2], out var right) ||
-            !DrawingInputParser.TryParseCropPercent(parts[3], out var bottom) ||
-            left + right >= 1 ||
-            top + bottom >= 1)
+        if (!DrawingInputParser.TryParseCropPercents(input, out var left, out var top, out var right, out var bottom))
         {
             MessageBox.Show("Enter four percentages between 0 and 99, keeping visible width and height. Example: 10, 0, 10, 0.",
                 "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -10175,10 +10168,7 @@ public partial class MainWindow : Window
 
         var input = PromptForInput("Gradient colors (start R,G,B; end R,G,B):", "31,119,180; 180,210,240");
         if (input is null) return;
-        var parts = input.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !DrawingInputParser.TryParseRgbColor(parts[0], out var startColor) ||
-            !DrawingInputParser.TryParseRgbColor(parts[1], out var endColor))
+        if (!DrawingInputParser.TryParseGradientColors(input, out var startColor, out var endColor))
         {
             MessageBox.Show("Enter two colors separated by a semicolon, for example 31,119,180; 180,210,240.",
                 "Shape Gradient", MessageBoxButton.OK, MessageBoxImage.Warning);
