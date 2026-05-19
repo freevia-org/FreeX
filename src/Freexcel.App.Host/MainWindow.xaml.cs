@@ -1302,6 +1302,18 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+            if (e.Key == Key.PageUp && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            {
+                SelectAdjacentVisibleSheetGroup(-1);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.PageDown && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            {
+                SelectAdjacentVisibleSheetGroup(1);
+                e.Handled = true;
+                return;
+            }
             if (e.Key == Key.PageUp && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 ActivateAdjacentVisibleSheet(-1);
@@ -11975,6 +11987,28 @@ public partial class MainWindow : Window
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
+        UpdateViewport();
+        RefreshSheetTabs();
+    }
+
+    private void SelectAdjacentVisibleSheetGroup(int direction)
+    {
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            _workbook,
+            _currentSheetId,
+            _sheetGroupAnchor,
+            direction);
+        if (plan is null)
+            return;
+
+        _currentSheetId = plan.CurrentSheetId;
+        _sheetGroupAnchor = plan.AnchorSheetId;
+        _groupedSheetIds.Clear();
+        foreach (var id in plan.GroupedSheetIds)
+            _groupedSheetIds.Add(id);
+        if (_groupedSheetIds.Count == 0)
+            _groupedSheetIds.Add(_currentSheetId);
+
         UpdateViewport();
         RefreshSheetTabs();
     }
