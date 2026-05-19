@@ -130,6 +130,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.V)
+        {
+            shortcut = KeyboardCommandShortcut.PasteValues;
+            return true;
+        }
+
         if ((modifiers == ModifierKeys.None && effectiveKey == Key.F5) ||
             (modifiers == ModifierKeys.Control && effectiveKey == Key.G))
         {
@@ -377,6 +383,7 @@ public enum KeyboardCommandShortcut
     ToggleFormulaBarExpansion,
     QuickAnalysis,
     OpenPrintBackstage,
+    PasteValues,
     GoTo,
     InsertEmbeddedChart,
     InsertChartSheet,

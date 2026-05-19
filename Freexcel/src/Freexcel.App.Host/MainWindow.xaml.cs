@@ -2179,6 +2179,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.OpenPrintBackstage:
                 OpenPrintBackstage();
                 break;
+            case KeyboardCommandShortcut.PasteValues:
+                ExecutePaste(PasteMode.Values);
+                break;
             case KeyboardCommandShortcut.GoTo:
                 FindGoToMenuItem_Click(sender, e);
                 break;
