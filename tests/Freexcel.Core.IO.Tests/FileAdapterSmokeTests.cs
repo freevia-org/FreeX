@@ -12,6 +12,9 @@ namespace Freexcel.Core.IO.Tests;
 
 public class FileAdapterSmokeTests
 {
+    private const string NumberStoredAsTextCode = "NumberStoredAsText";
+    private const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
+
     // ── Native JSON ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -80,6 +83,8 @@ public class FileAdapterSmokeTests
     {
         var workbook = new Workbook("ErrorCheckingOptions");
         workbook.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
+        workbook.DisabledFormulaErrorCodes.Add(NumberStoredAsTextCode);
+        workbook.DisabledFormulaErrorCodes.Add(FormulaRefersToBlankCellsCode);
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -88,7 +93,10 @@ public class FileAdapterSmokeTests
 
         var loaded = adapter.Load(ms);
 
-        loaded.DisabledFormulaErrorCodes.Should().ContainSingle(ErrorValue.DivByZero.Code);
+        loaded.DisabledFormulaErrorCodes.Should().BeEquivalentTo(
+            ErrorValue.DivByZero.Code,
+            NumberStoredAsTextCode,
+            FormulaRefersToBlankCellsCode);
     }
 
     [Fact]
@@ -97,7 +105,7 @@ public class FileAdapterSmokeTests
         const string json = """
         {
           "Name": "ErrorCheckingOptions",
-          "DisabledFormulaErrorCodes": [ "#DIV/0!", "#NOT-AN-EXCEL-RULE!" ],
+          "DisabledFormulaErrorCodes": [ "#DIV/0!", "NumberStoredAsText", "FormulaRefersToBlankCells", "#NOT-AN-EXCEL-RULE!" ],
           "Sheets": [ { "Name": "Sheet1" } ]
         }
         """;
@@ -105,7 +113,10 @@ public class FileAdapterSmokeTests
         using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
         var loaded = new NativeJsonAdapter().Load(ms);
 
-        loaded.DisabledFormulaErrorCodes.Should().ContainSingle(ErrorValue.DivByZero.Code);
+        loaded.DisabledFormulaErrorCodes.Should().BeEquivalentTo(
+            ErrorValue.DivByZero.Code,
+            NumberStoredAsTextCode,
+            FormulaRefersToBlankCellsCode);
     }
 
     [Fact]
@@ -114,6 +125,8 @@ public class FileAdapterSmokeTests
         var workbook = new Workbook("ErrorCheckingSaveSanitize");
         workbook.AddSheet("Sheet1");
         workbook.DisabledFormulaErrorCodes.Add(ErrorValue.Ref.Code);
+        workbook.DisabledFormulaErrorCodes.Add(NumberStoredAsTextCode);
+        workbook.DisabledFormulaErrorCodes.Add(FormulaRefersToBlankCellsCode);
         workbook.DisabledFormulaErrorCodes.Add("#NOT-AN-EXCEL-RULE!");
 
         var ms = new MemoryStream();
@@ -126,7 +139,10 @@ public class FileAdapterSmokeTests
             .EnumerateArray()
             .Select(item => item.GetString())
             .ToList();
-        codes.Should().ContainSingle(ErrorValue.Ref.Code);
+        codes.Should().BeEquivalentTo(
+            ErrorValue.Ref.Code,
+            NumberStoredAsTextCode,
+            FormulaRefersToBlankCellsCode);
     }
 
     [Fact]

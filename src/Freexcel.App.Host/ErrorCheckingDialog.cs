@@ -125,7 +125,13 @@ public sealed class ErrorCheckingDialog : Window
             return;
 
         var index = _listView.SelectedIndex;
-        _issues.Remove(issue);
+        var sameCellIssues = _issues
+            .Where(candidate =>
+                candidate.SheetId == issue.SheetId &&
+                candidate.Address.Equals(issue.Address))
+            .ToList();
+        foreach (var sameCellIssue in sameCellIssues)
+            _issues.Remove(sameCellIssue);
         RefreshHeader();
 
         if (_issues.Count == 0)
