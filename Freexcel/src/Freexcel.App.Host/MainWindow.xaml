@@ -2145,7 +2145,7 @@
                                         local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
                                 <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
                                         local:RibbonTooltip.Title="Use in Formula"
-                                        local:RibbonTooltip.KeyTip="UF"
+                                        local:RibbonTooltip.KeyTip="I"
                                         local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>
                                 <Button Content="Name Manager"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NamedRangesButton_Click"
                                         local:RibbonTooltip.Title="Name Manager"
