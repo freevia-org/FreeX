@@ -1631,7 +1631,7 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(e.Key, Keyboard.Modifiers))
+        if (KeyboardShortcutMatcher.IsPasteSpecialShortcut(e.Key, e.SystemKey, Keyboard.Modifiers))
         {
             PasteSpecialBtn_Click(sender, e);
             e.Handled = true;
