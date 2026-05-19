@@ -2163,7 +2163,14 @@
                                 <Button Content="Error Checking"    Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ErrorCheckBtn_Click"
                                         local:RibbonTooltip.Title="Error Checking"
                                         local:RibbonTooltip.KeyTip="EC"
-                                        local:RibbonTooltip.Description="Check for common errors in the formulas on this sheet."/>
+                                        local:RibbonTooltip.Description="Check for common errors in the formulas on this sheet, or open error-checking options.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Error Checking..." local:RibbonTooltip.KeyTip="E" Click="ErrorCheckBtn_Click"/>
+                                            <MenuItem Header="Error Checking Options..." local:RibbonTooltip.KeyTip="O" Click="SsOptionsBtn_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="Evaluate Formula"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="EvaluateFormulaBtn_Click"
                                         local:RibbonTooltip.Title="Evaluate Formula"
                                         local:RibbonTooltip.KeyTip="V"
