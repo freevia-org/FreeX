@@ -82,6 +82,24 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.D)
+        {
+            shortcut = KeyboardCommandShortcut.FillDown;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.R)
+        {
+            shortcut = KeyboardCommandShortcut.FillRight;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.E)
+        {
+            shortcut = KeyboardCommandShortcut.FlashFill;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -412,6 +430,9 @@ public enum KeyboardCommandShortcut
 {
     CreateTable,
     InsertHyperlink,
+    FillDown,
+    FillRight,
+    FlashFill,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,

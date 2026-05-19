@@ -1854,24 +1854,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.D && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                FillDownMenuItem_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.R && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                FillRightMenuItem_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.E && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                TryFlashFill();
-                e.Handled = true;
-                return;
-            }
             if ((e.Key == Key.D5 || e.Key == Key.NumPad5) && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 ApplyFontToggleShortcut(FontToggleShortcut.Strikethrough, StrikeButton);
@@ -2121,6 +2103,15 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.InsertHyperlink:
                 InsertLinkBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.FillDown:
+                FillDownMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.FillRight:
+                FillRightMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.FlashFill:
+                TryFlashFill();
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);
