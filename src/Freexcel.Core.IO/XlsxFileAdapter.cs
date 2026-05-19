@@ -4818,6 +4818,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             if (MergeWorksheetRowAttributes(sourceSheetData, targetRoot, workbookNs))
                 changed = true;
+            if (MergeWorksheetCellAttributes(sourceSheetData, targetRoot, workbookNs))
+                changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
@@ -4884,6 +4886,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     continue;
 
                 targetRow.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorksheetCellAttributes(XElement? sourceSheetData, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceSheetData is null)
+            return false;
+
+        var targetSheetData = targetRoot.Element(workbookNs + "sheetData");
+        if (targetSheetData is null)
+            return false;
+
+        var targetCellsByAddress = targetSheetData
+            .Descendants(workbookNs + "c")
+            .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute("r")?.Value))
+            .ToDictionary(
+                cell => cell.Attribute("r")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceCell in sourceSheetData.Descendants(workbookNs + "c"))
+        {
+            var address = sourceCell.Attribute("r")?.Value;
+            if (string.IsNullOrWhiteSpace(address) ||
+                !targetCellsByAddress.TryGetValue(address, out var targetCell))
+            {
+                continue;
+            }
+
+            foreach (var attribute in sourceCell.Attributes())
+            {
+                if (targetCell.Attribute(attribute.Name) is not null)
+                    continue;
+
+                targetCell.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
             }
         }
