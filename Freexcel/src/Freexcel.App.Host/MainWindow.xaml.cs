@@ -6801,28 +6801,27 @@ public partial class MainWindow : Window
 
         var request = ExportPlanner.PlanExport(saveDlg.FileName);
         if (request.Format == ExportFormat.PdfViaWindowsPrinter)
-            ExportViaPrintToPdf(request.Path);
+            ExportViaPrintToPdf(request);
         else
-            ExportAsXps(request.Path);
+            ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options));
     }
 
     /// <summary>
     /// Handles PDF requests through the deterministic XPS export path. WPF's managed
     /// print APIs cannot set the target PDF file path for virtual PDF printers.
     /// </summary>
-    private void ExportViaPrintToPdf(string pdfPath)
+    private void ExportViaPrintToPdf(ExportRequest request)
     {
-        ExportPdfFallbackAsXps(pdfPath);
+        ExportPdfFallbackAsXps(request);
     }
 
-    private void ExportPdfFallbackAsXps(string pdfPath)
+    private void ExportPdfFallbackAsXps(ExportRequest request)
     {
-        var xpsPath = ExportPlanner.GetFallbackXpsPath(pdfPath);
-        if (!ExportAsXps(xpsPath, showSuccessMessage: false))
+        if (!ExportAsXps(request.ActualPath, showSuccessMessage: false))
             return;
 
         MessageBox.Show(
-            $"{ExportPlanner.PdfFallbackMessage}\n\nSaved XPS file:\n{xpsPath}",
+            $"{ExportPlanner.DescribeRequest(request)}\n\nSaved XPS file:\n{request.ActualPath}",
             "Export PDF",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -13118,7 +13117,7 @@ public partial class MainWindow : Window
         { FileName = AppInfo.FeedbackUrl, UseShellExecute = true });
     }
 
-    private bool ExportAsXps(string xpsPath, bool showSuccessMessage = true)
+    private bool ExportAsXps(string xpsPath, string? optionSummary = null, bool showSuccessMessage = true)
     {
         try
         {
@@ -13149,8 +13148,11 @@ public partial class MainWindow : Window
 
             if (showSuccessMessage)
             {
+                var detail = string.IsNullOrWhiteSpace(optionSummary)
+                    ? $"Saved XPS file:\n{xpsPath}"
+                    : $"{optionSummary}\n\nSaved XPS file:\n{xpsPath}";
                 MessageBox.Show(
-                    $"Saved XPS file:\n{xpsPath}",
+                    detail,
                     "Export XPS",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
