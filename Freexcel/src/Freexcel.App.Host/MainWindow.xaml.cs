@@ -1896,12 +1896,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if ((e.SystemKey == Key.OemPlus || e.SystemKey == Key.Add) && Keyboard.Modifiers == ModifierKeys.Alt)
-            {
-                InsertAutoSumFormula("SUM");
-                e.Handled = true;
-                return;
-            }
             if (e.SystemKey == Key.Right && Keyboard.Modifiers == (ModifierKeys.Alt | ModifierKeys.Shift))
             {
                 GroupRowsBtn_Click(sender, e);
@@ -2182,6 +2176,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
                 ChartColumnMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.AutoSum:
+                InsertAutoSumFormula("SUM");
                 break;
             case KeyboardCommandShortcut.OpenFormatCellsFont:
                 OpenFormatCellsDialog(FormatCellsDialogTab.Font);
