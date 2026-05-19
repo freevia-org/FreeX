@@ -5878,6 +5878,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.UnhideRows:
                 ExecuteRowsHidden(hidden: false);
                 break;
+            case WorksheetContextMenuAction.RowHeight:
+                FormatRowHeightMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.AutoFitRowHeight:
                 FormatAutoRowMenuItem_Click(this, new RoutedEventArgs());
                 break;
@@ -5886,6 +5889,9 @@ public partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.UnhideColumns:
                 ExecuteColumnsHidden(hidden: false);
+                break;
+            case WorksheetContextMenuAction.ColumnWidth:
+                FormatColWidthMenuItem_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.AutoFitColumnWidth:
                 FormatAutoColMenuItem_Click(this, new RoutedEventArgs());
