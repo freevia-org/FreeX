@@ -798,9 +798,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 slicers.Add(new SlicerModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     PackagePart = slicerEntry.FullName.Replace('\\', '/')
                 });
                 slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
@@ -824,9 +826,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 timelines.Add(new TimelineModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     StartDate = cache?.StartDate,
                     EndDate = cache?.EndDate,
                     SelectedStartDate = cache?.SelectedStartDate,
@@ -3986,7 +3990,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, slicerPath, new XDocument(
                 new XElement(slicerNs + "slicer",
                     new XAttribute("name", slicer.Name),
-                    new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName))));
+                    new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName),
+                    OptionalAttribute("caption", slicer.Caption),
+                    OptionalAttribute("style", slicer.StyleName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "slicerCacheDefinition",
                     new XAttribute("name", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName),
@@ -4018,7 +4024,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, timelinePath, new XDocument(
                 new XElement(slicerNs + "timeline",
                     new XAttribute("name", timeline.Name),
-                    new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName))));
+                    new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName),
+                    OptionalAttribute("caption", timeline.Caption),
+                    OptionalAttribute("style", timeline.StyleName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "timelineCacheDefinition",
                     new XAttribute("name", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName),

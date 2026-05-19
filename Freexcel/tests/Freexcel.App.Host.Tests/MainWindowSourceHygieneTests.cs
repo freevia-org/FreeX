@@ -26,6 +26,7 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RibbonCommandPresentationPlanner.cs"));
 
+        File.Exists(Path.Combine(appHostDirectory, "RibbonIconFactory.cs")).Should().BeTrue();
         iconResources.Should().Contain("FreexcelRibbonLargeIconSlot");
         iconResources.Should().Contain("FreexcelRibbonSmallIconSlot");
         iconResources.Should().Contain("FreexcelRibbonLargeLabel");
@@ -34,9 +35,15 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
         source.Should().Contain("NormalizeExistingRibbonIconText();");
         source.Should().Contain("GetRibbonIconAccentBrushes");
+        source.Should().Contain("RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush)");
+        source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
+        source.Should().NotContain("icon.Glyph");
         source.Should().Contain("RibbonCommandIconAccent.Chart");
         source.Should().Contain("HorizontalAlignment.Left");
 
+        planner.Should().Contain("RibbonCommandIconKind.ChartColumn");
+        planner.Should().NotContain("FontFamily");
+        planner.Should().NotContain("Glyph");
         planner.Should().Contain("RibbonCommandIconAccent.Chart");
         planner.Should().Contain("RibbonCommandIconAccent.Data");
         planner.Should().Contain("RibbonCommandIconAccent.Warning");
@@ -44,15 +51,74 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
+    public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("NumberFormatOptions.Select(option => option.Label)");
+        source.Should().Contain("NumberFormatOptions[NumberFormatBox.SelectedIndex].Code");
+        source.Should().Contain("Accounting ($#,##0.00)");
+        source.Should().Contain("Fraction (# ?/?)");
+        source.Should().Contain("Scientific (0.00E+00)");
+        source.Should().Contain("\"# ?/?\"");
+        source.Should().Contain("\"0.00E+00\"");
+    }
+
+    [Fact]
+    public void ArrangeAllMenu_ReflectsStoredWorkbookArrangement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
+        xaml.Should().Contain("IsCheckable=\"True\"");
+        source.Should().Contain("ArrangeAllContextMenu_Opened");
+        source.Should().Contain("_workbook.WindowArrangement.ToString()");
+        source.Should().Contain("item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal)");
+    }
+
+    [Fact]
+    public void SplitRibbonCommand_ReflectsActiveSplitState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("<ToggleButton x:Name=\"SplitViewBtn\"");
+        xaml.Should().Contain("Style=\"{StaticResource RibbonToggleBtn}\"");
+        source.Should().Contain("SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null");
+    }
+
+    [Fact]
+    public void QuickAccessToolbar_UsesVectorIcons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
 
         xaml.Should().Contain("x:Name=\"SaveQatBtn\"");
-        xaml.Should().Contain("FreexcelQatOnAccentIcon");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Save\"");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Undo\"");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Redo\"");
+        xaml.Should().NotContain("FreexcelQatOnAccentIcon");
+        iconResources.Should().NotContain("FreexcelQatIcon");
         xaml.Should().NotContain("Content=\"💾\"");
         xaml.Should().NotContain("Content=\"↩\"");
         xaml.Should().NotContain("Content=\"↪\"");
+    }
+
+    [Fact]
+    public void ToolbarIcons_DoNotUseFontGlyphAssets()
+    {
+        var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
+        var appHostDirectory = Path.GetDirectoryName(mainWindowPath)!;
+        var xaml = File.ReadAllText(mainWindowPath);
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
+
+        xaml.Should().NotContain("Segoe MDL2 Assets");
+        xaml.Should().NotContain("RibbonIconGlyph");
+        xaml.Should().NotContain("FreexcelQatOnAccentIcon");
+        iconResources.Should().NotContain("Segoe MDL2 Assets");
+        iconResources.Should().NotContain("FreexcelRibbonGlyph");
     }
 
     [Fact]
@@ -68,8 +134,27 @@ public sealed class MainWindowSourceHygieneTests
         File.Exists(Path.Combine(appHostDirectory, "Resources", "Freexcel.ico")).Should().BeTrue();
         xaml.Should().Contain("Icon=\"Resources/Freexcel.ico\"");
         xaml.Should().Contain("x:Name=\"TitleBarAppIcon\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppFreeBand\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineTop\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineBottom\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineLeft\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppXOutlineRight\"");
+        xaml.Should().Contain("x:Name=\"TitleBarAppX\"");
         xaml.Should().Contain("<TextBlock Text=\"FREE\"");
         xaml.Should().Contain("<TextBlock Text=\"X\"");
+        xaml.Should().Contain("<RowDefinition Height=\"8\"/>");
+        xaml.Should().Contain("<RowDefinition Height=\"1\"/>");
+        xaml.Should().Contain("<RowDefinition Height=\"*\"/>");
+        xaml.Should().Contain("Margin=\"0\"");
+        xaml.Should().Contain("Grid.RowSpan=\"3\"");
+        xaml.Should().Contain("FontSize=\"6.6\"");
+        xaml.Should().Contain("FontSize=\"14.5\"");
+        xaml.Should().Contain("Foreground=\"#155C38\"");
+        xaml.Should().Contain("Margin=\"0,-3,0,0\"");
+        xaml.Should().Contain("Margin=\"0,-1,0,0\"");
+        xaml.Should().Contain("Margin=\"-1,-2,0,0\"");
+        xaml.Should().Contain("Margin=\"1,-2,0,0\"");
+        xaml.Should().Contain("Margin=\"0,-2,0,0\"");
         xaml.Should().NotContain("<Image Source=\"Resources/Freexcel.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreexcelGreenBrush}\"");
         theme.Should().Contain("x:Key=\"FreexcelTitleBarBrush\"");
@@ -209,5 +294,19 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");
+    }
+
+    [Fact]
+    public void SpellCheckWorkflow_RoutesReplaceAllAndIgnoreThroughKnownCorrectionsPlan()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId)");
+        source.Should().Contain("replace all");
+        source.Should().Contain("ignore");
+        source.Should().Contain("BuildSpellCheckEdits");
+        source.Should().Contain("TryExecuteSpellCheckEdits");
+        source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
+        source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
     }
 }
