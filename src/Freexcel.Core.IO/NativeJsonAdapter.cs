@@ -45,6 +45,13 @@ public sealed class NativeJsonAdapter : IFileAdapter
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;
+            foreach (var property in sDto.CustomProperties ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(property?.Name) || property.Id <= 0)
+                    continue;
+
+                sheet.CustomProperties.Add(new WorksheetCustomProperty(property.Name, property.Id));
+            }
             foreach (var entry in sDto.RowHeights ?? [])
                 if (IsValidRowIndex(entry.Index) && IsPositiveFinite(entry.Value))
                     sheet.RowHeights[entry.Index] = entry.Value;
@@ -78,6 +85,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             sheet.ShowRulers = sDto.ShowRulers ?? true;
             sheet.ZoomPercent = ValidZoomPercentOrDefault(sDto.ZoomPercent);
             sheet.ShowFormulas = sDto.ShowFormulas ?? false;
+            sheet.FullCalculationOnLoad = sDto.FullCalculationOnLoad;
+            sheet.PhoneticProperties = ToWorksheetPhoneticProperties(sDto.PhoneticProperties);
             sheet.FrozenRows = ValidFrozenRowsOrZero(sDto.FrozenRows);
             sheet.FrozenCols = ValidFrozenColumnsOrZero(sDto.FrozenCols);
             sheet.ViewTopRow = ValidRowPaneOrNull(sDto.ViewTopRow);
@@ -430,6 +439,14 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 TabColor = s.TabColor is { } color ? FormatColor(color) : null,
                 IsProtected = s.IsProtected,
                 ProtectionPassword = s.IsProtected ? s.ProtectionPassword : null,
+                CustomProperties = s.CustomProperties
+                    .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
+                    .Select(property => new WorksheetCustomPropertyDto
+                    {
+                        Name = property.Name,
+                        Id = property.Id
+                    })
+                    .ToList(),
                 RowHeights = s.RowHeights
                     .Where(pair => IsValidRowIndex(pair.Key) && IsPositiveFinite(pair.Value))
                     .Select(pair => new UIntDoubleDto { Index = pair.Key, Value = pair.Value })
@@ -457,6 +474,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 ShowRulers = s.ShowRulers,
                 ZoomPercent = ValidZoomPercentOrDefault(s.ZoomPercent),
                 ShowFormulas = s.ShowFormulas,
+                FullCalculationOnLoad = s.FullCalculationOnLoad,
+                PhoneticProperties = ToWorksheetPhoneticPropertiesDto(s.PhoneticProperties),
                 FrozenRows = ValidFrozenRowsOrZero(s.FrozenRows),
                 FrozenCols = ValidFrozenColumnsOrZero(s.FrozenCols),
                 ViewTopRow = ValidRowPaneOrNull(s.ViewTopRow),
@@ -1465,6 +1484,37 @@ public sealed class NativeJsonAdapter : IFileAdapter
         };
     }
 
+    private static WorksheetPhoneticProperties? ToWorksheetPhoneticProperties(WorksheetPhoneticPropertiesDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var fontId = string.IsNullOrWhiteSpace(dto.FontId) ? null : dto.FontId;
+        var type = string.IsNullOrWhiteSpace(dto.Type) ? null : dto.Type;
+        var alignment = string.IsNullOrWhiteSpace(dto.Alignment) ? null : dto.Alignment;
+        return fontId is null && type is null && alignment is null
+            ? null
+            : new WorksheetPhoneticProperties(fontId, type, alignment);
+    }
+
+    private static WorksheetPhoneticPropertiesDto? ToWorksheetPhoneticPropertiesDto(WorksheetPhoneticProperties? properties)
+    {
+        if (properties is null)
+            return null;
+
+        var fontId = string.IsNullOrWhiteSpace(properties.FontId) ? null : properties.FontId;
+        var type = string.IsNullOrWhiteSpace(properties.Type) ? null : properties.Type;
+        var alignment = string.IsNullOrWhiteSpace(properties.Alignment) ? null : properties.Alignment;
+        return fontId is null && type is null && alignment is null
+            ? null
+            : new WorksheetPhoneticPropertiesDto
+            {
+                FontId = fontId,
+                Type = type,
+                Alignment = alignment
+            };
+    }
+
     private static int ValidZoomPercentOrDefault(int? zoomPercent) =>
         zoomPercent is >= 10 and <= 400 ? zoomPercent.Value : 100;
 
@@ -1682,6 +1732,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public string? TabColor { get; set; }
         public bool IsProtected { get; set; }
         public string? ProtectionPassword { get; set; }
+        public List<WorksheetCustomPropertyDto> CustomProperties { get; set; } = [];
         public List<UIntDoubleDto> RowHeights { get; set; } = [];
         public List<UIntDoubleDto> ColumnWidths { get; set; } = [];
         public List<uint> HiddenRows { get; set; } = [];
@@ -1697,6 +1748,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool? ShowRulers { get; set; }
         public int? ZoomPercent { get; set; }
         public bool? ShowFormulas { get; set; }
+        public bool FullCalculationOnLoad { get; set; }
+        public WorksheetPhoneticPropertiesDto? PhoneticProperties { get; set; }
         public uint FrozenRows { get; set; }
         public uint FrozenCols { get; set; }
         public uint? ViewTopRow { get; set; }
@@ -1751,6 +1804,19 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public List<ConditionalFormatDto> ConditionalFormats { get; set; } = [];
         public List<CellDto> Cells { get; set; } = [];
         public List<StyleOnlyCellDto> StyleOnlyCells { get; set; } = [];
+    }
+
+    private class WorksheetCustomPropertyDto
+    {
+        public string Name { get; set; } = "";
+        public int Id { get; set; }
+    }
+
+    private class WorksheetPhoneticPropertiesDto
+    {
+        public string? FontId { get; set; }
+        public string? Type { get; set; }
+        public string? Alignment { get; set; }
     }
 
     private class DataValidationDto

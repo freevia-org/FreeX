@@ -375,6 +375,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                     states.Add(customView.State with { SheetName = sheet.Name });
                 }
+                foreach (var property in layout.CustomProperties)
+                    sheet.CustomProperties.Add(property);
+                sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
+                sheet.PhoneticProperties = layout.PhoneticProperties;
             }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
@@ -509,6 +513,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Merge load failed: {ex.Message}"); }
         }
 
+        ResolvePivotChartCacheBindings(workbook);
+
         // Load named ranges (best-effort; skip any we cannot map)
         try { LoadNamedRanges(xlWorkbook, workbook); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Named-range load failed: {ex.Message}"); }
@@ -520,6 +526,27 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return workbook;
+    }
+
+    private static void ResolvePivotChartCacheBindings(Workbook workbook)
+    {
+        foreach (var chartSheet in workbook.Sheets)
+        {
+            foreach (var chart in chartSheet.Charts.Where(chart =>
+                         chart.IsPivotChart &&
+                         chart.PivotCacheId is null &&
+                         !string.IsNullOrWhiteSpace(chart.PivotTableName)))
+            {
+                var sourceSheet = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+                    ? chartSheet
+                    : workbook.Sheets.FirstOrDefault(sheet =>
+                        string.Equals(sheet.Name, chart.PivotSourceSheetName, StringComparison.OrdinalIgnoreCase));
+                var pivot = sourceSheet?.PivotTables.FirstOrDefault(pivot =>
+                    string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+                if (pivot is not null)
+                    chart.PivotCacheId = pivot.CacheId;
+            }
+        }
     }
 
     private sealed record SheetXmlLayout(
@@ -534,6 +561,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        bool FullCalculationOnLoad,
+        WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
         uint? PaneRowSplit,
         uint? PaneColumnSplit,
@@ -556,6 +585,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<CellAddress> CellWatches,
         IReadOnlyList<WorkbookScenario> Scenarios,
         IReadOnlyList<XlsxWorksheetCustomViewState> CustomViews,
+        IReadOnlyList<WorksheetCustomProperty> CustomProperties,
         string? CodeName);
 
     private sealed record XlsxWorkbookCustomView(string Id, string Name);
@@ -837,16 +867,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (root is null)
                 continue;
 
-            var worksheetSource = root
-                .Element(workbookNs + "cacheSource")?
-                .Element(workbookNs + "worksheetSource");
+            var cacheSource = root.Element(workbookNs + "cacheSource");
+            var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
             var cache = new PivotCacheModel
             {
                 CacheId = cacheId,
-                SourceType = GetPivotCacheSourceType(worksheetSource),
+                SourceType = GetPivotCacheSourceType(cacheSource, worksheetSource),
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
                 SourceTableName = worksheetSource?.Attribute("name")?.Value,
+                ConnectionId = cacheSource is null ? null : ReadIntAttribute(cacheSource, "connectionId"),
+                IsOlap = ReadBoolAttribute(root, "olap"),
                 PackagePart = cachePath,
                 RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
                 SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
@@ -885,8 +916,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return result;
     }
 
-    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? worksheetSource)
+    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? cacheSource, XElement? worksheetSource)
     {
+        var sourceType = cacheSource?.Attribute("type")?.Value;
+        if (string.Equals(sourceType, "external", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.External;
+        if (string.Equals(sourceType, "consolidation", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.Consolidation;
+        if (string.Equals(sourceType, "scenario", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.Scenario;
         if (worksheetSource is null)
             return PivotCacheSourceType.Unknown;
         if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("name")?.Value))
@@ -921,9 +959,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 slicers.Add(new SlicerModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     PackagePart = slicerEntry.FullName.Replace('\\', '/')
                 });
                 slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
@@ -947,9 +987,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 timelines.Add(new TimelineModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     StartDate = cache?.StartDate,
                     EndDate = cache?.EndDate,
                     SelectedStartDate = cache?.SelectedStartDate,
@@ -2429,6 +2471,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Element(worksheetNs + "sheetViews")?
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
+        var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
+        var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
         var activeCell = ParseOptionalCellReference(
@@ -2446,6 +2490,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var cellWatches = ReadCellWatches(worksheetXml, worksheetNs);
         var scenarios = ReadWorksheetScenarios(worksheetXml, worksheetNs);
         var customViews = ReadWorksheetCustomViews(worksheetXml, worksheetNs);
+        var customProperties = ReadWorksheetCustomProperties(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -2463,6 +2508,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
+            ReadBoolAttribute(sheetCalcPr, "fullCalcOnLoad"),
+            ReadWorksheetPhoneticProperties(phoneticPr),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
@@ -2485,7 +2532,49 @@ public sealed class XlsxFileAdapter : IFileAdapter
             cellWatches,
             scenarios,
             customViews,
+            customProperties,
             codeName);
+    }
+
+    private static IReadOnlyList<WorksheetCustomProperty> ReadWorksheetCustomProperties(
+        XDocument worksheetXml,
+        XNamespace worksheetNs)
+    {
+        var properties = new List<WorksheetCustomProperty>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var customProperty in worksheetXml.Root?
+                     .Element(worksheetNs + "customProperties")?
+                     .Elements(worksheetNs + "customPr") ?? [])
+        {
+            var name = customProperty.Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(name) ||
+                !int.TryParse(customProperty.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ||
+                id <= 0 ||
+                !seen.Add(name))
+            {
+                continue;
+            }
+
+            properties.Add(new WorksheetCustomProperty(name, id));
+        }
+
+        return properties;
+    }
+
+    private static WorksheetPhoneticProperties? ReadWorksheetPhoneticProperties(XElement? phoneticPr)
+    {
+        if (phoneticPr is null)
+            return null;
+
+        var fontId = phoneticPr.Attribute("fontId")?.Value;
+        var type = phoneticPr.Attribute("type")?.Value;
+        var alignment = phoneticPr.Attribute("alignment")?.Value;
+        return string.IsNullOrWhiteSpace(fontId) && string.IsNullOrWhiteSpace(type) && string.IsNullOrWhiteSpace(alignment)
+            ? null
+            : new WorksheetPhoneticProperties(
+                string.IsNullOrWhiteSpace(fontId) ? null : fontId,
+                string.IsNullOrWhiteSpace(type) ? null : type,
+                string.IsNullOrWhiteSpace(alignment) ? null : alignment);
     }
 
     private static IReadOnlyList<XlsxWorksheetCustomViewState> ReadWorksheetCustomViews(
@@ -4029,6 +4118,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         SaveWorkbookCalculationProperties(packageStream, workbook);
 
+        if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetCalculationProperties(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetPhoneticProperties(packageStream, workbook);
+        }
+
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
         {
             packageStream.Position = 0;
@@ -4099,6 +4200,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             packageStream.Position = 0;
             SaveCustomViews(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.CustomProperties.Count > 0))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetCustomProperties(packageStream, workbook);
         }
 
         packageStream.Position = 0;
@@ -4433,6 +4540,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, slicerPath, new XDocument(
                 new XElement(slicerNs + "slicer",
                     new XAttribute("name", slicer.Name),
+                    OptionalAttribute("caption", slicer.Caption),
+                    OptionalAttribute("style", slicer.StyleName),
                     new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "slicerCacheDefinition",
@@ -4465,6 +4574,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, timelinePath, new XDocument(
                 new XElement(slicerNs + "timeline",
                     new XAttribute("name", timeline.Name),
+                    OptionalAttribute("caption", timeline.Caption),
+                    OptionalAttribute("style", timeline.StyleName),
                     new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "timelineCacheDefinition",
@@ -5660,6 +5771,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                     continue;
                 }
+                if (sourceBlock.Name == workbookNs + "sheetCalcPr")
+                {
+                    if (MergeWorksheetCalculationProperties(sourceBlock, targetRoot, workbookNs))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
+                if (sourceBlock.Name == workbookNs + "phoneticPr")
+                {
+                    if (MergeWorksheetPhoneticProperties(sourceBlock, targetRoot, workbookNs))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
                 if (sourceBlock.Name == workbookNs + "customSheetViews")
                 {
                     if (MergeWorksheetCustomSheetViews(
@@ -5667,6 +5796,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         targetRoot,
                         workbookNs,
                         GetModeledCustomViewIds(workbook)))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
+                if (sourceBlock.Name == workbookNs + "customProperties")
+                {
+                    if (MergeWorksheetCustomProperties(
+                        sourceBlock,
+                        targetRoot,
+                        workbookNs,
+                        GetModeledCustomPropertyNames(workbook, sheetName)))
                     {
                         changed = true;
                     }
@@ -6176,6 +6318,58 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return customSheetView;
     }
 
+    private static void SaveWorksheetCustomProperties(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            var properties = sheet.CustomProperties
+                .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
+                .GroupBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last())
+                .OrderBy(property => property.Id)
+                .ThenBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (properties.Count == 0 || !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "customProperties")?.Remove();
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
+                workbookNs + "customProperties",
+                properties.Select(property => new XElement(
+                    workbookNs + "customPr",
+                    new XAttribute("name", property.Name),
+                    new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture))))));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
     private static string? NormalizeCustomViewId(string? id)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -6192,6 +6386,109 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         var bytes = MD5.HashData(Encoding.UTF8.GetBytes($"Freexcel.CustomView:{index}:{name}"));
         return $"{{{new Guid(bytes):D}}}";
+    }
+
+    private static void SaveWorksheetCalculationProperties(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "sheetCalcPr")?.Remove();
+            if (!sheet.FullCalculationOnLoad)
+            {
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+                continue;
+            }
+
+            var sheetCalcPr = new XElement(workbookNs + "sheetCalcPr");
+            sheetCalcPr.SetAttributeValue("fullCalcOnLoad", sheet.FullCalculationOnLoad ? "1" : null);
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, sheetCalcPr);
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
+    private static void SaveWorksheetPhoneticProperties(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "phoneticPr")?.Remove();
+            if (sheet.PhoneticProperties is null)
+            {
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+                continue;
+            }
+
+            var phoneticPr = new XElement(workbookNs + "phoneticPr");
+            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.FontId))
+                phoneticPr.SetAttributeValue("fontId", sheet.PhoneticProperties.FontId);
+            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Type))
+                phoneticPr.SetAttributeValue("type", sheet.PhoneticProperties.Type);
+            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Alignment))
+                phoneticPr.SetAttributeValue("alignment", sheet.PhoneticProperties.Alignment);
+
+            if (phoneticPr.HasAttributes)
+                InsertWorksheetMetadataElementInOrder(root, workbookNs, phoneticPr);
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
     }
 
     private static void InsertWorkbookCustomViewsInOrder(
@@ -6233,6 +6530,72 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         string[] laterWorksheetElements = metadataElement.Name.LocalName switch
         {
+            "sheetCalcPr" =>
+            [
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            "protectedRanges" =>
+            [
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
             "scenarios" =>
             [
                 "autoFilter",
@@ -6278,6 +6641,46 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 "rowBreaks",
                 "colBreaks",
                 "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            "phoneticPr" =>
+            [
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            "customProperties" =>
+            [
                 "cellWatches",
                 "ignoredErrors",
                 "smartTags",
@@ -6526,6 +6929,178 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return workbook.CustomViews
             .Select((view, index) => NormalizeCustomViewId(view.Id) ?? CreateDeterministicCustomViewId(view.Name, index))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static HashSet<string> GetModeledCustomPropertyNames(Workbook workbook, string sheetName)
+    {
+        var sheet = workbook.GetSheet(sheetName);
+        if (sheet is null)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        return sheet.CustomProperties
+            .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool MergeWorksheetCalculationProperties(
+        XElement sourceSheetCalcPr,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        var targetSheetCalcPr = targetRoot.Element(workbookNs + "sheetCalcPr");
+        if (targetSheetCalcPr is null)
+        {
+            var retained = new XElement(sourceSheetCalcPr);
+            retained.Attribute("fullCalcOnLoad")?.Remove();
+            if (!retained.HasAttributes && !retained.HasElements)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, retained);
+            return true;
+        }
+
+        var changed = MergeMissingAttributes(sourceSheetCalcPr, targetSheetCalcPr, ["fullCalcOnLoad"]);
+        foreach (var sourceChild in sourceSheetCalcPr.Elements())
+        {
+            var targetChild = targetSheetCalcPr.Elements(sourceChild.Name)
+                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            if (targetChild is not null)
+            {
+                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    changed = true;
+                continue;
+            }
+
+            targetSheetCalcPr.Add(new XElement(sourceChild));
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorksheetPhoneticProperties(
+        XElement sourcePhoneticPr,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        var modeledAttributes = new[] { "fontId", "type", "alignment" };
+        var targetPhoneticPr = targetRoot.Element(workbookNs + "phoneticPr");
+        if (targetPhoneticPr is null)
+        {
+            var retained = new XElement(sourcePhoneticPr);
+            foreach (var attributeName in modeledAttributes)
+                retained.Attribute(attributeName)?.Remove();
+            if (!retained.HasAttributes && !retained.HasElements)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, retained);
+            return true;
+        }
+
+        var changed = MergeMissingAttributes(sourcePhoneticPr, targetPhoneticPr, modeledAttributes);
+        foreach (var sourceChild in sourcePhoneticPr.Elements())
+        {
+            var targetChild = targetPhoneticPr.Elements(sourceChild.Name)
+                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            if (targetChild is not null)
+            {
+                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    changed = true;
+                continue;
+            }
+
+            targetPhoneticPr.Add(new XElement(sourceChild));
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorksheetCustomProperties(
+        XElement sourceCustomProperties,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        IReadOnlySet<string> modeledPropertyNames)
+    {
+        var targetCustomProperties = targetRoot.Element(workbookNs + "customProperties");
+        if (targetCustomProperties is null)
+        {
+            var retainedProperties = sourceCustomProperties
+                .Elements(workbookNs + "customPr")
+                .Where(property => !IsSupportedWorksheetCustomProperty(property))
+                .Select(property => new XElement(property))
+                .ToList();
+            if (retainedProperties.Count == 0)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(
+                targetRoot,
+                workbookNs,
+                new XElement(sourceCustomProperties.Name, sourceCustomProperties.Attributes(), retainedProperties));
+            return true;
+        }
+
+        var changed = MergeMissingAttributes(sourceCustomProperties, targetCustomProperties, []);
+        var targetPropertiesByName = targetCustomProperties
+            .Elements(workbookNs + "customPr")
+            .Select(property => new
+            {
+                Name = property.Attribute("name")?.Value,
+                Element = property
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .GroupBy(item => item.Name!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Element, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceProperty in sourceCustomProperties.Elements(workbookNs + "customPr"))
+        {
+            var name = sourceProperty.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name) && targetPropertiesByName.TryGetValue(name, out var targetProperty))
+            {
+                changed |= MergeMissingAttributes(sourceProperty, targetProperty, ["name", "id"]);
+                foreach (var sourceChild in sourceProperty.Elements())
+                {
+                    var targetChild = targetProperty.Elements(sourceChild.Name)
+                        .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+                    if (targetChild is not null)
+                    {
+                        if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                            changed = true;
+                        continue;
+                    }
+
+                    targetProperty.Add(new XElement(sourceChild));
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(name) && modeledPropertyNames.Contains(name))
+                continue;
+
+            if (IsSupportedWorksheetCustomProperty(sourceProperty))
+                continue;
+
+            targetCustomProperties.Add(new XElement(sourceProperty));
+            if (!string.IsNullOrWhiteSpace(name))
+                targetPropertiesByName[name] = targetCustomProperties.Elements(workbookNs + "customPr").Last();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool IsSupportedWorksheetCustomProperty(XElement customProperty)
+    {
+        return !string.IsNullOrWhiteSpace(customProperty.Attribute("name")?.Value) &&
+               int.TryParse(
+                   customProperty.Attribute("id")?.Value,
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var id) &&
+               id > 0;
     }
 
     private static bool MergeWorksheetCustomSheetViews(
@@ -7893,11 +8468,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         new XAttribute("name", $"FreexcelAllowEditRange{index + 1}"),
                         new XAttribute("sqref", range.ToString()))));
 
-            var sheetProtection = root.Element(workbookNs + "sheetProtection");
-            if (sheetProtection is not null)
-                sheetProtection.AddAfterSelf(protectedRanges);
-            else
-                root.Add(protectedRanges);
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, protectedRanges);
 
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
@@ -8467,20 +9038,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
             source.SetAttributeValue("sheet", cache.SourceSheetName);
         if (!string.IsNullOrWhiteSpace(cache.SourceReference))
             source.SetAttributeValue("ref", cache.SourceReference);
+        var cacheSource = new XElement(
+            workbookNs + "cacheSource",
+            new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
+            cache.ConnectionId is { } connectionId ? new XAttribute("connectionId", connectionId.ToString(CultureInfo.InvariantCulture)) : null);
+        if (cache.SourceType != PivotCacheSourceType.External)
+            cacheSource.Add(source);
 
         return new XDocument(new XElement(
             workbookNs + "pivotCacheDefinition",
             new XAttribute(XNamespace.Xmlns + "r", relNs),
+            cache.IsOlap ? new XAttribute("olap", "1") : null,
             new XAttribute("refreshOnLoad", cache.RefreshOnLoad ? "1" : "0"),
             new XAttribute("saveData", cache.SaveData ? "1" : "0"),
             new XAttribute("enableRefresh", cache.EnableRefresh ? "1" : "0"),
             cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
             new XAttribute("recordCount", "0"),
-            new XElement(
-                workbookNs + "cacheSource",
-                new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
-                source),
+            cacheSource,
             new XElement(
                 workbookNs + "cacheFields",
                 new XAttribute("count", cache.Fields.Count.ToString(CultureInfo.InvariantCulture)),
@@ -9736,8 +10311,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return null;
 
+        var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+            ? sheet.Name
+            : chart.PivotSourceSheetName;
         return new XElement(chartNs + "pivotSource",
-            new XElement(chartNs + "name", $"{QuoteSheetName(sheet.Name)}!{chart.PivotTableName}"),
+            new XElement(chartNs + "name", $"{QuoteSheetName(sourceSheetName)}!{chart.PivotTableName}"),
             new XElement(chartNs + "fmtId", new XAttribute("val", "0")));
     }
 

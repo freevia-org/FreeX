@@ -171,6 +171,12 @@ public sealed class Sheet
     /// <summary>Whether formulas are displayed in cells instead of their calculated values.</summary>
     public bool ShowFormulas { get; set; }
 
+    /// <summary>Whether Excel should fully recalculate this worksheet when opened.</summary>
+    public bool FullCalculationOnLoad { get; set; }
+
+    /// <summary>Worksheet-level phonetic display metadata loaded from XLSX phoneticPr.</summary>
+    public WorksheetPhoneticProperties? PhoneticProperties { get; set; }
+
     /// <summary>True when the sheet is hidden from the worksheet tab strip.</summary>
     public bool IsHidden { get; set; }
 
@@ -179,6 +185,9 @@ public sealed class Sheet
 
     /// <summary>Optional VBA/OOXML sheet code name metadata.</summary>
     public string? CodeName { get; set; }
+
+    /// <summary>Worksheet custom-property metadata loaded from XLSX customPr elements.</summary>
+    public List<WorksheetCustomProperty> CustomProperties { get; } = [];
 
     /// <summary>Optional worksheet tab color.</summary>
     public CellColor? TabColor { get; set; }
@@ -531,6 +540,8 @@ public sealed class Sheet
             ShowRulers                    = ShowRulers,
             ZoomPercent                   = ZoomPercent,
             ShowFormulas                  = ShowFormulas,
+            FullCalculationOnLoad         = FullCalculationOnLoad,
+            PhoneticProperties            = PhoneticProperties,
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
@@ -622,6 +633,8 @@ public sealed class Sheet
         // Allow-edit ranges (protection)
         foreach (var range in AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, newId));
+        foreach (var property in CustomProperties)
+            copy.CustomProperties.Add(property);
 
         // Pivot tables
         foreach (var pt in PivotTables)
@@ -752,6 +765,10 @@ public sealed class Sheet
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
     }
 }
+
+public sealed record WorksheetCustomProperty(string Name, int Id);
+
+public sealed record WorksheetPhoneticProperties(string? FontId, string? Type, string? Alignment);
 
 public enum WorksheetViewMode
 {
