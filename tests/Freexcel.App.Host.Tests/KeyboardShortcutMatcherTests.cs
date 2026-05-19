@@ -168,7 +168,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.D3, ModifierKeys.Control, FontToggleShortcut.Italic)]
     [InlineData(Key.U, ModifierKeys.Control, FontToggleShortcut.Underline)]
     [InlineData(Key.D4, ModifierKeys.Control, FontToggleShortcut.Underline)]
-    [InlineData(Key.D5, ModifierKeys.Control, null)]
+    [InlineData(Key.D5, ModifierKeys.Control, FontToggleShortcut.Strikethrough)]
+    [InlineData(Key.NumPad5, ModifierKeys.Control, FontToggleShortcut.Strikethrough)]
     public void TryGetFontToggleShortcut_MapsExcelFontShortcuts(Key key, ModifierKeys modifiers, FontToggleShortcut? expected)
     {
         var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out var shortcut);
