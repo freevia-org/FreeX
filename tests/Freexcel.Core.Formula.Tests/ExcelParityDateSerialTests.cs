@@ -42,5 +42,28 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=DATEVALUE(\"1/1/1900\")", 1)]
+    [InlineData("=DATEVALUE(\"2/28/1900\")", 59)]
+    [InlineData("=DATEVALUE(\"3/1/1900\")", 61)]
+    [InlineData("=DATEVALUE(\"2024-01-15\")", 45306)]
+    public void DateValue_ReturnsExcelSerialNumbers(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=TIMEVALUE(\"00:00:00\")", 0)]
+    [InlineData("=TIMEVALUE(\"12:00:00\")", 0.5)]
+    [InlineData("=TIMEVALUE(\"23:59:59\")", 0.999988425925926)]
+    [InlineData("=TIMEVALUE(\"12:00 AM\")", 0)]
+    [InlineData("=TIMEVALUE(\"12:00 PM\")", 0.5)]
+    public void TimeValue_ReturnsExcelDayFraction(string formula, double expected)
+    {
+        var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
+
+        result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 }

@@ -2794,7 +2794,7 @@ public static class BuiltInFunctions
         var text = ToText(args[0]);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
-            return new NumberValue(Math.Floor(dt.ToOADate()));
+            return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
     }
 
