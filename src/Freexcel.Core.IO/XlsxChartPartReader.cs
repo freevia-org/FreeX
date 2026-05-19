@@ -91,6 +91,7 @@ public static class XlsxChartPartReader
         if (int.TryParse(styleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleId))
             chart.ChartStyleId = styleId;
 
+        chart.ColorMapOverride = ReadColorMapOverride(chartXml.Root?.Element(ChartNs + "clrMapOvr"));
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
         chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
 
@@ -98,6 +99,29 @@ public static class XlsxChartPartReader
             .Element(ChartNs + "roundedCorners")?
             .Attribute("val")?
             .Value);
+    }
+
+    private static ChartColorMapOverrideModel? ReadColorMapOverride(XElement? colorMapOverride)
+    {
+        if (colorMapOverride is null)
+            return null;
+
+        var masterMapping = colorMapOverride.Element(DrawingNs + "masterClrMapping");
+        var overrideMapping = colorMapOverride.Element(DrawingNs + "overrideClrMapping");
+        if (masterMapping is null && overrideMapping is null)
+            return null;
+
+        var result = new ChartColorMapOverrideModel
+        {
+            UseMasterColorMapping = masterMapping is not null
+        };
+        if (overrideMapping is not null)
+        {
+            foreach (var attribute in overrideMapping.Attributes())
+                result.OverrideMappings[attribute.Name.LocalName] = attribute.Value;
+        }
+
+        return result;
     }
 
     private static ChartProtectionModel? ReadProtection(XElement? protection)
