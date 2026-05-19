@@ -73,7 +73,7 @@ public static class XlsxChartPartReader
         if (plotArea is null)
             return null;
 
-        foreach (var element in plotArea.Elements())
+        foreach (var element in plotArea.Descendants())
         {
             var chartType = element.Name.LocalName switch
             {
