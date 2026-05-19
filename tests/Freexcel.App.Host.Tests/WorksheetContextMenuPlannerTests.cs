@@ -13,6 +13,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Cut",
             "Copy",
             "Paste",
+            "Paste Special...",
             "Insert Row Above",
             "Delete Row(s)",
             "Sort A to Z",
