@@ -57,6 +57,19 @@ public sealed class BorderShortcutServiceTests
     }
 
     [Fact]
+    public void GetSingleBorderDiff_UsesRequestedLineColor()
+    {
+        var color = new CellColor(12, 34, 56);
+
+        var diff = BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, BorderStyle.Dashed, color);
+
+        diff.BorderRight.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        diff.BorderTop.Should().BeNull();
+        diff.BorderBottom.Should().BeNull();
+        diff.BorderLeft.Should().BeNull();
+    }
+
+    [Fact]
     public void GetOutlineBorderDiff_UsesRequestedLineStyleOnlyOnRangePerimeter()
     {
         var sheetId = SheetId.New();
@@ -82,6 +95,29 @@ public sealed class BorderShortcutServiceTests
         bottomRight.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thick, CellColor.Black));
         bottomRight.BorderTop.Should().BeNull();
         bottomRight.BorderLeft.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetOutlineBorderDiff_UsesRequestedLineColorOnRangePerimeter()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 4, 5));
+        var color = new CellColor(80, 20, 140);
+
+        var topLeft = BorderShortcutService.GetOutlineBorderDiff(range, new CellAddress(sheetId, 2, 3), BorderStyle.Dotted, color);
+        var center = BorderShortcutService.GetOutlineBorderDiff(range, new CellAddress(sheetId, 3, 4), BorderStyle.Dotted, color);
+        var bottomRight = BorderShortcutService.GetOutlineBorderDiff(range, new CellAddress(sheetId, 4, 5), BorderStyle.Dotted, color);
+
+        topLeft.BorderTop.Should().Be(new CellBorder(BorderStyle.Dotted, color));
+        topLeft.BorderLeft.Should().Be(new CellBorder(BorderStyle.Dotted, color));
+        center.BorderTop.Should().BeNull();
+        center.BorderRight.Should().BeNull();
+        center.BorderBottom.Should().BeNull();
+        center.BorderLeft.Should().BeNull();
+        bottomRight.BorderRight.Should().Be(new CellBorder(BorderStyle.Dotted, color));
+        bottomRight.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dotted, color));
     }
 
     [Fact]
