@@ -1114,6 +1114,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue table) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+        if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
 
         var lookupValue = args[0];
         double rawMatchType = args.Count > 2 ? ToNumber(args[2]) : 1;
