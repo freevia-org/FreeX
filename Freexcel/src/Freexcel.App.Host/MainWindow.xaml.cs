@@ -2905,11 +2905,12 @@ public partial class MainWindow : Window
 
     private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
     {
-        var insertion = Environment.NewLine;
-        var start = editor.SelectionStart;
-        var length = editor.SelectionLength;
-        editor.Text = editor.Text.Remove(start, length).Insert(start, insertion);
-        editor.CaretIndex = start + insertion.Length;
+        var edit = ExcelTextEditorPlanner.InsertLineBreak(
+            editor.Text,
+            editor.SelectionStart,
+            editor.SelectionLength,
+            Environment.NewLine);
+        ApplyTextEdit(editor, edit);
     }
 
     private void InlineEditor_LostFocus(object sender, RoutedEventArgs e)
@@ -3081,21 +3082,19 @@ public partial class MainWindow : Window
 
     private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
     {
-        if (!editor.Text.StartsWith("=", StringComparison.Ordinal))
+        var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(editor.Text, caretIndex, out var edit))
             return false;
 
-        if (!FormulaReferenceCycler.TryCycleReferenceAtCaret(
-                editor.Text,
-                editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex,
-                out var cycled,
-                out var selectionStart,
-                out var selectionLength))
-            return false;
-
-        editor.Text = cycled;
-        editor.SelectionStart = selectionStart;
-        editor.SelectionLength = selectionLength;
+        ApplyTextEdit(editor, edit);
         return true;
+    }
+
+    private static void ApplyTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)
+    {
+        editor.Text = edit.Text;
+        editor.SelectionStart = edit.SelectionStart;
+        editor.SelectionLength = edit.SelectionLength;
     }
 
     private bool CommitEdit()
