@@ -3745,7 +3745,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
         PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
-        PreserveWorksheetCustomSheetViews(sourceArchive, generatedArchive);
+        PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
     }
 
@@ -4473,11 +4473,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static void PreserveWorksheetCustomSheetViews(ZipArchive sourceArchive, ZipArchive targetArchive)
+    private static void PreserveWorksheetMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XName[] retainedChildNames =
+        [
+            workbookNs + "customSheetViews",
+            workbookNs + "scenarios"
+        ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
         var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
@@ -4518,17 +4523,31 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
 
             var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
-            var sourceCustomSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "customSheetViews");
-            if (sourceCustomSheetViews is null)
+            var sourceBlocks = retainedChildNames
+                .Select(name => sourceWorksheetXml.Root?.Element(name))
+                .Where(element => element is not null)
+                .Cast<XElement>()
+                .ToList();
+            if (sourceBlocks.Count == 0)
                 continue;
 
             var targetWorksheetXml = LoadXml(targetWorksheetEntry);
             var targetRoot = targetWorksheetXml.Root;
-            if (targetRoot is null || targetRoot.Element(workbookNs + "customSheetViews") is not null)
+            if (targetRoot is null)
                 continue;
 
-            targetRoot.Add(new XElement(sourceCustomSheetViews));
-            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+            var changed = false;
+            foreach (var sourceBlock in sourceBlocks)
+            {
+                if (targetRoot.Element(sourceBlock.Name) is not null)
+                    continue;
+
+                targetRoot.Add(new XElement(sourceBlock));
+                changed = true;
+            }
+
+            if (changed)
+                ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
 

@@ -7434,6 +7434,37 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
+    {
+        var workbook = new Workbook("ScenariosRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("input"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetScenarios(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var scenarios = worksheetXml.Root!.Element(worksheetNs + "scenarios");
+        scenarios.Should().NotBeNull();
+        scenarios!.ToString().Should().Contain("BestCase");
+        scenarios.ToString().Should().Contain("inputCells");
+        scenarios.ToString().Should().Contain("val=\"42\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -8463,6 +8494,33 @@ public class FileAdapterSmokeTests
                         new XAttribute("ySplit", "1"),
                         new XAttribute("topLeftCell", "B2"),
                         new XAttribute("activePane", "bottomRight")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorksheetScenarios(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "scenarios",
+                new XAttribute("current", "0"),
+                new XAttribute("show", "0"),
+                new XElement(
+                    worksheetNs + "scenario",
+                    new XAttribute("name", "BestCase"),
+                    new XAttribute("locked", "1"),
+                    new XAttribute("count", "1"),
+                    new XAttribute("user", "FreexcelTest"),
+                    new XElement(
+                        worksheetNs + "inputCells",
+                        new XAttribute("r", "A1"),
+                        new XAttribute("val", "42")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
