@@ -1717,6 +1717,9 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.CopyValueFromAbove:
                 CopyFromAbove(CopyFromAboveMode.Value);
                 break;
+            case KeyboardCommandShortcut.OpenActiveDropdown:
+                OpenActiveDropdown();
+                break;
         }
     }
 
@@ -2604,6 +2607,16 @@ public partial class MainWindow : Window
 
         if (_inlineEditor?.IsVisible != true)
             EditOverlay.IsHitTestVisible = false;
+    }
+
+    private void OpenActiveDropdown()
+    {
+        RefreshValidationDropdown();
+        if (_validationDropdown?.Visibility != Visibility.Visible)
+            return;
+
+        _validationDropdown.Focus();
+        _validationDropdown.IsDropDownOpen = true;
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)
