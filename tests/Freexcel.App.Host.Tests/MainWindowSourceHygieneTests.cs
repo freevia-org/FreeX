@@ -89,15 +89,36 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
+    public void QuickAccessToolbar_UsesVectorIcons()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
 
         xaml.Should().Contain("x:Name=\"SaveQatBtn\"");
-        xaml.Should().Contain("FreexcelQatOnAccentIcon");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Save\"");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Undo\"");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Redo\"");
+        xaml.Should().NotContain("FreexcelQatOnAccentIcon");
+        iconResources.Should().NotContain("FreexcelQatIcon");
         xaml.Should().NotContain("Content=\"💾\"");
         xaml.Should().NotContain("Content=\"↩\"");
         xaml.Should().NotContain("Content=\"↪\"");
+    }
+
+    [Fact]
+    public void ToolbarIcons_DoNotUseFontGlyphAssets()
+    {
+        var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
+        var appHostDirectory = Path.GetDirectoryName(mainWindowPath)!;
+        var xaml = File.ReadAllText(mainWindowPath);
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
+
+        xaml.Should().NotContain("Segoe MDL2 Assets");
+        xaml.Should().NotContain("RibbonIconGlyph");
+        xaml.Should().NotContain("FreexcelQatOnAccentIcon");
+        iconResources.Should().NotContain("Segoe MDL2 Assets");
+        iconResources.Should().NotContain("FreexcelRibbonGlyph");
     }
 
     [Fact]

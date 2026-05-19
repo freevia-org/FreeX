@@ -632,14 +632,7 @@ public partial class MainWindow : Window
                         MaxWidth = 52,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center
                     },
-                    new TextBlock
-                    {
-                        Text = "\uE70D",
-                        Tag = "RibbonIcon",
-                        FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                        FontSize = 8,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-                    }
+                    RibbonIconFactory.CreateIcon(new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown), 8, BrushFromRgb(31, 31, 31))
                 }
             }
         };
@@ -1113,10 +1106,7 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                var family = textBlock.FontFamily?.Source ?? "";
-                var isIcon = string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal) ||
-                             family.Contains("Segoe MDL2", StringComparison.OrdinalIgnoreCase) ||
-                             family.Contains("Segoe UI Symbol", StringComparison.OrdinalIgnoreCase);
+                var isIcon = string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
                 if (!isIcon)
                     continue;
 
@@ -1171,10 +1161,7 @@ public partial class MainWindow : Window
 
     private static bool IsRibbonIconTextBlock(TextBlock textBlock)
     {
-        var family = textBlock.FontFamily?.Source ?? "";
-        return string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal) ||
-               family.Contains("Segoe MDL2", StringComparison.OrdinalIgnoreCase) ||
-               family.Contains("Segoe UI Symbol", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
     }
 
     private static FrameworkElement CreateStaticRibbonVectorIcon(ButtonBase owner, TextBlock source, bool tall)
