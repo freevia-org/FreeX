@@ -109,7 +109,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.F9, Key.None, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.RebuildDependenciesAndCalculate)]
     [InlineData(Key.U, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFormulaBarExpansion)]
     [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
-    [InlineData(Key.P, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenPrintBackstage)]
+    [InlineData(Key.P, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenPrintPreview)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.PasteValues)]
     [InlineData(Key.L, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFilter)]
     [InlineData(Key.F5, Key.None, ModifierKeys.None, KeyboardCommandShortcut.GoTo)]

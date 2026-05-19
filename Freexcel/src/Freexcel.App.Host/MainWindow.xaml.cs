@@ -2047,8 +2047,8 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.QuickAnalysis:
                 ShowQuickAnalysisMenu();
                 break;
-            case KeyboardCommandShortcut.OpenPrintBackstage:
-                OpenPrintBackstage();
+            case KeyboardCommandShortcut.OpenPrintPreview:
+                PrintButton_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.PasteValues:
                 ExecutePaste(PasteMode.Values);
