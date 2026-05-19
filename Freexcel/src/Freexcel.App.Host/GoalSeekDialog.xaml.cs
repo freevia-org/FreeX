@@ -31,59 +31,21 @@ public partial class GoalSeekDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Parse Set Cell
-        var setCellText = SetCellBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(setCellText))
+        if (!GoalSeekInputParser.TryParse(
+                _sheetId,
+                SetCellBox.Text,
+                ToValueBox.Text,
+                ChangingCellBox.Text,
+                out var input,
+                out var error))
         {
-            MessageBox.Show("Please enter the Set cell address.", "Goal Seek",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        if (!CellAddress.TryParse(setCellText, _sheetId, out var setCell))
-        {
-            MessageBox.Show($"'{setCellText}' is not a valid cell address.", "Goal Seek",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(error, "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        // Parse Target Value
-        var toValueText = ToValueBox.Text.Trim();
-        if (!double.TryParse(toValueText, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.CurrentCulture, out var targetValue) &&
-            !double.TryParse(toValueText, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out targetValue))
-        {
-            MessageBox.Show($"'{toValueText}' is not a valid number.", "Goal Seek",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        // Parse Changing Cell
-        var changingCellText = ChangingCellBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(changingCellText))
-        {
-            MessageBox.Show("Please enter the By changing cell address.", "Goal Seek",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-        if (!CellAddress.TryParse(changingCellText, _sheetId, out var changingCell))
-        {
-            MessageBox.Show($"'{changingCellText}' is not a valid cell address.", "Goal Seek",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        // Validate: set cell must differ from changing cell
-        if (setCell == changingCell)
-        {
-            MessageBox.Show("The Set cell and the By changing cell must be different.", "Goal Seek",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        SetCell = setCell;
-        TargetValue = targetValue;
-        ChangingCell = changingCell;
+        SetCell = input.SetCell;
+        TargetValue = input.TargetValue;
+        ChangingCell = input.ChangingCell;
         DialogResult = true;
     }
 
