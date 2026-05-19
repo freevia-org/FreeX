@@ -87,15 +87,6 @@ public partial class MainWindow : Window
 
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells, bool IsCut = false);
     private sealed record PivotFieldListItem(string Caption, bool IsChecked);
-    private sealed record SlicerPaneItem(string Name, string FieldName, IReadOnlyList<SlicerTileItem> Tiles);
-    private sealed record SlicerTileItem(string SlicerName, string Caption, bool IsSelected);
-    private sealed class TimelinePaneItem
-    {
-        public string Name { get; init; } = "";
-        public string FieldName { get; init; } = "";
-        public string SelectedStartDate { get; set; } = "";
-        public string SelectedEndDate { get; set; } = "";
-    }
     private InternalClipboard? _internalClipboard;
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
@@ -7127,13 +7118,7 @@ public partial class MainWindow : Window
             .ToList();
         var timelines = _workbook.Timelines
             .Where(timeline => !string.IsNullOrWhiteSpace(timeline.Name))
-            .Select(timeline => new TimelinePaneItem
-            {
-                Name = timeline.Name,
-                FieldName = timeline.SourceFieldName ?? timeline.CacheName,
-                SelectedStartDate = timeline.SelectedStartDate ?? timeline.StartDate ?? "",
-                SelectedEndDate = timeline.SelectedEndDate ?? timeline.EndDate ?? ""
-            })
+            .Select(SlicerTimelinePlanner.BuildTimelineItem)
             .ToList();
 
         SlicerItemsControl.ItemsSource = slicers;
@@ -7149,16 +7134,7 @@ public partial class MainWindow : Window
 
     private IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer)
     {
-        var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        var items = ReadSlicerSourceItems(slicer).ToList();
-        if (items.Count == 0)
-            items.AddRange(slicer.SelectedItems);
-
-        return items
-            .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)
-            .Select(item => new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)))
-            .ToList();
+        return SlicerTimelinePlanner.BuildSlicerTiles(slicer, ReadSlicerSourceItems(slicer));
     }
 
     private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
@@ -7201,13 +7177,7 @@ public partial class MainWindow : Window
             return;
 
         var allItems = ReadSlicerSourceItems(slicer).ToList();
-        var selected = slicer.SelectedItems.Count == 0
-            ? allItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase)
-            : slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        if (!selected.Remove(tile.Caption))
-            selected.Add(tile.Caption);
-        if (selected.Count == allItems.Count)
-            selected.Clear();
+        var selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
 
         if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicer.Name, selected.ToList()), "Slicer"))
             return;
@@ -7232,7 +7202,10 @@ public partial class MainWindow : Window
             return;
 
         if (!TryExecuteCommand(
-                new SetTimelineRangeCommand(item.Name, EmptyToNull(item.SelectedStartDate), EmptyToNull(item.SelectedEndDate)),
+                new SetTimelineRangeCommand(
+                    item.Name,
+                    SlicerTimelinePlanner.NormalizeTimelineDateInput(item.SelectedStartDate),
+                    SlicerTimelinePlanner.NormalizeTimelineDateInput(item.SelectedEndDate)),
                 "Timeline"))
             return;
 
@@ -7249,9 +7222,6 @@ public partial class MainWindow : Window
 
         UpdateViewport();
     }
-
-    private static string? EmptyToNull(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private void SetPivotContextualTabsVisible(bool visible)
     {
