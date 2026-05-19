@@ -167,6 +167,18 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.Right)
+        {
+            shortcut = KeyboardCommandShortcut.GroupSelection;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.Left)
+        {
+            shortcut = KeyboardCommandShortcut.UngroupSelection;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.None && effectiveKey == Key.F11)
         {
             shortcut = KeyboardCommandShortcut.InsertChartSheet;
@@ -407,6 +419,8 @@ public enum KeyboardCommandShortcut
     GoTo,
     InsertEmbeddedChart,
     AutoSum,
+    GroupSelection,
+    UngroupSelection,
     InsertChartSheet,
     OpenFormatCellsFont,
     WorkbookStatistics,
