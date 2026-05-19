@@ -146,6 +146,38 @@ public static class XlsxChartPartReader
         };
     }
 
+    private static ChartManualLayoutModel? ReadManualLayout(XElement? layout)
+    {
+        var manualLayout = layout?.Element(ChartNs + "manualLayout");
+        if (manualLayout is null)
+            return null;
+
+        var result = new ChartManualLayoutModel
+        {
+            LayoutTarget = manualLayout.Element(ChartNs + "layoutTarget")?.Attribute("val")?.Value,
+            XMode = manualLayout.Element(ChartNs + "xMode")?.Attribute("val")?.Value,
+            YMode = manualLayout.Element(ChartNs + "yMode")?.Attribute("val")?.Value,
+            WidthMode = manualLayout.Element(ChartNs + "wMode")?.Attribute("val")?.Value,
+            HeightMode = manualLayout.Element(ChartNs + "hMode")?.Attribute("val")?.Value,
+            X = ReadOptionalDouble(manualLayout.Element(ChartNs + "x")?.Attribute("val")?.Value),
+            Y = ReadOptionalDouble(manualLayout.Element(ChartNs + "y")?.Attribute("val")?.Value),
+            Width = ReadOptionalDouble(manualLayout.Element(ChartNs + "w")?.Attribute("val")?.Value),
+            Height = ReadOptionalDouble(manualLayout.Element(ChartNs + "h")?.Attribute("val")?.Value)
+        };
+
+        return string.IsNullOrWhiteSpace(result.LayoutTarget) &&
+            string.IsNullOrWhiteSpace(result.XMode) &&
+            string.IsNullOrWhiteSpace(result.YMode) &&
+            string.IsNullOrWhiteSpace(result.WidthMode) &&
+            string.IsNullOrWhiteSpace(result.HeightMode) &&
+            result.X is null &&
+            result.Y is null &&
+            result.Width is null &&
+            result.Height is null
+            ? null
+            : result;
+    }
+
     private static ChartProtectionModel? ReadProtection(XElement? protection)
     {
         if (protection is null)
@@ -1057,6 +1089,7 @@ public static class XlsxChartPartReader
         ApplyChartTitleFormatting(chartElement?.Element(ChartNs + "title"), chart);
         ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
         var plotArea = chartElement?.Element(ChartNs + "plotArea");
+        chart.PlotAreaLayout = ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
         ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
         ApplyAxisTitles(plotArea, chart);
         ApplyDataLabels(plotArea, chart);
@@ -1071,6 +1104,7 @@ public static class XlsxChartPartReader
         }
 
         chart.ShowLegend = true;
+        chart.LegendLayout = ReadManualLayout(legend.Element(ChartNs + "layout"));
         chart.LegendPosition = legend.Element(ChartNs + "legendPos")?.Attribute("val")?.Value switch
         {
             "l" => ChartLegendPosition.Left,
