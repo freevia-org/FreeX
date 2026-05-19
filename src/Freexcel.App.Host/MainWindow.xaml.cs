@@ -2210,6 +2210,15 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.PieChart:
                 ChartPieMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.BarChart:
+                ChartBarMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.AreaChart:
+                ChartAreaMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.ScatterChart:
+                ChartScatterMenuItem_Click(sender, e);
+                break;
             case QuickAnalysisCommand.Sum:
                 AutoSumSumMenuItem_Click(sender, e);
                 break;
@@ -2218,6 +2227,12 @@ public partial class MainWindow : Window
                 break;
             case QuickAnalysisCommand.Count:
                 AutoSumCountMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.Max:
+                AutoSumMaxMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.Min:
+                AutoSumMinMenuItem_Click(sender, e);
                 break;
             case QuickAnalysisCommand.FormatAsTable:
                 TableBtn_Click(sender, e);
@@ -4689,6 +4704,12 @@ public partial class MainWindow : Window
 
     private void InsertChartOfType(ChartType type)
     {
+        if (!ChartTypeSupport.IsRenderable(type))
+        {
+            ShowDeferredChartFamilyMessage();
+            return;
+        }
+
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Chart",
@@ -5660,6 +5681,18 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.Filter:
                 FilterButton_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.HideRows:
+                ExecuteRowsHidden(hidden: true);
+                break;
+            case WorksheetContextMenuAction.UnhideRows:
+                ExecuteRowsHidden(hidden: false);
+                break;
+            case WorksheetContextMenuAction.HideColumns:
+                ExecuteColumnsHidden(hidden: true);
+                break;
+            case WorksheetContextMenuAction.UnhideColumns:
+                ExecuteColumnsHidden(hidden: false);
+                break;
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
@@ -5874,34 +5907,80 @@ public partial class MainWindow : Window
 
     private bool ExecuteKeyboardInsertCellsWithPrompt(GridRange range)
     {
-        var input = PromptForInput("Shift cells (right/down):", "right");
+        var input = PromptForInput("Insert cells (right/down/row/column):", "right");
         if (input is null) return false;
 
-        var direction = input.Trim().Equals("down", StringComparison.OrdinalIgnoreCase)
-            ? InsertCellsShiftDirection.Down
-            : InsertCellsShiftDirection.Right;
-        return TryExecuteRepeatableGroupedSheetCommand(
-            "Insert Cells",
-            sheetId => new InsertCellsCommand(
-                sheetId,
-                GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                direction));
+        if (!KeyboardInsertDeletePlanner.TryParseInsertDialogChoice(input, out var choice))
+            return false;
+
+        return choice switch
+        {
+            KeyboardInsertDeleteDialogChoice.ShiftDown => TryExecuteRepeatableGroupedSheetCommand(
+                "Insert Cells",
+                sheetId => new InsertCellsCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                    InsertCellsShiftDirection.Down)),
+            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableGroupedSheetCommand(
+                "Insert Row",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new InsertRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
+                }),
+            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableGroupedSheetCommand(
+                "Insert Column",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new InsertColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
+                }),
+            _ => TryExecuteRepeatableGroupedSheetCommand(
+                "Insert Cells",
+                sheetId => new InsertCellsCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                    InsertCellsShiftDirection.Right))
+        };
     }
 
     private bool ExecuteKeyboardDeleteCellsWithPrompt(GridRange range)
     {
-        var input = PromptForInput("Shift cells (left/up):", "left");
+        var input = PromptForInput("Delete cells (left/up/row/column):", "left");
         if (input is null) return false;
 
-        var direction = input.Trim().Equals("up", StringComparison.OrdinalIgnoreCase)
-            ? DeleteCellsShiftDirection.Up
-            : DeleteCellsShiftDirection.Left;
-        return TryExecuteRepeatableGroupedSheetCommand(
-            "Delete Cells",
-            sheetId => new DeleteCellsCommand(
-                sheetId,
-                GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                direction));
+        if (!KeyboardInsertDeletePlanner.TryParseDeleteDialogChoice(input, out var choice))
+            return false;
+
+        return choice switch
+        {
+            KeyboardInsertDeleteDialogChoice.ShiftUp => TryExecuteRepeatableGroupedSheetCommand(
+                "Delete Cells",
+                sheetId => new DeleteCellsCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                    DeleteCellsShiftDirection.Up)),
+            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableGroupedSheetCommand(
+                "Delete Row",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new DeleteRowsCommand(sheetId, currentRange.Start.Row, currentRange.RowCount);
+                }),
+            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableGroupedSheetCommand(
+                "Delete Column",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new DeleteColumnsCommand(sheetId, currentRange.Start.Col, currentRange.ColCount);
+                }),
+            _ => TryExecuteRepeatableGroupedSheetCommand(
+                "Delete Cells",
+                sheetId => new DeleteCellsCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                    DeleteCellsShiftDirection.Left))
+        };
     }
 
     private void ExecuteRowsHidden(bool hidden)
@@ -7036,18 +7115,37 @@ public partial class MainWindow : Window
     private void InsertCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var input = PromptForInput("Shift cells (right/down):", "right");
+        var input = PromptForInput("Insert cells (right/down/row/column):", "right");
         if (input is null) return;
 
-        var direction = input.Trim().Equals("down", StringComparison.OrdinalIgnoreCase)
-            ? InsertCellsShiftDirection.Down
-            : InsertCellsShiftDirection.Right;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!KeyboardInsertDeletePlanner.TryParseInsertDialogChoice(input, out var choice))
+            return;
+
+        CommandOutcome outcome;
+        var success = choice switch
+        {
+            KeyboardInsertDeleteDialogChoice.ShiftDown => TryExecuteRepeatableCurrentRangeCommand(
                 "Insert Cells",
                 range,
-                currentRange => new InsertCellsCommand(_currentSheetId, currentRange, direction),
-                out var outcome))
-            return;
+                currentRange => new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Down),
+                out outcome),
+            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Row",
+                range,
+                currentRange => new InsertRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount),
+                out outcome),
+            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Column",
+                range,
+                currentRange => new InsertColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount),
+                out outcome),
+            _ => TryExecuteRepeatableCurrentRangeCommand(
+                "Insert Cells",
+                range,
+                currentRange => new InsertCellsCommand(_currentSheetId, currentRange, InsertCellsShiftDirection.Right),
+                out outcome)
+        };
+        if (!success) return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
@@ -7057,18 +7155,37 @@ public partial class MainWindow : Window
     private void DeleteCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var input = PromptForInput("Shift cells (left/up):", "left");
+        var input = PromptForInput("Delete cells (left/up/row/column):", "left");
         if (input is null) return;
 
-        var direction = input.Trim().Equals("up", StringComparison.OrdinalIgnoreCase)
-            ? DeleteCellsShiftDirection.Up
-            : DeleteCellsShiftDirection.Left;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!KeyboardInsertDeletePlanner.TryParseDeleteDialogChoice(input, out var choice))
+            return;
+
+        CommandOutcome outcome;
+        var success = choice switch
+        {
+            KeyboardInsertDeleteDialogChoice.ShiftUp => TryExecuteRepeatableCurrentRangeCommand(
                 "Delete Cells",
                 range,
-                currentRange => new DeleteCellsCommand(_currentSheetId, currentRange, direction),
-                out var outcome))
-            return;
+                currentRange => new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Up),
+                out outcome),
+            KeyboardInsertDeleteDialogChoice.EntireRow => TryExecuteRepeatableCurrentRangeCommand(
+                "Delete Row",
+                range,
+                currentRange => new DeleteRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.RowCount),
+                out outcome),
+            KeyboardInsertDeleteDialogChoice.EntireColumn => TryExecuteRepeatableCurrentRangeCommand(
+                "Delete Column",
+                range,
+                currentRange => new DeleteColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.ColCount),
+                out outcome),
+            _ => TryExecuteRepeatableCurrentRangeCommand(
+                "Delete Cells",
+                range,
+                currentRange => new DeleteCellsCommand(_currentSheetId, currentRange, DeleteCellsShiftDirection.Left),
+                out outcome)
+        };
+        if (!success) return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
@@ -8791,6 +8908,14 @@ public partial class MainWindow : Window
     private void ChartBubbleMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Bubble);
     private void ChartRadarMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Radar);
     private void ChartStockMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Stock);
+    private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();
+
+    private static void ShowDeferredChartFamilyMessage() =>
+        MessageBox.Show(
+            "This chart family is retained when opening XLSX files, but authoring and rendering are deferred until its data model and renderer are implemented.",
+            "Chart family deferred",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {

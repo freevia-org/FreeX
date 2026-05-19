@@ -2,6 +2,24 @@ namespace Freexcel.Core.Model;
 
 public static class ChartTypeSupport
 {
+    public static bool IsKnown(ChartType type) => Enum.IsDefined(type);
+
+    public static bool IsRenderable(ChartType type) =>
+        type is ChartType.Column
+            or ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.Line
+            or ChartType.Pie
+            or ChartType.Doughnut
+            or ChartType.Bar
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+            or ChartType.Scatter
+            or ChartType.Bubble
+            or ChartType.Area
+            or ChartType.Radar
+            or ChartType.Stock;
+
     public static bool SupportsTrendlines(ChartType type) =>
         type is ChartType.Column or ChartType.Line or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area;
 
