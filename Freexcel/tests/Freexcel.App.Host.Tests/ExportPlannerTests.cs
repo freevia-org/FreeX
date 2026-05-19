@@ -37,9 +37,9 @@ public class ExportPlannerTests
     }
 
     [Fact]
-    public void PdfFallbackMessage_ExplicitlyNamesWindowsPrintToPdfAndXpsConversion()
+    public void PdfFallbackMessage_ExplainsWindowsPrintPipelineAndXpsConversion()
     {
         ExportPlanner.PdfFallbackMessage.Should().Be(
-            "Windows Print to PDF is unavailable. Exported XPS instead; use a PDF printer or convert the XPS file.");
+            "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.");
     }
 }
