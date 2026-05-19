@@ -25,9 +25,11 @@ public sealed class WorksheetContextMenuPlannerTests
             "Quick Analysis",
             "Hide Rows",
             "Unhide Rows",
+            "Row Height...",
             "AutoFit Row Height",
             "Hide Columns",
             "Unhide Columns",
+            "Column Width...",
             "AutoFit Column Width",
             "New Note",
             "Edit Note...",
@@ -49,8 +51,12 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.QuickAnalysis);
         commands.Single(command => command.Header == "AutoFit Row Height")
             .Action.Should().Be(WorksheetContextMenuAction.AutoFitRowHeight);
+        commands.Single(command => command.Header == "Row Height...")
+            .Action.Should().Be(WorksheetContextMenuAction.RowHeight);
         commands.Single(command => command.Header == "AutoFit Column Width")
             .Action.Should().Be(WorksheetContextMenuAction.AutoFitColumnWidth);
+        commands.Single(command => command.Header == "Column Width...")
+            .Action.Should().Be(WorksheetContextMenuAction.ColumnWidth);
         commands.Single(command => command.Header == "Clear All")
             .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
         commands.Single(command => command.Header == "Clear Comments")
