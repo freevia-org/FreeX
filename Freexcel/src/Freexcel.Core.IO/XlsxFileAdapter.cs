@@ -46,6 +46,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var externalLinkMetadata = LoadExternalLinkMetadata(packageStream);
         packageStream.Position = 0;
         var structuredTableMetadata = LoadStructuredTableMetadata(packageStream);
+        packageStream.Position = 0;
+        var pivotTableStyleMetadata = LoadPivotTableStyleMetadata(packageStream);
 
         packageStream.Position = 0;
         using var closedXmlPackageStream = CreateClosedXmlLoadPackage(packageStream);
@@ -74,6 +76,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbook.Timelines.Add(timeline);
         foreach (var externalLink in externalLinkMetadata)
             workbook.ExternalLinks.Add(externalLink);
+        foreach (var pivotTableStyle in pivotTableStyleMetadata)
+            workbook.PivotTableStyles.Add(pivotTableStyle);
 
         foreach (var xlSheet in xlWorkbook.Worksheets)
         {
@@ -1268,6 +1272,59 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs),
             ReadPivotSorts(root.Element(workbookNs + "pivotSorts"), workbookNs));
         return true;
+    }
+
+    private static List<PivotTableStyleModel> LoadPivotTableStyleMetadata(Stream xlsxStream)
+    {
+        var result = new List<PivotTableStyleModel>();
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return result;
+
+            var stylesXml = LoadXml(stylesEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            foreach (var styleElement in stylesXml.Root?
+                         .Element(workbookNs + "tableStyles")?
+                         .Elements(workbookNs + "tableStyle") ?? [])
+            {
+                var name = styleElement.Attribute("name")?.Value;
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                var appliesToPivotTables = ReadBoolAttribute(styleElement, "pivot");
+                if (!appliesToPivotTables)
+                    continue;
+
+                var model = new PivotTableStyleModel
+                {
+                    Name = name,
+                    AppliesToPivotTables = true,
+                    AppliesToTables = ReadBoolAttribute(styleElement, "table")
+                };
+                foreach (var element in styleElement.Elements(workbookNs + "tableStyleElement"))
+                {
+                    var type = element.Attribute("type")?.Value;
+                    if (string.IsNullOrWhiteSpace(type))
+                        continue;
+
+                    model.Elements.Add(new PivotTableStyleElementModel(
+                        type,
+                        ReadIntAttribute(element, "dxfId"),
+                        ReadIntAttribute(element, "size")));
+                }
+
+                result.Add(model);
+            }
+        }
+        catch
+        {
+            return result;
+        }
+
+        return result;
     }
 
     private static List<PivotFieldModel> ReadPivotFieldIndexes(XElement? fieldsElement, XNamespace workbookNs)
@@ -3752,6 +3809,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveStructuredTables(packageStream, workbook);
         }
 
+        if (workbook.PivotTableStyles.Count > 0)
+        {
+            packageStream.Position = 0;
+            SavePivotTableStyles(packageStream, workbook);
+        }
+
         if (!SourcePackages.TryGetValue(workbook, out _) &&
             workbook.PivotCaches.Count > 0 &&
             workbook.Sheets.Any(sheet => sheet.PivotTables.Count > 0))
@@ -3979,6 +4042,62 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetTableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
         return changed;
     }
+
+    private static void SavePivotTableStyles(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var stylesEntry = archive.GetEntry("xl/styles.xml");
+        if (stylesEntry is null)
+            return;
+
+        var stylesXml = LoadXml(stylesEntry);
+        var targetRoot = stylesXml.Root;
+        if (targetRoot is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableStyles = targetRoot.Element(workbookNs + "tableStyles");
+        if (tableStyles is null)
+        {
+            tableStyles = new XElement(workbookNs + "tableStyles");
+            targetRoot.Add(tableStyles);
+        }
+
+        var existingStylesByName = tableStyles
+            .Elements(workbookNs + "tableStyle")
+            .Select(element => (Name: element.Attribute("name")?.Value, Element: element))
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Name))
+            .ToDictionary(pair => pair.Name!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var style in workbook.PivotTableStyles.Where(style => !string.IsNullOrWhiteSpace(style.Name)))
+        {
+            var styleXml = ToPivotTableStyleXml(style, workbookNs);
+            if (existingStylesByName.TryGetValue(style.Name, out var existingStyle))
+                existingStyle.ReplaceWith(styleXml);
+            else
+                tableStyles.Add(styleXml);
+        }
+
+        tableStyles.SetAttributeValue(
+            "count",
+            tableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
+        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+    }
+
+    private static XElement ToPivotTableStyleXml(PivotTableStyleModel style, XNamespace workbookNs) =>
+        new(
+            workbookNs + "tableStyle",
+            new XAttribute("name", style.Name),
+            new XAttribute("pivot", style.AppliesToPivotTables ? "1" : "0"),
+            new XAttribute("table", style.AppliesToTables ? "1" : "0"),
+            new XAttribute("count", style.Elements.Count.ToString(CultureInfo.InvariantCulture)),
+            style.Elements
+                .Where(element => !string.IsNullOrWhiteSpace(element.Type))
+                .Select(element => new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", element.Type),
+                    element.DifferentialFormatId is { } dxfId ? new XAttribute("dxfId", dxfId.ToString(CultureInfo.InvariantCulture)) : null,
+                    element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null)));
 
     private static void SaveSlicerTimelines(Stream xlsxStream, Workbook workbook)
     {

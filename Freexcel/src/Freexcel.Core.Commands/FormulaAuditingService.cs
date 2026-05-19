@@ -35,6 +35,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
+        new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
         new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
     ];
 
@@ -64,7 +65,7 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
         if (cell is null)
             return new CommandOutcome(false, "No cell exists at the selected issue.");
 
-        if (_ignored && !FormulaAuditingService.HasIgnorableFormulaIssue(cell))
+        if (_ignored && !FormulaAuditingService.HasIgnorableFormulaIssue(ctx.Workbook, _sheetId, cell))
             return new CommandOutcome(false, "The selected cell does not currently contain an issue.");
 
         _previousIgnored = cell.IgnoreFormulaError;
@@ -119,6 +120,7 @@ public sealed class SetFormulaErrorCheckingRuleCommand : IWorkbookCommand
 
 public static class FormulaAuditingService
 {
+    public const string FormulaRefersToBlankCellsErrorCode = "FormulaRefersToBlankCells";
     public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
 
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
@@ -251,6 +253,9 @@ public static class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode))
             result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));
 
+        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode))
+            result.AddRange(FindFormulaRefersToBlankCellsIssues(workbook, sheetId));
+
         return result
             .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
             .ThenBy(issue => issue.Address.Row)
@@ -258,7 +263,12 @@ public static class FormulaAuditingService
             .ToList();
     }
 
-    internal static bool HasIgnorableFormulaIssue(Cell cell) =>
+    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, Cell cell) =>
+        cell.Value is ErrorValue ||
+        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
+        FormulaRefersToBlankCells(workbook, sheetId, cell);
+
+    private static bool HasIgnorableLiteralIssue(Cell cell) =>
         cell.Value is ErrorValue ||
         (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value));
 
@@ -271,7 +281,7 @@ public static class FormulaAuditingService
 
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                if (cell.IgnoreFormulaError || !HasIgnorableFormulaIssue(cell) || cell.Value is not TextValue)
+                if (cell.IgnoreFormulaError || !HasIgnorableLiteralIssue(cell) || cell.Value is not TextValue)
                     continue;
 
                 yield return new FormulaErrorIssue(
@@ -284,6 +294,46 @@ public static class FormulaAuditingService
                     "The number in this cell is formatted as text or preceded by an apostrophe.");
             }
         }
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindFormulaRefersToBlankCellsIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || !FormulaRefersToBlankCells(workbook, sheet.Id, cell))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    FormulaRefersToBlankCellsErrorCode,
+                    cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                    "The formula refers to one or more blank cells.");
+            }
+        }
+    }
+
+    private static bool FormulaRefersToBlankCells(Workbook workbook, SheetId sheetId, Cell cell)
+    {
+        if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
+            return false;
+
+        return ExtractPrecedents(workbook, sheetId, cell.FormulaText)
+            .Any(precedent => IsBlankPrecedent(workbook, precedent));
+    }
+
+    private static bool IsBlankPrecedent(Workbook workbook, CellAddress address)
+    {
+        var sheet = workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        return cell is null || (!cell.HasFormula && cell.Value is BlankValue);
     }
 
     private static bool IsNumberStoredAsText(string text) =>
