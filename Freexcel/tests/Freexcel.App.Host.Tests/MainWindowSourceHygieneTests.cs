@@ -42,4 +42,17 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryApplyFormatPainter(selectedRange)");
         source.Should().NotContain("var targetRange = new GridRange(addr, addr);");
     }
+
+    [Fact]
+    public void AutoFitMenuHandlers_UseSizingServiceAndSetExplicitSizes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("AutoFitSizingService.EstimateRowHeight");
+        source.Should().Contain("AutoFitSizingService.EstimateColumnWidth");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
+        source.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
+        source.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
+    }
 }
