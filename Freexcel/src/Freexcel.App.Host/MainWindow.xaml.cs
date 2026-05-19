@@ -1824,12 +1824,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.F11 && Keyboard.Modifiers == ModifierKeys.Shift)
-            {
-                AddSheetButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.IsCtrlPlus(e.Key, e.SystemKey, Keyboard.Modifiers))
             {
                 ExecuteKeyboardInsert();
