@@ -9228,6 +9228,30 @@ public class FileAdapterSmokeTests
                 TargetMode = "External",
                 AutoUpdate = true
             },
+            PlotAreaLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "outer",
+                XMode = "factor",
+                YMode = "edge",
+                WidthMode = "factor",
+                HeightMode = "factor",
+                X = 0.1,
+                Y = 0.2,
+                Width = 0.8,
+                Height = 0.6
+            },
+            LegendLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner",
+                XMode = "edge",
+                YMode = "edge",
+                WidthMode = "factor",
+                HeightMode = "factor",
+                X = 0.76,
+                Y = 0.15,
+                Width = 0.2,
+                Height = 0.7
+            },
             PrintSettings = new ChartPrintSettingsModel
             {
                 PageMargins = new ChartPageMarginsModel
@@ -9294,6 +9318,26 @@ public class FileAdapterSmokeTests
             externalRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/package");
             externalRelationship.Attribute("Target")!.Value.Should().Be("linked-pivot-source.xlsx");
             externalRelationship.Attribute("TargetMode")!.Value.Should().Be("External");
+            var plotAreaManualLayout = chartXml.Root.Element(chartNs + "chart")!
+                .Element(chartNs + "plotArea")!
+                .Element(chartNs + "layout")!
+                .Element(chartNs + "manualLayout")!;
+            plotAreaManualLayout.Element(chartNs + "layoutTarget")!.Attribute("val")!.Value.Should().Be("outer");
+            plotAreaManualLayout.Element(chartNs + "xMode")!.Attribute("val")!.Value.Should().Be("factor");
+            plotAreaManualLayout.Element(chartNs + "yMode")!.Attribute("val")!.Value.Should().Be("edge");
+            plotAreaManualLayout.Element(chartNs + "wMode")!.Attribute("val")!.Value.Should().Be("factor");
+            plotAreaManualLayout.Element(chartNs + "hMode")!.Attribute("val")!.Value.Should().Be("factor");
+            plotAreaManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.1");
+            plotAreaManualLayout.Element(chartNs + "y")!.Attribute("val")!.Value.Should().Be("0.2");
+            plotAreaManualLayout.Element(chartNs + "w")!.Attribute("val")!.Value.Should().Be("0.8");
+            plotAreaManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.6");
+            var legendManualLayout = chartXml.Root.Element(chartNs + "chart")!
+                .Element(chartNs + "legend")!
+                .Element(chartNs + "layout")!
+                .Element(chartNs + "manualLayout")!;
+            legendManualLayout.Element(chartNs + "layoutTarget")!.Attribute("val")!.Value.Should().Be("inner");
+            legendManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.76");
+            legendManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.7");
             var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
             var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
             pageMargins.Attribute("l")!.Value.Should().Be("0.7");
@@ -9331,6 +9375,8 @@ public class FileAdapterSmokeTests
         loadedChart.Language.Should().Be("en-US");
         loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
         loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
+        loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
+        loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
         loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
         loadedChart.RoundedCorners.Should().BeTrue();
         loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
