@@ -3903,6 +3903,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Textjoin_RangeArgument_FlattensCellsAndHonorsIgnoreEmpty()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 3, new TextValue("b")));
+
+        _eval.Evaluate("=TEXTJOIN(\"|\",TRUE,A1:C1)", sheet).Should().Be(new TextValue("a|b"));
+        _eval.Evaluate("=TEXTJOIN(\"|\",FALSE,A1:C1)", sheet).Should().Be(new TextValue("a||b"));
+    }
+
+    [Fact]
     public void Textjoin_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet(
@@ -4264,6 +4275,16 @@ public class FunctionLibraryTests
         var rv = (RangeValue)result;
         rv.RowCount.Should().Be(1);
         rv.Cells[0, 0].Should().Be(new TextValue("keep"));
+    }
+
+    [Fact]
+    public void Filter_TextIncludeCell_ReturnsValueError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("keep")), (1, 2, new TextValue("x")),
+            (2, 1, new TextValue("drop")), (2, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=FILTER(A1:A2,B1:B2,\"empty\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
