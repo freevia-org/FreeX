@@ -11171,25 +11171,17 @@ public partial class MainWindow : Window
         var sourceInput = PromptForInput("Source ranges to sum (same size, separated by comma or semicolon):", defaultSource);
         if (sourceInput is null) return;
 
-        var ranges = new List<GridRange>();
-        foreach (var part in sourceInput.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        if (!ConsolidateInputParser.TryParseSourceRanges(sourceInput, _currentSheetId, out var ranges, out var invalidPart))
         {
-            try
-            {
-                ranges.Add(GridRange.Parse(part, _currentSheetId));
-            }
-            catch
-            {
-                MessageBox.Show($"Invalid range: {part}", "Consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
+            MessageBox.Show($"Invalid range: {invalidPart}", "Consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
 
         var defaultDestination = selected?.Start.ToA1() ?? "A1";
         var destinationInput = PromptForInput("Destination cell:", defaultDestination);
         if (destinationInput is null) return;
 
-        if (!CellAddress.TryParse(destinationInput, _currentSheetId, out var destination))
+        if (!ConsolidateInputParser.TryParseDestination(destinationInput, _currentSheetId, out var destination))
         {
             MessageBox.Show("Invalid destination cell.", "Consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
