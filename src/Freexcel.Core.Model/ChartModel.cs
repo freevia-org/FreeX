@@ -44,6 +44,70 @@ public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
+public enum ChartBlankDisplayMode { Gap, Span, Zero }
+
+public sealed class ChartProtectionModel
+{
+    public bool? ChartObject { get; set; }
+    public bool? Data { get; set; }
+    public bool? Formatting { get; set; }
+    public bool? Selection { get; set; }
+    public bool? UserInterface { get; set; }
+}
+
+public sealed class ChartPrintSettingsModel
+{
+    public ChartPageMarginsModel? PageMargins { get; set; }
+    public ChartPageSetupModel? PageSetup { get; set; }
+}
+
+public sealed class ChartColorMapOverrideModel
+{
+    public bool UseMasterColorMapping { get; set; }
+    public Dictionary<string, string> OverrideMappings { get; set; } = new(StringComparer.Ordinal);
+}
+
+public sealed class ChartExternalDataModel
+{
+    public string? RelationshipId { get; set; }
+    public string? RelationshipType { get; set; }
+    public string? Target { get; set; }
+    public string? TargetMode { get; set; }
+    public bool? AutoUpdate { get; set; }
+}
+
+public sealed class ChartManualLayoutModel
+{
+    public string? LayoutTarget { get; set; }
+    public string? XMode { get; set; }
+    public string? YMode { get; set; }
+    public string? WidthMode { get; set; }
+    public string? HeightMode { get; set; }
+    public double? X { get; set; }
+    public double? Y { get; set; }
+    public double? Width { get; set; }
+    public double? Height { get; set; }
+}
+
+public sealed class ChartPageMarginsModel
+{
+    public double? Left { get; set; }
+    public double? Right { get; set; }
+    public double? Top { get; set; }
+    public double? Bottom { get; set; }
+    public double? Header { get; set; }
+    public double? Footer { get; set; }
+}
+
+public sealed class ChartPageSetupModel
+{
+    public string? PaperSize { get; set; }
+    public string? Orientation { get; set; }
+    public int? Copies { get; set; }
+    public bool? BlackAndWhite { get; set; }
+    public bool? Draft { get; set; }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -91,8 +155,23 @@ public sealed class ChartModel
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsPivotChart { get; set; }
+    public string? PivotSourceSheetName { get; set; }
     public string? PivotTableName { get; set; }
     public int? PivotCacheId { get; set; }
+    public bool Uses1904DateSystem { get; set; }
+    public string? Language { get; set; }
+    public int? ChartStyleId { get; set; }
+    public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
+    public ChartExternalDataModel? ExternalData { get; set; }
+    public ChartManualLayoutModel? PlotAreaLayout { get; set; }
+    public ChartManualLayoutModel? LegendLayout { get; set; }
+    public bool RoundedCorners { get; set; }
+    public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
+    public bool ShowDataLabelsOverMaximum { get; set; }
+    public bool AutoTitleDeleted { get; set; }
+    public bool ShowDataInHiddenRowsAndColumns { get; set; }
+    public ChartProtectionModel? Protection { get; set; }
+    public ChartPrintSettingsModel? PrintSettings { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }

@@ -171,7 +171,8 @@ public sealed class XlsxChartPartReaderTests
         var sheetId = SheetId.New();
         var chartXml = XDocument.Parse($$"""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
-                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
               <c:chart>
                 <c:title><c:tx><c:rich><a:p><a:r><a:t>Market View</a:t></a:r></a:p></c:rich></c:tx></c:title>
                 <c:plotArea>
@@ -232,7 +233,8 @@ public sealed class XlsxChartPartReaderTests
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
-                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
               <c:chart>
                 <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
                 <c:plotArea>
@@ -272,13 +274,40 @@ public sealed class XlsxChartPartReaderTests
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
-                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <c:date1904 val="1"/>
+              <c:lang val="en-US"/>
+              <c:style val="42"/>
+              <c:clrMapOvr>
+                <a:overrideClrMapping bg1="lt1" tx1="dk1" accent1="accent2"/>
+              </c:clrMapOvr>
+              <c:protection chartObject="1" data="1" formatting="0" selection="1" userInterface="1"/>
+              <c:printSettings>
+                <c:pageMargins l="0.7" r="0.7" t="0.75" b="0.75" header="0.3" footer="0.3"/>
+                <c:pageSetup paperSize="9" orientation="landscape" copies="2" blackAndWhite="1" draft="0"/>
+              </c:printSettings>
               <c:pivotSource>
                 <c:name>Data!PivotTable1</c:name>
                 <c:fmtId val="0"/>
               </c:pivotSource>
+              <c:roundedCorners val="1"/>
               <c:chart>
+                <c:autoTitleDeleted val="1"/>
                 <c:plotArea>
+                  <c:layout>
+                    <c:manualLayout>
+                      <c:layoutTarget val="outer"/>
+                      <c:xMode val="factor"/>
+                      <c:yMode val="edge"/>
+                      <c:wMode val="factor"/>
+                      <c:hMode val="factor"/>
+                      <c:x val="0.1"/>
+                      <c:y val="0.2"/>
+                      <c:w val="0.8"/>
+                      <c:h val="0.6"/>
+                    </c:manualLayout>
+                  </c:layout>
                   <c:barChart>
                     <c:barDir val="col"/>
                     <c:ser>
@@ -288,7 +317,30 @@ public sealed class XlsxChartPartReaderTests
                     </c:ser>
                   </c:barChart>
                 </c:plotArea>
+                <c:legend>
+                  <c:legendPos val="r"/>
+                  <c:layout>
+                    <c:manualLayout>
+                      <c:layoutTarget val="inner"/>
+                      <c:xMode val="edge"/>
+                      <c:yMode val="edge"/>
+                      <c:wMode val="factor"/>
+                      <c:hMode val="factor"/>
+                      <c:x val="0.76"/>
+                      <c:y val="0.15"/>
+                      <c:w val="0.2"/>
+                      <c:h val="0.7"/>
+                    </c:manualLayout>
+                  </c:layout>
+                  <c:overlay val="1"/>
+                </c:legend>
+                <c:plotVisOnly val="0"/>
+                <c:dispBlanksAs val="span"/>
+                <c:showDLblsOverMax val="1"/>
               </c:chart>
+              <c:externalData r:id="rIdExternalData1">
+                <c:autoUpdate val="1"/>
+              </c:externalData>
             </c:chartSpace>
             """);
 
@@ -297,6 +349,80 @@ public sealed class XlsxChartPartReaderTests
 
         chart.IsPivotChart.Should().BeTrue();
         chart.PivotTableName.Should().Be("PivotTable1");
+        chart.ChartStyleId.Should().Be(42);
+        chart.RoundedCorners.Should().BeTrue();
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Span);
+        chart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        chart.AutoTitleDeleted.Should().BeTrue();
+        chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        chart.Uses1904DateSystem.Should().BeTrue();
+        chart.Language.Should().Be("en-US");
+        chart.ColorMapOverride.Should().BeEquivalentTo(new ChartColorMapOverrideModel
+        {
+            OverrideMappings =
+            {
+                ["bg1"] = "lt1",
+                ["tx1"] = "dk1",
+                ["accent1"] = "accent2"
+            }
+        });
+        chart.ExternalData.Should().BeEquivalentTo(new ChartExternalDataModel
+        {
+            RelationshipId = "rIdExternalData1",
+            AutoUpdate = true
+        });
+        chart.PlotAreaLayout.Should().BeEquivalentTo(new ChartManualLayoutModel
+        {
+            LayoutTarget = "outer",
+            XMode = "factor",
+            YMode = "edge",
+            WidthMode = "factor",
+            HeightMode = "factor",
+            X = 0.1,
+            Y = 0.2,
+            Width = 0.8,
+            Height = 0.6
+        });
+        chart.LegendLayout.Should().BeEquivalentTo(new ChartManualLayoutModel
+        {
+            LayoutTarget = "inner",
+            XMode = "edge",
+            YMode = "edge",
+            WidthMode = "factor",
+            HeightMode = "factor",
+            X = 0.76,
+            Y = 0.15,
+            Width = 0.2,
+            Height = 0.7
+        });
+        chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
+        {
+            PageMargins = new ChartPageMarginsModel
+            {
+                Left = 0.7,
+                Right = 0.7,
+                Top = 0.75,
+                Bottom = 0.75,
+                Header = 0.3,
+                Footer = 0.3
+            },
+            PageSetup = new ChartPageSetupModel
+            {
+                PaperSize = "9",
+                Orientation = "landscape",
+                Copies = 2,
+                BlackAndWhite = true,
+                Draft = false
+            }
+        });
+        chart.Protection.Should().BeEquivalentTo(new ChartProtectionModel
+        {
+            ChartObject = true,
+            Data = true,
+            Formatting = false,
+            Selection = true,
+            UserInterface = true
+        });
     }
 
     [Fact]

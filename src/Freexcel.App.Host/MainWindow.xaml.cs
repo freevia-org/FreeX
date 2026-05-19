@@ -29,6 +29,8 @@ namespace Freexcel.App.Host;
 public partial class MainWindow : Window
 {
     private const double MaximizedSafeInsetDip = 8.0;
+    private const double SheetTabNavScrollAmount = 140.0;
+    private const double SheetTabScrollEpsilon = 0.5;
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
@@ -77,6 +79,21 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private CellColor _borderPickerColor = CellColor.Black;
+    private BorderStyle _borderPickerStyle = BorderStyle.Thin;
+    private static readonly (string Label, string Code)[] NumberFormatOptions =
+    [
+        ("General", "General"),
+        ("Number (0.00)", "0.00"),
+        ("Currency ($#,##0.00)", "$#,##0.00"),
+        ("Accounting ($#,##0.00)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)"),
+        ("Percentage (0%)", "0%"),
+        ("Fraction (# ?/?)", "# ?/?"),
+        ("Scientific (0.00E+00)", "0.00E+00"),
+        ("Date (yyyy-MM-dd)", "yyyy-MM-dd"),
+        ("Time (HH:mm:ss)", "HH:mm:ss"),
+        ("Text (@)", "@")
+    ];
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private WatchWindowDialog? _watchWindowDialog;
@@ -178,8 +195,7 @@ public partial class MainWindow : Window
         FontSizeBox.ItemsSource = sizes;
         FontSizeBox.SelectedItem = "11";
 
-        var formats = new[] { "General", "Number (0.00)", "Currency ($#,##0.00)", "Percentage (0%)", "Date (yyyy-MM-dd)", "Time (HH:mm:ss)", "Text (@)" };
-        NumberFormatBox.ItemsSource = formats;
+        NumberFormatBox.ItemsSource = NumberFormatOptions.Select(option => option.Label).ToArray();
         NumberFormatBox.SelectedIndex = 0;
 
         ApplyOptionsToView();
@@ -698,6 +714,12 @@ public partial class MainWindow : Window
                 if (CloneRibbonMenuItem(child) is { } childItem)
                     item.Items.Add(childItem);
             }
+
+            item.SubmenuOpened += (_, _) =>
+            {
+                contextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, contextMenu));
+                SynchronizeClonedMenuItems(contextMenu.Items, item.Items);
+            };
         }
         else
         {
@@ -719,6 +741,8 @@ public partial class MainWindow : Window
         {
             Header = sourceItem.Header,
             IsEnabled = sourceItem.IsEnabled,
+            IsCheckable = sourceItem.IsCheckable,
+            IsChecked = sourceItem.IsChecked,
             InputGestureText = sourceItem.InputGestureText
         };
 
@@ -732,6 +756,12 @@ public partial class MainWindow : Window
                 item.Items.Add(childItem);
         }
 
+        item.SubmenuOpened += (_, _) =>
+        {
+            sourceItem.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, sourceItem));
+            SynchronizeMenuItemState(sourceItem, item);
+        };
+
         item.Click += (_, args) =>
         {
             if (args.OriginalSource is MenuItem original && original.Items.Count > 0)
@@ -741,6 +771,43 @@ public partial class MainWindow : Window
         };
 
         return item;
+    }
+
+    private static void SynchronizeClonedMenuItems(ItemCollection sourceItems, ItemCollection clonedItems)
+    {
+        var clonedIndex = 0;
+        foreach (var source in sourceItems)
+        {
+            if (source is Separator)
+            {
+                clonedIndex++;
+                continue;
+            }
+
+            if (source is not MenuItem sourceItem)
+                continue;
+
+            while (clonedIndex < clonedItems.Count && clonedItems[clonedIndex] is not MenuItem)
+                clonedIndex++;
+
+            if (clonedIndex >= clonedItems.Count)
+                break;
+
+            if (clonedItems[clonedIndex] is MenuItem clonedItem)
+                SynchronizeMenuItemState(sourceItem, clonedItem);
+
+            clonedIndex++;
+        }
+    }
+
+    private static void SynchronizeMenuItemState(MenuItem sourceItem, MenuItem clonedItem)
+    {
+        clonedItem.IsEnabled = sourceItem.IsEnabled;
+        clonedItem.IsCheckable = sourceItem.IsCheckable;
+        clonedItem.IsChecked = sourceItem.IsChecked;
+        clonedItem.InputGestureText = sourceItem.InputGestureText;
+
+        SynchronizeClonedMenuItems(sourceItem.Items, clonedItem.Items);
     }
 
     private static void InvokeRibbonButton(ButtonBase button)
@@ -939,7 +1006,7 @@ public partial class MainWindow : Window
             ConfigureInsertRibbonSurface();
             NormalizeRibbonCommandGroups();
             AlignRibbonIconColumns();
-            DisableRibbonScrollBars();
+            HideRibbonScrollBars();
             ApplyToolbarDropdownWhiteBackgrounds();
             UpdateRibbonCompactMode(force: forceCompact);
         }
@@ -949,13 +1016,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void DisableRibbonScrollBars()
+    private void HideRibbonScrollBars()
     {
         if (RibbonTabs is null)
             return;
 
         foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
-            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
@@ -1445,11 +1512,28 @@ public partial class MainWindow : Window
             Grid.SetColumnSpan(grid, columnSpan);
 
             foreach (var button in directButtons)
+            {
+                NormalizeDenseRibbonColumnButton(button);
                 grid.Children.Add(button);
+            }
 
             parentPanel.Children.RemoveAt(index);
             parentPanel.Children.Insert(index, grid);
         }
+    }
+
+    private static void NormalizeDenseRibbonColumnButton(Button button)
+    {
+        var commandName = GetRibbonButtonTitleOrLabel(button);
+        if (string.IsNullOrWhiteSpace(commandName))
+            return;
+
+        var label = FindRibbonContentLabel(button.Content) ?? commandName;
+        button.Height = 22;
+        button.Padding = new Thickness(3, 1, 3, 1);
+        button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+        button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
     }
 
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -2256,12 +2340,7 @@ public partial class MainWindow : Window
                 currentGroup = option.Group;
             }
 
-            var item = new MenuItem
-            {
-                Header = option.Label,
-                Tag = option.Command,
-                ToolTip = option.PreviewText
-            };
+            var item = new MenuItem { Header = option.Label, Tag = option.Command };
             item.Click += QuickAnalysisMenuItem_Click;
             menu.Items.Add(item);
         }
@@ -3052,6 +3131,12 @@ public partial class MainWindow : Window
                 toggleButton.IsChecked = toggleButton.IsChecked != true;
 
             button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu &&
+                ReferenceEquals(_activeRibbonKeyTipMenu?.PlacementTarget, button))
+            {
+                return false;
+            }
+
             return true;
         }
 
@@ -3072,14 +3157,27 @@ public partial class MainWindow : Window
             return false;
         }
 
-        _activeRibbonKeyTipMenu = menu;
-        _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
-        _ribbonKeyTipSequence = "";
+        OpenRibbonContextMenu(button, menu, enterKeyTipMenuScope: true);
+        return true;
+    }
+
+    private void OpenRibbonContextMenu(ButtonBase button, ContextMenu menu, bool enterKeyTipMenuScope = false)
+    {
+        button.ContextMenu = menu;
         menu.PlacementTarget = button;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
+
+        if (enterKeyTipMenuScope || _ribbonKeyTipMode.IsActive)
+            EnterRibbonMenuKeyTipScope(menu);
+    }
+
+    private void EnterRibbonMenuKeyTipScope(ContextMenu menu)
+    {
+        _activeRibbonKeyTipMenu = menu;
+        _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
+        _ribbonKeyTipSequence = "";
         ClearKeyTipOverlay();
-        return true;
     }
 
     private bool TryInvokeActiveMenuItemKeyTip(string keyTip)
@@ -3388,23 +3486,33 @@ public partial class MainWindow : Window
             Owner = this,
             Title = "AutoFilter"
         };
-        PositionAutoFilterDialogAtActiveCell(dialog, activeCell);
 
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, "AutoFilter");
-    }
-
-    private void PositionAutoFilterDialogAtActiveCell(Window dialog, CellAddress activeCell)
-    {
-        if (TryGetCellOverlayRect(activeCell) is not { } rect)
+        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Sort",
+                    plan.Range,
+                    currentRange => new SortCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
+                return;
+            UpdateViewport();
             return;
+        }
 
-        var screenPoint = SheetGrid.PointToScreen(new Point(rect.Left, rect.Bottom));
-        dialog.WindowStartupLocation = WindowStartupLocation.Manual;
-        dialog.Left = screenPoint.X;
-        dialog.Top = screenPoint.Y;
+        if (dialog.Result.SelectedValues.Count == 0)
+        {
+            MessageBox.Show("Select at least one filter item.", "AutoFilter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Filter",
+                plan.Range,
+                currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SelectedValues)))
+            return;
+        UpdateViewport();
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)
@@ -3683,15 +3791,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
+    private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
     {
         var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
-        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(
-                editor.Text,
-                caretIndex,
-                SheetGrid.SelectedRange?.Start,
-                _options.UseR1C1ReferenceStyle,
-                out var edit))
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(editor.Text, caretIndex, out var edit))
             return false;
 
         ApplyTextEdit(editor, edit);
@@ -3918,6 +4021,8 @@ public partial class MainWindow : Window
                 ViewHeadersChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
+            if (SplitViewBtn is not null)
+                SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
         }
         finally
         {
@@ -4230,29 +4335,14 @@ public partial class MainWindow : Window
 
     private void UpdateInfoView()
     {
-        InfoWorkbookName.Text = _workbook.Name;
-        InfoFilePath.Text = _currentFilePath ?? "Not saved yet";
-        InfoSheetCount.Text = _workbook.Sheets.Count.ToString();
-        InfoFormat.Text = _currentFilePath is not null
-            ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
-            : ".xlsx";
-
-        var plan = InfoPanelSummaryPlanner.Create(
-            _workbook,
-            _workbook.GetSheet(_currentSheetId),
-            CultureInfo.CurrentCulture);
-
+        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath);
+        InfoWorkbookName.Text = plan.WorkbookName;
+        InfoFilePath.Text = plan.FilePath;
         InfoSheetCount.Text = plan.SheetCount;
-        InfoCellsWithData.Text = plan.CellsWithDataCount;
-        InfoFormulaCount.Text = plan.FormulaCount;
-        InfoCommentCount.Text = plan.CommentCount;
-        InfoChartCount.Text = plan.ChartCount;
-        InfoPictureCount.Text = plan.PictureCount;
-        InfoShapeCount.Text = plan.ShapeCount;
-        InfoNamedRangeCount.Text = plan.NamedRangeCount;
-        InfoWorkbookProtection.Text = plan.WorkbookProtectionSummary;
-        InfoSheetProtection.Text = plan.ActiveSheetProtectionSummary;
-        InfoAccessibilitySummary.Text = plan.AccessibilityIssueSummary;
+        InfoFormat.Text = plan.Format;
+        InfoStatisticsSummary.Text = plan.StatisticsSummary;
+        InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
+        InfoFormulaErrorSummary.Text = plan.FormulaErrorSummary;
     }
 
     private void UpdateSsGreeting()
@@ -4952,6 +5042,12 @@ public partial class MainWindow : Window
         _sheetTabs.Clear();
         foreach (var tab in plan.Tabs)
             _sheetTabs.Add(tab);
+        UpdateSheetTabNavigation();
+        Dispatcher.BeginInvoke(() =>
+        {
+            BringCurrentSheetTabIntoView();
+            UpdateSheetTabNavigation();
+        }, DispatcherPriority.Loaded);
         RefreshSheetProtectionUi();
         RefreshWorkbookProtectionUi();
         UpdateTitleBar();
@@ -5340,34 +5436,21 @@ public partial class MainWindow : Window
         var dialog = new AutoFilterDialog(items) { Owner = this, Title = "Filter" };
         if (dialog.ShowDialog() != true) return;
 
-        ApplyAutoFilterDialogResult(range, filterColOffset, dialog.Result, "Filter");
-    }
-
-    private bool ApplyAutoFilterDialogResult(
-        GridRange range,
-        uint filterColOffset,
-        AutoFilterDialogResult result,
-        string dialogTitle)
-    {
-        if (result.SortDirection != AutoFilterSortDirection.None)
+        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
         {
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Sort",
                     range,
-                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
-                return false;
+                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
+                return;
             UpdateViewport();
-            return true;
+            return;
         }
 
-        var value = result.CriteriaText;
+        var value = dialog.Result.CriteriaText;
         var filterText = value.TrimStart();
-        var criteriaMatchesChecklist = string.Equals(
-            value,
-            string.Join(", ", result.SelectedValues),
-            StringComparison.Ordinal);
         if (string.IsNullOrWhiteSpace(filterText))
-            return ApplyChecklistFilter(range, filterColOffset, result.SelectedValues, dialogTitle);
+            return;
         if (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
             filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
             filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
@@ -5376,8 +5459,8 @@ public partial class MainWindow : Window
             if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var error))
             {
                 MessageBox.Show(error ?? "Enter top:n, bottom:n, toppercent:n, or bottompercent:n.",
-                    dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
 
             if (!TryExecuteRepeatableCurrentRangeCommand(
@@ -5386,9 +5469,9 @@ public partial class MainWindow : Window
                     currentRange => percent
                         ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
                         : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
-                return false;
+                return;
             UpdateViewport();
-            return true;
+            return;
         }
 
         if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
@@ -5397,9 +5480,9 @@ public partial class MainWindow : Window
                     "Filter",
                     range,
                     currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
-                return false;
+                return;
             UpdateViewport();
-            return true;
+            return;
         }
 
         if (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
@@ -5423,44 +5506,26 @@ public partial class MainWindow : Window
             if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var error) || criterion is null)
             {
                 MessageBox.Show(error ?? "Enter a supported filter criterion.",
-                    dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
-                return false;
+                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
             }
 
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Filter",
                     range,
                     currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
-                return false;
+                return;
             UpdateViewport();
-            return true;
+            return;
         }
 
-        var allowedValues = criteriaMatchesChecklist
-            ? result.SelectedValues
-            : FilterInputParser.ParseAllowedValues(value);
-        return ApplyChecklistFilter(range, filterColOffset, allowedValues, dialogTitle);
-    }
-
-    private bool ApplyChecklistFilter(
-        GridRange range,
-        uint filterColOffset,
-        IReadOnlyList<string> allowedValues,
-        string dialogTitle)
-    {
-        if (allowedValues.Count == 0)
-        {
-            MessageBox.Show("Select at least one filter item.", dialogTitle, MessageBoxButton.OK, MessageBoxImage.Warning);
-            return false;
-        }
-
+        var allowedValues = FilterInputParser.ParseAllowedValues(value);
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
-            return false;
+            return;
         UpdateViewport();
-        return true;
     }
 
     private void CfRuleButton_Click(object sender, RoutedEventArgs e)
@@ -5828,9 +5893,8 @@ public partial class MainWindow : Window
     {
         if (_suppressToolbarSync) return;
         if (NumberFormatBox.SelectedIndex < 0) return;
-        var codes = new[] { "General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@" };
-        if (NumberFormatBox.SelectedIndex < codes.Length)
-            ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
+        if (NumberFormatBox.SelectedIndex < NumberFormatOptions.Length)
+            ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatOptions[NumberFormatBox.SelectedIndex].Code));
     }
 
     private void ExecuteUndo()
@@ -6802,28 +6866,27 @@ public partial class MainWindow : Window
 
         var request = ExportPlanner.PlanExport(saveDlg.FileName);
         if (request.Format == ExportFormat.PdfViaWindowsPrinter)
-            ExportViaPrintToPdf(request.Path);
+            ExportViaPrintToPdf(request);
         else
-            ExportAsXps(request.Path);
+            ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options));
     }
 
     /// <summary>
     /// Handles PDF requests through the deterministic XPS export path. WPF's managed
     /// print APIs cannot set the target PDF file path for virtual PDF printers.
     /// </summary>
-    private void ExportViaPrintToPdf(string pdfPath)
+    private void ExportViaPrintToPdf(ExportRequest request)
     {
-        ExportPdfFallbackAsXps(pdfPath);
+        ExportPdfFallbackAsXps(request);
     }
 
-    private void ExportPdfFallbackAsXps(string pdfPath)
+    private void ExportPdfFallbackAsXps(ExportRequest request)
     {
-        var xpsPath = ExportPlanner.GetFallbackXpsPath(pdfPath);
-        if (!ExportAsXps(xpsPath, showSuccessMessage: false))
+        if (!ExportAsXps(request.ActualPath, showSuccessMessage: false))
             return;
 
         MessageBox.Show(
-            $"{ExportPlanner.PdfFallbackMessage}\n\nSaved XPS file:\n{xpsPath}",
+            $"{ExportPlanner.DescribeRequest(request)}\n\nSaved XPS file:\n{request.ActualPath}",
             "Export PDF",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -7230,12 +7293,12 @@ public partial class MainWindow : Window
     }
 
     private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff());
+        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff(_borderPickerStyle, _borderPickerColor));
 
     private void BorderOutsideMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ApplyOutlineBorderShortcut();
-    }
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+            "Outside Borders");
 
     private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -7243,34 +7306,70 @@ public partial class MainWindow : Window
     }
 
     private void BorderBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor));
 
     private void BorderTopMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, _borderPickerStyle, _borderPickerColor));
 
     private void BorderLeftMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, _borderPickerStyle, _borderPickerColor));
 
     private void BorderRightMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, _borderPickerStyle, _borderPickerColor));
 
     private void BorderThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick, _borderPickerColor));
 
     private void BorderBottomDoubleMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
 
     private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick), "Thick Box Border");
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Box Border");
 
     private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thin), "Top and Bottom Border");
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, _borderPickerStyle, _borderPickerColor),
+            "Top and Bottom Border");
 
     private void BorderTopAndThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thick), "Top and Thick Bottom Border");
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Thick, _borderPickerColor),
+            "Top and Thick Bottom Border");
 
     private void BorderTopAndDoubleBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Double), "Top and Double Bottom Border");
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
+            "Top and Double Bottom Border");
+
+    private void BorderLineColorBlackMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = CellColor.Black;
+
+    private void BorderLineColorGrayMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = new CellColor(128, 128, 128);
+
+    private void BorderLineColorAccent1MenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1);
+
+    private void BorderLineColorAccent2MenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2);
+
+    private void BorderLineStyleThinMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Thin;
+
+    private void BorderLineStyleMediumMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Medium;
+
+    private void BorderLineStyleThickMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Thick;
+
+    private void BorderLineStyleDashedMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Dashed;
+
+    private void BorderLineStyleDottedMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Dotted;
+
+    private void BorderLineStyleDoubleMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Double;
 
     private void BorderMoreMenuItem_Click(object sender, RoutedEventArgs e)
         => OpenFormatCellsDialog(FormatCellsDialogTab.Border);
@@ -7357,8 +7456,11 @@ public partial class MainWindow : Window
     private void CfDateMenuItem_Click(object sender, RoutedEventArgs e)     => ShowCfDialog("Date Occurring");
     private void CfDuplicateMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Duplicate Values");
     private void CfTop10MenuItem_Click(object sender, RoutedEventArgs e)    => ShowCfDialog("Top 10 Items");
+    private void CfTop10PercentMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Top 10%");
     private void CfBottom10MenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Bottom 10 Items");
+    private void CfBottom10PercentMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Bottom 10%");
     private void CfAboveAvgMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Above Average");
+    private void CfBelowAvgMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Below Average");
     private void CfDataBarMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Data Bar");
     private void CfColorScaleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Color Scale");
     private void CfIconSetMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Icon Set");
@@ -7396,7 +7498,8 @@ public partial class MainWindow : Window
     private void ShowCfDialog(string ruleType)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dlg = new ConditionalFormatDialog(ruleType, range) { Owner = this };
+        var dlg = ConditionalFormatDialogFactory.Create(ruleType, range);
+        dlg.Owner = this;
         if (dlg.ShowDialog() != true || dlg.ResultRule is null) return;
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",
@@ -7417,6 +7520,26 @@ public partial class MainWindow : Window
     private void ApplyTableFormat(int variant)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var tableStyleName = variant switch
+        {
+            1 => "TableStyleMedium2",
+            2 => "TableStyleDark1",
+            _ => "TableStyleLight9"
+        };
+        var dialog = new CreateTableDialog(_currentSheetId, FormatRangeReference(range.Start, range.End), tableStyleName) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result is null)
+            return;
+
+        range = dialog.Result.Range;
+        if (!TryExecuteGroupedSheetCommand(
+                "Format as Table",
+                sheetId => new CreateStructuredTableCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId),
+                    dialog.Result.TableStyleName,
+                    dialog.Result.FirstRowHasHeaders)))
+            return;
+
         var (headerFill, oddFill, evenFill) = variant switch
         {
             1 => (new CellColor(31, 78, 121), new CellColor(222, 235, 247), new CellColor(255, 255, 255)),
@@ -7445,7 +7568,7 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
     private void ApplyCellStylePreset(CellStylePreset preset)
-        => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset));
+        => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme));
     private void CellStyleNormalMenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Normal);
     private void CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)
@@ -8538,88 +8661,17 @@ public partial class MainWindow : Window
 
     private void PivotGrandTotalsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            ApplyPivotOptions(
-                pivotTable,
-                !pivotTable.ShowRowGrandTotals,
-                !pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotSubtotalsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            var showSubtotals = pivotTable.ShowSubtotals;
-            var subtotalPlacement = pivotTable.SubtotalPlacement;
-            if (!pivotTable.ShowSubtotals)
-            {
-                showSubtotals = true;
-                subtotalPlacement = PivotSubtotalPlacement.Bottom;
-            }
-            else if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
-            {
-                subtotalPlacement = PivotSubtotalPlacement.Top;
-            }
-            else
-            {
-                showSubtotals = false;
-                subtotalPlacement = PivotSubtotalPlacement.Bottom;
-            }
-
-            ApplyPivotOptions(
-                pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                showSubtotals,
-                subtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotReportLayoutBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            var reportLayout = pivotTable.ReportLayout switch
-            {
-                PivotReportLayout.Compact => PivotReportLayout.Outline,
-                PivotReportLayout.Outline => PivotReportLayout.Tabular,
-                _ => PivotReportLayout.Compact
-            };
-            ApplyPivotOptions(
-                pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                reportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotBlankRowsBtn_Click(object sender, RoutedEventArgs e)
@@ -8643,29 +8695,7 @@ public partial class MainWindow : Window
 
     private void PivotStyleGalleryBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            var styleName = pivotTable.StyleName switch
-            {
-                "PivotStyleLight16" => "PivotStyleMedium9",
-                "PivotStyleMedium9" => "PivotStyleDark4",
-                _ => "PivotStyleLight16"
-            };
-            ApplyPivotOptions(
-                pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                styleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotRowHeadersBtn_Click(object sender, RoutedEventArgs e)
@@ -8780,6 +8810,34 @@ public partial class MainWindow : Window
 
         UpdateViewport();
     }
+
+    private void ShowPivotTableOptionsDialog()
+    {
+        if (!TryGetActivePivotTable(out _, out var pivotTable))
+            return;
+
+        var dialog = new PivotTableOptionsDialog(pivotTable) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyPivotOptions(pivotTable, dialog.Result);
+    }
+
+    private void ApplyPivotOptions(PivotTableModel pivotTable, PivotTableOptionsDialogResult result) =>
+        ApplyPivotOptions(
+            pivotTable,
+            result.ShowRowGrandTotals,
+            result.ShowColumnGrandTotals,
+            result.ShowSubtotals,
+            result.SubtotalPlacement,
+            result.RepeatItemLabels,
+            result.BlankLineAfterItems,
+            result.StyleName,
+            result.ShowRowHeaders,
+            result.ShowColumnHeaders,
+            result.ShowRowStripes,
+            result.ShowColumnStripes,
+            result.ReportLayout);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
@@ -10670,6 +10728,35 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>
+        PictureCropBtn_Click(sender, e);
+
+    private void PictureResetCropMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var picture = GetTargetPicture(_currentSheetId);
+        if (picture is null)
+        {
+            MessageBox.Show("No picture found on this sheet.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (picture.Kind != PictureKind.Image)
+        {
+            MessageBox.Show("Only inserted image pictures can be cropped.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Reset Crop",
+                sheetId => new SetPictureCropCommand(
+                    sheetId,
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
+                    0, 0, 0, 0)))
+            return;
+
+        UpdateViewport();
+    }
+
     private PictureModel? GetTargetPicture(SheetId sheetId)
     {
         var sheet = _workbook.GetSheet(sheetId);
@@ -11128,6 +11215,9 @@ public partial class MainWindow : Window
     private void ThemeColorsGrayscaleMenuItem_Click(object sender, RoutedEventArgs e) =>
         ApplyWorkbookTheme(WorkbookThemeWorkflow.ApplyGrayscaleColors(_workbook.Theme).WithName(_workbook.Theme.Name));
 
+    private void ThemeColorsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ThemeCustomizeMenuItem_Click(sender, e);
+
     private void ThemeFontsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
@@ -11143,6 +11233,9 @@ public partial class MainWindow : Window
     private void ThemeFontsTimesMenuItem_Click(object sender, RoutedEventArgs e) =>
         ApplyWorkbookTheme(_workbook.Theme.WithFonts("Times New Roman", "Times New Roman"));
 
+    private void ThemeFontsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ThemeCustomizeMenuItem_Click(sender, e);
+
     private void ThemeEffectsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
@@ -11157,6 +11250,9 @@ public partial class MainWindow : Window
 
     private void ThemeEffectsRefinedMenuItem_Click(object sender, RoutedEventArgs e) =>
         ApplyWorkbookTheme(_workbook.Theme.WithEffects("Refined"));
+
+    private void ThemeEffectsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ThemeCustomizeMenuItem_Click(sender, e);
 
     private void ApplyWorkbookTheme(WorkbookTheme theme)
     {
@@ -11309,37 +11405,75 @@ public partial class MainWindow : Window
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null) return;
-
         var selected = SheetGrid.SelectedRange?.Start;
         var defaultValue = selected is { } address
-            ? $"row {Math.Max(2, address.Row)}"
+            ? $"row {Math.Max(2u, address.Row)}"
             : "clear";
         var dialog = new PageBreakDialog(defaultValue) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
+        ApplyPageBreakDialogResult(dialog.Result);
+    }
+
+    private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var selected = SheetGrid.SelectedRange?.Start;
+        if (selected is null) return;
+        var address = selected.Value;
+
         var rowBreaks = sheet.RowPageBreaks.ToList();
         var columnBreaks = sheet.ColumnPageBreaks.ToList();
-        if (dialog.Result.Action == PageBreakDialogAction.Clear)
+
+        rowBreaks.Add(Math.Max(2u, address.Row));
+        columnBreaks.Add(Math.Max(2u, address.Col));
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+    }
+
+    private void RemovePageBreakMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var selected = SheetGrid.SelectedRange?.Start;
+        if (selected is null) return;
+        var address = selected.Value;
+
+        var rowBreaks = sheet.RowPageBreaks.ToList();
+        var columnBreaks = sheet.ColumnPageBreaks.ToList();
+
+        rowBreaks.Remove(Math.Max(2u, address.Row));
+        columnBreaks.Remove(Math.Max(2u, address.Col));
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+    }
+
+    private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
+    }
+
+    private void ApplyPageBreakDialogResult(PageBreakDialogResult result)
+    {
+        if (result.Action == PageBreakDialogAction.Clear)
         {
-            rowBreaks.Clear();
-            columnBreaks.Clear();
-        }
-        else if (dialog.Result.RowBreak is { } rowBreak)
-        {
-            rowBreaks.Add(rowBreak);
-        }
-        else if (dialog.Result.ColumnBreak is { } columnBreak)
-        {
-            columnBreaks.Add(columnBreak);
-        }
-        else
-        {
-            MessageBox.Show("Enter row N, col N, or clear.", "Page Breaks", MessageBoxButton.OK, MessageBoxImage.Warning);
+            TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
             return;
         }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var rowBreaks = sheet.RowPageBreaks.ToList();
+        var columnBreaks = sheet.ColumnPageBreaks.ToList();
+
+        if (result.RowBreak is { } rowBreak && !rowBreaks.Contains(rowBreak))
+            rowBreaks.Add(rowBreak);
+        if (result.ColumnBreak is { } columnBreak && !columnBreaks.Contains(columnBreak))
+            columnBreaks.Add(columnBreak);
 
         TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
     }
@@ -11466,8 +11600,7 @@ public partial class MainWindow : Window
         }
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
-        menu.PlacementTarget = btn;
-        menu.IsOpen = true;
+        OpenRibbonContextMenu(btn, menu);
     }
 
     private void InsertDefinedNameIntoFormula(string name)
@@ -11562,7 +11695,7 @@ public partial class MainWindow : Window
         var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
         if (issues.Count == 0)
         {
-            MessageBox.Show("No errors found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("No issues found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -11735,9 +11868,7 @@ public partial class MainWindow : Window
         }
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
-        btn.ContextMenu = menu;
-        menu.PlacementTarget = btn;
-        menu.IsOpen = true;
+        OpenRibbonContextMenu(btn, menu);
     }
 
     private void InsertFormulaFunction(string funcName)
@@ -11968,19 +12099,8 @@ public partial class MainWindow : Window
 
         var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
 
-        if (!result.Converged)
-        {
-            MessageBox.Show(
-                $"Goal Seek could not find a solution.\nClosest value: {result.FoundValue:G10}\nActual result: {result.ActualResult:G10}",
-                "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var confirm = MessageBox.Show(
-            $"Goal Seek found a solution.\nChanging cell value: {result.FoundValue:G10}",
-            "Goal Seek", MessageBoxButton.OKCancel, MessageBoxImage.Information);
-
-        if (confirm == MessageBoxResult.OK)
+        var statusDialog = new GoalSeekStatusDialog(result) { Owner = this };
+        if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
         {
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
             if (TryExecuteCommand(cmd, "Goal Seek"))
@@ -12229,21 +12349,15 @@ public partial class MainWindow : Window
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
         var statistics = WorkbookStatisticsService.GetStatistics(_workbook);
-        var message = WorkbookStatisticsFormatter.Format(statistics);
-        MessageBox.Show(message, "Workbook Statistics", MessageBoxButton.OK, MessageBoxImage.Information);
+        var dialog = new WorkbookStatisticsDialog(statistics) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void AccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
-        if (issues.Count == 0)
-        {
-            MessageBox.Show("No accessibility issues found.", "Accessibility", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var message = AccessibilityIssueFormatter.Format(issues);
-        MessageBox.Show(message, "Accessibility", MessageBoxButton.OK, MessageBoxImage.Warning);
+        var dialog = new AccessibilityCheckerDialog(issues) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void SetAltTextBtn_Click(object sender, RoutedEventArgs e)
@@ -12550,6 +12664,16 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
 
+    private void ArrangeAllContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var current = _workbook.WindowArrangement.ToString();
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal);
+    }
+
     private void ArrangeAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as System.Windows.Controls.MenuItem)?.Tag is not string tag ||
@@ -12804,16 +12928,66 @@ public partial class MainWindow : Window
     private void SheetNavLeftBtn_Click(object sender, RoutedEventArgs e)
     {
         SheetTabsScroller.ScrollToHorizontalOffset(
-            Math.Max(0, SheetTabsScroller.HorizontalOffset - 80));
+            Math.Max(0, SheetTabsScroller.HorizontalOffset - SheetTabNavScrollAmount));
     }
 
     private void SheetNavRightBtn_Click(object sender, RoutedEventArgs e)
     {
         SheetTabsScroller.ScrollToHorizontalOffset(
-            SheetTabsScroller.HorizontalOffset + 80);
+            Math.Min(SheetTabsScroller.ScrollableWidth, SheetTabsScroller.HorizontalOffset + SheetTabNavScrollAmount));
     }
 
     // ── Sheet tab context menu ────────────────────────────────────────────────
+
+    private void SheetTabsScroller_Loaded(object sender, RoutedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
+    private void SheetTabsScroller_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
+    private void SheetTabsScroller_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSheetTabNavigation();
+    }
+
+    private void UpdateSheetTabNavigation()
+    {
+        var canScroll = SheetTabsScroller.ScrollableWidth > SheetTabScrollEpsilon;
+        SheetNavLeftBtn.Visibility = canScroll && SheetTabsScroller.HorizontalOffset > SheetTabScrollEpsilon
+            ? Visibility.Visible
+            : Visibility.Hidden;
+        SheetNavRightBtn.Visibility = canScroll &&
+                                      SheetTabsScroller.HorizontalOffset < SheetTabsScroller.ScrollableWidth - SheetTabScrollEpsilon
+            ? Visibility.Visible
+            : Visibility.Hidden;
+    }
+
+    private void BringCurrentSheetTabIntoView()
+    {
+        var activeTab = _sheetTabs.FirstOrDefault(tab => tab.Id == _currentSheetId);
+        if (activeTab is null ||
+            SheetTabsControl.ItemContainerGenerator.ContainerFromItem(activeTab) is not FrameworkElement container)
+            return;
+
+        var bounds = container.TransformToAncestor(SheetTabsScroller)
+            .TransformBounds(new Rect(new Point(0, 0), container.RenderSize));
+        if (bounds.Left < 0)
+        {
+            SheetTabsScroller.ScrollToHorizontalOffset(
+                Math.Max(0, SheetTabsScroller.HorizontalOffset + bounds.Left));
+        }
+        else if (bounds.Right > SheetTabsScroller.ViewportWidth)
+        {
+            SheetTabsScroller.ScrollToHorizontalOffset(
+                Math.Min(
+                    SheetTabsScroller.ScrollableWidth,
+                    SheetTabsScroller.HorizontalOffset + bounds.Right - SheetTabsScroller.ViewportWidth));
+        }
+    }
 
     private void SheetCtxRename_Click(object sender, RoutedEventArgs e)
     {
@@ -13100,7 +13274,7 @@ public partial class MainWindow : Window
         { FileName = AppInfo.FeedbackUrl, UseShellExecute = true });
     }
 
-    private bool ExportAsXps(string xpsPath, bool showSuccessMessage = true)
+    private bool ExportAsXps(string xpsPath, string? optionSummary = null, bool showSuccessMessage = true)
     {
         try
         {
@@ -13131,8 +13305,11 @@ public partial class MainWindow : Window
 
             if (showSuccessMessage)
             {
+                var detail = string.IsNullOrWhiteSpace(optionSummary)
+                    ? $"Saved XPS file:\n{xpsPath}"
+                    : $"{optionSummary}\n\nSaved XPS file:\n{xpsPath}";
                 MessageBox.Show(
-                    $"Saved XPS file:\n{xpsPath}",
+                    detail,
                     "Export XPS",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);

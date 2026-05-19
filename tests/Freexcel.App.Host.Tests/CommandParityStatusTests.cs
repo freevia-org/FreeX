@@ -26,7 +26,9 @@ public sealed class CommandParityStatusTests
             ("Full Excel locale/accounting fidelity", "Partial"),
             ("AutoFit Row/Column", "Implemented"),
             ("Format Cells dialog (Ctrl+1)", "Implemented"),
-            ("Flash Fill", "Partial")
+            ("Flash Fill", "Partial"),
+            ("Share", "Partial"),
+            ("Split Panes", "Implemented")
         ];
 
         var tableRows = ParseMarkdownTableRows(doc);

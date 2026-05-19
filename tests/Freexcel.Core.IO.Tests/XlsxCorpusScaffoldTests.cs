@@ -68,6 +68,20 @@ public class XlsxCorpusScaffoldTests
         readme.Should().Contain("redistribution");
     }
 
+    [Fact]
+    public void CorpusReport_PublishesWorkbookAndFeatureBucketPassRates()
+    {
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        report.Should().Contain("## Pass Rate Summary");
+        report.Should().Contain("| Workbook set | Executed | Passing | Pass rate |");
+        report.Should().Contain("| Generated supported-pass workbooks | 16 | 16 | 100% |");
+        report.Should().Contain("| Public redistributed workbooks | 25 | 25 | 100% |");
+        report.Should().Contain("| Feature bucket | Evidence | Pass rate |");
+        report.Should().Contain("| PivotTables, pivot caches, and PivotChart binding |");
+        report.Should().Contain("| Slicers, timelines, external links, printer settings, custom XML |");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

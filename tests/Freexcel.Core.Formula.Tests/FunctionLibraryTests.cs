@@ -4328,6 +4328,13 @@ public class FunctionLibraryTests
         _eval.Evaluate("=SEQUENCE(2,1,1,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
+    public void Sum_FlattensSequenceDynamicArrayResult()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(3,2,1,1))", MakeSheet())
+            .Should().Be(new NumberValue(21));
+    }
+
+    [Fact]
     public void Filter_ByBoolArray_ReturnsMatchingRows()
     {
         var sheet = MakeSheet(
@@ -4361,6 +4368,39 @@ public class FunctionLibraryTests
 
         _eval.Evaluate("=FILTER(A1:A1,B1:B1)", sheet).Should().Be(new ErrorValue("#CALC!"));
         _eval.Evaluate("=ERROR.TYPE(FILTER(A1:A1,B1:B1))", sheet).Should().Be(new NumberValue(14));
+    }
+
+    [Fact]
+    public void Iferror_CatchesFilterNoMatchesCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=IFERROR(FILTER(A1:A1,B1:B1),\"fallback\")", sheet)
+            .Should().Be(new TextValue("fallback"));
+    }
+
+    [Fact]
+    public void Ifna_DoesNotCatchFilterNoMatchesCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=IFNA(FILTER(A1:A1,B1:B1),\"fallback\")", sheet)
+            .Should().Be(new ErrorValue("#CALC!"));
+    }
+
+    [Fact]
+    public void Choose_DoesNotEvaluateUnselectedFilterCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (1, 2, new BoolValue(false)));
+
+        _eval.Evaluate("=CHOOSE(2,FILTER(A1:A1,B1:B1),42)", sheet)
+            .Should().Be(new NumberValue(42));
     }
 
     [Fact]
@@ -4442,6 +4482,63 @@ public class FunctionLibraryTests
             (1, 2, ErrorValue.NA));
 
         _eval.Evaluate("=FILTER(A1:A1,B1:B1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Filter_AcceptsArrayComparisonIncludeExpression()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(3)));
+
+        var rv = _eval.Evaluate("=FILTER(A1:A3,A1:A3>1)", sheet).Should().BeOfType<RangeValue>().Subject;
+
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(1);
+        rv.At(1, 1).Should().Be(new NumberValue(2));
+        rv.At(2, 1).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Sumproduct_AcceptsArrayArithmeticExpression()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)),
+            (2, 1, new NumberValue(2)), (2, 2, new NumberValue(20)),
+            (3, 1, new NumberValue(3)), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=SUMPRODUCT(A1:A3+1,B1:B3)", sheet).Should().Be(new NumberValue(200));
+    }
+
+    [Fact]
+    public void Aggregate_FlattensDynamicArrayArithmeticResult()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(2,2)*2)", MakeSheet()).Should().Be(new NumberValue(20));
+    }
+
+    [Fact]
+    public void Aggregate_FlattensDynamicArrayUnaryMinusResult()
+    {
+        _eval.Evaluate("=SUM(-SEQUENCE(2,2))", MakeSheet()).Should().Be(new NumberValue(-10));
+    }
+
+    [Fact]
+    public void Aggregate_FlattensDynamicArrayPercentResult()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(2,2)%)", MakeSheet()).Should().Be(new NumberValue(0.1));
+    }
+
+    [Fact]
+    public void Sum_FlattensFilterDynamicArrayResult()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(3)), (1, 2, new BoolValue(true)),
+            (2, 1, new NumberValue(1)), (2, 2, new BoolValue(false)),
+            (3, 1, new NumberValue(2)), (3, 2, new BoolValue(true)));
+
+        _eval.Evaluate("=SUM(FILTER(A1:A3,B1:B3))", sheet)
+            .Should().Be(new NumberValue(5));
     }
 
     [Fact]

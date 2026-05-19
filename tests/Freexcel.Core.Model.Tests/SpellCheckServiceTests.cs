@@ -95,6 +95,46 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_PreservesKnownCorrectionCasingStyles()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(textAddress, new TextValue("TEH Teh teh"));
+
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        plan.IssueCount.Should().Be(3);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].CorrectedText.Should().Be("THE The the");
+        plan.Edits[0].ReplacementCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_CoversCommonWorksheetMisspellings()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(textAddress, new TextValue("Calender recomendations for tommorow were a sucess, although wierd."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Calender", "calendar"),
+            ("recomendations", "recommendations"),
+            ("tommorow", "tomorrow"),
+            ("sucess", "success"),
+            ("wierd", "weird"));
+        plan.IssueCount.Should().Be(5);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be("Calendar recommendations for tomorrow were a success, although weird.");
+        plan.Edits[0].ReplacementCount.Should().Be(5);
+    }
+
+    [Fact]
     public void ApplyCorrection_ReplacesWholeWordAndPreservesCapitalization()
     {
         var issue = new SpellingIssue(
@@ -106,5 +146,22 @@ public sealed class SpellCheckServiceTests
         var corrected = SpellCheckService.ApplyCorrection(issue, "the");
 
         corrected.Should().Be("The item is not the same as other.");
+    }
+
+    [Theory]
+    [InlineData("TEH", "THE")]
+    [InlineData("Teh", "The")]
+    [InlineData("teh", "the")]
+    public void ApplyCorrection_PreservesKnownCorrectionCasingStyle(string original, string expected)
+    {
+        var issue = new SpellingIssue(
+            new CellAddress(SheetId.New(), 1, 1),
+            original,
+            "the",
+            original);
+
+        var corrected = SpellCheckService.ApplyCorrection(issue, "the");
+
+        corrected.Should().Be(expected);
     }
 }

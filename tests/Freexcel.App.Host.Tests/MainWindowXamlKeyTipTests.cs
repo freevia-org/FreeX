@@ -54,6 +54,26 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageInfo_ShowsFormulaErrorSummary()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document
+            .Descendants(presentation + "TextBlock")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Should()
+            .Contain("Formula errors");
+
+        var hasFormulaSummary = document
+            .Descendants(presentation + "TextBlock")
+            .Any(element => element.Attribute(xaml + "Name")?.Value == "InfoFormulaErrorSummary");
+
+        hasFormulaSummary.Should().BeTrue();
+    }
+
+    [Fact]
     public void BackstageRecentList_ProvidesVisiblePinAndUnpinButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -66,6 +86,46 @@ public sealed class MainWindowXamlKeyTipTests
 
         visibleButtons.Should().Contain("SsPinItem_Click", "pinning should not be hidden behind a context menu");
         visibleButtons.Should().Contain("SsUnpinItem_Click", "pinned files need a visible unpin affordance");
+    }
+
+    [Fact]
+    public void ConditionalFormattingTopBottomRules_ExposeExcelParityMenuChoices()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var menuItems = document
+            .Descendants(presentation + "MenuItem")
+            .Select(element => new
+            {
+                Header = element.Attribute("Header")?.Value,
+                Click = element.Attribute("Click")?.Value
+            })
+            .ToList();
+
+        menuItems.Should().Contain(item => item.Header == "Top 10%..." && item.Click == "CfTop10PercentMenuItem_Click");
+        menuItems.Should().Contain(item => item.Header == "Bottom 10%..." && item.Click == "CfBottom10PercentMenuItem_Click");
+        menuItems.Should().Contain(item => item.Header == "Below Average..." && item.Click == "CfBelowAvgMenuItem_Click");
+    }
+
+    [Fact]
+    public void DataTab_ExposesFlashFillCommand()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var dataTab = document
+            .Descendants(presentation + "TabItem")
+            .Single(element => element.Attribute("Header")?.Value == "Data");
+
+        var flashFillButton = dataTab
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == "Flash Fill");
+
+        flashFillButton.Attribute("Click")?.Value.Should().Be("FlashFillMenuItem_Click");
+        flashFillButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FF");
+        flashFillButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("examples");
     }
 
     [Fact]
@@ -96,12 +156,13 @@ public sealed class MainWindowXamlKeyTipTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var optionsButton = document
             .Descendants()
-            .Single(element => element.Attribute("Click")?.Value == "SsOptionsBtn_Click");
+            .Single(element => element.Attribute(x + "Name")?.Value == "SsOptionsNavBtn");
 
-        optionsButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("SsOptionsNavBtn");
+        optionsButton.Attribute("Click")?.Value.Should().Be("SsOptionsBtn_Click");
         optionsButton.ToString().Should().Contain("AutomationProperties.Name=\"Options\"");
         optionsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageOptionsButton\"");
         optionsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Open Freexcel settings");
@@ -229,6 +290,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute("Click")?.Value is
                 "ReviewNewCommentBtn_Click" or
                 "ReviewDeleteCommentBtn_Click" or
+                "ReviewPrevCommentBtn_Click" or
+                "ReviewNextCommentBtn_Click" or
                 "ReviewShowCommentsBtn_Click")
             .ToList();
 
@@ -240,12 +303,16 @@ public sealed class MainWindowXamlKeyTipTests
             })
             .ToList();
 
-        tooltipTexts.Should().HaveCount(3);
+        tooltipTexts.Should().HaveCount(6);
         tooltipTexts.Should().OnlyContain(text =>
             text.Title.Contains("Note", StringComparison.OrdinalIgnoreCase) ||
             text.Description.Contains("note", StringComparison.OrdinalIgnoreCase));
         tooltipTexts
             .Single(text => text.Title.Equals("New Note", StringComparison.OrdinalIgnoreCase))
+            .Description.Should()
+            .Contain("threaded comments are not implemented");
+        tooltipTexts
+            .Single(text => text.Title.Equals("Edit Note", StringComparison.OrdinalIgnoreCase))
             .Description.Should()
             .Contain("threaded comments are not implemented");
     }
@@ -265,6 +332,23 @@ public sealed class MainWindowXamlKeyTipTests
         spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("text cells");
         spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("replace all");
         spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("proofing engine");
+    }
+
+    [Fact]
+    public void AccessibilityTooltip_DisclosesCurrentCheckerCoverage()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var accessibilityButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
+
+        var description = accessibilityButton.Attribute(local + "RibbonTooltip.Description")?.Value;
+        description.Should().Contain("merged cells");
+        description.Should().Contain("alternate text");
+        description.Should().Contain("charts without titles");
     }
 
     [Fact]
@@ -337,7 +421,7 @@ public sealed class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var splitButton = document
-            .Descendants(presentation + "Button")
+            .Descendants(presentation + "ToggleButton")
             .Single(element => element.Attribute("Click")?.Value == "SplitViewBtn_Click");
 
         splitButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clears frozen panes");
@@ -540,7 +624,7 @@ public sealed class MainWindowXamlKeyTipTests
         ]);
 
         source.Should().Contain("ApplyCellStylePreset(CellStylePreset preset)");
-        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset)");
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
         source.Should().Contain("CellStyleInputMenuItem_Click");
         source.Should().Contain("=> ApplyCellStylePreset(CellStylePreset.Input);");
         source.Should().NotContain("CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)\r\n        => ApplyStyleDiff(new StyleDiff");
@@ -836,6 +920,65 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void ErrorCheckingButton_ExposesOptionsEntryPoint()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var errorCheckingButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Error Checking");
+
+        var menuItems = errorCheckingButton
+            .Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value
+            })
+            .ToList();
+
+        menuItems.Should().Contain(item =>
+            item.Header == "Error Checking..." &&
+            item.KeyTip == "E" &&
+            item.Click == "ErrorCheckBtn_Click");
+        menuItems.Should().Contain(item =>
+            item.Header == "Error Checking Options..." &&
+            item.KeyTip == "O" &&
+            item.Click == "SsOptionsBtn_Click");
+    }
+
+    [Fact]
+    public void PageLayoutBreaksButton_OpensExcelStyleBreaksMenu()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var breaksButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Breaks");
+
+        breaksButton.Attribute("Click")?.Value.Should().Be("PageBreaksBtn_Click");
+        breaksButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("B");
+        breaksButton.Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value
+            })
+            .Should()
+            .Equal([
+                new { Header = (string?)"Insert Page Break", KeyTip = (string?)"I", Click = (string?)"InsertPageBreakMenuItem_Click" },
+                new { Header = (string?)"Remove Page Break", KeyTip = (string?)"R", Click = (string?)"RemovePageBreakMenuItem_Click" },
+                new { Header = (string?)"Reset All Page Breaks", KeyTip = (string?)"A", Click = (string?)"ResetAllPageBreaksMenuItem_Click" }
+            ]);
+    }
+
+    [Fact]
     public void DeferredCommandButtons_DescribeDeferredStatusInTooltip()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -890,7 +1033,10 @@ public sealed class MainWindowXamlKeyTipTests
         colorsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         colorsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Freexcel Colorful", "Grayscale");
+            .Should().Equal("Office", "Freexcel Colorful", "Grayscale", "Customize Colors...");
+        colorsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Colors...")
+            .Attribute("Click")?.Value.Should().Be("ThemeColorsCustomizeMenuItem_Click");
     }
 
     [Fact]
@@ -908,7 +1054,10 @@ public sealed class MainWindowXamlKeyTipTests
         fontsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         fontsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Arial", "Times New Roman");
+            .Should().Equal("Office", "Arial", "Times New Roman", "Customize Fonts...");
+        fontsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Fonts...")
+            .Attribute("Click")?.Value.Should().Be("ThemeFontsCustomizeMenuItem_Click");
     }
 
     [Fact]
@@ -926,7 +1075,10 @@ public sealed class MainWindowXamlKeyTipTests
         effectsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         effectsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Subtle", "Refined");
+            .Should().Equal("Office", "Subtle", "Refined", "Customize Effects...");
+        effectsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Effects...")
+            .Attribute("Click")?.Value.Should().Be("ThemeEffectsCustomizeMenuItem_Click");
     }
 
     [Fact]

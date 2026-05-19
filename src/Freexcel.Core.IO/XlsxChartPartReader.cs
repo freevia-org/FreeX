@@ -8,6 +8,7 @@ public static class XlsxChartPartReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace OfficeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
     public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart)
     {
@@ -63,9 +64,215 @@ public static class XlsxChartPartReader
             return false;
 
         if (read)
+        {
+            ApplyChartStyleMetadata(chartXml, chart);
+            ApplyChartBehaviorMetadata(chartXml, chart);
             ApplyPivotSourceMetadata(chartXml, chart);
+        }
 
         return read;
+    }
+
+    private static void ApplyChartStyleMetadata(XDocument chartXml, ChartModel chart)
+    {
+        chart.Uses1904DateSystem = IsTrue(chartXml.Root?
+            .Element(ChartNs + "date1904")?
+            .Attribute("val")?
+            .Value);
+
+        chart.Language = chartXml.Root?
+            .Element(ChartNs + "lang")?
+            .Attribute("val")?
+            .Value;
+
+        var styleValue = chartXml.Root?
+            .Element(ChartNs + "style")?
+            .Attribute("val")?
+            .Value;
+        if (int.TryParse(styleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleId))
+            chart.ChartStyleId = styleId;
+
+        chart.ColorMapOverride = ReadColorMapOverride(chartXml.Root?.Element(ChartNs + "clrMapOvr"));
+        chart.ExternalData = ReadExternalData(chartXml.Root?.Element(ChartNs + "externalData"));
+        chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
+        chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
+
+        chart.RoundedCorners = IsTrue(chartXml.Root?
+            .Element(ChartNs + "roundedCorners")?
+            .Attribute("val")?
+            .Value);
+    }
+
+    private static ChartColorMapOverrideModel? ReadColorMapOverride(XElement? colorMapOverride)
+    {
+        if (colorMapOverride is null)
+            return null;
+
+        var masterMapping = colorMapOverride.Element(DrawingNs + "masterClrMapping");
+        var overrideMapping = colorMapOverride.Element(DrawingNs + "overrideClrMapping");
+        if (masterMapping is null && overrideMapping is null)
+            return null;
+
+        var result = new ChartColorMapOverrideModel
+        {
+            UseMasterColorMapping = masterMapping is not null
+        };
+        if (overrideMapping is not null)
+        {
+            foreach (var attribute in overrideMapping.Attributes())
+                result.OverrideMappings[attribute.Name.LocalName] = attribute.Value;
+        }
+
+        return result;
+    }
+
+    private static ChartExternalDataModel? ReadExternalData(XElement? externalData)
+    {
+        if (externalData is null)
+            return null;
+
+        var relationshipId = externalData.Attribute(OfficeRelNs + "id")?.Value;
+        var autoUpdate = ReadOptionalBool(externalData
+            .Element(ChartNs + "autoUpdate")?
+            .Attribute("val")?
+            .Value);
+        if (string.IsNullOrWhiteSpace(relationshipId) && autoUpdate is null)
+            return null;
+
+        return new ChartExternalDataModel
+        {
+            RelationshipId = relationshipId,
+            AutoUpdate = autoUpdate
+        };
+    }
+
+    private static ChartManualLayoutModel? ReadManualLayout(XElement? layout)
+    {
+        var manualLayout = layout?.Element(ChartNs + "manualLayout");
+        if (manualLayout is null)
+            return null;
+
+        var result = new ChartManualLayoutModel
+        {
+            LayoutTarget = manualLayout.Element(ChartNs + "layoutTarget")?.Attribute("val")?.Value,
+            XMode = manualLayout.Element(ChartNs + "xMode")?.Attribute("val")?.Value,
+            YMode = manualLayout.Element(ChartNs + "yMode")?.Attribute("val")?.Value,
+            WidthMode = manualLayout.Element(ChartNs + "wMode")?.Attribute("val")?.Value,
+            HeightMode = manualLayout.Element(ChartNs + "hMode")?.Attribute("val")?.Value,
+            X = ReadOptionalDouble(manualLayout.Element(ChartNs + "x")?.Attribute("val")?.Value),
+            Y = ReadOptionalDouble(manualLayout.Element(ChartNs + "y")?.Attribute("val")?.Value),
+            Width = ReadOptionalDouble(manualLayout.Element(ChartNs + "w")?.Attribute("val")?.Value),
+            Height = ReadOptionalDouble(manualLayout.Element(ChartNs + "h")?.Attribute("val")?.Value)
+        };
+
+        return string.IsNullOrWhiteSpace(result.LayoutTarget) &&
+            string.IsNullOrWhiteSpace(result.XMode) &&
+            string.IsNullOrWhiteSpace(result.YMode) &&
+            string.IsNullOrWhiteSpace(result.WidthMode) &&
+            string.IsNullOrWhiteSpace(result.HeightMode) &&
+            result.X is null &&
+            result.Y is null &&
+            result.Width is null &&
+            result.Height is null
+            ? null
+            : result;
+    }
+
+    private static ChartProtectionModel? ReadProtection(XElement? protection)
+    {
+        if (protection is null)
+            return null;
+
+        return new ChartProtectionModel
+        {
+            ChartObject = ReadOptionalBool(protection.Attribute("chartObject")?.Value),
+            Data = ReadOptionalBool(protection.Attribute("data")?.Value),
+            Formatting = ReadOptionalBool(protection.Attribute("formatting")?.Value),
+            Selection = ReadOptionalBool(protection.Attribute("selection")?.Value),
+            UserInterface = ReadOptionalBool(protection.Attribute("userInterface")?.Value)
+        };
+    }
+
+    private static ChartPrintSettingsModel? ReadPrintSettings(XElement? printSettings)
+    {
+        if (printSettings is null)
+            return null;
+
+        var pageMargins = printSettings.Element(ChartNs + "pageMargins");
+        var pageSetup = printSettings.Element(ChartNs + "pageSetup");
+        return new ChartPrintSettingsModel
+        {
+            PageMargins = pageMargins is null ? null : new ChartPageMarginsModel
+            {
+                Left = ReadOptionalDouble(pageMargins.Attribute("l")?.Value),
+                Right = ReadOptionalDouble(pageMargins.Attribute("r")?.Value),
+                Top = ReadOptionalDouble(pageMargins.Attribute("t")?.Value),
+                Bottom = ReadOptionalDouble(pageMargins.Attribute("b")?.Value),
+                Header = ReadOptionalDouble(pageMargins.Attribute("header")?.Value),
+                Footer = ReadOptionalDouble(pageMargins.Attribute("footer")?.Value)
+            },
+            PageSetup = pageSetup is null ? null : new ChartPageSetupModel
+            {
+                PaperSize = pageSetup.Attribute("paperSize")?.Value,
+                Orientation = pageSetup.Attribute("orientation")?.Value,
+                Copies = ReadOptionalInt(pageSetup.Attribute("copies")?.Value),
+                BlackAndWhite = ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
+                Draft = ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
+            }
+        };
+    }
+
+    private static double? ReadOptionalDouble(string? value)
+    {
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+            return result;
+
+        return null;
+    }
+
+    private static int? ReadOptionalInt(string? value)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
+            return result;
+
+        return null;
+    }
+
+    private static bool? ReadOptionalBool(string? value)
+    {
+        if (value is null)
+            return null;
+
+        return IsTrue(value);
+    }
+
+    private static void ApplyChartBehaviorMetadata(XDocument chartXml, ChartModel chart)
+    {
+        var chartElement = chartXml.Root?.Element(ChartNs + "chart");
+        chart.AutoTitleDeleted = IsTrue(chartElement?
+            .Element(ChartNs + "autoTitleDeleted")?
+            .Attribute("val")?
+            .Value);
+
+        chart.BlankDisplayMode = chartElement?
+            .Element(ChartNs + "dispBlanksAs")?
+            .Attribute("val")?
+            .Value switch
+            {
+                "span" => ChartBlankDisplayMode.Span,
+                "zero" => ChartBlankDisplayMode.Zero,
+                _ => ChartBlankDisplayMode.Gap
+            };
+
+        chart.ShowDataLabelsOverMaximum = IsTrue(chartElement?
+            .Element(ChartNs + "showDLblsOverMax")?
+            .Attribute("val")?
+            .Value);
+
+        chart.ShowDataInHiddenRowsAndColumns = chartElement?
+            .Element(ChartNs + "plotVisOnly")?
+            .Attribute("val")?
+            .Value is "0" or "false" or "False";
     }
 
     private static (XElement Element, ChartType Type)? FindDeferredAdvancedChart(XElement? plotArea)
@@ -161,7 +368,17 @@ public static class XlsxChartPartReader
             return;
 
         chart.IsPivotChart = true;
+        chart.PivotSourceSheetName = ExtractPivotSourceSheetName(pivotSourceName);
         chart.PivotTableName = ExtractPivotTableName(pivotSourceName);
+    }
+
+    private static string? ExtractPivotSourceSheetName(string pivotSourceName)
+    {
+        var bangIndex = pivotSourceName.LastIndexOf('!');
+        if (bangIndex <= 0)
+            return null;
+
+        return UnquoteSheetName(pivotSourceName[..bangIndex].Trim());
     }
 
     private static string ExtractPivotTableName(string pivotSourceName)
@@ -169,6 +386,14 @@ public static class XlsxChartPartReader
         var bangIndex = pivotSourceName.LastIndexOf('!');
         var name = bangIndex >= 0 ? pivotSourceName[(bangIndex + 1)..] : pivotSourceName;
         return name.Trim().Trim('\'');
+    }
+
+    private static string UnquoteSheetName(string value)
+    {
+        if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'')
+            return value[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return value;
     }
 
     private static bool TryReadLineLikeChart(
@@ -864,6 +1089,7 @@ public static class XlsxChartPartReader
         ApplyChartTitleFormatting(chartElement?.Element(ChartNs + "title"), chart);
         ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
         var plotArea = chartElement?.Element(ChartNs + "plotArea");
+        chart.PlotAreaLayout = ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
         ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
         ApplyAxisTitles(plotArea, chart);
         ApplyDataLabels(plotArea, chart);
@@ -878,6 +1104,7 @@ public static class XlsxChartPartReader
         }
 
         chart.ShowLegend = true;
+        chart.LegendLayout = ReadManualLayout(legend.Element(ChartNs + "layout"));
         chart.LegendPosition = legend.Element(ChartNs + "legendPos")?.Attribute("val")?.Value switch
         {
             "l" => ChartLegendPosition.Left,

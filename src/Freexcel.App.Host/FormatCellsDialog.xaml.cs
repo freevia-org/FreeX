@@ -13,11 +13,34 @@ public partial class FormatCellsDialog : Window
     private readonly CellStyle _current;
 
     private static readonly string[] NumberFormatCodes =
-        ["General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@"];
+    [
+        "General",
+        "#,##0.00",
+        "$#,##0.00",
+        "$#,##0.00",
+        "0%",
+        "0.00%",
+        "m/d/yyyy",
+        "h:mm AM/PM",
+        "# ?/?",
+        "0.00E+00",
+        "@"
+    ];
 
     private static readonly string[] NumberFormatLabels =
-        ["General", "Number (0.00)", "Currency ($#,##0.00)", "Percentage (0%)",
-         "Date (yyyy-MM-dd)", "Time (HH:mm:ss)", "Text (@)"];
+    [
+        "General",
+        "Number (#,##0.00)",
+        "Currency ($#,##0.00)",
+        "Accounting ($#,##0.00)",
+        "Percentage (0%)",
+        "Percentage (0.00%)",
+        "Date (m/d/yyyy)",
+        "Time (h:mm AM/PM)",
+        "Fraction (# ?/?)",
+        "Scientific (0.00E+00)",
+        "Text (@)"
+    ];
 
     public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
