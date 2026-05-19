@@ -71,6 +71,9 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.N, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.NewWorkbook)]
+    [InlineData(Key.O, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
+    [InlineData(Key.S, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SaveWorkbook)]
     [InlineData(Key.T, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
     [InlineData(Key.L, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
     [InlineData(Key.K, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.InsertHyperlink)]
