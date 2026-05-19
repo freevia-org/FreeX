@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     private string? _currentFilePath;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     private bool _formatPainterActive;
+    private bool _formatPainterPersistent;
     private StyleId _formatPainterStyleId;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
@@ -2645,7 +2646,7 @@ public partial class MainWindow : Window
     {
         ClearClipboardVisualState();
         _internalClipboard = null;
-        _formatPainterActive = false;
+        CancelFormatPainter();
     }
 
     private void ClearClipboardVisualState()
@@ -5715,19 +5716,38 @@ public partial class MainWindow : Window
 
     private void FormatPainterBtn_Click(object sender, RoutedEventArgs e)
     {
+        CaptureFormatPainterSource(persistent: false);
+    }
+
+    private void FormatPainterBtn_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        CaptureFormatPainterSource(persistent: true);
+    }
+
+    private void CaptureFormatPainterSource(bool persistent)
+    {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         _formatPainterStyleId = sheet?.GetCell(range.Start)?.StyleId
             ?? sheet?.GetStyleOnly(range.Start.Row, range.Start.Col)
             ?? StyleId.Default;
         _formatPainterActive = true;
+        _formatPainterPersistent = persistent;
+    }
+
+    private void CancelFormatPainter()
+    {
+        _formatPainterActive = false;
+        _formatPainterPersistent = false;
     }
 
     // Call from cell-click path: if painter active, apply stored style
     private bool TryApplyFormatPainter(CellAddress addr)
     {
         if (!_formatPainterActive) return false;
-        _formatPainterActive = false;
+        if (!_formatPainterPersistent)
+            CancelFormatPainter();
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return true;
