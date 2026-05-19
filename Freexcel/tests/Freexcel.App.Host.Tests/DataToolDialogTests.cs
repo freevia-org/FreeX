@@ -129,4 +129,23 @@ public sealed class DataToolDialogTests
         twoVariable.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
         twoVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
     }
+
+    [Fact]
+    public void CreateTableDialog_ParsesRangeHeadersAndStyle()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = CreateTableDialog.TryParse(
+            sheetId,
+            rangeText: " A1:C12 ",
+            firstRowHasHeaders: false,
+            tableStyleName: "TableStyleMedium2",
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.Range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 3)));
+        result.FirstRowHasHeaders.Should().BeFalse();
+        result.TableStyleName.Should().Be("TableStyleMedium2");
+    }
 }
