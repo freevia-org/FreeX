@@ -1824,12 +1824,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.L && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            {
-                FilterButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if (e.Key == Key.PageUp && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
             {
                 SelectAdjacentVisibleSheetGroup(-1);
@@ -2169,6 +2163,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
                 FormulaBarExpandBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ToggleFilter:
+                FilterButton_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.QuickAnalysis:
                 ShowQuickAnalysisMenu();
