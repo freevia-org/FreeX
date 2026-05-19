@@ -80,6 +80,50 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Theory]
+    [InlineData("cx:treemapChart", ChartType.Treemap)]
+    [InlineData("cx:sunburstChart", ChartType.Sunburst)]
+    [InlineData("cx:histogramChart", ChartType.Histogram)]
+    [InlineData("cx:boxWhiskerChart", ChartType.BoxAndWhisker)]
+    [InlineData("cx:waterfallChart", ChartType.Waterfall)]
+    [InlineData("cx:funnelChart", ChartType.Funnel)]
+    public void TryReadSupportedChart_RecognizesDeferredAdvancedChartFamiliesInsideExtensions(
+        string chartElementName,
+        ChartType expectedType)
+    {
+        var sheetId = SheetId.New();
+        var chartXml = XDocument.Parse($$"""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart>
+                <c:plotArea>
+                  <c:extLst>
+                    <c:ext uri="{C3380CC4-5D6E-409C-BE32-E72D297353CC}">
+                      <{{chartElementName}}>
+                        <cx:ser>
+                          <cx:tx><cx:strRef><cx:f>Sheet1!$B$1</cx:f></cx:strRef></cx:tx>
+                          <cx:cat><cx:strRef><cx:f>Sheet1!$A$2:$A$4</cx:f></cx:strRef></cx:cat>
+                          <cx:val><cx:numRef><cx:f>Sheet1!$B$2:$B$4</cx:f></cx:numRef></cx:val>
+                        </cx:ser>
+                      </{{chartElementName}}>
+                    </c:ext>
+                  </c:extLst>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(expectedType);
+        ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        chart.DataRange.Should().Be(new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 4, 2)));
+    }
+
+    [Theory]
     [InlineData("radarChart", ChartType.Radar)]
     [InlineData("stockChart", ChartType.Stock)]
     public void TryReadSupportedChart_ReadsRadarAndStockChartFamilies(string chartElementName, ChartType expectedType)
