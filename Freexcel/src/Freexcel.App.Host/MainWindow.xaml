@@ -1391,7 +1391,7 @@
                                         local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
                                 <Button Content="Treemap" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
                                         local:RibbonTooltip.Title="Treemap Chart"
-                                        local:RibbonTooltip.KeyTip="TM"
+                                        local:RibbonTooltip.KeyTip="T7"
                                         local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
                                 <Button Content="Sunburst" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
                                         local:RibbonTooltip.Title="Sunburst Chart"
