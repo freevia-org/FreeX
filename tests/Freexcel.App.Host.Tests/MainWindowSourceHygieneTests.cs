@@ -58,6 +58,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ArrangeAllMenu_ReflectsStoredWorkbookArrangement()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
+        xaml.Should().Contain("IsCheckable=\"True\"");
+        source.Should().Contain("ArrangeAllContextMenu_Opened");
+        source.Should().Contain("_workbook.WindowArrangement.ToString()");
+        source.Should().Contain("item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal)");
+    }
+
+    [Fact]
     public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
