@@ -61,6 +61,21 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void InsertRibbon_HidesChartFormattingCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Insert", 1024);
+
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Label Border", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain("Column", harness.DebugActiveRibbonChildren);
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -110,6 +125,43 @@ public sealed class MainWindowAdaptiveRibbonTests
                     ? $"{child.GetType().Name}:{fe.Tag}:{fe.Visibility}:{RibbonTooltip.GetTitle(fe) ?? fe.Name}"
                     : child.GetType().Name));
 
+        public string DebugActiveRibbonChildren =>
+            string.Join(", ", ActiveRibbonPanel?.Children.Cast<UIElement>().Select(child =>
+                child is FrameworkElement fe
+                    ? $"{child.GetType().Name}:{fe.Tag}:{fe.Visibility}:{RibbonTooltip.GetTitle(fe) ?? fe.Name}"
+                    : child.GetType().Name) ?? []);
+
+        public IReadOnlyList<string> VisibleRibbonCommandLabels =>
+            (SelectedRibbonTab is null
+                ? []
+                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                    .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                    .OfType<Button>()
+                    .Distinct()
+                    .Where(button => button.Visibility == Visibility.Visible)
+                    .Select(GetButtonLabel)
+                    .Where(label => !string.IsNullOrWhiteSpace(label)))
+            .ToList();
+
+        private TabItem? SelectedRibbonTab =>
+            (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem as TabItem;
+
+        private DependencyObject SelectedRibbonContentRoot =>
+            SelectedRibbonTab?.Content as DependencyObject ??
+            (DependencyObject?)SelectedRibbonTab ??
+            _window;
+
+        private StackPanel? ActiveRibbonPanel =>
+            SelectedRibbonTab is { } tabItem
+                ? EnumerateSelfAndVisualDescendants(tabItem.Content as DependencyObject ?? tabItem)
+                    .Concat(EnumerateLogicalDescendants(tabItem.Content as DependencyObject ?? tabItem))
+                    .OfType<StackPanel>()
+                    .Distinct()
+                    .OrderByDescending(panel => panel.Children.OfType<Grid>().Count())
+                    .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
+                                             panel.Children.OfType<Grid>().Any())
+                : null;
+
         public void SetRibbonWidth(double width)
         {
             if (_window.FindName("RibbonTabs") is TabControl tabs)
@@ -118,6 +170,22 @@ public sealed class MainWindowAdaptiveRibbonTests
             _window.Width = width;
             _window.UpdateLayout();
             _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void SelectRibbonTab(string header, double width)
+        {
+            if (_window.FindName("RibbonTabs") is TabControl tabs)
+            {
+                tabs.SelectedItem = tabs.Items
+                    .OfType<TabItem>()
+                    .First(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+            }
+
+            _window.WindowState = WindowState.Normal;
+            _window.Width = width;
+            _window.UpdateLayout();
+            PumpDispatcher();
             PumpDispatcher();
         }
 
@@ -148,6 +216,44 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             _window.Close();
             PumpDispatcher();
+        }
+
+        private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
+        {
+            yield return root;
+
+            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+                foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
+                    yield return descendant;
+            }
+        }
+
+        private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is not DependencyObject dependencyObject)
+                    continue;
+
+                yield return dependencyObject;
+
+                foreach (var descendant in EnumerateLogicalDescendants(dependencyObject))
+                    yield return descendant;
+            }
+        }
+
+        private static string GetButtonLabel(Button button)
+        {
+            if (button.Content is string text)
+                return text;
+
+            return EnumerateSelfAndVisualDescendants(button)
+                .Concat(EnumerateLogicalDescendants(button))
+                .OfType<TextBlock>()
+                .FirstOrDefault(textBlock => string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
+                ?.Text ?? "";
         }
     }
 

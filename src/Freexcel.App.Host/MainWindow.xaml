@@ -416,13 +416,41 @@
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
-                <Image Source="Resources/Freexcel.ico"
-                       DockPanel.Dock="Left"
-                       Width="22" Height="22"
-                       Margin="0,0,8,0"
-                       VerticalAlignment="Center"
-                       SnapsToDevicePixels="True"
-                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                <Border x:Name="TitleBarAppIcon"
+                        DockPanel.Dock="Left"
+                        Width="22" Height="22"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Background="{StaticResource FreexcelGreenDarkBrush}"
+                        BorderBrush="#66FFFFFF"
+                        BorderThickness="1"
+                        CornerRadius="2"
+                        SnapsToDevicePixels="True"
+                        UseLayoutRounding="True">
+                    <Grid SnapsToDevicePixels="True"
+                          UseLayoutRounding="True"
+                          TextOptions.TextFormattingMode="Display"
+                          TextOptions.TextRenderingMode="ClearType"
+                          TextOptions.TextHintingMode="Fixed">
+                        <TextBlock Text="X"
+                                   Foreground="{StaticResource FreexcelWhiteBrush}"
+                                   FontFamily="Segoe UI"
+                                   FontWeight="Bold"
+                                   FontSize="13"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"/>
+                        <TextBlock Text="FREE"
+                                   Foreground="{StaticResource FreexcelWhiteBrush}"
+                                   FontFamily="Segoe UI"
+                                   FontWeight="Bold"
+                                   FontSize="4.5"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Top"
+                                   Margin="0,1,0,0"
+                                   TextAlignment="Center"/>
+                    </Grid>
+                </Border>
                 <!-- QAT buttons -->
                 <Button x:Name="SaveQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource RibbonBtn}" FontSize="13"
