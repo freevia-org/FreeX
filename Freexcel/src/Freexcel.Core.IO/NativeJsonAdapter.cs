@@ -148,29 +148,13 @@ public sealed class NativeJsonAdapter : IFileAdapter
             }
             foreach (var commentDto in sDto.Comments ?? [])
             {
-                if (string.IsNullOrWhiteSpace(commentDto?.Address) || commentDto.Text is null)
-                    continue;
-
-                try
-                {
-                    var address = CellAddress.Parse(commentDto.Address, sheet.Id);
-                    if (address.Sheet == sheet.Id)
-                        sheet.Comments[address] = commentDto.Text;
-                }
-                catch (FormatException) { /* skip comments with unparseable addresses */ }
+                if (TryLoadComment(commentDto, sheet.Id) is { } comment)
+                    sheet.Comments[comment.Address] = comment.Text;
             }
             foreach (var hyperlinkDto in sDto.Hyperlinks ?? [])
             {
-                if (string.IsNullOrWhiteSpace(hyperlinkDto?.Address) || hyperlinkDto.Target is null)
-                    continue;
-
-                try
-                {
-                    var address = CellAddress.Parse(hyperlinkDto.Address, sheet.Id);
-                    if (address.Sheet == sheet.Id)
-                        sheet.Hyperlinks[address] = hyperlinkDto.Target;
-                }
-                catch (FormatException) { /* skip hyperlinks with unparseable addresses */ }
+                if (TryLoadHyperlink(hyperlinkDto, sheet.Id) is { } hyperlink)
+                    sheet.Hyperlinks[hyperlink.Address] = hyperlink.Target;
             }
             foreach (var allowEditRange in sDto.AllowEditRanges ?? [])
             {
@@ -539,18 +523,12 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     .ToList(),
                 Comments = s.Comments
                     .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
-                    .Select(pair => new CommentDto
-                    {
-                        Address = pair.Key.ToA1(),
-                        Text = pair.Value
-                    }).ToList(),
+                    .Select(ToCommentDto)
+                    .ToList(),
                 Hyperlinks = s.Hyperlinks
                     .Where(pair => pair.Key.Sheet == s.Id && pair.Value is not null)
-                    .Select(pair => new HyperlinkDto
-                    {
-                        Address = pair.Key.ToA1(),
-                        Target = pair.Value
-                    }).ToList(),
+                    .Select(ToHyperlinkDto)
+                    .ToList(),
                 AllowEditRanges = s.AllowEditRanges
                     .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)
                     .Select(range => range.ToString())
@@ -655,6 +633,54 @@ public sealed class NativeJsonAdapter : IFileAdapter
         dto.MaxCalculationIterations = workbook.MaxCalculationIterations;
         dto.MaxCalculationChange = workbook.MaxCalculationChange;
     }
+
+    private static (CellAddress Address, string Text)? TryLoadComment(CommentDto? commentDto, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(commentDto?.Address) || commentDto.Text is null)
+            return null;
+
+        try
+        {
+            var address = CellAddress.Parse(commentDto.Address, sheetId);
+            return address.Sheet == sheetId
+                ? (address, commentDto.Text)
+                : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static (CellAddress Address, string Target)? TryLoadHyperlink(HyperlinkDto? hyperlinkDto, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(hyperlinkDto?.Address) || hyperlinkDto.Target is null)
+            return null;
+
+        try
+        {
+            var address = CellAddress.Parse(hyperlinkDto.Address, sheetId);
+            return address.Sheet == sheetId
+                ? (address, hyperlinkDto.Target)
+                : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static CommentDto ToCommentDto(KeyValuePair<CellAddress, string> pair) => new()
+    {
+        Address = pair.Key.ToA1(),
+        Text = pair.Value
+    };
+
+    private static HyperlinkDto ToHyperlinkDto(KeyValuePair<CellAddress, string> pair) => new()
+    {
+        Address = pair.Key.ToA1(),
+        Target = pair.Value
+    };
 
     private static SparklineModel? TryLoadSparkline(SparklineDto? sparklineDto, SheetId sheetId)
     {
