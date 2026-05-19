@@ -377,6 +377,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 }
                 foreach (var property in layout.CustomProperties)
                     sheet.CustomProperties.Add(property);
+                sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
             }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
@@ -559,6 +560,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         bool ShowRulers,
         int ZoomPercent,
         bool ShowFormulas,
+        bool FullCalculationOnLoad,
         string? PaneState,
         uint? PaneRowSplit,
         uint? PaneColumnSplit,
@@ -2467,6 +2469,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Element(worksheetNs + "sheetViews")?
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
+        var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
         var activeCell = ParseOptionalCellReference(
@@ -2502,6 +2505,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
+            ReadBoolAttribute(sheetCalcPr, "fullCalcOnLoad"),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
@@ -4093,6 +4097,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         packageStream.Position = 0;
         SaveWorkbookCalculationProperties(packageStream, workbook);
+
+        if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetCalculationProperties(packageStream, workbook);
+        }
 
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
         {
@@ -5735,6 +5745,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                     continue;
                 }
+                if (sourceBlock.Name == workbookNs + "sheetCalcPr")
+                {
+                    if (MergeWorksheetCalculationProperties(sourceBlock, targetRoot, workbookNs))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
                 if (sourceBlock.Name == workbookNs + "customSheetViews")
                 {
                     if (MergeWorksheetCustomSheetViews(
@@ -6334,6 +6353,54 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return $"{{{new Guid(bytes):D}}}";
     }
 
+    private static void SaveWorksheetCalculationProperties(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "sheetCalcPr")?.Remove();
+            if (!sheet.FullCalculationOnLoad)
+            {
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+                continue;
+            }
+
+            var sheetCalcPr = new XElement(workbookNs + "sheetCalcPr");
+            sheetCalcPr.SetAttributeValue("fullCalcOnLoad", sheet.FullCalculationOnLoad ? "1" : null);
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, sheetCalcPr);
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
     private static void InsertWorkbookCustomViewsInOrder(
         XElement? workbookRoot,
         XNamespace workbookNs,
@@ -6373,6 +6440,40 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         string[] laterWorksheetElements = metadataElement.Name.LocalName switch
         {
+            "sheetCalcPr" =>
+            [
+                "sheetProtection",
+                "protectedRanges",
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
             "scenarios" =>
             [
                 "autoFilter",
@@ -6693,6 +6794,42 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
             .Select(property => property.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool MergeWorksheetCalculationProperties(
+        XElement sourceSheetCalcPr,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        var targetSheetCalcPr = targetRoot.Element(workbookNs + "sheetCalcPr");
+        if (targetSheetCalcPr is null)
+        {
+            var retained = new XElement(sourceSheetCalcPr);
+            retained.Attribute("fullCalcOnLoad")?.Remove();
+            if (!retained.HasAttributes && !retained.HasElements)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, retained);
+            return true;
+        }
+
+        var changed = MergeMissingAttributes(sourceSheetCalcPr, targetSheetCalcPr, ["fullCalcOnLoad"]);
+        foreach (var sourceChild in sourceSheetCalcPr.Elements())
+        {
+            var targetChild = targetSheetCalcPr.Elements(sourceChild.Name)
+                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            if (targetChild is not null)
+            {
+                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    changed = true;
+                continue;
+            }
+
+            targetSheetCalcPr.Add(new XElement(sourceChild));
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetCustomProperties(
