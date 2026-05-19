@@ -8177,6 +8177,40 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCellNativeAttributes()
+    {
+        var workbook = new Workbook("WorksheetCellNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Cell metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCellNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var cell = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Descendants(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2");
+        cell.Attribute("cm")!.Value.Should().Be("2");
+        cell.Attribute("vm")!.Value.Should().Be("1");
+        cell.Attribute("ph")!.Value.Should().Be("1");
+        cell.Attribute("customAttr")!.Value.Should().Be("cell-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
     {
         var workbook = new Workbook("ScenariosRetentionTest");
@@ -10029,6 +10063,27 @@ public class FileAdapterSmokeTests
             row.SetAttributeValue("thickTop", "1");
             row.SetAttributeValue("ph", "1");
             row.SetAttributeValue("customAttr", "row-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetCellNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var cell = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Descendants(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A2");
+            cell.SetAttributeValue("cm", "2");
+            cell.SetAttributeValue("vm", "1");
+            cell.SetAttributeValue("ph", "1");
+            cell.SetAttributeValue("customAttr", "cell-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
