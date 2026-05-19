@@ -41,7 +41,6 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.PivotTables);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.Charts);
     }
 
@@ -114,7 +113,6 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.ExternalLinks);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.EmbeddedObjects);
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.CustomXmlParts);
     }
@@ -130,8 +128,7 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.Slicers);
-        report.Features.Select(f => f.Kind).Should().NotContain(XlsxUnsupportedFeatureKind.Timelines);
+        report.HasUnsupportedFeatures.Should().BeFalse();
     }
 
     [Fact]
@@ -291,13 +288,13 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_PrinterSettingsPackage_DetectsPrinterSettings()
+    public void Inspect_PrinterSettingsPackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage("xl/printerSettings/printerSettings1.bin");
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.PrinterSettings);
+        report.HasUnsupportedFeatures.Should().BeFalse("printer settings package parts are retained through XLSX save");
     }
 
     [Fact]

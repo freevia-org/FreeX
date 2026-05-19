@@ -9,7 +9,7 @@
         Title="Freexcel"
         Height="720" Width="1280"
         WindowState="Maximized"
-        Background="#F0F0F0"
+        Background="{DynamicResource FreexcelSheetSurfaceBrush}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
@@ -21,6 +21,11 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="Resources/ThemeResources.xaml"/>
+            <ResourceDictionary Source="Resources/IconResources.xaml"/>
+        </ResourceDictionary.MergedDictionaries>
 
         <!-- ── Ribbon button styles ─────────────────────────────────────── -->
 
@@ -30,17 +35,18 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource FreexcelTextBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#E8F0FE"/>
-                    <Setter Property="BorderBrush" Value="#B8CFF0"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelGreenSoftBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelBorderStrongBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#C0D4F0"/>
-                    <Setter Property="BorderBrush" Value="#6090C8"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelGreenPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -51,25 +57,26 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource FreexcelTextBrush}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#E8F0FE"/>
-                    <Setter Property="BorderBrush" Value="#B8CFF0"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelGreenSoftBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelBorderStrongBrush}"/>
                 </Trigger>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="#CCDEf8"/>
-                    <Setter Property="BorderBrush" Value="#4080CC"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelGreenPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
                 </Trigger>
                 <MultiTrigger>
                     <MultiTrigger.Conditions>
                         <Condition Property="IsChecked" Value="True"/>
                         <Condition Property="IsMouseOver" Value="True"/>
                     </MultiTrigger.Conditions>
-                    <Setter Property="Background" Value="#BBCEF5"/>
-                    <Setter Property="BorderBrush" Value="#3070BB"/>
+                    <Setter Property="Background" Value="{StaticResource FreexcelGreenPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource FreexcelGreenDarkBrush}"/>
                 </MultiTrigger>
             </Style.Triggers>
         </Style>
@@ -77,7 +84,7 @@
         <!-- Group label text style -->
         <Style x:Key="GroupLbl" TargetType="TextBlock">
             <Setter Property="FontSize" Value="9"/>
-            <Setter Property="Foreground" Value="#555555"/>
+            <Setter Property="Foreground" Value="{StaticResource FreexcelMutedTextBrush}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -89,13 +96,13 @@
 
         <Style x:Key="RibbonGroupLabelBorder" TargetType="Border">
             <Setter Property="BorderThickness" Value="0,1,0,0"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderBrush" Value="{StaticResource FreexcelBorderBrush}"/>
             <Setter Property="MinHeight" Value="18"/>
         </Style>
 
         <Style x:Key="RibbonGroupDivider" TargetType="Rectangle">
             <Setter Property="Width" Value="1"/>
-            <Setter Property="Fill" Value="#D0D0D0"/>
+            <Setter Property="Fill" Value="{StaticResource FreexcelBorderBrush}"/>
             <Setter Property="Margin" Value="4,5,6,18"/>
         </Style>
 
@@ -155,11 +162,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#217346"/>
-                                <Setter TargetName="TabBorder" Property="Background" Value="White"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#EEF4EE"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreexcelGreenSoftBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -352,7 +359,7 @@
 
         <!-- ── Start-screen sidebar buttons ─────────────────────────────── -->
         <Style x:Key="SsNavBtn" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{StaticResource FreexcelWhiteBrush}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -368,7 +375,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="#265C40"/>
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource FreexcelGreenDarkBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -377,10 +384,11 @@
         </Style>
 
         <Style x:Key="SsNavBtnActive" BasedOn="{StaticResource SsNavBtn}" TargetType="Button">
-            <Setter Property="Background" Value="#2D7254"/>
+            <Setter Property="Background" Value="{StaticResource FreexcelGreenBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
@@ -402,38 +410,43 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 0  Title bar / Quick Access Toolbar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Background="#F5F5F5" BorderBrush="#E0E0E0"
+        <Border Grid.Row="0" Background="{StaticResource FreexcelChromeSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
                 <Border DockPanel.Dock="Left" Width="22" Height="22"
-                        Background="#217346" CornerRadius="2" Margin="0,0,8,0"
+                        Background="{StaticResource FreexcelGreenBrush}" CornerRadius="2" Margin="0,0,8,0"
                         VerticalAlignment="Center">
-                    <TextBlock Text="X" Foreground="White" FontWeight="Bold" FontSize="11"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <TextBlock Text="F" Style="{StaticResource FreexcelAppMarkText}"/>
                 </Border>
                 <!-- QAT buttons -->
-                <Button DockPanel.Dock="Left" Content="💾" Width="26" Height="22" Margin="0,0,2,0"
+                <Button x:Name="SaveQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource RibbonBtn}" FontSize="13"
                         WindowChrome.IsHitTestVisibleInChrome="True"
                         Click="SaveButton_Click"
                         local:RibbonTooltip.Title="Save"
                         local:RibbonTooltip.KeyTip="1"
-                        local:RibbonTooltip.Description="Save the workbook."/>
-                <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Content="↩" Width="26" Height="22" Margin="0,0,2,0"
+                        local:RibbonTooltip.Description="Save the workbook.">
+                    <TextBlock Text="&#xE74E;" Style="{StaticResource FreexcelQatIcon}"/>
+                </Button>
+                <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource RibbonBtn}" FontSize="14"
                         WindowChrome.IsHitTestVisibleInChrome="True"
                         Click="UndoQatBtn_Click"
                         local:RibbonTooltip.Title="Undo"
                         local:RibbonTooltip.KeyTip="2"
-                        local:RibbonTooltip.Description="Undo the last action."/>
-                <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Content="↪" Width="26" Height="22" Margin="0,0,8,0"
+                        local:RibbonTooltip.Description="Undo the last action.">
+                    <TextBlock Text="&#xE7A7;" Style="{StaticResource FreexcelQatIcon}"/>
+                </Button>
+                <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,8,0"
                         Style="{StaticResource RibbonBtn}" FontSize="14"
                         WindowChrome.IsHitTestVisibleInChrome="True"
                         Click="RedoQatBtn_Click"
                         local:RibbonTooltip.Title="Redo"
                         local:RibbonTooltip.KeyTip="3"
-                        local:RibbonTooltip.Description="Redo the last undone action."/>
+                        local:RibbonTooltip.Description="Redo the last undone action.">
+                    <TextBlock Text="&#xE7A6;" Style="{StaticResource FreexcelQatIcon}"/>
+                </Button>
                 <!-- System buttons — must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
                 <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right" Content="&#xE8BB;"
@@ -448,15 +461,15 @@
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="12" Foreground="#333"/>
+                           FontSize="12" Foreground="{StaticResource FreexcelTextBrush}"/>
             </DockPanel>
         </Border>
 
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 1  Ribbon  (tabbed, groups with labels)
              ═══════════════════════════════════════════════════════════════ -->
-        <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="White"
-                    BorderThickness="0,0,0,1" BorderBrush="#D0D0D0"
+        <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="{StaticResource FreexcelRibbonSurfaceBrush}"
+                    BorderThickness="0,0,0,1" BorderBrush="{StaticResource FreexcelBorderBrush}"
                     Padding="0" TabStripPlacement="Top" SelectedIndex="1" MinHeight="132"
                     SelectionChanged="RibbonTabs_SelectionChanged">
 
@@ -465,7 +478,7 @@
 
             <!-- ── HOME ──────────────────────────────────────────────── -->
             <TabItem Header="Home" local:RibbonTooltip.KeyTip="H">
-                <Border Background="White" Padding="6,4,6,0">
+                <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -3032,9 +3045,9 @@
                                             <Button Content="Clear Filter"
                                                     Tag="{Binding Name}"
                                                     Click="SlicerClearButton_Click"
-                                                    AutomationProperties.Name="Clear Filter"
                                                     Margin="0,6,0,0"
-                                                    MinHeight="24"/>
+                                                    MinHeight="24"
+                                                    AutomationProperties.Name="Clear Slicer Filter"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -3072,7 +3085,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="4" Background="#E8E8E8" BorderBrush="#D0D0D0"
+        <Border Grid.Row="4" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -3084,13 +3097,13 @@
                 <!-- Sheet navigation arrows -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
                     <Button x:Name="SheetNavLeftBtn" Content="&lt;" Width="20" Height="20" Padding="0"
-                            FontSize="11" Background="Transparent" BorderBrush="#B0B0B0" BorderThickness="1"
+                            FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                             Cursor="Hand" Click="SheetNavLeftBtn_Click"
                             local:RibbonTooltip.Title="Scroll Tabs Left"
                             local:RibbonTooltip.KeyTip="SL"
                             local:RibbonTooltip.Description="Scroll the sheet tab list to the left."/>
                     <Button x:Name="SheetNavRightBtn" Content="&gt;" Width="20" Height="20" Padding="0"
-                            FontSize="11" Background="Transparent" BorderBrush="#B0B0B0" BorderThickness="1"
+                            FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                             Cursor="Hand" Click="SheetNavRightBtn_Click" Margin="2,0,0,0"
                             local:RibbonTooltip.Title="Scroll Tabs Right"
                             local:RibbonTooltip.KeyTip="SR"
@@ -3120,19 +3133,19 @@
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background"       Value="{Binding TabBrush}"/>
-                                                <Setter Property="BorderBrush"      Value="#D0D0D0"/>
+                                                <Setter Property="BorderBrush"      Value="{StaticResource FreexcelBorderBrush}"/>
                                                 <Setter Property="BorderThickness"  Value="1"/>
                                                 <Setter Property="Margin"           Value="2,0,0,0"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                        <Setter Property="Background"      Value="White"/>
-                                                        <Setter Property="BorderBrush"     Value="White"/>
+                                                        <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                         <Setter Property="BorderThickness" Value="0"/>
                                                         <Setter Property="Margin"          Value="2,-1,0,0"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                        <Setter Property="Background"      Value="White"/>
-                                                        <Setter Property="BorderBrush"     Value="White"/>
+                                                        <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                                        <Setter Property="BorderBrush"     Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
                                                         <Setter Property="BorderThickness" Value="0"/>
                                                         <Setter Property="Margin"          Value="2,-1,0,0"/>
                                                     </DataTrigger>
@@ -3178,7 +3191,7 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
                                             <Border Grid.Row="1" Height="2" Margin="0,1,0,0"
-                                                    Background="#217346">
+                                                    Background="{StaticResource FreexcelGreenBrush}">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -3201,7 +3214,7 @@
                         <!-- Add sheet button immediately after the last tab -->
                         <Button x:Name="AddSheetButton" Content="+" Width="26" Height="22"
                                 FontSize="14" Margin="4,0" Padding="0"
-                                Background="Transparent" BorderBrush="#C0C0C0" BorderThickness="1"
+                                Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
                                 VerticalAlignment="Center" Cursor="Hand"
                                 Click="AddSheetButton_Click"
                                 local:RibbonTooltip.Title="Insert Sheet"
@@ -3222,7 +3235,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="5" Background="#217346" Padding="8,3">
+        <Border Grid.Row="5" Background="{StaticResource FreexcelStatusSurfaceBrush}" Padding="8,3">
             <Grid>
                 <TextBlock x:Name="StatusReadyText" Text="Ready" Foreground="White"
                            FontSize="12" VerticalAlignment="Center"/>

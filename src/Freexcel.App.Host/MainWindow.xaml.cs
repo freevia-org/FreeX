@@ -54,6 +54,8 @@ public partial class MainWindow : Window
     private bool _isOpeningFile;
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
+    private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
+    private bool _endMode;
     private bool _dragSelectActive;
     private Freexcel.App.UI.SplitPaneRegion _activeSplitPaneRegion = Freexcel.App.UI.SplitPaneRegion.BottomRight;
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
@@ -596,21 +598,15 @@ public partial class MainWindow : Window
                 textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        button.HorizontalContentAlignment = level == RibbonCompactLevel.IconOnly
-            ? System.Windows.HorizontalAlignment.Right
-            : System.Windows.HorizontalAlignment.Center;
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
 
         if (button.Content is FrameworkElement content)
-            content.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
-                ? System.Windows.HorizontalAlignment.Right
-                : System.Windows.HorizontalAlignment.Center;
+            content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
 
         foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
         {
             if (stack.Orientation == Orientation.Horizontal)
-                stack.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
-                    ? System.Windows.HorizontalAlignment.Right
-                    : System.Windows.HorizontalAlignment.Center;
+                stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
         }
     }
 
@@ -1234,6 +1230,20 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (ExcelSelectionModePlanner.TryToggle(e.Key, Keyboard.Modifiers, _selectionMode, out var nextSelectionMode))
+            {
+                SetSelectionMode(nextSelectionMode);
+                e.Handled = true;
+                return;
+            }
+
+            if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(e.Key, Keyboard.Modifiers, _endMode, out var nextEndMode))
+            {
+                SetEndMode(nextEndMode);
+                e.Handled = true;
+                return;
+            }
+
             if (Keyboard.Modifiers == ModifierKeys.Alt &&
                 RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
                 TryHandleTopLevelRibbonKeyTip(keyTip))
@@ -1578,10 +1588,12 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange == null) return;
 
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        bool extendSelection = ExcelSelectionModePlanner.ShouldExtendSelection(_selectionMode, Keyboard.Modifiers);
+        bool useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(e.Key, Keyboard.Modifiers, _endMode);
         bool ctrlHeld  = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
-        // When Shift is held the moving end is _selectionCursor; otherwise it's the active cell.
-        var current = shiftHeld && _selectionCursor.HasValue
+        // When Shift or F8 extend mode is active the moving end is _selectionCursor; otherwise it's the active cell.
+        var current = extendSelection && _selectionCursor.HasValue
             ? _selectionCursor.Value
             : SheetGrid.SelectedRange.Value.Start;
 
@@ -1598,13 +1610,13 @@ public partial class MainWindow : Window
 
         target ??= e.Key switch
         {
-            Key.Up    => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
+            Key.Up    => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
                                   : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
-            Key.Down  => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
+            Key.Down  => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
                                   : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Left  => ctrlHeld ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
+            Key.Left  => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
                                   : new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
-            Key.Right => ctrlHeld ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
+            Key.Right => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
                                   : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
 
             Key.Home     => new CellAddress(_currentSheetId, ctrlHeld ? 1u : current.Row, 1u),
@@ -1623,9 +1635,14 @@ public partial class MainWindow : Window
 
         if (target == null) return;
 
+        if (_endMode)
+            SetEndMode(false);
+
         // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
-        if (shiftHeld && !moveOnly && _selectionAnchor.HasValue)
+        if (_selectionMode == ExcelSelectionMode.Add && !moveOnly)
+            AddOrMoveAdditionalSelection(target.Value, extendSelection);
+        else if (extendSelection && !moveOnly && _selectionAnchor.HasValue)
             ExtendSelection(_selectionAnchor.Value, target.Value);
         else
             SetActiveCell(target.Value);
@@ -1693,6 +1710,15 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.ZoomOut:
                 ZoomOutBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.CopyFormulaFromAbove:
+                CopyFromAbove(CopyFromAboveMode.FormulaOrContent);
+                break;
+            case KeyboardCommandShortcut.CopyValueFromAbove:
+                CopyFromAbove(CopyFromAboveMode.Value);
+                break;
+            case KeyboardCommandShortcut.OpenActiveDropdown:
+                OpenActiveDropdown();
                 break;
         }
     }
@@ -1835,6 +1861,35 @@ public partial class MainWindow : Window
             new CellAddress(_currentSheetId,
                 Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
         CellAddressBox.Text = FormatRangeReference(anchor, to);
+        RefreshStatusBar();
+    }
+
+    private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
+    {
+        var ranges = SheetGrid.SelectedRanges is { Count: > 0 }
+            ? SheetGrid.SelectedRanges.ToList()
+            : SheetGrid.SelectedRange is { } currentRange ? [currentRange] : [];
+
+        if (!extendSelection)
+            _selectionAnchor = target;
+
+        var anchor = _selectionAnchor ?? target;
+        _selectionCursor = target;
+        var activeRange = new GridRange(anchor, target);
+
+        if (ranges.Count > 0 && SheetGrid.SelectedRange is { } currentActive && ranges[^1] == currentActive)
+            ranges[^1] = activeRange;
+        else
+            ranges.Add(activeRange);
+
+        SheetGrid.SelectedRanges = ranges;
+        SheetGrid.SelectedRange = activeRange;
+        CellAddressBox.Text = FormatRangeReference(activeRange.Start, activeRange.End);
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
+        FocusSheetGridIfNeeded();
+        RefreshToolbar();
         RefreshStatusBar();
     }
 
@@ -2554,6 +2609,16 @@ public partial class MainWindow : Window
             EditOverlay.IsHitTestVisible = false;
     }
 
+    private void OpenActiveDropdown()
+    {
+        RefreshValidationDropdown();
+        if (_validationDropdown?.Visibility != Visibility.Visible)
+            return;
+
+        _validationDropdown.Focus();
+        _validationDropdown.IsDropDownOpen = true;
+    }
+
     private Rect? TryGetCellOverlayRect(CellAddress addr)
     {
         var vp = SheetGrid.Viewport;
@@ -2686,6 +2751,41 @@ public partial class MainWindow : Window
         ClearClipboardVisualState();
         _internalClipboard = null;
         CancelFormatPainter();
+        SetSelectionMode(ExcelSelectionMode.Normal);
+        SetEndMode(false);
+    }
+
+    private void SetSelectionMode(ExcelSelectionMode mode)
+    {
+        _selectionMode = mode;
+        if (mode != ExcelSelectionMode.Normal)
+            _endMode = false;
+        if (StatusStatsPanel is not null)
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+        if (StatusReadyText is null)
+            return;
+
+        StatusReadyText.Visibility = Visibility.Visible;
+        StatusReadyText.Text = mode switch
+        {
+            ExcelSelectionMode.Extend => "Extend Selection",
+            ExcelSelectionMode.Add => "Add to Selection",
+            _ => "Ready"
+        };
+    }
+
+    private void SetEndMode(bool enabled)
+    {
+        _endMode = enabled;
+        if (enabled)
+            _selectionMode = ExcelSelectionMode.Normal;
+        if (StatusStatsPanel is not null)
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+        if (StatusReadyText is null)
+            return;
+
+        StatusReadyText.Visibility = Visibility.Visible;
+        StatusReadyText.Text = enabled ? "End Mode" : "Ready";
     }
 
     private void ClearClipboardVisualState()
@@ -5012,6 +5112,25 @@ public partial class MainWindow : Window
     private void ApplyNumberFormatShortcut(NumberFormatShortcut shortcut) =>
         ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatShortcutService.GetFormat(shortcut)));
 
+    private void CopyFromAbove(CopyFromAboveMode mode)
+    {
+        if (SheetGrid.SelectedRange?.Start is not { } target)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null ||
+            CopyFromAbovePlanner.CreateEdit(sheet, target, mode) is not { } edit)
+            return;
+
+        if (!TryExecuteEditCells([edit], mode == CopyFromAboveMode.Value ? "Copy Value from Above" : "Copy Formula from Above"))
+            return;
+
+        RecalculateIfAutomatic([target]);
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(target), target);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
     private void ApplyFontToggleShortcut(FontToggleShortcut shortcut, ToggleButton button)
     {
         var enabled = !(button.IsChecked == true);
@@ -5780,8 +5899,34 @@ public partial class MainWindow : Window
                 "multiply" => PasteSpecialOperation.Multiply,
                 "divide" => PasteSpecialOperation.Divide,
                 _ => PasteSpecialOperation.None
+            },
+            SkipBlanks: dlg.SkipBlanks,
+            ContentKind: dlg.Mode switch
+            {
+                PasteSpecialDialogMode.AllExceptBorders => PasteSpecialContentKind.AllExceptBorders,
+                PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
+                PasteSpecialDialogMode.ValuesAndNumberFormats => PasteSpecialContentKind.ValuesAndNumberFormats,
+                _ => PasteSpecialContentKind.Default
             });
         var keepColumnWidths = dlg.KeepColumnWidths;
+        if (dlg.Mode == PasteSpecialDialogMode.ColumnWidths)
+        {
+            ExecutePasteColumnWidthsOnly();
+            return;
+        }
+
+        if (dlg.Mode == PasteSpecialDialogMode.Comments)
+        {
+            ExecutePasteComments(options.Transpose);
+            return;
+        }
+
+        if (dlg.Mode == PasteSpecialDialogMode.Validation)
+        {
+            ExecutePasteValidation(options.Transpose);
+            return;
+        }
+
         if (dlg.PastePicture)
         {
             ExecutePasteAsPicture();
@@ -5802,6 +5947,82 @@ public partial class MainWindow : Window
             ExecutePaste(PasteMode.Formats, options, keepColumnWidths);
         else
             ExecutePaste(PasteMode.All, options, keepColumnWidths);
+    }
+
+    private void ExecutePasteColumnWidthsOnly()
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Column Widths",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
+    private void ExecutePasteComments(bool transpose)
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Comments",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteCommentsCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        transpose);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
+    private void ExecutePasteValidation(bool transpose)
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Validation",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteDataValidationCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        transpose);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        UpdateViewport();
+        RefreshToolbar();
     }
 
     private void ExecutePasteAsPicture()

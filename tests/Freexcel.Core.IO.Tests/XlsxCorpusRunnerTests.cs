@@ -210,13 +210,10 @@ public class XlsxCorpusRunnerTests
         {
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
-            [XlsxUnsupportedFeatureKind.Slicers] = "excluded slicer disclosed",
-            [XlsxUnsupportedFeatureKind.Timelines] = "excluded timeline disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
             [XlsxUnsupportedFeatureKind.CustomXmlParts] = "unsupported custom XML disclosed",
             [XlsxUnsupportedFeatureKind.ConditionalFormats] = "unsupported conditional-format rule disclosed",
             [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
-            [XlsxUnsupportedFeatureKind.Sparklines] = "unsupported sparkline disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
@@ -229,7 +226,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.LiveWebQueries] = "unsupported live web query disclosed",
             [XlsxUnsupportedFeatureKind.SensitivityLabels] = "unsupported sensitivity label disclosed",
             [XlsxUnsupportedFeatureKind.SmartArtDiagrams] = "unsupported SmartArt diagram disclosed",
-            [XlsxUnsupportedFeatureKind.PrinterSettings] = "unsupported printer settings disclosed",
             [XlsxUnsupportedFeatureKind.UnsupportedSheetTypes] = "unsupported sheet type disclosed"
         };
 
@@ -243,12 +239,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("unsupported-chart-family"))
             expected.Add(XlsxUnsupportedFeatureKind.Charts);
-
-        if (tags.Contains("slicers"))
-            expected.Add(XlsxUnsupportedFeatureKind.Slicers);
-
-        if (tags.Contains("timelines"))
-            expected.Add(XlsxUnsupportedFeatureKind.Timelines);
 
         if (tags.Contains("power-query") || tags.Contains("connections"))
             expected.Add(XlsxUnsupportedFeatureKind.PowerQuery);
@@ -285,9 +275,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("smartart") || tags.Contains("diagrams"))
             expected.Add(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
-
-        if (tags.Contains("printer-settings"))
-            expected.Add(XlsxUnsupportedFeatureKind.PrinterSettings);
 
         if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets"))
             expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);

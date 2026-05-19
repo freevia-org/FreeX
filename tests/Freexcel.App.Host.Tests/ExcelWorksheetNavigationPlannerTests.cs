@@ -46,4 +46,35 @@ public sealed class ExcelWorksheetNavigationPlannerTests
 
         target.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData(Key.End, ModifierKeys.None, false, true)]
+    [InlineData(Key.End, ModifierKeys.None, true, false)]
+    public void TryToggleEndMode_MapsPlainEndKey(
+        Key key,
+        ModifierKeys modifiers,
+        bool current,
+        bool expected)
+    {
+        var handled = ExcelWorksheetNavigationPlanner.TryToggleEndMode(key, modifiers, current, out var next);
+
+        handled.Should().BeTrue();
+        next.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Right, true)]
+    [InlineData(Key.Left, true)]
+    [InlineData(Key.Up, true)]
+    [InlineData(Key.Down, true)]
+    [InlineData(Key.PageDown, false)]
+    public void ShouldUseDataBoundary_TreatsEndModeArrowsLikeCtrlArrow(Key key, bool expected)
+    {
+        ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(
+                key,
+                ModifierKeys.None,
+                endMode: true)
+            .Should()
+            .Be(expected);
+    }
 }

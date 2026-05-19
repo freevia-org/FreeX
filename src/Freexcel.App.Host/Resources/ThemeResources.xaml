@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="FreexcelGreenBrush" Color="#217346"/>
+    <SolidColorBrush x:Key="FreexcelGreenDarkBrush" Color="#185C37"/>
+    <SolidColorBrush x:Key="FreexcelGreenSoftBrush" Color="#EAF4EF"/>
+    <SolidColorBrush x:Key="FreexcelGreenPressedBrush" Color="#D6EADE"/>
+    <SolidColorBrush x:Key="FreexcelTextBrush" Color="#1F1F1F"/>
+    <SolidColorBrush x:Key="FreexcelMutedTextBrush" Color="#5F6368"/>
+    <SolidColorBrush x:Key="FreexcelSubtleTextBrush" Color="#767676"/>
+    <SolidColorBrush x:Key="FreexcelRibbonSurfaceBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="FreexcelChromeSurfaceBrush" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="FreexcelSheetSurfaceBrush" Color="#F3F3F3"/>
+    <SolidColorBrush x:Key="FreexcelStatusSurfaceBrush" Color="#217346"/>
+    <SolidColorBrush x:Key="FreexcelBorderBrush" Color="#DADCE0"/>
+    <SolidColorBrush x:Key="FreexcelBorderStrongBrush" Color="#C8CCD0"/>
+    <SolidColorBrush x:Key="FreexcelDangerBrush" Color="#C42B1C"/>
+    <SolidColorBrush x:Key="FreexcelWhiteBrush" Color="#FFFFFF"/>
+</ResourceDictionary>
