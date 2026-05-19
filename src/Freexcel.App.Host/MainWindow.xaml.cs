@@ -11578,7 +11578,7 @@ public partial class MainWindow : Window
         var periodsInput = PromptForInput("Forecast periods:", "3");
         if (periodsInput is null)
             return;
-        if (!uint.TryParse(periodsInput.Trim(), out var periods) || periods == 0)
+        if (!ForecastSheetInputParser.TryParsePeriods(periodsInput, out var periods))
         {
             MessageBox.Show("Enter a positive whole number of forecast periods.",
                 "Forecast Sheet", MessageBoxButton.OK, MessageBoxImage.Warning);
