@@ -55,26 +55,49 @@ public sealed class ConsolidateDialog : Window
         return ranges.All(range => range.RowCount == rowCount && range.ColCount == colCount);
     }
 
+    public static bool TryParse(
+        SheetId sheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        out ConsolidateDialogResult result,
+        out string? error)
+    {
+        result = default!;
+        error = null;
+
+        if (!ConsolidateInputParser.TryParseSourceRanges(sourceRangesText, sheetId, out var ranges, out var invalidPart))
+        {
+            error = string.IsNullOrWhiteSpace(invalidPart)
+                ? "Enter at least one valid source range."
+                : $"Enter a valid source range: {invalidPart}.";
+            return false;
+        }
+
+        if (!HaveSameSize(ranges))
+        {
+            error = "Source ranges must be the same size.";
+            return false;
+        }
+
+        if (!ConsolidateInputParser.TryParseDestination(destinationCellText, sheetId, out var destination))
+        {
+            error = "Enter a valid destination cell.";
+            return false;
+        }
+
+        result = CreateResult(ranges, destination);
+        return true;
+    }
+
     private void Accept()
     {
-        try
+        if (!TryParse(_sheetId, _sourcesBox.Text, _destinationBox.Text, out var result, out var error))
         {
-            var ranges = _sourcesBox.Text
-                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(text => GridRange.Parse(text, _sheetId))
-                .ToList();
-            if (!HaveSameSize(ranges))
-            {
-                MessageBox.Show(this, "Source ranges must be the same size.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
+            MessageBox.Show(this, error ?? "Enter valid consolidation ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
-            Result = CreateResult(ranges, CellAddress.Parse(_destinationBox.Text, _sheetId));
-            DialogResult = true;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+        Result = result;
+        DialogResult = true;
     }
 }

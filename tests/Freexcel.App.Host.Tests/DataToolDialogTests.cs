@@ -136,6 +136,73 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_TryParse_DelegatesSourceAndDestinationParsing()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B3; D5:E7",
+            destinationCellText: "G10",
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.SourceRanges.Should().Equal(
+            new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            new GridRange(new CellAddress(sheetId, 5, 4), new CellAddress(sheetId, 7, 5)));
+        result.DestinationCell.Should().Be(new CellAddress(sheetId, 10, 7));
+    }
+
+    [Fact]
+    public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B3; nope",
+            destinationCellText: "G10",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid source range: nope.");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_TryParse_RejectsMismatchedSourceSizes()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B3; D5:F7",
+            destinationCellText: "G10",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Source ranges must be the same size.");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_TryParse_RejectsInvalidDestinationCell()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = ConsolidateDialog.TryParse(
+            sheetId,
+            sourceRangesText: "A1:B3",
+            destinationCellText: "nope",
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid destination cell.");
+    }
+
+    [Fact]
     public void DataTableDialog_ParsesOneAndTwoVariableInputs()
     {
         var sheetId = SheetId.New();
