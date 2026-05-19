@@ -95,6 +95,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
     [InlineData(Key.OemMinus, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
     [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.OemQuotes, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CopyFormulaFromAbove)]
+    [InlineData(Key.OemQuotes, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.CopyValueFromAbove)]
     public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
         Key key,
         Key systemKey,

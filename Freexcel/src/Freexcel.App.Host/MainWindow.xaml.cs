@@ -1711,6 +1711,12 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.ZoomOut:
                 ZoomOutBtn_Click(sender, e);
                 break;
+            case KeyboardCommandShortcut.CopyFormulaFromAbove:
+                CopyFromAbove(CopyFromAboveMode.FormulaOrContent);
+                break;
+            case KeyboardCommandShortcut.CopyValueFromAbove:
+                CopyFromAbove(CopyFromAboveMode.Value);
+                break;
         }
     }
 
@@ -5147,6 +5153,25 @@ public partial class MainWindow : Window
 
     private void ApplyNumberFormatShortcut(NumberFormatShortcut shortcut) =>
         ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatShortcutService.GetFormat(shortcut)));
+
+    private void CopyFromAbove(CopyFromAboveMode mode)
+    {
+        if (SheetGrid.SelectedRange?.Start is not { } target)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null ||
+            CopyFromAbovePlanner.CreateEdit(sheet, target, mode) is not { } edit)
+            return;
+
+        if (!TryExecuteEditCells([edit], mode == CopyFromAboveMode.Value ? "Copy Value from Above" : "Copy Formula from Above"))
+            return;
+
+        RecalculateIfAutomatic([target]);
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(target), target);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
 
     private void ApplyFontToggleShortcut(FontToggleShortcut shortcut, ToggleButton button)
     {
