@@ -4059,6 +4059,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Fixed_ExcessiveNegativeDecimals_RoundsToZeroLikeExcel()
+    {
+        _eval.Evaluate("=FIXED(1,-309,TRUE)", MakeSheet()).Should().Be(new TextValue("0"));
+    }
+
+    [Fact]
     public void Fixed_DecimalsError_PropagatesError()
     {
         var sheet = MakeSheet();
@@ -4103,6 +4109,12 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=DOLLAR(1234.567,-1)", sheet).Should().Be(new TextValue("$1,230"));
+    }
+
+    [Fact]
+    public void Dollar_ExcessiveNegativeDecimals_RoundsToZeroLikeExcel()
+    {
+        _eval.Evaluate("=DOLLAR(1,-309)", MakeSheet()).Should().Be(new TextValue("$0"));
     }
 
     [Fact]
