@@ -4486,7 +4486,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
-        if (sourceExtensionList is null && sourceDefinedNames is null)
+        var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
+        if (sourceExtensionList is null && sourceDefinedNames is null && sourceBookViews is null)
             return;
 
         var targetWorkbookXml = LoadXml(targetWorkbookEntry);
@@ -4495,6 +4496,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var changed = false;
+        if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
+            changed = true;
         if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
             changed = true;
         if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
@@ -4502,6 +4505,42 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (changed)
             ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
+    private static bool MergeWorkbookViews(XElement? sourceBookViews, XElement targetRoot, XNamespace workbookNs)
+    {
+        var sourceViews = sourceBookViews?
+            .Elements(workbookNs + "workbookView")
+            .ToList()
+            ?? [];
+        if (sourceViews.Count == 0)
+            return false;
+
+        var targetBookViews = targetRoot.Element(workbookNs + "bookViews");
+        if (targetBookViews is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceBookViews!));
+            return true;
+        }
+
+        var existing = targetBookViews
+            .Elements(workbookNs + "workbookView")
+            .Select(view => view.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var changed = false;
+        foreach (var sourceView in sourceViews)
+        {
+            var raw = sourceView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            if (existing.Contains(raw))
+                continue;
+
+            targetBookViews.Add(new XElement(sourceView));
+            existing.Add(raw);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorkbookDefinedNames(XElement? sourceDefinedNames, XElement targetRoot, XNamespace workbookNs)
