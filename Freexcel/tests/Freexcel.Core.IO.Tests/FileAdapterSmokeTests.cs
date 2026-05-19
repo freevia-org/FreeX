@@ -1368,6 +1368,22 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetCalculationProperties()
+    {
+        var workbook = new Workbook("WorksheetCalculationProperties");
+        workbook.AddSheet("Data").FullCalculationOnLoad = true;
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesInvalidViewPaneState()
     {
         var workbook = new Workbook("ViewPaneSanitizeTest");
@@ -9956,6 +9972,103 @@ public class FileAdapterSmokeTests
         var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
         sheetCalcPr.Should().NotBeNull();
         sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsWorksheetCalculationPropertiesIntoSheetModel()
+    {
+        var workbook = new Workbook("CalculationPropertiesLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCalculationProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).FullCalculationOnLoad.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetCalculationProperties()
+    {
+        var workbook = new Workbook("CalculationPropertiesSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+        sheet.FullCalculationOnLoad = true;
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull();
+        sheetCalcPr!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesWorksheetCalculationPropertiesBeforeSheetProtection()
+    {
+        var workbook = new Workbook("CalculationPropertiesProtectedSheetOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+        sheet.FullCalculationOnLoad = true;
+        sheet.IsProtected = true;
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var childNames = worksheetXml.Root!
+            .Elements()
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        childNames.IndexOf("sheetCalcPr").Should().BeLessThan(childNames.IndexOf("sheetProtection"));
+        worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr")!.Attribute("fullCalcOnLoad")!.Value.Should().Be("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetCalculationProperty()
+    {
+        var workbook = new Workbook("CalculationPropertiesRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("calc"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCalculationProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).FullCalculationOnLoad = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetCalcPr = worksheetXml.Root!.Element(worksheetNs + "sheetCalcPr");
+        sheetCalcPr.Should().NotBeNull();
+        sheetCalcPr!.Attribute("fullCalcOnLoad").Should().BeNull();
+        sheetCalcPr.Attribute("calcId")!.Value.Should().Be("999");
     }
 
     [Fact]
@@ -12805,7 +12918,8 @@ public class FileAdapterSmokeTests
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sheetCalcPr",
-                new XAttribute("fullCalcOnLoad", "1")));
+                new XAttribute("fullCalcOnLoad", "1"),
+                new XAttribute("calcId", "999")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

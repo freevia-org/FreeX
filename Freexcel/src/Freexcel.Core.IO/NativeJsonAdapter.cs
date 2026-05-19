@@ -86,6 +86,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             sheet.ShowRulers = sDto.ShowRulers ?? true;
             sheet.ZoomPercent = ValidZoomPercentOrDefault(sDto.ZoomPercent);
             sheet.ShowFormulas = sDto.ShowFormulas ?? false;
+            sheet.FullCalculationOnLoad = sDto.FullCalculationOnLoad;
             sheet.FrozenRows = ValidFrozenRowsOrZero(sDto.FrozenRows);
             sheet.FrozenCols = ValidFrozenColumnsOrZero(sDto.FrozenCols);
             sheet.ViewTopRow = ValidRowPaneOrNull(sDto.ViewTopRow);
@@ -719,6 +720,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 ShowRulers = s.ShowRulers,
                 ZoomPercent = ValidZoomPercentOrDefault(s.ZoomPercent),
                 ShowFormulas = s.ShowFormulas,
+                FullCalculationOnLoad = s.FullCalculationOnLoad,
                 FrozenRows = ValidFrozenRowsOrZero(s.FrozenRows),
                 FrozenCols = ValidFrozenColumnsOrZero(s.FrozenCols),
                 ViewTopRow = ValidRowPaneOrNull(s.ViewTopRow),
@@ -1773,6 +1775,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool? ShowRulers { get; set; }
         public int? ZoomPercent { get; set; }
         public bool? ShowFormulas { get; set; }
+        public bool FullCalculationOnLoad { get; set; }
         public uint FrozenRows { get; set; }
         public uint FrozenCols { get; set; }
         public uint? ViewTopRow { get; set; }

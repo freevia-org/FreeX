@@ -171,6 +171,9 @@ public sealed class Sheet
     /// <summary>Whether formulas are displayed in cells instead of their calculated values.</summary>
     public bool ShowFormulas { get; set; }
 
+    /// <summary>Whether Excel should fully recalculate this worksheet when opened.</summary>
+    public bool FullCalculationOnLoad { get; set; }
+
     /// <summary>True when the sheet is hidden from the worksheet tab strip.</summary>
     public bool IsHidden { get; set; }
 
@@ -534,6 +537,7 @@ public sealed class Sheet
             ShowRulers                    = ShowRulers,
             ZoomPercent                   = ZoomPercent,
             ShowFormulas                  = ShowFormulas,
+            FullCalculationOnLoad         = FullCalculationOnLoad,
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
