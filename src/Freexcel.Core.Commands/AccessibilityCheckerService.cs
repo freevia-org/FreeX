@@ -24,6 +24,7 @@ public static class AccessibilityCheckerService
         "click here",
         "here",
         "link",
+        "more",
         "read more",
         "learn more"
     };
@@ -92,13 +93,16 @@ public static class AccessibilityCheckerService
         var text = displayText.Trim();
         return text.Length > 0 &&
             !GenericHyperlinkDisplayTexts.Contains(text) &&
-            !string.Equals(text, target.Trim(), StringComparison.Ordinal) &&
+            !string.Equals(text, target.Trim(), StringComparison.OrdinalIgnoreCase) &&
             !LooksLikeUrl(text);
     }
 
     private static bool LooksLikeUrl(string text) =>
         (Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) ||
+            (uri.Scheme == Uri.UriSchemeHttp ||
+             uri.Scheme == Uri.UriSchemeHttps ||
+             uri.Scheme == Uri.UriSchemeMailto ||
+             uri.Scheme == Uri.UriSchemeFtp)) ||
         text.StartsWith("www.", StringComparison.OrdinalIgnoreCase);
 
     private static string FormatRange(GridRange range) =>

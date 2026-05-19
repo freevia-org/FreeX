@@ -113,12 +113,32 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Theory]
+    [InlineData("HTTPS://EXAMPLE.COM/REPORT", "https://example.com/report")]
+    [InlineData("mailto:help@example.com", "mailto:help@example.com?subject=Support")]
+    [InlineData("ftp://example.com/report.csv", "ftp://example.com/report.csv?download=1")]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsARawDestination(string displayText, string target)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = target;
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("click here")]
     [InlineData("Click Here")]
     [InlineData("here")]
     [InlineData("link")]
+    [InlineData("more")]
     [InlineData("read more")]
     [InlineData("learn more")]
     public void FindIssues_FlagsHyperlinksWithBlankOrGenericDisplayText(string displayText)
