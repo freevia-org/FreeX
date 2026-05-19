@@ -7983,6 +7983,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
                 chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
                 ToChartProtectionXml(chart, chartNs),
+                ToChartPrintSettingsXml(chart, chartNs),
                 ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",
@@ -8022,10 +8023,59 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return element.HasAttributes ? element : null;
     }
 
+    private static XElement? ToChartPrintSettingsXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.PrintSettings is not { } printSettings)
+            return null;
+
+        var element = new XElement(chartNs + "printSettings",
+            ToChartPageMarginsXml(printSettings.PageMargins, chartNs),
+            ToChartPageSetupXml(printSettings.PageSetup, chartNs));
+        return element.HasElements ? element : null;
+    }
+
+    private static XElement? ToChartPageMarginsXml(ChartPageMarginsModel? margins, XNamespace chartNs)
+    {
+        if (margins is null)
+            return null;
+
+        var element = new XElement(chartNs + "pageMargins");
+        AddOptionalDoubleAttribute(element, "l", margins.Left);
+        AddOptionalDoubleAttribute(element, "r", margins.Right);
+        AddOptionalDoubleAttribute(element, "t", margins.Top);
+        AddOptionalDoubleAttribute(element, "b", margins.Bottom);
+        AddOptionalDoubleAttribute(element, "header", margins.Header);
+        AddOptionalDoubleAttribute(element, "footer", margins.Footer);
+        return element.HasAttributes ? element : null;
+    }
+
+    private static XElement? ToChartPageSetupXml(ChartPageSetupModel? pageSetup, XNamespace chartNs)
+    {
+        if (pageSetup is null)
+            return null;
+
+        var element = new XElement(chartNs + "pageSetup");
+        if (!string.IsNullOrWhiteSpace(pageSetup.PaperSize))
+            element.SetAttributeValue("paperSize", pageSetup.PaperSize);
+        if (!string.IsNullOrWhiteSpace(pageSetup.Orientation))
+            element.SetAttributeValue("orientation", pageSetup.Orientation);
+        if (pageSetup.Copies is { } copies)
+            element.SetAttributeValue("copies", copies.ToString(CultureInfo.InvariantCulture));
+        AddOptionalBoolAttribute(element, "blackAndWhite", pageSetup.BlackAndWhite);
+        AddOptionalBoolAttribute(element, "draft", pageSetup.Draft);
+        return element.HasAttributes ? element : null;
+    }
+
     private static void AddOptionalBoolAttribute(XElement element, string name, bool? value)
     {
         if (value is { } boolValue)
             element.SetAttributeValue(name, boolValue ? "1" : "0");
+    }
+
+    private static void AddOptionalDoubleAttribute(XElement element, string name, double? value)
+    {
+        if (value is { } doubleValue)
+            element.SetAttributeValue(name, doubleValue.ToString("G15", CultureInfo.InvariantCulture));
     }
 
     private static XElement? ToPivotSourceXml(ChartModel chart, Sheet sheet, XNamespace chartNs)
