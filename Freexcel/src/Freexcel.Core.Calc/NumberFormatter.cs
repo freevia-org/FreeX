@@ -131,9 +131,9 @@ public static class NumberFormatter
             if (sections.Length >= 2 && sections[1] != "")
             {
                 sectionFmt = sections[1];
-                // If section 2 doesn't start with '-' or '(' the format string is
-                // expected to embed the negative sign; we pass abs value.
-                displayValue = HasExplicitNegativeSign(sections[1]) ? Math.Abs(value) : value;
+                // Excel formats negative sections with Abs(value); literals in the
+                // selected section decide whether a sign is visible.
+                displayValue = Math.Abs(value);
             }
             else
             {
@@ -151,15 +151,6 @@ public static class NumberFormatter
         var (color, cleanFmt) = ExtractColor(sectionFmt);
         string text = ApplyNumericFormat(displayValue, cleanFmt);
         return new FormatResult(text, color);
-    }
-
-    // True when the negative section already embeds a minus sign or parentheses
-    private static bool HasExplicitNegativeSign(string section)
-    {
-        var (_, clean) = ExtractColor(section);
-        // Strip quoted strings to check remaining characters
-        var stripped = Regex.Replace(clean, "\"[^\"]*\"", "");
-        return stripped.Contains('-') || stripped.Contains('(');
     }
 
     // Extract optional [Color] or [ColorN] prefix; return (hexColor, remainingFormat)
@@ -198,6 +189,7 @@ public static class NumberFormatter
 
         // Remove any remaining bracket content (conditions, locale, etc.)
         format = Regex.Replace(format, @"\[[^\]]*\]", "");
+        format = PreserveAccountingFillSpace(format);
         format = RemoveSpacingAndFillDirectives(format);
 
         // Percentage: multiply value by 100 before formatting
@@ -303,13 +295,49 @@ public static class NumberFormatter
             }
 
             if (!inQuote && c == '*')
+            {
+                if (i + 1 < format.Length) i++;
                 continue;
+            }
 
             sb.Append(c);
         }
 
         return sb.ToString();
     }
+
+    private static string PreserveAccountingFillSpace(string format)
+    {
+        var sb = new System.Text.StringBuilder(format.Length);
+        bool inQuote = false;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                sb.Append(c);
+                continue;
+            }
+
+            if (!inQuote && IsCurrencySymbol(c) &&
+                i + 2 < format.Length && format[i + 1] == '*' && format[i + 2] == ' ')
+            {
+                sb.Append(c);
+                sb.Append(' ');
+                i += 2;
+                continue;
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool IsCurrencySymbol(char c)
+        => c is '$' or '\u00A3' or '\u20AC' or '\u00A5';
 
     private static bool IsSimpleFractionFormat(string format)
     {
@@ -321,7 +349,8 @@ public static class NumberFormatter
 
     private static string FormatSimpleFraction(double value, string format)
     {
-        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
+        var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
         var denominatorPattern = Regex.Match(stripped, @"/(\?+)");
         int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
 
@@ -338,13 +367,14 @@ public static class NumberFormatter
 
         var sign = value < 0 ? "-" : "";
         if (numerator == 0)
-            return sign + (whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture));
+            return prefix + sign + (whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture)) + suffix;
 
         string fraction = numerator.ToString(CultureInfo.InvariantCulture) + "/" +
                           denominator.ToString(CultureInfo.InvariantCulture);
-        return whole > 0
+        string number = whole > 0
             ? sign + whole.ToString(CultureInfo.InvariantCulture) + " " + fraction
             : sign + fraction;
+        return prefix + number + suffix;
     }
 
     private static (int Numerator, int Denominator) ApproximateFraction(double value, int maxDenominator)
@@ -390,7 +420,8 @@ public static class NumberFormatter
 
     private static string FormatScientific(double value, string format)
     {
-        var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
+        var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
         var mantissa = stripped.Split(['E', 'e'], 2)[0];
         int decimals = mantissa.Contains('.')
             ? mantissa[(mantissa.IndexOf('.') + 1)..].Count(c => c == '0' || c == '#')
@@ -407,8 +438,41 @@ public static class NumberFormatter
             string displaySign = exponentFormat.Groups[1].Value == "-" && sign == "+" ? "" : sign;
             return "E" + displaySign + exponent;
         });
-        return result;
+        return prefix + result + suffix;
     }
+
+    private static (string Prefix, string NumericFormat, string Suffix) ExtractNumericAffixes(string format)
+    {
+        string unquoted = Regex.Replace(format, "\"([^\"]*)\"", "$1");
+        int start = -1;
+        int end = -1;
+
+        for (int i = 0; i < unquoted.Length; i++)
+        {
+            if (IsNumericPlaceholder(unquoted[i]))
+            {
+                start = i;
+                break;
+            }
+        }
+
+        for (int i = unquoted.Length - 1; i >= 0; i--)
+        {
+            if (IsNumericPlaceholder(unquoted[i]))
+            {
+                end = i;
+                break;
+            }
+        }
+
+        if (start < 0 || end < start)
+            return (unquoted, "", "");
+
+        return (unquoted[..start], unquoted[start..(end + 1)], unquoted[(end + 1)..]);
+    }
+
+    private static bool IsNumericPlaceholder(char c)
+        => c is '0' or '#' or '?';
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 
