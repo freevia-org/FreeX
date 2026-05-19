@@ -3761,6 +3761,10 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
+
+        if (args.Count == 2 && lookupVec.RowCount > 1 && lookupVec.ColCount > 1)
+            return LookupArrayForm(args[0], lookupVec);
+
         var lookupFlat = lookupVec.Flatten();
         if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
         var resultFlat = args.Count > 2 && args[2] is RangeValue rv
@@ -3776,6 +3780,24 @@ public static class BuiltInFunctions
         }
         if (matchIdx < 0) return ErrorValue.NA;
         return matchIdx < resultFlat.Count ? resultFlat[matchIdx] : ErrorValue.NA;
+    }
+
+    private static ScalarValue LookupArrayForm(ScalarValue lookupVal, RangeValue array)
+    {
+        bool searchFirstRow = array.ColCount > array.RowCount;
+        var lookupVector = searchFirstRow ? array.GetRow(1) : array.GetColumn(1);
+        var resultVector = searchFirstRow ? array.GetRow(array.RowCount) : array.GetColumn(array.ColCount);
+
+        int matchIdx = -1;
+        for (int i = 0; i < lookupVector.Count; i++)
+        {
+            if (lookupVector[i] is ErrorValue lErr) return lErr;
+            if (CompareScalar(lookupVector[i], lookupVal) <= 0)
+                matchIdx = i;
+        }
+
+        if (matchIdx < 0) return ErrorValue.NA;
+        return matchIdx < resultVector.Count ? resultVector[matchIdx] : ErrorValue.NA;
     }
 
     private static ScalarValue NFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
