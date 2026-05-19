@@ -295,6 +295,19 @@ public sealed class XlsxChartPartReaderTests
               <c:chart>
                 <c:autoTitleDeleted val="1"/>
                 <c:plotArea>
+                  <c:layout>
+                    <c:manualLayout>
+                      <c:layoutTarget val="outer"/>
+                      <c:xMode val="factor"/>
+                      <c:yMode val="edge"/>
+                      <c:wMode val="factor"/>
+                      <c:hMode val="factor"/>
+                      <c:x val="0.1"/>
+                      <c:y val="0.2"/>
+                      <c:w val="0.8"/>
+                      <c:h val="0.6"/>
+                    </c:manualLayout>
+                  </c:layout>
                   <c:barChart>
                     <c:barDir val="col"/>
                     <c:ser>
@@ -304,6 +317,23 @@ public sealed class XlsxChartPartReaderTests
                     </c:ser>
                   </c:barChart>
                 </c:plotArea>
+                <c:legend>
+                  <c:legendPos val="r"/>
+                  <c:layout>
+                    <c:manualLayout>
+                      <c:layoutTarget val="inner"/>
+                      <c:xMode val="edge"/>
+                      <c:yMode val="edge"/>
+                      <c:wMode val="factor"/>
+                      <c:hMode val="factor"/>
+                      <c:x val="0.76"/>
+                      <c:y val="0.15"/>
+                      <c:w val="0.2"/>
+                      <c:h val="0.7"/>
+                    </c:manualLayout>
+                  </c:layout>
+                  <c:overlay val="1"/>
+                </c:legend>
                 <c:plotVisOnly val="0"/>
                 <c:dispBlanksAs val="span"/>
                 <c:showDLblsOverMax val="1"/>
@@ -340,6 +370,30 @@ public sealed class XlsxChartPartReaderTests
         {
             RelationshipId = "rIdExternalData1",
             AutoUpdate = true
+        });
+        chart.PlotAreaLayout.Should().BeEquivalentTo(new ChartManualLayoutModel
+        {
+            LayoutTarget = "outer",
+            XMode = "factor",
+            YMode = "edge",
+            WidthMode = "factor",
+            HeightMode = "factor",
+            X = 0.1,
+            Y = 0.2,
+            Width = 0.8,
+            Height = 0.6
+        });
+        chart.LegendLayout.Should().BeEquivalentTo(new ChartManualLayoutModel
+        {
+            LayoutTarget = "inner",
+            XMode = "edge",
+            YMode = "edge",
+            WidthMode = "factor",
+            HeightMode = "factor",
+            X = 0.76,
+            Y = 0.15,
+            Width = 0.2,
+            Height = 0.7
         });
         chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
         {

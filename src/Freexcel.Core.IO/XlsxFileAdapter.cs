@@ -8046,6 +8046,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         : ToChartTitleXml(chart, chartNs, drawingNs),
                     chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
                     new XElement(chartNs + "plotArea",
+                        ToManualLayoutXml(chart.PlotAreaLayout, chartNs),
                         plotCharts,
                         ShouldWriteChartAxes(chart.Type)
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
@@ -8755,6 +8756,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return new XElement(chartNs + "legend",
             new XElement(chartNs + "legendPos",
                 new XAttribute("val", ToXlsxLegendPosition(chart.LegendPosition))),
+            ToManualLayoutXml(chart.LegendLayout, chartNs),
             new XElement(chartNs + "overlay",
                 new XAttribute("val", chart.LegendOverlay ? "1" : "0")),
             ToShapeProperties(
@@ -8767,6 +8769,38 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 chart.LegendBorderThickness),
             ToLegendTextProperties(chart, chartNs, drawingNs));
     }
+
+    private static XElement? ToManualLayoutXml(ChartManualLayoutModel? layout, XNamespace chartNs)
+    {
+        if (layout is null ||
+            string.IsNullOrWhiteSpace(layout.LayoutTarget) &&
+            string.IsNullOrWhiteSpace(layout.XMode) &&
+            string.IsNullOrWhiteSpace(layout.YMode) &&
+            string.IsNullOrWhiteSpace(layout.WidthMode) &&
+            string.IsNullOrWhiteSpace(layout.HeightMode) &&
+            layout.X is null &&
+            layout.Y is null &&
+            layout.Width is null &&
+            layout.Height is null)
+        {
+            return null;
+        }
+
+        return new XElement(chartNs + "layout",
+            new XElement(chartNs + "manualLayout",
+                string.IsNullOrWhiteSpace(layout.LayoutTarget) ? null : new XElement(chartNs + "layoutTarget", new XAttribute("val", layout.LayoutTarget)),
+                string.IsNullOrWhiteSpace(layout.XMode) ? null : new XElement(chartNs + "xMode", new XAttribute("val", layout.XMode)),
+                string.IsNullOrWhiteSpace(layout.YMode) ? null : new XElement(chartNs + "yMode", new XAttribute("val", layout.YMode)),
+                string.IsNullOrWhiteSpace(layout.WidthMode) ? null : new XElement(chartNs + "wMode", new XAttribute("val", layout.WidthMode)),
+                string.IsNullOrWhiteSpace(layout.HeightMode) ? null : new XElement(chartNs + "hMode", new XAttribute("val", layout.HeightMode)),
+                layout.X is { } x ? new XElement(chartNs + "x", new XAttribute("val", ToChartLayoutDecimal(x))) : null,
+                layout.Y is { } y ? new XElement(chartNs + "y", new XAttribute("val", ToChartLayoutDecimal(y))) : null,
+                layout.Width is { } width ? new XElement(chartNs + "w", new XAttribute("val", ToChartLayoutDecimal(width))) : null,
+                layout.Height is { } height ? new XElement(chartNs + "h", new XAttribute("val", ToChartLayoutDecimal(height))) : null));
+    }
+
+    private static string ToChartLayoutDecimal(double value) =>
+        value.ToString("0.###############", CultureInfo.InvariantCulture);
 
     private static XElement? ToLegendTextProperties(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {

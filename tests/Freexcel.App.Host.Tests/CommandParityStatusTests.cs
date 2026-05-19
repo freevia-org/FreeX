@@ -27,7 +27,8 @@ public sealed class CommandParityStatusTests
             ("AutoFit Row/Column", "Implemented"),
             ("Format Cells dialog (Ctrl+1)", "Implemented"),
             ("Flash Fill", "Partial"),
-            ("Share", "Partial")
+            ("Share", "Partial"),
+            ("Split Panes", "Implemented")
         ];
 
         var tableRows = ParseMarkdownTableRows(doc);

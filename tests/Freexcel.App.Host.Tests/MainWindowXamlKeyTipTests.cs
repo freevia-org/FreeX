@@ -134,12 +134,18 @@ public sealed class MainWindowXamlKeyTipTests
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var accountButton = document
-            .Descendants(presentation + "Button")
+            .Descendants()
             .Single(element => element.Attribute("Content")?.Value == "Account");
 
+        accountButton.Attribute(x + "Name")?.Value.Should().Be("SsAccountNavBtn");
         accountButton.Attribute("Click")?.Value.Should().Be("SsAccountBtn_Click");
+        accountButton.ToString().Should().Contain("AutomationProperties.Name=\"Account\"");
+        accountButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageAccountButton\"");
+        accountButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Show local account information");
+        accountButton.Attribute("IsTabStop")?.Value.Should().Be("True");
         accountButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Contain("Local");
         accountButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("AC");
         accountButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Microsoft account");
@@ -152,13 +158,67 @@ public sealed class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var optionsButton = document
-            .Descendants(presentation + "Button")
+            .Descendants()
             .Single(element => element.Attribute("Click")?.Value == "SsOptionsBtn_Click");
 
         optionsButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("SsOptionsNavBtn");
-        optionsButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Options");
-        optionsButton.Attribute("AutomationProperties.HelpText")?.Value.Should().Contain("Freexcel settings");
+        optionsButton.ToString().Should().Contain("AutomationProperties.Name=\"Options\"");
+        optionsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageOptionsButton\"");
+        optionsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Open Freexcel settings");
         optionsButton.Attribute("IsTabStop")?.Value.Should().Be("True");
+    }
+
+    [Fact]
+    public void DialogEntryPointButtons_HaveStableAutomationIds()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+
+        var expected = new Dictionary<string, string>
+        {
+            ["InsertFunctionBtn_Click"] = "FormulasInsertFunctionButton",
+            ["SsAccountBtn_Click"] = "BackstageAccountButton",
+            ["SsOptionsBtn_Click"] = "BackstageOptionsButton",
+            ["AboutBtn_Click"] = "HelpAboutFreexcelButton",
+        };
+
+        foreach (var (clickHandler, automationId) in expected)
+        {
+            var matchingAutomationIds = document
+                .Descendants()
+                .Where(element => element.Attribute("Click")?.Value == clickHandler)
+                .Select(element => element.ToString())
+                .ToList();
+
+            matchingAutomationIds.Should().Contain(element => element.Contains($"AutomationProperties.AutomationId=\"{automationId}\""));
+        }
+
+        var automationInvokeButtonMarkup = document
+            .Descendants(local + "AutomationInvokeButton")
+            .Select(element => element.ToString())
+            .ToList();
+
+        foreach (var automationId in expected.Values)
+            automationInvokeButtonMarkup.Should().Contain(element => element.Contains($"AutomationProperties.AutomationId=\"{automationId}\""));
+    }
+
+    [Fact]
+    public void DialogEntryPointHandlers_UseOwnedActivatedDialogs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var invokeButtonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutomationInvokeButton.cs"));
+
+        source.Should().Contain("ShowOwnedDialog(");
+        source.Should().Contain("ShowOwnedMessage(");
+        source.Should().Contain("var dlg = new InsertFunctionDialog");
+        source.Should().Contain("var dlg = new OptionsDialog");
+        source.Should().Contain("ShowOwnedDialog(dlg)");
+        source.Should().Contain("ShowOwnedMessage(");
+        source.Should().Contain("AppInfo.AboutText");
+        invokeButtonSource.Should().Contain("IInvokeProvider");
+        invokeButtonSource.Should().Contain("Dispatcher.BeginInvoke");
+        invokeButtonSource.Should().Contain("ButtonBase.ClickEvent");
     }
 
     [Fact]
