@@ -32,6 +32,22 @@ public class FormulaReferenceCyclerTests
     public void TryCycleReferenceAtCaret_CyclesReferenceInsideFormula()
     {
         var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(A1)+B2",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM($A$1)+B2");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(4);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesRangeReferenceAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
             "=SUM(A1:B2)",
             caretIndex: 6,
             out var result,
@@ -39,9 +55,9 @@ public class FormulaReferenceCyclerTests
             out var selectionLength);
 
         changed.Should().BeTrue();
-        result.Should().Be("=SUM($A$1:B2)");
+        result.Should().Be("=SUM($A$1:$B$2)");
         selectionStart.Should().Be(5);
-        selectionLength.Should().Be(4);
+        selectionLength.Should().Be(9);
     }
 
     [Theory]
