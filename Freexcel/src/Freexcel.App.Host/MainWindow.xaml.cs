@@ -54,6 +54,7 @@ public partial class MainWindow : Window
     private bool _isOpeningFile;
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
+    private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
     private bool _dragSelectActive;
     private Freexcel.App.UI.SplitPaneRegion _activeSplitPaneRegion = Freexcel.App.UI.SplitPaneRegion.BottomRight;
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
@@ -596,21 +597,15 @@ public partial class MainWindow : Window
                 textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        button.HorizontalContentAlignment = level == RibbonCompactLevel.IconOnly
-            ? System.Windows.HorizontalAlignment.Right
-            : System.Windows.HorizontalAlignment.Center;
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
 
         if (button.Content is FrameworkElement content)
-            content.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
-                ? System.Windows.HorizontalAlignment.Right
-                : System.Windows.HorizontalAlignment.Center;
+            content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
 
         foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
         {
             if (stack.Orientation == Orientation.Horizontal)
-                stack.HorizontalAlignment = level == RibbonCompactLevel.IconOnly
-                    ? System.Windows.HorizontalAlignment.Right
-                    : System.Windows.HorizontalAlignment.Center;
+                stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
         }
     }
 
@@ -1234,6 +1229,13 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (ExcelSelectionModePlanner.TryToggle(e.Key, Keyboard.Modifiers, _selectionMode, out var nextSelectionMode))
+            {
+                SetSelectionMode(nextSelectionMode);
+                e.Handled = true;
+                return;
+            }
+
             if (Keyboard.Modifiers == ModifierKeys.Alt &&
                 RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
                 TryHandleTopLevelRibbonKeyTip(keyTip))
@@ -1578,10 +1580,11 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange == null) return;
 
         bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        bool extendSelection = ExcelSelectionModePlanner.ShouldExtendSelection(_selectionMode, Keyboard.Modifiers);
         bool ctrlHeld  = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
 
-        // When Shift is held the moving end is _selectionCursor; otherwise it's the active cell.
-        var current = shiftHeld && _selectionCursor.HasValue
+        // When Shift or F8 extend mode is active the moving end is _selectionCursor; otherwise it's the active cell.
+        var current = extendSelection && _selectionCursor.HasValue
             ? _selectionCursor.Value
             : SheetGrid.SelectedRange.Value.Start;
 
@@ -1625,7 +1628,9 @@ public partial class MainWindow : Window
 
         // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
-        if (shiftHeld && !moveOnly && _selectionAnchor.HasValue)
+        if (_selectionMode == ExcelSelectionMode.Add && !moveOnly)
+            AddOrMoveAdditionalSelection(target.Value, extendSelection);
+        else if (extendSelection && !moveOnly && _selectionAnchor.HasValue)
             ExtendSelection(_selectionAnchor.Value, target.Value);
         else
             SetActiveCell(target.Value);
@@ -1835,6 +1840,35 @@ public partial class MainWindow : Window
             new CellAddress(_currentSheetId,
                 Math.Max(anchor.Row, to.Row), Math.Max(anchor.Col, to.Col)));
         CellAddressBox.Text = FormatRangeReference(anchor, to);
+        RefreshStatusBar();
+    }
+
+    private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
+    {
+        var ranges = SheetGrid.SelectedRanges is { Count: > 0 }
+            ? SheetGrid.SelectedRanges.ToList()
+            : SheetGrid.SelectedRange is { } currentRange ? [currentRange] : [];
+
+        if (!extendSelection)
+            _selectionAnchor = target;
+
+        var anchor = _selectionAnchor ?? target;
+        _selectionCursor = target;
+        var activeRange = new GridRange(anchor, target);
+
+        if (ranges.Count > 0 && SheetGrid.SelectedRange is { } currentActive && ranges[^1] == currentActive)
+            ranges[^1] = activeRange;
+        else
+            ranges.Add(activeRange);
+
+        SheetGrid.SelectedRanges = ranges;
+        SheetGrid.SelectedRange = activeRange;
+        CellAddressBox.Text = FormatRangeReference(activeRange.Start, activeRange.End);
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
+        FocusSheetGridIfNeeded();
+        RefreshToolbar();
         RefreshStatusBar();
     }
 
@@ -2686,6 +2720,24 @@ public partial class MainWindow : Window
         ClearClipboardVisualState();
         _internalClipboard = null;
         CancelFormatPainter();
+        SetSelectionMode(ExcelSelectionMode.Normal);
+    }
+
+    private void SetSelectionMode(ExcelSelectionMode mode)
+    {
+        _selectionMode = mode;
+        if (StatusStatsPanel is not null)
+            StatusStatsPanel.Visibility = Visibility.Collapsed;
+        if (StatusReadyText is null)
+            return;
+
+        StatusReadyText.Visibility = Visibility.Visible;
+        StatusReadyText.Text = mode switch
+        {
+            ExcelSelectionMode.Extend => "Extend Selection",
+            ExcelSelectionMode.Add => "Add to Selection",
+            _ => "Ready"
+        };
     }
 
     private void ClearClipboardVisualState()
