@@ -4069,7 +4069,7 @@ public static class BuiltInFunctions
         if (args[0] is not RangeValue arr) return ErrorValue.Value;
         if (args[1] is ErrorValue includeError) return includeError;
         if (args[1] is not RangeValue include) return ErrorValue.Value;
-        var ifEmpty = args.Count > 2 ? args[2] : new TextValue("");
+        var ifEmpty = args.Count > 2 ? args[2] : ErrorValue.Calc;
 
         if (include.ColCount == 1 && include.RowCount == arr.RowCount)
             return FilterRows(arr, include, ifEmpty);
@@ -4142,9 +4142,12 @@ public static class BuiltInFunctions
     }
 
     private static ScalarValue FilterEmptyResult(ScalarValue ifEmpty) =>
-        ifEmpty is RangeValue rvEmpty
-            ? rvEmpty
-            : new RangeValue(new ScalarValue[1, 1] { { ifEmpty } });
+        ifEmpty switch
+        {
+            ErrorValue e => e,
+            RangeValue rvEmpty => rvEmpty,
+            _ => new RangeValue(new ScalarValue[1, 1] { { ifEmpty } })
+        };
 
     private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -5495,7 +5498,8 @@ public static class BuiltInFunctions
             "#NUM!"   => new NumberValue(6),
             "#N/A"    => new NumberValue(7),
             "#GETTING_DATA" => new NumberValue(8),
-            "#SPILL!" => new NumberValue(14),
+            "#SPILL!" => new NumberValue(9),
+            "#CALC!" => new NumberValue(14),
             _ => ErrorValue.NA
         };
     }
