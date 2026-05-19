@@ -95,4 +95,79 @@ public sealed class ChartOptionCyclerTests
     {
         ChartOptionCycler.ParseChartType(text).Should().Be(expected);
     }
+
+    [Fact]
+    public void TryGetAxisBounds_UsesNumericChartDataAndExpandsSingleValueRanges()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var barChart = CreateChart(sheet.Id, ChartType.Bar, 1, 1, 4, 2);
+        var lineChart = CreateChart(sheet.Id, ChartType.Line, 1, 4, 4, 5);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 5), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("ignored"));
+
+        ChartOptionCycler.TryGetAxisBounds(sheet, barChart, useXAxis: true, out var xMinimum, out var xMaximum)
+            .Should()
+            .BeTrue();
+        xMinimum.Should().Be(10);
+        xMaximum.Should().Be(20);
+
+        ChartOptionCycler.TryGetAxisBounds(sheet, lineChart, useXAxis: false, out var yMinimum, out var yMaximum)
+            .Should()
+            .BeTrue();
+        yMinimum.Should().Be(6);
+        yMaximum.Should().Be(8);
+    }
+
+    [Fact]
+    public void GetNextSecondaryAxisSeries_CyclesEachSeriesThenClearsWhileKeepingAxisVisible()
+    {
+        var chart = CreateChart(SheetId.New(), ChartType.Column, 1, 1, 5, 4);
+
+        var first = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, 3);
+        first.ShowSecondaryAxis.Should().BeTrue();
+        first.SeriesIndexes.Should().Equal(1);
+
+        chart.ShowSecondaryAxis = true;
+        chart.SecondaryAxisSeriesIndexes = [1];
+        var second = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, 3);
+        second.ShowSecondaryAxis.Should().BeTrue();
+        second.SeriesIndexes.Should().Equal(2);
+
+        chart.SecondaryAxisSeriesIndexes = [2];
+        var clearedIndexes = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, 3);
+        clearedIndexes.ShowSecondaryAxis.Should().BeTrue();
+        clearedIndexes.SeriesIndexes.Should().BeEmpty();
+
+        chart.SecondaryAxisSeriesIndexes = [];
+        var clearedAxis = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, 3);
+        clearedAxis.ShowSecondaryAxis.Should().BeFalse();
+        clearedAxis.SeriesIndexes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetNextComboLineSeries_CyclesSeriesAndClearsAtTheEnd()
+    {
+        var chart = CreateChart(SheetId.New(), ChartType.Column, 1, 1, 5, 4);
+
+        ChartOptionCycler.GetNextComboLineSeries(chart, 3).Should().Equal(1);
+
+        chart.UseComboLineForSecondarySeries = true;
+        chart.ComboLineSeriesIndexes = [1];
+        ChartOptionCycler.GetNextComboLineSeries(chart, 3).Should().Equal(2);
+
+        chart.ComboLineSeriesIndexes = [2];
+        ChartOptionCycler.GetNextComboLineSeries(chart, 3).Should().BeEmpty();
+    }
+
+    private static ChartModel CreateChart(SheetId sheetId, ChartType type, uint startRow, uint startCol, uint endRow, uint endCol) =>
+        new()
+        {
+            Type = type,
+            DataRange = new GridRange(
+                new CellAddress(sheetId, startRow, startCol),
+                new CellAddress(sheetId, endRow, endCol))
+        };
 }
