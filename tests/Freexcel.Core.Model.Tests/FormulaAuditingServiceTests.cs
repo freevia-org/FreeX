@@ -158,6 +158,24 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsNumbersStoredAsText()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 3, 2);
+        sheet.SetCell(address, new TextValue("42"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Cell.Should().Be("B3");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.NumberStoredAsTextErrorCode);
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("number in this cell is formatted as text");
+    }
+
+    [Fact]
     public void FindFormulaErrors_SkipsIgnoredFormulaErrors()
     {
         var wb = new Workbook("test");
@@ -191,6 +209,18 @@ public sealed class FormulaAuditingServiceTests
         FormulaAuditingService.FindFormulaErrors(wb, sheet.Id)
             .Should().ContainSingle()
             .Which.Address.Should().Be(nameAddress);
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledNumbersStoredAsTextRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("42"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.NumberStoredAsTextErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
     }
 
     [Fact]
@@ -243,7 +273,8 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Num.Code, "Formulas with invalid numbers"),
                 (ErrorValue.Null.Code, "Formulas with invalid intersections"),
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
-                (ErrorValue.Circular.Code, "Formulas with circular references"));
+                (ErrorValue.Circular.Code, "Formulas with circular references"),
+                (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
