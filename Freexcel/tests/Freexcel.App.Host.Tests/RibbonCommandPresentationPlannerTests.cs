@@ -57,6 +57,10 @@ public sealed class RibbonCommandPresentationPlannerTests
     [Theory]
     [InlineData("Refresh All", "\uE72C")]
     [InlineData("Insert Function", "fx")]
+    [InlineData("Spelling", "abc\u2713")]
+    [InlineData("Check Accessibility", "\uE776")]
+    [InlineData("Protect Sheet", "\uE72E")]
+    [InlineData("Help Online", "\uE897")]
     [InlineData("Unknown Command", "\uE8A5")]
     public void GetIcon_MapsKnownCommandsAndProvidesFallback(string commandName, string expectedGlyph)
     {
@@ -64,6 +68,19 @@ public sealed class RibbonCommandPresentationPlannerTests
 
         icon.Glyph.Should().Be(expectedGlyph);
         icon.FontFamily.Source.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Theory]
+    [InlineData("Column Chart", RibbonCommandIconAccent.Chart)]
+    [InlineData("Get Data", RibbonCommandIconAccent.Data)]
+    [InlineData("Theme Colors", RibbonCommandIconAccent.Theme)]
+    [InlineData("Fill", RibbonCommandIconAccent.Fill)]
+    [InlineData("Error Checking", RibbonCommandIconAccent.Warning)]
+    [InlineData("Protect Workbook", RibbonCommandIconAccent.Protect)]
+    [InlineData("Send Feedback", RibbonCommandIconAccent.Help)]
+    public void GetIcon_AssignsExcelLikeAccentFamilies(string commandName, RibbonCommandIconAccent expectedAccent)
+    {
+        RibbonCommandPresentationPlanner.GetIcon(commandName).Accent.Should().Be(expectedAccent);
     }
 
     [Theory]
