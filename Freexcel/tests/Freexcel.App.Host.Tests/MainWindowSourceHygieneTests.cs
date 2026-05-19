@@ -115,4 +115,13 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
         source.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
     }
+
+    [Fact]
+    public void MainWindow_DelegatesRgbTextParsingToDrawingInputParser()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().NotContain("input.Split(',')");
+        source.Should().Contain("DrawingInputParser.TryParseRgbColor(input, out var color)");
+    }
 }
