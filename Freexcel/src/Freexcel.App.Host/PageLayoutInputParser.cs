@@ -157,10 +157,54 @@ public static class PageLayoutInputParser
         return false;
     }
 
+    public static bool TryParseOptionalFirstPageNumber(string input, out int? firstPageNumber)
+    {
+        firstPageNumber = null;
+        var trimmed = input.Trim();
+        if (IsAutoInput(trimmed))
+            return true;
+
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value != 0)
+        {
+            firstPageNumber = value;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryParseMarginDistance(string input, out double value)
+    {
+        value = 0;
+        return double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+               double.IsFinite(value) &&
+               value >= 0;
+    }
+
+    public static bool TryParseOptionalPrintQuality(string input, out int? printQualityDpi)
+    {
+        printQualityDpi = null;
+        var trimmed = input.Trim();
+        if (IsAutoInput(trimmed))
+            return true;
+
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+        {
+            printQualityDpi = value;
+            return true;
+        }
+
+        return false;
+    }
+
     private static bool IsClearInput(string normalized) =>
         normalized.Equals("none", StringComparison.OrdinalIgnoreCase) ||
         normalized.Equals("clear", StringComparison.OrdinalIgnoreCase) ||
         normalized.Length == 0;
+
+    private static bool IsAutoInput(string normalized) =>
+        normalized.Length == 0 ||
+        normalized.Equals("auto", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsColumnName(string text) =>
         text.Length > 0 && text.All(char.IsLetter);
