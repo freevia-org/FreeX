@@ -773,6 +773,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void LeftAndRight_PreserveSurrogatePairAtBoundary()
+    {
+        _eval.Evaluate("=LEFT(\"😀x\",1)", MakeSheet()).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=RIGHT(\"x😀\",1)", MakeSheet()).Should().Be(new TextValue("😀"));
+    }
+
+    [Fact]
     public void Left_ResultAtExcelCellLimit_ReturnsText()
     {
         var text = new string('x', 32767);
