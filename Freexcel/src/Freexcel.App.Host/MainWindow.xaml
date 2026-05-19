@@ -138,13 +138,6 @@
             <Setter Property="Padding" Value="2"/>
         </Style>
 
-        <Style x:Key="RibbonIconGlyph" TargetType="TextBlock">
-            <Setter Property="Tag" Value="RibbonIcon"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="TextAlignment" Value="Center"/>
-        </Style>
-
         <!-- Ribbon tab item style — flat, green underline when selected -->
         <Style TargetType="TabItem">
             <Setter Property="Padding" Value="7,4"/>
@@ -181,7 +174,6 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="BorderBrush"  Value="Transparent"/>
             <Setter Property="Foreground"   Value="{StaticResource FreexcelWhiteBrush}"/>
-            <Setter Property="FontFamily"   Value="Segoe MDL2 Assets"/>
             <Setter Property="FontSize"     Value="10"/>
             <Setter Property="Width"        Value="46"/>
             <Setter Property="Padding"      Value="0"/>
@@ -432,22 +424,90 @@
                           TextOptions.TextFormattingMode="Display"
                           TextOptions.TextRenderingMode="ClearType"
                           TextOptions.TextHintingMode="Fixed">
-                        <TextBlock Text="X"
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="8"/>
+                            <RowDefinition Height="1"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border x:Name="TitleBarAppFreeBand"
+                                Grid.Row="0"
+                                Background="#2FA466"
+                                CornerRadius="1,1,0,0"
+                                Margin="0"/>
+                        <TextBlock x:Name="TitleBarAppXOutlineTop"
+                                   Grid.Row="0"
+                                   Grid.RowSpan="3"
+                                   Panel.ZIndex="3"
+                                   Text="X"
+                                   Foreground="#155C38"
+                                   FontFamily="Segoe UI"
+                                   FontWeight="Bold"
+                                   FontSize="14.5"
+                                   Margin="0,-3,0,0"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"/>
+                        <TextBlock x:Name="TitleBarAppXOutlineBottom"
+                                   Grid.Row="0"
+                                   Grid.RowSpan="3"
+                                   Panel.ZIndex="3"
+                                   Text="X"
+                                   Foreground="#155C38"
+                                   FontFamily="Segoe UI"
+                                   FontWeight="Bold"
+                                   FontSize="14.5"
+                                   Margin="0,-1,0,0"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"/>
+                        <TextBlock x:Name="TitleBarAppXOutlineLeft"
+                                   Grid.Row="0"
+                                   Grid.RowSpan="3"
+                                   Panel.ZIndex="3"
+                                   Text="X"
+                                   Foreground="#155C38"
+                                   FontFamily="Segoe UI"
+                                   FontWeight="Bold"
+                                   FontSize="14.5"
+                                   Margin="-1,-2,0,0"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"/>
+                        <TextBlock x:Name="TitleBarAppXOutlineRight"
+                                   Grid.Row="0"
+                                   Grid.RowSpan="3"
+                                   Panel.ZIndex="3"
+                                   Text="X"
+                                   Foreground="#155C38"
+                                   FontFamily="Segoe UI"
+                                   FontWeight="Bold"
+                                   FontSize="14.5"
+                                   Margin="1,-2,0,0"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"/>
+                        <TextBlock x:Name="TitleBarAppX"
+                                   Grid.Row="0"
+                                   Grid.RowSpan="3"
+                                   Panel.ZIndex="4"
+                                   Text="X"
                                    Foreground="{StaticResource FreexcelWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
-                                   FontSize="13"
+                                   FontSize="14.5"
+                                   Margin="0,-2,0,0"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    TextAlignment="Center"/>
                         <TextBlock Text="FREE"
+                                   Grid.Row="0"
+                                   Panel.ZIndex="2"
                                    Foreground="{StaticResource FreexcelWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
-                                   FontSize="4.5"
+                                   FontSize="6.6"
                                    HorizontalAlignment="Center"
-                                   VerticalAlignment="Top"
-                                   Margin="0,1,0,0"
+                                   VerticalAlignment="Center"
                                    TextAlignment="Center"/>
                     </Grid>
                 </Border>
@@ -459,7 +519,7 @@
                         local:RibbonTooltip.Title="Save"
                         local:RibbonTooltip.KeyTip="1"
                         local:RibbonTooltip.Description="Save the workbook.">
-                    <TextBlock Text="&#xE74E;" Style="{StaticResource FreexcelQatOnAccentIcon}"/>
+                    <local:RibbonIcon Kind="Save" IconSize="13" Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
                         Style="{StaticResource RibbonBtn}" FontSize="14"
@@ -468,7 +528,7 @@
                         local:RibbonTooltip.Title="Undo"
                         local:RibbonTooltip.KeyTip="2"
                         local:RibbonTooltip.Description="Undo the last action.">
-                    <TextBlock Text="&#xE7A7;" Style="{StaticResource FreexcelQatOnAccentIcon}"/>
+                    <local:RibbonIcon Kind="Undo" IconSize="13" Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,8,0"
                         Style="{StaticResource RibbonBtn}" FontSize="14"
@@ -477,19 +537,25 @@
                         local:RibbonTooltip.Title="Redo"
                         local:RibbonTooltip.KeyTip="3"
                         local:RibbonTooltip.Description="Redo the last undone action.">
-                    <TextBlock Text="&#xE7A6;" Style="{StaticResource FreexcelQatOnAccentIcon}"/>
+                    <local:RibbonIcon Kind="Redo" IconSize="13" Foreground="{StaticResource FreexcelWhiteBrush}"/>
                 </Button>
                 <!-- System buttons — must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
-                <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right" Content="&#xE8BB;"
+                <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right"
                         Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"
-                        AutomationProperties.Name="Close"/>
-                <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right" Content="&#xE739;"
+                        AutomationProperties.Name="Close">
+                    <local:RibbonIcon Kind="WindowClose" IconSize="11" Foreground="{StaticResource FreexcelWhiteBrush}"/>
+                </Button>
+                <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
-                        AutomationProperties.Name="Maximize or Restore"/>
-                <Button                         DockPanel.Dock="Right" Content="&#xE949;"
+                        AutomationProperties.Name="Maximize or Restore">
+                    <local:RibbonIcon Kind="WindowMaximize" IconSize="11" Foreground="{StaticResource FreexcelWhiteBrush}"/>
+                </Button>
+                <Button                         DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"
-                        AutomationProperties.Name="Minimize"/>
+                        AutomationProperties.Name="Minimize">
+                    <local:RibbonIcon Kind="WindowMinimize" IconSize="11" Foreground="{StaticResource FreexcelWhiteBrush}"/>
+                </Button>
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -538,8 +604,8 @@
                                         local:RibbonTooltip.KeyTip="V"
                                         local:RibbonTooltip.Description="Paste the contents of the Clipboard (Ctrl+V).">
                                     <StackPanel>
-                                        <TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" FontSize="22"
-                                                   HorizontalAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Paste" IconSize="22"
+                                                          HorizontalAlignment="Center"/>
                                         <TextBlock Text="Paste" Tag="RibbonLabel" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Button>
@@ -550,8 +616,8 @@
                                             local:RibbonTooltip.KeyTip="X"
                                             local:RibbonTooltip.Description="Cut the selection and put it on the Clipboard (Ctrl+X).">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE8C6;" FontFamily="Segoe MDL2 Assets" FontSize="10"
-                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <local:RibbonIcon Kind="Cut" IconSize="10"
+                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
                                             <TextBlock Text="Cut" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
@@ -561,8 +627,8 @@
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Copy the selection and put it on the Clipboard (Ctrl+C).">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="10"
-                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <local:RibbonIcon Kind="Copy" IconSize="10"
+                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
                                             <TextBlock Text="Copy" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
@@ -572,8 +638,8 @@
                                             local:RibbonTooltip.KeyTip="FP"
                                             local:RibbonTooltip.Description="Copy formatting from one place and apply it to another.">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xF0E3;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <local:RibbonIcon Kind="FormatPainter" IconSize="11"
+                                                              VerticalAlignment="Center" Margin="0,0,3,0"/>
                                             <TextBlock Text="Format Painter" Tag="RibbonLabel" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
@@ -613,7 +679,8 @@
                                             local:RibbonTooltip.Description="Make the font larger.">
                                         <Grid Width="18" Height="16">
                                             <TextBlock Text="A" FontSize="13" FontWeight="SemiBold" Margin="0,0,5,0"
-                                                       Style="{StaticResource RibbonIconGlyph}"/>
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       TextAlignment="Center"/>
                                             <TextBlock Text="A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                                             <Path Data="M 0 5 L 4 0 L 8 5" Stroke="#111" StrokeThickness="1.2"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top" Width="8" Height="6"/>
@@ -626,7 +693,8 @@
                                             local:RibbonTooltip.Description="Make the font smaller.">
                                         <Grid Width="18" Height="16">
                                             <TextBlock Text="A" FontSize="13" FontWeight="SemiBold" Margin="0,0,5,0"
-                                                       Style="{StaticResource RibbonIconGlyph}"/>
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       TextAlignment="Center"/>
                                             <TextBlock Text="A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Top"/>
                                             <Path Data="M 0 0 L 4 5 L 8 0" Stroke="#111" StrokeThickness="1.2"
                                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="8" Height="6"/>
@@ -729,8 +797,8 @@
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="Color the background of the selected cells.">
                                         <StackPanel>
-                                            <TextBlock Text="&#xE771;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                                            <local:RibbonIcon Kind="Fill" IconSize="11"
+                                                              HorizontalAlignment="Center" Margin="0,1,0,0"/>
                                             <Rectangle x:Name="FillColorBar" Height="3" Width="14" Fill="#FFFF00" Margin="0,1,0,0"/>
                                         </StackPanel>
                                     </Button>
@@ -816,8 +884,8 @@
                                                   local:RibbonTooltip.KeyTip="W"
                                                   local:RibbonTooltip.Description="Make all content visible within a cell by displaying it on multiple lines.">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE292;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <local:RibbonIcon Kind="Wrap" IconSize="11"
+                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
                                             <TextBlock Text="Wrap" FontSize="9" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </ToggleButton>
@@ -830,8 +898,8 @@
                                                   local:RibbonTooltip.Title="Align Left"
                                                   local:RibbonTooltip.KeyTip="AL"
                                                   local:RibbonTooltip.Description="Align the contents to the left edge of the cell (Ctrl+L).">
-                                        <TextBlock Text="&#xE8E4;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Align" IconSize="13"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="AlignCenterBtn"
                                                   Style="{StaticResource RibbonIconToggleButton}"
@@ -839,8 +907,8 @@
                                                   local:RibbonTooltip.Title="Center"
                                                   local:RibbonTooltip.KeyTip="AC"
                                                   local:RibbonTooltip.Description="Center the contents of the selected cells (Ctrl+E).">
-                                        <TextBlock Text="&#xE8E3;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Align" IconSize="13"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <ToggleButton x:Name="AlignRightBtn"
                                                   Style="{StaticResource RibbonIconToggleButton}"
@@ -848,8 +916,8 @@
                                                   local:RibbonTooltip.Title="Align Right"
                                                   local:RibbonTooltip.KeyTip="AR"
                                                   local:RibbonTooltip.Description="Align the contents to the right edge of the cell (Ctrl+R).">
-                                        <TextBlock Text="&#xE8E2;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <local:RibbonIcon Kind="Align" IconSize="13"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </ToggleButton>
                                     <Rectangle Width="1" Fill="#CCCCCC" Margin="3,3"/>
                                     <Button Style="{StaticResource RibbonIconButton}"
@@ -1007,8 +1075,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="20"
-                                                   HorizontalAlignment="Center" Margin="0,5,0,3"/>
+                                        <local:RibbonIcon Kind="Theme" IconSize="20"
+                                                          HorizontalAlignment="Center" Margin="0,5,0,3"/>
                                         <TextBlock Text="Conditional" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                         <TextBlock Text="Formatting" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
@@ -1027,8 +1095,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE8A9;" FontFamily="Segoe MDL2 Assets" FontSize="20"
-                                                   HorizontalAlignment="Center" Margin="0,5,0,3"/>
+                                        <local:RibbonIcon Kind="Table" IconSize="20"
+                                                          HorizontalAlignment="Center" Margin="0,5,0,3"/>
                                         <TextBlock Text="Format as" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                         <TextBlock Text="Table" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
@@ -1069,8 +1137,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE91C;" FontFamily="Segoe MDL2 Assets" FontSize="20"
-                                                   HorizontalAlignment="Center" Margin="0,5,0,3"/>
+                                        <local:RibbonIcon Kind="Color" IconSize="20"
+                                                          HorizontalAlignment="Center" Margin="0,5,0,3"/>
                                         <TextBlock Text="Cell" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                         <TextBlock Text="Styles" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
@@ -1104,8 +1172,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <local:RibbonIcon Kind="Insert" IconSize="11"
+                                                          VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock Text="Insert" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -1123,8 +1191,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE738;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <local:RibbonIcon Kind="Delete" IconSize="11"
+                                                          VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock Text="Delete" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -1151,8 +1219,8 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                        <local:RibbonIcon Kind="FormatPainter" IconSize="11"
+                                                          VerticalAlignment="Center" Margin="0,0,3,0"/>
                                         <TextBlock Text="Format" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -1194,7 +1262,7 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <TextBlock Text="&#x03A3;" FontSize="22" HorizontalAlignment="Center" Margin="0,4,0,1"/>
+                                        <local:RibbonIcon Kind="Sum" IconSize="22" HorizontalAlignment="Center" Margin="0,4,0,1"/>
                                         <TextBlock Text="AutoSum" Tag="RibbonLabel" FontSize="10" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -1226,8 +1294,8 @@
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE740;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <local:RibbonIcon Kind="Fill" IconSize="13"
+                                                              VerticalAlignment="Center" Margin="0,0,3,0"/>
                                             <TextBlock Text="Fill" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -1247,8 +1315,8 @@
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <local:RibbonIcon Kind="Delete" IconSize="13"
+                                                              VerticalAlignment="Center" Margin="0,0,3,0"/>
                                             <TextBlock Text="Clear" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -1270,8 +1338,8 @@
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <local:RibbonIcon Kind="Filter" IconSize="13"
+                                                              VerticalAlignment="Center" Margin="0,0,3,0"/>
                                             <TextBlock Text="Sort &amp; Filter" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -1291,8 +1359,8 @@
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                                       VerticalAlignment="Center" Margin="0,0,3,0"/>
+                                            <local:RibbonIcon Kind="Search" IconSize="13"
+                                                              VerticalAlignment="Center" Margin="0,0,3,0"/>
                                             <TextBlock Text="Find &amp; Select" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
@@ -2292,14 +2360,24 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="&#x2191; A&#x2192;Z" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
+                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
                                             local:RibbonTooltip.Title="Sort Ascending"
                                             local:RibbonTooltip.KeyTip="SA"
-                                            local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z)."/>
-                                    <Button Content="&#x2193; Z&#x2192;A" Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
+                                            local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z).">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <local:RibbonIcon Kind="SortAscending" IconSize="12" Margin="0,0,3,0"/>
+                                            <TextBlock Text="A-Z" FontSize="10" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
                                             local:RibbonTooltip.Title="Sort Descending"
                                             local:RibbonTooltip.KeyTip="SD"
-                                            local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A)."/>
+                                            local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A).">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <local:RibbonIcon Kind="SortDescending" IconSize="12" Margin="0,0,3,0"/>
+                                            <TextBlock Text="Z-A" FontSize="10" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
@@ -2307,8 +2385,8 @@
                                             local:RibbonTooltip.KeyTip="T"
                                             local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want.">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <local:RibbonIcon Kind="Filter" IconSize="11"
+                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
                                             <TextBlock Text="Filter" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
@@ -2317,8 +2395,8 @@
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <TextBlock Text="&#xE71C;" FontFamily="Segoe MDL2 Assets" FontSize="11"
-                                                       VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                            <local:RibbonIcon Kind="Filter" IconSize="11"
+                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
                                             <TextBlock Text="Clear Filter" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
@@ -3476,14 +3554,16 @@
             <DockPanel Grid.Column="0" Background="#1C3E2E" LastChildFill="True">
 
                 <!-- Back arrow -->
-                <Button x:Name="SsBackBtn" DockPanel.Dock="Top"
-                        Content="&#x2190;" HorizontalAlignment="Left"
-                        Style="{StaticResource SsNavBtn}"
-                        Padding="18,11" FontSize="18"
-                        Click="SsBackBtn_Click"
-                        ToolTip="Back to workbook"
-                        local:RibbonTooltip.Title="Back"
-                        local:RibbonTooltip.KeyTip="B"/>
+	                <Button x:Name="SsBackBtn" DockPanel.Dock="Top"
+	                        HorizontalAlignment="Left"
+	                        Style="{StaticResource SsNavBtn}"
+	                        Padding="18,11" FontSize="18"
+	                        Click="SsBackBtn_Click"
+	                        ToolTip="Back to workbook"
+	                        local:RibbonTooltip.Title="Back"
+	                        local:RibbonTooltip.KeyTip="B">
+                    <local:RibbonIcon Kind="Previous" IconSize="18" Foreground="{StaticResource FreexcelWhiteBrush}"/>
+                </Button>
 
                 <!-- Home (active/selected when showing home view) -->
                 <Button x:Name="SsHomeNavBtn" DockPanel.Dock="Top"
@@ -3784,8 +3864,7 @@
                                                     local:RibbonTooltip.Description="Pin or unpin this workbook in the recent files list."
                                                     AutomationProperties.Name="Pin file"
                                                     ToolTip="Pin to list">
-                                                <TextBlock Text="&#xE718;" FontFamily="Segoe MDL2 Assets"
-                                                           FontSize="12" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -3860,8 +3939,7 @@
                                                     local:RibbonTooltip.Description="Remove this workbook from the pinned files list."
                                                     AutomationProperties.Name="Unpin file"
                                                     ToolTip="Unpin from list">
-                                                <TextBlock Text="&#xE77A;" FontFamily="Segoe MDL2 Assets"
-                                                           FontSize="12" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
