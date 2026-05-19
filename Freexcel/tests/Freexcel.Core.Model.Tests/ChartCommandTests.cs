@@ -442,6 +442,35 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void AddChartSheetCommand_CreatesDefaultChartSheetAndUndoRemovesIt()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Sheet1");
+        wb.AddSheet("Chart1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+
+        var command = new AddChartSheetCommand(source.Id, range, ChartType.Column, "Chart");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        command.CreatedSheetId.Should().NotBeNull();
+        source.Charts.Should().BeEmpty();
+        var chartSheet = wb.Sheets.Single(sheet => sheet.Name == "Chart2");
+        chartSheet.Id.Should().Be(command.CreatedSheetId!.Value);
+        chartSheet.Charts.Should().ContainSingle();
+        chartSheet.Charts[0].Type.Should().Be(ChartType.Column);
+        chartSheet.Charts[0].DataRange.Should().Be(range);
+
+        command.Revert(ctx);
+
+        wb.Sheets.Should().NotContain(sheet => sheet.Name == "Chart2");
+        source.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ChangeChartTypeCommand_UpdatesNormalChartAndUndoRestores()
     {
         var wb = new Workbook("test");
