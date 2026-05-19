@@ -8991,6 +8991,53 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RemovesModeledCellWatches()
+    {
+        var workbook = new Workbook("CellWatchesRemoveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "2+2");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCellWatches(
+            source,
+            "xl/worksheets/sheet1.xml",
+            ("A1", null, null),
+            ("B2", null, null),
+            ("NotARef", "unsupportedAttr", "kept"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loaded.WatchedCells.Remove(new CellAddress(loadedSheet.Id, 1, 1)).Should().BeTrue();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var entries = worksheetXml.Root!
+            .Element(worksheetNs + "cellWatches")!
+            .Elements(worksheetNs + "cellWatch")
+            .ToList();
+
+        var references = entries.Select(entry => entry.Attribute("r")?.Value).ToList();
+        references.Should().BeEquivalentTo(["B2", "NotARef"]);
+        references.Should().NotContain("A1");
+        entries.Single(entry => entry.Attribute("r")?.Value == "NotARef")
+            .Attribute("unsupportedAttr")!
+            .Value
+            .Should()
+            .Be("kept");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_FreshWorkbook_InsertsCellWatchesBeforeExtensionList()
     {
         var workbook = new Workbook("CellWatchesWithSparklineTest");
@@ -9020,6 +9067,33 @@ public class FileAdapterSmokeTests
         cellWatchesIndex.Should().BeGreaterThanOrEqualTo(0);
         extensionListIndex.Should().BeGreaterThanOrEqualTo(0);
         cellWatchesIndex.Should().BeLessThan(extensionListIndex);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_FreshWorkbook_InsertsCellWatchesBeforeIgnoredErrors()
+    {
+        var workbook = new Workbook("CellWatchesWithIgnoredErrorsTest");
+        var sheet = workbook.AddSheet("Data");
+        var ignoredAddress = new CellAddress(sheet.Id, 1, 1);
+        var watchedAddress = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(ignoredAddress, new TextValue("00123"));
+        sheet.GetCell(ignoredAddress)!.IgnoreFormulaError = true;
+        workbook.WatchedCells.Add(watchedAddress);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = worksheetXml.Root!.Elements().ToList();
+        var cellWatchesIndex = orderedChildren.FindIndex(element => element.Name == worksheetNs + "cellWatches");
+        var ignoredErrorsIndex = orderedChildren.FindIndex(element => element.Name == worksheetNs + "ignoredErrors");
+
+        cellWatchesIndex.Should().BeGreaterThanOrEqualTo(0);
+        ignoredErrorsIndex.Should().BeGreaterThanOrEqualTo(0);
+        cellWatchesIndex.Should().BeLessThan(ignoredErrorsIndex);
     }
 
     [Fact]
