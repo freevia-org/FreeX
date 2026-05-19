@@ -4323,6 +4323,7 @@ public partial class MainWindow : Window
         InfoFormat.Text = plan.Format;
         InfoStatisticsSummary.Text = plan.StatisticsSummary;
         InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
+        InfoFormulaErrorSummary.Text = plan.FormulaErrorSummary;
     }
 
     private void UpdateSsGreeting()
@@ -7478,7 +7479,8 @@ public partial class MainWindow : Window
     private void ShowCfDialog(string ruleType)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dlg = new ConditionalFormatDialog(ruleType, range) { Owner = this };
+        var dlg = ConditionalFormatDialogFactory.Create(ruleType, range);
+        dlg.Owner = this;
         if (dlg.ShowDialog() != true || dlg.ResultRule is null) return;
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",

@@ -54,6 +54,26 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageInfo_ShowsFormulaErrorSummary()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document
+            .Descendants(presentation + "TextBlock")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Should()
+            .Contain("Formula errors");
+
+        var hasFormulaSummary = document
+            .Descendants(presentation + "TextBlock")
+            .Any(element => element.Attribute(xaml + "Name")?.Value == "InfoFormulaErrorSummary");
+
+        hasFormulaSummary.Should().BeTrue();
+    }
+
+    [Fact]
     public void BackstageRecentList_ProvidesVisiblePinAndUnpinButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
