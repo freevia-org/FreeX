@@ -77,6 +77,19 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private static readonly (string Label, string Code)[] NumberFormatOptions =
+    [
+        ("General", "General"),
+        ("Number (0.00)", "0.00"),
+        ("Currency ($#,##0.00)", "$#,##0.00"),
+        ("Accounting ($#,##0.00)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)"),
+        ("Percentage (0%)", "0%"),
+        ("Fraction (# ?/?)", "# ?/?"),
+        ("Scientific (0.00E+00)", "0.00E+00"),
+        ("Date (yyyy-MM-dd)", "yyyy-MM-dd"),
+        ("Time (HH:mm:ss)", "HH:mm:ss"),
+        ("Text (@)", "@")
+    ];
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private WatchWindowDialog? _watchWindowDialog;
@@ -177,8 +190,7 @@ public partial class MainWindow : Window
         FontSizeBox.ItemsSource = sizes;
         FontSizeBox.SelectedItem = "11";
 
-        var formats = new[] { "General", "Number (0.00)", "Currency ($#,##0.00)", "Percentage (0%)", "Date (yyyy-MM-dd)", "Time (HH:mm:ss)", "Text (@)" };
-        NumberFormatBox.ItemsSource = formats;
+        NumberFormatBox.ItemsSource = NumberFormatOptions.Select(option => option.Label).ToArray();
         NumberFormatBox.SelectedIndex = 0;
 
         ApplyOptionsToView();
@@ -5691,9 +5703,8 @@ public partial class MainWindow : Window
     {
         if (_suppressToolbarSync) return;
         if (NumberFormatBox.SelectedIndex < 0) return;
-        var codes = new[] { "General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@" };
-        if (NumberFormatBox.SelectedIndex < codes.Length)
-            ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
+        if (NumberFormatBox.SelectedIndex < NumberFormatOptions.Length)
+            ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatOptions[NumberFormatBox.SelectedIndex].Code));
     }
 
     private void ExecuteUndo()
