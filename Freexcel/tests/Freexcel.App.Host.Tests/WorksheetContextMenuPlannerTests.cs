@@ -1,0 +1,25 @@
+using FluentAssertions;
+
+namespace Freexcel.App.Host.Tests;
+
+public sealed class WorksheetContextMenuPlannerTests
+{
+    [Fact]
+    public void BuildCommands_IncludesCommonExcelWorksheetContextActions()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands();
+
+        commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
+            "Insert Row Above",
+            "Delete Row(s)",
+            "Sort A to Z",
+            "Filter...",
+            "New Note",
+            "Hyperlink...",
+            "Format Cells...",
+            "Clear Contents");
+    }
+}
