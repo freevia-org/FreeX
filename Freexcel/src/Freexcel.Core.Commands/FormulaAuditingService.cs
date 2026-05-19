@@ -62,10 +62,10 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
     {
         var cell = ctx.GetSheet(_sheetId).GetCell(_address);
         if (cell is null)
-            return new CommandOutcome(false, "No cell exists at the selected error.");
+            return new CommandOutcome(false, "No cell exists at the selected issue.");
 
-        if (_ignored && cell.Value is not ErrorValue)
-            return new CommandOutcome(false, "The selected cell does not currently contain an error.");
+        if (_ignored && !FormulaAuditingService.HasIgnorableFormulaIssue(cell))
+            return new CommandOutcome(false, "The selected cell does not currently contain an issue.");
 
         _previousIgnored = cell.IgnoreFormulaError;
         cell.IgnoreFormulaError = _ignored;
@@ -258,6 +258,10 @@ public static class FormulaAuditingService
             .ToList();
     }
 
+    internal static bool HasIgnorableFormulaIssue(Cell cell) =>
+        cell.Value is ErrorValue ||
+        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value));
+
     private static IEnumerable<FormulaErrorIssue> FindNumbersStoredAsTextIssues(Workbook workbook, SheetId? sheetId)
     {
         foreach (var sheet in workbook.Sheets)
@@ -267,7 +271,7 @@ public static class FormulaAuditingService
 
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                if (cell.HasFormula || cell.IgnoreFormulaError || cell.Value is not TextValue text || !IsNumberStoredAsText(text.Value))
+                if (cell.IgnoreFormulaError || !HasIgnorableFormulaIssue(cell) || cell.Value is not TextValue)
                     continue;
 
                 yield return new FormulaErrorIssue(
