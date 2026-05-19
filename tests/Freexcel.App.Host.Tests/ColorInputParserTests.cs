@@ -27,6 +27,29 @@ public sealed class ColorInputParserTests
     }
 
     [Theory]
+    [InlineData("#217346", 0x21, 0x73, 0x46)]
+    [InlineData("217346", 0x21, 0x73, 0x46)]
+    [InlineData("33, 115, 70", 33, 115, 70)]
+    [InlineData("33,115,70", 33, 115, 70)]
+    public void TryParseColorText_AcceptsHexOrRgbTriples(string input, byte r, byte g, byte b)
+    {
+        ColorInputParser.TryParseColorText(input, out var color).Should().BeTrue();
+        color.Should().Be(new CellColor(r, g, b));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("#12345")]
+    [InlineData("1,2")]
+    [InlineData("1,2,300")]
+    [InlineData("red")]
+    public void TryParseColorText_RejectsInvalidColorText(string input)
+    {
+        ColorInputParser.TryParseColorText(input, out var color).Should().BeFalse();
+        color.Should().Be(default(CellColor));
+    }
+
+    [Theory]
     [InlineData("none")]
     [InlineData("clear")]
     [InlineData(" NONE ")]

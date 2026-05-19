@@ -18,6 +18,30 @@ public static class ColorInputParser
         return TryParseHexColor(normalized, out color);
     }
 
+    public static bool TryParseColorText(string text, out CellColor color)
+    {
+        color = default;
+        if (TryParseHexColor(text, out var hexColor) && hexColor is { } parsedHex)
+        {
+            color = parsedHex;
+            return true;
+        }
+
+        var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length != 3)
+            return false;
+
+        if (!byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ||
+            !byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var g) ||
+            !byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b))
+        {
+            return false;
+        }
+
+        color = new CellColor(r, g, b);
+        return true;
+    }
+
     public static bool TryParseHexColor(string text, out CellColor? color)
     {
         color = null;
