@@ -9223,6 +9223,9 @@ public class FileAdapterSmokeTests
             ExternalData = new ChartExternalDataModel
             {
                 RelationshipId = "rIdExternalData1",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "linked-pivot-source.xlsx",
+                TargetMode = "External",
                 AutoUpdate = true
             },
             PrintSettings = new ChartPrintSettingsModel
@@ -9281,6 +9284,16 @@ public class FileAdapterSmokeTests
             var externalData = chartXml.Root.Element(chartNs + "externalData")!;
             externalData.Attribute(relNs + "id")!.Value.Should().Be("rIdExternalData1");
             externalData.Element(chartNs + "autoUpdate")!.Attribute("val")!.Value.Should().Be("1");
+            var chartRelsXml = LoadPackageXml(archive.GetEntry("xl/charts/_rels/chart1.xml.rels")!);
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var externalRelationship = chartRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Where(relationship => relationship.Attribute("Id")?.Value == "rIdExternalData1")
+                .Should().ContainSingle()
+                .Which;
+            externalRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/package");
+            externalRelationship.Attribute("Target")!.Value.Should().Be("linked-pivot-source.xlsx");
+            externalRelationship.Attribute("TargetMode")!.Value.Should().Be("External");
             var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
             var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
             pageMargins.Attribute("l")!.Value.Should().Be("0.7");

@@ -2040,6 +2040,7 @@
                                             <MenuItem Header="Office" local:RibbonTooltip.KeyTip="O" Click="ThemeEffectsOfficeMenuItem_Click"/>
                                             <MenuItem Header="Subtle" local:RibbonTooltip.KeyTip="S" Click="ThemeEffectsSubtleMenuItem_Click"/>
                                             <MenuItem Header="Refined" local:RibbonTooltip.KeyTip="R" Click="ThemeEffectsRefinedMenuItem_Click"/>
+                                            <MenuItem Header="Customize Effects..." local:RibbonTooltip.KeyTip="U" Click="ThemeEffectsCustomizeMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
