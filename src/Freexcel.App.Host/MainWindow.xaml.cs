@@ -5455,7 +5455,7 @@ public partial class MainWindow : Window
     {
         if (_suppressToolbarSync) return;
         var text = FontSizeBox.Text;
-        if (double.TryParse(text, out var size) && size > 0)
+        if (WorksheetSizeInputParser.TryParsePositiveSize(text, out var size))
             ApplyStyleDiff(new StyleDiff(FontSize: size));
     }
 
