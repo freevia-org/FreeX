@@ -369,7 +369,11 @@ public sealed class FormulaEvaluator
             }
             else
             {
-                expandedArgs.Add(EvaluateNode(arg, context));
+                var value = EvaluateNode(arg, context);
+                if (!isStructured && IsAggregateFunction(node.FunctionName) && value is RangeValue rangeValue)
+                    AddRangeValues(expandedArgs, rangeValue.Flatten(), node.FunctionName);
+                else
+                    expandedArgs.Add(value);
             }
         }
 
