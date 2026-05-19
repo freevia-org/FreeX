@@ -29,6 +29,7 @@ public static class FlashFillService
         Func<string, string?>? patternFn =
             TryConstant(examples)
             ?? TryCaseTransform(examples)
+            ?? TryInitials(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
             ?? TrySuffixTrim(examples)
@@ -47,6 +48,46 @@ public static class FlashFillService
             results.Add(filled);
         }
         return results;
+    }
+
+    public static IReadOnlyList<string>? FillFromColumns(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs,
+        IReadOnlyList<IReadOnlyList<string>> remainingSources)
+    {
+        if (exampleSources.Count == 0 || exampleSources.Count != exampleOutputs.Count)
+            return null;
+
+        if (exampleSources.Any(s => s.Count < 2) || remainingSources.Any(s => s.Count < 2))
+            return null;
+
+        Func<IReadOnlyList<string>, string>[] patterns =
+        [
+            s => s[0] + " " + s[1],
+            s => s[1] + ", " + s[0],
+            s => s[0] + "." + s[1],
+            s => GetFirstInitial(s[0]) + GetFirstInitial(s[1])
+        ];
+
+        foreach (var pattern in patterns)
+        {
+            var allExamplesMatch = true;
+            for (var i = 0; i < exampleSources.Count; i++)
+            {
+                if (pattern(exampleSources[i]) != exampleOutputs[i])
+                {
+                    allExamplesMatch = false;
+                    break;
+                }
+            }
+
+            if (!allExamplesMatch)
+                continue;
+
+            return remainingSources.Select(pattern).ToList();
+        }
+
+        return null;
     }
 
     // ── Pattern detectors ─────────────────────────────────────────────────────
@@ -147,6 +188,14 @@ public static class FlashFillService
         }
 
         return null;
+    }
+
+    private static Func<string, string?>? TryInitials(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryGetDelimitedInitials(e.Source, out var initials) && initials == e.Expected))
+            return null;
+
+        return s => TryGetDelimitedInitials(s, out var initials) ? initials : null;
     }
 
     private static Func<string, string?>? TryPrefixTrim(IReadOnlyList<(string Source, string Expected)> examples)
@@ -286,4 +335,23 @@ public static class FlashFillService
         var textInfo = CultureInfo.InvariantCulture.TextInfo;
         return textInfo.ToTitleCase(s.ToLowerInvariant());
     }
+
+    private static bool TryGetDelimitedInitials(string source, out string initials)
+    {
+        foreach (var delimiter in Delimiters)
+        {
+            var parts = source.Split(delimiter, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+                continue;
+
+            initials = string.Concat(parts.Select(GetFirstInitial));
+            return true;
+        }
+
+        initials = string.Empty;
+        return false;
+    }
+
+    private static string GetFirstInitial(string value) =>
+        string.IsNullOrEmpty(value) ? string.Empty : value[0].ToString();
 }
