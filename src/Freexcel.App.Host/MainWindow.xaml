@@ -3459,9 +3459,13 @@
                             local:RibbonTooltip.Title="Local Account"
                             local:RibbonTooltip.KeyTip="AC"
                             local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options."/>
-                    <Button Content="Options" HorizontalAlignment="Stretch"
+                    <Button x:Name="SsOptionsNavBtn"
+                            Content="Options" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsOptionsBtn_Click"
+                            IsTabStop="True"
+                            AutomationProperties.Name="Options"
+                            AutomationProperties.HelpText="Open Freexcel settings and formula error checking options."
                             local:RibbonTooltip.Title="Options"
                             local:RibbonTooltip.KeyTip="T"/>
                 </StackPanel>
