@@ -21,6 +21,18 @@ public sealed class ObjectDialogTests
         size.Should().Be(new ObjectSizeDialogResult(320, 180));
     }
 
+    [Theory]
+    [InlineData("NaNx180")]
+    [InlineData("320xInfinity")]
+    [InlineData("-1x180")]
+    [InlineData("320x0")]
+    public void ObjectSizeDialog_TryParseSize_RejectsNonFiniteAndNonPositiveSizes(string input)
+    {
+        ObjectSizeDialog.TryParseSize(input, out var size).Should().BeFalse();
+
+        size.Should().Be(new ObjectSizeDialogResult(0, 0));
+    }
+
     [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
@@ -29,12 +41,22 @@ public sealed class ObjectDialogTests
         rotation.Should().Be(new RotationDialogResult(45.5));
     }
 
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    public void RotationDialog_TryParseRotation_RejectsNonFiniteDegrees(string input)
+    {
+        RotationDialog.TryParseRotation(input, out var rotation).Should().BeFalse();
+
+        rotation.Should().Be(new RotationDialogResult(0));
+    }
+
     [Fact]
     public void PictureCropDialog_TryCreateResult_RejectsCropThatRemovesVisibleArea()
     {
         PictureCropDialog.TryCreateResult("60, 0, 50, 0", out _, out var error).Should().BeFalse();
 
-        error.Should().Contain("visible");
+        error.Should().Contain("percentages");
     }
 
     [Fact]
