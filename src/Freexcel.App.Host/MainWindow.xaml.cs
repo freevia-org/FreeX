@@ -2212,6 +2212,12 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.Count:
                 AutoSumCountMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.Max:
+                AutoSumMaxMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.Min:
+                AutoSumMinMenuItem_Click(sender, e);
+                break;
             case QuickAnalysisCommand.FormatAsTable:
                 TableBtn_Click(sender, e);
                 break;
