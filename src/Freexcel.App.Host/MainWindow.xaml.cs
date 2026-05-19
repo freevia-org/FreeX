@@ -1790,12 +1790,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                PrintButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if ((e.Key == Key.D1 || e.Key == Key.NumPad1) && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 OpenFormatCellsDialog();
@@ -2188,6 +2182,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.QuickAnalysis:
                 ShowQuickAnalysisMenu();
+                break;
+            case KeyboardCommandShortcut.OpenPrintBackstage:
+                OpenPrintBackstage();
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
@@ -4156,6 +4153,13 @@ public partial class MainWindow : Window
     {
         StartScreenOverlay.Visibility = Visibility.Collapsed;
         SheetGrid.Focus();
+    }
+
+    private void OpenPrintBackstage()
+    {
+        ShowStartScreen();
+        SsPrintNavBtn.Focus();
+        Keyboard.Focus(SsPrintNavBtn);
     }
 
     private void ShowHomeView()
