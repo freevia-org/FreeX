@@ -9192,6 +9192,44 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredPivotChartStyleMetadata()
+    {
+        var workbook = new Workbook("AuthoredPivotChartStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ChartStyleId = 42
+        };
+        sheet.Charts.Add(chart);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
+            chartXml.Root.Element(chartNs + "pivotSource").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        loaded.GetSheetAt(0).Charts.Should().ContainSingle().Which.ChartStyleId.Should().Be(42);
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesAuthoredPivotTablePackageParts()
     {
         var workbook = new Workbook("AuthoredPivotXlsxTest");
