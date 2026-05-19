@@ -2648,11 +2648,11 @@
                                         local:RibbonTooltip.KeyTip="A"
                                         local:RibbonTooltip.Description="Store the workbook-window arrangement to use when multi-window hosting is available.">
                                     <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Tiled"      Tag="Tiled"      local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Horizontal" Tag="Horizontal" local:RibbonTooltip.KeyTip="H" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Vertical"   Tag="Vertical"   local:RibbonTooltip.KeyTip="V" Click="ArrangeAllMenuItem_Click"/>
-                                            <MenuItem Header="Cascade"    Tag="Cascade"    local:RibbonTooltip.KeyTip="C" Click="ArrangeAllMenuItem_Click"/>
+                                        <ContextMenu Opened="ArrangeAllContextMenu_Opened">
+                                            <MenuItem Header="Tiled"      Tag="Tiled"      IsCheckable="True" local:RibbonTooltip.KeyTip="T" Click="ArrangeAllMenuItem_Click"/>
+                                            <MenuItem Header="Horizontal" Tag="Horizontal" IsCheckable="True" local:RibbonTooltip.KeyTip="H" Click="ArrangeAllMenuItem_Click"/>
+                                            <MenuItem Header="Vertical"   Tag="Vertical"   IsCheckable="True" local:RibbonTooltip.KeyTip="V" Click="ArrangeAllMenuItem_Click"/>
+                                            <MenuItem Header="Cascade"    Tag="Cascade"    IsCheckable="True" local:RibbonTooltip.KeyTip="C" Click="ArrangeAllMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
