@@ -38,6 +38,8 @@ public static class CellStyleDiffPlanner
             Underline: false,
             DoubleUnderline: false,
             Strikethrough: false,
+            Superscript: false,
+            Subscript: false,
             FontName: "Calibri",
             FontSize: 11,
             FontColor: CellColor.Black,
@@ -46,11 +48,14 @@ public static class CellStyleDiffPlanner
             HAlign: CellHAlign.General,
             VAlign: CellVAlign.Bottom,
             WrapText: false,
+            ShrinkToFit: false,
             IndentLevel: 0,
+            TextRotation: 0,
             BorderTop: new CellBorder(BorderStyle.None),
             BorderBottom: new CellBorder(BorderStyle.None),
             BorderLeft: new CellBorder(BorderStyle.None),
-            BorderRight: new CellBorder(BorderStyle.None));
+            BorderRight: new CellBorder(BorderStyle.None),
+            Locked: true);
 
     public static StyleDiff UnderlineDiff(bool enabled) =>
         new(Underline: enabled, Strikethrough: enabled ? false : null);
@@ -99,6 +104,8 @@ public static class CellStyleDiffPlanner
                 FillColor: new CellColor(221, 235, 247),
                 FontColor: new CellColor(5, 99, 193),
                 Underline: true,
+                DoubleUnderline: false,
+                Strikethrough: false,
                 Bold: false,
                 NumberFormat: "General",
                 BorderBottom: ThinGrayBorder()),
