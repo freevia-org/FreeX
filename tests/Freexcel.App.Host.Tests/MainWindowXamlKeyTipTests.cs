@@ -749,24 +749,35 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void ShareCommandButtons_DiscloseExcludedStatusBeforeClick()
+    public void ShareCommandButtons_ArePresentedAsWindowsShareCommands()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        var missing = document
+        var shareButtons = document
             .Descendants(presentation + "Button")
             .Where(button =>
                 button.Attribute("Click")?.Value is "ShareWorkbookBtn_Click" or "SsShareBtn_Click")
-            .Where(button =>
-                !ContainsExcludedStatus(button.Attribute("Content")?.Value) &&
-                !ContainsExcludedStatus(button.Attribute(local + "RibbonTooltip.Title")?.Value) &&
-                !ContainsExcludedStatus(button.Attribute(local + "RibbonTooltip.Description")?.Value))
-            .Select(button => button.Attribute("Content")?.Value ?? button.Attribute("x:Name")?.Value ?? "Button")
             .ToList();
 
-        missing.Should().BeEmpty("Share is an explicit cloud/collaboration exclusion and should not look like a normal parity command");
+        shareButtons.Should().NotBeEmpty();
+        shareButtons
+            .Select(button => new
+            {
+                Content = button.Attribute("Content")?.Value,
+                Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
+                Description = button.Attribute(local + "RibbonTooltip.Description")?.Value
+            })
+            .Should()
+            .OnlyContain(button =>
+                button.Content == "Share" &&
+                button.Title == "Share" &&
+                button.Description != null &&
+                button.Description.Contains("Windows Share", StringComparison.Ordinal) &&
+                !ContainsExcludedStatus(button.Content) &&
+                !ContainsExcludedStatus(button.Title) &&
+                !ContainsExcludedStatus(button.Description));
     }
 
     [Fact]
