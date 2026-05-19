@@ -2,6 +2,7 @@ using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace Freexcel.Core.IO.Tests;
 
@@ -107,6 +108,7 @@ public class XlsxCorpusRunnerTests
             var after = CapturePackageSummary(saved);
 
             after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
+            after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
         }
     }
 
@@ -159,6 +161,7 @@ public class XlsxCorpusRunnerTests
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
             roundTripped.SheetCount.Should().BeGreaterThan(0, row.Id);
+            AssertExpectedFeatureTags(row, roundTripped);
         }
     }
 
@@ -301,6 +304,27 @@ public class XlsxCorpusRunnerTests
         return expected.Distinct().ToArray();
     }
 
+    private static void AssertExpectedFeatureTags(ManifestRow row, Workbook workbook)
+    {
+        var tags = row.FeatureTags.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var summary = CaptureSummary(workbook);
+
+        if (tags.Contains("hyperlinks"))
+            summary.Sheets.Sum(sheet => sheet.HyperlinkCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("merged-cells"))
+            summary.Sheets.Sum(sheet => sheet.MergedRegionCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("charts") && !tags.Contains("unsupported-chart-family"))
+            summary.Sheets.Sum(sheet => sheet.ChartCount).Should().BeGreaterThan(0, row.Id);
+
+        if (tags.Contains("styles") || tags.Contains("formatting"))
+            summary.Sheets.Sum(sheet => sheet.StyleOnlyCellCount).Should().BeGreaterThanOrEqualTo(0, row.Id);
+
+        if (tags.Contains("cell-types"))
+            summary.Sheets.Sum(sheet => sheet.CellCount).Should().BeGreaterThan(0, row.Id);
+    }
+
     private static WorkbookSummary CaptureSummary(Workbook workbook) =>
         new(
             workbook.SheetCount,
@@ -368,6 +392,11 @@ public class XlsxCorpusRunnerTests
                     .Select(entry => entry.FullName.Replace('\\', '/'))
                     .Where(IsFidelityCriticalPart)
                     .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                archive.Entries
+                    .Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(ReadRelationshipTargets)
+                    .Order(StringComparer.OrdinalIgnoreCase)
                     .ToArray());
         }
         finally
@@ -402,6 +431,22 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("customUI/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("_xmlsignatures/", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> ReadRelationshipTargets(ZipArchiveEntry relsEntry)
+    {
+        XDocument relsXml;
+        using (var stream = relsEntry.Open())
+            relsXml = XDocument.Load(stream);
+
+        XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        return relsXml.Root?
+            .Elements(relNs + "Relationship")
+            .Select(rel => rel.Attribute("Target")?.Value)
+            .Where(target => !string.IsNullOrWhiteSpace(target))
+            .Where(target => !target!.Contains("/package/services/metadata/core-properties/", StringComparison.OrdinalIgnoreCase))
+            .Select(target => $"{relsEntry.FullName.Replace('\\', '/')}=>{target!.Replace('\\', '/')}")
+            .ToArray() ?? [];
+    }
 
     private sealed record WorkbookSummary(
         int SheetCount,
@@ -454,5 +499,7 @@ public class XlsxCorpusRunnerTests
         int GroupHiddenColumnCount,
         int StyleOnlyCellCount);
 
-    private sealed record PackagePartSummary(IReadOnlyList<string> CriticalParts);
+    private sealed record PackagePartSummary(
+        IReadOnlyList<string> CriticalParts,
+        IReadOnlyList<string> CriticalRelationshipTargets);
 }
