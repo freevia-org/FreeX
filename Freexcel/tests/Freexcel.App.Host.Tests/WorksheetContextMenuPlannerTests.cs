@@ -27,7 +27,9 @@ public sealed class WorksheetContextMenuPlannerTests
             "Hide Columns",
             "Unhide Columns",
             "New Note",
+            "Edit Note...",
             "Delete Note",
+            "Show Notes",
             "Hyperlink...",
             "Format Cells...",
             "Clear All",
@@ -44,5 +46,9 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
         commands.Single(command => command.Header == "Clear Comments")
             .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
+        commands.Single(command => command.Header == "Edit Note...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditNote);
+        commands.Single(command => command.Header == "Show Notes")
+            .Action.Should().Be(WorksheetContextMenuAction.ShowNotes);
     }
 }

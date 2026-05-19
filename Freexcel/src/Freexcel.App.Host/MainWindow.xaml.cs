@@ -5884,8 +5884,14 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.EditNote:
+                ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.DeleteNote:
                 ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShowNotes:
+                ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
