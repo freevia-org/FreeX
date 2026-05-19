@@ -378,6 +378,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 foreach (var property in layout.CustomProperties)
                     sheet.CustomProperties.Add(property);
                 sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
+                sheet.PhoneticProperties = layout.PhoneticProperties;
             }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
@@ -561,6 +562,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         int ZoomPercent,
         bool ShowFormulas,
         bool FullCalculationOnLoad,
+        WorksheetPhoneticProperties? PhoneticProperties,
         string? PaneState,
         uint? PaneRowSplit,
         uint? PaneColumnSplit,
@@ -2470,6 +2472,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Elements(worksheetNs + "sheetView")
             .FirstOrDefault();
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
+        var phoneticPr = worksheetXml.Root?.Element(worksheetNs + "phoneticPr");
         var pane = sheetView?.Element(worksheetNs + "pane");
         var viewTopLeft = ParseOptionalCellReference(sheetView?.Attribute("topLeftCell")?.Value);
         var activeCell = ParseOptionalCellReference(
@@ -2506,6 +2509,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
             ReadBoolAttribute(sheetCalcPr, "fullCalcOnLoad"),
+            ReadWorksheetPhoneticProperties(phoneticPr),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
@@ -2555,6 +2559,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return properties;
+    }
+
+    private static WorksheetPhoneticProperties? ReadWorksheetPhoneticProperties(XElement? phoneticPr)
+    {
+        if (phoneticPr is null)
+            return null;
+
+        var fontId = phoneticPr.Attribute("fontId")?.Value;
+        var type = phoneticPr.Attribute("type")?.Value;
+        var alignment = phoneticPr.Attribute("alignment")?.Value;
+        return string.IsNullOrWhiteSpace(fontId) && string.IsNullOrWhiteSpace(type) && string.IsNullOrWhiteSpace(alignment)
+            ? null
+            : new WorksheetPhoneticProperties(
+                string.IsNullOrWhiteSpace(fontId) ? null : fontId,
+                string.IsNullOrWhiteSpace(type) ? null : type,
+                string.IsNullOrWhiteSpace(alignment) ? null : alignment);
     }
 
     private static IReadOnlyList<XlsxWorksheetCustomViewState> ReadWorksheetCustomViews(
@@ -4102,6 +4122,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             packageStream.Position = 0;
             SaveWorksheetCalculationProperties(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetPhoneticProperties(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
@@ -5754,6 +5780,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
                     continue;
                 }
+                if (sourceBlock.Name == workbookNs + "phoneticPr")
+                {
+                    if (MergeWorksheetPhoneticProperties(sourceBlock, targetRoot, workbookNs))
+                    {
+                        changed = true;
+                    }
+
+                    continue;
+                }
                 if (sourceBlock.Name == workbookNs + "customSheetViews")
                 {
                     if (MergeWorksheetCustomSheetViews(
@@ -6401,6 +6436,61 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
+    private static void SaveWorksheetPhoneticProperties(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "phoneticPr")?.Remove();
+            if (sheet.PhoneticProperties is null)
+            {
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+                continue;
+            }
+
+            var phoneticPr = new XElement(workbookNs + "phoneticPr");
+            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.FontId))
+                phoneticPr.SetAttributeValue("fontId", sheet.PhoneticProperties.FontId);
+            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Type))
+                phoneticPr.SetAttributeValue("type", sheet.PhoneticProperties.Type);
+            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Alignment))
+                phoneticPr.SetAttributeValue("alignment", sheet.PhoneticProperties.Alignment);
+
+            if (phoneticPr.HasAttributes)
+                InsertWorksheetMetadataElementInOrder(root, workbookNs, phoneticPr);
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
     private static void InsertWorkbookCustomViewsInOrder(
         XElement? workbookRoot,
         XNamespace workbookNs,
@@ -6474,6 +6564,38 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 "tableParts",
                 "extLst"
             ],
+            "protectedRanges" =>
+            [
+                "scenarios",
+                "autoFilter",
+                "sortState",
+                "dataConsolidate",
+                "customSheetViews",
+                "mergeCells",
+                "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
             "scenarios" =>
             [
                 "autoFilter",
@@ -6509,6 +6631,31 @@ public sealed class XlsxFileAdapter : IFileAdapter
             [
                 "mergeCells",
                 "phoneticPr",
+                "conditionalFormatting",
+                "dataValidations",
+                "hyperlinks",
+                "printOptions",
+                "pageMargins",
+                "pageSetup",
+                "headerFooter",
+                "rowBreaks",
+                "colBreaks",
+                "customProperties",
+                "cellWatches",
+                "ignoredErrors",
+                "smartTags",
+                "drawing",
+                "legacyDrawing",
+                "legacyDrawingHF",
+                "picture",
+                "oleObjects",
+                "controls",
+                "webPublishItems",
+                "tableParts",
+                "extLst"
+            ],
+            "phoneticPr" =>
+            [
                 "conditionalFormatting",
                 "dataValidations",
                 "hyperlinks",
@@ -6826,6 +6973,44 @@ public sealed class XlsxFileAdapter : IFileAdapter
             }
 
             targetSheetCalcPr.Add(new XElement(sourceChild));
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorksheetPhoneticProperties(
+        XElement sourcePhoneticPr,
+        XElement targetRoot,
+        XNamespace workbookNs)
+    {
+        var modeledAttributes = new[] { "fontId", "type", "alignment" };
+        var targetPhoneticPr = targetRoot.Element(workbookNs + "phoneticPr");
+        if (targetPhoneticPr is null)
+        {
+            var retained = new XElement(sourcePhoneticPr);
+            foreach (var attributeName in modeledAttributes)
+                retained.Attribute(attributeName)?.Remove();
+            if (!retained.HasAttributes && !retained.HasElements)
+                return false;
+
+            InsertWorksheetMetadataElementInOrder(targetRoot, workbookNs, retained);
+            return true;
+        }
+
+        var changed = MergeMissingAttributes(sourcePhoneticPr, targetPhoneticPr, modeledAttributes);
+        foreach (var sourceChild in sourcePhoneticPr.Elements())
+        {
+            var targetChild = targetPhoneticPr.Elements(sourceChild.Name)
+                .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
+            if (targetChild is not null)
+            {
+                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    changed = true;
+                continue;
+            }
+
+            targetPhoneticPr.Add(new XElement(sourceChild));
             changed = true;
         }
 
@@ -8283,11 +8468,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         new XAttribute("name", $"FreexcelAllowEditRange{index + 1}"),
                         new XAttribute("sqref", range.ToString()))));
 
-            var sheetProtection = root.Element(workbookNs + "sheetProtection");
-            if (sheetProtection is not null)
-                sheetProtection.AddAfterSelf(protectedRanges);
-            else
-                root.Add(protectedRanges);
+            InsertWorksheetMetadataElementInOrder(root, workbookNs, protectedRanges);
 
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }

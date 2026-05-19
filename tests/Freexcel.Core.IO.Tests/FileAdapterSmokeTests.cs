@@ -1384,6 +1384,28 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("WorksheetPhoneticProperties");
+        workbook.AddSheet("Data").PhoneticProperties = new WorksheetPhoneticProperties(
+            "1",
+            "fullwidthKatakana",
+            "center");
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        loaded.GetSheetAt(0).PhoneticProperties.Should().Be(new WorksheetPhoneticProperties(
+            "1",
+            "fullwidthKatakana",
+            "center"));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesInvalidViewPaneState()
     {
         var workbook = new Workbook("ViewPaneSanitizeTest");
@@ -10099,6 +10121,143 @@ public class FileAdapterSmokeTests
         phoneticProperties.Should().NotBeNull();
         phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
         phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+        phoneticProperties.Attribute("alignment")!.Value.Should().Be("center");
+        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadsWorksheetPhoneticPropertiesIntoSheetModel()
+    {
+        var workbook = new Workbook("PhoneticPropertiesLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).PhoneticProperties.Should().Be(new WorksheetPhoneticProperties(
+            "1",
+            "fullwidthKatakana",
+            "center"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+
+        phoneticProperties.Should().NotBeNull();
+        phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
+        phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+        phoneticProperties.Attribute("alignment")!.Value.Should().Be("center");
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesProtectedRangesBeforeWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesProtectedRangeOrderTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+        sheet.PhoneticProperties = new WorksheetPhoneticProperties("1", "fullwidthKatakana", "center");
+        sheet.AllowEditRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1)));
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var childNames = worksheetXml.Root!
+            .Elements()
+            .Select(element => element.Name.LocalName)
+            .ToList();
+
+        childNames.IndexOf("protectedRanges").Should().BeLessThan(childNames.IndexOf("phoneticPr"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotDuplicateWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Elements(worksheetNs + "phoneticPr").ToList();
+
+        phoneticProperties.Should().ContainSingle();
+        phoneticProperties[0].Attribute("fontId")!.Value.Should().Be("1");
+        phoneticProperties[0].Attribute("nativeOnly")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesRemovalTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).PhoneticProperties = null;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+
+        phoneticProperties.Should().NotBeNull();
+        phoneticProperties!.Attribute("fontId").Should().BeNull();
+        phoneticProperties.Attribute("type").Should().BeNull();
+        phoneticProperties.Attribute("alignment").Should().BeNull();
+        phoneticProperties.Attribute("nativeOnly")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -12937,7 +13096,8 @@ public class FileAdapterSmokeTests
                 worksheetNs + "phoneticPr",
                 new XAttribute("fontId", "1"),
                 new XAttribute("type", "fullwidthKatakana"),
-                new XAttribute("alignment", "center")));
+                new XAttribute("alignment", "center"),
+                new XAttribute("nativeOnly", "kept")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
