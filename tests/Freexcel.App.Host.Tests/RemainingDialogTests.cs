@@ -59,6 +59,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ForecastSheetDialog_TryCreateResult_AcceptsPositivePeriods()
+    {
+        ForecastSheetDialog.TryCreateResult("12", out var result, out var error).Should().BeTrue(error);
+
+        result.Should().Be(new ForecastSheetDialogResult(12));
+    }
+
+    [Fact]
     public void SparklineDialog_CreateResult_TrimsRangeAndLocation()
     {
         SparklineDialog.CreateResult(" A1:E1 ", " F1 ", SparklineKindChoice.Column)

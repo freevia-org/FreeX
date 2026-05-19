@@ -300,7 +300,7 @@ public sealed class ForecastSheetDialog : Window
     {
         result = new ForecastSheetDialogResult(3);
         error = null;
-        if (!uint.TryParse(input.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var periods) || periods == 0)
+        if (!ForecastSheetInputParser.TryParsePeriods(input, out var periods))
         {
             error = "Enter a positive whole number of forecast periods.";
             return false;
