@@ -4046,46 +4046,67 @@ public partial class MainWindow : Window
 
     private void SsRecentTab_Click(object sender, RoutedEventArgs e)
     {
-        if (_showingPinnedList)
-            SwitchToRecentTab();
+        ApplyBackstageTabSelection(BackstageTabSelectionPlanner.Select(
+            _showingPinnedList,
+            BackstageRecentTab.Recent));
     }
 
     private void SsPinnedTab_Click(object sender, RoutedEventArgs e)
     {
-        if (!_showingPinnedList)
-            SwitchToPinnedTab();
+        ApplyBackstageTabSelection(BackstageTabSelectionPlanner.Select(
+            _showingPinnedList,
+            BackstageRecentTab.Pinned));
     }
 
     private void SwitchToRecentTab()
     {
-        _showingPinnedList = false;
-        SsRecentScroll.Visibility  = Visibility.Visible;
-        SsPinnedScroll.Visibility  = Visibility.Collapsed;
-        SsRecentTab.BorderBrush    = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
-        SsRecentTabText.FontWeight = FontWeights.SemiBold;
-        SsRecentTabText.Foreground = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
-        SsPinnedTab.BorderBrush    = System.Windows.Media.Brushes.Transparent;
-        SsPinnedTabText.FontWeight = FontWeights.Normal;
-        SsPinnedTabText.Foreground = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0x88, 0x88, 0x88));
+        ApplyBackstageTabSelection(BackstageTabSelectionPlanner.Select(
+            _showingPinnedList,
+            BackstageRecentTab.Recent),
+            force: true);
     }
 
     private void SwitchToPinnedTab()
     {
-        _showingPinnedList = true;
-        SsRecentScroll.Visibility  = Visibility.Collapsed;
-        SsPinnedScroll.Visibility  = Visibility.Visible;
-        SsPinnedTab.BorderBrush    = new System.Windows.Media.SolidColorBrush(
+        ApplyBackstageTabSelection(BackstageTabSelectionPlanner.Select(
+            _showingPinnedList,
+            BackstageRecentTab.Pinned),
+            force: true);
+    }
+
+    private void ApplyBackstageTabSelection(BackstageTabSelectionPlan plan, bool force = false)
+    {
+        if (!plan.Changed && !force)
+            return;
+
+        _showingPinnedList = plan.ActiveTab == BackstageRecentTab.Pinned;
+        SsRecentScroll.Visibility = plan.RecentListVisible ? Visibility.Visible : Visibility.Collapsed;
+        SsPinnedScroll.Visibility = plan.PinnedListVisible ? Visibility.Visible : Visibility.Collapsed;
+
+        var activeBrush = new System.Windows.Media.SolidColorBrush(
             System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
-        SsPinnedTabText.FontWeight = FontWeights.SemiBold;
-        SsPinnedTabText.Foreground = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
-        SsRecentTab.BorderBrush    = System.Windows.Media.Brushes.Transparent;
-        SsRecentTabText.FontWeight = FontWeights.Normal;
-        SsRecentTabText.Foreground = new System.Windows.Media.SolidColorBrush(
+        var inactiveBrush = new System.Windows.Media.SolidColorBrush(
             System.Windows.Media.Color.FromRgb(0x88, 0x88, 0x88));
+
+        SsRecentTab.BorderBrush = plan.ActiveTab == BackstageRecentTab.Recent
+            ? activeBrush
+            : System.Windows.Media.Brushes.Transparent;
+        SsRecentTabText.FontWeight = plan.ActiveTab == BackstageRecentTab.Recent
+            ? FontWeights.SemiBold
+            : FontWeights.Normal;
+        SsRecentTabText.Foreground = plan.ActiveTab == BackstageRecentTab.Recent
+            ? activeBrush
+            : inactiveBrush;
+
+        SsPinnedTab.BorderBrush = plan.ActiveTab == BackstageRecentTab.Pinned
+            ? activeBrush
+            : System.Windows.Media.Brushes.Transparent;
+        SsPinnedTabText.FontWeight = plan.ActiveTab == BackstageRecentTab.Pinned
+            ? FontWeights.SemiBold
+            : FontWeights.Normal;
+        SsPinnedTabText.Foreground = plan.ActiveTab == BackstageRecentTab.Pinned
+            ? activeBrush
+            : inactiveBrush;
     }
 
     private void CreateNewWorkbook()
