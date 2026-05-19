@@ -7986,6 +7986,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     string.IsNullOrWhiteSpace(chart.Title)
                         ? null
                         : ToChartTitleXml(chart, chartNs, drawingNs),
+                    chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
                     new XElement(chartNs + "plotArea",
                         plotCharts,
                         ShouldWriteChartAxes(chart.Type)
