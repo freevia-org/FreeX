@@ -46,6 +46,8 @@ public sealed class FormulaEvaluator
                 => context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber),
             CellRefNode cell => context.GetCellValue(cell.Row, cell.ColumnNumber),
             RangeRefNode range => EvaluateRange(range, context),
+            FullColumnRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
+            FullRowRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
             NamedRangeNode named => EvaluateNamedRange(named, context),
             BinaryOpNode binary => EvaluateBinaryOp(binary, context),
             UnaryOpNode unary => EvaluateUnaryOp(unary, context),
@@ -263,7 +265,7 @@ public sealed class FormulaEvaluator
         for (var argIndex = 0; argIndex < node.Arguments.Count; argIndex++)
         {
             var arg = node.Arguments[argIndex];
-            if (arg is RangeRefNode range)
+            if (TryAsRangeRef(arg, out var range))
             {
                 if (range.SheetName is not null && !context.SheetExists(range.SheetName))
                 {
@@ -445,6 +447,32 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
         return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
+    }
+
+    private static bool TryAsRangeRef(FormulaNode node, out RangeRefNode range)
+    {
+        range = node switch
+        {
+            RangeRefNode rr => rr,
+            FullColumnRangeRefNode fcr => ToRangeRef(fcr),
+            FullRowRangeRefNode frr => ToRangeRef(frr),
+            _ => null!
+        };
+        return range is not null;
+    }
+
+    private static RangeRefNode ToRangeRef(FullColumnRangeRefNode range)
+    {
+        var start = new CellRefNode(range.StartColumnName, 1, range.IsStartAbsolute, false, range.SheetName);
+        var end = new CellRefNode(range.EndColumnName, CellAddress.MaxRow, range.IsEndAbsolute);
+        return new RangeRefNode(start, end, range.SheetName);
+    }
+
+    private static RangeRefNode ToRangeRef(FullRowRangeRefNode range)
+    {
+        var start = new CellRefNode("A", range.StartRow, false, range.IsStartAbsolute, range.SheetName);
+        var end = new CellRefNode(CellAddress.NumberToColumnName(CellAddress.MaxCol), range.EndRow, false, range.IsEndAbsolute);
+        return new RangeRefNode(start, end, range.SheetName);
     }
 
     private ScalarValue EvaluateShortCircuit(FunctionCallNode node, IEvalContext context)

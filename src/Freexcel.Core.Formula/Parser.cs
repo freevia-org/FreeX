@@ -28,6 +28,12 @@ public sealed class Parser
 
     private Token Current => _tokens[_pos];
 
+    private Token Peek(int offset = 1)
+    {
+        var index = _pos + offset;
+        return index < _tokens.Count ? _tokens[index] : _tokens[^1];
+    }
+
     private Token Advance()
     {
         var token = _tokens[_pos];
@@ -176,6 +182,9 @@ public sealed class Parser
         {
             case TokenType.Number:
             {
+                if (Peek().Type == TokenType.Colon && TryParseFullRowRange(null, out var fullRowRange))
+                    return fullRowRange;
+
                 var token = Advance();
                 return new NumberNode(double.Parse(token.Value, System.Globalization.CultureInfo.InvariantCulture));
             }
@@ -210,36 +219,7 @@ public sealed class Parser
             case TokenType.SheetQualifier:
             {
                 var sheetToken = Advance();
-                var sheetName = sheetToken.Value;
-
-                if (Current.Type != TokenType.CellRef)
-                    throw new FormulaParseException(
-                        $"Expected cell reference after '{sheetName}!' at position {Current.Position}");
-
-                var startRef = ParseCellRefWithSheet(Advance(), sheetName);
-                if (startRef is not CellRefNode rangeStartRef)
-                    return startRef;
-
-                if (Current.Type == TokenType.Colon)
-                {
-                    Advance();
-                    if (Current.Type == TokenType.SheetQualifier)
-                    {
-                        var endSheetToken = Advance();
-                        if (!string.Equals(endSheetToken.Value, sheetName, StringComparison.OrdinalIgnoreCase))
-                            throw new FormulaParseException(
-                                $"Range start and end must be on the same sheet; got '{sheetName}' and '{endSheetToken.Value}'");
-                    }
-                    if (Current.Type != TokenType.CellRef)
-                        throw new FormulaParseException(
-                            $"Expected cell reference after ':' at position {Current.Position}");
-                    var endRef = ParseCellRef(Advance());
-                    if (endRef is not CellRefNode rangeEndRef)
-                        return endRef;
-                    return new RangeRefNode(rangeStartRef, rangeEndRef, sheetName);
-                }
-
-                return startRef;
+                return ParseSheetQualifiedReference(sheetToken.Value);
             }
 
             case TokenType.CellRef:
@@ -266,6 +246,12 @@ public sealed class Parser
 
             case TokenType.NamedRange:
             {
+                if (Peek().Type == TokenType.Colon && TryParseFullColumnRange(null, out var fullColumnRange))
+                    return fullColumnRange;
+
+                if (Peek().Type == TokenType.Colon && TryParseFullRowRange(null, out var fullRowRange))
+                    return fullRowRange;
+
                 var token = Advance();
                 return new NamedRangeNode(token.Value);
             }
@@ -282,6 +268,106 @@ public sealed class Parser
                 throw new FormulaParseException(
                     $"Unexpected token '{Current.Value}' at position {Current.Position}");
         }
+    }
+
+    private FormulaNode ParseSheetQualifiedReference(string sheetName)
+    {
+        if (TryParseFullColumnRange(sheetName, out var fullColumnRange))
+            return fullColumnRange;
+
+        if (TryParseFullRowRange(sheetName, out var fullRowRange))
+            return fullRowRange;
+
+        if (Current.Type != TokenType.CellRef)
+            throw new FormulaParseException(
+                $"Expected cell reference after '{sheetName}!' at position {Current.Position}");
+
+        var startRef = ParseCellRefWithSheet(Advance(), sheetName);
+        if (startRef is not CellRefNode rangeStartRef)
+            return startRef;
+
+        if (Current.Type == TokenType.Colon)
+        {
+            Advance();
+            if (Current.Type == TokenType.SheetQualifier)
+                ExpectMatchingSheetQualifier(sheetName);
+
+            if (Current.Type != TokenType.CellRef)
+                throw new FormulaParseException(
+                    $"Expected cell reference after ':' at position {Current.Position}");
+            var endRef = ParseCellRef(Advance());
+            if (endRef is not CellRefNode rangeEndRef)
+                return endRef;
+            return new RangeRefNode(rangeStartRef, rangeEndRef, sheetName);
+        }
+
+        return startRef;
+    }
+
+    private bool TryParseFullColumnRange(string? sheetName, out FormulaNode range)
+    {
+        range = null!;
+        if (!TryParseColumnToken(Current, out var startColumn, out var isStartAbsolute))
+            return false;
+
+        if (Peek().Type != TokenType.Colon)
+            return false;
+
+        var saved = _pos;
+        Advance();
+        Advance();
+
+        if (Current.Type == TokenType.SheetQualifier)
+            ExpectMatchingSheetQualifier(sheetName);
+
+        if (!TryParseColumnToken(Current, out var endColumn, out var isEndAbsolute))
+        {
+            _pos = saved;
+            return false;
+        }
+
+        Advance();
+        range = new FullColumnRangeRefNode(startColumn, endColumn, isStartAbsolute, isEndAbsolute, sheetName);
+        return true;
+    }
+
+    private bool TryParseFullRowRange(string? sheetName, out FormulaNode range)
+    {
+        range = null!;
+        if (!TryParseRowToken(Current, out var startRow, out var isStartAbsolute))
+            return false;
+
+        if (Peek().Type != TokenType.Colon)
+            return false;
+
+        var saved = _pos;
+        Advance();
+        Advance();
+
+        if (Current.Type == TokenType.SheetQualifier)
+            ExpectMatchingSheetQualifier(sheetName);
+
+        if (!TryParseRowToken(Current, out var endRow, out var isEndAbsolute))
+        {
+            _pos = saved;
+            return false;
+        }
+
+        Advance();
+        range = new FullRowRangeRefNode(startRow, endRow, isStartAbsolute, isEndAbsolute, sheetName);
+        return true;
+    }
+
+    private void ExpectMatchingSheetQualifier(string? sheetName)
+    {
+        var endSheetToken = Advance();
+        if (sheetName is null)
+            throw new FormulaParseException(
+                $"Unexpected sheet qualifier '{endSheetToken.Value}!' at position {endSheetToken.Position}");
+
+        if (!string.Equals(endSheetToken.Value, sheetName, StringComparison.OrdinalIgnoreCase))
+            throw new FormulaParseException(
+                $"Range start and end must be on the same sheet; got '{sheetName}' and '{endSheetToken.Value}'");
     }
 
     private static FormulaNode ParseCellRef(Token token)
@@ -310,6 +396,51 @@ public sealed class Parser
             return new ErrorNode(Model.ErrorValue.Ref);
 
         return new CellRefNode(colName, row, isColAbs, isRowAbs);
+    }
+
+    private static bool TryParseColumnToken(Token token, out string columnName, out bool isAbsolute)
+    {
+        columnName = "";
+        isAbsolute = false;
+        if (token.Type != TokenType.NamedRange)
+            return false;
+
+        var value = token.Value;
+        if (value.StartsWith('$'))
+        {
+            isAbsolute = true;
+            value = value[1..];
+        }
+
+        if (value.Length == 0 || value.Length > 3 || !value.All(char.IsLetter))
+            return false;
+
+        var colNum = Model.CellAddress.ColumnNameToNumber(value);
+        if (colNum == 0 || colNum > Model.CellAddress.MaxCol)
+            return false;
+
+        columnName = value.ToUpperInvariant();
+        return true;
+    }
+
+    private static bool TryParseRowToken(Token token, out uint row, out bool isAbsolute)
+    {
+        row = 0;
+        isAbsolute = false;
+        var value = token.Value;
+
+        if (token.Type == TokenType.NamedRange && value.StartsWith('$'))
+        {
+            isAbsolute = true;
+            value = value[1..];
+        }
+        else if (token.Type != TokenType.Number)
+        {
+            return false;
+        }
+
+        return uint.TryParse(value, out row) &&
+               row is > 0 and <= Model.CellAddress.MaxRow;
     }
 
     private static FormulaNode ParseCellRefWithSheet(Token token, string sheetName)
