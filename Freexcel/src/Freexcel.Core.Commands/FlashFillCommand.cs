@@ -46,6 +46,8 @@ public sealed class FlashFillCommand : IWorkbookCommand
 
         // 1. Scan fill column for non-blank rows (examples) and blank rows (rows to fill).
         var examplePairs = new List<(string Source, string Expected)>();
+        var exampleRows = new List<uint>();
+        var exampleOutputs = new List<string>();
         var rowsToFill = new List<uint>();
         var sourcesToFill = new List<string>();
 
@@ -63,8 +65,14 @@ public sealed class FlashFillCommand : IWorkbookCommand
             {
                 // This row has a user-typed example
                 var expectedStr = ScalarToString(fillValue);
-                if (sourceStr.Length > 0 && expectedStr.Length > 0)
-                    examplePairs.Add((sourceStr, expectedStr));
+                if (expectedStr.Length > 0)
+                {
+                    exampleRows.Add(row);
+                    exampleOutputs.Add(expectedStr);
+
+                    if (sourceStr.Length > 0)
+                        examplePairs.Add((sourceStr, expectedStr));
+                }
             }
             else
             {
@@ -74,14 +82,15 @@ public sealed class FlashFillCommand : IWorkbookCommand
             }
         }
 
-        if (examplePairs.Count == 0)
+        if (exampleOutputs.Count == 0)
             return new CommandOutcome(false, "No examples found. Type at least one value in the fill column.");
 
         if (rowsToFill.Count == 0)
             return new CommandOutcome(true); // Nothing to fill — already complete
 
         // 2. Detect pattern and compute filled values
-        var filled = FlashFillService.Fill(examplePairs, sourcesToFill);
+        var filled = TryFillFromImmediateLeftColumns(sheet, exampleRows, exampleOutputs, rowsToFill)
+            ?? FlashFillService.Fill(examplePairs, sourcesToFill);
         if (filled is null)
             return new CommandOutcome(false, "Could not detect a pattern from the provided examples.");
 
@@ -123,4 +132,49 @@ public sealed class FlashFillCommand : IWorkbookCommand
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         _ => string.Empty
     };
+
+    private IReadOnlyList<string>? TryFillFromImmediateLeftColumns(
+        Sheet sheet,
+        IReadOnlyList<uint> exampleRows,
+        IReadOnlyList<string> exampleOutputs,
+        IReadOnlyList<uint> rowsToFill)
+    {
+        if (_fillColIndex < 3)
+            return null;
+
+        var leftCol0 = _fillColIndex - 2;
+        var leftCol1 = _fillColIndex - 1;
+
+        var exampleSources = new List<IReadOnlyList<string>>(exampleRows.Count);
+        foreach (var row in exampleRows)
+        {
+            var sources = GetPopulatedLeftSources(sheet, row, leftCol0, leftCol1);
+            if (sources is null)
+                return null;
+
+            exampleSources.Add(sources);
+        }
+
+        var remainingSources = new List<IReadOnlyList<string>>(rowsToFill.Count);
+        foreach (var row in rowsToFill)
+        {
+            var sources = GetPopulatedLeftSources(sheet, row, leftCol0, leftCol1);
+            if (sources is null)
+                return null;
+
+            remainingSources.Add(sources);
+        }
+
+        return FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
+    }
+
+    private static IReadOnlyList<string>? GetPopulatedLeftSources(Sheet sheet, uint row, uint leftCol0, uint leftCol1)
+    {
+        var first = ScalarToString(sheet.GetValue(row, leftCol0));
+        var second = ScalarToString(sheet.GetValue(row, leftCol1));
+
+        return first.Length > 0 && second.Length > 0
+            ? [first, second]
+            : null;
+    }
 }
