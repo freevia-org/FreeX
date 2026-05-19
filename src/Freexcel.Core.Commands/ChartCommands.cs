@@ -68,6 +68,76 @@ public sealed class AddChartCommand : IWorkbookCommand
         Enum.IsDefined(value) ? value : defaultValue;
 }
 
+public sealed class AddChartSheetCommand : IWorkbookCommand
+{
+    private readonly SheetId _sourceSheetId;
+    private readonly GridRange _dataRange;
+    private readonly ChartType _chartType;
+    private readonly string? _title;
+    private SheetId? _createdSheetId;
+
+    public string Label => "Insert Chart Sheet";
+    public SheetId? CreatedSheetId => _createdSheetId;
+
+    public AddChartSheetCommand(
+        SheetId sourceSheetId,
+        GridRange dataRange,
+        ChartType chartType,
+        string? title = null)
+    {
+        _sourceSheetId = sourceSheetId;
+        _dataRange = dataRange;
+        _chartType = Enum.IsDefined(chartType) ? chartType : ChartType.Column;
+        _title = title;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
+            return protectedOutcome;
+        if (!ChartTypeSupport.IsRenderable(_chartType))
+            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
+        if (_dataRange.Start.Sheet != _sourceSheetId || _dataRange.End.Sheet != _sourceSheetId)
+            return new CommandOutcome(false, "Chart data range must be on the source sheet.");
+
+        var candidate = new ChartModel
+        {
+            Type = _chartType,
+            DataRange = _dataRange,
+            FirstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble),
+            Title = _title
+        };
+        if (ChartTypeSupport.GetDataSeriesCount(candidate) <= 0)
+            return new CommandOutcome(false, "Chart data range must include at least one data series.");
+        if (ChartTypeSupport.GetDataPointCount(candidate) <= 0)
+            return new CommandOutcome(false, "Chart data range must include at least one data point.");
+
+        var target = ctx.Workbook.AddSheet(GetUniqueChartSheetName(ctx.Workbook));
+        target.Charts.Add(candidate);
+        _createdSheetId = target.Id;
+        return new CommandOutcome(true, AffectedCells: [_dataRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_createdSheetId is null)
+            return;
+
+        ctx.Workbook.RemoveSheet(_createdSheetId.Value);
+        _createdSheetId = null;
+    }
+
+    private static string GetUniqueChartSheetName(Workbook workbook)
+    {
+        for (var i = 1; ; i++)
+        {
+            var candidate = $"Chart{i}";
+            if (workbook.ValidateSheetName(candidate) is null)
+                return candidate;
+        }
+    }
+}
+
 public sealed class AddPivotChartCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
