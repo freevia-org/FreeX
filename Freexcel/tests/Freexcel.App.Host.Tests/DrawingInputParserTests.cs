@@ -83,6 +83,53 @@ public sealed class DrawingInputParserTests
         height.Should().Be(expectedHeight);
     }
 
+    [Theory]
+    [InlineData("10, 0, 10, 0", true, 0.1, 0, 0.1, 0)]
+    [InlineData("10; 5; 10; 5", true, 0.1, 0.05, 0.1, 0.05)]
+    [InlineData("50,0,50,0", false, 0, 0, 0, 0)]
+    [InlineData("10,0,10", false, 0, 0, 0, 0)]
+    [InlineData("abc", false, 0, 0, 0, 0)]
+    public void TryParseCropPercents_ParsesFourVisibleCropPercentages(
+        string text,
+        bool expected,
+        double expectedLeft,
+        double expectedTop,
+        double expectedRight,
+        double expectedBottom)
+    {
+        var result = DrawingInputParser.TryParseCropPercents(text, out var left, out var top, out var right, out var bottom);
+
+        result.Should().Be(expected);
+        left.Should().BeApproximately(expectedLeft, 0.000001);
+        top.Should().BeApproximately(expectedTop, 0.000001);
+        right.Should().BeApproximately(expectedRight, 0.000001);
+        bottom.Should().BeApproximately(expectedBottom, 0.000001);
+    }
+
+    [Theory]
+    [InlineData("31,119,180; 180,210,240", true, 31, 119, 180, 180, 210, 240)]
+    [InlineData("31,119,180", false, 0, 0, 0, 0, 0, 0)]
+    [InlineData("red; blue", false, 0, 0, 0, 0, 0, 0)]
+    public void TryParseGradientColors_ParsesTwoRgbColorsSeparatedBySemicolon(
+        string text,
+        bool expected,
+        byte startR,
+        byte startG,
+        byte startB,
+        byte endR,
+        byte endG,
+        byte endB)
+    {
+        var result = DrawingInputParser.TryParseGradientColors(text, out var startColor, out var endColor);
+
+        result.Should().Be(expected);
+        if (expected)
+        {
+            startColor.Should().Be(new CellColor(startR, startG, startB));
+            endColor.Should().Be(new CellColor(endR, endG, endB));
+        }
+    }
+
     [Fact]
     public void FormatPictureCellText_MapsScalarValuesToExcelDisplayText()
     {

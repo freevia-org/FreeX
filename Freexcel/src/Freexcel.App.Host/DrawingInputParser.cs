@@ -69,6 +69,48 @@ public static class DrawingInputParser
         return true;
     }
 
+    public static bool TryParseCropPercents(
+        string input,
+        out double left,
+        out double top,
+        out double right,
+        out double bottom)
+    {
+        left = 0;
+        top = 0;
+        right = 0;
+        bottom = 0;
+
+        var parts = input.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4 ||
+            !TryParseCropPercent(parts[0], out left) ||
+            !TryParseCropPercent(parts[1], out top) ||
+            !TryParseCropPercent(parts[2], out right) ||
+            !TryParseCropPercent(parts[3], out bottom) ||
+            left + right >= 1 ||
+            top + bottom >= 1)
+        {
+            left = 0;
+            top = 0;
+            right = 0;
+            bottom = 0;
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryParseGradientColors(string input, out CellColor startColor, out CellColor endColor)
+    {
+        startColor = default;
+        endColor = default;
+
+        var parts = input.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 &&
+               TryParseRgbColor(parts[0], out startColor) &&
+               TryParseRgbColor(parts[1], out endColor);
+    }
+
     public static string FormatPictureCellText(ScalarValue value) =>
         value switch
         {
