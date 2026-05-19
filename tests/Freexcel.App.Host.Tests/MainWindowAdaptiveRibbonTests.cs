@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
@@ -105,6 +106,37 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void RibbonTabs_RemainSingleRowAtNarrowWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(640);
+
+            harness.VisibleRibbonTabHeaderRows.Should().HaveCount(1, "Excel keeps the main ribbon tabs on one row while the command groups collapse");
+        });
+    }
+
+    [Fact]
+    public void DenseRibbonCommandColumns_UseShortRowButtons()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1465);
+
+                harness.DenseColumnButtonHeights.Should().OnlyContain(
+                    height => height <= 24,
+                    $"{tab} dense ribbon columns should use Excel-like short row commands instead of tall large-button footprints");
+            }
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -189,6 +221,26 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Select(GetButtonLabel)
                     .Where(label => !string.IsNullOrWhiteSpace(label)))
             .ToList();
+
+        public IReadOnlyList<int> VisibleRibbonTabHeaderRows =>
+            _window.FindName("RibbonTabs") is TabControl tabs
+                ? EnumerateSelfAndVisualDescendants(tabs)
+                    .OfType<TabItem>()
+                    .Where(item => item.Visibility == Visibility.Visible && item.ActualHeight > 0)
+                    .Select(item => (int)Math.Round(item.TransformToAncestor(tabs).Transform(new Point(0, 0)).Y))
+                    .Distinct()
+                    .OrderBy(row => row)
+                    .ToList()
+                : [];
+
+        public IReadOnlyList<double> DenseColumnButtonHeights =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<UniformGrid>()
+                .Where(grid => grid.Rows == 3 && grid.Children.OfType<Button>().Count() > 3)
+                .SelectMany(grid => grid.Children.OfType<Button>())
+                .Where(IsEffectivelyVisible)
+                .Select(button => button.Height)
+                .ToList();
 
         private TabItem? SelectedRibbonTab =>
             (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem as TabItem;
