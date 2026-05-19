@@ -402,6 +402,7 @@ public enum RibbonCommandIconKind
     ChartLine,
     ChartPie,
     ChartScatter,
+    ChevronDown,
     Collapse,
     Color,
     Comma,
@@ -431,6 +432,7 @@ public enum RibbonCommandIconKind
     HeaderFooter,
     Help,
     History,
+    Insert,
     Info,
     Italic,
     Label,
@@ -450,6 +452,7 @@ public enum RibbonCommandIconKind
     Paste,
     Percent,
     Picture,
+    Pin,
     Previous,
     Print,
     Protect,
@@ -486,6 +489,9 @@ public enum RibbonCommandIconKind
     Warning,
     Watch,
     Window,
+    WindowClose,
+    WindowMaximize,
+    WindowMinimize,
     Wrap,
     Zoom
 }
