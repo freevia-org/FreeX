@@ -3121,32 +3121,27 @@
                 BorderThickness="0" Padding="0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>   <!-- Nav arrows -->
-                    <ColumnDefinition Width="2*"/>     <!-- Scrolling tabs + Add button -->
-                    <ColumnDefinition Width="*"/>      <!-- Horizontal scrollbar (~1/3 of row) -->
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Sheet navigation arrows -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
-                    <Button x:Name="SheetNavLeftBtn" Content="&lt;" Width="20" Height="20" Padding="0"
-                            FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                            Cursor="Hand" Click="SheetNavLeftBtn_Click"
-                            local:RibbonTooltip.Title="Scroll Tabs Left"
-                            local:RibbonTooltip.KeyTip="SL"
-                            local:RibbonTooltip.Description="Scroll the sheet tab list to the left."/>
-                    <Button x:Name="SheetNavRightBtn" Content="&gt;" Width="20" Height="20" Padding="0"
-                            FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                            Cursor="Hand" Click="SheetNavRightBtn_Click" Margin="2,0,0,0"
-                            local:RibbonTooltip.Title="Scroll Tabs Right"
-                            local:RibbonTooltip.KeyTip="SR"
-                            local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
-                </StackPanel>
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="20" Height="20" Padding="0"
+                        FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="2,0,0,0"
+                        local:RibbonTooltip.Title="Scroll Tabs Left"
+                        local:RibbonTooltip.KeyTip="SL"
+                        local:RibbonTooltip.Description="Scroll the sheet tab list to the left."/>
 
-                <!-- Sheet tabs + Add button in a horizontal ScrollViewer -->
+                <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
                 <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
-                              HorizontalScrollBarVisibility="Auto"
-                              VerticalScrollBarVisibility="Disabled">
-                    <StackPanel Orientation="Horizontal">
+                              HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Disabled"
+                              ScrollChanged="SheetTabsScroller_ScrollChanged"
+                              SizeChanged="SheetTabsScroller_SizeChanged"
+                              Loaded="SheetTabsScroller_Loaded">
                         <ItemsControl x:Name="SheetTabsControl">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -3243,20 +3238,26 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <!-- Add sheet button immediately after the last tab -->
-                        <Button x:Name="AddSheetButton" Content="+" Width="26" Height="22"
-                                FontSize="14" Margin="4,0" Padding="0"
-                                Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                                VerticalAlignment="Center" Cursor="Hand"
-                                Click="AddSheetButton_Click"
-                                local:RibbonTooltip.Title="Insert Sheet"
-                                local:RibbonTooltip.KeyTip="IS"
-                                local:RibbonTooltip.Description="Add a new sheet to the workbook."/>
-                    </StackPanel>
                 </ScrollViewer>
 
+                <Button x:Name="SheetNavRightBtn" Grid.Column="2" Content="&gt;" Width="20" Height="20" Padding="0"
+                        FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="2,0,0,0"
+                        local:RibbonTooltip.Title="Scroll Tabs Right"
+                        local:RibbonTooltip.KeyTip="SR"
+                        local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
+
+                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" Width="26" Height="22"
+                        FontSize="14" Margin="4,0" Padding="0"
+                        Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
+                        VerticalAlignment="Center" Cursor="Hand"
+                        Click="AddSheetButton_Click"
+                        local:RibbonTooltip.Title="Insert Sheet"
+                        local:RibbonTooltip.KeyTip="IS"
+                        local:RibbonTooltip.Description="Add a new sheet to the workbook."/>
+
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
-                <ScrollBar x:Name="HorizontalScroll" Grid.Column="2"
+                <ScrollBar x:Name="HorizontalScroll" Grid.Column="4"
                            Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
                            SmallChange="1" VerticalAlignment="Center" Margin="2,0"
                            AutomationProperties.Name="Horizontal Worksheet Scroll Bar"

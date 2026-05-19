@@ -53,6 +53,35 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabs_UseContextualNavigationArrowsInsteadOfAHorizontalScrollbar()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var navigationStart = source.IndexOf("private void UpdateSheetTabNavigation()", StringComparison.Ordinal);
+        var navigationEnd = source.IndexOf("private void BringCurrentSheetTabIntoView()", navigationStart, StringComparison.Ordinal);
+        navigationStart.Should().BeGreaterThanOrEqualTo(0);
+        navigationEnd.Should().BeGreaterThan(navigationStart);
+        var navigationSource = source[navigationStart..navigationEnd];
+
+        xaml.Should().Contain("x:Name=\"SheetNavLeftBtn\" Grid.Column=\"0\"");
+        xaml.Should().Contain("x:Name=\"SheetTabsScroller\" Grid.Column=\"1\"");
+        xaml.Should().Contain("HorizontalScrollBarVisibility=\"Hidden\"");
+        xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
+        xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
+        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"2\"");
+        xaml.Should().Contain("Visibility=\"Hidden\"");
+        xaml.Should().NotContain("HorizontalScrollBarVisibility=\"Auto\"\r\n                              VerticalScrollBarVisibility=\"Disabled\">\r\n                    <StackPanel Orientation=\"Horizontal\">");
+
+        source.Should().Contain("UpdateSheetTabNavigation();");
+        navigationSource.Should().Contain("SheetNavLeftBtn.Visibility");
+        navigationSource.Should().Contain("SheetNavRightBtn.Visibility");
+        navigationSource.Should().Contain(": Visibility.Hidden;");
+        navigationSource.Should().NotContain(": Visibility.Collapsed;");
+        source.Should().NotContain("SheetTabsScroller.HorizontalOffset - 80");
+        source.Should().NotContain("SheetTabsScroller.HorizontalOffset + 80");
+    }
+
+    [Fact]
     public void MainWindow_DoesNotKeepLegacyZoomConversionHelpers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
