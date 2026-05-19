@@ -168,6 +168,16 @@ public sealed class ManageConditionalFormatsDialog : Window
         appliesToCol.CellTemplate = appliesToTemplate;
         gridView.Columns.Add(appliesToCol);
 
+        // Column 5 - Stop If True
+        var stopIfTrueCol = new GridViewColumn { Header = "Stop If True", Width = 85 };
+        var stopIfTrueTemplate = new DataTemplate();
+        var stopIfTrueFactory  = new FrameworkElementFactory(typeof(TextBlock));
+        stopIfTrueFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new StopIfTrueConverter() });
+        stopIfTrueFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        stopIfTrueTemplate.VisualTree = stopIfTrueFactory;
+        stopIfTrueCol.CellTemplate = stopIfTrueTemplate;
+        gridView.Columns.Add(stopIfTrueCol);
+
         _listView.View = gridView;
         root.Children.Add(_listView);
 
@@ -322,9 +332,29 @@ public sealed class ManageConditionalFormatsDialog : Window
             MidColor      = src.MidColor,
             MaxColor      = src.MaxColor,
             UseThreeColorScale = src.UseThreeColorScale,
+            MinThresholdType = src.MinThresholdType,
+            MinThresholdValue = src.MinThresholdValue,
+            MidThresholdType = src.MidThresholdType,
+            MidThresholdValue = src.MidThresholdValue,
+            MaxThresholdType = src.MaxThresholdType,
+            MaxThresholdValue = src.MaxThresholdValue,
             DataBarColor  = src.DataBarColor,
+            DataBarMinThresholdType = src.DataBarMinThresholdType,
+            DataBarMinThresholdValue = src.DataBarMinThresholdValue,
+            DataBarMaxThresholdType = src.DataBarMaxThresholdType,
+            DataBarMaxThresholdValue = src.DataBarMaxThresholdValue,
+            DataBarShowValue = src.DataBarShowValue,
+            DataBarMinLength = src.DataBarMinLength,
+            DataBarMaxLength = src.DataBarMaxLength,
             AboveAverage  = src.AboveAverage,
             FormulaText   = src.FormulaText,
+            IconSetStyle = src.IconSetStyle,
+            IconSetShowValue = src.IconSetShowValue,
+            IconSetReverse = src.IconSetReverse,
+            TopBottomRank = src.TopBottomRank,
+            TopBottomPercent = src.TopBottomPercent,
+            TextRuleText = src.TextRuleText,
+            DateOccurringPeriod = src.DateOccurringPeriod,
             StopIfTrue    = src.StopIfTrue,
         };
         return cf;
@@ -342,13 +372,25 @@ public sealed class ManageConditionalFormatsDialog : Window
     public static string DescribeRule(ConditionalFormat cf) => cf.RuleType switch
     {
         CfRuleType.Formula     => $"Formula: ={cf.FormulaText}",
-        CfRuleType.DataBar     => "Data Bar",
-        CfRuleType.ColorScale  => "Color Scale",
+        CfRuleType.DataBar     => cf.DataBarShowValue ? "Data Bar" : "Data Bar (bar only)",
+        CfRuleType.ColorScale  => cf.UseThreeColorScale ? "3-Color Scale" : "2-Color Scale",
+        CfRuleType.IconSet     => BuildIconSetDescription(cf),
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
-        CfRuleType.Top10       => cf.AboveAverage ? "Top 10" : "Bottom 10",
+        CfRuleType.Top10       => $"{(cf.AboveAverage ? "Top" : "Bottom")} {cf.TopBottomRank}{(cf.TopBottomPercent ? "%" : "")}",
         CfRuleType.CellValue   => BuildCellValueDescription(cf),
         _ => cf.RuleType.ToString()
     };
+
+    private static string BuildIconSetDescription(ConditionalFormat cf)
+    {
+        var style = string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle;
+        var flags = new List<string>();
+        if (cf.IconSetReverse) flags.Add("reverse");
+        if (!cf.IconSetShowValue) flags.Add("icons only");
+        return flags.Count == 0
+            ? $"Icon Set: {style}"
+            : $"Icon Set: {style} ({string.Join(", ", flags)})";
+    }
 
     private static string BuildCellValueDescription(ConditionalFormat cf)
     {
@@ -373,6 +415,8 @@ public sealed class ManageConditionalFormatsDialog : Window
 
     public static Brush PreviewBrush(ConditionalFormat cf)
     {
+        if (cf.RuleType == CfRuleType.IconSet)
+            return Brushes.LightGray;
         if (cf.FormatIfTrue?.FillColor is { } fc)
             return new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
         return Brushes.LightGray;
@@ -384,6 +428,8 @@ public sealed class ManageConditionalFormatsDialog : Window
         var ec = CellAddress.NumberToColumnName(r.End.Col);
         return $"${sc}${r.Start.Row}:${ec}${r.End.Row}";
     }
+
+    public static string StopIfTrueText(ConditionalFormat cf) => cf.StopIfTrue ? "Yes" : "";
 }
 
 // ── Value converters used by the GridView cell templates ──────────────────────
@@ -410,6 +456,15 @@ internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.AppliesToString(cf.AppliesTo) : "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => Binding.DoNothing;
+}
+
+internal sealed class StopIfTrueConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.StopIfTrueText(cf) : "";
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => Binding.DoNothing;

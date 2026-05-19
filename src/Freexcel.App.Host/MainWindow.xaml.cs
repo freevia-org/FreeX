@@ -77,6 +77,19 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private static readonly (string Label, string Code)[] NumberFormatOptions =
+    [
+        ("General", "General"),
+        ("Number (0.00)", "0.00"),
+        ("Currency ($#,##0.00)", "$#,##0.00"),
+        ("Accounting ($#,##0.00)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)"),
+        ("Percentage (0%)", "0%"),
+        ("Fraction (# ?/?)", "# ?/?"),
+        ("Scientific (0.00E+00)", "0.00E+00"),
+        ("Date (yyyy-MM-dd)", "yyyy-MM-dd"),
+        ("Time (HH:mm:ss)", "HH:mm:ss"),
+        ("Text (@)", "@")
+    ];
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private WatchWindowDialog? _watchWindowDialog;
@@ -177,8 +190,7 @@ public partial class MainWindow : Window
         FontSizeBox.ItemsSource = sizes;
         FontSizeBox.SelectedItem = "11";
 
-        var formats = new[] { "General", "Number (0.00)", "Currency ($#,##0.00)", "Percentage (0%)", "Date (yyyy-MM-dd)", "Time (HH:mm:ss)", "Text (@)" };
-        NumberFormatBox.ItemsSource = formats;
+        NumberFormatBox.ItemsSource = NumberFormatOptions.Select(option => option.Label).ToArray();
         NumberFormatBox.SelectedIndex = 0;
 
         ApplyOptionsToView();
@@ -609,16 +621,7 @@ public partial class MainWindow : Window
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock
-                    {
-                        Text = icon.Glyph,
-                        Tag = "RibbonIcon",
-                        FontFamily = icon.FontFamily,
-                        FontSize = 22,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                        TextAlignment = TextAlignment.Center,
-                        Margin = new Thickness(0, 2, 0, 1)
-                    },
+                    RibbonIconFactory.CreateIcon(icon, 22, BrushFromRgb(31, 31, 31)),
                     new TextBlock
                     {
                         Text = groupName,
@@ -629,14 +632,7 @@ public partial class MainWindow : Window
                         MaxWidth = 52,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center
                     },
-                    new TextBlock
-                    {
-                        Text = "\uE70D",
-                        Tag = "RibbonIcon",
-                        FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                        FontSize = 8,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-                    }
+                    RibbonIconFactory.CreateIcon(new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown), 8, BrushFromRgb(31, 31, 31))
                 }
             }
         };
@@ -934,7 +930,9 @@ public partial class MainWindow : Window
             button.Tag ??= $"RibbonCompact:{fullWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{compactWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
             button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+            button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
+                ? System.Windows.HorizontalAlignment.Left
+                : System.Windows.HorizontalAlignment.Center;
         }
 
     }
@@ -948,10 +946,11 @@ public partial class MainWindow : Window
         try
         {
             NormalizeRibbonCommandButtons();
+            NormalizeExistingRibbonIconText();
             ConfigureInsertRibbonSurface();
             NormalizeRibbonCommandGroups();
             AlignRibbonIconColumns();
-            DisableRibbonScrollBars();
+            HideRibbonScrollBars();
             ApplyToolbarDropdownWhiteBackgrounds();
             UpdateRibbonCompactMode(force: forceCompact);
         }
@@ -961,13 +960,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void DisableRibbonScrollBars()
+    private void HideRibbonScrollBars()
     {
         if (RibbonTabs is null)
             return;
 
         foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
-            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
@@ -1079,9 +1078,141 @@ public partial class MainWindow : Window
                 continue;
 
             icon.Width = Math.Max(icon.Width is > 0 ? icon.Width : 0, 18);
-            icon.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+            icon.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
             icon.Margin = new Thickness(0, icon.Margin.Top, 4, icon.Margin.Bottom);
-            stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+            stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+        }
+    }
+
+    private void NormalizeExistingRibbonIconText()
+    {
+        foreach (var button in EnumerateVisualDescendants(this).OfType<ButtonBase>())
+        {
+            var tall = button is FrameworkElement element && element.Height >= 46;
+            ReplaceRibbonGlyphIcons(button.Content, button, tall);
+            foreach (var textBlock in EnumerateRibbonTextContent(button.Content))
+            {
+                if (string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
+                {
+                    textBlock.FontSize = 10;
+                    textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
+                    textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                    if (tall)
+                    {
+                        textBlock.TextAlignment = TextAlignment.Center;
+                        textBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                    }
+
+                    continue;
+                }
+
+                var isIcon = string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
+                if (!isIcon)
+                    continue;
+
+                textBlock.Tag = "RibbonIcon";
+                textBlock.FontSize = tall ? 22 : Math.Max(12, textBlock.FontSize);
+                textBlock.Width = tall ? Math.Max(24, textBlock.Width) : Math.Max(16, textBlock.Width);
+                textBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                textBlock.TextAlignment = TextAlignment.Center;
+            }
+        }
+    }
+
+    private static void ReplaceRibbonGlyphIcons(object? content, ButtonBase owner, bool tall)
+    {
+        switch (content)
+        {
+            case null:
+                return;
+            case TextBlock textBlock when IsRibbonIconTextBlock(textBlock):
+                owner.Content = CreateStaticRibbonVectorIcon(owner, textBlock, tall);
+                return;
+            case Panel panel:
+                for (var i = 0; i < panel.Children.Count; i++)
+                {
+                    if (panel.Children[i] is TextBlock childText && IsRibbonIconTextBlock(childText))
+                    {
+                        var replacement = CreateStaticRibbonVectorIcon(owner, childText, tall);
+                        panel.Children.RemoveAt(i);
+                        panel.Children.Insert(i, replacement);
+                        continue;
+                    }
+
+                    ReplaceRibbonGlyphIcons(panel.Children[i], owner, tall);
+                }
+
+                return;
+            case Decorator decorator:
+                if (decorator.Child is TextBlock decoratorText && IsRibbonIconTextBlock(decoratorText))
+                    decorator.Child = CreateStaticRibbonVectorIcon(owner, decoratorText, tall);
+                else
+                    ReplaceRibbonGlyphIcons(decorator.Child, owner, tall);
+                return;
+            case ContentControl contentControl when !ReferenceEquals(contentControl, owner):
+                if (contentControl.Content is TextBlock contentText && IsRibbonIconTextBlock(contentText))
+                    contentControl.Content = CreateStaticRibbonVectorIcon(owner, contentText, tall);
+                else
+                    ReplaceRibbonGlyphIcons(contentControl.Content, owner, tall);
+                return;
+        }
+    }
+
+    private static bool IsRibbonIconTextBlock(TextBlock textBlock)
+    {
+        return string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
+    }
+
+    private static FrameworkElement CreateStaticRibbonVectorIcon(ButtonBase owner, TextBlock source, bool tall)
+    {
+        var title = owner is FrameworkElement element
+            ? RibbonTooltip.GetTitle(element)
+            : null;
+        var commandName = !string.IsNullOrWhiteSpace(title)
+            ? title
+            : owner.Name;
+        if (string.IsNullOrWhiteSpace(commandName))
+            commandName = source.Text;
+
+        var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
+        var iconSize = tall
+            ? 22
+            : Math.Max(11, Math.Min(16, source.FontSize is > 0 ? source.FontSize : 13));
+        var vector = RibbonIconFactory.CreateIcon(icon, iconSize, source.Foreground);
+        vector.Tag = "RibbonIcon";
+        vector.HorizontalAlignment = source.HorizontalAlignment;
+        vector.VerticalAlignment = source.VerticalAlignment;
+        vector.Margin = source.Margin;
+        return vector;
+    }
+
+    private static IEnumerable<TextBlock> EnumerateRibbonTextContent(object? content)
+    {
+        if (content is TextBlock textBlock)
+        {
+            yield return textBlock;
+            yield break;
+        }
+
+        if (content is Panel panel)
+        {
+            foreach (var child in panel.Children)
+            {
+                foreach (var text in EnumerateRibbonTextContent(child))
+                    yield return text;
+            }
+        }
+        else if (content is ContentControl contentControl &&
+                 !ReferenceEquals(contentControl.Content, content))
+        {
+            foreach (var text in EnumerateRibbonTextContent(contentControl.Content))
+                yield return text;
+        }
+        else if (content is Decorator decorator)
+        {
+            foreach (var text in EnumerateRibbonTextContent(decorator.Child))
+                yield return text;
         }
     }
 
@@ -1151,20 +1282,36 @@ public partial class MainWindow : Window
     {
         var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
-        var iconBlock = new TextBlock
+        var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
+        var iconSize = layoutKind switch
         {
-            Text = icon.Glyph,
-            Tag = "RibbonIcon",
-            FontFamily = icon.FontFamily,
-            FontSize = layoutKind switch
+            RibbonCommandLayoutKind.Large => 23,
+            RibbonCommandLayoutKind.Medium => 19,
+            _ => 12
+        };
+        var iconSlot = new Border
+        {
+            Width = layoutKind switch
             {
-                RibbonCommandLayoutKind.Large => 24,
-                RibbonCommandLayoutKind.Medium => 20,
-                _ => 12
+                RibbonCommandLayoutKind.Large => 34,
+                RibbonCommandLayoutKind.Medium => 28,
+                _ => 18
             },
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            Height = layoutKind switch
+            {
+                RibbonCommandLayoutKind.Large => 30,
+                RibbonCommandLayoutKind.Medium => 24,
+                _ => 16
+            },
+            CornerRadius = tall ? new CornerRadius(3) : new CornerRadius(2),
+            Background = slotBackground,
+            BorderBrush = slotBorder,
+            BorderThickness = slotBorder is null ? new Thickness(0) : new Thickness(1),
+            Child = RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush),
+            SnapsToDevicePixels = true,
+            HorizontalAlignment = tall ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Margin = tall ? new Thickness(0, 2, 0, 2) : new Thickness(0, 0, 3, 0)
+            Margin = tall ? new Thickness(0, 1, 0, 2) : new Thickness(0, 0, 4, 0)
         };
 
         var labelBlock = new TextBlock
@@ -1175,9 +1322,9 @@ public partial class MainWindow : Window
             TextWrapping = tall ? TextWrapping.Wrap : TextWrapping.NoWrap,
             MaxWidth = tall ? 72 : double.PositiveInfinity,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            HorizontalAlignment = tall ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            TextAlignment = TextAlignment.Center
+            TextAlignment = tall ? TextAlignment.Center : TextAlignment.Left
         };
 
         if (tall)
@@ -1188,7 +1335,7 @@ public partial class MainWindow : Window
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
                 {
-                    iconBlock,
+                    iconSlot,
                     labelBlock
                 }
             };
@@ -1197,15 +1344,36 @@ public partial class MainWindow : Window
         return new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Children =
             {
-                iconBlock,
+                iconSlot,
                 labelBlock
             }
         };
     }
+
+    private static (Brush? SlotBackground, Brush? SlotBorder, Brush GlyphBrush) GetRibbonIconAccentBrushes(
+        RibbonCommandIconAccent accent)
+    {
+        return accent switch
+        {
+            RibbonCommandIconAccent.Green => (BrushFromRgb(232, 244, 239), BrushFromRgb(33, 115, 70), BrushFromRgb(24, 92, 55)),
+            RibbonCommandIconAccent.Chart => (BrushFromRgb(232, 241, 252), BrushFromRgb(68, 114, 196), BrushFromRgb(47, 84, 150)),
+            RibbonCommandIconAccent.Data => (BrushFromRgb(229, 243, 250), BrushFromRgb(0, 120, 170), BrushFromRgb(0, 92, 135)),
+            RibbonCommandIconAccent.Theme => (BrushFromRgb(241, 236, 250), BrushFromRgb(112, 48, 160), BrushFromRgb(85, 35, 125)),
+            RibbonCommandIconAccent.Fill => (BrushFromRgb(255, 248, 218), BrushFromRgb(191, 144, 0), BrushFromRgb(116, 88, 0)),
+            RibbonCommandIconAccent.Color => (BrushFromRgb(255, 235, 235), BrushFromRgb(192, 0, 0), BrushFromRgb(150, 0, 0)),
+            RibbonCommandIconAccent.Border => (BrushFromRgb(245, 245, 245), BrushFromRgb(96, 96, 96), BrushFromRgb(31, 31, 31)),
+            RibbonCommandIconAccent.Warning => (BrushFromRgb(255, 244, 214), BrushFromRgb(214, 157, 0), BrushFromRgb(138, 91, 0)),
+            RibbonCommandIconAccent.Protect => (BrushFromRgb(232, 244, 239), BrushFromRgb(33, 115, 70), BrushFromRgb(24, 92, 55)),
+            RibbonCommandIconAccent.Help => (BrushFromRgb(235, 242, 255), BrushFromRgb(68, 114, 196), BrushFromRgb(47, 84, 150)),
+            _ => (Brushes.Transparent, null, Brushes.Black)
+        };
+    }
+
+    private static SolidColorBrush BrushFromRgb(byte r, byte g, byte b) => new(Color.FromRgb(r, g, b));
 
     private static void ApplyRibbonCommandSize(Button button, RibbonCommandLayoutKind layoutKind)
     {
@@ -1288,11 +1456,28 @@ public partial class MainWindow : Window
             Grid.SetColumnSpan(grid, columnSpan);
 
             foreach (var button in directButtons)
+            {
+                NormalizeDenseRibbonColumnButton(button);
                 grid.Children.Add(button);
+            }
 
             parentPanel.Children.RemoveAt(index);
             parentPanel.Children.Insert(index, grid);
         }
+    }
+
+    private static void NormalizeDenseRibbonColumnButton(Button button)
+    {
+        var commandName = GetRibbonButtonTitleOrLabel(button);
+        if (string.IsNullOrWhiteSpace(commandName))
+            return;
+
+        var label = FindRibbonContentLabel(button.Content) ?? commandName;
+        button.Height = 22;
+        button.Padding = new Thickness(3, 1, 3, 1);
+        button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+        button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
     }
 
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1666,12 +1851,6 @@ public partial class MainWindow : Window
             if (e.Key == Key.N && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 CreateNewWorkbook();
-                e.Handled = true;
-                return;
-            }
-            if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                PrintButton_Click(sender, e);
                 e.Handled = true;
                 return;
             }
@@ -2067,6 +2246,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.QuickAnalysis:
                 ShowQuickAnalysisMenu();
+                break;
+            case KeyboardCommandShortcut.OpenPrintBackstage:
+                OpenPrintBackstage();
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
@@ -3770,6 +3952,8 @@ public partial class MainWindow : Window
                 ViewHeadersChk.IsChecked = SheetGrid.ShowHeaders;
             if (ViewRulerChk is not null)
                 ViewRulerChk.IsChecked = SheetGrid.ShowRulers;
+            if (SplitViewBtn is not null)
+                SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
         }
         finally
         {
@@ -4037,6 +4221,13 @@ public partial class MainWindow : Window
         SheetGrid.Focus();
     }
 
+    private void OpenPrintBackstage()
+    {
+        ShowStartScreen();
+        SsPrintNavBtn.Focus();
+        Keyboard.Focus(SsPrintNavBtn);
+    }
+
     private void ShowHomeView()
     {
         SsHomeView.Visibility = Visibility.Visible;
@@ -4056,12 +4247,13 @@ public partial class MainWindow : Window
 
     private void UpdateInfoView()
     {
-        InfoWorkbookName.Text = _workbook.Name;
-        InfoFilePath.Text = _currentFilePath ?? "Not saved yet";
-        InfoSheetCount.Text = _workbook.Sheets.Count.ToString();
-        InfoFormat.Text = _currentFilePath is not null
-            ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
-            : ".xlsx";
+        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath);
+        InfoWorkbookName.Text = plan.WorkbookName;
+        InfoFilePath.Text = plan.FilePath;
+        InfoSheetCount.Text = plan.SheetCount;
+        InfoFormat.Text = plan.Format;
+        InfoStatisticsSummary.Text = plan.StatisticsSummary;
+        InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
     }
 
     private void UpdateSsGreeting()
@@ -5553,9 +5745,8 @@ public partial class MainWindow : Window
     {
         if (_suppressToolbarSync) return;
         if (NumberFormatBox.SelectedIndex < 0) return;
-        var codes = new[] { "General", "0.00", "$#,##0.00", "0%", "yyyy-MM-dd", "HH:mm:ss", "@" };
-        if (NumberFormatBox.SelectedIndex < codes.Length)
-            ApplyStyleDiff(new StyleDiff(NumberFormat: codes[NumberFormatBox.SelectedIndex]));
+        if (NumberFormatBox.SelectedIndex < NumberFormatOptions.Length)
+            ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatOptions[NumberFormatBox.SelectedIndex].Code));
     }
 
     private void ExecuteUndo()
@@ -5699,6 +5890,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.DeleteNote:
+                ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
                 break;
@@ -5820,20 +6014,7 @@ public partial class MainWindow : Window
 
     private void ApplyOutlineBorderShortcut()
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
-            {
-                var address = new CellAddress(_currentSheetId, r, c);
-                var diff = BorderShortcutService.GetOutlineBorderDiff(range, address);
-                if (!TryExecuteApplyStyle(new GridRange(address, address), diff, "Outline Border"))
-                    return;
-            }
-        }
-
-        UpdateViewport();
+        ApplyRangeBorderPreset(BorderShortcutService.GetOutlineBorderDiff, "Outline Border");
     }
 
     private void ExecuteKeyboardInsert()
@@ -6886,29 +7067,85 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
 
-    private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ApplyRangeBorderPreset(Func<GridRange, CellAddress, StyleDiff> createDiff, string title)
     {
-        var b = new CellBorder(BorderStyle.Thin, CellColor.Black);
-        ApplyStyleDiff(new StyleDiff(BorderTop: b, BorderRight: b, BorderBottom: b, BorderLeft: b));
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        IWorkbookCommand CreateSheetCommand(SheetId sheetId)
+        {
+            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            var commands = sheetRange
+                .AllCells()
+                .Select(address => (Address: address, Diff: createDiff(sheetRange, address)))
+                .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))
+                .Select(plan => (IWorkbookCommand)new ApplyStyleCommand(
+                    sheetId,
+                    new GridRange(plan.Address, plan.Address),
+                    plan.Diff))
+                .ToList();
+
+            return commands.Count == 1
+                ? commands[0]
+                : new CompositeWorkbookCommand(title, commands);
+        }
+
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var command = targetSheetIds.Count == 1
+            ? CreateSheetCommand(_currentSheetId)
+            : new CompositeWorkbookCommand(title, targetSheetIds.Select(CreateSheetCommand).ToList());
+
+        if (!TryExecuteCommand(command, title))
+            return;
+
+        UpdateViewport();
+        RefreshStatusBar();
     }
+
+    private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff());
+
     private void BorderOutsideMenuItem_Click(object sender, RoutedEventArgs e)
     {
         ApplyOutlineBorderShortcut();
     }
+
     private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
     {
         ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());
     }
+
     private void BorderBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderBottom: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thin));
+
     private void BorderTopMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderTop: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, BorderStyle.Thin));
+
     private void BorderLeftMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderLeft: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, BorderStyle.Thin));
+
     private void BorderRightMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderRight: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, BorderStyle.Thin));
+
     private void BorderThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderBottom: new CellBorder(BorderStyle.Thick, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick));
+
+    private void BorderBottomDoubleMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double));
+
+    private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick), "Thick Box Border");
+
+    private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thin), "Top and Bottom Border");
+
+    private void BorderTopAndThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thick), "Top and Thick Bottom Border");
+
+    private void BorderTopAndDoubleBottomMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Double), "Top and Double Bottom Border");
+
+    private void BorderMoreMenuItem_Click(object sender, RoutedEventArgs e)
+        => OpenFormatCellsDialog(FormatCellsDialogTab.Border);
 
     // ── Alignment group additions ────────────────────────────────────────────
 
@@ -6992,8 +7229,11 @@ public partial class MainWindow : Window
     private void CfDateMenuItem_Click(object sender, RoutedEventArgs e)     => ShowCfDialog("Date Occurring");
     private void CfDuplicateMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Duplicate Values");
     private void CfTop10MenuItem_Click(object sender, RoutedEventArgs e)    => ShowCfDialog("Top 10 Items");
+    private void CfTop10PercentMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Top 10%");
     private void CfBottom10MenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Bottom 10 Items");
+    private void CfBottom10PercentMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Bottom 10%");
     private void CfAboveAvgMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Above Average");
+    private void CfBelowAvgMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Below Average");
     private void CfDataBarMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Data Bar");
     private void CfColorScaleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Color Scale");
     private void CfIconSetMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Icon Set");
@@ -7079,23 +7319,50 @@ public partial class MainWindow : Window
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
+    private void ApplyCellStylePreset(CellStylePreset preset)
+        => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset));
+    private void CellStyleNormalMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Normal);
     private void CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(198, 239, 206), FontColor: new CellColor(0, 97, 0)));
+        => ApplyCellStylePreset(CellStylePreset.Good);
     private void CellStyleBadMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 199, 206), FontColor: new CellColor(156, 0, 6)));
+        => ApplyCellStylePreset(CellStylePreset.Bad);
     private void CellStyleNeutralMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 235, 156), FontColor: new CellColor(156, 101, 0)));
+        => ApplyCellStylePreset(CellStylePreset.Neutral);
+    private void CellStyleInputMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Input);
+    private void CellStyleOutputMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Output);
+    private void CellStyleCalculationMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Calculation);
+    private void CellStyleCheckCellMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.CheckCell);
+    private void CellStyleLinkedCellMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.LinkedCell);
+    private void CellStyleExplanatoryTextMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.ExplanatoryText);
     private void CellStyleH1MenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(Bold: true, FontSize: 16, FillColor: new CellColor(31, 115, 70), FontColor: CellColor.White));
+        => ApplyCellStylePreset(CellStylePreset.Heading1);
     private void CellStyleH2MenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(Bold: true, FontSize: 14));
+        => ApplyCellStylePreset(CellStylePreset.Heading2);
     private void CellStyleNoteMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 255, 204), BorderBottom: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyCellStylePreset(CellStylePreset.Note);
     private void CellStyleWarningMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 192, 0), FontColor: CellColor.Black, Bold: true));
+        => ApplyCellStylePreset(CellStylePreset.WarningText);
     private void CellStyleTotalMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(Bold: true, BorderTop: new CellBorder(BorderStyle.Thin, CellColor.Black),
-            BorderBottom: new CellBorder(BorderStyle.Double, CellColor.Black)));
+        => ApplyCellStylePreset(CellStylePreset.Total);
+    private void CellStyleAccent1_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent1_20);
+    private void CellStyleAccent2_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent2_20);
+    private void CellStyleAccent3_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent3_20);
+    private void CellStyleAccent4_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent4_20);
+    private void CellStyleAccent5_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent5_20);
+    private void CellStyleAccent6_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent6_20);
 
     // ── Cells group (pickers) ────────────────────────────────────────────────
 
@@ -11849,6 +12116,46 @@ public partial class MainWindow : Window
             return;
         }
 
+        var plan = SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId);
+        var action = PromptForInput(
+            $"Found {issues.Count} known spelling issue(s) in {plan.Edits.Count} text cell(s) on the active sheet.\n" +
+            "Type replace to review the first issue, replace all to apply all known corrections, or ignore to leave them unchanged.",
+            "replace");
+        if (action is null)
+            return;
+
+        var normalizedAction = action.Trim();
+        if (normalizedAction.Equals("ignore", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Spelling issues ignored.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (normalizedAction.Equals("replace all", StringComparison.OrdinalIgnoreCase) ||
+            normalizedAction.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            var edits = BuildSpellCheckEdits(plan);
+            if (edits.Count == 0)
+            {
+                MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TryExecuteSpellCheckEdits(edits))
+                return;
+
+            UpdateViewport();
+            RefreshStatusBar();
+            return;
+        }
+
+        if (!normalizedAction.Equals("replace", StringComparison.OrdinalIgnoreCase) &&
+            !normalizedAction.Equals("first", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Type replace, replace all, or ignore.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         var issue = issues[0];
         SetActiveCell(issue.Address);
         EnsureCellVisible(issue.Address);
@@ -11860,12 +12167,20 @@ public partial class MainWindow : Window
         if (replacement is null) return;
 
         var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-        if (!TryExecuteEditCells([(issue.Address, Cell.FromValue(new TextValue(corrected)))], "Spell Check"))
+        if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
     }
+
+    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckEdits(SpellingCorrectionPlan plan) =>
+        plan.Edits
+            .Select(edit => (edit.Address, Cell.FromValue(new TextValue(edit.CorrectedText))))
+            .ToList();
+
+    private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
+        TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
 
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -12198,6 +12513,16 @@ public partial class MainWindow : Window
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
+    }
+
+    private void ArrangeAllContextMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+            return;
+
+        var current = _workbook.WindowArrangement.ToString();
+        foreach (var item in menu.Items.OfType<MenuItem>())
+            item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal);
     }
 
     private void ArrangeAllMenuItem_Click(object sender, RoutedEventArgs e)

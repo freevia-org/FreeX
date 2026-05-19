@@ -1873,6 +1873,21 @@ public static class BuiltInFunctions
         return true;
     }
 
+    private static bool TryNonNegativeSerialToTimeParts(ScalarValue v, out int hour, out int minute, out int second)
+    {
+        hour = minute = second = 0;
+        var num = ToNumber(v);
+        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
+            return false;
+
+        var fraction = num - Math.Floor(num);
+        var totalSeconds = (int)Math.Floor(fraction * 86400.0 + 1e-9) % 86400;
+        hour = totalSeconds / 3600;
+        minute = totalSeconds % 3600 / 60;
+        second = totalSeconds % 60;
+        return true;
+    }
+
     private static DateTime OADateToDateTime(ScalarValue v) =>
         DateTime.FromOADate(ToNumber(v));
 
@@ -1903,19 +1918,19 @@ public static class BuiltInFunctions
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Hour) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out var hour, out _, out _) ? new NumberValue(hour) : ErrorValue.Num;
     }
 
     private static ScalarValue Minute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Minute) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out _, out var minute, out _) ? new NumberValue(minute) : ErrorValue.Num;
     }
 
     private static ScalarValue Second(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Second) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out _, out _, out var second) ? new NumberValue(second) : ErrorValue.Num;
     }
 
     private static ScalarValue Weekday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
