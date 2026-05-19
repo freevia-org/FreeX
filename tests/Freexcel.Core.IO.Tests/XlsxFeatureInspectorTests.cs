@@ -413,7 +413,7 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_DrawingWithConnectorAndGroupShape_DetectsUnsupportedDrawingObjects()
+    public void Inspect_DrawingWithRetainedConnectorAndGroupShape_DoesNotWarn()
     {
         using var package = CreatePackageWithContent(("xl/drawings/drawing1.xml", """
             <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">
@@ -426,9 +426,7 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f =>
-            f.Kind == XlsxUnsupportedFeatureKind.DrawingObjects &&
-            f.PackagePart == "xl/drawings/drawing1.xml");
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.DrawingObjects);
     }
 
     private static MemoryStream CreatePackage(params string[] entries)

@@ -223,7 +223,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
-            [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
@@ -291,9 +290,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("embedded-objects"))
             expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);
-
-        if (tags.Contains("connectors") || tags.Contains("group-shapes"))
-            expected.Add(XlsxUnsupportedFeatureKind.DrawingObjects);
 
         return expected.Distinct().ToArray();
     }
