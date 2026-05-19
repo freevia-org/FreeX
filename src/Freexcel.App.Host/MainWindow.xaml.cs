@@ -10339,6 +10339,35 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>
+        PictureCropBtn_Click(sender, e);
+
+    private void PictureResetCropMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var picture = GetTargetPicture(_currentSheetId);
+        if (picture is null)
+        {
+            MessageBox.Show("No picture found on this sheet.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (picture.Kind != PictureKind.Image)
+        {
+            MessageBox.Show("Only inserted image pictures can be cropped.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Reset Crop",
+                sheetId => new SetPictureCropCommand(
+                    sheetId,
+                    GetTargetPicture(sheetId)?.Id ?? Guid.Empty,
+                    0, 0, 0, 0)))
+            return;
+
+        UpdateViewport();
+    }
+
     private PictureModel? GetTargetPicture(SheetId sheetId)
     {
         var sheet = _workbook.GetSheet(sheetId);

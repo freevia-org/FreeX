@@ -92,6 +92,7 @@ public static class XlsxChartPartReader
             chart.ChartStyleId = styleId;
 
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
+        chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
 
         chart.RoundedCorners = IsTrue(chartXml.Root?
             .Element(ChartNs + "roundedCorners")?
@@ -112,6 +113,51 @@ public static class XlsxChartPartReader
             Selection = ReadOptionalBool(protection.Attribute("selection")?.Value),
             UserInterface = ReadOptionalBool(protection.Attribute("userInterface")?.Value)
         };
+    }
+
+    private static ChartPrintSettingsModel? ReadPrintSettings(XElement? printSettings)
+    {
+        if (printSettings is null)
+            return null;
+
+        var pageMargins = printSettings.Element(ChartNs + "pageMargins");
+        var pageSetup = printSettings.Element(ChartNs + "pageSetup");
+        return new ChartPrintSettingsModel
+        {
+            PageMargins = pageMargins is null ? null : new ChartPageMarginsModel
+            {
+                Left = ReadOptionalDouble(pageMargins.Attribute("l")?.Value),
+                Right = ReadOptionalDouble(pageMargins.Attribute("r")?.Value),
+                Top = ReadOptionalDouble(pageMargins.Attribute("t")?.Value),
+                Bottom = ReadOptionalDouble(pageMargins.Attribute("b")?.Value),
+                Header = ReadOptionalDouble(pageMargins.Attribute("header")?.Value),
+                Footer = ReadOptionalDouble(pageMargins.Attribute("footer")?.Value)
+            },
+            PageSetup = pageSetup is null ? null : new ChartPageSetupModel
+            {
+                PaperSize = pageSetup.Attribute("paperSize")?.Value,
+                Orientation = pageSetup.Attribute("orientation")?.Value,
+                Copies = ReadOptionalInt(pageSetup.Attribute("copies")?.Value),
+                BlackAndWhite = ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
+                Draft = ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
+            }
+        };
+    }
+
+    private static double? ReadOptionalDouble(string? value)
+    {
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+            return result;
+
+        return null;
+    }
+
+    private static int? ReadOptionalInt(string? value)
+    {
+        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
+            return result;
+
+        return null;
     }
 
     private static bool? ReadOptionalBool(string? value)
