@@ -112,6 +112,8 @@ public class LexerTests
     [InlineData("#NAME?")]
     [InlineData("#NULL!")]
     [InlineData("#NUM!")]
+    [InlineData("#SPILL!")]
+    [InlineData("#CALC!")]
     public void Tokenizes_ErrorLiteral(string errorCode)
     {
         var tokens = new Lexer("=" + errorCode).Tokenize();

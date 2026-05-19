@@ -206,6 +206,46 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void ApplyStyleCommand_AppliesSuperscriptAndSubscriptAsMutuallyExclusiveEffects_AndUndoRestoresOriginalStyle()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new CellStyle { Superscript = false, Subscript = false };
+        var cell = Cell.FromValue(new TextValue("x2"));
+        cell.StyleId = wb.RegisterStyle(original);
+        sheet.SetCell(addr, cell);
+        var originalStyleId = cell.StyleId;
+
+        var command = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(Superscript: true));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        var appliedStyle = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        appliedStyle.Superscript.Should().BeTrue();
+        appliedStyle.Subscript.Should().BeFalse();
+
+        var subscriptCommand = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(Subscript: true));
+
+        subscriptCommand.Apply(ctx).Success.Should().BeTrue();
+        var subscriptStyle = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        subscriptStyle.Superscript.Should().BeFalse();
+        subscriptStyle.Subscript.Should().BeTrue();
+
+        subscriptCommand.Revert(ctx);
+        command.Revert(ctx);
+
+        sheet.GetCell(addr)!.StyleId.Should().Be(originalStyleId);
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).Should().Be(original);
+    }
+
+    [Fact]
     public void ApplyStyleCommand_RejectsInvalidStyleChoices()
     {
         var (_, sheet, ctx) = Setup();

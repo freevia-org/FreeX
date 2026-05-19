@@ -26,4 +26,9 @@ public static class CommentNavigationPlanner
     public static string FormatCommentList(IReadOnlyDictionary<CellAddress, string> comments) =>
         string.Join(Environment.NewLine,
             OrderedCommentAddresses(comments).Select(address => $"{address.ToA1()}: {comments[address]}"));
+
+    public static string GetDefaultCommentText(IReadOnlyDictionary<CellAddress, string> comments, CellAddress address) =>
+        comments.TryGetValue(address, out var comment)
+            ? comment
+            : string.Empty;
 }
