@@ -5045,80 +5045,17 @@ public partial class MainWindow : Window
     {
         var value = PromptForInput("Filter: values separated by comma/semicolon, top:n, bottom:n, toppercent:n, bottompercent:n, aboveavg, belowavg, blank, nonblank, text=value, text<>value, contains:text, notcontains:text, begins:text, ends:text, between:min:max, date=yyyy-mm-dd, date<>yyyy-mm-dd, date>yyyy-mm-dd, date>=yyyy-mm-dd, date<yyyy-mm-dd, date<=yyyy-mm-dd, datebetween:start:end, >number, >=number, <number, <=number, =number, or <>number", "");
         if (value is null) return;  // user cancelled
-        var filterText = value.TrimStart();
-        if (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase))
+        if (!FilterPromptPlanner.TryPlan(value, out var plan, out var error) || plan is null)
         {
-            if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var error))
-            {
-                MessageBox.Show(error ?? "Enter top:n, bottom:n, toppercent:n, or bottompercent:n.",
-                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (!TryExecuteRepeatableCurrentRangeCommand(
-                    "Filter",
-                    range,
-                    currentRange => percent
-                        ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
-                        : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
-                return;
-            UpdateViewport();
+            MessageBox.Show(error ?? "Enter a supported filter criterion.",
+                "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
-        {
-            if (!TryExecuteRepeatableCurrentRangeCommand(
-                    "Filter",
-                    range,
-                    currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
-                return;
-            UpdateViewport();
-            return;
-        }
-
-        if (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
-            filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
-            filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith('>') ||
-            filterText.StartsWith('<') ||
-            filterText.StartsWith('='))
-        {
-            if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var error) || criterion is null)
-            {
-                MessageBox.Show(error ?? "Enter a supported filter criterion.",
-                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            if (!TryExecuteRepeatableCurrentRangeCommand(
-                    "Filter",
-                    range,
-                    currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
-                return;
-            UpdateViewport();
-            return;
-        }
-
-        var allowedValues = FilterInputParser.ParseAllowedValues(value);
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
-                currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
+                currentRange => plan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
             return;
         UpdateViewport();
     }
