@@ -4732,7 +4732,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "customProperties",
             workbookNs + "smartTags",
             workbookNs + "autoFilter",
-            workbookNs + "protectedRanges"
+            workbookNs + "protectedRanges",
+            workbookNs + "rowBreaks",
+            workbookNs + "colBreaks"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
@@ -4816,6 +4818,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     changed = true;
                     continue;
                 }
+                if ((sourceBlock.Name == workbookNs + "rowBreaks" || sourceBlock.Name == workbookNs + "colBreaks") &&
+                    MergeWorksheetBreaks(sourceBlock, targetRoot, workbookNs))
+                {
+                    changed = true;
+                    continue;
+                }
 
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
@@ -4830,6 +4838,57 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetBreaks(XElement sourceBreaks, XElement targetRoot, XNamespace workbookNs)
+    {
+        var targetBreaks = targetRoot.Element(sourceBreaks.Name);
+        if (targetBreaks is null)
+        {
+            targetRoot.Add(new XElement(sourceBreaks));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceBreaks.Attributes())
+        {
+            if (targetBreaks.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetBreaks.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var targetBreaksById = targetBreaks
+            .Elements(workbookNs + "brk")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("id")?.Value))
+            .ToDictionary(
+                element => element.Attribute("id")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceBreak in sourceBreaks.Elements(workbookNs + "brk"))
+        {
+            var id = sourceBreak.Attribute("id")?.Value;
+            if (string.IsNullOrWhiteSpace(id) || !targetBreaksById.TryGetValue(id, out var targetBreak))
+            {
+                targetBreaks.Add(new XElement(sourceBreak));
+                if (!string.IsNullOrWhiteSpace(id))
+                    targetBreaksById[id] = targetBreaks.Elements(workbookNs + "brk").Last();
+                changed = true;
+                continue;
+            }
+
+            foreach (var attribute in sourceBreak.Attributes())
+            {
+                if (targetBreak.Attribute(attribute.Name) is not null)
+                    continue;
+
+                targetBreak.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetSheetFormatProperties(XElement? sourceSheetFormatProperties, XElement targetRoot, XNamespace workbookNs)
