@@ -66,7 +66,11 @@ public static class FlashFillService
             s => s[0] + " " + s[1],
             s => s[1] + ", " + s[0],
             s => s[0] + "." + s[1],
-            s => GetFirstInitial(s[0]) + GetFirstInitial(s[1])
+            s => GetFirstInitial(s[0]) + GetFirstInitial(s[1]),
+            s => GetFirstInitial(s[0]) + ". " + s[1],
+            s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant(),
+            s => (s[0] + "." + s[1]).ToLowerInvariant() + "@example.com",
+            s => s[1] + " " + GetFirstInitial(s[0]) + "."
         ];
 
         foreach (var pattern in patterns)
