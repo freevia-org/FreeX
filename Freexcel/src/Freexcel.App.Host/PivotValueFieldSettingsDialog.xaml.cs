@@ -81,17 +81,10 @@ public partial class PivotValueFieldSettingsDialog : Window
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        var numberFormatText = NumberFormatBox.Text.Trim();
-        int? numberFormatId = null;
-        if (numberFormatText.Length > 0)
+        if (!PivotValueFieldSettingsInputParser.TryParseOptionalNumberFormatId(NumberFormatBox.Text, out var numberFormatId))
         {
-            if (!int.TryParse(numberFormatText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-            {
-                MessageBox.Show(this, "Number format ID must be a whole number.", "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            numberFormatId = parsed;
+            MessageBox.Show(this, "Number format ID must be a whole number.", "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
 
         var summaryFunction = SummaryFunctions[Math.Max(0, SummaryFunctionBox.SelectedIndex)].Value;
