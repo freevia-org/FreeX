@@ -2545,7 +2545,61 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_Save_SanitizesInvalidCellStyleValues()
+    public void XlsxAdapter_RoundTrip_JustifyDistributedAndShrinkToFit()
+    {
+        var workbook = new Workbook("AlignmentTest");
+        var sheet = workbook.AddSheet("S1");
+
+        var style = new CellStyle
+        {
+            HorizontalAlignment = HorizontalAlignment.Distributed,
+            VerticalAlignment = VerticalAlignment.Justify,
+            ShrinkToFit = true
+        };
+        var styleId = workbook.RegisterStyle(style);
+
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromValue(new TextValue("aligned"));
+        cell.StyleId = styleId;
+        sheet.SetCell(addr, cell);
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var loadedCell = loaded.GetSheetAt(0).GetCell(1, 1);
+        loadedCell.Should().NotBeNull();
+        var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
+        loadedStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Distributed);
+        loadedStyle.VerticalAlignment.Should().Be(VerticalAlignment.Justify);
+        loadedStyle.ShrinkToFit.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_ShrinkToFit()
+    {
+        var workbook = new Workbook("NativeShrinkTest");
+        var sheet = workbook.AddSheet("S1");
+        var styleId = workbook.RegisterStyle(new CellStyle { ShrinkToFit = true });
+        var cell = Cell.FromValue(new TextValue("fit"));
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), cell);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        var loadedCell = loaded.GetSheetAt(0).GetCell(1, 1);
+        loadedCell.Should().NotBeNull();
+        loaded.GetStyle(loadedCell!.StyleId).ShrinkToFit.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_SanitizesInvalidAlignmentAndCellStyleValues()
     {
         var workbook = new Workbook("InvalidStyleSaveTest");
         var sheet = workbook.AddSheet("S1");
@@ -2581,6 +2635,7 @@ public class FileAdapterSmokeTests
         loadedStyle.VerticalAlignment.Should().Be(VerticalAlignment.Bottom);
         loadedStyle.BorderTop.Style.Should().Be(BorderStyle.None);
         loadedStyle.TextRotation.Should().Be(0);
+        loadedStyle.ShrinkToFit.Should().BeFalse();
     }
 
     [Fact]

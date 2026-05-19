@@ -168,6 +168,44 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void ApplyStyleCommand_AppliesDistributedJustifyAndShrinkToFit_AndUndoRestoresOriginalStyle()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new CellStyle
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            ShrinkToFit = false
+        };
+        var cell = Cell.FromValue(new TextValue("aligned"));
+        cell.StyleId = wb.RegisterStyle(original);
+        sheet.SetCell(addr, cell);
+        var originalStyleId = cell.StyleId;
+
+        var command = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(
+                HAlign: HorizontalAlignment.Distributed,
+                VAlign: VerticalAlignment.Justify,
+                ShrinkToFit: true));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        var appliedStyle = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        appliedStyle.HorizontalAlignment.Should().Be(HorizontalAlignment.Distributed);
+        appliedStyle.VerticalAlignment.Should().Be(VerticalAlignment.Justify);
+        appliedStyle.ShrinkToFit.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.GetCell(addr)!.StyleId.Should().Be(originalStyleId);
+        wb.GetStyle(sheet.GetCell(addr)!.StyleId).Should().Be(original);
+    }
+
+    [Fact]
     public void ApplyStyleCommand_RejectsInvalidStyleChoices()
     {
         var (_, sheet, ctx) = Setup();

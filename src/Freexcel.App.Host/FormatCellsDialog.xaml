@@ -55,6 +55,7 @@
                     <TextBlock Text="Vertical alignment:" Margin="0,8,0,2"/>
                     <ComboBox x:Name="DlgVAlignBox" Height="24"/>
                     <CheckBox x:Name="DlgWrapTextCheck" Content="Wrap text" Margin="0,8,0,0"/>
+                    <CheckBox x:Name="DlgShrinkToFitCheck" Content="Shrink to fit" Margin="0,6,0,0"/>
                 </StackPanel>
             </TabItem>
         </TabControl>
