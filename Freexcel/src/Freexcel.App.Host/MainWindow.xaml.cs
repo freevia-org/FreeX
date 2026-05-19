@@ -11166,30 +11166,30 @@ public partial class MainWindow : Window
 
     private void ScenariosBtn_Click(object sender, RoutedEventArgs e)
     {
-        var action = PromptForInput("Scenario action (save/show/list/report):", _workbook.Scenarios.Count == 0 ? "save" : "show");
+        var action = PromptForInput("Scenario action (save/show/list/report):",
+            ScenarioManagerPlanner.GetDefaultAction(_workbook.Scenarios.Count));
         if (action is null)
             return;
 
-        switch (action.Trim().ToLowerInvariant())
+        if (!ScenarioManagerPlanner.TryParseAction(action, out var parsedAction))
         {
-            case "save":
-            case "add":
+            MessageBox.Show("Enter save, show, list, or report.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        switch (parsedAction)
+        {
+            case ScenarioManagerAction.Save:
                 SaveScenarioFromSelection();
                 break;
-            case "show":
-            case "apply":
+            case ScenarioManagerAction.Show:
                 ShowScenarioByName();
                 break;
-            case "list":
-            case "manager":
+            case ScenarioManagerAction.List:
                 ListScenarios();
                 break;
-            case "report":
-            case "summary":
+            case ScenarioManagerAction.Report:
                 CreateScenarioSummaryReport();
-                break;
-            default:
-                MessageBox.Show("Enter save, show, list, or report.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
                 break;
         }
     }
@@ -11206,7 +11206,7 @@ public partial class MainWindow : Window
         if (sheet is null)
             return;
 
-        var name = PromptForInput("Scenario name:", _workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}");
+        var name = PromptForInput("Scenario name:", ScenarioManagerPlanner.GetDefaultScenarioName(_workbook.Scenarios.Count));
         if (name is null)
             return;
 
@@ -11216,7 +11216,7 @@ public partial class MainWindow : Window
         if (!TryExecuteCommand(new SaveScenarioCommand(name, changes), "Scenario Manager"))
             return;
 
-        MessageBox.Show($"Scenario '{name.Trim()}' saved for {changes.Count} changing cell(s).",
+        MessageBox.Show(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count),
             "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -11254,8 +11254,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var message = string.Join(Environment.NewLine,
-            _workbook.Scenarios.Select(s => $"{s.Name}: {s.ChangingCells.Count} changing cell(s)"));
+        var message = ScenarioManagerPlanner.FormatScenarioList(_workbook.Scenarios);
         MessageBox.Show(message, "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
