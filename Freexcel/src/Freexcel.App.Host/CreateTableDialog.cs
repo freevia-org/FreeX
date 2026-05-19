@@ -43,37 +43,8 @@ public sealed class CreateTableDialog : Window
         bool firstRowHasHeaders,
         string tableStyleName,
         out CreateTableDialogResult result,
-        out string? error)
-    {
-        result = default!;
-        error = null;
-        if (string.IsNullOrWhiteSpace(rangeText))
-        {
-            error = "Enter a table range.";
-            return false;
-        }
-
-        try
-        {
-            var range = rangeText.Contains(':', StringComparison.Ordinal)
-                ? GridRange.Parse(rangeText.Trim(), sheetId)
-                : new GridRange(CellAddress.Parse(rangeText.Trim(), sheetId), CellAddress.Parse(rangeText.Trim(), sheetId));
-
-            if (range.End.Row <= range.Start.Row)
-            {
-                error = "Table range must include at least two rows.";
-                return false;
-            }
-
-            result = new CreateTableDialogResult(range, firstRowHasHeaders, tableStyleName.Trim());
-            return true;
-        }
-        catch (FormatException)
-        {
-            error = "Enter a valid table range.";
-            return false;
-        }
-    }
+        out string? error) =>
+        CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
 
     private void Accept()
     {
