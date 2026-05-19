@@ -7461,7 +7461,7 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
     private void ApplyCellStylePreset(CellStylePreset preset)
-        => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset));
+        => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme));
     private void CellStyleNormalMenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Normal);
     private void CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)

@@ -186,4 +186,22 @@ public sealed class CellStyleDiffPlannerTests
             diff.BorderBottom!.Value.Style.Should().Be(BorderStyle.Thin);
         });
     }
+
+    [Fact]
+    public void CellStylePreset_Accent20Presets_CanResolveFromWorkbookTheme()
+    {
+        var theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(100, 150, 200))
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(40, 80, 120));
+
+        var accent1 = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Accent1_20, theme);
+        var accent2 = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Accent2_20, theme);
+
+        accent1.FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8));
+        accent1.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(WorkbookThemeColorSlot.Accent1)));
+        accent2.FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent2, 0.8));
+        accent2.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(WorkbookThemeColorSlot.Accent2)));
+        accent1.FontColor.Should().Be(CellColor.Black);
+        accent2.FontColor.Should().Be(CellColor.Black);
+    }
 }
