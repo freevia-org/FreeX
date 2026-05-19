@@ -289,14 +289,10 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ChartKeyboardShortcuts_UseSeparateEmbeddedAndChartSheetPaths()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
 
-        source.Should().Contain("case KeyboardCommandShortcut.InsertEmbeddedChart:");
-        source.Should().Contain("InsertEmbeddedChart();");
-        source.Should().Contain("case KeyboardCommandShortcut.InsertChartSheet:");
-        source.Should().Contain("InsertChartSheet();");
-        source.Should().NotContain(
-            "case KeyboardCommandShortcut.InsertEmbeddedChart:\r\n            case KeyboardCommandShortcut.InsertChartSheet:");
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertEmbeddedChart, (_, _) => InsertEmbeddedChart())");
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertChartSheet, (_, _) => InsertChartSheet())");
     }
 
     [Fact]

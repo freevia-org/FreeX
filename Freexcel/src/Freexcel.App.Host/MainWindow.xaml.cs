@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
+    private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
     private ContextMenu? _activeRibbonKeyTipMenu;
@@ -125,6 +126,7 @@ public partial class MainWindow : Window
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        RegisterKeyboardCommandShortcuts();
 
         _currentSheetId = _workbook.Sheets[0].Id;
         SheetTabsControl.ItemsSource = _sheetTabs;
@@ -1937,209 +1939,7 @@ public partial class MainWindow : Window
 
     private void ExecuteCommandShortcut(KeyboardCommandShortcut shortcut, object sender, RoutedEventArgs e)
     {
-        switch (shortcut)
-        {
-            case KeyboardCommandShortcut.NewWorkbook:
-                CreateNewWorkbook();
-                break;
-            case KeyboardCommandShortcut.OpenWorkbook:
-                OpenButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.SaveWorkbook:
-                SaveButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.Copy:
-                ExecuteCopy();
-                break;
-            case KeyboardCommandShortcut.Cut:
-                ExecuteCopy(isCut: true);
-                break;
-            case KeyboardCommandShortcut.Paste:
-                ExecutePaste();
-                break;
-            case KeyboardCommandShortcut.SelectCurrentRegionOrAll:
-                SelectCurrentRegionOrAll();
-                break;
-            case KeyboardCommandShortcut.Undo:
-                ExecuteUndo();
-                break;
-            case KeyboardCommandShortcut.Redo:
-                ExecuteRedo();
-                break;
-            case KeyboardCommandShortcut.CreateTable:
-                TableBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.InsertHyperlink:
-                InsertLinkBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.FillDown:
-                FillDownMenuItem_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.FillRight:
-                FillRightMenuItem_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.FlashFill:
-                TryFlashFill();
-                break;
-            case KeyboardCommandShortcut.InsertCurrentDate:
-                InsertCurrentDateOrTime(insertTime: false);
-                break;
-            case KeyboardCommandShortcut.InsertCurrentTime:
-                InsertCurrentDateOrTime(insertTime: true);
-                break;
-            case KeyboardCommandShortcut.ToggleShowFormulas:
-                ShowFormulasBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.ActivatePreviousSheet:
-                ActivateAdjacentVisibleSheet(-1);
-                break;
-            case KeyboardCommandShortcut.ActivateNextSheet:
-                ActivateAdjacentVisibleSheet(1);
-                break;
-            case KeyboardCommandShortcut.SelectPreviousSheetGroup:
-                SelectAdjacentVisibleSheetGroup(-1);
-                break;
-            case KeyboardCommandShortcut.SelectNextSheetGroup:
-                SelectAdjacentVisibleSheetGroup(1);
-                break;
-            case KeyboardCommandShortcut.OpenFormatCells:
-                OpenFormatCellsDialog();
-                break;
-            case KeyboardCommandShortcut.Find:
-                FindButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.Replace:
-                ReplaceButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.InsertFunction:
-                InsertFunctionBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.SpellCheck:
-                SpellCheckBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.CloseWorkbook:
-                Close();
-                break;
-            case KeyboardCommandShortcut.CalculateNow:
-                CalcNowBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.CalculateSheet:
-                CalcSheetBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.RebuildDependenciesAndCalculate:
-                RebuildDependenciesAndCalculate();
-                break;
-            case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
-                FormulaBarExpandBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.ToggleFilter:
-                FilterButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.QuickAnalysis:
-                ShowQuickAnalysisMenu();
-                break;
-            case KeyboardCommandShortcut.OpenPrintPreview:
-                PrintButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.PasteValues:
-                ExecutePaste(PasteMode.Values);
-                break;
-            case KeyboardCommandShortcut.GoTo:
-                FindGoToMenuItem_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.InsertEmbeddedChart:
-                InsertEmbeddedChart();
-                break;
-            case KeyboardCommandShortcut.InsertChartSheet:
-                InsertChartSheet();
-                break;
-            case KeyboardCommandShortcut.AutoSum:
-                InsertAutoSumFormula("SUM");
-                break;
-            case KeyboardCommandShortcut.GroupSelection:
-                GroupRowsBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.UngroupSelection:
-                UngroupRowsBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.OpenFormatCellsFont:
-                OpenFormatCellsDialog(FormatCellsDialogTab.Font);
-                break;
-            case KeyboardCommandShortcut.WorkbookStatistics:
-                WorkbookStatisticsBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.NewNote:
-            case KeyboardCommandShortcut.NewThreadedComment:
-                ReviewNewCommentBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.SaveAs:
-                SaveWorkbookWithDialog();
-                break;
-            case KeyboardCommandShortcut.ShowKeyTips:
-                EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
-                break;
-            case KeyboardCommandShortcut.OpenContextMenu:
-                OpenKeyboardContextMenu();
-                break;
-            case KeyboardCommandShortcut.EditInFormulaBar:
-                EditActiveCellInFormulaBar();
-                break;
-            case KeyboardCommandShortcut.InsertWorksheet:
-                AddSheetButton_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.ZoomIn:
-                ZoomInBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.ZoomOut:
-                ZoomOutBtn_Click(sender, e);
-                break;
-            case KeyboardCommandShortcut.CopyFormulaFromAbove:
-                CopyFromAbove(CopyFromAboveMode.FormulaOrContent);
-                break;
-            case KeyboardCommandShortcut.CopyValueFromAbove:
-                CopyFromAbove(CopyFromAboveMode.Value);
-                break;
-            case KeyboardCommandShortcut.OpenActiveDropdown:
-                OpenActiveDropdown();
-                break;
-            case KeyboardCommandShortcut.SelectVisibleCellsOnly:
-                SelectGoToSpecialMatches(GoToSpecialKind.VisibleCellsOnly, showEmptyMessage: true);
-                break;
-            case KeyboardCommandShortcut.ScrollActiveCellIntoView:
-                ScrollActiveCellIntoView();
-                break;
-            case KeyboardCommandShortcut.CycleSelectionCorner:
-                CycleSelectionCorner();
-                break;
-            case KeyboardCommandShortcut.SelectDirectPrecedents:
-                SelectFormulaAuditCells(selectDependents: false, includeTransitive: false);
-                break;
-            case KeyboardCommandShortcut.SelectDirectDependents:
-                SelectFormulaAuditCells(selectDependents: true, includeTransitive: false);
-                break;
-            case KeyboardCommandShortcut.SelectAllPrecedents:
-                SelectFormulaAuditCells(selectDependents: false, includeTransitive: true);
-                break;
-            case KeyboardCommandShortcut.SelectAllDependents:
-                SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
-                break;
-            case KeyboardCommandShortcut.SelectCellsWithComments:
-                SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true);
-                break;
-            case KeyboardCommandShortcut.EditCell:
-                EnterEditMode();
-                break;
-            case KeyboardCommandShortcut.ClearSelection:
-                ExecuteClearSelection();
-                break;
-            case KeyboardCommandShortcut.ClearSelectionAndEdit:
-                ExecuteClearSelection();
-                EnterEditMode();
-                break;
-            case KeyboardCommandShortcut.RepeatLastAction:
-                ExecuteRepeatLast();
-                break;
-        }
+        _keyboardCommandDispatcher.TryExecute(shortcut, sender, e);
     }
 
     private void ShowQuickAnalysisMenu()
