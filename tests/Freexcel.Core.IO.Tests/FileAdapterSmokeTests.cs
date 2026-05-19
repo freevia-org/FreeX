@@ -9211,7 +9211,8 @@ public class FileAdapterSmokeTests
             ChartStyleId = 42,
             RoundedCorners = true,
             BlankDisplayMode = ChartBlankDisplayMode.Zero,
-            ShowDataLabelsOverMaximum = true
+            ShowDataLabelsOverMaximum = true,
+            AutoTitleDeleted = true
         };
         sheet.Charts.Add(chart);
 
@@ -9225,6 +9226,7 @@ public class FileAdapterSmokeTests
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
             chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
+            chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "autoTitleDeleted")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "dispBlanksAs")!.Attribute("val")!.Value.Should().Be("zero");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "showDLblsOverMax")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "pivotSource").Should().NotBeNull();
@@ -9236,7 +9238,8 @@ public class FileAdapterSmokeTests
             chart => chart.ChartStyleId == 42 &&
                      chart.RoundedCorners &&
                      chart.BlankDisplayMode == ChartBlankDisplayMode.Zero &&
-                     chart.ShowDataLabelsOverMaximum);
+                     chart.ShowDataLabelsOverMaximum &&
+                     chart.AutoTitleDeleted);
     }
 
     [Fact]
