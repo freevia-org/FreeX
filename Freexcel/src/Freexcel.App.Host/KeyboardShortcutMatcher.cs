@@ -420,6 +420,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (key is Key.D5 or Key.NumPad5 && modifiers == ModifierKeys.Control)
+        {
+            shortcut = FontToggleShortcut.Strikethrough;
+            return true;
+        }
+
         return false;
     }
 

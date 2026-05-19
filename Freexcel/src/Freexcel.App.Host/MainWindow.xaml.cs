@@ -1836,12 +1836,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if ((e.Key == Key.D5 || e.Key == Key.NumPad5) && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                ApplyFontToggleShortcut(FontToggleShortcut.Strikethrough, StrikeButton);
-                e.Handled = true;
-                return;
-            }
             if (KeyboardShortcutMatcher.IsCtrlPlus(e.Key, e.SystemKey, Keyboard.Modifiers))
             {
                 ExecuteKeyboardInsert();
@@ -1868,6 +1862,7 @@ public partial class MainWindow : Window
             {
                 FontToggleShortcut.Bold => BoldButton,
                 FontToggleShortcut.Italic => ItalicButton,
+                FontToggleShortcut.Strikethrough => StrikeButton,
                 _ => UnderlineButton
             };
             ApplyFontToggleShortcut(fontToggleShortcut, button);
