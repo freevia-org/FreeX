@@ -66,6 +66,26 @@ public sealed class ExcelParityDateSerialTests
     }
 
     [Theory]
+    [InlineData("=TIME(1.9,2.9,3.9)", 0.0430902777777778)]
+    [InlineData("=TIME(25,61,61)", 0.0847337962962964)]
+    [InlineData("=TIME(0,0,32767)", 0.379247685185185)]
+    public void Time_TruncatesComponentsAndWrapsWithinDay(string formula, double expected)
+    {
+        var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
+
+        result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
+    [Theory]
+    [InlineData("=HOUR(-0.25)")]
+    [InlineData("=MINUTE(-0.25)")]
+    [InlineData("=SECOND(-0.25)")]
+    public void TimePartFunctions_ReturnNumForNegativeSerials(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Theory]
     [InlineData("=EDATE(DATE(1900,1,1),1)", 32)]
     [InlineData("=EDATE(DATE(1900,1,31),1)", 59)]
     [InlineData("=EDATE(DATE(1900,2,28),1)", 88)]
