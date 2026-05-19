@@ -4485,11 +4485,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
+        var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
         var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
         var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
         if (sourceExtensionList is null &&
+            sourceFileVersion is null &&
             sourceDefinedNames is null &&
             sourceBookViews is null &&
             sourceCustomWorkbookViews is null &&
@@ -4504,6 +4506,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var changed = false;
+        if (MergeWorkbookChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
+            changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
         if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
