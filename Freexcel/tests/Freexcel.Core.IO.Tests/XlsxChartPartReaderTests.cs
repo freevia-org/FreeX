@@ -273,6 +273,7 @@ public sealed class XlsxChartPartReaderTests
         var chartXml = XDocument.Parse("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:style val="42"/>
               <c:pivotSource>
                 <c:name>Data!PivotTable1</c:name>
                 <c:fmtId val="0"/>
@@ -297,6 +298,7 @@ public sealed class XlsxChartPartReaderTests
 
         chart.IsPivotChart.Should().BeTrue();
         chart.PivotTableName.Should().Be("PivotTable1");
+        chart.ChartStyleId.Should().Be(42);
     }
 
     [Fact]
