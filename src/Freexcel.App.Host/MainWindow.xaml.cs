@@ -1841,32 +1841,35 @@ public partial class MainWindow : Window
             return;
 
         var activeCell = _selectionCursor ?? _selectionAnchor ?? range.Start;
-        var matches = GetFormulaAuditMatches(activeCell, selectDependents, includeTransitive)
-            .Where(address => address.Sheet == _currentSheetId)
-            .Distinct()
-            .ToList();
-
-        if (matches.Count == 0)
+        var matches = GetFormulaAuditMatches(activeCell, selectDependents, includeTransitive);
+        var plan = FormulaAuditSelectionPlanner.Plan(_currentSheetId, matches);
+        if (plan is null)
         {
             StatusReadyText.Visibility = Visibility.Visible;
             var depth = includeTransitive ? "traceable" : "direct";
             StatusReadyText.Text = selectDependents
-                ? $"No {depth} dependents on this sheet"
-                : $"No {depth} precedents on this sheet";
+                ? $"No {depth} dependents"
+                : $"No {depth} precedents";
             return;
         }
 
-        var compressedRanges = SelectionRangeService.CompressAddresses(matches);
-        _selectionAnchor = matches[0];
-        _selectionCursor = matches[0];
-        SheetGrid.SelectedRange = new GridRange(matches[0], matches[0]);
+        var targetMatches = plan.Matches;
+        _currentSheetId = plan.TargetSheetId;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(_currentSheetId);
+        _sheetGroupAnchor = _currentSheetId;
+        var compressedRanges = SelectionRangeService.CompressAddresses(targetMatches);
+        _selectionAnchor = targetMatches[0];
+        _selectionCursor = targetMatches[0];
+        SheetGrid.SelectedRange = new GridRange(targetMatches[0], targetMatches[0]);
         SheetGrid.SelectedRanges = compressedRanges;
         CellAddressBox.Text = compressedRanges.Count == 1
             ? FormatRangeReference(compressedRanges[0].Start, compressedRanges[0].End)
-            : $"{matches.Count} cells";
-        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(matches[0]), matches[0]);
-        EnsureCellVisible(matches[0]);
+            : $"{targetMatches.Count} cells";
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(targetMatches[0]), targetMatches[0]);
+        EnsureCellVisible(targetMatches[0]);
         UpdateViewport();
+        RefreshSheetTabs();
         RefreshToolbar();
         RefreshStatusBar();
     }
