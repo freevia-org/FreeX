@@ -12068,7 +12068,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (!TryExecuteEditCells(edits, "Spell Check"))
+            if (!TryExecuteSpellCheckEdits(edits))
                 return;
 
             UpdateViewport();
@@ -12094,7 +12094,7 @@ public partial class MainWindow : Window
         if (replacement is null) return;
 
         var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-        if (!TryExecuteEditCells([(issue.Address, Cell.FromValue(new TextValue(corrected)))], "Spell Check"))
+        if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
             return;
 
         UpdateViewport();
@@ -12105,6 +12105,9 @@ public partial class MainWindow : Window
         plan.Edits
             .Select(edit => (edit.Address, Cell.FromValue(new TextValue(edit.CorrectedText))))
             .ToList();
+
+    private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
+        TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
 
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
