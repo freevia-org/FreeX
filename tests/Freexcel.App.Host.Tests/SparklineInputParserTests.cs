@@ -40,4 +40,23 @@ public sealed class SparklineInputParserTests
     {
         SparklineInputParser.ParseKind(input).Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData("column", SparklineKindChoice.Column)]
+    [InlineData("winloss", SparklineKindChoice.WinLoss)]
+    [InlineData("line", SparklineKindChoice.Line)]
+    [InlineData("anything", SparklineKindChoice.Line)]
+    public void ParseDialogKindChoice_MapsToolbarKindText(string input, SparklineKindChoice expected)
+    {
+        SparklineInputParser.ParseDialogKindChoice(input).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(SparklineKindChoice.Column, SparklineKind.Column)]
+    [InlineData(SparklineKindChoice.WinLoss, SparklineKind.WinLoss)]
+    [InlineData(SparklineKindChoice.Line, SparklineKind.Line)]
+    public void ToModelKind_MapsDialogChoiceToCoreKind(SparklineKindChoice input, SparklineKind expected)
+    {
+        SparklineInputParser.ToModelKind(input).Should().Be(expected);
+    }
 }

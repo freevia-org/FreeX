@@ -21,6 +21,22 @@ public static class SparklineInputParser
     public static bool TryParseLocation(string input, SheetId sheetId, out CellAddress location) =>
         CellAddress.TryParse(input, sheetId, out location);
 
+    public static SparklineKindChoice ParseDialogKindChoice(string type) =>
+        type switch
+        {
+            "column" => SparklineKindChoice.Column,
+            "winloss" => SparklineKindChoice.WinLoss,
+            _ => SparklineKindChoice.Line
+        };
+
+    public static SparklineKind ToModelKind(SparklineKindChoice choice) =>
+        choice switch
+        {
+            SparklineKindChoice.Column => SparklineKind.Column,
+            SparklineKindChoice.WinLoss => SparklineKind.WinLoss,
+            _ => SparklineKind.Line
+        };
+
     public static SparklineKind ParseKind(string type) =>
         type switch
         {
