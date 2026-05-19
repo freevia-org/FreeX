@@ -62,7 +62,7 @@ public sealed class RowHeightDialog : Window
     {
         result = new RowHeightDialogResult(20);
         error = null;
-        if (!double.TryParse(input?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var height) || height <= 0)
+        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var height))
         {
             error = "Enter a positive row height.";
             return false;
@@ -106,7 +106,7 @@ public sealed class ColumnWidthDialog : Window
     {
         result = new ColumnWidthDialogResult(8);
         error = null;
-        if (!double.TryParse(input?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var width) || width <= 0)
+        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var width))
         {
             error = "Enter a positive column width.";
             return false;
@@ -150,7 +150,7 @@ public sealed class FillSeriesStepDialog : Window
     {
         result = new FillSeriesStepDialogResult(1);
         error = null;
-        if (!double.TryParse(input?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var step))
+        if (input is null || !FillSeriesPlanner.TryParseStep(input, out var step))
         {
             error = "Enter a numeric step value.";
             return false;

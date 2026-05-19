@@ -20,6 +20,16 @@ public sealed class RemainingDialogTests
         error.Should().Contain("positive");
     }
 
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    public void RowHeightDialog_TryCreateResult_RejectsNonFiniteHeights(string input)
+    {
+        RowHeightDialog.TryCreateResult(input, out _, out var error).Should().BeFalse();
+
+        error.Should().Contain("positive");
+    }
+
     [Fact]
     public void ColumnWidthDialog_TryCreateResult_AcceptsPositiveWidth()
     {
@@ -28,12 +38,32 @@ public sealed class RemainingDialogTests
         result.Should().Be(new ColumnWidthDialogResult(8.5));
     }
 
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    public void ColumnWidthDialog_TryCreateResult_RejectsNonFiniteWidths(string input)
+    {
+        ColumnWidthDialog.TryCreateResult(input, out _, out var error).Should().BeFalse();
+
+        error.Should().Contain("positive");
+    }
+
     [Fact]
     public void FillSeriesStepDialog_TryCreateResult_AcceptsNegativeStep()
     {
         FillSeriesStepDialog.TryCreateResult("-2", out var result, out _).Should().BeTrue();
 
         result.Should().Be(new FillSeriesStepDialogResult(-2));
+    }
+
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    public void FillSeriesStepDialog_TryCreateResult_RejectsNonFiniteSteps(string input)
+    {
+        FillSeriesStepDialog.TryCreateResult(input, out _, out var error).Should().BeFalse();
+
+        error.Should().Contain("numeric");
     }
 
     [Fact]
