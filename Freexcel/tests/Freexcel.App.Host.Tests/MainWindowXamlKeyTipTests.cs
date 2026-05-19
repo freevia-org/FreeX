@@ -505,7 +505,7 @@ public sealed class MainWindowXamlKeyTipTests
         ]);
 
         source.Should().Contain("ApplyCellStylePreset(CellStylePreset preset)");
-        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset)");
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
         source.Should().Contain("CellStyleInputMenuItem_Click");
         source.Should().Contain("=> ApplyCellStylePreset(CellStylePreset.Input);");
         source.Should().NotContain("CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)\r\n        => ApplyStyleDiff(new StyleDiff");
