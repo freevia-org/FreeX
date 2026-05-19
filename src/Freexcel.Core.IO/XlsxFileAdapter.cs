@@ -4487,6 +4487,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
         var sourceFileSharing = sourceWorkbookXml.Root?.Element(workbookNs + "fileSharing");
+        var sourceFileRecoveryProperties = sourceWorkbookXml.Root?.Element(workbookNs + "fileRecoveryPr");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
         var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
@@ -4494,6 +4495,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (sourceExtensionList is null &&
             sourceFileVersion is null &&
             sourceFileSharing is null &&
+            sourceFileRecoveryProperties is null &&
             sourceDefinedNames is null &&
             sourceBookViews is null &&
             sourceCustomWorkbookViews is null &&
@@ -4511,6 +4513,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (MergeWorkbookChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
             changed = true;
         if (MergeWorkbookChildBlock(sourceFileSharing, targetRoot, workbookNs + "fileSharing"))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceFileRecoveryProperties, targetRoot, workbookNs + "fileRecoveryPr"))
             changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
