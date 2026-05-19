@@ -91,19 +91,8 @@ public sealed class InsertChartDialog : Window
         DialogResult = true;
     }
 
-    internal static StackPanel CreateButtonRow(Action accept)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = global::System.Windows.HorizontalAlignment.Right
-        };
-        var ok = new Button { Content = "OK", Width = 76, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        ok.Click += (_, _) => accept();
-        row.Children.Add(ok);
-        row.Children.Add(new Button { Content = "Cancel", Width = 76, IsCancel = true });
-        return row;
-    }
+    internal static StackPanel CreateButtonRow(Action accept) =>
+        DialogButtonRowFactory.Create(accept, buttonWidth: 76);
 }
 
 public sealed record ChangeChartTypeDialogResult(ChartType ChartType);
