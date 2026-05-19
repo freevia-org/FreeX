@@ -73,4 +73,55 @@ public sealed class SheetTabListPlannerTests
 
         SheetTabListPlanner.AdjacentVisibleSheet(workbook, SheetId.New(), 1).Should().Be(second.Id);
     }
+
+    [Fact]
+    public void SelectAdjacentVisibleSheetGroup_ExtendsFromAnchorAcrossVisibleSheets()
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var hidden = workbook.AddSheet("Hidden");
+        var third = workbook.AddSheet("Third");
+        hidden.IsHidden = true;
+
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            first.Id,
+            anchorSheetId: null,
+            direction: 1);
+
+        plan.Should().NotBeNull();
+        plan!.CurrentSheetId.Should().Be(second.Id);
+        plan.AnchorSheetId.Should().Be(first.Id);
+        plan.GroupedSheetIds.Should().Equal(first.Id, second.Id);
+
+        var extended = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            plan.CurrentSheetId,
+            plan.AnchorSheetId,
+            direction: 1);
+
+        extended.Should().NotBeNull();
+        extended!.CurrentSheetId.Should().Be(third.Id);
+        extended.AnchorSheetId.Should().Be(first.Id);
+        extended.GroupedSheetIds.Should().Equal(first.Id, second.Id, third.Id);
+    }
+
+    [Fact]
+    public void SelectAdjacentVisibleSheetGroup_ClampsAtWorkbookEdges()
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        workbook.AddSheet("Second");
+
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            first.Id,
+            anchorSheetId: null,
+            direction: -1);
+
+        plan.Should().NotBeNull();
+        plan!.CurrentSheetId.Should().Be(first.Id);
+        plan.GroupedSheetIds.Should().Equal(first.Id);
+    }
 }
