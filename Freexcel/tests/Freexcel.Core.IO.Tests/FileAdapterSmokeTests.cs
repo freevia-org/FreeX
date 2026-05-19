@@ -7934,6 +7934,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdditionalWorksheetSheetViews()
+    {
+        var workbook = new Workbook("AdditionalSheetViewsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdditionalWorksheetSheetView(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+        sheetViews.Should().NotBeNull();
+        var hasAdditionalSheetView = sheetViews!.Elements(worksheetNs + "sheetView").Any(view =>
+            string.Equals(view.Attribute("workbookViewId")?.Value, "1", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("view")?.Value, "pageBreakPreview", StringComparison.Ordinal) &&
+            string.Equals(view.Attribute("topLeftCell")?.Value, "C3", StringComparison.Ordinal));
+        hasAdditionalSheetView.Should().BeTrue();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetScenarios()
     {
         var workbook = new Workbook("ScenariosRetentionTest");
@@ -9633,6 +9666,32 @@ public class FileAdapterSmokeTests
                         new XAttribute("ySplit", "1"),
                         new XAttribute("topLeftCell", "B2"),
                         new XAttribute("activePane", "bottomRight")))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddAdditionalWorksheetSheetView(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+            if (sheetViews is null)
+            {
+                sheetViews = new XElement(worksheetNs + "sheetViews");
+                worksheetXml.Root.AddFirst(sheetViews);
+            }
+
+            sheetViews.Add(new XElement(
+                worksheetNs + "sheetView",
+                new XAttribute("workbookViewId", "1"),
+                new XAttribute("view", "pageBreakPreview"),
+                new XAttribute("topLeftCell", "C3"),
+                new XAttribute("zoomScale", "80")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

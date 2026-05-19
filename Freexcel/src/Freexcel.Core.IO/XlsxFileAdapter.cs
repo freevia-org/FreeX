@@ -4781,10 +4781,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .ToList();
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
+            var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
                 sourceSheetProtection is null &&
+                sourceSheetViews is null &&
                 sourceExtensionList is null)
             {
                 continue;
@@ -4799,6 +4801,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
@@ -4822,6 +4826,44 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetSheetViews(XElement? sourceSheetViews, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceSheetViews is null)
+            return false;
+
+        var sourceViews = sourceSheetViews.Elements(workbookNs + "sheetView").ToList();
+        if (sourceViews.Count == 0)
+            return false;
+
+        var targetSheetViews = targetRoot.Element(workbookNs + "sheetViews");
+        if (targetSheetViews is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceSheetViews));
+            return true;
+        }
+
+        var existingViewIds = targetSheetViews
+            .Elements(workbookNs + "sheetView")
+            .Select(element => element.Attribute("workbookViewId")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceView in sourceViews)
+        {
+            var viewId = sourceView.Attribute("workbookViewId")?.Value;
+            if (!string.IsNullOrWhiteSpace(viewId) && existingViewIds.Contains(viewId))
+                continue;
+
+            targetSheetViews.Add(new XElement(sourceView));
+            if (!string.IsNullOrWhiteSpace(viewId))
+                existingViewIds.Add(viewId);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetProtectedRanges(XElement sourceProtectedRanges, XElement targetRoot, XNamespace workbookNs)
