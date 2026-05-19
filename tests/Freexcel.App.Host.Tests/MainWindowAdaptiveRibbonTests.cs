@@ -137,6 +137,24 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 640);
+
+                harness.RibbonHorizontalScrollBarModes.Should().OnlyContain(
+                    mode => mode == ScrollBarVisibility.Hidden,
+                    $"{tab} should keep the ribbon face clean while preserving hidden horizontal fallback scrolling");
+            }
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -241,6 +259,15 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(IsEffectivelyVisible)
                 .Select(button => button.Height)
                 .ToList();
+
+        public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
+            _window.FindName("RibbonTabs") is TabControl tabs
+                ? EnumerateSelfAndVisualDescendants(tabs)
+                    .OfType<ScrollViewer>()
+                    .Where(IsEffectivelyVisible)
+                    .Select(scrollViewer => scrollViewer.HorizontalScrollBarVisibility)
+                    .ToList()
+                : [];
 
         private TabItem? SelectedRibbonTab =>
             (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem as TabItem;
