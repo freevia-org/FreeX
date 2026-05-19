@@ -116,6 +116,44 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
+    {
+        var rows = ReadManifestRows()
+            .Where(row => row.SourceType == "generated")
+            .Where(row => row.ExpectedStatus == "supported-metadata-pass")
+            .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
+            .ToArray();
+
+        rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
+
+        var adapter = new XlsxFileAdapter();
+        foreach (var row in rows)
+        {
+            using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage(row.Id);
+            var before = CapturePackageSummary(source);
+            var fixtureParts = CaptureKnownGapFixtureParts(row.Id);
+            before.CriticalParts.Should().Contain(fixtureParts, row.Id);
+
+            source.Position = 0;
+            XlsxFeatureInspector.Inspect(source).HasUnsupportedFeatures.Should().BeFalse(row.Id);
+
+            source.Position = 0;
+            var workbook = adapter.Load(source);
+            var sheet = workbook.GetSheetAt(0);
+            sheet.SetCell(new CellAddress(sheet.Id, 11, 1), new TextValue("freexcel-metadata-retention-edit"));
+
+            using var saved = new MemoryStream();
+            adapter.Save(workbook, saved);
+            saved.Position = 0;
+            AssertPackageHealth(saved, row.Id);
+            var after = CapturePackageSummary(saved);
+
+            after.CriticalParts.Should().Contain(before.CriticalParts, row.Id);
+            after.CriticalRelationshipTargets.Should().Contain(before.CriticalRelationshipTargets, row.Id);
+        }
+    }
+
+    [Fact]
     public void PackageSummary_TreatsDocumentPropertiesAsFidelityCriticalParts()
     {
         var workbook = new Workbook("DocumentPropertiesCriticalParts");
@@ -681,6 +719,7 @@ public class XlsxCorpusRunnerTests
         path.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/macroSheets/", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("xl/vbaProject.bin", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/core.xml", StringComparison.OrdinalIgnoreCase) ||
         path.Equals("docProps/app.xml", StringComparison.OrdinalIgnoreCase) ||
