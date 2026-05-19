@@ -7734,6 +7734,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPhoneticProperties()
+    {
+        var workbook = new Workbook("PhoneticPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kana"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPhoneticProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var phoneticProperties = worksheetXml.Root!.Element(worksheetNs + "phoneticPr");
+        phoneticProperties.Should().NotBeNull();
+        phoneticProperties!.Attribute("fontId")!.Value.Should().Be("1");
+        phoneticProperties.Attribute("type")!.Value.Should().Be("fullwidthKatakana");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -8971,6 +9001,24 @@ public class FileAdapterSmokeTests
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "sheetCalcPr",
                 new XAttribute("fullCalcOnLoad", "1")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPhoneticProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "phoneticPr",
+                new XAttribute("fontId", "1"),
+                new XAttribute("type", "fullwidthKatakana"),
+                new XAttribute("alignment", "center")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
