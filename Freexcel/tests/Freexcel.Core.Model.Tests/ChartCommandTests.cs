@@ -546,6 +546,58 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void MoveChartCommand_MovesNormalChartToExistingSheetAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var target = wb.AddSheet("Dashboard");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+        new AddChartCommand(source.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+
+        var command = new MoveChartCommand(source.Id, chart.Id, target.Id);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        source.Charts.Should().BeEmpty();
+        target.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+
+        command.Revert(ctx);
+
+        source.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+        target.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MoveChartToNewSheetCommand_CreatesSheetAndUndoRemovesIt()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+        new AddChartCommand(source.Id, range, ChartType.Line, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+
+        var command = new MoveChartToNewSheetCommand(source.Id, chart.Id, "Sales Chart");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        source.Charts.Should().BeEmpty();
+        var chartSheet = wb.Sheets.Single(sheet => sheet.Name == "Sales Chart");
+        chartSheet.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+
+        command.Revert(ctx);
+
+        wb.Sheets.Should().NotContain(sheet => sheet.Name == "Sales Chart");
+        source.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+    }
+
+    [Fact]
     public void SetChartLayoutCommand_UpdatesTitleAxesLegendAndUndoRestores()
     {
         var wb = new Workbook("test");
