@@ -209,6 +209,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.Down)
+        {
+            shortcut = KeyboardCommandShortcut.OpenActiveDropdown;
+            return true;
+        }
+
         return false;
     }
 
@@ -316,7 +322,8 @@ public enum KeyboardCommandShortcut
     ZoomIn,
     ZoomOut,
     CopyFormulaFromAbove,
-    CopyValueFromAbove
+    CopyValueFromAbove,
+    OpenActiveDropdown
 }
 
 public enum BorderKeyboardShortcut
