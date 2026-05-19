@@ -21,6 +21,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Hyperlink...",
             "Format Cells...",
             "Clear Formats",
+            "Clear Hyperlinks",
             "Clear Contents");
     }
 }

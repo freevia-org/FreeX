@@ -5620,6 +5620,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.ClearFormats:
                 ClearFormats();
                 break;
+            case WorksheetContextMenuAction.ClearHyperlinks:
+                ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
                 break;
