@@ -7981,6 +7981,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 chart.Uses1904DateSystem ? new XElement(chartNs + "date1904", new XAttribute("val", "1")) : null,
                 string.IsNullOrWhiteSpace(chart.Language) ? null : new XElement(chartNs + "lang", new XAttribute("val", chart.Language)),
                 chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
+                ToChartColorMapOverrideXml(chart, chartNs, drawingNs),
                 chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
                 ToChartProtectionXml(chart, chartNs),
                 ToChartPrintSettingsXml(chart, chartNs),
@@ -8008,6 +8009,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ? null
             : new XElement(chartNs + "dispBlanksAs",
                 new XAttribute("val", chart.BlankDisplayMode == ChartBlankDisplayMode.Span ? "span" : "zero"));
+
+    private static XElement? ToChartColorMapOverrideXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.ColorMapOverride is not { } colorMapOverride)
+            return null;
+
+        if (colorMapOverride.UseMasterColorMapping)
+            return new XElement(chartNs + "clrMapOvr", new XElement(drawingNs + "masterClrMapping"));
+
+        if (colorMapOverride.OverrideMappings.Count == 0)
+            return null;
+
+        return new XElement(chartNs + "clrMapOvr",
+            new XElement(drawingNs + "overrideClrMapping",
+                colorMapOverride.OverrideMappings
+                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                    .Select(pair => new XAttribute(pair.Key, pair.Value))));
+    }
 
     private static XElement? ToChartProtectionXml(ChartModel chart, XNamespace chartNs)
     {
