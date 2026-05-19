@@ -88,6 +88,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey is Key.F4 or Key.W)
+        {
+            shortcut = KeyboardCommandShortcut.CloseWorkbook;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.None && effectiveKey == Key.F9)
         {
             shortcut = KeyboardCommandShortcut.CalculateNow;
@@ -377,6 +383,7 @@ public enum KeyboardCommandShortcut
     CreateTable,
     InsertFunction,
     SpellCheck,
+    CloseWorkbook,
     CalculateNow,
     CalculateSheet,
     RebuildDependenciesAndCalculate,
