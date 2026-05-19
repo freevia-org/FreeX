@@ -55,51 +55,26 @@ public sealed class AdvancedFilterDialog : Window
         result = default!;
         error = null;
 
-        if (!TryParseRange(listRangeText, currentSheetId, out var listRange))
+        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, listRangeText, _ => null, out var listRange))
         {
             error = "Enter a valid list range.";
             return false;
         }
 
-        if (!TryParseRange(criteriaRangeText, currentSheetId, out var criteriaRange))
+        if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, _ => null, out var criteriaRange))
         {
             error = "Enter a valid criteria range.";
             return false;
         }
 
-        CellAddress? copyToCell = null;
-        if (!string.IsNullOrWhiteSpace(copyToCellText))
+        if (!AdvancedFilterInputParser.TryParseCopyDestination(copyToCellText ?? "", currentSheetId, out var copyToCell))
         {
-            if (!CellAddress.TryParse(copyToCellText, currentSheetId, out var parsedCopyToCell))
-            {
-                error = "Enter a valid copy-to cell.";
-                return false;
-            }
-
-            copyToCell = parsedCopyToCell;
+            error = "Enter a valid copy-to cell.";
+            return false;
         }
 
         result = new AdvancedFilterDialogResult(listRange, criteriaRange, copyToCell, uniqueRecordsOnly);
         return true;
-    }
-
-    private static bool TryParseRange(string text, SheetId sheetId, out GridRange range)
-    {
-        range = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        try
-        {
-            range = text.Contains(':', StringComparison.Ordinal)
-                ? GridRange.Parse(text, sheetId)
-                : new GridRange(CellAddress.Parse(text, sheetId), CellAddress.Parse(text, sheetId));
-            return true;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
     }
 
     private void Accept()

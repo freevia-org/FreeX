@@ -81,6 +81,45 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_AcceptsSingleCellRangesOnCurrentSheet()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1",
+            criteriaRangeText: "C3",
+            copyToCellText: "",
+            uniqueRecordsOnly: false,
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.ListRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1)));
+        result.CriteriaRange.Should().Be(new GridRange(new CellAddress(sheetId, 3, 3), new CellAddress(sheetId, 3, 3)));
+        result.CopyToCell.Should().BeNull();
+        result.UniqueRecordsOnly.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_RejectsInvalidCopyToCell()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToCellText: "NotACell",
+            uniqueRecordsOnly: false,
+            out _,
+            out var error);
+
+        parsed.Should().BeFalse();
+        error.Should().Be("Enter a valid copy-to cell.");
+    }
+
+    [Fact]
     public void ConsolidateDialog_ValidatesSameSizeSourceRanges()
     {
         var sheetId = SheetId.New();
