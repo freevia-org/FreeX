@@ -34,8 +34,15 @@ public partial class FormatCellsDialog : Window
     {
         NumberFormatCombo.ItemsSource = NumberFormatLabels;
         var idx = Array.IndexOf(NumberFormatCodes, s.NumberFormat);
-        NumberFormatCombo.SelectedIndex = idx >= 0 ? idx : 0;
-        if (idx < 0) NumberFormatCombo.Text = s.NumberFormat;
+        if (idx >= 0)
+        {
+            NumberFormatCombo.SelectedIndex = idx;
+        }
+        else
+        {
+            NumberFormatCombo.SelectedIndex = -1;
+            NumberFormatCombo.Text = s.NumberFormat;
+        }
 
         DlgFontNameBox.ItemsSource  = new[] { "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana" };
         DlgFontNameBox.SelectedItem = s.FontName;
@@ -72,17 +79,41 @@ public partial class FormatCellsDialog : Window
 
     private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
 
+    public static string? ResolveNumberFormat(string text, int selectedIndex)
+    {
+        var trimmedText = text.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmedText)
+            && (selectedIndex < 0
+                || selectedIndex >= NumberFormatCodes.Length
+                || (trimmedText != NumberFormatLabels[selectedIndex]
+                    && trimmedText != NumberFormatCodes[selectedIndex])))
+        {
+            return trimmedText;
+        }
+
+        if (selectedIndex >= 0 && selectedIndex < NumberFormatCodes.Length)
+            return NumberFormatCodes[selectedIndex];
+
+        return string.IsNullOrWhiteSpace(trimmedText) ? null : trimmedText;
+    }
+
+    public static int? TryParseSupportedTextRotation(string text)
+    {
+        if (!int.TryParse(text, out var rotation))
+            return null;
+
+        return rotation == 255 || rotation is >= -90 and <= 90
+            ? rotation
+            : null;
+    }
+
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
         CellColor? fontColor = TryParseColor(DlgFontColorBox.Text);
         CellColor? fillColor = TryParseColor(DlgFillColorBox.Text);
         bool clearFill = DlgClearFillCheck.IsChecked == true;
 
-        string? numFmt = null;
-        if (NumberFormatCombo.SelectedIndex >= 0 && NumberFormatCombo.SelectedIndex < NumberFormatCodes.Length)
-            numFmt = NumberFormatCodes[NumberFormatCombo.SelectedIndex];
-        else if (!string.IsNullOrWhiteSpace(NumberFormatCombo.Text))
-            numFmt = NumberFormatCombo.Text;
+        string? numFmt = ResolveNumberFormat(NumberFormatCombo.Text, NumberFormatCombo.SelectedIndex);
 
         double? fontSize = null;
         if (double.TryParse(DlgFontSizeBox.Text, out var fs) && fs > 0) fontSize = fs;
@@ -96,9 +127,7 @@ public partial class FormatCellsDialog : Window
         if (int.TryParse(DlgIndentLevelBox.Text, out var indent))
             indentLevel = Math.Clamp(indent, 0, 15);
 
-        int? textRotation = null;
-        if (int.TryParse(DlgTextRotationBox.Text, out var rotation))
-            textRotation = rotation;
+        int? textRotation = TryParseSupportedTextRotation(DlgTextRotationBox.Text);
 
         CellBorder borderTop = ParseBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, _current.BorderTop);
         CellBorder borderRight = ParseBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, _current.BorderRight);
