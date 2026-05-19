@@ -161,6 +161,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Alt && effectiveKey is Key.OemPlus or Key.Add)
+        {
+            shortcut = KeyboardCommandShortcut.AutoSum;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.None && effectiveKey == Key.F11)
         {
             shortcut = KeyboardCommandShortcut.InsertChartSheet;
@@ -400,6 +406,7 @@ public enum KeyboardCommandShortcut
     PasteValues,
     GoTo,
     InsertEmbeddedChart,
+    AutoSum,
     InsertChartSheet,
     OpenFormatCellsFont,
     WorkbookStatistics,

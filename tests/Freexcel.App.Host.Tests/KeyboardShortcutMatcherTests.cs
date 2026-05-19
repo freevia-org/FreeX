@@ -90,6 +90,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.G, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.GoTo)]
     [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
     [InlineData(Key.F11, Key.None, ModifierKeys.None, KeyboardCommandShortcut.InsertChartSheet)]
+    [InlineData(Key.None, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
+    [InlineData(Key.None, Key.Add, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
     [InlineData(Key.F, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
     [InlineData(Key.P, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
     [InlineData(Key.G, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.WorkbookStatistics)]
