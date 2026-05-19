@@ -48,6 +48,25 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_ContainsColorPickerButtonsForColorFields()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var controlName in new[]
+        {
+            "DlgFontColorPickerButton",
+            "DlgFillColorPickerButton",
+            "DlgBorderTopColorPickerButton",
+            "DlgBorderRightColorPickerButton",
+            "DlgBorderBottomColorPickerButton",
+            "DlgBorderLeftColorPickerButton",
+        })
+        {
+            xaml.Should().Contain($"x:Name=\"{controlName}\"");
+        }
+    }
+
+    [Fact]
     public void FormatCellsDialog_ExposesShrinkToFitAndMapsItIntoStyleDiff()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));

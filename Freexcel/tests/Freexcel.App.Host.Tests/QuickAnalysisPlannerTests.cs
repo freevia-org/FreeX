@@ -34,14 +34,41 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.Top10,
                 QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
+                QuickAnalysisCommand.StackedColumnChart,
+                QuickAnalysisCommand.PercentStackedColumnChart,
                 QuickAnalysisCommand.BarChart,
+                QuickAnalysisCommand.StackedBarChart,
+                QuickAnalysisCommand.PercentStackedBarChart,
+                QuickAnalysisCommand.DoughnutChart,
                 QuickAnalysisCommand.AreaChart,
                 QuickAnalysisCommand.ScatterChart,
+                QuickAnalysisCommand.BubbleChart,
+                QuickAnalysisCommand.RadarChart,
+                QuickAnalysisCommand.StockChart,
                 QuickAnalysisCommand.Sum,
                 QuickAnalysisCommand.Max,
                 QuickAnalysisCommand.Min,
                 QuickAnalysisCommand.FormatAsTable,
                 QuickAnalysisCommand.LineSparkline
             ]);
+
+        options.Where(option => option.Group == "Charts")
+            .Select(option => option.Label)
+            .Should()
+            .Equal(
+                "Column",
+                "Stacked Column",
+                "100% Stacked Column",
+                "Line",
+                "Pie",
+                "Doughnut",
+                "Bar",
+                "Stacked Bar",
+                "100% Stacked Bar",
+                "Area",
+                "Scatter",
+                "Bubble",
+                "Radar",
+                "Stock");
     }
 }

@@ -12,13 +12,23 @@ public partial class PivotFieldFilterDialog : Window
     private readonly ICollectionView _view;
 
     public PivotFieldFilterDialog(IEnumerable<string> items, IEnumerable<string>? selectedItems = null)
+        : this(
+            items.Select(item => new AutoFilterChecklistItem(item, item)),
+            selectedItems)
+    {
+    }
+
+    public PivotFieldFilterDialog(IEnumerable<AutoFilterChecklistItem> items, IEnumerable<string>? selectedItems = null)
     {
         var selected = selectedItems?.ToHashSet(StringComparer.CurrentCultureIgnoreCase) ?? [];
         var hasExplicitSelection = selected.Count > 0;
         _items = new ObservableCollection<PivotFilterItem>(
-            items.Distinct(StringComparer.CurrentCultureIgnoreCase)
-                .OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)
-                .Select(item => new PivotFilterItem(item, !hasExplicitSelection || selected.Contains(item))));
+            items.DistinctBy(item => item.Value, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(item => item.DisplayText, StringComparer.CurrentCultureIgnoreCase)
+                .Select(item => new PivotFilterItem(
+                    item.DisplayText,
+                    item.Value,
+                    !hasExplicitSelection || selected.Contains(item.Value))));
 
         InitializeComponent();
         FilterItemsList.ItemsSource = _items;
@@ -55,7 +65,7 @@ public partial class PivotFieldFilterDialog : Window
     {
         SelectedItems = _items
             .Where(item => item.IsChecked)
-            .Select(item => item.Caption)
+            .Select(item => item.Value)
             .ToList();
         DialogResult = true;
     }
@@ -66,9 +76,10 @@ public partial class PivotFieldFilterDialog : Window
         SelectAllCheckBox.IsChecked = visible.Count > 0 && visible.All(item => item.IsChecked);
     }
 
-    private sealed class PivotFilterItem(string caption, bool isChecked)
+    private sealed class PivotFilterItem(string caption, string value, bool isChecked)
     {
         public string Caption { get; } = caption;
+        public string Value { get; } = value;
         public bool IsChecked { get; set; } = isChecked;
     }
 }

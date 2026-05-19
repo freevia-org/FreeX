@@ -63,6 +63,14 @@ public static class FormulaSerializer
                 WriteRangeRef(rr, sb);
                 break;
 
+            case FullColumnRangeRefNode fcr:
+                WriteFullColumnRangeRef(fcr, sb);
+                break;
+
+            case FullRowRangeRefNode frr:
+                WriteFullRowRangeRef(frr, sb);
+                break;
+
             case NamedRangeNode nr:
                 sb.Append(nr.Name);
                 break;
@@ -169,6 +177,34 @@ public static class FormulaSerializer
         WriteRefPart(rr.Start, sb);
         sb.Append(':');
         WriteRefPart(rr.End, sb);
+    }
+
+    private static void WriteFullColumnRangeRef(FullColumnRangeRefNode fcr, StringBuilder sb)
+    {
+        if (fcr.SheetName is not null)
+        {
+            WriteSheetName(fcr.SheetName, sb);
+            sb.Append('!');
+        }
+        if (fcr.IsStartAbsolute) sb.Append('$');
+        sb.Append(fcr.StartColumnName);
+        sb.Append(':');
+        if (fcr.IsEndAbsolute) sb.Append('$');
+        sb.Append(fcr.EndColumnName);
+    }
+
+    private static void WriteFullRowRangeRef(FullRowRangeRefNode frr, StringBuilder sb)
+    {
+        if (frr.SheetName is not null)
+        {
+            WriteSheetName(frr.SheetName, sb);
+            sb.Append('!');
+        }
+        if (frr.IsStartAbsolute) sb.Append('$');
+        sb.Append(frr.StartRow);
+        sb.Append(':');
+        if (frr.IsEndAbsolute) sb.Append('$');
+        sb.Append(frr.EndRow);
     }
 
     private static void WriteRefPart(CellRefNode cr, StringBuilder sb)

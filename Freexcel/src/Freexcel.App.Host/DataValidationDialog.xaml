@@ -66,7 +66,12 @@
 
         <!-- Formula2 row (only for Between) -->
         <TextBlock x:Name="Formula2Label" Grid.Row="3" Grid.Column="0" Text="Maximum:" VerticalAlignment="Center" Margin="0,0,8,8"/>
-        <TextBox x:Name="Formula2Box" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
+        <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
+            <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
+                    Content="Use Selection" Width="96" Margin="6,0,0,0"
+                    Click="UseSelection2Button_Click"/>
+            <TextBox x:Name="Formula2Box"/>
+        </DockPanel>
 
         <!-- In-cell dropdown (List only) -->
         <CheckBox x:Name="ShowDropdownBox" Grid.Row="4" Grid.Column="1" Content="In-cell dropdown" IsChecked="True" Margin="0,0,0,8"/>
