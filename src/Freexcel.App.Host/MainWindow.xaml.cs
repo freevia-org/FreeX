@@ -10854,11 +10854,15 @@ public partial class MainWindow : Window
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.ContextMenu is { } cm)
-        {
-            cm.PlacementTarget = btn;
-            cm.IsOpen = true;
-        }
+        var selected = SheetGrid.SelectedRange?.Start;
+        var defaultValue = selected is { } address
+            ? $"row {Math.Max(2u, address.Row)}"
+            : "clear";
+        var dialog = new PageBreakDialog(defaultValue) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyPageBreakDialogResult(dialog.Result);
     }
 
     private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
@@ -10898,6 +10902,29 @@ public partial class MainWindow : Window
     private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
     {
         TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
+    }
+
+    private void ApplyPageBreakDialogResult(PageBreakDialogResult result)
+    {
+        if (result.Action == PageBreakDialogAction.Clear)
+        {
+            TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
+            return;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var rowBreaks = sheet.RowPageBreaks.ToList();
+        var columnBreaks = sheet.ColumnPageBreaks.ToList();
+
+        if (result.RowBreak is { } rowBreak && !rowBreaks.Contains(rowBreak))
+            rowBreaks.Add(rowBreak);
+        if (result.ColumnBreak is { } columnBreak && !columnBreaks.Contains(columnBreak))
+            columnBreaks.Add(columnBreak);
+
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
     }
 
     private void PrintTitlesBtn_Click(object sender, RoutedEventArgs e)
@@ -11529,19 +11556,8 @@ public partial class MainWindow : Window
 
         var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
 
-        if (!result.Converged)
-        {
-            MessageBox.Show(
-                $"Goal Seek could not find a solution.\nClosest value: {result.FoundValue:G10}\nActual result: {result.ActualResult:G10}",
-                "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        var confirm = MessageBox.Show(
-            $"Goal Seek found a solution.\nChanging cell value: {result.FoundValue:G10}",
-            "Goal Seek", MessageBoxButton.OKCancel, MessageBoxImage.Information);
-
-        if (confirm == MessageBoxResult.OK)
+        var statusDialog = new GoalSeekStatusDialog(result) { Owner = this };
+        if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
         {
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
             if (TryExecuteCommand(cmd, "Goal Seek"))
@@ -11784,21 +11800,15 @@ public partial class MainWindow : Window
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
         var statistics = WorkbookStatisticsService.GetStatistics(_workbook);
-        var message = WorkbookStatisticsFormatter.Format(statistics);
-        MessageBox.Show(message, "Workbook Statistics", MessageBoxButton.OK, MessageBoxImage.Information);
+        var dialog = new WorkbookStatisticsDialog(statistics) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void AccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
     {
         var issues = AccessibilityCheckerService.FindIssues(_workbook);
-        if (issues.Count == 0)
-        {
-            MessageBox.Show("No accessibility issues found.", "Accessibility", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var message = AccessibilityIssueFormatter.Format(issues);
-        MessageBox.Show(message, "Accessibility", MessageBoxButton.OK, MessageBoxImage.Warning);
+        var dialog = new AccessibilityCheckerDialog(issues) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void SetAltTextBtn_Click(object sender, RoutedEventArgs e)
