@@ -3491,7 +3491,7 @@
                             Click="SaveButton_Click"
                             local:RibbonTooltip.Title="Save As"
                             local:RibbonTooltip.KeyTip="A"/>
-                    <Button Content="Print" HorizontalAlignment="Stretch"
+                    <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"
