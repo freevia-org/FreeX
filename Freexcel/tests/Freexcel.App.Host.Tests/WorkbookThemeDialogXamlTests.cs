@@ -9,7 +9,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesExcelStyleThemeMetadataFields()
     {
-        var xaml = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
 
         xaml.Should().Contain("AutomationProperties.Name=\"Theme name\"");
         xaml.Should().Contain("AutomationProperties.Name=\"Heading font\"");
@@ -20,7 +20,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesAllThemeColorSlots()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -55,7 +55,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_SaveButton_IsDefaultAction()
     {
-        var document = XDocument.Load(FindWorkspaceFile("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -66,17 +66,4 @@ public sealed class WorkbookThemeDialogXamlTests
         saveButton.Attribute("IsDefault")?.Value.Should().Be("True");
     }
 
-    private static string FindWorkspaceFile(params string[] parts)
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            var candidate = Path.Combine(new[] { current.FullName }.Concat(parts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-            current = current.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find {Path.Combine(parts)} from {AppContext.BaseDirectory}");
-    }
 }

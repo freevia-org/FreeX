@@ -42,6 +42,18 @@ public sealed class Sheet
     /// <summary>First column to the right of a split pane, or null when no vertical split is active.</summary>
     public uint? SplitColumn { get; set; }
 
+    /// <summary>Saved top visible row from the worksheet view, when present.</summary>
+    public uint? ViewTopRow { get; set; }
+
+    /// <summary>Saved left visible column from the worksheet view, when present.</summary>
+    public uint? ViewLeftCol { get; set; }
+
+    /// <summary>Saved active cell row from the worksheet view, when present.</summary>
+    public uint? ActiveRow { get; set; }
+
+    /// <summary>Saved active cell column from the worksheet view, when present.</summary>
+    public uint? ActiveCol { get; set; }
+
     /// <summary>Optional worksheet print area. Null means print the used range.</summary>
     public GridRange? PrintArea { get; set; }
 
@@ -510,6 +522,10 @@ public sealed class Sheet
             FrozenCols                    = FrozenCols,
             SplitRow                      = SplitRow,
             SplitColumn                   = SplitColumn,
+            ViewTopRow                    = ViewTopRow,
+            ViewLeftCol                   = ViewLeftCol,
+            ActiveRow                     = ActiveRow,
+            ActiveCol                     = ActiveCol,
             ShowGridlines                 = ShowGridlines,
             ShowHeadings                  = ShowHeadings,
             ShowRulers                    = ShowRulers,
