@@ -6353,63 +6353,34 @@ public partial class MainWindow : Window
         var dlg = new PasteSpecialDialog { Owner = this };
         if (dlg.ShowDialog() != true) return;
 
-        var options = new PasteSpecialOptions(
-            Transpose: dlg.Transpose,
-            Operation: dlg.Operation.ToLowerInvariant() switch
-            {
-                "add" => PasteSpecialOperation.Add,
-                "subtract" => PasteSpecialOperation.Subtract,
-                "multiply" => PasteSpecialOperation.Multiply,
-                "divide" => PasteSpecialOperation.Divide,
-                _ => PasteSpecialOperation.None
-            },
-            SkipBlanks: dlg.SkipBlanks,
-            ContentKind: dlg.Mode switch
-            {
-                PasteSpecialDialogMode.AllExceptBorders => PasteSpecialContentKind.AllExceptBorders,
-                PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
-                PasteSpecialDialogMode.ValuesAndNumberFormats => PasteSpecialContentKind.ValuesAndNumberFormats,
-                _ => PasteSpecialContentKind.Default
-            });
-        var keepColumnWidths = dlg.KeepColumnWidths;
-        if (dlg.Mode == PasteSpecialDialogMode.ColumnWidths)
+        var plan = PasteSpecialPlanner.CreatePlan(new PasteSpecialDialogSelection(
+            dlg.Mode,
+            dlg.Operation,
+            dlg.SkipBlanks,
+            dlg.Transpose,
+            dlg.KeepColumnWidths,
+            dlg.PasteLink));
+        switch (plan.Action)
         {
-            ExecutePasteColumnWidthsOnly();
-            return;
+            case PasteSpecialAction.ColumnWidths:
+                ExecutePasteColumnWidthsOnly();
+                return;
+            case PasteSpecialAction.Comments:
+                ExecutePasteComments(plan.Options.Transpose);
+                return;
+            case PasteSpecialAction.Validation:
+                ExecutePasteValidation(plan.Options.Transpose);
+                return;
+            case PasteSpecialAction.Picture:
+                ExecutePasteAsPicture();
+                return;
+            case PasteSpecialAction.Link:
+                ExecutePasteLink(plan.Options.Transpose, plan.KeepColumnWidths);
+                return;
+            default:
+                ExecutePaste(plan.PasteMode, plan.Options, plan.KeepColumnWidths);
+                return;
         }
-
-        if (dlg.Mode == PasteSpecialDialogMode.Comments)
-        {
-            ExecutePasteComments(options.Transpose);
-            return;
-        }
-
-        if (dlg.Mode == PasteSpecialDialogMode.Validation)
-        {
-            ExecutePasteValidation(options.Transpose);
-            return;
-        }
-
-        if (dlg.PastePicture)
-        {
-            ExecutePasteAsPicture();
-            return;
-        }
-
-        if (dlg.PasteLink)
-        {
-            ExecutePasteLink(options.Transpose, keepColumnWidths);
-            return;
-        }
-
-        if (dlg.PasteValues)
-            ExecutePaste(PasteMode.Values, options, keepColumnWidths);
-        else if (dlg.PasteFormulas)
-            ExecutePaste(PasteMode.Formulas, options, keepColumnWidths);
-        else if (dlg.PasteFormats)
-            ExecutePaste(PasteMode.Formats, options, keepColumnWidths);
-        else
-            ExecutePaste(PasteMode.All, options, keepColumnWidths);
     }
 
     private void ExecutePasteColumnWidthsOnly()
