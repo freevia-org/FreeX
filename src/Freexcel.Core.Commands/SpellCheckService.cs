@@ -150,6 +150,9 @@ public static partial class SpellCheckService
         if (original.Length == 0 || replacement.Length == 0)
             return replacement;
 
+        if (original.Any(char.IsLetter) && original.Where(char.IsLetter).All(char.IsUpper))
+            return replacement.ToUpperInvariant();
+
         if (char.IsUpper(original[0]))
             return char.ToUpperInvariant(replacement[0]) + replacement[1..];
 
