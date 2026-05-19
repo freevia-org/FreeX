@@ -9138,6 +9138,34 @@ public sealed class XlsxFileAdapter : IFileAdapter
         worksheetXml.Save(worksheetStream);
     }
 
+    private static void WriteChartExternalDataRelationships(
+        ZipArchive archive,
+        string chartPath,
+        ChartModel chart,
+        XNamespace packageRelNs)
+    {
+        if (chart.ExternalData is not { } externalData ||
+            string.IsNullOrWhiteSpace(externalData.RelationshipId) ||
+            string.IsNullOrWhiteSpace(externalData.RelationshipType) ||
+            string.IsNullOrWhiteSpace(externalData.Target))
+        {
+            return;
+        }
+
+        var relsPath = GetWorksheetRelsPath(chartPath);
+        archive.GetEntry(relsPath)?.Delete();
+        ReplacePackageXml(archive, relsPath, new XDocument(new XElement(
+            packageRelNs + "Relationships",
+            new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", externalData.RelationshipId),
+                new XAttribute("Type", externalData.RelationshipType),
+                new XAttribute("Target", externalData.Target),
+                string.IsNullOrWhiteSpace(externalData.TargetMode)
+                    ? null
+                    : new XAttribute("TargetMode", externalData.TargetMode)))));
+    }
+
     private static XElement ToAbsoluteChartAnchor(
         ChartModel chart,
         int chartIndex,
