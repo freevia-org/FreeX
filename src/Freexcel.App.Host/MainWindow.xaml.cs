@@ -10441,19 +10441,7 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new EditCellsCommand(_currentSheetId, []);
 
-        var edits = new List<(CellAddress, Cell)>();
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            var cellVal = sheet.GetValue(r, range.Start.Col) as TextValue;
-            if (cellVal is null) continue;
-            var parts = cellVal.Value.Split(delimiter);
-            for (int i = 0; i < parts.Length; i++)
-            {
-                var addr = new CellAddress(_currentSheetId, r, range.Start.Col + (uint)i);
-                ScalarValue val = double.TryParse(parts[i].Trim(), out var d) ? new NumberValue(d) : new TextValue(parts[i].Trim());
-                edits.Add((addr, Cell.FromValue(val)));
-            }
-        }
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, delimiter);
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1
