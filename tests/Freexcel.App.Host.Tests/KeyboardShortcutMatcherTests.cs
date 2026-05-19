@@ -153,6 +153,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Delete, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.ClearSelection)]
     [InlineData(Key.Back, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ClearSelectionAndEdit)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.ClearSelectionAndEdit)]
+    [InlineData(Key.F4, Key.None, ModifierKeys.None, KeyboardCommandShortcut.RepeatLastAction)]
     public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
         Key key,
         Key systemKey,
