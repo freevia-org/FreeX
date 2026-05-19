@@ -9,6 +9,9 @@ namespace Freexcel.Core.IO;
 /// </summary>
 public sealed class NativeJsonAdapter : IFileAdapter
 {
+    private const string NativeFileFormat = "Freexcel.NativeJsonWorkbook";
+    private const int CurrentSchemaVersion = 1;
+    private const int CurrentMinimumReaderVersion = 1;
     private const string NumberStoredAsTextCode = "NumberStoredAsText";
     private const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
 
@@ -19,6 +22,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
     {
         var dto = JsonSerializer.Deserialize<WorkbookDto>(stream)
             ?? throw new InvalidDataException("Invalid Freexcel file");
+
+        ValidateSchemaHeader(dto);
 
         var workbook = new Workbook(dto.Name);
         if (dto.Theme is { } theme)
@@ -360,6 +365,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
     {
         var dto = new WorkbookDto
         {
+            FileFormat = NativeFileFormat,
+            SchemaVersion = CurrentSchemaVersion,
+            MinimumReaderVersion = CurrentMinimumReaderVersion,
             Name = workbook.Name,
             Theme = FromWorkbookTheme(workbook.Theme),
             IsStructureProtected = workbook.IsStructureProtected,
@@ -574,6 +582,21 @@ public sealed class NativeJsonAdapter : IFileAdapter
         PopulateCalculationOptions(workbook, dto);
 
         JsonSerializer.Serialize(stream, dto, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static void ValidateSchemaHeader(WorkbookDto dto)
+    {
+        if (dto.FileFormat is { Length: > 0 } fileFormat &&
+            !string.Equals(fileFormat, NativeFileFormat, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Unsupported Freexcel file format '{fileFormat}'.");
+        }
+
+        if (dto.SchemaVersion is > CurrentSchemaVersion)
+            throw new InvalidDataException($"Unsupported Freexcel native JSON schema version {dto.SchemaVersion}.");
+
+        if (dto.MinimumReaderVersion is > CurrentSchemaVersion)
+            throw new InvalidDataException($"Freexcel native JSON requires reader schema version {dto.MinimumReaderVersion}.");
     }
 
     private static void ApplyCalculationOptions(WorkbookDto dto, Workbook workbook)
@@ -1564,6 +1587,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
 
     private class WorkbookDto
     {
+        public string? FileFormat { get; set; }
+        public int? SchemaVersion { get; set; }
+        public int? MinimumReaderVersion { get; set; }
         public string Name { get; set; } = "";
         public WorkbookThemeDto? Theme { get; set; }
         public bool IsStructureProtected { get; set; }
