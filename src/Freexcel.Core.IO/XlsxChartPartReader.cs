@@ -109,6 +109,11 @@ public static class XlsxChartPartReader
             .Element(ChartNs + "showDLblsOverMax")?
             .Attribute("val")?
             .Value);
+
+        chart.ShowDataInHiddenRowsAndColumns = chartElement?
+            .Element(ChartNs + "plotVisOnly")?
+            .Attribute("val")?
+            .Value is "0" or "false" or "False";
     }
 
     private static (XElement Element, ChartType Type)? FindDeferredAdvancedChart(XElement? plotArea)
