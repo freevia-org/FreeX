@@ -2257,9 +2257,15 @@ public partial class MainWindow : Window
 
     private void CancelCopyAndTransientModes()
     {
-        SheetGrid.ClipboardRange = null;
+        ClearClipboardVisualState();
         _internalClipboard = null;
         _formatPainterActive = false;
+    }
+
+    private void ClearClipboardVisualState()
+    {
+        SheetGrid.ClipboardRange = null;
+        SheetGrid.ClipboardIsCut = false;
     }
 
     private void EnsureCellVisible(CellAddress addr)
@@ -2393,7 +2399,7 @@ public partial class MainWindow : Window
                 var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
             }
-            SheetGrid.ClipboardRange = null;
+            ClearClipboardVisualState();
             SheetGrid.Focus();
             e.Handled = true;
         }
@@ -4930,6 +4936,7 @@ public partial class MainWindow : Window
 
         // Show marching ants around the copied range
         SheetGrid.ClipboardRange = range;
+        SheetGrid.ClipboardIsCut = isCut;
 
         // Capture raw cells (including formulas) for paste formula adjustment
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -5098,7 +5105,7 @@ public partial class MainWindow : Window
         _selectionCursor = pastedEnd;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
-        SheetGrid.ClipboardRange = null;
+        ClearClipboardVisualState();
     }
 
     private void CompleteExternalPasteSelection(IReadOnlyList<IReadOnlyList<string>> rows)
@@ -5119,7 +5126,7 @@ public partial class MainWindow : Window
         _selectionCursor = pastedEnd;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(range.Start, pastedEnd);
-        SheetGrid.ClipboardRange = null;
+        ClearClipboardVisualState();
     }
 
     private bool TryPasteClipboardImage(CellAddress anchor)
@@ -5155,7 +5162,7 @@ public partial class MainWindow : Window
                     }))
                 return true;
 
-            SheetGrid.ClipboardRange = null;
+            ClearClipboardVisualState();
             UpdateViewport();
             RefreshToolbar();
             return true;
@@ -5366,8 +5373,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        _repeatPostAction = _ => { SheetGrid.ClipboardRange = null; };
-        SheetGrid.ClipboardRange = null;
+        _repeatPostAction = _ => ClearClipboardVisualState();
+        ClearClipboardVisualState();
         UpdateViewport();
         RefreshToolbar();
     }

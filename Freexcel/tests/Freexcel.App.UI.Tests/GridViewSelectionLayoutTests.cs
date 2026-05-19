@@ -82,6 +82,38 @@ public sealed class GridViewSelectionLayoutTests
         rect.Should().BeNull();
     }
 
+    [Fact]
+    public void CalculateClipboardMarquee_ReturnsVisibleRectangle_ForCopiedRange()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 3, 3));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20), new RowMetric(3, 20, 40)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64), new ColMetric(3, 64, 128)]);
+
+        var rect = GridView.CalculateClipboardMarquee(viewport, range, headerSize: 30);
+
+        rect.Should().Be(new Rect(94, 50, 128, 40));
+    }
+
+    [Fact]
+    public void CalculateClipboardMarquee_ReturnsNull_WhenRangeIsOutsideViewport()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 10, 10),
+            new CellAddress(sheetId, 11, 11));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]);
+
+        GridView.CalculateClipboardMarquee(viewport, range, headerSize: 30).Should().BeNull();
+    }
+
     private static ViewportModel Viewport() =>
         new(
             [],
