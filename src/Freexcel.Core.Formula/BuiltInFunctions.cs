@@ -1451,8 +1451,144 @@ public static class BuiltInFunctions
     private static string FormatNumberInline(double value, string fmt)
     {
         if (string.IsNullOrEmpty(fmt)) return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (TryFormatDateTimeInline(value, fmt, out var dateText)) return dateText;
         try { return value.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture); }
         catch { return value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
+    }
+
+    private static bool TryFormatDateTimeInline(double value, string fmt, out string text)
+    {
+        text = string.Empty;
+        if (!LooksLikeDateTimeFormat(fmt)) return false;
+
+        try
+        {
+            var dt = SerialToDate(value);
+            text = dt.ToString(ToDotNetDateTimeFormat(fmt), CultureInfo.GetCultureInfo("en-US"));
+            return true;
+        }
+        catch
+        {
+            text = string.Empty;
+            return false;
+        }
+    }
+
+    private static bool LooksLikeDateTimeFormat(string fmt) =>
+        fmt.Contains("AM/PM", StringComparison.OrdinalIgnoreCase)
+        || fmt.Any(c => c is 'y' or 'Y' or 'h' or 'H')
+        || LooksLikeMonthFormat(fmt)
+        || LooksLikeDayFormat(fmt);
+
+    private static bool LooksLikeMonthFormat(string fmt)
+    {
+        for (int i = 0; i < fmt.Length; i++)
+        {
+            if (fmt[i] is not ('m' or 'M')) continue;
+            var prev = PreviousNonSpace(fmt, i);
+            var next = NextNonSpace(fmt, i + CountSame(fmt, i));
+            if (prev is '/' or '-' or '\0' || next is '/' or '-' or '\0') return true;
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeDayFormat(string fmt)
+    {
+        for (int i = 0; i < fmt.Length; i++)
+        {
+            if (fmt[i] is not ('d' or 'D')) continue;
+            var prev = PreviousNonSpace(fmt, i);
+            var next = NextNonSpace(fmt, i + CountSame(fmt, i));
+            if (prev is '/' or '-' or ',' || next is '/' or '-' or ',') return true;
+        }
+
+        return false;
+    }
+
+    private static string ToDotNetDateTimeFormat(string fmt)
+    {
+        var sb = new System.Text.StringBuilder(fmt.Length);
+        bool lastWasHour = false;
+        bool lastWasMinute = false;
+
+        for (int i = 0; i < fmt.Length;)
+        {
+            if (MatchesAt(fmt, i, "AM/PM"))
+            {
+                sb.Append("tt");
+                i += 5;
+                lastWasHour = lastWasMinute = false;
+                continue;
+            }
+
+            char ch = fmt[i];
+            int count = CountSame(fmt, i);
+            switch (char.ToLowerInvariant(ch))
+            {
+                case 'y':
+                    sb.Append(count <= 2 ? "yy" : "yyyy");
+                    lastWasHour = lastWasMinute = false;
+                    break;
+                case 'd':
+                    sb.Append(new string('d', Math.Min(count, 4)));
+                    lastWasHour = lastWasMinute = false;
+                    break;
+                case 'h':
+                    sb.Append(count <= 1 ? "h" : "hh");
+                    lastWasHour = true;
+                    lastWasMinute = false;
+                    break;
+                case 's':
+                    sb.Append(count <= 1 ? "s" : "ss");
+                    lastWasHour = false;
+                    lastWasMinute = false;
+                    break;
+                case 'm':
+                    bool minute = lastWasHour || lastWasMinute || PreviousNonSpace(fmt, i) == ':' || NextNonSpace(fmt, i + count) == ':';
+                    sb.Append(minute
+                        ? count <= 1 ? "m" : "mm"
+                        : count switch { 1 => "M", 2 => "MM", 3 => "MMM", _ => "MMMM" });
+                    lastWasHour = false;
+                    lastWasMinute = minute;
+                    break;
+                default:
+                    sb.Append(ch);
+                    lastWasHour = ch == ':' && lastWasHour;
+                    lastWasMinute = ch == ':' && lastWasMinute;
+                    break;
+            }
+
+            i += count;
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool MatchesAt(string text, int index, string value) =>
+        index + value.Length <= text.Length
+        && string.Compare(text, index, value, 0, value.Length, StringComparison.OrdinalIgnoreCase) == 0;
+
+    private static int CountSame(string text, int index)
+    {
+        char ch = char.ToLowerInvariant(text[index]);
+        int end = index + 1;
+        while (end < text.Length && char.ToLowerInvariant(text[end]) == ch) end++;
+        return end - index;
+    }
+
+    private static char PreviousNonSpace(string text, int index)
+    {
+        for (int i = index - 1; i >= 0; i--)
+            if (!char.IsWhiteSpace(text[i])) return text[i];
+        return '\0';
+    }
+
+    private static char NextNonSpace(string text, int index)
+    {
+        for (int i = index; i < text.Length; i++)
+            if (!char.IsWhiteSpace(text[i])) return text[i];
+        return '\0';
     }
 
     private static readonly Regex MultiSpaceRegex = new(@" {2,}", RegexOptions.Compiled);

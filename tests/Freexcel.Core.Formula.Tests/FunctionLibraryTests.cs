@@ -727,6 +727,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Text_FormatsDateAndTimeSerialsWithExcelMasks()
+    {
+        _eval.Evaluate("=TEXT(DATE(2024,1,15),\"yyyy-mm-dd\")", MakeSheet()).Should().Be(new TextValue("2024-01-15"));
+        _eval.Evaluate("=TEXT(DATE(2024,1,15),\"mmm d, yyyy\")", MakeSheet()).Should().Be(new TextValue("Jan 15, 2024"));
+        _eval.Evaluate("=TEXT(TIME(13,5,7),\"h:mm AM/PM\")", MakeSheet()).Should().Be(new TextValue("1:05 PM"));
+    }
+
+    [Fact]
     public void Text_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('0', 32768))));
