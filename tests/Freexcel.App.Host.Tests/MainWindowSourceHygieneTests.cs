@@ -66,8 +66,8 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
         xaml.Should().Contain("IsCheckable=\"True\"");
         source.Should().Contain("ArrangeAllContextMenu_Opened");
-        source.Should().Contain("_workbook.WindowArrangement.ToString()");
-        source.Should().Contain("item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal)");
+        source.Should().Contain("ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
+        source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement");
     }
 
     [Fact]

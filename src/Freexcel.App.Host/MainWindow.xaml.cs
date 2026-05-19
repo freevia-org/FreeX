@@ -11873,15 +11873,15 @@ public partial class MainWindow : Window
         if (sender is not ContextMenu menu)
             return;
 
-        var current = _workbook.WindowArrangement.ToString();
         foreach (var item in menu.Items.OfType<MenuItem>())
-            item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal);
+            item.IsChecked = ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement);
     }
 
     private void ArrangeAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as System.Windows.Controls.MenuItem)?.Tag is not string tag ||
-            !Enum.TryParse<WorkbookWindowArrangement>(tag, out var arrangement))
+        if (!ArrangeAllMenuPlanner.TryParseArrangement(
+                (sender as System.Windows.Controls.MenuItem)?.Tag,
+                out var arrangement))
             return;
 
         TryExecuteCommand(new SetWorkbookWindowArrangementCommand(arrangement), "Arrange Windows");
