@@ -4490,6 +4490,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceFileRecoveryProperties = sourceWorkbookXml.Root?.Element(workbookNs + "fileRecoveryPr");
         var sourceSmartTagProperties = sourceWorkbookXml.Root?.Element(workbookNs + "smartTagPr");
         var sourceSmartTagTypes = sourceWorkbookXml.Root?.Element(workbookNs + "smartTagTypes");
+        var sourceFunctionGroups = sourceWorkbookXml.Root?.Element(workbookNs + "functionGroups");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
         var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
@@ -4501,6 +4502,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sourceFileRecoveryProperties is null &&
             sourceSmartTagProperties is null &&
             sourceSmartTagTypes is null &&
+            sourceFunctionGroups is null &&
             sourceDefinedNames is null &&
             sourceBookViews is null &&
             sourceCustomWorkbookViews is null &&
@@ -4525,6 +4527,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (MergeWorkbookChildBlock(sourceSmartTagProperties, targetRoot, workbookNs + "smartTagPr"))
             changed = true;
         if (MergeWorkbookChildBlock(sourceSmartTagTypes, targetRoot, workbookNs + "smartTagTypes"))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceFunctionGroups, targetRoot, workbookNs + "functionGroups"))
             changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
