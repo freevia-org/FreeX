@@ -210,13 +210,10 @@ public class XlsxCorpusRunnerTests
         {
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
-            [XlsxUnsupportedFeatureKind.Slicers] = "excluded slicer disclosed",
-            [XlsxUnsupportedFeatureKind.Timelines] = "excluded timeline disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
             [XlsxUnsupportedFeatureKind.CustomXmlParts] = "unsupported custom XML disclosed",
             [XlsxUnsupportedFeatureKind.ConditionalFormats] = "unsupported conditional-format rule disclosed",
             [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
-            [XlsxUnsupportedFeatureKind.Sparklines] = "unsupported sparkline disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
             [XlsxUnsupportedFeatureKind.DataModel] = "excluded Data Model disclosed",
             [XlsxUnsupportedFeatureKind.LinkedDataTypes] = "excluded linked data type disclosed",
@@ -242,12 +239,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("unsupported-chart-family"))
             expected.Add(XlsxUnsupportedFeatureKind.Charts);
-
-        if (tags.Contains("slicers"))
-            expected.Add(XlsxUnsupportedFeatureKind.Slicers);
-
-        if (tags.Contains("timelines"))
-            expected.Add(XlsxUnsupportedFeatureKind.Timelines);
 
         if (tags.Contains("power-query") || tags.Contains("connections"))
             expected.Add(XlsxUnsupportedFeatureKind.PowerQuery);

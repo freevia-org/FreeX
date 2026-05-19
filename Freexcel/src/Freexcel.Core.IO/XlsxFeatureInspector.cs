@@ -7,16 +7,11 @@ namespace Freexcel.Core.IO;
 public enum XlsxUnsupportedFeatureKind
 {
     Macros,
-    PivotTables,
     Charts,
-    Slicers,
-    Timelines,
-    ExternalLinks,
     EmbeddedObjects,
     CustomXmlParts,
     ConditionalFormats,
     DrawingObjects,
-    Sparklines,
     PowerQuery,
     DataModel,
     LinkedDataTypes,
@@ -29,7 +24,6 @@ public enum XlsxUnsupportedFeatureKind
     LiveWebQueries,
     SensitivityLabels,
     SmartArtDiagrams,
-    StructuredTables,
     UnsupportedSheetTypes
 }
 

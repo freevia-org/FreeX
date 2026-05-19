@@ -63,16 +63,11 @@ public static class DeferredCommandMessages
     public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
     {
         XlsxUnsupportedFeatureKind.Macros => "VBA macros (excluded)",
-        XlsxUnsupportedFeatureKind.PivotTables => "PivotTables/pivot caches",
         XlsxUnsupportedFeatureKind.Charts => "XLSX chart package parts",
-        XlsxUnsupportedFeatureKind.Slicers => "slicers",
-        XlsxUnsupportedFeatureKind.Timelines => "timelines",
-        XlsxUnsupportedFeatureKind.ExternalLinks => "external links",
         XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
         XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
         XlsxUnsupportedFeatureKind.ConditionalFormats => "unsupported conditional formatting",
         XlsxUnsupportedFeatureKind.DrawingObjects => "drawing objects",
-        XlsxUnsupportedFeatureKind.Sparklines => "sparklines",
         XlsxUnsupportedFeatureKind.PowerQuery => "Power Query queries (excluded)",
         XlsxUnsupportedFeatureKind.DataModel => "Data Model / Power Pivot (excluded)",
         XlsxUnsupportedFeatureKind.LinkedDataTypes => "Microsoft linked data types (excluded)",
@@ -85,7 +80,6 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.LiveWebQueries => "live web queries / web publishing",
         XlsxUnsupportedFeatureKind.SensitivityLabels => "sensitivity labels / IRM metadata",
         XlsxUnsupportedFeatureKind.SmartArtDiagrams => "SmartArt diagrams",
-        XlsxUnsupportedFeatureKind.StructuredTables => "structured Excel tables",
         XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => "chart sheets / dialog sheets / macro sheets",
         _ => kind.ToString()
     };
