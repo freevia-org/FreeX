@@ -275,6 +275,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 foreach (var pivotTable in pivotTables)
                     sheet.PivotTables.Add(ToPivotTableModel(pivotTable, sheet.Id));
             }
+            ResolvePivotChartCacheBindings(workbook, sheet);
             if (structuredTableMetadata.TablesBySheetName.TryGetValue(xlSheet.Name, out var structuredTables))
             {
                 foreach (var structuredTable in structuredTables)
@@ -797,9 +798,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 slicers.Add(new SlicerModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     PackagePart = slicerEntry.FullName.Replace('\\', '/')
                 });
                 slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
@@ -823,9 +826,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 timelines.Add(new TimelineModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     StartDate = cache?.StartDate,
                     EndDate = cache?.EndDate,
                     SelectedStartDate = cache?.SelectedStartDate,
@@ -1527,6 +1532,49 @@ public sealed class XlsxFileAdapter : IFileAdapter
         pivotTable.LabelFilters.AddRange(pending.LabelFilters);
         pivotTable.Sorts.AddRange(pending.Sorts);
         return pivotTable;
+    }
+
+    private static void ResolvePivotChartCacheBindings(Workbook workbook, Sheet chartSheet)
+    {
+        if (chartSheet.Charts.Count == 0)
+            return;
+
+        foreach (var chart in chartSheet.Charts)
+        {
+            if (!chart.IsPivotChart ||
+                chart.PivotCacheId is not null ||
+                string.IsNullOrWhiteSpace(chart.PivotTableName))
+            {
+                continue;
+            }
+
+            if (TryFindPivotTableForChart(workbook, chartSheet, chart, out var pivotTable))
+                chart.PivotCacheId = pivotTable.CacheId;
+        }
+    }
+
+    private static bool TryFindPivotTableForChart(
+        Workbook workbook,
+        Sheet chartSheet,
+        ChartModel chart,
+        out PivotTableModel pivotTable)
+    {
+        if (!string.IsNullOrWhiteSpace(chart.PivotSourceSheetName))
+        {
+            foreach (var sheet in workbook.Sheets)
+            {
+                if (!string.Equals(sheet.Name, chart.PivotSourceSheetName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                pivotTable = sheet.PivotTables.FirstOrDefault(pivot =>
+                    string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase))!;
+                return pivotTable is not null;
+            }
+        }
+
+        pivotTable = chartSheet.PivotTables.FirstOrDefault(pivot =>
+            string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase))!;
+        return pivotTable is not null;
     }
 
     private static int? ReadIntAttribute(XElement element, string attributeName) =>
@@ -3742,6 +3790,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         MergeContentTypes(sourceArchive, generatedArchive);
         MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        PreserveDocumentProperties(sourceArchive, generatedArchive);
         PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive);
         PreserveStylesheetMetadata(sourceArchive, generatedArchive);
         PreservePivotXmlReferences(sourceArchive, generatedArchive);
@@ -3752,6 +3801,84 @@ public sealed class XlsxFileAdapter : IFileAdapter
         PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
         PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
+    }
+
+    private static void PreserveDocumentProperties(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        PreserveDocumentPropertyElements(
+            sourceArchive,
+            targetArchive,
+            "docProps/core.xml",
+            [
+                XName.Get("subject", "http://purl.org/dc/elements/1.1/"),
+                XName.Get("keywords", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                XName.Get("category", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                XName.Get("contentStatus", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"),
+                XName.Get("language", "http://purl.org/dc/elements/1.1/"),
+                XName.Get("version", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties")
+            ]);
+
+        PreserveDocumentPropertyElements(
+            sourceArchive,
+            targetArchive,
+            "docProps/app.xml",
+            [
+                XName.Get("Application", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("Company", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("Manager", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("PresentationFormat", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"),
+                XName.Get("Template", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")
+            ]);
+    }
+
+    private static void PreserveDocumentPropertyElements(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string partName,
+        IReadOnlyCollection<XName> stableElementNames)
+    {
+        var sourceEntry = sourceArchive.GetEntry(partName);
+        var targetEntry = targetArchive.GetEntry(partName);
+        if (sourceEntry is null)
+            return;
+
+        if (targetEntry is null)
+        {
+            CopyZipEntry(sourceEntry, targetArchive);
+            return;
+        }
+
+        var sourceXml = LoadXml(sourceEntry);
+        var targetXml = LoadXml(targetEntry);
+        var sourceRoot = sourceXml.Root;
+        var targetRoot = targetXml.Root;
+        if (sourceRoot is null || targetRoot is null)
+            return;
+
+        var changed = false;
+        foreach (var stableElementName in stableElementNames)
+        {
+            var sourceElement = sourceRoot.Element(stableElementName);
+            if (sourceElement is null)
+                continue;
+
+            var targetElement = targetRoot.Element(stableElementName);
+            if (targetElement is null)
+            {
+                targetRoot.Add(new XElement(sourceElement));
+                changed = true;
+                continue;
+            }
+
+            if (XNode.DeepEquals(targetElement, sourceElement))
+                continue;
+
+            targetElement.ReplaceWith(new XElement(sourceElement));
+            changed = true;
+        }
+
+        if (changed)
+            ReplacePackageXml(targetArchive, partName, targetXml);
     }
 
     private static void PreserveStylesheetMetadata(ZipArchive sourceArchive, ZipArchive targetArchive)
@@ -3863,7 +3990,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, slicerPath, new XDocument(
                 new XElement(slicerNs + "slicer",
                     new XAttribute("name", slicer.Name),
-                    new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName))));
+                    new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName),
+                    OptionalAttribute("caption", slicer.Caption),
+                    OptionalAttribute("style", slicer.StyleName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "slicerCacheDefinition",
                     new XAttribute("name", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName),
@@ -3895,7 +4024,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, timelinePath, new XDocument(
                 new XElement(slicerNs + "timeline",
                     new XAttribute("name", timeline.Name),
-                    new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName))));
+                    new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName),
+                    OptionalAttribute("caption", timeline.Caption),
+                    OptionalAttribute("style", timeline.StyleName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "timelineCacheDefinition",
                     new XAttribute("name", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName),
@@ -7724,8 +7855,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return null;
 
+        var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+            ? sheet.Name
+            : chart.PivotSourceSheetName!;
         return new XElement(chartNs + "pivotSource",
-            new XElement(chartNs + "name", $"{QuoteSheetName(sheet.Name)}!{chart.PivotTableName}"),
+            new XElement(chartNs + "name", $"{QuoteSheetName(sourceSheetName)}!{chart.PivotTableName}"),
             new XElement(chartNs + "fmtId", new XAttribute("val", "0")));
     }
 
