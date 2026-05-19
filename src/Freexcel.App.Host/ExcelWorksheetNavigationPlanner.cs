@@ -5,6 +5,20 @@ namespace Freexcel.App.Host;
 
 public static class ExcelWorksheetNavigationPlanner
 {
+    public static bool TryToggleEndMode(Key key, ModifierKeys modifiers, bool current, out bool next)
+    {
+        next = current;
+        if (key != Key.End || modifiers != ModifierKeys.None)
+            return false;
+
+        next = !current;
+        return true;
+    }
+
+    public static bool ShouldUseDataBoundary(Key key, ModifierKeys modifiers, bool endMode) =>
+        key is Key.Up or Key.Down or Key.Left or Key.Right &&
+        (endMode || (modifiers & ModifierKeys.Control) != 0);
+
     public static CellAddress? GetHorizontalPageTarget(
         Key key,
         Key systemKey,
