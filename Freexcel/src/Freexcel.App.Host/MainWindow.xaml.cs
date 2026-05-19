@@ -4947,26 +4947,6 @@ public partial class MainWindow : Window
             _groupedSheetIds.Add(clickedSheetId);
     }
 
-    private static string? PromptForInput(string prompt, string defaultValue)
-    {
-        var win = new Window
-        {
-            Title = prompt, Width = 300, Height = 120,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize
-        };
-        var tb = new System.Windows.Controls.TextBox { Text = defaultValue, Margin = new Thickness(10) };
-        var btn = new System.Windows.Controls.Button { Content = "OK", Margin = new Thickness(10, 0, 10, 10) };
-        var sp = new System.Windows.Controls.StackPanel();
-        sp.Children.Add(tb);
-        sp.Children.Add(btn);
-        win.Content = sp;
-        string? result = null;
-        btn.Click += (_, _) => { result = tb.Text; win.Close(); };
-        win.ShowDialog();
-        return result;
-    }
-
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -5121,8 +5101,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var thresholdText = PromptForInput("Conditional Format: highlight cells greater than", "0");
-        if (string.IsNullOrWhiteSpace(thresholdText)) return;
+        var dialog = new ConditionalFormatThresholdDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
 
         var cf = new ConditionalFormat
         {
@@ -5130,7 +5111,7 @@ public partial class MainWindow : Window
             Priority     = 1,
             RuleType     = CfRuleType.CellValue,
             Operator     = CfOperator.GreaterThan,
-            Value1       = thresholdText.Trim(),
+            Value1       = dialog.Result.ThresholdText,
             FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 0, 0) }
         };
 
@@ -7200,10 +7181,11 @@ public partial class MainWindow : Window
 
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var input = PromptForInput("Row height (pixels):", "20");
-        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var h)) return;
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, h)))
+        var dialog = new RowHeightDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+        if (!TryExecuteGroupedSheetCommand("Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, dialog.Result.Height)))
             return;
         UpdateViewport();
     }
@@ -7216,10 +7198,11 @@ public partial class MainWindow : Window
     }
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        var input = PromptForInput("Column width (character units):", "8");
-        if (input is null || !WorksheetSizeInputParser.TryParsePositiveSize(input, out var w)) return;
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, w)))
+        var dialog = new ColumnWidthDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+        if (!TryExecuteGroupedSheetCommand("Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, dialog.Result.Width)))
             return;
         UpdateViewport();
     }
@@ -7418,8 +7401,10 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
         var startVal = sheet.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
         if (startVal is null) { MessageBox.Show("Select a cell with a numeric value to start a series."); return; }
-        var stepInput = PromptForInput("Step value:", "1");
-        if (stepInput is null || !FillSeriesPlanner.TryParseStep(stepInput, out var step)) return;
+        var dialog = new FillSeriesStepDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+        var step = dialog.Result.Step;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Fill Series",
@@ -7429,7 +7414,7 @@ public partial class MainWindow : Window
                     var currentSheet = _workbook.GetSheet(_currentSheetId);
                     List<(CellAddress Address, Cell NewCell)> edits = currentSheet is null
                         ? []
-                        : FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, step);
+                        : FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, dialog.Result.Step);
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
@@ -8883,6 +8868,75 @@ public partial class MainWindow : Window
 
         InsertChartOfType(dialog.Result.ChartType);
     }
+
+    private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Change Chart Type", out var chart))
+            return;
+
+        var dialog = new ChangeChartTypeDialog(chart.Type) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType), "Change Chart Type"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void SelectChartDataSourceBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveNormalChart("Select Data Source", out var chart))
+            return;
+
+        var dialog = new SelectDataSourceDialog(
+            FormatRangeReference(chart.DataRange.Start, chart.DataRange.End),
+            chart.FirstColIsCategories)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        GridRange dataRange;
+        try
+        {
+            dataRange = GridRange.Parse(dialog.Result.SourceRangeText, _currentSheetId);
+        }
+        catch
+        {
+            MessageBox.Show("Enter a valid chart data range.", "Select Data Source", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new ChangeChartSourceCommand(
+                    _currentSheetId,
+                    chart.Id,
+                    dataRange,
+                    firstRowIsHeader: chart.FirstRowIsHeader,
+                    firstColIsCategories: dialog.Result.FirstColumnIsCategories),
+                "Select Data Source"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        chart = sheet?.Charts.FirstOrDefault(item => !item.IsPivotChart) ?? null!;
+        if (chart is not null)
+            return true;
+
+        MessageBox.Show(
+            "Insert or select a chart before using this command.",
+            caption,
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+        return false;
+    }
+
     private void ChartColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Column);
     private void ChartStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.StackedColumn);
     private void ChartPercentStackedColumnMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.PercentStackedColumn);
@@ -9921,24 +9975,28 @@ public partial class MainWindow : Window
     private void InsertSparkline(string type)
     {
         var selected = SheetGrid.SelectedRange;
-        var rangeInput = PromptForInput("Data range (e.g. A1:E1):", selected?.ToString() ?? "");
-        if (rangeInput is null) return;
-        var targetInput = PromptForInput("Location cell (e.g. F1):", "");
-        if (targetInput is null) return;
+        var dialog = new SparklineDialog(selected?.ToString() ?? "", "", ToSparklineKindChoice(type)) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
 
-        if (!SparklineInputParser.TryParseDataRange(rangeInput, _currentSheetId, out var dataRange))
+        if (!SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange))
         {
             MessageBox.Show("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (!SparklineInputParser.TryParseLocation(targetInput, _currentSheetId, out var location))
+        if (!SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location))
         {
             MessageBox.Show("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        var kind = SparklineInputParser.ParseKind(type);
+        var kind = dialog.Result.Kind switch
+        {
+            SparklineKindChoice.Column => SparklineKind.Column,
+            SparklineKindChoice.WinLoss => SparklineKind.WinLoss,
+            _ => SparklineKind.Line
+        };
 
         var fallbackLocationRange = new GridRange(location, location);
         if (!TryExecuteRepeatableCurrentRangeCommand(
@@ -9951,6 +10009,14 @@ public partial class MainWindow : Window
         EnsureCellVisible(location);
         UpdateViewport();
     }
+
+    private static SparklineKindChoice ToSparklineKindChoice(string type) =>
+        type switch
+        {
+            "column" => SparklineKindChoice.Column,
+            "winloss" => SparklineKindChoice.WinLoss,
+            _ => SparklineKindChoice.Line
+        };
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -11448,17 +11514,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var periodsInput = PromptForInput("Forecast periods:", "3");
-        if (periodsInput is null)
+        var dialog = new ForecastSheetDialog { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
-        if (!ForecastSheetInputParser.TryParsePeriods(periodsInput, out var periods))
-        {
-            MessageBox.Show("Enter a positive whole number of forecast periods.",
-                "Forecast Sheet", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
 
-        if (!TryExecuteCommand(new ForecastSheetCommand(range, periods), "Forecast Sheet"))
+        if (!TryExecuteCommand(new ForecastSheetCommand(range, dialog.Result.Periods), "Forecast Sheet"))
             return;
 
         var forecastSheet = _workbook.Sheets.LastOrDefault();
@@ -11521,23 +11581,23 @@ public partial class MainWindow : Window
             return;
         }
 
-        var plan = SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId);
-        var action = PromptForInput(
-            $"Found {issues.Count} known spelling issue(s) in {plan.Edits.Count} text cell(s) on the active sheet.\n" +
-            "Type replace to review the first issue, replace all to apply all known corrections, or ignore to leave them unchanged.",
-            "replace");
-        if (action is null)
+        var issue = issues[0];
+        SetActiveCell(issue.Address);
+        EnsureCellVisible(issue.Address);
+        UpdateViewport();
+
+        var dialog = new SpellCheckDialog(issue.Word, issue.Suggestion) { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
 
-        var normalizedAction = action.Trim();
-        if (normalizedAction.Equals("ignore", StringComparison.OrdinalIgnoreCase))
+        if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
         {
             MessageBox.Show("Spelling issues ignored.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        if (normalizedAction.Equals("replace all", StringComparison.OrdinalIgnoreCase) ||
-            normalizedAction.Equals("all", StringComparison.OrdinalIgnoreCase))
+        var plan = SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId);
+        if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
         {
             var edits = SpellCheckService.BuildCorrectionCellEdits(plan);
             if (edits.Count == 0)
@@ -11554,22 +11614,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!normalizedAction.Equals("replace", StringComparison.OrdinalIgnoreCase) &&
-            !normalizedAction.Equals("first", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show("Type replace, replace all, or ignore.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        var issue = issues[0];
-        SetActiveCell(issue.Address);
-        EnsureCellVisible(issue.Address);
-        UpdateViewport();
-
-        var replacement = PromptForInput(
-            $"Replace '{issue.Word}' in {issue.Address.ToA1()} with:",
-            issue.Suggestion);
-        if (replacement is null) return;
+        var replacement = dialog.Result.Replacement ?? issue.Suggestion;
 
         var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
         if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
@@ -12054,18 +12099,11 @@ public partial class MainWindow : Window
     private void ZoomCustomMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var current = (int)Math.Round(_zoomLevel * 100);
-        var input = PromptForInput("Zoom", current.ToString(System.Globalization.CultureInfo.CurrentCulture));
-        if (!Freexcel.App.UI.ZoomLevelMapper.TryParseZoomPercent(input, out var zoomPercent))
-        {
-            MessageBox.Show(
-                "Enter a zoom value from 10 to 400.",
-                "Zoom",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+        var dialog = new ZoomDialog(current) { Owner = this };
+        if (dialog.ShowDialog() != true)
             return;
-        }
 
-        ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
     }
     private void Zoom100Btn_Click(object sender, RoutedEventArgs e)
     {
@@ -12198,7 +12236,11 @@ public partial class MainWindow : Window
 
     private void RenameSheetFromTab(SheetTabViewModel tab)
     {
-        var name = PromptForInput("Rename Sheet", tab.Name);
+        var dialog = new SheetNameDialog(tab.Name) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var name = dialog.Result.SheetName;
         if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
         {
             var outcome = _commandBus.Execute(_workbook.Id, new RenameSheetCommand(tab.Id, name));
@@ -12325,8 +12367,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var defaultName = hiddenSheets[0].Name;
-        var name = PromptForInput("Unhide sheet name:", defaultName);
+        var dialog = new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name)) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var name = dialog.Result.SheetName;
         if (string.IsNullOrWhiteSpace(name)) return;
 
         var sheet = hiddenSheets.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
