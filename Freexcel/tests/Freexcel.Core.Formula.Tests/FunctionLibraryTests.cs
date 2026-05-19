@@ -1169,6 +1169,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Value_ParsesTimeAndDateTimeText()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=VALUE(\"1:30 PM\")", sheet).Should().Be(new NumberValue(0.5625));
+        _eval.Evaluate("=VALUE(\"1/2/2024 6:00 AM\")", sheet)
+            .Should().Be(new NumberValue(new DateTime(2024, 1, 2, 6, 0, 0).ToOADate()));
+    }
+
+    [Fact]
     public void Value_InvalidText_ReturnsValueError()
     {
         var sheet = MakeSheet();
