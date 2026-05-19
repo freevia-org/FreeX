@@ -13,11 +13,21 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DATE(1900,2,28)", 59)]
     [InlineData("=DATE(1900,2,29)", 60)]
     [InlineData("=DATE(1900,3,0)", 60)]
+    [InlineData("=DATE(1900,2,0)", 31)]
+    [InlineData("=DATE(1900,3,-1)", 59)]
     [InlineData("=DATE(1900,3,1)", 61)]
     [InlineData("=DATE(2024,1,15)", 45306)]
     public void Date_ReturnsExcelSerialNumbers(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=DATE(1900,0,31)")]
+    [InlineData("=DATE(1900,-1,62)")]
+    public void Date_ReturnsNumWhenMonthUnderflowReachesSerialZero(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Num);
     }
 
     [Theory]

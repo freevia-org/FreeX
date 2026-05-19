@@ -1641,6 +1641,7 @@ public static class BuiltInFunctions
         if (year >= 0 && year < 1900)
             year += 1900;
         if (year < 0 || year > 9999) return ErrorValue.Num;
+        if (year == 1900 && month < 1) return ErrorValue.Num;
         try
         {
             var dt = new DateTime(year, 1, 1)
@@ -1648,6 +1649,8 @@ public static class BuiltInFunctions
                 .AddDays(day - 1);
             double serial = DateToSerial(dt);
             if (serial < 0) return ErrorValue.Num;
+            if (year == 1900 && month >= 3 && dt < new DateTime(1900, 3, 1))
+                return new NumberValue(serial + 1);
             if (year == 1900 && month == 3 && day == 0)
                 return new NumberValue(60);
             if (dt == new DateTime(1900, 3, 1) && month < 3)
