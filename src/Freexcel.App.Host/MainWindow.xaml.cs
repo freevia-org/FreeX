@@ -10385,34 +10385,14 @@ public partial class MainWindow : Window
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var current = sheet.ScaleToFit;
-        var defaultValue = current.ScalePercent.HasValue
-            ? current.ScalePercent.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : $"{current.FitToPagesWide ?? 1}x{current.FitToPagesTall ?? 1}";
+        var defaultValue = PageLayoutInputParser.FormatScaleToFit(sheet.ScaleToFit);
         var input = PromptForInput("Scale percent (10-400) or pages wide x tall (for example 1x1):", defaultValue);
         if (input is null) return;
 
-        WorksheetScaleToFit scaleToFit;
-        if (input.Contains('x', StringComparison.OrdinalIgnoreCase))
+        if (!PageLayoutInputParser.TryParseScaleToFit(input, out var scaleToFit))
         {
-            var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2 ||
-                !int.TryParse(parts[0], out var wide) ||
-                !int.TryParse(parts[1], out var tall))
-            {
-                MessageBox.Show("Enter fit-to-pages as width x height, for example 1x1.", "Scale to Fit", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            scaleToFit = new WorksheetScaleToFit(null, wide, tall);
-        }
-        else if (int.TryParse(input, out var percent))
-        {
-            scaleToFit = new WorksheetScaleToFit(percent, null, null);
-        }
-        else
-        {
-            MessageBox.Show("Enter a scale percent or fit-to-pages value.", "Scale to Fit", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Enter a scale percent from 10 to 400 or fit-to-pages as width x height, for example 1x1.",
+                "Scale to Fit", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
