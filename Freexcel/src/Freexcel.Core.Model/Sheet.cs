@@ -174,6 +174,9 @@ public sealed class Sheet
     /// <summary>Whether Excel should fully recalculate this worksheet when opened.</summary>
     public bool FullCalculationOnLoad { get; set; }
 
+    /// <summary>Worksheet-level phonetic display metadata loaded from XLSX phoneticPr.</summary>
+    public WorksheetPhoneticProperties? PhoneticProperties { get; set; }
+
     /// <summary>True when the sheet is hidden from the worksheet tab strip.</summary>
     public bool IsHidden { get; set; }
 
@@ -538,6 +541,7 @@ public sealed class Sheet
             ZoomPercent                   = ZoomPercent,
             ShowFormulas                  = ShowFormulas,
             FullCalculationOnLoad         = FullCalculationOnLoad,
+            PhoneticProperties            = PhoneticProperties,
             PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
@@ -763,6 +767,8 @@ public sealed class Sheet
 }
 
 public sealed record WorksheetCustomProperty(string Name, int Id);
+
+public sealed record WorksheetPhoneticProperties(string? FontId, string? Type, string? Alignment);
 
 public enum WorksheetViewMode
 {

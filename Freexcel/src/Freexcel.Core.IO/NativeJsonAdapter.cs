@@ -87,6 +87,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             sheet.ZoomPercent = ValidZoomPercentOrDefault(sDto.ZoomPercent);
             sheet.ShowFormulas = sDto.ShowFormulas ?? false;
             sheet.FullCalculationOnLoad = sDto.FullCalculationOnLoad;
+            sheet.PhoneticProperties = ToWorksheetPhoneticProperties(sDto.PhoneticProperties);
             sheet.FrozenRows = ValidFrozenRowsOrZero(sDto.FrozenRows);
             sheet.FrozenCols = ValidFrozenColumnsOrZero(sDto.FrozenCols);
             sheet.ViewTopRow = ValidRowPaneOrNull(sDto.ViewTopRow);
@@ -721,6 +722,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 ZoomPercent = ValidZoomPercentOrDefault(s.ZoomPercent),
                 ShowFormulas = s.ShowFormulas,
                 FullCalculationOnLoad = s.FullCalculationOnLoad,
+                PhoneticProperties = ToWorksheetPhoneticPropertiesDto(s.PhoneticProperties),
                 FrozenRows = ValidFrozenRowsOrZero(s.FrozenRows),
                 FrozenCols = ValidFrozenColumnsOrZero(s.FrozenCols),
                 ViewTopRow = ValidRowPaneOrNull(s.ViewTopRow),
@@ -1527,6 +1529,37 @@ public sealed class NativeJsonAdapter : IFileAdapter
         };
     }
 
+    private static WorksheetPhoneticProperties? ToWorksheetPhoneticProperties(WorksheetPhoneticPropertiesDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var fontId = string.IsNullOrWhiteSpace(dto.FontId) ? null : dto.FontId;
+        var type = string.IsNullOrWhiteSpace(dto.Type) ? null : dto.Type;
+        var alignment = string.IsNullOrWhiteSpace(dto.Alignment) ? null : dto.Alignment;
+        return fontId is null && type is null && alignment is null
+            ? null
+            : new WorksheetPhoneticProperties(fontId, type, alignment);
+    }
+
+    private static WorksheetPhoneticPropertiesDto? ToWorksheetPhoneticPropertiesDto(WorksheetPhoneticProperties? properties)
+    {
+        if (properties is null)
+            return null;
+
+        var fontId = string.IsNullOrWhiteSpace(properties.FontId) ? null : properties.FontId;
+        var type = string.IsNullOrWhiteSpace(properties.Type) ? null : properties.Type;
+        var alignment = string.IsNullOrWhiteSpace(properties.Alignment) ? null : properties.Alignment;
+        return fontId is null && type is null && alignment is null
+            ? null
+            : new WorksheetPhoneticPropertiesDto
+            {
+                FontId = fontId,
+                Type = type,
+                Alignment = alignment
+            };
+    }
+
     private static int ValidZoomPercentOrDefault(int? zoomPercent) =>
         zoomPercent is >= 10 and <= 400 ? zoomPercent.Value : 100;
 
@@ -1776,6 +1809,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public int? ZoomPercent { get; set; }
         public bool? ShowFormulas { get; set; }
         public bool FullCalculationOnLoad { get; set; }
+        public WorksheetPhoneticPropertiesDto? PhoneticProperties { get; set; }
         public uint FrozenRows { get; set; }
         public uint FrozenCols { get; set; }
         public uint? ViewTopRow { get; set; }
@@ -1836,6 +1870,13 @@ public sealed class NativeJsonAdapter : IFileAdapter
     {
         public string Name { get; set; } = "";
         public int Id { get; set; }
+    }
+
+    private class WorksheetPhoneticPropertiesDto
+    {
+        public string? FontId { get; set; }
+        public string? Type { get; set; }
+        public string? Alignment { get; set; }
     }
 
     private class DataValidationDto
