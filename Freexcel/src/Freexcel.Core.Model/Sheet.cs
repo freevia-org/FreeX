@@ -180,6 +180,9 @@ public sealed class Sheet
     /// <summary>Optional VBA/OOXML sheet code name metadata.</summary>
     public string? CodeName { get; set; }
 
+    /// <summary>Worksheet custom-property metadata loaded from XLSX customPr elements.</summary>
+    public List<WorksheetCustomProperty> CustomProperties { get; } = [];
+
     /// <summary>Optional worksheet tab color.</summary>
     public CellColor? TabColor { get; set; }
 
@@ -622,6 +625,8 @@ public sealed class Sheet
         // Allow-edit ranges (protection)
         foreach (var range in AllowEditRanges)
             copy.AllowEditRanges.Add(RemapRange(range, newId));
+        foreach (var property in CustomProperties)
+            copy.CustomProperties.Add(property);
 
         // Pivot tables
         foreach (var pt in PivotTables)
@@ -752,6 +757,8 @@ public sealed class Sheet
             new(RemapAddress(r.Start, id), RemapAddress(r.End, id));
     }
 }
+
+public sealed record WorksheetCustomProperty(string Name, int Id);
 
 public enum WorksheetViewMode
 {
