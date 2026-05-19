@@ -55,4 +55,70 @@ public sealed class KeyboardInsertDeletePlannerTests
 
         plan.Should().Be(KeyboardInsertDeletePlan.CellShiftDialog);
     }
+
+    [Theory]
+    [InlineData("right", KeyboardInsertDeleteDialogChoice.ShiftRight)]
+    [InlineData("r", KeyboardInsertDeleteDialogChoice.ShiftRight)]
+    [InlineData("down", KeyboardInsertDeleteDialogChoice.ShiftDown)]
+    [InlineData("d", KeyboardInsertDeleteDialogChoice.ShiftDown)]
+    [InlineData("row", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("rows", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("entire row", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    [InlineData("columns", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    [InlineData("entire column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    public void TryParseInsertDialogChoice_RecognizesShiftAndEntireAxisChoices(
+        string input,
+        KeyboardInsertDeleteDialogChoice expected)
+    {
+        var parsed = KeyboardInsertDeletePlanner.TryParseInsertDialogChoice(input, out var choice);
+
+        parsed.Should().BeTrue();
+        choice.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("left", KeyboardInsertDeleteDialogChoice.ShiftLeft)]
+    [InlineData("l", KeyboardInsertDeleteDialogChoice.ShiftLeft)]
+    [InlineData("up", KeyboardInsertDeleteDialogChoice.ShiftUp)]
+    [InlineData("u", KeyboardInsertDeleteDialogChoice.ShiftUp)]
+    [InlineData("row", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("rows", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("entire row", KeyboardInsertDeleteDialogChoice.EntireRow)]
+    [InlineData("column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    [InlineData("columns", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    [InlineData("entire column", KeyboardInsertDeleteDialogChoice.EntireColumn)]
+    public void TryParseDeleteDialogChoice_RecognizesShiftAndEntireAxisChoices(
+        string input,
+        KeyboardInsertDeleteDialogChoice expected)
+    {
+        var parsed = KeyboardInsertDeletePlanner.TryParseDeleteDialogChoice(input, out var choice);
+
+        parsed.Should().BeTrue();
+        choice.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("sideways")]
+    [InlineData("left")]
+    [InlineData("up")]
+    public void TryParseInsertDialogChoice_RejectsInvalidOrDeleteOnlyChoices(string input)
+    {
+        var parsed = KeyboardInsertDeletePlanner.TryParseInsertDialogChoice(input, out _);
+
+        parsed.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("sideways")]
+    [InlineData("right")]
+    [InlineData("down")]
+    public void TryParseDeleteDialogChoice_RejectsInvalidOrInsertOnlyChoices(string input)
+    {
+        var parsed = KeyboardInsertDeletePlanner.TryParseDeleteDialogChoice(input, out _);
+
+        parsed.Should().BeFalse();
+    }
 }
