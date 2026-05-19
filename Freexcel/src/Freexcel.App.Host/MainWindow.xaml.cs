@@ -392,6 +392,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (IsFormulasRibbonGroupSet(groups))
+        {
+            ApplyFormulasRibbonBreakpointOverrides(availableWidth, groups, states);
+            return;
+        }
+
         var collapseFrom = availableWidth switch
         {
             <= 900 => 0,
@@ -417,6 +423,11 @@ public partial class MainWindow : Window
     private static bool IsInsertRibbonGroupSet(IReadOnlyList<FrameworkElement> groups) =>
         groups.Count >= 4 && TryFindRibbonGroupIndex(groups, "Tables", out _);
 
+    private static bool IsFormulasRibbonGroupSet(IReadOnlyList<FrameworkElement> groups) =>
+        groups.Count >= 4 &&
+        TryFindRibbonGroupIndex(groups, "Function Library", out _) &&
+        TryFindRibbonGroupIndex(groups, "Formula Auditing", out _);
+
     private static void ApplyInsertRibbonBreakpointOverrides(
         double availableWidth,
         IReadOnlyList<FrameworkElement> groups,
@@ -429,11 +440,49 @@ public partial class MainWindow : Window
         }
     }
 
+    private static void ApplyFormulasRibbonBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<FrameworkElement> groups,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (availableWidth <= 900)
+        {
+            for (var i = 0; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 1120)
+        {
+            for (var i = 1; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+        else if (availableWidth <= 1320)
+        {
+            for (var i = 2; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+        }
+
+        if (availableWidth <= 1500 &&
+            TryFindRibbonGroupIndex(groups, "Function Library", out var functionLibraryIndex))
+        {
+            states[functionLibraryIndex] = RibbonAdaptiveGroupState.Collapsed;
+        }
+    }
+
     private static void ApplyHomeRibbonBreakpointOverrides(
         double availableWidth,
         IReadOnlyList<FrameworkElement> groups,
         RibbonAdaptiveGroupState[] states)
     {
+        if (availableWidth is > 1320 and <= 1500 &&
+            TryFindRibbonGroupIndex(groups, "Editing", out var editingIndex))
+        {
+            for (var i = editingIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
         if (availableWidth <= 900 &&
             TryFindRibbonGroupIndex(groups, "Font", out var fontIndex))
         {
@@ -615,6 +664,9 @@ public partial class MainWindow : Window
 
         foreach (var button in EnumerateVisualDescendants(group).OfType<ButtonBase>())
         {
+            if (button.Visibility != Visibility.Visible)
+                continue;
+
             if (!added.Add(button) || FindVisualAncestor<ButtonBase>(button) is { } ancestor && !ReferenceEquals(ancestor, button))
                 continue;
 
