@@ -14,6 +14,95 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void AutoFitSizingService_ColumnWidthGrowsForLongDisplayText()
+    {
+        var width = AutoFitSizingService.EstimateColumnWidth(["short", "a much longer display value"], defaultWidth: 8.43);
+
+        width.Should().BeGreaterThan(8.43);
+    }
+
+    [Fact]
+    public void AutoFitSizingService_ColumnWidthKeepsShortTextNearDefaultWidth()
+    {
+        var width = AutoFitSizingService.EstimateColumnWidth(["x"], defaultWidth: 8.43);
+
+        width.Should().BeApproximately(8.43, 0.01);
+        width.Should().BeLessThan(24);
+    }
+
+    [Fact]
+    public void AutoFitSizingService_ColumnWidthKeepsEmptyInputAtLeastDefaultWidth()
+    {
+        AutoFitSizingService.EstimateColumnWidth([], defaultWidth: 8.43)
+            .Should().BeApproximately(8.43, 0.01);
+
+        AutoFitSizingService.EstimateColumnWidth([""], defaultWidth: 8.43)
+            .Should().BeApproximately(8.43, 0.01);
+    }
+
+    [Fact]
+    public void AutoFitSizingService_RowHeightGrowsForMultilineDisplayText()
+    {
+        var height = AutoFitSizingService.EstimateRowHeight(["first line\nsecond line\nthird line"], defaultHeight: 20);
+
+        height.Should().BeGreaterThan(20);
+    }
+
+    [Fact]
+    public void AutoFitSizingService_ClampsColumnWidthToBounds()
+    {
+        AutoFitSizingService.EstimateColumnWidth(["x"], defaultWidth: 8)
+            .Should().Be(8);
+
+        AutoFitSizingService.EstimateColumnWidth([new string('x', 1_000)], defaultWidth: 8)
+            .Should().Be(255);
+    }
+
+    [Fact]
+    public void AutoFitSizingService_ClampsRowHeightToBounds()
+    {
+        AutoFitSizingService.EstimateRowHeight([""], defaultHeight: 8)
+            .Should().Be(16);
+
+        AutoFitSizingService.EstimateRowHeight([string.Join('\n', Enumerable.Repeat("line", 50))], defaultHeight: 20)
+            .Should().Be(220);
+    }
+
+    [Fact]
+    public void AutoFitEstimatedRowHeightCommand_UndoRestoresPreviousOverrides()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.RowHeights[1] = 19;
+
+        var height = AutoFitSizingService.EstimateRowHeight(["first\nsecond"], sheet.DefaultRowHeight);
+        var cmd = new SetRowHeightCommand(sheet.Id, 1, 1, height);
+
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(height);
+
+        cmd.Revert(ctx);
+
+        sheet.RowHeights[1].Should().Be(19);
+    }
+
+    [Fact]
+    public void AutoFitEstimatedColumnWidthCommand_UndoRestoresPreviousOverrides()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.ColumnWidths[1] = 12;
+
+        var width = AutoFitSizingService.EstimateColumnWidth(["a much longer display value"], sheet.DefaultColumnWidth);
+        var cmd = new SetColumnWidthCommand(sheet.Id, 1, 1, width);
+
+        cmd.Apply(ctx).Success.Should().BeTrue();
+        sheet.ColumnWidths[1].Should().Be(width);
+
+        cmd.Revert(ctx);
+
+        sheet.ColumnWidths[1].Should().Be(12);
+    }
+
+    [Fact]
     public void SetRowHeightCommand_SetsHeightForRowsAndUndoRestoresPreviousOverrides()
     {
         var (_, sheet, ctx) = Setup();
