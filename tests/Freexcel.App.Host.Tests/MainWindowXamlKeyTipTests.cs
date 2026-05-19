@@ -914,7 +914,10 @@ public sealed class MainWindowXamlKeyTipTests
         colorsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         colorsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Freexcel Colorful", "Grayscale");
+            .Should().Equal("Office", "Freexcel Colorful", "Grayscale", "Customize Colors...");
+        colorsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Colors...")
+            .Attribute("Click")?.Value.Should().Be("ThemeColorsCustomizeMenuItem_Click");
     }
 
     [Fact]
@@ -932,7 +935,10 @@ public sealed class MainWindowXamlKeyTipTests
         fontsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
         fontsButton.Descendants(presentation + "MenuItem")
             .Select(item => item.Attribute("Header")?.Value)
-            .Should().Equal("Office", "Arial", "Times New Roman");
+            .Should().Equal("Office", "Arial", "Times New Roman", "Customize Fonts...");
+        fontsButton.Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Customize Fonts...")
+            .Attribute("Click")?.Value.Should().Be("ThemeFontsCustomizeMenuItem_Click");
     }
 
     [Fact]
