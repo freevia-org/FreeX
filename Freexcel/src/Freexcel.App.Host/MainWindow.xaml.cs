@@ -4323,6 +4323,7 @@ public partial class MainWindow : Window
         InfoFormat.Text = plan.Format;
         InfoStatisticsSummary.Text = plan.StatisticsSummary;
         InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
+        InfoFormulaErrorSummary.Text = plan.FormulaErrorSummary;
     }
 
     private void UpdateSsGreeting()
