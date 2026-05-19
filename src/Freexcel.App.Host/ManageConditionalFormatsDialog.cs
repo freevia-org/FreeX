@@ -299,7 +299,11 @@ public sealed class ManageConditionalFormatsDialog : Window
     private void CommitResult()
     {
         ReassignPriorities();
-        ResultRules = [.. _rules];
+        ResultRules = BuildResultRules(
+            _sheet.ConditionalFormats,
+            _selection,
+            IsFilteringToSelection(),
+            _rules);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -314,6 +318,47 @@ public sealed class ManageConditionalFormatsDialog : Window
                 _rules[i] = CloneWithPriority(r, i + 1);
         }
     }
+
+    public static IReadOnlyList<ConditionalFormat> BuildResultRules(
+        IReadOnlyList<ConditionalFormat> sheetRules,
+        GridRange? selection,
+        bool filterToSelection,
+        IReadOnlyList<ConditionalFormat> editedRules)
+    {
+        if (!filterToSelection || selection is null)
+            return Reprioritize(editedRules);
+
+        var result = new List<ConditionalFormat>();
+        var insertedEditedRules = false;
+
+        foreach (var rule in sheetRules)
+        {
+            if (!RangesOverlap(rule.AppliesTo, selection.Value))
+            {
+                result.Add(rule);
+                continue;
+            }
+
+            if (insertedEditedRules)
+                continue;
+
+            result.AddRange(editedRules);
+            insertedEditedRules = true;
+        }
+
+        if (!insertedEditedRules)
+            result.AddRange(editedRules);
+
+        return Reprioritize(result);
+    }
+
+    private bool IsFilteringToSelection() =>
+        _selection.HasValue
+        && _scopeBox.SelectedItem is string selectedScope
+        && selectedScope == ScopeSelection;
+
+    private static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
+        rules.Select((rule, index) => CloneWithPriority(rule, index + 1)).ToList();
 
     private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority)
     {
