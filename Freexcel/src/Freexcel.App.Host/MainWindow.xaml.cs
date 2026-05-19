@@ -3587,26 +3587,10 @@ public partial class MainWindow : Window
 
     private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)
     {
-        newCell = default!;
-        if (text.StartsWith("="))
-        {
-            var formula = text.Substring(1);
-            if (_options.UseR1C1ReferenceStyle)
-                formula = FormulaReferenceStyleService.ToA1(formula, addr);
-            newCell = Cell.FromFormula(formula);
-        }
-        else
-        {
-            ScalarValue value;
-            if (double.TryParse(text, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var d) && double.IsFinite(d))
-                value = new NumberValue(d);
-            else if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
-                     text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
-                value = new BoolValue(text.Equals("TRUE", StringComparison.OrdinalIgnoreCase));
-            else value = new TextValue(text);
+        newCell = CellEntryParser.CreateCell(text, addr, _options.UseR1C1ReferenceStyle);
 
-            // Soft validation: check data validation rules and warn but still apply
+        if (newCell.Value is { } value)
+        {
             var sheet = _workbook.GetSheet(_currentSheetId);
             if (sheet != null)
             {
@@ -3658,8 +3642,6 @@ public partial class MainWindow : Window
                     }
                 }
             }
-
-            newCell = Cell.FromValue(value);
         }
 
         return true;
