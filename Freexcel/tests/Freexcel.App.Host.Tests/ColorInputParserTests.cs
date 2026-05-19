@@ -50,6 +50,26 @@ public sealed class ColorInputParserTests
     }
 
     [Theory]
+    [InlineData("33, 115, 70", 33, 115, 70)]
+    [InlineData("33,115,70", 33, 115, 70)]
+    public void TryParseRgbColorText_AcceptsRgbTriplesOnly(string input, byte r, byte g, byte b)
+    {
+        ColorInputParser.TryParseRgbColorText(input, out var color).Should().BeTrue();
+        color.Should().Be(new CellColor(r, g, b));
+    }
+
+    [Theory]
+    [InlineData("#217346")]
+    [InlineData("217346")]
+    [InlineData("1,2")]
+    [InlineData("1,2,300")]
+    public void TryParseRgbColorText_RejectsHexAndInvalidTriples(string input)
+    {
+        ColorInputParser.TryParseRgbColorText(input, out var color).Should().BeFalse();
+        color.Should().Be(default(CellColor));
+    }
+
+    [Theory]
     [InlineData("none")]
     [InlineData("clear")]
     [InlineData(" NONE ")]
@@ -63,5 +83,11 @@ public sealed class ColorInputParserTests
     public void FormatHexColor_ReturnsUppercaseHashRgb()
     {
         ColorInputParser.FormatHexColor(new CellColor(0x21, 0x73, 0x46)).Should().Be("#217346");
+    }
+
+    [Fact]
+    public void FormatRgbColor_ReturnsCommaSeparatedDecimalRgb()
+    {
+        ColorInputParser.FormatRgbColor(new CellColor(0x21, 0x73, 0x46)).Should().Be("33,115,70");
     }
 }

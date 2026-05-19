@@ -55,10 +55,10 @@ public partial class FormatCellsDialog : Window
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
         DlgSuperscriptCheck.IsChecked = s.Superscript;
         DlgSubscriptCheck.IsChecked = s.Subscript;
-        DlgFontColorBox.Text        = $"{s.FontColor.R},{s.FontColor.G},{s.FontColor.B}";
+        DlgFontColorBox.Text        = ColorInputParser.FormatRgbColor(s.FontColor);
 
         DlgFillColorBox.Text = s.FillColor.HasValue
-            ? $"{s.FillColor.Value.R},{s.FillColor.Value.G},{s.FillColor.Value.B}"
+            ? ColorInputParser.FormatRgbColor(s.FillColor.Value)
             : "";
         DlgClearFillCheck.IsChecked = false;
 
@@ -170,7 +170,7 @@ public partial class FormatCellsDialog : Window
     {
         styleBox.ItemsSource = Enum.GetNames(typeof(BorderStyle));
         styleBox.SelectedItem = border.Style.ToString();
-        colorBox.Text = FormatColor(border.Color);
+        colorBox.Text = ColorInputParser.FormatRgbColor(border.Color);
     }
 
     private static CellBorder ParseBorder(ComboBox styleBox, TextBox colorBox, CellBorder current)
@@ -186,8 +186,6 @@ public partial class FormatCellsDialog : Window
         var color = TryParseColor(colorBox.Text) ?? current.Color;
         return new CellBorder(style, color);
     }
-
-    private static string FormatColor(CellColor color) => $"{color.R},{color.G},{color.B}";
 
     private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFontColorBox, allowNoColor: false);
@@ -214,19 +212,15 @@ public partial class FormatCellsDialog : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        target.Text = dialog.SelectedColor is { } color ? FormatColor(color) : "";
+        target.Text = dialog.SelectedColor is { } color ? ColorInputParser.FormatRgbColor(color) : "";
     }
 
     private static CellColor? TryParseColor(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
-        var parts = text.Split(',');
-        if (parts.Length == 3
-            && byte.TryParse(parts[0].Trim(), out var r)
-            && byte.TryParse(parts[1].Trim(), out var g)
-            && byte.TryParse(parts[2].Trim(), out var b))
-            return new CellColor(r, g, b);
-        return null;
+        return ColorInputParser.TryParseRgbColorText(text, out var color)
+            ? color
+            : null;
     }
 }
 

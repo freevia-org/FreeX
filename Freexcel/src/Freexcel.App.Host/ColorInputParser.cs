@@ -27,6 +27,18 @@ public static class ColorInputParser
             return true;
         }
 
+        if (TryParseRgbColorText(text, out var rgbColor))
+        {
+            color = rgbColor;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryParseRgbColorText(string text, out CellColor color)
+    {
+        color = default;
         var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
         if (parts.Length != 3)
             return false;
@@ -41,6 +53,9 @@ public static class ColorInputParser
         color = new CellColor(r, g, b);
         return true;
     }
+
+    public static string FormatRgbColor(CellColor color) =>
+        $"{color.R},{color.G},{color.B}";
 
     public static bool TryParseHexColor(string text, out CellColor? color)
     {
