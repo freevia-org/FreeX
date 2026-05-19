@@ -35,7 +35,10 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
                 QuickAnalysisCommand.StackedColumnChart,
+                QuickAnalysisCommand.PercentStackedColumnChart,
                 QuickAnalysisCommand.BarChart,
+                QuickAnalysisCommand.StackedBarChart,
+                QuickAnalysisCommand.PercentStackedBarChart,
                 QuickAnalysisCommand.AreaChart,
                 QuickAnalysisCommand.ScatterChart,
                 QuickAnalysisCommand.Sum,
@@ -44,5 +47,20 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.FormatAsTable,
                 QuickAnalysisCommand.LineSparkline
             ]);
+
+        options.Where(option => option.Group == "Charts")
+            .Select(option => option.Label)
+            .Should()
+            .Equal(
+                "Column",
+                "Stacked Column",
+                "100% Stacked Column",
+                "Line",
+                "Pie",
+                "Bar",
+                "Stacked Bar",
+                "100% Stacked Bar",
+                "Area",
+                "Scatter");
     }
 }
