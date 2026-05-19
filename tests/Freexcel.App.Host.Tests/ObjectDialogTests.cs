@@ -1,0 +1,64 @@
+using Freexcel.Core.Model;
+using FluentAssertions;
+
+namespace Freexcel.App.Host.Tests;
+
+public sealed class ObjectDialogTests
+{
+    [Fact]
+    public void HyperlinkDialog_CreateResult_UsesTargetAsDisplayTextWhenLabelIsBlank()
+    {
+        var result = HyperlinkDialog.CreateResult("https://example.test", " ");
+
+        result.Should().Be(new HyperlinkDialogResult("https://example.test", "https://example.test"));
+    }
+
+    [Fact]
+    public void ObjectSizeDialog_TryParseSize_AcceptsExcelLikeWidthByHeightText()
+    {
+        ObjectSizeDialog.TryParseSize("320 x 180", out var size).Should().BeTrue();
+
+        size.Should().Be(new ObjectSizeDialogResult(320, 180));
+    }
+
+    [Fact]
+    public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
+    {
+        RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
+
+        rotation.Should().Be(new RotationDialogResult(45.5));
+    }
+
+    [Fact]
+    public void PictureCropDialog_TryCreateResult_RejectsCropThatRemovesVisibleArea()
+    {
+        PictureCropDialog.TryCreateResult("60, 0, 50, 0", out _, out var error).Should().BeFalse();
+
+        error.Should().Contain("visible");
+    }
+
+    [Fact]
+    public void PictureCropDialog_TryCreateResult_ParsesPercentEdges()
+    {
+        PictureCropDialog.TryCreateResult("10, 5, 0, 20", out var result, out _).Should().BeTrue();
+
+        result.Should().Be(new PictureCropDialogResult(0.10, 0.05, 0, 0.20));
+    }
+
+    [Fact]
+    public void ShapeGradientDialog_TryCreateResult_ParsesTwoRgbColors()
+    {
+        ShapeGradientDialog.TryCreateResult("31,119,180; 180,210,240", out var result, out _).Should().BeTrue();
+
+        result.Should().Be(new ShapeGradientDialogResult(
+            new CellColor(31, 119, 180),
+            new CellColor(180, 210, 240)));
+    }
+
+    [Fact]
+    public void TextEntryDialog_CreateResult_TrimsNullToEmptyText()
+    {
+        TextEntryDialog.CreateResult(null).Text.Should().Be("");
+        TextEntryDialog.CreateResult("  keep spacing inside  ").Text.Should().Be("keep spacing inside");
+    }
+}
