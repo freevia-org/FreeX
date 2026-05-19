@@ -4253,49 +4253,6 @@ public partial class MainWindow : Window
         Func<SheetId, IWorkbookCommand> createCommand) =>
         TryExecuteGroupedSheetCommand(title, createCommand, out _);
 
-    private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
-        new(new CellAddress(sheetId, range.Start.Row, range.Start.Col),
-            new CellAddress(sheetId, range.End.Row, range.End.Col));
-
-    private static ConditionalFormat CloneConditionalFormatForSheet(ConditionalFormat source, SheetId sheetId) =>
-        new()
-        {
-            AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            UseThreeColorScale = source.UseThreeColorScale,
-            DataBarColor = source.DataBarColor,
-            AboveAverage = source.AboveAverage,
-            FormulaText  = source.FormulaText,
-            StopIfTrue   = source.StopIfTrue
-        };
-
-    private static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId) =>
-        new()
-        {
-            AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage
-        };
-
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
@@ -4578,7 +4535,7 @@ public partial class MainWindow : Window
 
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, CloneConditionalFormatForSheet(cf, sheetId))))
+                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(cf, sheetId))))
             return;
         UpdateViewport();
     }
@@ -4603,7 +4560,7 @@ public partial class MainWindow : Window
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Clear Data Validation",
-                    sheetId => new ClearDataValidationCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                    sheetId => new ClearDataValidationCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
                 return;
 
             UpdateViewport();
@@ -4619,8 +4576,8 @@ public partial class MainWindow : Window
                 "Data Validation",
                 sheetId =>
                 {
-                    var rule = CloneDataValidationForSheet(dv, sheetId);
-                    rule.AppliesTo = RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    var rule = GroupedSheetRangePlanner.CloneDataValidationForSheet(dv, sheetId);
+                    rule.AppliesTo = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
                     return new SetDataValidationCommand(sheetId, rule);
                 }))
             return;
@@ -4838,7 +4795,7 @@ public partial class MainWindow : Window
             var commands = targetSheetIds
                 .SelectMany(sheetId =>
                 {
-                    var sheetRange = RemapRangeToSheet(range, sheetId);
+                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
                     return new IWorkbookCommand[]
                     {
                         new MergeCellsCommand(sheetId, sheetRange),
@@ -5124,7 +5081,7 @@ public partial class MainWindow : Window
                      "Insert Cells",
                      sheetId => new InsertCellsCommand(
                          sheetId,
-                         RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                         GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
                          InsertCellsShiftDirection.Down)))
         {
             return;
@@ -5164,7 +5121,7 @@ public partial class MainWindow : Window
                      "Delete Cells",
                      sheetId => new DeleteCellsCommand(
                          sheetId,
-                         RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
+                         GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
                          DeleteCellsShiftDirection.Up)))
         {
             return;
@@ -5643,7 +5600,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Clear Contents",
-                sheetId => new ClearContentsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                sheetId => new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
                 out var outcome))
             return;
 
@@ -6103,7 +6060,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteGroupedSheetCommand(
                 "Clear Conditional Formatting",
-                sheetId => new ClearConditionalFormatsCommand(sheetId, RemapRangeToSheet(range, sheetId))))
+                sheetId => new ClearConditionalFormatsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))))
             return;
         UpdateViewport();
     }
@@ -6119,7 +6076,7 @@ public partial class MainWindow : Window
                 sheetId =>
                 {
                     var remapped = newRules
-                        .Select(r => CloneConditionalFormatForSheet(r, sheetId))
+                        .Select(r => GroupedSheetRangePlanner.CloneConditionalFormatForSheet(r, sheetId))
                         .ToList();
                     return new ReplaceAllConditionalFormatsCommand(sheetId, remapped);
                 }))
@@ -6134,7 +6091,7 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() != true || dlg.ResultRule is null) return;
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",
-                sheetId => new ApplyConditionalFormatCommand(sheetId, CloneConditionalFormatForSheet(dlg.ResultRule, sheetId))))
+                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(dlg.ResultRule, sheetId))))
             return;
         UpdateViewport();
     }
@@ -6434,7 +6391,7 @@ public partial class MainWindow : Window
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 title,
-                sheetId => new FillCellsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
+                sheetId => new FillCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
                 out var outcome))
             return;
 
@@ -6592,7 +6549,7 @@ public partial class MainWindow : Window
                 "Clear All",
                 sheetId =>
                 {
-                    var currentRange = RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
+                    var currentRange = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
                     return new CompositeWorkbookCommand(
                         "Clear All",
                         [
@@ -6636,7 +6593,7 @@ public partial class MainWindow : Window
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Clear Contents",
-                sheetId => new ClearContentsCommand(sheetId, RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
+                sheetId => new ClearContentsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId)),
                 out var outcome))
             return;
 
@@ -9876,7 +9833,7 @@ public partial class MainWindow : Window
     private void PrintAreaSetMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Print Area", sheetId => new SetPrintAreaCommand(sheetId, RemapRangeToSheet(range, sheetId))))
+        if (!TryExecuteGroupedSheetCommand("Print Area", sheetId => new SetPrintAreaCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId))))
             return;
         RefreshStatusBar();
     }
@@ -11890,3 +11847,4 @@ public partial class MainWindow : Window
         }
     }
 }
+
