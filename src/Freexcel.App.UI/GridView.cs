@@ -83,6 +83,22 @@ public class GridView : FrameworkElement
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
 
+    public static double ResolveShrinkFontSize(
+        double requestedFontSize,
+        double availableWidth,
+        Func<double, double> measureTextWidth,
+        double minimumFontSize = 6.0)
+    {
+        if (requestedFontSize <= minimumFontSize || availableWidth <= 0)
+            return Math.Min(requestedFontSize, minimumFontSize);
+
+        var fontSize = requestedFontSize;
+        while (fontSize > minimumFontSize && measureTextWidth(fontSize) > availableWidth)
+            fontSize = Math.Max(minimumFontSize, fontSize - 1);
+
+        return fontSize;
+    }
+
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
     {
         var verticalDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
@@ -2836,6 +2852,24 @@ public class GridView : FrameworkElement
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
                 textBrush = new SolidColorBrush(Color.FromRgb(fontColor.R, fontColor.G, fontColor.B));
 
+            var indentPx = (style?.IndentLevel ?? 0) * 8.0;
+            if (style?.ShrinkToFit == true && style.WrapText != true)
+            {
+                var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
+                fontSize = ResolveShrinkFontSize(
+                    fontSize,
+                    availableWidth,
+                    size => new FormattedText(
+                        cell.DisplayText,
+                        CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        typeface,
+                        size,
+                        textBrush,
+                        VisualTreeHelper.GetDpi(this).PixelsPerDip).Width,
+                    ToDisplayFontSize(6));
+            }
+
             var text = new FormattedText(
                 cell.DisplayText,
                 CultureInfo.CurrentCulture,
@@ -2848,10 +2882,10 @@ public class GridView : FrameworkElement
             if (BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
 
-            var indentPx = (style?.IndentLevel ?? 0) * 8.0;
             var textX = hAlign switch
             {
                 CellHAlign.Right => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
+                CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - text.Width) / 2,
                 CellHAlign.Center => rect.Left + (rect.Width - text.Width) / 2,
                 CellHAlign.General when isNumeric => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
                 _ => rect.Left + 2 + indentPx
@@ -3048,6 +3082,24 @@ public class GridView : FrameworkElement
             if (style?.FontColor is { } fc && !fc.IsBlack)
                 textBrush = new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
 
+            double indentPx = (style?.IndentLevel ?? 0) * 8.0;
+            if (style?.ShrinkToFit == true && !wrapText)
+            {
+                var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
+                fontSize = ResolveShrinkFontSize(
+                    fontSize,
+                    availableWidth,
+                    size => new FormattedText(
+                        cell.DisplayText,
+                        CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        typeface,
+                        size,
+                        textBrush,
+                        VisualTreeHelper.GetDpi(this).PixelsPerDip).Width,
+                    ToDisplayFontSize(6));
+            }
+
             var text = new FormattedText(
                 cell.DisplayText,
                 CultureInfo.CurrentCulture,
@@ -3063,16 +3115,16 @@ public class GridView : FrameworkElement
                 text.MaxTextWidth  = Math.Max(1, rect.Width - 4);
                 text.TextAlignment = hAlign switch
                 {
-                    CellHAlign.Center => System.Windows.TextAlignment.Center,
-                    CellHAlign.Right  => System.Windows.TextAlignment.Right,
-                    _                 => System.Windows.TextAlignment.Left
+                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => System.Windows.TextAlignment.Center,
+                    CellHAlign.Right => System.Windows.TextAlignment.Right,
+                    _ => System.Windows.TextAlignment.Left
                 };
             }
 
-            double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             double textX = hAlign switch
             {
                 CellHAlign.Right  => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
+                CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - text.Width) / 2,
                 CellHAlign.Center => rect.Left  + (rect.Width - text.Width) / 2,
                 CellHAlign.General when isNumeric
                                   => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
