@@ -1323,7 +1323,8 @@ public class FileAdapterSmokeTests
                 ShowHeadings: false,
                 ShowRulers: false,
                 ZoomPercent: 125,
-                ShowFormulas: true)]));
+                ShowFormulas: true)],
+            "{11111111-1111-1111-1111-111111111111}"));
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -1334,6 +1335,7 @@ public class FileAdapterSmokeTests
 
         var view = loaded.CustomViews.Should().ContainSingle().Subject;
         view.Name.Should().Be("Review");
+        view.Id.Should().Be("{11111111-1111-1111-1111-111111111111}");
         var state = view.Sheets.Should().ContainSingle().Subject;
         state.SheetName.Should().Be("Sheet1");
         state.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
@@ -8320,6 +8322,185 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadsMatchedCustomViewsIntoWorkbookModel()
+    {
+        var workbook = new Workbook("CustomViewLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMatchedCustomViews(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var view = loaded.CustomViews.Should().ContainSingle().Subject;
+        view.Name.Should().Be("FreexcelView");
+        view.Id.Should().Be("{11111111-1111-1111-1111-111111111111}");
+        var state = view.Sheets.Should().ContainSingle().Subject;
+        state.SheetName.Should().Be("Data");
+        state.ZoomPercent.Should().Be(120);
+        state.ShowGridlines.Should().BeFalse();
+        state.ShowHeadings.Should().BeFalse();
+        state.SplitRow.Should().Be(1);
+        state.SplitColumn.Should().Be(1);
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_WritesModeledCustomViewsToWorkbookAndWorksheets()
+    {
+        var workbook = new Workbook("CustomViewSaveTest");
+        workbook.AddSheet("Data");
+        workbook.CustomViews.Add(new WorkbookCustomView(
+            "Review",
+            [new WorksheetCustomViewState(
+                "Data",
+                WorksheetViewMode.PageLayout,
+                0,
+                0,
+                2,
+                3,
+                ShowGridlines: false,
+                ShowHeadings: false,
+                ShowRulers: false,
+                ZoomPercent: 125,
+                ShowFormulas: true)],
+            "{33333333-3333-3333-3333-333333333333}"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFileRecoveryProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookView = workbookXml.Root!
+            .Element(workbookNs + "customWorkbookViews")!
+            .Element(workbookNs + "customWorkbookView")!;
+        workbookView.Attribute("name")!.Value.Should().Be("Review");
+        workbookView.Attribute("guid")!.Value.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        workbookXml.Root!.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("customWorkbookViews", "fileRecoveryPr");
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var customSheetView = worksheetXml.Root!
+            .Element(workbookNs + "customSheetViews")!
+            .Element(workbookNs + "customSheetView")!;
+        customSheetView.Attribute("guid")!.Value.Should().Be("{33333333-3333-3333-3333-333333333333}");
+        customSheetView.Attribute("view")!.Value.Should().Be("pageLayout");
+        customSheetView.Attribute("scale")!.Value.Should().Be("125");
+        customSheetView.Attribute("showGridLines")!.Value.Should().Be("0");
+        customSheetView.Attribute("showRowCol")!.Value.Should().Be("0");
+        customSheetView.Attribute("showRuler")!.Value.Should().Be("0");
+        customSheetView.Attribute("showFormulas")!.Value.Should().Be("1");
+        customSheetView.Element(workbookNs + "pane")!.Attribute("xSplit")!.Value.Should().Be("3");
+        customSheetView.Element(workbookNs + "pane")!.Attribute("ySplit")!.Value.Should().Be("2");
+        worksheetXml.Root!.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("customSheetViews", "pageMargins");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectRemovedCustomViewSheetState()
+    {
+        var workbook = new Workbook("CustomViewSheetStateRemovalTest");
+        var data = workbook.AddSheet("Data");
+        var assumptions = workbook.AddSheet("Assumptions");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new TextValue("view state"));
+        assumptions.SetCell(new CellAddress(assumptions.Id, 1, 1), new TextValue("other view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMatchedCustomViewsOnTwoSheets(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.CustomViews.Should().ContainSingle();
+        loaded.CustomViews[0] = loaded.CustomViews[0] with
+        {
+            Sheets = loaded.CustomViews[0].Sheets
+                .Where(state => state.SheetName == "Data")
+                .ToList()
+        };
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var firstWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        firstWorksheetXml.Root!
+            .Element(workbookNs + "customSheetViews")!
+            .Elements(workbookNs + "customSheetView")
+            .Should().ContainSingle();
+
+        var secondWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet2.xml")!);
+        var secondSheetViews = secondWorksheetXml.Root!
+            .Element(workbookNs + "customSheetViews")?
+            .Elements(workbookNs + "customSheetView") ?? [];
+        secondSheetViews.Any(view =>
+            view.Attribute("guid")?.Value == "{11111111-1111-1111-1111-111111111111}").Should().BeFalse();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MergesCustomViewNativeMetadataAndRetainsNativeOnlyViews()
+    {
+        var workbook = new Workbook("CustomViewMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("view state"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMatchedCustomViews(source, includeNativeOnlyView: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.CustomViews.Should().ContainSingle(view => view.Name == "FreexcelView");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        var workbookViews = workbookXml.Root!
+            .Element(workbookNs + "customWorkbookViews")!
+            .Elements(workbookNs + "customWorkbookView")
+            .ToList();
+        workbookViews.Any(view =>
+            view.Attribute("guid")?.Value == "{11111111-1111-1111-1111-111111111111}" &&
+            view.Attribute("includePrintSettings")?.Value == "1").Should().BeTrue();
+        workbookViews.Any(view => view.Attribute("name")?.Value == "NativeOnlyView").Should().BeTrue();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var sheetViews = worksheetXml.Root!
+            .Element(workbookNs + "customSheetViews")!
+            .Elements(workbookNs + "customSheetView")
+            .ToList();
+        sheetViews.Any(view =>
+            view.Attribute("guid")?.Value == "{11111111-1111-1111-1111-111111111111}" &&
+            view.Element(workbookNs + "pane")?.Attribute("topLeftCell")?.Value == "B2").Should().BeTrue();
+        sheetViews.Any(view => view.Attribute("guid")?.Value == "{22222222-2222-2222-2222-222222222222}").Should().BeTrue();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesAdditionalWorksheetSheetViews()
     {
         var workbook = new Workbook("AdditionalSheetViewsRetentionTest");
@@ -11852,6 +12033,101 @@ public class FileAdapterSmokeTests
                         new XAttribute("topLeftCell", "B2"),
                         new XAttribute("activePane", "bottomRight")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMatchedCustomViews(MemoryStream packageStream, bool includeNativeOnlyView = false)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "customWorkbookViews",
+                new XElement(
+                    workbookNs + "customWorkbookView",
+                    new XAttribute("name", "FreexcelView"),
+                    new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                    new XAttribute("autoUpdate", "0"),
+                    new XAttribute("mergeInterval", "0"),
+                    new XAttribute("personalView", "0"),
+                    new XAttribute("includePrintSettings", "1")),
+                includeNativeOnlyView
+                    ? new XElement(
+                        workbookNs + "customWorkbookView",
+                        new XAttribute("name", "NativeOnlyView"),
+                        new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                        new XAttribute("autoUpdate", "0"),
+                        new XAttribute("mergeInterval", "0"),
+                        new XAttribute("personalView", "0"))
+                    : null));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "customSheetViews",
+                new XElement(
+                    worksheetNs + "customSheetView",
+                    new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                    new XAttribute("scale", "120"),
+                    new XAttribute("showGridLines", "0"),
+                    new XAttribute("showRowCol", "0"),
+                    new XAttribute("state", "visible"),
+                    new XElement(
+                        worksheetNs + "pane",
+                        new XAttribute("xSplit", "1"),
+                        new XAttribute("ySplit", "1"),
+                        new XAttribute("topLeftCell", "B2"),
+                        new XAttribute("activePane", "bottomRight"))),
+                includeNativeOnlyView
+                    ? new XElement(
+                        worksheetNs + "customSheetView",
+                        new XAttribute("guid", "{22222222-2222-2222-2222-222222222222}"),
+                        new XAttribute("scale", "90"),
+                        new XAttribute("state", "visible"))
+                    : null));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMatchedCustomViewsOnTwoSheets(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "customWorkbookViews",
+                new XElement(
+                    workbookNs + "customWorkbookView",
+                    new XAttribute("name", "FreexcelView"),
+                    new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                    new XAttribute("autoUpdate", "0"),
+                    new XAttribute("mergeInterval", "0"),
+                    new XAttribute("personalView", "0"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            for (var sheetIndex = 1; sheetIndex <= 2; sheetIndex++)
+            {
+                var worksheetPath = $"xl/worksheets/sheet{sheetIndex}.xml";
+                var worksheetXml = LoadPackageXml(archive.GetEntry(worksheetPath)!);
+                worksheetXml.Root!.Add(new XElement(
+                    worksheetNs + "customSheetViews",
+                    new XElement(
+                        worksheetNs + "customSheetView",
+                        new XAttribute("guid", "{11111111-1111-1111-1111-111111111111}"),
+                        new XAttribute("scale", sheetIndex == 1 ? "120" : "90"),
+                        new XAttribute("state", "visible"))));
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+            }
         }
 
         packageStream.Position = 0;
