@@ -146,4 +146,43 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Map");
         xaml.Should().Contain("3D Column");
     }
+
+    [Fact]
+    public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        foreach (var label in new[]
+        {
+            "Bottom Double Border",
+            "Thick Box Border",
+            "Top and Bottom Border",
+            "Top and Thick Bottom Border",
+            "Top and Double Bottom Border",
+            "More Borders..."
+        })
+            xaml.Should().Contain($"Header=\"{label}\"");
+
+        foreach (var handler in new[]
+        {
+            "BorderBottomDoubleMenuItem_Click",
+            "BorderThickBoxMenuItem_Click",
+            "BorderTopAndBottomMenuItem_Click",
+            "BorderTopAndThickBottomMenuItem_Click",
+            "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderMoreMenuItem_Click"
+        })
+        {
+            xaml.Should().Contain($"Click=\"{handler}\"");
+            source.Should().Contain(handler);
+        }
+
+        source.Should().Contain("ApplyRangeBorderPreset");
+        source.Should().Contain("new CompositeWorkbookCommand(title, commands)");
+        source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
+        source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
+        source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
+        source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");
+    }
 }
