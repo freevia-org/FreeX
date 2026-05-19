@@ -2,8 +2,8 @@ namespace Freexcel.Core.Commands;
 
 public static class AutoFitSizingService
 {
-    public const double MinimumColumnWidth = 24.0;
-    public const double MaximumColumnWidth = 300.0;
+    public const double MinimumColumnWidth = 3.0;
+    public const double MaximumColumnWidth = 255.0;
     public const double MinimumRowHeight = 16.0;
     public const double MaximumRowHeight = 220.0;
 

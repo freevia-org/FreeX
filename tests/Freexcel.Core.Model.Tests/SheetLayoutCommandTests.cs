@@ -22,6 +22,25 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void AutoFitSizingService_ColumnWidthKeepsShortTextNearDefaultWidth()
+    {
+        var width = AutoFitSizingService.EstimateColumnWidth(["x"], defaultWidth: 8.43);
+
+        width.Should().BeApproximately(8.43, 0.01);
+        width.Should().BeLessThan(24);
+    }
+
+    [Fact]
+    public void AutoFitSizingService_ColumnWidthKeepsEmptyInputAtLeastDefaultWidth()
+    {
+        AutoFitSizingService.EstimateColumnWidth([], defaultWidth: 8.43)
+            .Should().BeApproximately(8.43, 0.01);
+
+        AutoFitSizingService.EstimateColumnWidth([""], defaultWidth: 8.43)
+            .Should().BeApproximately(8.43, 0.01);
+    }
+
+    [Fact]
     public void AutoFitSizingService_RowHeightGrowsForMultilineDisplayText()
     {
         var height = AutoFitSizingService.EstimateRowHeight(["first line\nsecond line\nthird line"], defaultHeight: 20);
@@ -33,10 +52,10 @@ public class SheetLayoutCommandTests
     public void AutoFitSizingService_ClampsColumnWidthToBounds()
     {
         AutoFitSizingService.EstimateColumnWidth(["x"], defaultWidth: 8)
-            .Should().Be(24);
+            .Should().Be(8);
 
         AutoFitSizingService.EstimateColumnWidth([new string('x', 1_000)], defaultWidth: 8)
-            .Should().Be(300);
+            .Should().Be(255);
     }
 
     [Fact]
