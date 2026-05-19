@@ -1385,6 +1385,46 @@
                                         local:RibbonTooltip.Title="Stock Chart"
                                         local:RibbonTooltip.KeyTip="ST"
                                         local:RibbonTooltip.Description="Insert a stock chart from high-low-close or open-high-low-close data."/>
+                                <Button Content="Surface" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Surface Chart"
+                                        local:RibbonTooltip.KeyTip="SF"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Treemap" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Treemap Chart"
+                                        local:RibbonTooltip.KeyTip="TM"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Sunburst" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Sunburst Chart"
+                                        local:RibbonTooltip.KeyTip="SU"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Histogram" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Histogram Chart"
+                                        local:RibbonTooltip.KeyTip="HI"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Pareto" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Pareto Chart"
+                                        local:RibbonTooltip.KeyTip="PA"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Box Plot" Width="72" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Box and Whisker Chart"
+                                        local:RibbonTooltip.KeyTip="BW"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Waterfall" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Waterfall Chart"
+                                        local:RibbonTooltip.KeyTip="WF"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Funnel" Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Funnel Chart"
+                                        local:RibbonTooltip.KeyTip="FU"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="Map" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="Map Chart"
+                                        local:RibbonTooltip.KeyTip="MP"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
+                                <Button Content="3D Column" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
+                                        local:RibbonTooltip.Title="3D Column Chart"
+                                        local:RibbonTooltip.KeyTip="3C"
+                                        local:RibbonTooltip.Description="Deferred: retained from XLSX files; authoring and rendering need a dedicated data model."/>
                                 <Button Content="Data Labels" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartDataLabelsBtn_Click"
                                         local:RibbonTooltip.Title="Data Labels"
                                         local:RibbonTooltip.KeyTip="DL"

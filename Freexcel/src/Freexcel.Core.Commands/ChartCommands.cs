@@ -37,6 +37,8 @@ public sealed class AddChartCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!ChartTypeSupport.IsRenderable(_chart.Type))
+            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
         if (_chart.DataRange.Start.Sheet != _sheetId || _chart.DataRange.End.Sheet != _sheetId)
             return new CommandOutcome(false, "Chart data range must be on the target sheet.");
         if (!double.IsFinite(_chart.Width) || !double.IsFinite(_chart.Height) || _chart.Width <= 0 || _chart.Height <= 0)
@@ -104,6 +106,8 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
     {
         if (string.IsNullOrWhiteSpace(_pivotTableName))
             return new CommandOutcome(false, "PivotTable name is required.");
+        if (!ChartTypeSupport.IsRenderable(_chartType))
+            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
         if (!double.IsFinite(_width) || !double.IsFinite(_height) || _width <= 0 || _height <= 0)
             return new CommandOutcome(false, "Chart size must be positive.");
 
@@ -174,6 +178,8 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotChart was not found.");
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+        if (!ChartTypeSupport.IsRenderable(_chartType))
+            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
 
         _previousType = chart.Type;
         _previousFirstColIsCategories = chart.FirstColIsCategories;
