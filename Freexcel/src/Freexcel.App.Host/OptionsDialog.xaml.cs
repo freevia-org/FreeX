@@ -51,6 +51,10 @@ public partial class OptionsDialog : Window
         OptFormulasAutocomplete.IsChecked = true;
         PopulateErrorCheckingRules();
 
+        // View
+        OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
+        OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded;
+
         // Save
         OptDefaultFormat.ItemsSource = new[] { "Excel Workbook (.xlsx)", "Freexcel JSON (.json)" };
         OptDefaultFormat.SelectedIndex = _opts.DefaultFormat == ".json" ? 1 : 0;
@@ -65,7 +69,8 @@ public partial class OptionsDialog : Window
         if (TabList.SelectedIndex < 0) return;
         PanelGeneral.Visibility  = TabList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
         PanelFormulas.Visibility = TabList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PanelSave.Visibility     = TabList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        PanelView.Visibility     = TabList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        PanelSave.Visibility     = TabList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
@@ -78,6 +83,8 @@ public partial class OptionsDialog : Window
             UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
             AutoCalculate     = OptCalcAuto.IsChecked == true,
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
+            ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
+            FormulaBarExpanded = OptFormulaBarExpanded.IsChecked == true,
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
         };
         opts.Save();
