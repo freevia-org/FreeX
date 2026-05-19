@@ -14,6 +14,8 @@ namespace Freexcel.Core.IO;
 /// </summary>
 public sealed class XlsxFileAdapter : IFileAdapter
 {
+    private const long MaxExpandedIgnoredErrorCells = 16384;
+
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
     private static readonly FieldInfo? XlCellValueNumberField =
         typeof(XLCellValue).GetField("_value", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -269,7 +271,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 }
                 foreach (var conditionalFormat in layout.AdvancedConditionalFormats)
                     sheet.ConditionalFormats.Add(RemapConditionalFormat(conditionalFormat, sheet.Id));
-                foreach (var ignoredErrorAddress in layout.IgnoredErrorCells)
+                foreach (var ignoredErrorAddress in layout.IgnoredErrors.ExpandedCells)
                 {
                     var address = new CellAddress(sheet.Id, ignoredErrorAddress.Row, ignoredErrorAddress.Col);
                     var cell = sheet.GetCell(address);
@@ -280,6 +282,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     }
 
                     cell.IgnoreFormulaError = true;
+                }
+                if (layout.IgnoredErrors.ExistingCellOnlyRanges.Count > 0)
+                {
+                    foreach (var (address, cell) in sheet.GetUsedCells())
+                    {
+                        var comparableAddress = new CellAddress(
+                            layout.IgnoredErrors.ExistingCellOnlyRanges[0].Start.Sheet,
+                            address.Row,
+                            address.Col);
+                        if (layout.IgnoredErrors.ExistingCellOnlyRanges.Any(range => range.Contains(comparableAddress)))
+                            cell.IgnoreFormulaError = true;
+                    }
                 }
             }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
@@ -452,8 +466,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<XlsxShapePackagePart> ShapeParts,
         IReadOnlyList<SparklineModel> Sparklines,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
-        IReadOnlyList<CellAddress> IgnoredErrorCells,
+        IgnoredErrorLayout IgnoredErrors,
         string? CodeName);
+
+    private sealed record IgnoredErrorLayout(
+        IReadOnlyList<CellAddress> ExpandedCells,
+        IReadOnlyList<GridRange> ExistingCellOnlyRanges);
 
     private sealed record XlsxChartPackagePart(XDocument Xml, XlsxDrawingAnchor? Anchor);
 
@@ -2247,7 +2265,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var (textBoxParts, shapeParts) = ReadWorksheetShapeParts(archive, worksheetPath, worksheetXml);
         var sparklines = ReadWorksheetSparklines(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
-        var ignoredErrorCells = ReadIgnoredErrorCells(worksheetXml, worksheetNs);
+        var ignoredErrors = ReadIgnoredErrors(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -2283,11 +2301,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             shapeParts,
             sparklines,
             advancedConditionalFormats,
-            ignoredErrorCells,
+            ignoredErrors,
             codeName);
     }
 
-    private static IReadOnlyList<CellAddress> ReadIgnoredErrorCells(XDocument worksheetXml, XNamespace worksheetNs)
+    private static IgnoredErrorLayout ReadIgnoredErrors(XDocument worksheetXml, XNamespace worksheetNs)
     {
         string[] supportedFlags =
         [
@@ -2303,6 +2321,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ];
 
         var cells = new List<CellAddress>();
+        var existingCellOnlyRanges = new List<GridRange>();
         var tempSheet = SheetId.New();
         foreach (var ignoredError in worksheetXml.Root?
                      .Element(worksheetNs + "ignoredErrors")?
@@ -2320,11 +2339,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (!TryParseSqrefToken(token, tempSheet, out var range))
                     continue;
 
-                cells.AddRange(range.AllCells());
+                // Full-column/full-sheet sqref ranges are legal but can cover billions of cells.
+                // Keep small ranges materialized for existing behavior; apply oversized ranges to
+                // cells that ClosedXML already loaded instead of creating blank cells for the range.
+                if (range.CellCount > MaxExpandedIgnoredErrorCells)
+                    existingCellOnlyRanges.Add(range);
+                else
+                    cells.AddRange(range.AllCells());
             }
         }
 
-        return cells;
+        return new IgnoredErrorLayout(cells, existingCellOnlyRanges);
     }
 
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
@@ -5369,7 +5394,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
 
             root.Element(workbookNs + "ignoredErrors")?.Remove();
-            root.Add(new XElement(
+            InsertWorksheetIgnoredErrorsInOrder(root, workbookNs, new XElement(
                 workbookNs + "ignoredErrors",
                 ignoredCells.Select(pair => new XElement(
                     workbookNs + "ignoredError",
@@ -5381,6 +5406,32 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
+    }
+
+    private static void InsertWorksheetIgnoredErrorsInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement ignoredErrors)
+    {
+        string[] laterWorksheetElements =
+        [
+            "smartTags",
+            "drawing",
+            "legacyDrawing",
+            "legacyDrawingHF",
+            "picture",
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var insertionPoint = worksheetRoot.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == workbookNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+        if (insertionPoint is null)
+            worksheetRoot.Add(ignoredErrors);
+        else
+            insertionPoint.AddBeforeSelf(ignoredErrors);
     }
 
     private static bool MergeWorksheetElementAttributes(XElement? sourceElement, XElement targetRoot, XName elementName)
@@ -5464,7 +5515,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var targetIgnoredErrors = targetRoot.Element(workbookNs + "ignoredErrors");
         if (targetIgnoredErrors is null)
         {
-            targetRoot.Add(new XElement(sourceIgnoredErrors));
+            InsertWorksheetIgnoredErrorsInOrder(targetRoot, workbookNs, new XElement(sourceIgnoredErrors));
             return true;
         }
 
@@ -5542,6 +5593,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (!TryParseSqrefToken(token, sheet, out var range))
+                return false;
+            if (range.CellCount > MaxExpandedIgnoredErrorCells ||
+                (long)cells.Count + range.CellCount > MaxExpandedIgnoredErrorCells)
                 return false;
 
             foreach (var cell in range.AllCells())

@@ -8734,6 +8734,33 @@ public class FileAdapterSmokeTests
         loadedSheet.GetCell(3, 3)!.IgnoreFormulaError.Should().BeTrue();
     }
 
+    [Fact(Timeout = 5000)]
+    public void XlsxAdapter_Load_IgnoredErrors_LargeRangeMarksOnlyExistingCells()
+    {
+        var workbook = new Workbook("IgnoredErrorsLargeRangeLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 1_048_576, 16_384), "1/0");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A1:XFD1048576", ("numberStoredAsText", "1"));
+
+        source.Position = 0;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var loaded = adapter.Load(source);
+        stopwatch.Stop();
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.CellCount.Should().Be(2);
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.GetCell(1_048_576, 16_384)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.GetCell(2, 2).Should().BeNull();
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3));
+    }
+
     [Fact]
     public void XlsxAdapter_Load_IgnoredErrors_SkipsMalformedReferences()
     {
@@ -8783,6 +8810,39 @@ public class FileAdapterSmokeTests
             entry.Attribute("formula")!.Value.Should().Be("1");
             entry.Attribute("emptyCellReference")!.Value.Should().Be("1");
         }
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_FreshWorkbook_InsertsIgnoredErrorsBeforeSparklineExtensionList()
+    {
+        var workbook = new Workbook("IgnoredErrorsWithSparklineTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("3"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("00123"));
+        sheet.GetCell(1, 4)!.IgnoreFormulaError = true;
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            Kind = SparklineKind.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 3)),
+            Location = new CellAddress(sheet.Id, 1, 5)
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = worksheetXml.Root!.Elements().ToList();
+        var ignoredErrorsIndex = orderedChildren.FindIndex(element => element.Name == worksheetNs + "ignoredErrors");
+        var extensionListIndex = orderedChildren.FindIndex(element => element.Name == worksheetNs + "extLst");
+
+        ignoredErrorsIndex.Should().BeGreaterThanOrEqualTo(0);
+        extensionListIndex.Should().BeGreaterThanOrEqualTo(0);
+        ignoredErrorsIndex.Should().BeLessThan(extensionListIndex);
     }
 
     [Fact]
