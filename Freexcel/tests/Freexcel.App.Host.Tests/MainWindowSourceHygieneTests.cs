@@ -323,4 +323,15 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
         source.Should().Contain("request.ActualPath");
     }
+
+    [Fact]
+    public void RemainingStatusWorkflows_OpenNamedDialogsInsteadOfMessageBoxes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new PageBreakDialog");
+        source.Should().Contain("new GoalSeekStatusDialog");
+        source.Should().Contain("new WorkbookStatisticsDialog");
+        source.Should().Contain("new AccessibilityCheckerDialog");
+    }
 }
