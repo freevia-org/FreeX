@@ -66,6 +66,7 @@ public partial class MainWindow : Window
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     private bool _formatPainterActive;
     private bool _formatPainterPersistent;
+    private bool _formatPainterTargetSelectionActive;
     private StyleId _formatPainterStyleId;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
@@ -1136,8 +1137,21 @@ public partial class MainWindow : Window
                 }
             }
 
-            if (TryApplyFormatPainter(newAddr))
+            if (_formatPainterActive)
             {
+                if (SheetGrid.SelectedRange is { } selectedRange &&
+                    selectedRange.Contains(newAddr) &&
+                    (selectedRange.Start != selectedRange.End || e.ClickCount > 1))
+                {
+                    TryApplyFormatPainter(selectedRange);
+                    e.Handled = true;
+                    return;
+                }
+
+                SetActiveCell(newAddr);
+                _formatPainterTargetSelectionActive = true;
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
                 e.Handled = true;
                 return;
             }
@@ -1842,6 +1856,19 @@ public partial class MainWindow : Window
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (_formatPainterTargetSelectionActive)
+        {
+            _formatPainterTargetSelectionActive = false;
+            _dragSelectActive = false;
+            SheetGrid.ReleaseMouseCapture();
+
+            if (SheetGrid.SelectedRange is { } selectedRange)
+                TryApplyFormatPainter(selectedRange);
+
+            e.Handled = true;
+            return;
+        }
+
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
         SheetGrid.ReleaseMouseCapture();
@@ -5731,9 +5758,12 @@ public partial class MainWindow : Window
         CaptureFormatPainterSource(persistent: false);
     }
 
-    private void FormatPainterBtn_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private void FormatPainterBtn_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ClickCount != 2) return;
+
         CaptureFormatPainterSource(persistent: true);
+        e.Handled = true;
     }
 
     private void CaptureFormatPainterSource(bool persistent)
@@ -5751,23 +5781,31 @@ public partial class MainWindow : Window
     {
         _formatPainterActive = false;
         _formatPainterPersistent = false;
+        _formatPainterTargetSelectionActive = false;
     }
 
-    // Call from cell-click path: if painter active, apply stored style
-    private bool TryApplyFormatPainter(CellAddress addr)
+    private bool TryApplyFormatPainter(GridRange targetRange)
     {
         if (!_formatPainterActive) return false;
-        if (!_formatPainterPersistent)
-            CancelFormatPainter();
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
+        {
+            if (!_formatPainterPersistent)
+                CancelFormatPainter();
             return true;
+        }
 
-        var targetRange = new GridRange(addr, addr);
         var command = FormatPainterCommandFactory.Create(_workbook, _formatPainterStyleId, targetRange);
         if (!TryExecuteCommand(command, "Format Painter"))
+        {
+            if (!_formatPainterPersistent)
+                CancelFormatPainter();
             return true;
+        }
+
+        if (!_formatPainterPersistent)
+            CancelFormatPainter();
 
         UpdateViewport();
         return true;
