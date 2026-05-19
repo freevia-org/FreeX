@@ -88,6 +88,30 @@ public sealed class ExcelParityRoundTripTests
         Number($"=OCT2DEC(DEC2OCT({D(value)}))").Should().Be(value);
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(13, 25)]
+    [InlineData(255, 4096)]
+    [InlineData(1048575, 65535)]
+    [InlineData(281474976710655, 1)]
+    public void BitwiseIdentities_RoundTripThroughXorAndAbsorption(double left, double right)
+    {
+        Number($"=BITXOR(BITXOR({D(left)},{D(right)}),{D(right)})").Should().Be(left);
+        Number($"=BITAND({D(left)},BITOR({D(left)},{D(right)}))").Should().Be(left);
+        Number($"=BITOR({D(left)},BITAND({D(left)},{D(right)}))").Should().Be(left);
+    }
+
+    [Theory]
+    [InlineData(4, 2)]
+    [InlineData(16, 3)]
+    [InlineData(1024, 5)]
+    [InlineData(1048576, 10)]
+    public void BitShift_RoundTripsWhenShiftedBitsAreZero(double value, double shift)
+    {
+        Number($"=BITLSHIFT(BITRSHIFT({D(value)},{D(shift)}),{D(shift)})").Should().Be(value);
+        Number($"=BITRSHIFT(BITLSHIFT({D(value)},{D(shift)}),{D(shift)})").Should().Be(value);
+    }
+
     private double Number(string formula)
     {
         var value = _eval.Evaluate(formula, new Sheet(SheetId.New(), "S"));
