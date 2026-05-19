@@ -11297,6 +11297,9 @@ public partial class MainWindow : Window
     private void ThemeEffectsRefinedMenuItem_Click(object sender, RoutedEventArgs e) =>
         ApplyWorkbookTheme(_workbook.Theme.WithEffects("Refined"));
 
+    private void ThemeEffectsCustomizeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ThemeCustomizeMenuItem_Click(sender, e);
+
     private void ApplyWorkbookTheme(WorkbookTheme theme)
     {
         if (!TryExecuteCommand(new SetWorkbookThemeCommand(theme), "Themes"))
