@@ -5617,6 +5617,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.FormatCells:
                 OpenFormatCellsDialog();
                 break;
+            case WorksheetContextMenuAction.ClearFormats:
+                ClearFormats();
+                break;
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
                 break;
