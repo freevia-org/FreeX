@@ -90,6 +90,49 @@ public sealed class AccessibilityCheckerServiceTests
         issue.SheetId.Should().Be(sheet.Id);
         issue.SheetName.Should().Be("Sheet1");
         issue.Location.Should().Be("A1");
-        issue.Message.Should().Be("Hyperlink display text should describe the destination instead of repeating the URL.");
+        issue.Message.Should().Be("Hyperlink display text should describe the destination.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextLooksLikeAUrl()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var urlAddress = new CellAddress(sheet.Id, 1, 1);
+        var descriptiveAddress = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(urlAddress, new TextValue("www.example.com/report"));
+        sheet.Hyperlinks[urlAddress] = "https://example.com/report?download=1";
+        sheet.SetCell(descriptiveAddress, new TextValue("Download the quarterly report"));
+        sheet.Hyperlinks[descriptiveAddress] = "https://example.com/report?download=1";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl).Subject;
+        issue.Location.Should().Be("A1");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("click here")]
+    [InlineData("Click Here")]
+    [InlineData("here")]
+    [InlineData("link")]
+    [InlineData("read more")]
+    [InlineData("learn more")]
+    public void FindIssues_FlagsHyperlinksWithBlankOrGenericDisplayText(string displayText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = "https://example.com/report";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
     }
 }
