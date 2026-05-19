@@ -110,8 +110,8 @@ public partial class PageSetupDialog : Window
             return;
         }
 
-        if (!TryParseMarginDistance(HeaderMarginBox.Text, out var headerMargin) ||
-            !TryParseMarginDistance(FooterMarginBox.Text, out var footerMargin))
+        if (!PageLayoutInputParser.TryParseMarginDistance(HeaderMarginBox.Text, out var headerMargin) ||
+            !PageLayoutInputParser.TryParseMarginDistance(FooterMarginBox.Text, out var footerMargin))
         {
             MessageBox.Show(this, "Enter non-negative header and footer margins in inches.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -125,22 +125,22 @@ public partial class PageSetupDialog : Window
             return;
         }
 
-        if (!TryParseFirstPageNumber(FirstPageNumberBox.Text, out var firstPageNumber))
+        if (!PageLayoutInputParser.TryParseOptionalFirstPageNumber(FirstPageNumberBox.Text, out var firstPageNumber))
         {
             MessageBox.Show(this, "Enter a non-zero first page number, or leave it blank for Automatic.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (!TryParsePrintQuality(PrintQualityBox.Text, out var printQualityDpi))
+        if (!PageLayoutInputParser.TryParseOptionalPrintQuality(PrintQualityBox.Text, out var printQualityDpi))
         {
             MessageBox.Show(this, "Enter a positive print quality DPI value, or leave it blank for printer default.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (!TryParseRepeatRows(RowsRepeatBox.Text, out var repeatRows) ||
-            !TryParseRepeatColumns(ColumnsRepeatBox.Text, out var repeatColumns))
+        if (!PageLayoutInputParser.TryParseRepeatRows(RowsRepeatBox.Text, out var repeatRows) ||
+            !PageLayoutInputParser.TryParseRepeatColumns(ColumnsRepeatBox.Text, out var repeatColumns))
         {
             MessageBox.Show(this, "Enter print titles as rows like 1:2 and columns like A:C, or leave blank.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -190,96 +190,4 @@ public partial class PageSetupDialog : Window
         Close();
     }
 
-    private static bool TryParseFirstPageNumber(string input, out int? firstPageNumber)
-    {
-        firstPageNumber = null;
-        var trimmed = input.Trim();
-        if (trimmed.Length == 0 || trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value != 0)
-        {
-            firstPageNumber = value;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParseMarginDistance(string input, out double value)
-    {
-        return double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
-               value >= 0;
-    }
-
-    private static bool TryParsePrintQuality(string input, out int? printQualityDpi)
-    {
-        printQualityDpi = null;
-        var trimmed = input.Trim();
-        if (trimmed.Length == 0 || trimmed.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
-        {
-            printQualityDpi = value;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParseRepeatRows(string input, out WorksheetRepeatRange? range)
-    {
-        range = null;
-        var normalized = input.Trim();
-        if (normalized.Length == 0 || normalized.Equals("none", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1 && uint.TryParse(parts[0], out var single) && single > 0)
-        {
-            range = new WorksheetRepeatRange(single, single);
-            return true;
-        }
-        if (parts.Length == 2 &&
-            uint.TryParse(parts[0], out var start) &&
-            uint.TryParse(parts[1], out var end) &&
-            start > 0 &&
-            end > 0)
-        {
-            range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryParseRepeatColumns(string input, out WorksheetRepeatRange? range)
-    {
-        range = null;
-        var normalized = input.Trim();
-        if (normalized.Length == 0 || normalized.Equals("none", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        try
-        {
-            if (parts.Length == 1)
-            {
-                var single = CellAddress.ColumnNameToNumber(parts[0]);
-                range = new WorksheetRepeatRange(single, single);
-                return true;
-            }
-            if (parts.Length == 2)
-            {
-                var start = CellAddress.ColumnNameToNumber(parts[0]);
-                var end = CellAddress.ColumnNameToNumber(parts[1]);
-                range = new WorksheetRepeatRange(Math.Min(start, end), Math.Max(start, end));
-                return true;
-            }
-        }
-        catch (FormatException) { }
-
-        return false;
-    }
 }

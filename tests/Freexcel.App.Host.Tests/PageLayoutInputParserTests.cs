@@ -120,6 +120,61 @@ public sealed class PageLayoutInputParserTests
         scaleToFit.FitToPagesTall.Should().Be(expectedTall);
     }
 
+    [Theory]
+    [InlineData("", true, null)]
+    [InlineData("auto", true, null)]
+    [InlineData("1", true, 1)]
+    [InlineData("-3", true, -3)]
+    [InlineData("0", false, null)]
+    [InlineData("abc", false, null)]
+    public void TryParseOptionalFirstPageNumber_ParsesAutoOrNonZeroIntegers(
+        string input,
+        bool expected,
+        int? expectedValue)
+    {
+        var result = PageLayoutInputParser.TryParseOptionalFirstPageNumber(input, out var value);
+
+        result.Should().Be(expected);
+        value.Should().Be(expectedValue);
+    }
+
+    [Theory]
+    [InlineData("0", true, 0)]
+    [InlineData("0.75", true, 0.75)]
+    [InlineData("-0.1", false, 0)]
+    [InlineData("NaN", false, 0)]
+    [InlineData("Infinity", false, 0)]
+    [InlineData("abc", false, 0)]
+    public void TryParseMarginDistance_ParsesNonNegativeFiniteDistances(
+        string input,
+        bool expected,
+        double expectedValue)
+    {
+        var result = PageLayoutInputParser.TryParseMarginDistance(input, out var value);
+
+        result.Should().Be(expected);
+        if (expected)
+            value.Should().Be(expectedValue);
+    }
+
+    [Theory]
+    [InlineData("", true, null)]
+    [InlineData("auto", true, null)]
+    [InlineData("300", true, 300)]
+    [InlineData("0", false, null)]
+    [InlineData("-1", false, null)]
+    [InlineData("600.5", false, null)]
+    public void TryParseOptionalPrintQuality_ParsesAutoOrPositiveIntegerDpi(
+        string input,
+        bool expected,
+        int? expectedValue)
+    {
+        var result = PageLayoutInputParser.TryParseOptionalPrintQuality(input, out var value);
+
+        result.Should().Be(expected);
+        value.Should().Be(expectedValue);
+    }
+
     private static void AssertRange(WorksheetRepeatRange? range, int? expectedStart, int? expectedEnd)
     {
         if (expectedStart is null)
