@@ -4212,12 +4212,13 @@ public partial class MainWindow : Window
 
     private void UpdateInfoView()
     {
-        InfoWorkbookName.Text = _workbook.Name;
-        InfoFilePath.Text = _currentFilePath ?? "Not saved yet";
-        InfoSheetCount.Text = _workbook.Sheets.Count.ToString();
-        InfoFormat.Text = _currentFilePath is not null
-            ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
-            : ".xlsx";
+        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath);
+        InfoWorkbookName.Text = plan.WorkbookName;
+        InfoFilePath.Text = plan.FilePath;
+        InfoSheetCount.Text = plan.SheetCount;
+        InfoFormat.Text = plan.Format;
+        InfoStatisticsSummary.Text = plan.StatisticsSummary;
+        InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
     }
 
     private void UpdateSsGreeting()
