@@ -442,6 +442,162 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void ChangeChartTypeCommand_UpdatesNormalChartAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+
+        var command = new ChangeChartTypeCommand(sheet.Id, chart.Id, ChartType.Scatter);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Scatter);
+        chart.FirstColIsCategories.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        chart.Type.Should().Be(ChartType.Column);
+        chart.FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChangeChartTypeCommand_RejectsPivotCharts()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1"
+        });
+
+        var outcome = new ChangeChartTypeCommand(sheet.Id, sheet.Charts[0].Id, ChartType.Line).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.Charts[0].Type.Should().Be(ChartType.Column);
+    }
+
+    [Fact]
+    public void ChangeChartSourceCommand_UpdatesNormalChartSourceAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var originalRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        var newRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 6, 5));
+        new AddChartCommand(sheet.Id, originalRange, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+
+        var command = new ChangeChartSourceCommand(
+            sheet.Id,
+            chart.Id,
+            newRange,
+            firstRowIsHeader: false,
+            firstColIsCategories: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.DataRange.Should().Be(newRange);
+        chart.FirstRowIsHeader.Should().BeFalse();
+        chart.FirstColIsCategories.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        chart.DataRange.Should().Be(originalRange);
+        chart.FirstRowIsHeader.Should().BeTrue();
+        chart.FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChangeChartSourceCommand_RejectsRangesOnDifferentSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        var originalRange = new GridRange(
+            new CellAddress(sheet1.Id, 1, 1),
+            new CellAddress(sheet1.Id, 4, 3));
+        var otherSheetRange = new GridRange(
+            new CellAddress(sheet2.Id, 1, 1),
+            new CellAddress(sheet2.Id, 4, 3));
+        new AddChartCommand(sheet1.Id, originalRange, ChartType.Column, "Sales").Apply(ctx);
+
+        var outcome = new ChangeChartSourceCommand(sheet1.Id, sheet1.Charts[0].Id, otherSheetRange).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet1.Charts[0].DataRange.Should().Be(originalRange);
+    }
+
+    [Fact]
+    public void MoveChartCommand_MovesNormalChartToExistingSheetAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var target = wb.AddSheet("Dashboard");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+        new AddChartCommand(source.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+
+        var command = new MoveChartCommand(source.Id, chart.Id, target.Id);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        source.Charts.Should().BeEmpty();
+        target.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+
+        command.Revert(ctx);
+
+        source.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+        target.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MoveChartToNewSheetCommand_CreatesSheetAndUndoRemovesIt()
+    {
+        var wb = new Workbook("test");
+        var source = wb.AddSheet("Source");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(source.Id, 1, 1),
+            new CellAddress(source.Id, 4, 3));
+        new AddChartCommand(source.Id, range, ChartType.Line, "Sales").Apply(ctx);
+        var chart = source.Charts[0];
+
+        var command = new MoveChartToNewSheetCommand(source.Id, chart.Id, "Sales Chart");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        source.Charts.Should().BeEmpty();
+        var chartSheet = wb.Sheets.Single(sheet => sheet.Name == "Sales Chart");
+        chartSheet.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+
+        command.Revert(ctx);
+
+        wb.Sheets.Should().NotContain(sheet => sheet.Name == "Sales Chart");
+        source.Charts.Should().ContainSingle().Which.Id.Should().Be(chart.Id);
+    }
+
+    [Fact]
     public void SetChartLayoutCommand_UpdatesTitleAxesLegendAndUndoRestores()
     {
         var wb = new Workbook("test");

@@ -120,6 +120,32 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void CollapsedRibbonMenuItems_MirrorSourceMenuStateAndOpenedUpdates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", 640);
+            var arrangeAll = harness.CollapsedActiveMenuItem("Window", "Arrange All");
+
+            arrangeAll.Should().NotBeNull(harness.DebugActiveRibbonChildren);
+            var tiled = arrangeAll!.Items.OfType<MenuItem>()
+                .First(item => string.Equals(item.Header?.ToString(), "Tiled", StringComparison.Ordinal));
+
+            tiled.IsCheckable.Should().BeTrue();
+            tiled.InputGestureText.Should().Be("T");
+
+            arrangeAll.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, arrangeAll));
+
+            tiled.IsChecked.Should().BeTrue("the clone should run the source menu's Opened state refresh before display");
+            arrangeAll.Items.OfType<MenuItem>()
+                .Where(item => !ReferenceEquals(item, tiled))
+                .Should().OnlyContain(item => item.IsChecked == false);
+        });
+    }
+
+    [Fact]
     public void DenseRibbonCommandColumns_UseShortRowButtons()
     {
         StaTestRunner.Run(() =>
@@ -212,6 +238,14 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Select(item => item.Header?.ToString() ?? "")
                 .Where(header => !string.IsNullOrWhiteSpace(header))
                 .ToList();
+
+        public MenuItem? CollapsedActiveMenuItem(string groupName, string header) =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
+                .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
+                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
 
         private IEnumerable<UIElement> HomeRibbonChildren =>
             (_window.FindName("HomeRibbonPanel") as StackPanel)?.Children.Cast<UIElement>() ?? [];

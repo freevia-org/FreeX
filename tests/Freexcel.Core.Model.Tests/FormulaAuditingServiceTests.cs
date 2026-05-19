@@ -176,6 +176,41 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaRefersToBlankCellsForDirectRefsRangesAndCrossSheetRefs()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var formulaAddress = new CellAddress(sheet1.Id, 4, 4);
+
+        sheet1.SetCell(new CellAddress(sheet1.Id, 1, 1), new NumberValue(1));
+        sheet1.SetCell(new CellAddress(sheet1.Id, 1, 2), BlankValue.Instance);
+        sheet2.SetCell(new CellAddress(sheet2.Id, 2, 2), BlankValue.Instance);
+        sheet1.SetCell(formulaAddress, Cell.FromFormula("SUM(A1:B1,Sheet2!B2,C1)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet1.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Cell.Should().Be("D4");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode);
+        issue.FormulaText.Should().Be("=SUM(A1:B1,Sheet2!B2,C1)");
+        issue.Description.Should().Contain("blank cells");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledFormulaRefersToBlankCellsRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromFormula("A1+1"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindFormulaErrors_SkipsIgnoredFormulaErrors()
     {
         var wb = new Workbook("test");
@@ -266,6 +301,27 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresFormulaRefersToBlankCellsIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(address, Cell.FromFormula("A1+1"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -295,6 +351,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Null.Code, "Formulas with invalid intersections"),
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
+                (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
     }
 

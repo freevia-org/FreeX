@@ -1361,6 +1361,18 @@
                                         local:RibbonTooltip.Title="100% Stacked Column Chart"
                                         local:RibbonTooltip.KeyTip="PC"
                                         local:RibbonTooltip.Description="Insert a 100% stacked column chart to compare percentage contributions by category."/>
+                                <Button Content="Change Chart" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChangeChartTypeBtn_Click"
+                                        local:RibbonTooltip.Title="Change Chart Type"
+                                        local:RibbonTooltip.KeyTip="CT"
+                                        local:RibbonTooltip.Description="Change the current chart to another supported chart type."/>
+                                <Button Content="Select Data" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SelectChartDataSourceBtn_Click"
+                                        local:RibbonTooltip.Title="Select Data Source"
+                                        local:RibbonTooltip.KeyTip="DS"
+                                        local:RibbonTooltip.Description="Change the current chart data range and category-label column."/>
+                                <Button Content="Move Chart" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="MoveChartBtn_Click"
+                                        local:RibbonTooltip.Title="Move Chart"
+                                        local:RibbonTooltip.KeyTip="MC"
+                                        local:RibbonTooltip.Description="Move the current chart to another sheet or a new chart sheet."/>
                                 <Button Content="Line"   Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
                                         local:RibbonTooltip.Title="Line Chart"
                                         local:RibbonTooltip.KeyTip="L"
@@ -2137,7 +2149,7 @@
                                         local:RibbonTooltip.Description="Create named ranges from labels in the selected cells."/>
                                 <Button Content="Use in Formula" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="UseInFormulaBtn_Click"
                                         local:RibbonTooltip.Title="Use in Formula"
-                                        local:RibbonTooltip.KeyTip="UF"
+                                        local:RibbonTooltip.KeyTip="I"
                                         local:RibbonTooltip.Description="Insert a defined name into the formula you are currently editing."/>
                                 <Button Content="Name Manager"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NamedRangesButton_Click"
                                         local:RibbonTooltip.Title="Name Manager"
