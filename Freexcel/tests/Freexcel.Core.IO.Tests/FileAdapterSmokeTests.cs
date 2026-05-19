@@ -9254,6 +9254,80 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoad_RoundTripsExternalOlapPivotCacheMetadata()
+    {
+        var workbook = new Workbook("ExternalOlapPivotCacheTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotCacheDefinitionXml: ExternalOlapPivotCacheDefinitionXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedCache = loaded.PivotCaches.Should().ContainSingle().Subject;
+        loadedCache.SourceType.Should().Be(PivotCacheSourceType.External);
+        loadedCache.IsOlap.Should().BeTrue();
+        loadedCache.ConnectionId.Should().Be(2);
+        loadedCache.SourceSheetName.Should().BeNull();
+        loadedCache.SourceReference.Should().BeNull();
+
+        var authored = new Workbook("AuthoredExternalOlapPivotCacheTest");
+        var authoredSheet = authored.AddSheet("Data");
+        authoredSheet.SetCell(new CellAddress(authoredSheet.Id, 1, 1), new TextValue("Category"));
+        authoredSheet.SetCell(new CellAddress(authoredSheet.Id, 1, 2), new TextValue("Amount"));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.External,
+            IsOlap = true,
+            ConnectionId = 2,
+            RefreshOnLoad = false,
+            SaveData = true,
+            EnableRefresh = true
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount"));
+        authored.PivotCaches.Add(cache);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(authoredSheet.Id, 1, 1), new CellAddress(authoredSheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(authoredSheet.Id, 4, 1), new CellAddress(authoredSheet.Id, 6, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        authoredSheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        adapter.Save(authored, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
+            cacheXml.Should().Contain("olap=\"1\"");
+            cacheXml.Should().Contain("type=\"external\"");
+            cacheXml.Should().Contain("connectionId=\"2\"");
+            cacheXml.Should().NotContain("worksheetSource");
+        }
+
+        saved.Position = 0;
+        var roundTripped = adapter.Load(saved);
+        var roundTrippedCache = roundTripped.PivotCaches.Should().ContainSingle().Subject;
+        roundTrippedCache.SourceType.Should().Be(PivotCacheSourceType.External);
+        roundTrippedCache.IsOlap.Should().BeTrue();
+        roundTrippedCache.ConnectionId.Should().Be(2);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsPivotCacheSharedItemMetadata()
     {
         var workbook = new Workbook("PivotSharedItemsMetadataTest");
@@ -11913,6 +11987,27 @@ public class FileAdapterSmokeTests
                 <n v="10"/>
                 <n v="20"/>
               </sharedItems>
+            </cacheField>
+          </cacheFields>
+        </pivotCacheDefinition>
+        """;
+
+    private const string ExternalOlapPivotCacheDefinitionXml = """
+        <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              refreshedBy="Freexcel Test"
+                              refreshOnLoad="0"
+                              saveData="1"
+                              enableRefresh="1"
+                              refreshedVersion="8"
+                              olap="1"
+                              recordCount="0">
+          <cacheSource type="external" connectionId="2"/>
+          <cacheFields count="2">
+            <cacheField name="Category">
+              <sharedItems count="0"/>
+            </cacheField>
+            <cacheField name="Amount">
+              <sharedItems containsNumber="1" count="0"/>
             </cacheField>
           </cacheFields>
         </pivotCacheDefinition>

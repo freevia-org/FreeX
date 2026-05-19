@@ -714,16 +714,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (root is null)
                 continue;
 
-            var worksheetSource = root
-                .Element(workbookNs + "cacheSource")?
-                .Element(workbookNs + "worksheetSource");
+            var cacheSource = root.Element(workbookNs + "cacheSource");
+            var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
             var cache = new PivotCacheModel
             {
                 CacheId = cacheId,
-                SourceType = GetPivotCacheSourceType(worksheetSource),
+                SourceType = GetPivotCacheSourceType(cacheSource, worksheetSource),
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
                 SourceTableName = worksheetSource?.Attribute("name")?.Value,
+                ConnectionId = cacheSource is null ? null : ReadIntAttribute(cacheSource, "connectionId"),
+                IsOlap = ReadBoolAttribute(root, "olap"),
                 PackagePart = cachePath,
                 RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
                 SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
@@ -762,8 +763,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return result;
     }
 
-    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? worksheetSource)
+    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? cacheSource, XElement? worksheetSource)
     {
+        var sourceType = cacheSource?.Attribute("type")?.Value;
+        if (string.Equals(sourceType, "external", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.External;
+        if (string.Equals(sourceType, "consolidation", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.Consolidation;
+        if (string.Equals(sourceType, "scenario", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.Scenario;
         if (worksheetSource is null)
             return PivotCacheSourceType.Unknown;
         if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("name")?.Value))
@@ -6752,13 +6760,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static XDocument ToPivotCacheDefinitionXml(PivotCacheModel cache, XNamespace workbookNs, XNamespace relNs)
     {
-        var source = new XElement(workbookNs + "worksheetSource");
-        if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
-            source.SetAttributeValue("name", cache.SourceTableName);
-        if (!string.IsNullOrWhiteSpace(cache.SourceSheetName))
-            source.SetAttributeValue("sheet", cache.SourceSheetName);
-        if (!string.IsNullOrWhiteSpace(cache.SourceReference))
-            source.SetAttributeValue("ref", cache.SourceReference);
+        var cacheSource = new XElement(
+            workbookNs + "cacheSource",
+            new XAttribute("type", ToPivotCacheSourceTypeText(cache.SourceType)));
+        if (cache.ConnectionId is { } connectionId)
+            cacheSource.SetAttributeValue("connectionId", connectionId.ToString(CultureInfo.InvariantCulture));
+        if (cache.SourceType is PivotCacheSourceType.WorksheetRange or PivotCacheSourceType.Table or PivotCacheSourceType.Unknown)
+        {
+            var source = new XElement(workbookNs + "worksheetSource");
+            if (!string.IsNullOrWhiteSpace(cache.SourceTableName))
+                source.SetAttributeValue("name", cache.SourceTableName);
+            if (!string.IsNullOrWhiteSpace(cache.SourceSheetName))
+                source.SetAttributeValue("sheet", cache.SourceSheetName);
+            if (!string.IsNullOrWhiteSpace(cache.SourceReference))
+                source.SetAttributeValue("ref", cache.SourceReference);
+            cacheSource.Add(source);
+        }
 
         return new XDocument(new XElement(
             workbookNs + "pivotCacheDefinition",
@@ -6766,13 +6783,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("refreshOnLoad", cache.RefreshOnLoad ? "1" : "0"),
             new XAttribute("saveData", cache.SaveData ? "1" : "0"),
             new XAttribute("enableRefresh", cache.EnableRefresh ? "1" : "0"),
+            cache.IsOlap ? new XAttribute("olap", "1") : null,
             cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
             new XAttribute("recordCount", "0"),
-            new XElement(
-                workbookNs + "cacheSource",
-                new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
-                source),
+            cacheSource,
             new XElement(
                 workbookNs + "cacheFields",
                 new XAttribute("count", cache.Fields.Count.ToString(CultureInfo.InvariantCulture)),
@@ -6782,6 +6797,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
                     ToPivotCacheSharedItemsXml(field, workbookNs))))));
     }
+
+    private static string ToPivotCacheSourceTypeText(PivotCacheSourceType sourceType) =>
+        sourceType switch
+        {
+            PivotCacheSourceType.External => "external",
+            PivotCacheSourceType.Consolidation => "consolidation",
+            PivotCacheSourceType.Scenario => "scenario",
+            _ => "worksheet"
+        };
 
     private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs) =>
         new(
