@@ -105,6 +105,19 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void RibbonTabs_RemainSingleRowAtNarrowWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(640);
+
+            harness.VisibleRibbonTabHeaderRows.Should().HaveCount(1, "Excel keeps the main ribbon tabs on one row while the command groups collapse");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -189,6 +202,17 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Select(GetButtonLabel)
                     .Where(label => !string.IsNullOrWhiteSpace(label)))
             .ToList();
+
+        public IReadOnlyList<int> VisibleRibbonTabHeaderRows =>
+            _window.FindName("RibbonTabs") is TabControl tabs
+                ? EnumerateSelfAndVisualDescendants(tabs)
+                    .OfType<TabItem>()
+                    .Where(item => item.Visibility == Visibility.Visible && item.ActualHeight > 0)
+                    .Select(item => (int)Math.Round(item.TransformToAncestor(tabs).Transform(new Point(0, 0)).Y))
+                    .Distinct()
+                    .OrderBy(row => row)
+                    .ToList()
+                : [];
 
         private TabItem? SelectedRibbonTab =>
             (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem as TabItem;
