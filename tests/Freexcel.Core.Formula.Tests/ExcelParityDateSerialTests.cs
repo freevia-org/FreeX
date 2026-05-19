@@ -91,5 +91,17 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=NETWORKDAYS(DATE(1900,1,1),DATE(1900,1,5))", 4)]
+    [InlineData("=NETWORKDAYS(DATE(1900,1,5),DATE(1900,1,1))", -4)]
+    [InlineData("=NETWORKDAYS(DATE(1900,1,6),DATE(1900,1,7))", 1)]
+    [InlineData("=NETWORKDAYS.INTL(DATE(1900,1,1),DATE(1900,1,5),\"0000011\")", 4)]
+    [InlineData("=NETWORKDAYS.INTL(DATE(1900,1,5),DATE(1900,1,1),\"0000011\")", -4)]
+    [InlineData("=NETWORKDAYS.INTL(DATE(1900,1,6),DATE(1900,1,7),\"0000011\")", 1)]
+    public void NetworkdaysFunctions_CountExcelSerialWeekdays(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 }
