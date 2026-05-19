@@ -10195,6 +10195,15 @@ public class FileAdapterSmokeTests
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             IsPivotChart = true,
             PivotTableName = "PivotTable1",
+            PivotFormatsXml = """
+                <c:pivotFmts xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <c:pivotFmt>
+                    <c:idx val="0"/>
+                    <c:spPr><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></c:spPr>
+                  </c:pivotFmt>
+                </c:pivotFmts>
+                """,
             ChartStyleId = 42,
             Uses1904DateSystem = true,
             Language = "en-US",
@@ -10340,6 +10349,9 @@ public class FileAdapterSmokeTests
             pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
             pageSetup.Attribute("draft")!.Value.Should().Be("0");
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
+            var pivotFormats = chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "pivotFmts")!;
+            pivotFormats.Element(chartNs + "pivotFmt")!.Element(chartNs + "idx")!.Attribute("val")!.Value.Should().Be("0");
+            pivotFormats.ToString().Should().Contain("4472C4");
             chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
             var protection = chartXml.Root.Element(chartNs + "protection")!;
             protection.Attribute("chartObject")!.Value.Should().Be("1");
@@ -10358,6 +10370,7 @@ public class FileAdapterSmokeTests
         var loaded = new XlsxFileAdapter().Load(saved);
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Which;
         loadedChart.ChartStyleId.Should().Be(42);
+        loadedChart.PivotFormatsXml.Should().Contain("4472C4");
         loadedChart.Uses1904DateSystem.Should().BeTrue();
         loadedChart.Language.Should().Be("en-US");
         loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
