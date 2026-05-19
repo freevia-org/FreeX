@@ -6431,10 +6431,13 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new FailedWorkbookCommand("Sheet not found.");
 
-        var height = AutoFitSizingService.EstimateRowHeight(
-            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Rows),
+        var plans = AutoFitPlanner.PlanRowHeights(
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultRowHeight);
-        return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height);
+
+        return CreateAutoFitRowHeightCommand(sheetId, plans);
     }
 
     private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
@@ -6443,37 +6446,44 @@ public partial class MainWindow : Window
         if (sheet is null)
             return new FailedWorkbookCommand("Sheet not found.");
 
-        var width = AutoFitSizingService.EstimateColumnWidth(
-            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Columns),
+        var plans = AutoFitPlanner.PlanColumnWidths(
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayText(sheet, row, col),
             sheet.DefaultColumnWidth);
-        return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width);
+
+        return CreateAutoFitColumnWidthCommand(sheetId, plans);
     }
 
-    private enum AutoFitAxis
+    private static IWorkbookCommand CreateAutoFitRowHeightCommand(
+        SheetId sheetId,
+        IReadOnlyList<AutoFitSizePlan> plans)
     {
-        Rows,
-        Columns
+        if (plans.Count == 1)
+            return new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
+
+        return new CompositeWorkbookCommand(
+            "Auto Row Height",
+            plans.Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
     }
 
-    private IEnumerable<string> CollectAutoFitDisplayTexts(Sheet sheet, GridRange range, AutoFitAxis axis)
+    private static IWorkbookCommand CreateAutoFitColumnWidthCommand(
+        SheetId sheetId,
+        IReadOnlyList<AutoFitSizePlan> plans)
     {
-        var usedRange = sheet.GetUsedRange();
-        if (usedRange is null)
-            yield break;
+        if (plans.Count == 1)
+            return new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
 
-        var rowStart = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.Start.Row : range.Start.Row;
-        var rowEnd = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.End.Row : range.End.Row;
-        var colStart = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.Start.Col : range.Start.Col;
-        var colEnd = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.End.Col : range.End.Col;
+        return new CompositeWorkbookCommand(
+            "Auto Column Width",
+            plans.Select(plan => (IWorkbookCommand)new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
+    }
 
-        foreach (var (address, cell) in sheet.GetUsedCells())
-        {
-            if (address.Row < rowStart || address.Row > rowEnd ||
-                address.Col < colStart || address.Col > colEnd)
-                continue;
-
-            yield return GetAutoFitDisplayText(sheet, cell);
-        }
+    private string? GetAutoFitDisplayText(Sheet sheet, uint row, uint col)
+    {
+        return sheet.GetCell(row, col) is { } cell
+            ? GetAutoFitDisplayText(sheet, cell)
+            : null;
     }
 
     private string GetAutoFitDisplayText(Sheet sheet, Cell cell)
