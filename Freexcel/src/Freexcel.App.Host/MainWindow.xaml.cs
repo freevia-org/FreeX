@@ -5954,8 +5954,34 @@ public partial class MainWindow : Window
                 "multiply" => PasteSpecialOperation.Multiply,
                 "divide" => PasteSpecialOperation.Divide,
                 _ => PasteSpecialOperation.None
+            },
+            SkipBlanks: dlg.SkipBlanks,
+            ContentKind: dlg.Mode switch
+            {
+                PasteSpecialDialogMode.AllExceptBorders => PasteSpecialContentKind.AllExceptBorders,
+                PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
+                PasteSpecialDialogMode.ValuesAndNumberFormats => PasteSpecialContentKind.ValuesAndNumberFormats,
+                _ => PasteSpecialContentKind.Default
             });
         var keepColumnWidths = dlg.KeepColumnWidths;
+        if (dlg.Mode == PasteSpecialDialogMode.ColumnWidths)
+        {
+            ExecutePasteColumnWidthsOnly();
+            return;
+        }
+
+        if (dlg.Mode == PasteSpecialDialogMode.Comments)
+        {
+            ExecutePasteComments(options.Transpose);
+            return;
+        }
+
+        if (dlg.Mode == PasteSpecialDialogMode.Validation)
+        {
+            ExecutePasteValidation(options.Transpose);
+            return;
+        }
+
         if (dlg.PastePicture)
         {
             ExecutePasteAsPicture();
@@ -5976,6 +6002,82 @@ public partial class MainWindow : Window
             ExecutePaste(PasteMode.Formats, options, keepColumnWidths);
         else
             ExecutePaste(PasteMode.All, options, keepColumnWidths);
+    }
+
+    private void ExecutePasteColumnWidthsOnly()
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Column Widths",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
+    private void ExecutePasteComments(bool transpose)
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Comments",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteCommentsCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        transpose);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        UpdateViewport();
+        RefreshToolbar();
+    }
+
+    private void ExecutePasteValidation(bool transpose)
+    {
+        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+            return;
+
+        if (!TryExecuteRepeatableGroupedSheetCommand(
+                "Paste Validation",
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    return new PasteDataValidationCommand(
+                        sheetId,
+                        clip.SourceRange,
+                        new CellAddress(sheetId, currentRange.Start.Row, currentRange.Start.Col),
+                        transpose);
+                },
+                out var outcome))
+            return;
+
+        if (!outcome.Success)
+            return;
+
+        CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose));
+        UpdateViewport();
+        RefreshToolbar();
     }
 
     private void ExecutePasteAsPicture()
@@ -6427,7 +6529,7 @@ public partial class MainWindow : Window
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)))
+        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
             return;
         UpdateViewport();
     }
@@ -6443,9 +6545,68 @@ public partial class MainWindow : Window
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)))
+        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
             return;
         UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateAutoFitRowHeightCommand(SheetId sheetId, GridRange range)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new FailedWorkbookCommand("Sheet not found.");
+
+        var height = AutoFitSizingService.EstimateRowHeight(
+            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Rows),
+            sheet.DefaultRowHeight);
+        return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height);
+    }
+
+    private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new FailedWorkbookCommand("Sheet not found.");
+
+        var width = AutoFitSizingService.EstimateColumnWidth(
+            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Columns),
+            sheet.DefaultColumnWidth);
+        return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width);
+    }
+
+    private enum AutoFitAxis
+    {
+        Rows,
+        Columns
+    }
+
+    private IEnumerable<string> CollectAutoFitDisplayTexts(Sheet sheet, GridRange range, AutoFitAxis axis)
+    {
+        var usedRange = sheet.GetUsedRange();
+        if (usedRange is null)
+            yield break;
+
+        var rowStart = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.Start.Row : range.Start.Row;
+        var rowEnd = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.End.Row : range.End.Row;
+        var colStart = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.Start.Col : range.Start.Col;
+        var colEnd = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.End.Col : range.End.Col;
+
+        foreach (var (address, cell) in sheet.GetUsedCells())
+        {
+            if (address.Row < rowStart || address.Row > rowEnd ||
+                address.Col < colStart || address.Col > colEnd)
+                continue;
+
+            yield return GetAutoFitDisplayText(sheet, cell);
+        }
+    }
+
+    private string GetAutoFitDisplayText(Sheet sheet, Cell cell)
+    {
+        var style = _workbook.GetStyle(cell.StyleId);
+        return sheet.ShowFormulas && cell.FormulaText is not null
+            ? "=" + cell.FormulaText
+            : NumberFormatter.Format(cell.Value, style.NumberFormat);
     }
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
     private void FormatHideRowMenuItem_Click(object sender, RoutedEventArgs e)

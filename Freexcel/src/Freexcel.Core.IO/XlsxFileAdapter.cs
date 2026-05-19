@@ -8562,6 +8562,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 XLAlignmentHorizontalValues.Left => HorizontalAlignment.Left,
                 XLAlignmentHorizontalValues.Center => HorizontalAlignment.Center,
                 XLAlignmentHorizontalValues.Right => HorizontalAlignment.Right,
+                XLAlignmentHorizontalValues.Justify => HorizontalAlignment.Justify,
+                XLAlignmentHorizontalValues.Distributed => HorizontalAlignment.Distributed,
                 _ => HorizontalAlignment.General,
             },
             VerticalAlignment = xlStyle.Alignment.Vertical switch
@@ -8569,9 +8571,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 XLAlignmentVerticalValues.Top => VerticalAlignment.Top,
                 XLAlignmentVerticalValues.Center => VerticalAlignment.Center,
                 XLAlignmentVerticalValues.Bottom => VerticalAlignment.Bottom,
+                XLAlignmentVerticalValues.Justify => VerticalAlignment.Justify,
+                XLAlignmentVerticalValues.Distributed => VerticalAlignment.Distributed,
                 _ => VerticalAlignment.Bottom,
             },
             WrapText = xlStyle.Alignment.WrapText,
+            ShrinkToFit = xlStyle.Alignment.ShrinkToFit,
             TextRotation = IsSupportedTextRotation(xlStyle.Alignment.TextRotation)
                 ? xlStyle.Alignment.TextRotation
                 : 0,
@@ -8679,6 +8684,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 HorizontalAlignment.Left => XLAlignmentHorizontalValues.Left,
                 HorizontalAlignment.Center => XLAlignmentHorizontalValues.Center,
                 HorizontalAlignment.Right => XLAlignmentHorizontalValues.Right,
+                HorizontalAlignment.Justify => XLAlignmentHorizontalValues.Justify,
+                HorizontalAlignment.Distributed => XLAlignmentHorizontalValues.Distributed,
                 _ => XLAlignmentHorizontalValues.General,
             };
 
@@ -8687,11 +8694,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
             {
                 VerticalAlignment.Top => XLAlignmentVerticalValues.Top,
                 VerticalAlignment.Center => XLAlignmentVerticalValues.Center,
+                VerticalAlignment.Justify => XLAlignmentVerticalValues.Justify,
+                VerticalAlignment.Distributed => XLAlignmentVerticalValues.Distributed,
                 _ => XLAlignmentVerticalValues.Bottom,
             };
 
         if (style.WrapText != def.WrapText)
             xlCell.Style.Alignment.WrapText = style.WrapText;
+
+        if (style.ShrinkToFit != def.ShrinkToFit)
+            xlCell.Style.Alignment.ShrinkToFit = style.ShrinkToFit;
 
         if (style.TextRotation != def.TextRotation && IsSupportedTextRotation(style.TextRotation))
             xlCell.Style.Alignment.TextRotation = style.TextRotation;
