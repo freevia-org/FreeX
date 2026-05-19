@@ -3866,7 +3866,8 @@ public static class BuiltInFunctions
         {
             var v = include.Cells[i, 0];
             if (v is ErrorValue e) return e;
-            if (IsFilterIncluded(v)) matchedRows.Add(i);
+            if (!TryFilterIncluded(v, out bool included)) return ErrorValue.Value;
+            if (included) matchedRows.Add(i);
         }
 
         if (matchedRows.Count == 0)
@@ -3886,7 +3887,8 @@ public static class BuiltInFunctions
         {
             var v = include.Cells[0, c];
             if (v is ErrorValue e) return e;
-            if (IsFilterIncluded(v)) matchedCols.Add(c);
+            if (!TryFilterIncluded(v, out bool included)) return ErrorValue.Value;
+            if (included) matchedCols.Add(c);
         }
 
         if (matchedCols.Count == 0)
@@ -3899,8 +3901,24 @@ public static class BuiltInFunctions
         return new RangeValue(result);
     }
 
-    private static bool IsFilterIncluded(ScalarValue value) =>
-        value is BoolValue { Value: true } || (TryCellNumber(value, out double number) && number != 0);
+    private static bool TryFilterIncluded(ScalarValue value, out bool included)
+    {
+        included = false;
+        if (value is BlankValue) return true;
+        if (value is BoolValue b)
+        {
+            included = b.Value;
+            return true;
+        }
+
+        if (TryCellNumber(value, out double number))
+        {
+            included = number != 0;
+            return true;
+        }
+
+        return false;
+    }
 
     private static ScalarValue FilterEmptyResult(ScalarValue ifEmpty) =>
         ifEmpty is RangeValue rvEmpty
