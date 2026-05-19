@@ -20,6 +20,7 @@ public sealed class ConditionalFormatDialog : Window
     private readonly ComboBox _iconSetStyleBox;
     private readonly CheckBox _iconSetShowValueBox;
     private readonly CheckBox _iconSetReverseBox;
+    private ConditionalFormat? _existingRule;
 
     private static readonly (string Label, Color Color)[] ColorOptions =
     [
@@ -134,6 +135,7 @@ public sealed class ConditionalFormatDialog : Window
         : this(RuleTypeLabel(existingRule), existingRule.AppliesTo)
     {
         _existingId = existingRule.Id;   // preserve Id so the command recognises it as an update
+        _existingRule = CloneRule(existingRule);
 
         // Pre-populate value fields
         if (existingRule.RuleType == CfRuleType.Formula)
@@ -152,7 +154,9 @@ public sealed class ConditionalFormatDialog : Window
                 var style = string.IsNullOrWhiteSpace(existingRule.IconSetStyle)
                     ? IconSetStyles[0]
                     : existingRule.IconSetStyle;
-                _iconSetStyleBox.SelectedItem = IconSetStyles.Contains(style) ? style : IconSetStyles[0];
+                if (!IconSetStyles.Contains(style))
+                    _iconSetStyleBox.Items.Add(style);
+                _iconSetStyleBox.SelectedItem = style;
                 _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
                 _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
             }
@@ -171,7 +175,10 @@ public sealed class ConditionalFormatDialog : Window
 
     private void Ok_Click(object sender, RoutedEventArgs e)
     {
-        var cf = new ConditionalFormat { Id = _existingId, AppliesTo = _range };
+        var cf = _existingRule is not null
+            ? CloneRule(_existingRule)
+            : new ConditionalFormat { Id = _existingId, AppliesTo = _range };
+        cf.AppliesTo = _range;
         var (_, fillColor) = ColorOptions[_colorBox.SelectedIndex < 0 ? 0 : _colorBox.SelectedIndex];
 
         bool isFormula = _ruleType is "Formula" or "Use a Formula";
@@ -228,6 +235,46 @@ public sealed class ConditionalFormatDialog : Window
         ResultRule = cf;
         DialogResult = true;
     }
+
+    private static ConditionalFormat CloneRule(ConditionalFormat source) => new()
+    {
+        Id = source.Id,
+        AppliesTo = source.AppliesTo,
+        Priority = source.Priority,
+        RuleType = source.RuleType,
+        Operator = source.Operator,
+        Value1 = source.Value1,
+        Value2 = source.Value2,
+        FormatIfTrue = source.FormatIfTrue?.Clone(),
+        MinColor = source.MinColor,
+        MidColor = source.MidColor,
+        MaxColor = source.MaxColor,
+        UseThreeColorScale = source.UseThreeColorScale,
+        MinThresholdType = source.MinThresholdType,
+        MinThresholdValue = source.MinThresholdValue,
+        MidThresholdType = source.MidThresholdType,
+        MidThresholdValue = source.MidThresholdValue,
+        MaxThresholdType = source.MaxThresholdType,
+        MaxThresholdValue = source.MaxThresholdValue,
+        DataBarColor = source.DataBarColor,
+        DataBarMinThresholdType = source.DataBarMinThresholdType,
+        DataBarMinThresholdValue = source.DataBarMinThresholdValue,
+        DataBarMaxThresholdType = source.DataBarMaxThresholdType,
+        DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
+        DataBarShowValue = source.DataBarShowValue,
+        DataBarMinLength = source.DataBarMinLength,
+        DataBarMaxLength = source.DataBarMaxLength,
+        AboveAverage = source.AboveAverage,
+        FormulaText = source.FormulaText,
+        IconSetStyle = source.IconSetStyle,
+        IconSetShowValue = source.IconSetShowValue,
+        IconSetReverse = source.IconSetReverse,
+        TopBottomRank = source.TopBottomRank,
+        TopBottomPercent = source.TopBottomPercent,
+        TextRuleText = source.TextRuleText,
+        DateOccurringPeriod = source.DateOccurringPeriod,
+        StopIfTrue = source.StopIfTrue
+    };
 
     /// <summary>Returns the human-readable rule type label for a <see cref="ConditionalFormat"/>.</summary>
     private static string RuleTypeLabel(ConditionalFormat cf) => cf.RuleType switch
