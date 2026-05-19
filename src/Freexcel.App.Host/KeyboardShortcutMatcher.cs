@@ -294,7 +294,8 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
-        if (modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.F1)
+        if ((modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.F1) ||
+            (modifiers == ModifierKeys.Shift && effectiveKey == Key.F11))
         {
             shortcut = KeyboardCommandShortcut.InsertWorksheet;
             return true;
