@@ -66,6 +66,23 @@ public sealed class DrawingInputParserTests
             color.Should().Be(new CellColor(r, g, b));
     }
 
+    [Theory]
+    [InlineData("320x180", true, 320, 180)]
+    [InlineData("320 x 180", true, 320, 180)]
+    [InlineData("12.5x8.25", true, 12.5, 8.25)]
+    [InlineData("320", false, 0, 0)]
+    [InlineData("x180", false, 0, 0)]
+    [InlineData("320x", false, 0, 0)]
+    [InlineData("wide x tall", false, 0, 0)]
+    public void TryParseSize_ParsesWidthByHeightText(string text, bool expected, double expectedWidth, double expectedHeight)
+    {
+        var result = DrawingInputParser.TryParseSize(text, out var width, out var height);
+
+        result.Should().Be(expected);
+        width.Should().Be(expectedWidth);
+        height.Should().Be(expectedHeight);
+    }
+
     [Fact]
     public void FormatPictureCellText_MapsScalarValuesToExcelDisplayText()
     {
