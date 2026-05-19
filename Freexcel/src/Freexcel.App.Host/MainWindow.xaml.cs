@@ -1976,7 +1976,7 @@ public partial class MainWindow : Window
                 currentGroup = option.Group;
             }
 
-            var item = new MenuItem { Header = option.Label, Tag = option.Command };
+            var item = new MenuItem { Header = option.Label, Tag = option.Command, ToolTip = option.PreviewText };
             item.Click += QuickAnalysisMenuItem_Click;
             menu.Items.Add(item);
         }
@@ -3122,33 +3122,28 @@ public partial class MainWindow : Window
             Owner = this,
             Title = "AutoFilter"
         };
+        PositionAutoFilterDialogAtActiveCell(dialog, activeCell);
 
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
-        {
-            if (!TryExecuteRepeatableCurrentRangeCommand(
-                    "Sort",
-                    plan.Range,
-                    currentRange => new SortCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
-                return;
-            UpdateViewport();
-            return;
-        }
-
-        if (dialog.Result.SelectedValues.Count == 0)
-        {
-            MessageBox.Show("Select at least one filter item.", "AutoFilter", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Filter",
-                plan.Range,
-                currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SelectedValues)))
+        if (!ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, "AutoFilter"))
             return;
         UpdateViewport();
+    }
+
+    private void PositionAutoFilterDialogAtActiveCell(Window dialog, CellAddress activeCell)
+    {
+        if (TryGetCellOverlayRect(activeCell) is not { } rect)
+            return;
+
+        var screenPoint = SheetGrid.PointToScreen(new System.Windows.Point(rect.Left, rect.Bottom));
+        if (PresentationSource.FromVisual(this)?.CompositionTarget is { } target)
+            screenPoint = target.TransformFromDevice.Transform(screenPoint);
+
+        dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+        dialog.Left = screenPoint.X;
+        dialog.Top = screenPoint.Y;
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)
@@ -4926,31 +4921,36 @@ public partial class MainWindow : Window
         var dialog = new AutoFilterDialog(items) { Owner = this, Title = "Filter" };
         if (dialog.ShowDialog() != true) return;
 
-        if (dialog.Result.SortDirection != AutoFilterSortDirection.None)
+        if (!ApplyAutoFilterDialogResult(range, filterColOffset, dialog.Result, "Filter"))
+            return;
+        UpdateViewport();
+    }
+
+    private bool ApplyAutoFilterDialogResult(GridRange range, uint filterColOffset, AutoFilterDialogResult result, string title)
+    {
+        if (result.SortDirection != AutoFilterSortDirection.None)
         {
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Sort",
                     range,
-                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, dialog.Result.SortDirection == AutoFilterSortDirection.Ascending)))
-                return;
-            UpdateViewport();
-            return;
+                    currentRange => new SortCommand(_currentSheetId, currentRange, filterColOffset, result.SortDirection == AutoFilterSortDirection.Ascending)))
+                return false;
+            return true;
         }
 
-        var value = dialog.Result.CriteriaText;
+        var value = result.CriteriaText;
         var filterText = value.TrimStart();
-        if (string.IsNullOrWhiteSpace(filterText))
-            return;
-        if (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(filterText) &&
+            (filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase)))
         {
             if (!FilterInputParser.TryParseTopBottom(value, out var count, out var top, out var percent, out var error))
             {
                 MessageBox.Show(error ?? "Enter top:n, bottom:n, toppercent:n, or bottompercent:n.",
-                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                    title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
             }
 
             if (!TryExecuteRepeatableCurrentRangeCommand(
@@ -4959,63 +4959,72 @@ public partial class MainWindow : Window
                     currentRange => percent
                         ? TopBottomFilterCommand.Percent(_currentSheetId, currentRange, filterColOffset, count, top)
                         : new TopBottomFilterCommand(_currentSheetId, currentRange, filterColOffset, count, top)))
-                return;
-            UpdateViewport();
-            return;
+                return false;
+            return true;
         }
 
-        if (FilterInputParser.TryParseAverage(value, out var aboveAverage))
+        if (!string.IsNullOrWhiteSpace(filterText) &&
+            FilterInputParser.TryParseAverage(value, out var aboveAverage))
         {
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Filter",
                     range,
                     currentRange => new AverageFilterCommand(_currentSheetId, currentRange, filterColOffset, aboveAverage)))
-                return;
-            UpdateViewport();
-            return;
+                return false;
+            return true;
         }
 
-        if (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
-            filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
-            filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
-            filterText.StartsWith('>') ||
-            filterText.StartsWith('<') ||
-            filterText.StartsWith('='))
+        if (!string.IsNullOrWhiteSpace(filterText) &&
+            (filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
+             filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
+             filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
+             filterText.StartsWith('>') ||
+             filterText.StartsWith('<') ||
+             filterText.StartsWith('=')))
         {
             if (!FilterInputParser.TryParseCriterion(value, out var criterion, out var error) || criterion is null)
             {
                 MessageBox.Show(error ?? "Enter a supported filter criterion.",
-                    "Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                    title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
             }
 
             if (!TryExecuteRepeatableCurrentRangeCommand(
                     "Filter",
                     range,
                     currentRange => new FilterConditionCommand(_currentSheetId, currentRange, filterColOffset, criterion)))
-                return;
-            UpdateViewport();
-            return;
+                return false;
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
+        {
+            MessageBox.Show("Select at least one filter item.", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
         }
 
         var allowedValues = FilterInputParser.ParseAllowedValues(value);
+        if (allowedValues.Count == 0)
+            allowedValues = result.SelectedValues;
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Filter",
                 range,
                 currentRange => new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)))
-            return;
-        UpdateViewport();
+            return false;
+
+        return true;
     }
 
     private void CfRuleButton_Click(object sender, RoutedEventArgs e)

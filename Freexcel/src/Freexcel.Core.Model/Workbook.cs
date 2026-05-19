@@ -265,7 +265,7 @@ public sealed class Workbook
     }
 }
 
-public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets);
+public sealed record WorkbookCustomView(string Name, IReadOnlyList<WorksheetCustomViewState> Sheets, string? Id = null);
 
 public sealed record WorkbookScenario(string Name, IReadOnlyList<ScenarioCellValue> ChangingCells);
 
