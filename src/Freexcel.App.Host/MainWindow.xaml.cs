@@ -11505,7 +11505,11 @@ public partial class MainWindow : Window
     {
         if (SheetGrid.SelectedRange is null) return;
         var addr = SheetGrid.SelectedRange.Value.Start;
-        var text = PromptForInput($"Add comment to {addr.ToA1()}:", "");
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var defaultText = sheet is null
+            ? string.Empty
+            : CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr);
+        var text = PromptForInput($"Add comment to {addr.ToA1()}:", defaultText);
         if (text is null) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Comment",
