@@ -1774,7 +1774,7 @@ public static class BuiltInFunctions
 
         return unit switch
         {
-            "D"  => new NumberValue((end - start).Days),
+            "D"  => new NumberValue(DateToSerial(end) - DateToSerial(start)),
             "M"  => new NumberValue(MonthDiff(start, end)),
             "Y"  => new NumberValue(YearDiff(start, end)),
             "YM" => new NumberValue((int)MonthDiff(start, end) % 12),
