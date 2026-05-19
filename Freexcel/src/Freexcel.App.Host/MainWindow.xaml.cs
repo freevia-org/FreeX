@@ -1723,7 +1723,28 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.ScrollActiveCellIntoView:
                 ScrollActiveCellIntoView();
                 break;
+            case KeyboardCommandShortcut.CycleSelectionCorner:
+                CycleSelectionCorner();
+                break;
         }
+    }
+
+    private void CycleSelectionCorner()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var currentCorner = _selectionCursor ?? _selectionAnchor ?? range.Start;
+        var nextCorner = SelectionCornerNavigator.GetNextCorner(range, currentCorner);
+        _selectionAnchor = nextCorner;
+        _selectionCursor = nextCorner;
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner);
+        EnsureCellVisible(nextCorner);
+        FocusSheetGridIfNeeded();
+        RefreshToolbar();
+        RefreshStatusBar();
     }
 
     private void ScrollActiveCellIntoView()
