@@ -46,6 +46,15 @@ public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
 public enum ChartBlankDisplayMode { Gap, Span, Zero }
 
+public sealed class ChartProtectionModel
+{
+    public bool? ChartObject { get; set; }
+    public bool? Data { get; set; }
+    public bool? Formatting { get; set; }
+    public bool? Selection { get; set; }
+    public bool? UserInterface { get; set; }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -102,6 +111,7 @@ public sealed class ChartModel
     public bool ShowDataLabelsOverMaximum { get; set; }
     public bool AutoTitleDeleted { get; set; }
     public bool ShowDataInHiddenRowsAndColumns { get; set; }
+    public ChartProtectionModel? Protection { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
