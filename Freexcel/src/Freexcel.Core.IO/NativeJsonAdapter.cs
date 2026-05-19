@@ -198,32 +198,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
 
             foreach (var validationDto in sDto.DataValidations ?? [])
             {
-                if (string.IsNullOrWhiteSpace(validationDto?.AppliesTo))
-                    continue;
-                if (!IsSupportedDataValidation(validationDto))
-                    continue;
-
-                try
-                {
-                    sheet.DataValidations.Add(new DataValidation
-                    {
-                        AppliesTo = GridRange.Parse(validationDto.AppliesTo, sheet.Id),
-                        Type = validationDto.Type,
-                        Operator = validationDto.Operator,
-                        Formula1 = validationDto.Formula1,
-                        Formula2 = validationDto.Formula2,
-                        AllowBlank = validationDto.AllowBlank,
-                        ShowDropdown = validationDto.ShowDropdown,
-                        AlertStyle = validationDto.AlertStyle,
-                        ShowInputMessage = validationDto.ShowInputMessage,
-                        ShowErrorMessage = validationDto.ShowErrorMessage,
-                        ErrorTitle = validationDto.ErrorTitle,
-                        ErrorMessage = validationDto.ErrorMessage,
-                        PromptTitle = validationDto.PromptTitle,
-                        PromptMessage = validationDto.PromptMessage
-                    });
-                }
-                catch (FormatException) { /* skip validations with unparseable ranges */ }
+                if (TryLoadDataValidation(validationDto, sheet.Id) is { } validation)
+                    sheet.DataValidations.Add(validation);
             }
 
             foreach (var formatDto in sDto.ConditionalFormats ?? [])
@@ -544,23 +520,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 Charts = s.Charts.Select(ToChartDto).ToList(),
                 DataValidations = s.DataValidations
                     .Where(IsSupportedDataValidation)
-                    .Select(validation => new DataValidationDto
-                    {
-                        AppliesTo = validation.AppliesTo.ToString(),
-                        Type = validation.Type,
-                        Operator = validation.Operator,
-                        Formula1 = validation.Formula1,
-                        Formula2 = validation.Formula2,
-                        AllowBlank = validation.AllowBlank,
-                        ShowDropdown = validation.ShowDropdown,
-                        AlertStyle = validation.AlertStyle,
-                        ShowInputMessage = validation.ShowInputMessage,
-                        ShowErrorMessage = validation.ShowErrorMessage,
-                        ErrorTitle = validation.ErrorTitle,
-                        ErrorMessage = validation.ErrorMessage,
-                        PromptTitle = validation.PromptTitle,
-                        PromptMessage = validation.PromptMessage
-                    }).ToList(),
+                    .Select(ToDataValidationDto)
+                    .ToList(),
                 ConditionalFormats = s.ConditionalFormats
                     .Where(format =>
                         format.AppliesTo.Start.Sheet == s.Id &&
@@ -1203,6 +1164,57 @@ public sealed class NativeJsonAdapter : IFileAdapter
         string.Equals(errorCode, ErrorValue.Null.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Spill.Code, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(errorCode, ErrorValue.Circular.Code, StringComparison.OrdinalIgnoreCase);
+
+    private static DataValidation? TryLoadDataValidation(DataValidationDto? validationDto, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(validationDto?.AppliesTo))
+            return null;
+        if (!IsSupportedDataValidation(validationDto))
+            return null;
+
+        try
+        {
+            return new DataValidation
+            {
+                AppliesTo = GridRange.Parse(validationDto.AppliesTo, sheetId),
+                Type = validationDto.Type,
+                Operator = validationDto.Operator,
+                Formula1 = validationDto.Formula1,
+                Formula2 = validationDto.Formula2,
+                AllowBlank = validationDto.AllowBlank,
+                ShowDropdown = validationDto.ShowDropdown,
+                AlertStyle = validationDto.AlertStyle,
+                ShowInputMessage = validationDto.ShowInputMessage,
+                ShowErrorMessage = validationDto.ShowErrorMessage,
+                ErrorTitle = validationDto.ErrorTitle,
+                ErrorMessage = validationDto.ErrorMessage,
+                PromptTitle = validationDto.PromptTitle,
+                PromptMessage = validationDto.PromptMessage
+            };
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static DataValidationDto ToDataValidationDto(DataValidation validation) => new()
+    {
+        AppliesTo = validation.AppliesTo.ToString(),
+        Type = validation.Type,
+        Operator = validation.Operator,
+        Formula1 = validation.Formula1,
+        Formula2 = validation.Formula2,
+        AllowBlank = validation.AllowBlank,
+        ShowDropdown = validation.ShowDropdown,
+        AlertStyle = validation.AlertStyle,
+        ShowInputMessage = validation.ShowInputMessage,
+        ShowErrorMessage = validation.ShowErrorMessage,
+        ErrorTitle = validation.ErrorTitle,
+        ErrorMessage = validation.ErrorMessage,
+        PromptTitle = validation.PromptTitle,
+        PromptMessage = validation.PromptMessage
+    };
 
     private static bool IsSupportedDataValidation(DataValidation validation) =>
         Enum.IsDefined(validation.Type) &&
