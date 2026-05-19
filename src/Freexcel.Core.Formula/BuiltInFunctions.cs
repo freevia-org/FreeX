@@ -3056,10 +3056,19 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
+        if (IsExcelFakeLeapDayText(text)) return new NumberValue(60);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
+    }
+
+    private static bool IsExcelFakeLeapDayText(string text)
+    {
+        var trimmed = text.Trim();
+        return string.Equals(trimmed, "2/29/1900", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "02/29/1900", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "1900-02-29", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ScalarValue Eomonth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
