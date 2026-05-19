@@ -35,6 +35,14 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void StopIfTrueText_ShowsEnabledRules()
+    {
+        var rule = new ConditionalFormat { StopIfTrue = true };
+
+        ManageConditionalFormatsDialog.StopIfTrueText(rule).Should().Be("Yes");
+    }
+
+    [Fact]
     public void CloneWithPriority_PreservesAdvancedConditionalFormatFields()
     {
         var source = new ConditionalFormat
