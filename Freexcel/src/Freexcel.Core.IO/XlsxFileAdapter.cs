@@ -4727,7 +4727,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "legacyDrawingHF",
             workbookNs + "customProperties",
             workbookNs + "smartTags",
-            workbookNs + "autoFilter"
+            workbookNs + "autoFilter",
+            workbookNs + "protectedRanges"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
@@ -4797,6 +4798,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
+                if (sourceBlock.Name == workbookNs + "protectedRanges" &&
+                    MergeWorksheetProtectedRanges(sourceBlock, targetRoot, workbookNs))
+                {
+                    changed = true;
+                    continue;
+                }
+
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
 
@@ -4810,6 +4818,64 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetProtectedRanges(XElement sourceProtectedRanges, XElement targetRoot, XNamespace workbookNs)
+    {
+        var targetProtectedRanges = targetRoot.Element(workbookNs + "protectedRanges");
+        if (targetProtectedRanges is null)
+        {
+            targetRoot.Add(new XElement(sourceProtectedRanges));
+            return true;
+        }
+
+        var changed = false;
+        var targetBySqref = targetProtectedRanges
+            .Elements(workbookNs + "protectedRange")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
+            .ToDictionary(
+                element => element.Attribute("sqref")!.Value,
+                element => element,
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sourceRange in sourceProtectedRanges.Elements(workbookNs + "protectedRange"))
+        {
+            var sqref = sourceRange.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(sqref) || !targetBySqref.TryGetValue(sqref, out var targetRange))
+            {
+                targetProtectedRanges.Add(new XElement(sourceRange));
+                changed = true;
+                continue;
+            }
+
+            foreach (var sourceAttribute in sourceRange.Attributes())
+            {
+                if (sourceAttribute.Name == "sqref")
+                    continue;
+
+                if (targetRange.Attribute(sourceAttribute.Name)?.Value == sourceAttribute.Value)
+                    continue;
+
+                targetRange.SetAttributeValue(sourceAttribute.Name, sourceAttribute.Value);
+                changed = true;
+            }
+
+            var existingChildNames = targetRange
+                .Elements()
+                .Select(element => element.Name)
+                .ToHashSet();
+            foreach (var sourceChild in sourceRange.Elements())
+            {
+                if (existingChildNames.Contains(sourceChild.Name))
+                    continue;
+
+                targetRange.Add(new XElement(sourceChild));
+                existingChildNames.Add(sourceChild.Name);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetSheetProtection(XElement? sourceSheetProtection, XElement targetRoot, XNamespace workbookNs)

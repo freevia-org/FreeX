@@ -3294,6 +3294,41 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesProtectedRangeMetadata()
+    {
+        var workbook = new Workbook("ProtectedRangeRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddProtectedRangeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).AllowEditRanges.Should().ContainSingle();
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var protectedRange = worksheetXml.Root!
+            .Element(worksheetNs + "protectedRanges")!
+            .Element(worksheetNs + "protectedRange");
+        protectedRange.Should().NotBeNull();
+        protectedRange!.Attribute("sqref")!.Value.Should().Be("B2:C3");
+        protectedRange.Attribute("name")!.Value.Should().Be("NativeEditableRange");
+        protectedRange.Attribute("password")!.Value.Should().Be("ABCD");
+        protectedRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_WorkbookStructureProtection()
     {
         var workbook = new Workbook("WorkbookProtectionTest");
@@ -9812,6 +9847,27 @@ public class FileAdapterSmokeTests
                 new XAttribute("spinCount", "100000"),
                 new XAttribute("objects", "1"),
                 new XAttribute("scenarios", "1")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddProtectedRangeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "protectedRanges",
+                new XElement(
+                    worksheetNs + "protectedRange",
+                    new XAttribute("name", "NativeEditableRange"),
+                    new XAttribute("sqref", "B2:C3"),
+                    new XAttribute("password", "ABCD"),
+                    new XAttribute("securityDescriptor", "D:PAI"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
