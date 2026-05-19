@@ -229,7 +229,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.LiveWebQueries] = "unsupported live web query disclosed",
             [XlsxUnsupportedFeatureKind.SensitivityLabels] = "unsupported sensitivity label disclosed",
             [XlsxUnsupportedFeatureKind.SmartArtDiagrams] = "unsupported SmartArt diagram disclosed",
-            [XlsxUnsupportedFeatureKind.PrinterSettings] = "unsupported printer settings disclosed",
             [XlsxUnsupportedFeatureKind.UnsupportedSheetTypes] = "unsupported sheet type disclosed"
         };
 
@@ -285,9 +284,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("smartart") || tags.Contains("diagrams"))
             expected.Add(XlsxUnsupportedFeatureKind.SmartArtDiagrams);
-
-        if (tags.Contains("printer-settings"))
-            expected.Add(XlsxUnsupportedFeatureKind.PrinterSettings);
 
         if (tags.Contains("chart-sheets") || tags.Contains("dialog-sheets") || tags.Contains("macro-sheets"))
             expected.Add(XlsxUnsupportedFeatureKind.UnsupportedSheetTypes);

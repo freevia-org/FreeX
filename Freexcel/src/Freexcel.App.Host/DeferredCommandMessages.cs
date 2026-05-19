@@ -85,7 +85,6 @@ public static class DeferredCommandMessages
         XlsxUnsupportedFeatureKind.LiveWebQueries => "live web queries / web publishing",
         XlsxUnsupportedFeatureKind.SensitivityLabels => "sensitivity labels / IRM metadata",
         XlsxUnsupportedFeatureKind.SmartArtDiagrams => "SmartArt diagrams",
-        XlsxUnsupportedFeatureKind.PrinterSettings => "printer settings",
         XlsxUnsupportedFeatureKind.StructuredTables => "structured Excel tables",
         XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => "chart sheets / dialog sheets / macro sheets",
         _ => kind.ToString()

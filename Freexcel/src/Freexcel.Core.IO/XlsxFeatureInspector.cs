@@ -29,7 +29,6 @@ public enum XlsxUnsupportedFeatureKind
     LiveWebQueries,
     SensitivityLabels,
     SmartArtDiagrams,
-    PrinterSettings,
     StructuredTables,
     UnsupportedSheetTypes
 }
