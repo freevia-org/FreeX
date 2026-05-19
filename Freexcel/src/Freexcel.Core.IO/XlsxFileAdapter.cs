@@ -509,6 +509,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Merge load failed: {ex.Message}"); }
         }
 
+        ResolvePivotChartCacheBindings(workbook);
+
         // Load named ranges (best-effort; skip any we cannot map)
         try { LoadNamedRanges(xlWorkbook, workbook); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Named-range load failed: {ex.Message}"); }
@@ -520,6 +522,27 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return workbook;
+    }
+
+    private static void ResolvePivotChartCacheBindings(Workbook workbook)
+    {
+        foreach (var chartSheet in workbook.Sheets)
+        {
+            foreach (var chart in chartSheet.Charts.Where(chart =>
+                         chart.IsPivotChart &&
+                         chart.PivotCacheId is null &&
+                         !string.IsNullOrWhiteSpace(chart.PivotTableName)))
+            {
+                var sourceSheet = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+                    ? chartSheet
+                    : workbook.Sheets.FirstOrDefault(sheet =>
+                        string.Equals(sheet.Name, chart.PivotSourceSheetName, StringComparison.OrdinalIgnoreCase));
+                var pivot = sourceSheet?.PivotTables.FirstOrDefault(pivot =>
+                    string.Equals(pivot.Name, chart.PivotTableName, StringComparison.OrdinalIgnoreCase));
+                if (pivot is not null)
+                    chart.PivotCacheId = pivot.CacheId;
+            }
+        }
     }
 
     private sealed record SheetXmlLayout(
@@ -837,16 +860,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (root is null)
                 continue;
 
-            var worksheetSource = root
-                .Element(workbookNs + "cacheSource")?
-                .Element(workbookNs + "worksheetSource");
+            var cacheSource = root.Element(workbookNs + "cacheSource");
+            var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
             var cache = new PivotCacheModel
             {
                 CacheId = cacheId,
-                SourceType = GetPivotCacheSourceType(worksheetSource),
+                SourceType = GetPivotCacheSourceType(cacheSource, worksheetSource),
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
                 SourceTableName = worksheetSource?.Attribute("name")?.Value,
+                ConnectionId = cacheSource is null ? null : ReadIntAttribute(cacheSource, "connectionId"),
+                IsOlap = ReadBoolAttribute(root, "olap"),
                 PackagePart = cachePath,
                 RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
                 SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
@@ -885,8 +909,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return result;
     }
 
-    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? worksheetSource)
+    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? cacheSource, XElement? worksheetSource)
     {
+        var sourceType = cacheSource?.Attribute("type")?.Value;
+        if (string.Equals(sourceType, "external", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.External;
+        if (string.Equals(sourceType, "consolidation", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.Consolidation;
+        if (string.Equals(sourceType, "scenario", StringComparison.OrdinalIgnoreCase))
+            return PivotCacheSourceType.Scenario;
         if (worksheetSource is null)
             return PivotCacheSourceType.Unknown;
         if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("name")?.Value))
@@ -921,9 +952,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 slicers.Add(new SlicerModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     PackagePart = slicerEntry.FullName.Replace('\\', '/')
                 });
                 slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
@@ -947,9 +980,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 timelines.Add(new TimelineModel
                 {
                     Name = root?.Attribute("name")?.Value ?? "",
+                    Caption = root?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
                     SourceFieldName = cache?.SourceFieldName,
+                    StyleName = root?.Attribute("style")?.Value,
                     StartDate = cache?.StartDate,
                     EndDate = cache?.EndDate,
                     SelectedStartDate = cache?.SelectedStartDate,
@@ -4433,6 +4468,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, slicerPath, new XDocument(
                 new XElement(slicerNs + "slicer",
                     new XAttribute("name", slicer.Name),
+                    OptionalAttribute("caption", slicer.Caption),
+                    OptionalAttribute("style", slicer.StyleName),
                     new XAttribute("cache", string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "slicerCacheDefinition",
@@ -4465,6 +4502,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReplacePackageXml(archive, timelinePath, new XDocument(
                 new XElement(slicerNs + "timeline",
                     new XAttribute("name", timeline.Name),
+                    OptionalAttribute("caption", timeline.Caption),
+                    OptionalAttribute("style", timeline.StyleName),
                     new XAttribute("cache", string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName))));
             ReplacePackageXml(archive, cachePath, new XDocument(
                 new XElement(slicerNs + "timelineCacheDefinition",
@@ -8467,20 +8506,24 @@ public sealed class XlsxFileAdapter : IFileAdapter
             source.SetAttributeValue("sheet", cache.SourceSheetName);
         if (!string.IsNullOrWhiteSpace(cache.SourceReference))
             source.SetAttributeValue("ref", cache.SourceReference);
+        var cacheSource = new XElement(
+            workbookNs + "cacheSource",
+            new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
+            cache.ConnectionId is { } connectionId ? new XAttribute("connectionId", connectionId.ToString(CultureInfo.InvariantCulture)) : null);
+        if (cache.SourceType != PivotCacheSourceType.External)
+            cacheSource.Add(source);
 
         return new XDocument(new XElement(
             workbookNs + "pivotCacheDefinition",
             new XAttribute(XNamespace.Xmlns + "r", relNs),
+            cache.IsOlap ? new XAttribute("olap", "1") : null,
             new XAttribute("refreshOnLoad", cache.RefreshOnLoad ? "1" : "0"),
             new XAttribute("saveData", cache.SaveData ? "1" : "0"),
             new XAttribute("enableRefresh", cache.EnableRefresh ? "1" : "0"),
             cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
             new XAttribute("recordCount", "0"),
-            new XElement(
-                workbookNs + "cacheSource",
-                new XAttribute("type", cache.SourceType == PivotCacheSourceType.External ? "external" : "worksheet"),
-                source),
+            cacheSource,
             new XElement(
                 workbookNs + "cacheFields",
                 new XAttribute("count", cache.Fields.Count.ToString(CultureInfo.InvariantCulture)),
@@ -9736,8 +9779,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return null;
 
+        var sourceSheetName = string.IsNullOrWhiteSpace(chart.PivotSourceSheetName)
+            ? sheet.Name
+            : chart.PivotSourceSheetName;
         return new XElement(chartNs + "pivotSource",
-            new XElement(chartNs + "name", $"{QuoteSheetName(sheet.Name)}!{chart.PivotTableName}"),
+            new XElement(chartNs + "name", $"{QuoteSheetName(sourceSheetName)}!{chart.PivotTableName}"),
             new XElement(chartNs + "fmtId", new XAttribute("val", "0")));
     }
 
