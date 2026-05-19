@@ -51,4 +51,10 @@ public sealed class ProtectionDialogTests
         range.Start.Should().Be(new CellAddress(sheetId, 1, 1));
         range.End.Should().Be(new CellAddress(sheetId, 2, 2));
     }
+
+    [Fact]
+    public void TryParseAllowEditRange_RejectsInvalidRangeThroughSharedParser()
+    {
+        ProtectionDialogPlanner.TryParseAllowEditRange("A1:B2:C3", SheetId.New(), out _).Should().BeFalse();
+    }
 }
