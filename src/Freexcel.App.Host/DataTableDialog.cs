@@ -66,7 +66,7 @@ public sealed class DataTableDialog : Window
         result = default!;
         error = null;
 
-        if (!CellAddress.TryParse(formulaCellText, currentSheetId, out var formulaCell))
+        if (!DataTableInputParser.TryParseCell(formulaCellText, currentSheetId, out var formulaCell))
         {
             error = "Enter a valid formula cell.";
             return false;
@@ -112,7 +112,7 @@ public sealed class DataTableDialog : Window
         if (!shouldParse)
             return true;
 
-        if (!CellAddress.TryParse(text!, sheetId, out var parsed))
+        if (!DataTableInputParser.TryParseCell(text!, sheetId, out var parsed))
             return false;
 
         address = parsed;
