@@ -13,7 +13,7 @@ internal sealed record ExportRequest(string Path, ExportFormat Format);
 internal static class ExportPlanner
 {
     public const string PdfFallbackMessage =
-        "Windows Print to PDF is unavailable. Exported XPS instead; use a PDF printer or convert the XPS file.";
+        "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.";
 
     public static ExportFormat InferExportFormat(string path) =>
         string.Equals(Path.GetExtension(path), ".xps", StringComparison.OrdinalIgnoreCase)
