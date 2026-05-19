@@ -192,18 +192,18 @@ public sealed class MoveChartDialog : Window
     }
 }
 
-public sealed record SelectDataSourceDialogResult(string SourceRangeText, bool SwitchRowColumn);
+public sealed record SelectDataSourceDialogResult(string SourceRangeText, bool FirstColumnIsCategories);
 
 public sealed class SelectDataSourceDialog : Window
 {
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _switchBox = new() { Content = "Switch row/column" };
+    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains category labels" };
 
     public SelectDataSourceDialogResult Result { get; private set; }
 
-    public SelectDataSourceDialog(string sourceRangeText, bool switchRowColumn = false)
+    public SelectDataSourceDialog(string sourceRangeText, bool firstColumnIsCategories = true)
     {
-        Result = CreateResult(sourceRangeText, switchRowColumn);
+        Result = CreateResult(sourceRangeText, firstColumnIsCategories);
         Title = "Select Data Source";
         Width = 420;
         Height = 190;
@@ -215,17 +215,17 @@ public sealed class SelectDataSourceDialog : Window
         stack.Children.Add(new TextBlock { Text = "Chart data range", Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
         stack.Children.Add(_rangeBox);
-        _switchBox.IsChecked = switchRowColumn;
-        _switchBox.Margin = new Thickness(0, 10, 0, 16);
-        stack.Children.Add(_switchBox);
+        _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
+        _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 16);
+        stack.Children.Add(_firstColumnCategoriesBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
-            Result = CreateResult(_rangeBox.Text, _switchBox.IsChecked == true);
+            Result = CreateResult(_rangeBox.Text, _firstColumnCategoriesBox.IsChecked == true);
             DialogResult = true;
         }));
         Content = stack;
     }
 
-    public static SelectDataSourceDialogResult CreateResult(string sourceRangeText, bool switchRowColumn) =>
-        new(sourceRangeText.Trim(), switchRowColumn);
+    public static SelectDataSourceDialogResult CreateResult(string sourceRangeText, bool firstColumnIsCategories) =>
+        new(sourceRangeText.Trim(), firstColumnIsCategories);
 }
