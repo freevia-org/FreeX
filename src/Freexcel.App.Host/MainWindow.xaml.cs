@@ -5381,20 +5381,16 @@ public partial class MainWindow : Window
     {
         var input = PromptForInput("Font color (R,G,B e.g. 255,0,0):", "0,0,0");
         if (input is null) return;
-        var parts = input.Split(',');
-        if (parts.Length == 3 && byte.TryParse(parts[0].Trim(), out var r)
-            && byte.TryParse(parts[1].Trim(), out var g) && byte.TryParse(parts[2].Trim(), out var b))
-            ApplyStyleDiff(new StyleDiff(FontColor: new CellColor(r, g, b)));
+        if (DrawingInputParser.TryParseRgbColor(input, out var color))
+            ApplyStyleDiff(new StyleDiff(FontColor: color));
     }
 
     private void FillColorBtn_Click(object sender, RoutedEventArgs e)
     {
         var input = PromptForInput("Fill color (R,G,B e.g. 255,255,0):", "255,255,255");
         if (input is null) return;
-        var parts = input.Split(',');
-        if (parts.Length == 3 && byte.TryParse(parts[0].Trim(), out var r)
-            && byte.TryParse(parts[1].Trim(), out var g) && byte.TryParse(parts[2].Trim(), out var b))
-            ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(r, g, b)));
+        if (DrawingInputParser.TryParseRgbColor(input, out var color))
+            ApplyStyleDiff(new StyleDiff(FillColor: color));
     }
 
     private void NumberFormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
