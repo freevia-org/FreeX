@@ -15,7 +15,17 @@ public enum ChartType
     Bubble,
     Area,
     Radar,
-    Stock
+    Stock,
+    Surface,
+    Treemap,
+    Sunburst,
+    Histogram,
+    Pareto,
+    BoxAndWhisker,
+    Waterfall,
+    Funnel,
+    Map,
+    ThreeDColumn
 }
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
