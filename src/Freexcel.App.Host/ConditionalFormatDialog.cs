@@ -197,7 +197,7 @@ public sealed class ConditionalFormatDialog : Window
                 "Color Scale" => CfRuleType.ColorScale,
                 "Icon Set"    => CfRuleType.IconSet,
                 "Above Average" or "Below Average" => CfRuleType.AboveAverage,
-                "Top 10 Items" or "Bottom 10 Items" => CfRuleType.Top10,
+                "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => CfRuleType.Top10,
                 _ => CfRuleType.CellValue
             };
 
@@ -221,7 +221,8 @@ public sealed class ConditionalFormatDialog : Window
                 cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
             }
 
-            cf.AboveAverage = _ruleType != "Below Average" && _ruleType != "Bottom 10 Items";
+            cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
+            cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
         }
 
         if (cf.RuleType != CfRuleType.IconSet)
@@ -284,7 +285,9 @@ public sealed class ConditionalFormatDialog : Window
         CfRuleType.ColorScale  => "Color Scale",
         CfRuleType.IconSet     => "Icon Set",
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
-        CfRuleType.Top10       => cf.AboveAverage ? "Top 10 Items" : "Bottom 10 Items",
+        CfRuleType.Top10       => cf.TopBottomPercent
+            ? (cf.AboveAverage ? "Top 10%" : "Bottom 10%")
+            : (cf.AboveAverage ? "Top 10 Items" : "Bottom 10 Items"),
         CfRuleType.CellValue   => cf.Operator switch
         {
             CfOperator.GreaterThan => "Greater Than",

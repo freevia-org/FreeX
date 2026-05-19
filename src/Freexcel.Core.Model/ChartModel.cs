@@ -91,6 +91,7 @@ public sealed class ChartModel
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsPivotChart { get; set; }
+    public string? PivotSourceSheetName { get; set; }
     public string? PivotTableName { get; set; }
     public int? PivotCacheId { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;

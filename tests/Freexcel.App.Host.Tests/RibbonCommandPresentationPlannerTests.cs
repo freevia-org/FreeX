@@ -55,27 +55,47 @@ public sealed class RibbonCommandPresentationPlannerTests
     }
 
     [Theory]
-    [InlineData("Refresh All", "\uE72C")]
-    [InlineData("Insert Function", "fx")]
-    [InlineData("Unknown Command", "\uE8A5")]
-    public void GetIcon_MapsKnownCommandsAndProvidesFallback(string commandName, string expectedGlyph)
+    [InlineData("PivotTable", RibbonCommandIconKind.PivotTable)]
+    [InlineData("Table", RibbonCommandIconKind.Table)]
+    [InlineData("Column Chart", RibbonCommandIconKind.ChartColumn)]
+    [InlineData("Line Chart", RibbonCommandIconKind.ChartLine)]
+    [InlineData("Get Data", RibbonCommandIconKind.GetData)]
+    [InlineData("Refresh All", RibbonCommandIconKind.Refresh)]
+    [InlineData("Insert Function", RibbonCommandIconKind.Function)]
+    [InlineData("Spelling", RibbonCommandIconKind.Spelling)]
+    [InlineData("Check Accessibility", RibbonCommandIconKind.Accessibility)]
+    [InlineData("Protect Sheet", RibbonCommandIconKind.Protect)]
+    [InlineData("Help Online", RibbonCommandIconKind.Help)]
+    [InlineData("Unknown Command", RibbonCommandIconKind.Generic)]
+    public void GetIcon_MapsKnownCommandsToSemanticVectorKinds(string commandName, RibbonCommandIconKind expectedKind)
     {
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
 
-        icon.Glyph.Should().Be(expectedGlyph);
-        icon.FontFamily.Source.Should().NotBeNullOrWhiteSpace();
+        icon.Kind.Should().Be(expectedKind);
     }
 
     [Theory]
-    [InlineData("Clipboard", "\uE8C8")]
-    [InlineData("Font", "A")]
-    [InlineData("Editing", "\uE721")]
-    [InlineData("Unknown", "\uE8A5")]
-    public void GetGroupIcon_MapsExcelRibbonGroupsAndProvidesFallback(string groupName, string expectedGlyph)
+    [InlineData("Column Chart", RibbonCommandIconAccent.Chart)]
+    [InlineData("Get Data", RibbonCommandIconAccent.Data)]
+    [InlineData("Theme Colors", RibbonCommandIconAccent.Theme)]
+    [InlineData("Fill", RibbonCommandIconAccent.Fill)]
+    [InlineData("Error Checking", RibbonCommandIconAccent.Warning)]
+    [InlineData("Protect Workbook", RibbonCommandIconAccent.Protect)]
+    [InlineData("Send Feedback", RibbonCommandIconAccent.Help)]
+    public void GetIcon_AssignsExcelLikeAccentFamilies(string commandName, RibbonCommandIconAccent expectedAccent)
+    {
+        RibbonCommandPresentationPlanner.GetIcon(commandName).Accent.Should().Be(expectedAccent);
+    }
+
+    [Theory]
+    [InlineData("Clipboard", RibbonCommandIconKind.Paste)]
+    [InlineData("Font", RibbonCommandIconKind.Font)]
+    [InlineData("Editing", RibbonCommandIconKind.Search)]
+    [InlineData("Unknown", RibbonCommandIconKind.Generic)]
+    public void GetGroupIcon_MapsExcelRibbonGroupsToSemanticVectorKinds(string groupName, RibbonCommandIconKind expectedKind)
     {
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
 
-        icon.Glyph.Should().Be(expectedGlyph);
-        icon.FontFamily.Source.Should().NotBeNullOrWhiteSpace();
+        icon.Kind.Should().Be(expectedKind);
     }
 }
