@@ -28,6 +28,51 @@ public class FormulaReferenceCyclerTests
         selectionLength.Should().Be(expected.Length - 1);
     }
 
+    [Theory]
+    [InlineData("=R[-2]C[-1]", 3, "=R1C2")]
+    [InlineData("=R1C2", 3, "=R1C[-1]")]
+    [InlineData("=R1C[-1]", 3, "=R[-2]C2")]
+    [InlineData("=R[-2]C2", 3, "=R[-2]C[-1]")]
+    public void TryCycleR1C1ReferenceAtCaret_CyclesExcelAbsoluteReferenceModes(
+        string input,
+        int caretIndex,
+        string expected)
+    {
+        var anchor = new CellAddress(SheetId.New(), 3, 3);
+
+        var changed = FormulaReferenceCycler.TryCycleR1C1ReferenceAtCaret(
+            input,
+            caretIndex,
+            anchor,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be(expected);
+        selectionStart.Should().Be(1);
+        selectionLength.Should().Be(expected.Length - 1);
+    }
+
+    [Fact]
+    public void TryCycleR1C1ReferenceAtCaret_PreservesSheetQualifierAndCyclesTouchedReference()
+    {
+        var anchor = new CellAddress(SheetId.New(), 3, 3);
+
+        var changed = FormulaReferenceCycler.TryCycleR1C1ReferenceAtCaret(
+            "=SUM(Sheet2!R[-2]C[-1])",
+            caretIndex: 14,
+            anchor,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM(Sheet2!R1C2)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(11);
+    }
+
     [Fact]
     public void TryCycleReferenceAtCaret_CyclesReferenceInsideFormula()
     {

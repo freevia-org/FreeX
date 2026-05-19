@@ -3348,6 +3348,7 @@ public partial class MainWindow : Window
             Owner = this,
             Title = "AutoFilter"
         };
+        PositionAutoFilterDialogAtActiveCell(dialog, activeCell);
 
         if (dialog.ShowDialog() != true)
             return;
@@ -3375,6 +3376,17 @@ public partial class MainWindow : Window
                 currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SelectedValues)))
             return;
         UpdateViewport();
+    }
+
+    private void PositionAutoFilterDialogAtActiveCell(Window dialog, CellAddress activeCell)
+    {
+        if (TryGetCellOverlayRect(activeCell) is not { } rect)
+            return;
+
+        var screenPoint = SheetGrid.PointToScreen(new Point(rect.Left, rect.Bottom));
+        dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+        dialog.Left = screenPoint.X;
+        dialog.Top = screenPoint.Y;
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)
@@ -3653,10 +3665,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
+    private bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
     {
         var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
-        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(editor.Text, caretIndex, out var edit))
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(
+                editor.Text,
+                caretIndex,
+                SheetGrid.SelectedRange?.Start,
+                _options.UseR1C1ReferenceStyle,
+                out var edit))
             return false;
 
         ApplyTextEdit(editor, edit);
