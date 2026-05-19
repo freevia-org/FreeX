@@ -3032,9 +3032,9 @@
                                             <Button Content="Clear Filter"
                                                     Tag="{Binding Name}"
                                                     Click="SlicerClearButton_Click"
-                                                    AutomationProperties.Name="Clear Filter"
                                                     Margin="0,6,0,0"
-                                                    MinHeight="24"/>
+                                                    MinHeight="24"
+                                                    AutomationProperties.Name="Clear Slicer Filter"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>

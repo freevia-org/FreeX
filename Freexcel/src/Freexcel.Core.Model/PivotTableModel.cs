@@ -31,7 +31,16 @@ public sealed record PivotCacheFieldModel(
     bool ContainsBlank = false,
     bool ContainsString = false,
     bool ContainsNumber = false,
-    bool ContainsDate = false);
+    bool ContainsDate = false,
+    bool ContainsMixedTypes = false,
+    bool ContainsSemiMixedTypes = false,
+    bool ContainsNonDate = false,
+    bool ContainsInteger = false,
+    bool ContainsLongText = false,
+    double? MinValue = null,
+    double? MaxValue = null,
+    string? MinDate = null,
+    string? MaxDate = null);
 
 public sealed class PivotTableModel
 {
