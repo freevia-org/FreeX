@@ -100,6 +100,14 @@ public sealed class ExcelParityDateSerialTests
     }
 
     [Theory]
+    [InlineData("=DATEDIF(DATE(1900,1,1),DATE(1900,3,1),\"D\")", 60)]
+    [InlineData("=DATEDIF(DATE(1900,2,28),DATE(1900,3,1),\"D\")", 2)]
+    public void DatedifDays_UsesExcelSerialBoundaries(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
     [InlineData("=WORKDAY(DATE(1900,1,1),1)", 2)]
     [InlineData("=WORKDAY(DATE(1900,1,5),1)", 6)]
     [InlineData("=WORKDAY(DATE(1900,1,5),-1)", 4)]
