@@ -74,6 +74,40 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsHiddenRowContainingOnlySparkline()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sparklines");
+
+        sheet.HiddenRows.Add(4);
+        AddSparkline(sheet, 4, 7);
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i =>
+            i.Kind == AccessibilityIssueKind.HiddenRowContent &&
+            i.SheetName == "Sparklines" &&
+            i.Location == "4:4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenColumnContainingOnlySparkline()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sparklines");
+
+        sheet.HiddenCols.Add(7);
+        AddSparkline(sheet, 4, 7);
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i =>
+            i.Kind == AccessibilityIssueKind.HiddenColumnContent &&
+            i.SheetName == "Sparklines" &&
+            i.Location == "G:G");
+    }
+
+    [Fact]
     public void FindIssues_FlagsUnclearHyperlinkDisplayText()
     {
         var workbook = new Workbook("Accessibility");
@@ -157,5 +191,16 @@ public sealed class AccessibilityCheckerServiceTests
         sheet.Hyperlinks[address] = target;
         if (displayText is not null)
             sheet.SetCell(address, new TextValue(displayText));
+    }
+
+    private static void AddSparkline(Sheet sheet, uint row, uint col)
+    {
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, row, 1),
+                new CellAddress(sheet.Id, row, 3)),
+            Location = new CellAddress(sheet.Id, row, col)
+        });
     }
 }
