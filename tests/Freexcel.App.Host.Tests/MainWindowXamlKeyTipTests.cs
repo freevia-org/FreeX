@@ -366,6 +366,38 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void DirectContextMenuKeyTips_DoNotUsePrefixCollisions()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var collisions = document
+            .Descendants(presentation + "ContextMenu")
+            .SelectMany(menu =>
+            {
+                var directItems = menu
+                    .Elements(presentation + "MenuItem")
+                    .Select(item => new
+                    {
+                        Header = item.Attribute("Header")?.Value ?? "MenuItem",
+                        KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value
+                    })
+                    .Where(item => !string.IsNullOrWhiteSpace(item.KeyTip))
+                    .ToList();
+
+                return directItems
+                    .SelectMany(item => directItems
+                        .Where(other => !ReferenceEquals(item, other))
+                        .Where(other => other.KeyTip!.StartsWith(item.KeyTip!, StringComparison.OrdinalIgnoreCase))
+                        .Select(other => $"{item.Header}:{item.KeyTip} prefixes {other.Header}:{other.KeyTip}"));
+            })
+            .ToList();
+
+        collisions.Should().BeEmpty("leaf menu keytips must resolve without waiting for longer sibling keytips");
+    }
+
+    [Fact]
     public void BackstageCommandButtons_HaveAltKeyTips()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
