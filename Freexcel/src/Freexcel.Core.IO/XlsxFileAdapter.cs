@@ -9406,13 +9406,146 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     string.IsNullOrWhiteSpace(chart.Title)
                         ? null
                         : ToChartTitleXml(chart, chartNs, drawingNs),
+                    chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
+                    ToPivotFormatsXml(chart, chartNs),
                     new XElement(chartNs + "plotArea",
                         plotCharts,
                         ShouldWriteChartAxes(chart.Type)
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
                             : null,
                         ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
-                    ToLegendXml(chart, chartNs, drawingNs))));
+                    ToLegendXml(chart, chartNs, drawingNs),
+                    chart.ShowDataInHiddenRowsAndColumns ? new XElement(chartNs + "plotVisOnly", new XAttribute("val", "0")) : null,
+                    ToBlankDisplayXml(chart, chartNs),
+                    chart.ShowDataLabelsOverMaximum ? new XElement(chartNs + "showDLblsOverMax", new XAttribute("val", "1")) : null)));
+    }
+
+    private static XElement? ToPivotFormatsXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (string.IsNullOrWhiteSpace(chart.PivotFormatsXml))
+            return null;
+
+        try
+        {
+            var element = XElement.Parse(chart.PivotFormatsXml);
+            return element.Name == chartNs + "pivotFmts"
+                ? element
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
+        chart.BlankDisplayMode == ChartBlankDisplayMode.Gap
+            ? null
+            : new XElement(chartNs + "dispBlanksAs",
+                new XAttribute("val", chart.BlankDisplayMode == ChartBlankDisplayMode.Span ? "span" : "zero"));
+
+    private static XElement? ToChartExternalDataXml(ChartModel chart, XNamespace chartNs, XNamespace relNs)
+    {
+        if (chart.ExternalData is not { } externalData)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(externalData.RelationshipId) && externalData.AutoUpdate is null)
+            return null;
+
+        return new XElement(chartNs + "externalData",
+            string.IsNullOrWhiteSpace(externalData.RelationshipId)
+                ? null
+                : new XAttribute(relNs + "id", externalData.RelationshipId),
+            externalData.AutoUpdate is { } autoUpdate
+                ? new XElement(chartNs + "autoUpdate", new XAttribute("val", autoUpdate ? "1" : "0"))
+                : null);
+    }
+
+    private static XElement? ToChartColorMapOverrideXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (chart.ColorMapOverride is not { } colorMapOverride)
+            return null;
+
+        if (colorMapOverride.UseMasterColorMapping)
+            return new XElement(chartNs + "clrMapOvr", new XElement(drawingNs + "masterClrMapping"));
+
+        if (colorMapOverride.OverrideMappings.Count == 0)
+            return null;
+
+        return new XElement(chartNs + "clrMapOvr",
+            new XElement(drawingNs + "overrideClrMapping",
+                colorMapOverride.OverrideMappings
+                    .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                    .Select(pair => new XAttribute(pair.Key, pair.Value))));
+    }
+
+    private static XElement? ToChartProtectionXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.Protection is not { } protection)
+            return null;
+
+        var element = new XElement(chartNs + "protection");
+        AddOptionalBoolAttribute(element, "chartObject", protection.ChartObject);
+        AddOptionalBoolAttribute(element, "data", protection.Data);
+        AddOptionalBoolAttribute(element, "formatting", protection.Formatting);
+        AddOptionalBoolAttribute(element, "selection", protection.Selection);
+        AddOptionalBoolAttribute(element, "userInterface", protection.UserInterface);
+        return element.HasAttributes ? element : null;
+    }
+
+    private static XElement? ToChartPrintSettingsXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.PrintSettings is not { } printSettings)
+            return null;
+
+        var element = new XElement(chartNs + "printSettings",
+            ToChartPageMarginsXml(printSettings.PageMargins, chartNs),
+            ToChartPageSetupXml(printSettings.PageSetup, chartNs));
+        return element.HasElements ? element : null;
+    }
+
+    private static XElement? ToChartPageMarginsXml(ChartPageMarginsModel? margins, XNamespace chartNs)
+    {
+        if (margins is null)
+            return null;
+
+        var element = new XElement(chartNs + "pageMargins");
+        AddOptionalDoubleAttribute(element, "l", margins.Left);
+        AddOptionalDoubleAttribute(element, "r", margins.Right);
+        AddOptionalDoubleAttribute(element, "t", margins.Top);
+        AddOptionalDoubleAttribute(element, "b", margins.Bottom);
+        AddOptionalDoubleAttribute(element, "header", margins.Header);
+        AddOptionalDoubleAttribute(element, "footer", margins.Footer);
+        return element.HasAttributes ? element : null;
+    }
+
+    private static XElement? ToChartPageSetupXml(ChartPageSetupModel? pageSetup, XNamespace chartNs)
+    {
+        if (pageSetup is null)
+            return null;
+
+        var element = new XElement(chartNs + "pageSetup");
+        if (!string.IsNullOrWhiteSpace(pageSetup.PaperSize))
+            element.SetAttributeValue("paperSize", pageSetup.PaperSize);
+        if (!string.IsNullOrWhiteSpace(pageSetup.Orientation))
+            element.SetAttributeValue("orientation", pageSetup.Orientation);
+        if (pageSetup.Copies is { } copies)
+            element.SetAttributeValue("copies", copies.ToString(CultureInfo.InvariantCulture));
+        AddOptionalBoolAttribute(element, "blackAndWhite", pageSetup.BlackAndWhite);
+        AddOptionalBoolAttribute(element, "draft", pageSetup.Draft);
+        return element.HasAttributes ? element : null;
+    }
+
+    private static void AddOptionalBoolAttribute(XElement element, string name, bool? value)
+    {
+        if (value is { } boolValue)
+            element.SetAttributeValue(name, boolValue ? "1" : "0");
+    }
+
+    private static void AddOptionalDoubleAttribute(XElement element, string name, double? value)
+    {
+        if (value is { } doubleValue)
+            element.SetAttributeValue(name, doubleValue.ToString("G15", CultureInfo.InvariantCulture));
     }
 
     private static XElement? ToPivotSourceXml(ChartModel chart, Sheet sheet, XNamespace chartNs)
