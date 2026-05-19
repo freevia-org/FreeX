@@ -21,3 +21,6 @@ Thumbs.db
 
 # XLSX corpus private samples
 test-corpus/local-private/
+
+# Local isolated worktrees
+.worktrees/
