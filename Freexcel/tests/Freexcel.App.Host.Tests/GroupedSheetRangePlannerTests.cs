@@ -50,6 +50,46 @@ public sealed class GroupedSheetRangePlannerTests
     }
 
     [Fact]
+    public void CloneConditionalFormatForSheet_PreservesAdvancedFields()
+    {
+        var targetSheet = SheetId.New();
+        var source = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 4, 2)),
+            Priority = 3,
+            RuleType = CfRuleType.IconSet,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "5",
+            MidThresholdType = CfThresholdType.Percent,
+            MidThresholdValue = "50",
+            MaxThresholdType = CfThresholdType.Formula,
+            MaxThresholdValue = "A1",
+            DataBarMinThresholdType = CfThresholdType.Percentile,
+            DataBarMinThresholdValue = "10",
+            DataBarMaxThresholdType = CfThresholdType.Number,
+            DataBarMaxThresholdValue = "99",
+            DataBarShowValue = false,
+            DataBarMinLength = 5,
+            DataBarMaxLength = 95,
+            IconSetStyle = "5Arrows",
+            IconSetShowValue = false,
+            IconSetReverse = true,
+            TopBottomRank = 3,
+            TopBottomPercent = true,
+            TextRuleText = "urgent",
+            DateOccurringPeriod = "last7Days"
+        };
+
+        var clone = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(source, targetSheet);
+
+        clone.Should().BeEquivalentTo(source, options => options
+            .Excluding(rule => rule.Id)
+            .Excluding(rule => rule.AppliesTo));
+        clone.AppliesTo.Start.Sheet.Should().Be(targetSheet);
+        clone.AppliesTo.End.Sheet.Should().Be(targetSheet);
+    }
+
+    [Fact]
     public void CloneDataValidationForSheet_RemapsRangeAndCopiesPromptAndErrorFields()
     {
         var targetSheet = SheetId.New();

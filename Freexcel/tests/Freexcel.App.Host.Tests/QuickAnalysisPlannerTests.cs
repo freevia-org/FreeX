@@ -34,7 +34,12 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.Top10,
                 QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
+                QuickAnalysisCommand.BarChart,
+                QuickAnalysisCommand.AreaChart,
+                QuickAnalysisCommand.ScatterChart,
                 QuickAnalysisCommand.Sum,
+                QuickAnalysisCommand.Max,
+                QuickAnalysisCommand.Min,
                 QuickAnalysisCommand.FormatAsTable,
                 QuickAnalysisCommand.LineSparkline
             ]);
