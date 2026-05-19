@@ -11934,10 +11934,11 @@ public partial class MainWindow : Window
     private void ZoomSelectionBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        double cols = range.ColCount, rows = range.RowCount;
-        double fitPct = Math.Max(Freexcel.App.UI.ZoomLevelMapper.MinZoomPercent, Math.Min(Freexcel.App.UI.ZoomLevelMapper.MaxZoomPercent, Math.Min(
-            SheetGrid.ActualWidth  / Math.Max(1, cols * 80) * 100,
-            SheetGrid.ActualHeight / Math.Max(1, rows * 20) * 100)));
+        var fitPct = ZoomSelectionPlanner.CalculateFitPercent(
+            SheetGrid.ActualWidth,
+            SheetGrid.ActualHeight,
+            range.ColCount,
+            range.RowCount);
         ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(fitPct);
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
