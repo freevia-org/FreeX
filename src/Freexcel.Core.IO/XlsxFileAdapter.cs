@@ -269,6 +269,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 }
                 foreach (var conditionalFormat in layout.AdvancedConditionalFormats)
                     sheet.ConditionalFormats.Add(RemapConditionalFormat(conditionalFormat, sheet.Id));
+                foreach (var ignoredErrorAddress in layout.IgnoredErrorCells)
+                {
+                    var address = new CellAddress(sheet.Id, ignoredErrorAddress.Row, ignoredErrorAddress.Col);
+                    var cell = sheet.GetCell(address);
+                    if (cell is null)
+                    {
+                        cell = Cell.FromValue(BlankValue.Instance);
+                        sheet.SetCell(address, cell);
+                    }
+
+                    cell.IgnoreFormulaError = true;
+                }
             }
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
@@ -440,6 +452,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<XlsxShapePackagePart> ShapeParts,
         IReadOnlyList<SparklineModel> Sparklines,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
+        IReadOnlyList<CellAddress> IgnoredErrorCells,
         string? CodeName);
 
     private sealed record XlsxChartPackagePart(XDocument Xml, XlsxDrawingAnchor? Anchor);
@@ -2234,6 +2247,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var (textBoxParts, shapeParts) = ReadWorksheetShapeParts(archive, worksheetPath, worksheetXml);
         var sparklines = ReadWorksheetSparklines(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
+        var ignoredErrorCells = ReadIgnoredErrorCells(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -2269,7 +2283,72 @@ public sealed class XlsxFileAdapter : IFileAdapter
             shapeParts,
             sparklines,
             advancedConditionalFormats,
+            ignoredErrorCells,
             codeName);
+    }
+
+    private static IReadOnlyList<CellAddress> ReadIgnoredErrorCells(XDocument worksheetXml, XNamespace worksheetNs)
+    {
+        string[] supportedFlags =
+        [
+            "numberStoredAsText",
+            "evalError",
+            "formula",
+            "formulaRange",
+            "unlockedFormula",
+            "emptyCellReference",
+            "listDataValidation",
+            "calculatedColumn",
+            "twoDigitTextYear"
+        ];
+
+        var cells = new List<CellAddress>();
+        var tempSheet = SheetId.New();
+        foreach (var ignoredError in worksheetXml.Root?
+                     .Element(worksheetNs + "ignoredErrors")?
+                     .Elements(worksheetNs + "ignoredError") ?? [])
+        {
+            if (!supportedFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value)))
+                continue;
+
+            var sqref = ignoredError.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(sqref))
+                continue;
+
+            foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (!TryParseSqrefToken(token, tempSheet, out var range))
+                    continue;
+
+                cells.AddRange(range.AllCells());
+            }
+        }
+
+        return cells;
+    }
+
+    private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
+    {
+        range = default;
+        var parts = token.Split(':');
+        if (parts.Length == 1)
+        {
+            if (!CellAddress.TryParse(parts[0], sheet, out var address))
+                return false;
+
+            range = new GridRange(address, address);
+            return true;
+        }
+
+        if (parts.Length == 2 &&
+            CellAddress.TryParse(parts[0], sheet, out var start) &&
+            CellAddress.TryParse(parts[1], sheet, out var end))
+        {
+            range = new GridRange(start, end);
+            return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<GridRange> ReadAllowEditRanges(XDocument worksheetXml, XNamespace worksheetNs)
@@ -3670,6 +3749,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             packageStream.Position = 0;
             SaveWorksheetCodeNames(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.GetUsedCells().Any(pair => pair.Value.IgnoreFormulaError)))
+        {
+            packageStream.Position = 0;
+            SaveWorksheetIgnoredErrors(packageStream, workbook);
         }
 
         packageStream.Position = 0;
@@ -5094,6 +5179,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     changed = true;
                     continue;
                 }
+                if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
+                    MergeWorksheetIgnoredErrors(sourceBlock, targetRoot, workbookNs))
+                {
+                    changed = true;
+                    continue;
+                }
 
                 if (targetRoot.Element(sourceBlock.Name) is not null)
                     continue;
@@ -5235,6 +5326,63 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return changed;
     }
 
+    private static void SaveWorksheetIgnoredErrors(MemoryStream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var workbookXml = LoadXml(workbookEntry);
+        var workbookRels = LoadRelationshipTargets(
+            archive,
+            "xl/_rels/workbook.xml.rels",
+            "xl/workbook.xml",
+            packageRelNs);
+        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            var ignoredCells = sheet.GetUsedCells()
+                .Where(pair => pair.Value.IgnoreFormulaError)
+                .OrderBy(pair => pair.Key.Row)
+                .ThenBy(pair => pair.Key.Col)
+                .ToList();
+            if (ignoredCells.Count == 0)
+                continue;
+
+            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            root.Element(workbookNs + "ignoredErrors")?.Remove();
+            root.Add(new XElement(
+                workbookNs + "ignoredErrors",
+                ignoredCells.Select(pair => new XElement(
+                    workbookNs + "ignoredError",
+                    new XAttribute("sqref", pair.Key.ToA1()),
+                    new XAttribute("numberStoredAsText", "1"),
+                    new XAttribute("evalError", "1"),
+                    new XAttribute("formula", "1"),
+                    new XAttribute("emptyCellReference", "1")))));
+
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
     private static bool MergeWorksheetElementAttributes(XElement? sourceElement, XElement targetRoot, XName elementName)
     {
         if (sourceElement is null)
@@ -5304,6 +5452,48 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     continue;
 
                 targetBreak.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool MergeWorksheetIgnoredErrors(XElement sourceIgnoredErrors, XElement targetRoot, XNamespace workbookNs)
+    {
+        var targetIgnoredErrors = targetRoot.Element(workbookNs + "ignoredErrors");
+        if (targetIgnoredErrors is null)
+        {
+            targetRoot.Add(new XElement(sourceIgnoredErrors));
+            return true;
+        }
+
+        var targetBySqref = targetIgnoredErrors
+            .Elements(workbookNs + "ignoredError")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
+            .GroupBy(element => element.Attribute("sqref")!.Value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceIgnoredError in sourceIgnoredErrors.Elements(workbookNs + "ignoredError"))
+        {
+            var sqref = sourceIgnoredError.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(sqref) ||
+                !targetBySqref.TryGetValue(sqref, out var targetIgnoredError))
+            {
+                targetIgnoredErrors.Add(new XElement(sourceIgnoredError));
+                if (!string.IsNullOrWhiteSpace(sqref))
+                    targetBySqref[sqref] = targetIgnoredErrors.Elements(workbookNs + "ignoredError").Last();
+                changed = true;
+                continue;
+            }
+
+            foreach (var attribute in sourceIgnoredError.Attributes())
+            {
+                if (targetIgnoredError.Attribute(attribute.Name) is not null)
+                    continue;
+
+                targetIgnoredError.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
             }
         }

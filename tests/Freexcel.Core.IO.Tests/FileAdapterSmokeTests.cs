@@ -8655,7 +8655,7 @@ public class FileAdapterSmokeTests
         var adapter = new XlsxFileAdapter();
         adapter.Save(workbook, source);
         source.Position = 0;
-        AddWorksheetIgnoredErrors(source);
+        AddWorksheetIgnoredErrors(source, "A1", ("numberStoredAsText", "1"), ("twoDigitTextYear", "1"));
 
         source.Position = 0;
         var loaded = adapter.Load(source);
@@ -8671,7 +8671,84 @@ public class FileAdapterSmokeTests
         var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
         ignoredErrors.Should().NotBeNull();
         ignoredErrors!.ToString().Should().Contain("numberStoredAsText=\"1\"");
+        ignoredErrors.ToString().Should().Contain("twoDigitTextYear=\"1\"");
         ignoredErrors.ToString().Should().Contain("sqref=\"A1\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_IgnoredErrors_SetIgnoreFormulaErrorForSingleRefsAndRanges()
+    {
+        var workbook = new Workbook("IgnoredErrorsLoadTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 2), "1/0");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A1 B2:C3", ("numberStoredAsText", "1"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.GetCell(2, 2)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.GetCell(2, 3)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.GetCell(3, 2)!.IgnoreFormulaError.Should().BeTrue();
+        loadedSheet.GetCell(3, 3)!.IgnoreFormulaError.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_IgnoredErrors_SkipsMalformedReferences()
+    {
+        var workbook = new Workbook("IgnoredErrorsMalformedRefsTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetIgnoredErrors(source, "A0 NotARef XFE1 B2:Bogus", ("numberStoredAsText", "1"));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.GetCell(1, 1)!.IgnoreFormulaError.Should().BeFalse();
+        loadedSheet.GetCell(2, 2).Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_FreshWorkbook_WritesIgnoredErrorsForIgnoreFormulaErrorCells()
+    {
+        var workbook = new Workbook("IgnoredErrorsSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("00123"));
+        sheet.GetCell(2, 2)!.IgnoreFormulaError = true;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("plain"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var ignoredErrors = worksheetXml.Root!.Element(worksheetNs + "ignoredErrors");
+        ignoredErrors.Should().NotBeNull();
+        var entries = ignoredErrors!.Elements(worksheetNs + "ignoredError").ToList();
+        entries.Select(entry => entry.Attribute("sqref")?.Value).Should().Equal("A1", "B2");
+        foreach (var entry in entries)
+        {
+            entry.Attribute("numberStoredAsText")!.Value.Should().Be("1");
+            entry.Attribute("evalError")!.Value.Should().Be("1");
+            entry.Attribute("formula")!.Value.Should().Be("1");
+            entry.Attribute("emptyCellReference")!.Value.Should().Be("1");
+        }
     }
 
     [Fact]
@@ -10716,19 +10793,25 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddWorksheetIgnoredErrors(MemoryStream packageStream)
+    private static void AddWorksheetIgnoredErrors(
+        MemoryStream packageStream,
+        string sqref = "A1",
+        params (string Name, string Value)[] flags)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            if (flags.Length == 0)
+                flags = [("numberStoredAsText", "1")];
 
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            worksheetXml.Root!.Add(new XElement(
-                worksheetNs + "ignoredErrors",
-                new XElement(
-                    worksheetNs + "ignoredError",
-                    new XAttribute("sqref", "A1"),
-                    new XAttribute("numberStoredAsText", "1"))));
+            var ignoredError = new XElement(
+                worksheetNs + "ignoredError",
+                new XAttribute("sqref", sqref));
+            foreach (var (name, value) in flags)
+                ignoredError.SetAttributeValue(name, value);
+
+            worksheetXml.Root!.Add(new XElement(worksheetNs + "ignoredErrors", ignoredError));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
