@@ -1726,7 +1726,49 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.CycleSelectionCorner:
                 CycleSelectionCorner();
                 break;
+            case KeyboardCommandShortcut.SelectDirectPrecedents:
+                SelectFormulaAuditCells(selectDependents: false);
+                break;
+            case KeyboardCommandShortcut.SelectDirectDependents:
+                SelectFormulaAuditCells(selectDependents: true);
+                break;
         }
+    }
+
+    private void SelectFormulaAuditCells(bool selectDependents)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var activeCell = _selectionCursor ?? _selectionAnchor ?? range.Start;
+        var matches = (selectDependents
+                ? FormulaAuditingService.GetDirectDependents(_workbook, activeCell)
+                : FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell))
+            .Where(address => address.Sheet == _currentSheetId)
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            StatusReadyText.Visibility = Visibility.Visible;
+            StatusReadyText.Text = selectDependents
+                ? "No direct dependents on this sheet"
+                : "No direct precedents on this sheet";
+            return;
+        }
+
+        var compressedRanges = SelectionRangeService.CompressAddresses(matches);
+        _selectionAnchor = matches[0];
+        _selectionCursor = matches[0];
+        SheetGrid.SelectedRange = new GridRange(matches[0], matches[0]);
+        SheetGrid.SelectedRanges = compressedRanges;
+        CellAddressBox.Text = compressedRanges.Count == 1
+            ? FormatRangeReference(compressedRanges[0].Start, compressedRanges[0].End)
+            : $"{matches.Count} cells";
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(matches[0]), matches[0]);
+        EnsureCellVisible(matches[0]);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
     }
 
     private void CycleSelectionCorner()

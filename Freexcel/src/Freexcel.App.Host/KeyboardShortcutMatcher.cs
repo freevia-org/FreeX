@@ -227,6 +227,18 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemOpenBrackets)
+        {
+            shortcut = KeyboardCommandShortcut.SelectDirectPrecedents;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemCloseBrackets)
+        {
+            shortcut = KeyboardCommandShortcut.SelectDirectDependents;
+            return true;
+        }
+
         return false;
     }
 
@@ -337,7 +349,9 @@ public enum KeyboardCommandShortcut
     CopyValueFromAbove,
     OpenActiveDropdown,
     ScrollActiveCellIntoView,
-    CycleSelectionCorner
+    CycleSelectionCorner,
+    SelectDirectPrecedents,
+    SelectDirectDependents
 }
 
 public enum BorderKeyboardShortcut
