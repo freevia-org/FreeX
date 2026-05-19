@@ -9931,7 +9931,7 @@ public partial class MainWindow : Window
 
         var input = PromptForInput("Rotation degrees:", ((int)picture.RotationDegrees).ToString());
         if (input is null) return;
-        if (!double.TryParse(input, out var rotation))
+        if (!DrawingInputParser.TryParseRotationDegrees(input, out var rotation))
         {
             MessageBox.Show("Enter a numeric rotation in degrees.",
                 "Rotate Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -10186,7 +10186,7 @@ public partial class MainWindow : Window
 
         var input = PromptForInput("Rotation degrees:", ((int)target.RotationDegrees).ToString());
         if (input is null) return;
-        if (!double.TryParse(input, out var rotation))
+        if (!DrawingInputParser.TryParseRotationDegrees(input, out var rotation))
         {
             MessageBox.Show("Enter a numeric rotation in degrees.",
                 "Rotate Object", MessageBoxButton.OK, MessageBoxImage.Warning);

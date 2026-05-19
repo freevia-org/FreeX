@@ -84,6 +84,21 @@ public sealed class DrawingInputParserTests
     }
 
     [Theory]
+    [InlineData("45", true, 45)]
+    [InlineData(" -12.5 ", true, -12.5)]
+    [InlineData("0", true, 0)]
+    [InlineData("NaN", false, 0)]
+    [InlineData("Infinity", false, 0)]
+    [InlineData("north", false, 0)]
+    public void TryParseRotationDegrees_ParsesFiniteNumericRotation(string text, bool expected, double expectedRotation)
+    {
+        var result = DrawingInputParser.TryParseRotationDegrees(text, out var rotation);
+
+        result.Should().Be(expected);
+        rotation.Should().Be(expectedRotation);
+    }
+
+    [Theory]
     [InlineData("10, 0, 10, 0", true, 0.1, 0, 0.1, 0)]
     [InlineData("10; 5; 10; 5", true, 0.1, 0.05, 0.1, 0.05)]
     [InlineData("50,0,50,0", false, 0, 0, 0, 0)]

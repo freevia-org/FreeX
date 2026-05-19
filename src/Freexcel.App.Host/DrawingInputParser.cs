@@ -69,6 +69,19 @@ public static class DrawingInputParser
         return true;
     }
 
+    public static bool TryParseRotationDegrees(string input, out double rotation)
+    {
+        if (double.TryParse(input.Trim(), out var parsed) &&
+            double.IsFinite(parsed))
+        {
+            rotation = parsed;
+            return true;
+        }
+
+        rotation = 0;
+        return false;
+    }
+
     public static bool TryParseCropPercents(
         string input,
         out double left,
