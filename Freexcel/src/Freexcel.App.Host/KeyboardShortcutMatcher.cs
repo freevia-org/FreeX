@@ -13,8 +13,8 @@ public static class KeyboardShortcutMatcher
         modifiers == ModifierKeys.Control &&
         (key is Key.Subtract or Key.OemMinus || systemKey is Key.Subtract or Key.OemMinus);
 
-    public static bool IsPasteSpecialShortcut(Key key, ModifierKeys modifiers) =>
-        key == Key.V && modifiers == (ModifierKeys.Control | ModifierKeys.Alt);
+    public static bool IsPasteSpecialShortcut(Key key, Key systemKey, ModifierKeys modifiers) =>
+        (key == Key.V || systemKey == Key.V) && modifiers == (ModifierKeys.Control | ModifierKeys.Alt);
 
     public static bool TryGetGridShortcut(Key key, ModifierKeys modifiers, out KeyboardGridShortcut shortcut)
     {
