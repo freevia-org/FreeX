@@ -245,6 +245,27 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresNumberStoredAsTextIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("42"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.NumberStoredAsTextErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");

@@ -11383,7 +11383,7 @@ public partial class MainWindow : Window
         var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
         if (issues.Count == 0)
         {
-            MessageBox.Show("No errors found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("No issues found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
