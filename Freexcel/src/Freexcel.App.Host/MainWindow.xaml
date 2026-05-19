@@ -2177,10 +2177,13 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Insert Function" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertFunctionBtn_Click"
-                                        local:RibbonTooltip.Title="Insert Function"
-                                        local:RibbonTooltip.KeyTip="F"
-                                        local:RibbonTooltip.Description="Search for and insert a function into the selected cell."/>
+                                <local:AutomationInvokeButton x:Name="FormulasInsertFunctionButton"
+                                                              Content="Insert Function" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertFunctionBtn_Click"
+                                                              AutomationProperties.Name="Insert Function"
+                                                              AutomationProperties.AutomationId="FormulasInsertFunctionButton"
+                                                              local:RibbonTooltip.Title="Insert Function"
+                                                              local:RibbonTooltip.KeyTip="F"
+                                                              local:RibbonTooltip.Description="Search for and insert a function into the selected cell."/>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="AutoSum" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulasAutoSumPickerBtn_Click"
                                             local:RibbonTooltip.Title="AutoSum"
@@ -2965,10 +2968,13 @@
                                         local:RibbonTooltip.Title="Help Online"
                                         local:RibbonTooltip.KeyTip="HO"
                                         local:RibbonTooltip.Description="Open the Freexcel help documentation in a web browser."/>
-                                <Button Content="About Freexcel" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
-                                        local:RibbonTooltip.Title="About Freexcel"
-                                        local:RibbonTooltip.KeyTip="AB"
-                                        local:RibbonTooltip.Description="View version and license information about Freexcel."/>
+                                <local:AutomationInvokeButton x:Name="HelpAboutFreexcelButton"
+                                                              Content="About Freexcel" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
+                                                              AutomationProperties.Name="About Freexcel"
+                                                              AutomationProperties.AutomationId="HelpAboutFreexcelButton"
+                                                              local:RibbonTooltip.Title="About Freexcel"
+                                                              local:RibbonTooltip.KeyTip="AB"
+                                                              local:RibbonTooltip.Description="View version and license information about Freexcel."/>
                                 <Button Content="Send Feedback"  Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
                                         local:RibbonTooltip.Title="Send Feedback"
                                         local:RibbonTooltip.KeyTip="FE"
@@ -3592,21 +3598,27 @@
                 <!-- Account / Options pinned to bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
                     <Rectangle Height="1" Fill="#2C5C40" Margin="0,0,0,6"/>
-                    <Button Content="Account" HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsAccountBtn_Click"
-                            local:RibbonTooltip.Title="Local Account"
-                            local:RibbonTooltip.KeyTip="AC"
-                            local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options."/>
-                    <Button x:Name="SsOptionsNavBtn"
-                            Content="Options" HorizontalAlignment="Stretch"
-                            Style="{StaticResource SsNavBtn}"
-                            Click="SsOptionsBtn_Click"
-                            IsTabStop="True"
-                            AutomationProperties.Name="Options"
-                            AutomationProperties.HelpText="Open Freexcel settings and formula error checking options."
-                            local:RibbonTooltip.Title="Options"
-                            local:RibbonTooltip.KeyTip="T"/>
+                    <local:AutomationInvokeButton x:Name="SsAccountNavBtn"
+                                                  Content="Account" HorizontalAlignment="Stretch"
+                                                  Style="{StaticResource SsNavBtn}"
+                                                  Click="SsAccountBtn_Click"
+                                                  IsTabStop="True"
+                                                  AutomationProperties.Name="Account"
+                                                  AutomationProperties.AutomationId="BackstageAccountButton"
+                                                  AutomationProperties.HelpText="Show local account information for Freexcel."
+                                                  local:RibbonTooltip.Title="Local Account"
+                                                  local:RibbonTooltip.KeyTip="AC"
+                                                  local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options."/>
+                    <local:AutomationInvokeButton x:Name="SsOptionsNavBtn"
+                                                  Content="Options" HorizontalAlignment="Stretch"
+                                                  Style="{StaticResource SsNavBtn}"
+                                                  Click="SsOptionsBtn_Click"
+                                                  IsTabStop="True"
+                                                  AutomationProperties.Name="Options"
+                                                  AutomationProperties.AutomationId="BackstageOptionsButton"
+                                                  AutomationProperties.HelpText="Open Freexcel settings and formula error checking options."
+                                                  local:RibbonTooltip.Title="Options"
+                                                  local:RibbonTooltip.KeyTip="T"/>
                 </StackPanel>
 
                 <!-- Navigation items -->
