@@ -4528,7 +4528,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Where(element => element is not null)
                 .Cast<XElement>()
                 .ToList();
-            if (sourceBlocks.Count == 0)
+            var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
+            if (sourceBlocks.Count == 0 && sourceExtensionList is null)
                 continue;
 
             var targetWorksheetXml = LoadXml(targetWorksheetEntry);
@@ -4546,9 +4547,52 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
+            if (MergeWorksheetExtensionList(sourceExtensionList, targetRoot, workbookNs))
+                changed = true;
+
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceExtensionList is null)
+            return false;
+
+        var sourceExtensions = sourceExtensionList
+            .Elements(workbookNs + "ext")
+            .ToList();
+        if (sourceExtensions.Count == 0)
+            return false;
+
+        var targetExtensionList = targetRoot.Element(workbookNs + "extLst");
+        if (targetExtensionList is null)
+        {
+            targetRoot.Add(new XElement(sourceExtensionList));
+            return true;
+        }
+
+        var existingUris = targetExtensionList
+            .Elements(workbookNs + "ext")
+            .Select(extension => extension.Attribute("uri")?.Value)
+            .Where(uri => !string.IsNullOrWhiteSpace(uri))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceExtension in sourceExtensions)
+        {
+            var uri = sourceExtension.Attribute("uri")?.Value;
+            if (!string.IsNullOrWhiteSpace(uri) && existingUris.Contains(uri))
+                continue;
+
+            targetExtensionList.Add(new XElement(sourceExtension));
+            if (!string.IsNullOrWhiteSpace(uri))
+                existingUris.Add(uri);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static void MergeWorksheetDrawingParts(ZipArchive sourceArchive, ZipArchive targetArchive)
