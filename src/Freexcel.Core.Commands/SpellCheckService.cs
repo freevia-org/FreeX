@@ -31,6 +31,15 @@ public static partial class SpellCheckService
         ["definately"] = "definitely",
         ["adress"] = "address",
         ["untill"] = "until",
+        ["acommodate"] = "accommodate",
+        ["calender"] = "calendar",
+        ["goverment"] = "government",
+        ["publically"] = "publicly",
+        ["recomend"] = "recommend",
+        ["recomendations"] = "recommendations",
+        ["sucess"] = "success",
+        ["tommorow"] = "tomorrow",
+        ["wierd"] = "weird",
     };
 
     public static IReadOnlyList<SpellingIssue> FindIssues(Workbook workbook, SheetId? sheetId = null)

@@ -449,6 +449,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
+        xaml.Should().NotContain("Cycle grand totals");
+        xaml.Should().NotContain("Cycle subtotals");
+        xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
+        source.Should().Contain("new PivotTableOptionsDialog(pivotTable)");
+        source.Should().Contain("ApplyPivotOptions(pivotTable, dialog.Result)");
+        source.Should().NotContain("var reportLayout = pivotTable.ReportLayout switch");
+        source.Should().NotContain("var styleName = pivotTable.StyleName switch");
+    }
+
+    [Fact]
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
