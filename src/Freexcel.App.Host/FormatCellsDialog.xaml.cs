@@ -17,10 +17,14 @@ public partial class FormatCellsDialog : Window
         ["General", "Number (0.00)", "Currency ($#,##0.00)", "Percentage (0%)",
          "Date (yyyy-MM-dd)", "Time (HH:mm:ss)", "Text (@)"];
 
-    public FormatCellsDialog(CellStyle current)
+    public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         InitializeComponent();
-        Loaded += (_, _) => Populate(current);
+        Loaded += (_, _) =>
+        {
+            Populate(current);
+            Tabs.SelectedIndex = (int)initialTab;
+        };
     }
 
     private void Populate(CellStyle s)
@@ -101,4 +105,12 @@ public partial class FormatCellsDialog : Window
             return new CellColor(r, g, b);
         return null;
     }
+}
+
+public enum FormatCellsDialogTab
+{
+    Number,
+    Font,
+    Fill,
+    Alignment
 }

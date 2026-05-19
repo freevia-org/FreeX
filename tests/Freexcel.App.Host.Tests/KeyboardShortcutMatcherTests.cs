@@ -80,6 +80,21 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
     [InlineData(Key.None, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
     [InlineData(Key.F11, Key.None, ModifierKeys.None, KeyboardCommandShortcut.InsertChartSheet)]
+    [InlineData(Key.F, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
+    [InlineData(Key.P, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenFormatCellsFont)]
+    [InlineData(Key.G, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.WorkbookStatistics)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.NewNote)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.NewThreadedComment)]
+    [InlineData(Key.F12, Key.None, ModifierKeys.None, KeyboardCommandShortcut.SaveAs)]
+    [InlineData(Key.F10, Key.None, ModifierKeys.None, KeyboardCommandShortcut.ShowKeyTips)]
+    [InlineData(Key.F10, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.OpenContextMenu)]
+    [InlineData(Key.Apps, Key.None, ModifierKeys.None, KeyboardCommandShortcut.OpenContextMenu)]
+    [InlineData(Key.F2, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.EditInFormulaBar)]
+    [InlineData(Key.None, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
+    [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.OemMinus, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ZoomOut)]
     public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
         Key key,
         Key systemKey,
