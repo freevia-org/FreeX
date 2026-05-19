@@ -7992,8 +7992,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
                             : null,
                         ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
-                    ToLegendXml(chart, chartNs, drawingNs))));
+                    ToLegendXml(chart, chartNs, drawingNs),
+                    ToBlankDisplayXml(chart, chartNs),
+                    chart.ShowDataLabelsOverMaximum ? new XElement(chartNs + "showDLblsOverMax", new XAttribute("val", "1")) : null)));
     }
+
+    private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
+        chart.BlankDisplayMode == ChartBlankDisplayMode.Gap
+            ? null
+            : new XElement(chartNs + "dispBlanksAs",
+                new XAttribute("val", chart.BlankDisplayMode == ChartBlankDisplayMode.Span ? "span" : "zero"));
 
     private static XElement? ToPivotSourceXml(ChartModel chart, Sheet sheet, XNamespace chartNs)
     {
