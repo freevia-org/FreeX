@@ -2411,7 +2411,7 @@
                                         Click="SpellCheckBtn_Click"
                                         local:RibbonTooltip.Title="Spelling"
                                         local:RibbonTooltip.KeyTip="S"
-                                        local:RibbonTooltip.Description="Find known misspellings in text cells on the active sheet."/>
+                                        local:RibbonTooltip.Description="Find known misspellings in text cells on the active sheet with replace, replace all, and ignore choices."/>
                                 <Button Content="Workbook Stats" Width="104" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -3491,7 +3491,7 @@
                             Click="SaveButton_Click"
                             local:RibbonTooltip.Title="Save As"
                             local:RibbonTooltip.KeyTip="A"/>
-                    <Button Content="Print" HorizontalAlignment="Stretch"
+                    <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"

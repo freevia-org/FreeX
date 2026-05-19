@@ -1790,12 +1790,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.P && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                PrintButton_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if ((e.Key == Key.D1 || e.Key == Key.NumPad1) && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 OpenFormatCellsDialog();
@@ -2188,6 +2182,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.QuickAnalysis:
                 ShowQuickAnalysisMenu();
+                break;
+            case KeyboardCommandShortcut.OpenPrintBackstage:
+                OpenPrintBackstage();
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
@@ -4156,6 +4153,13 @@ public partial class MainWindow : Window
     {
         StartScreenOverlay.Visibility = Visibility.Collapsed;
         SheetGrid.Focus();
+    }
+
+    private void OpenPrintBackstage()
+    {
+        ShowStartScreen();
+        SsPrintNavBtn.Focus();
+        Keyboard.Focus(SsPrintNavBtn);
     }
 
     private void ShowHomeView()
@@ -12043,6 +12047,46 @@ public partial class MainWindow : Window
             return;
         }
 
+        var plan = SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId);
+        var action = PromptForInput(
+            $"Found {issues.Count} known spelling issue(s) in {plan.Edits.Count} text cell(s) on the active sheet.\n" +
+            "Type replace to review the first issue, replace all to apply all known corrections, or ignore to leave them unchanged.",
+            "replace");
+        if (action is null)
+            return;
+
+        var normalizedAction = action.Trim();
+        if (normalizedAction.Equals("ignore", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Spelling issues ignored.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (normalizedAction.Equals("replace all", StringComparison.OrdinalIgnoreCase) ||
+            normalizedAction.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            var edits = BuildSpellCheckEdits(plan);
+            if (edits.Count == 0)
+            {
+                MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!TryExecuteSpellCheckEdits(edits))
+                return;
+
+            UpdateViewport();
+            RefreshStatusBar();
+            return;
+        }
+
+        if (!normalizedAction.Equals("replace", StringComparison.OrdinalIgnoreCase) &&
+            !normalizedAction.Equals("first", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Type replace, replace all, or ignore.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         var issue = issues[0];
         SetActiveCell(issue.Address);
         EnsureCellVisible(issue.Address);
@@ -12054,12 +12098,20 @@ public partial class MainWindow : Window
         if (replacement is null) return;
 
         var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
-        if (!TryExecuteEditCells([(issue.Address, Cell.FromValue(new TextValue(corrected)))], "Spell Check"))
+        if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
     }
+
+    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckEdits(SpellingCorrectionPlan plan) =>
+        plan.Edits
+            .Select(edit => (edit.Address, Cell.FromValue(new TextValue(edit.CorrectedText))))
+            .ToList();
+
+    private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
+        TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
 
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
