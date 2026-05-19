@@ -5379,6 +5379,21 @@ public class FunctionLibraryTests
             .Should().Be(new NumberValue(0.1));
 
     [Fact]
+    public void Numbervalue_AccountingParentheses_ReturnsNegativeNumber() =>
+        _eval.Evaluate("=NUMBERVALUE(\"(1)\")", MakeSheet())
+            .Should().Be(new NumberValue(-1));
+
+    [Fact]
+    public void Numbervalue_AccountingParenthesesWithPercent_ReturnsNegativePercent() =>
+        _eval.Evaluate("=NUMBERVALUE(\"(10%)\")", MakeSheet())
+            .Should().Be(new NumberValue(-0.1));
+
+    [Fact]
+    public void Numbervalue_LocalizedAccountingParentheses_ReturnsNegativeNumber() =>
+        _eval.Evaluate("=NUMBERVALUE(\"(1.234,56)\",\",\",\".\")", MakeSheet())
+            .Should().Be(new NumberValue(-1234.56));
+
+    [Fact]
     public void Numbervalue_InvalidSeparators_ReturnsValueError() =>
         _eval.Evaluate("=NUMBERVALUE(\"1.234\",\".\",\".\")", MakeSheet())
             .Should().Be(ErrorValue.Value);

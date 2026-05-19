@@ -5089,6 +5089,9 @@ public static class BuiltInFunctions
 
         // Strip whitespace (Excel allows whitespace anywhere)
         text = text.Replace(" ", "").Replace("\t", "");
+        bool accountingNegative = text.StartsWith('(') && text.EndsWith(')');
+        if (accountingNegative)
+            text = text[1..^1];
 
         // Trailing percent
         int pctCount = 0;
@@ -5109,6 +5112,7 @@ public static class BuiltInFunctions
             return ErrorValue.Value;
 
         for (int i = 0; i < pctCount; i++) v /= 100.0;
+        if (accountingNegative) v = -v;
         return NumberResult(v);
     }
 
