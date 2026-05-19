@@ -4494,6 +4494,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
         var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
         var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
+        var sourceWorkbookProtection = sourceWorkbookXml.Root?.Element(workbookNs + "workbookProtection");
         if (sourceExtensionList is null &&
             sourceFileVersion is null &&
             sourceFileSharing is null &&
@@ -4503,7 +4504,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sourceDefinedNames is null &&
             sourceBookViews is null &&
             sourceCustomWorkbookViews is null &&
-            sourceWorkbookProperties is null)
+            sourceWorkbookProperties is null &&
+            sourceWorkbookProtection is null)
         {
             return;
         }
@@ -4526,6 +4528,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
+        if (MergeWorkbookProtection(sourceWorkbookProtection, targetRoot, workbookNs))
+            changed = true;
         if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
             changed = true;
         if (MergeWorkbookChildBlock(sourceCustomWorkbookViews, targetRoot, workbookNs + "customWorkbookViews"))
@@ -4546,6 +4550,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         targetRoot.Add(new XElement(sourceBlock));
         return true;
+    }
+
+    private static bool MergeWorkbookProtection(XElement? sourceWorkbookProtection, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceWorkbookProtection is null)
+            return false;
+
+        var targetWorkbookProtection = targetRoot.Element(workbookNs + "workbookProtection");
+        if (targetWorkbookProtection is null)
+        {
+            targetRoot.AddFirst(new XElement(sourceWorkbookProtection));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceWorkbookProtection.Attributes())
+        {
+            if (targetWorkbookProtection.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetWorkbookProtection.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetWorkbookProtection
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceWorkbookProtection.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetWorkbookProtection.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)
@@ -4680,7 +4723,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "sheetCalcPr",
             workbookNs + "phoneticPr",
             workbookNs + "sortState",
-            workbookNs + "dataConsolidate"
+            workbookNs + "dataConsolidate",
+            workbookNs + "legacyDrawingHF",
+            workbookNs + "customProperties"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
@@ -4728,9 +4773,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Cast<XElement>()
                 .ToList();
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
+            var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
-            if (sourceBlocks.Count == 0 && sourceSheetProperties is null && sourceExtensionList is null)
+            if (sourceBlocks.Count == 0 &&
+                sourceSheetProperties is null &&
+                sourceSheetProtection is null &&
+                sourceExtensionList is null)
+            {
                 continue;
+            }
 
             var targetWorksheetXml = LoadXml(targetWorksheetEntry);
             var targetRoot = targetWorksheetXml.Root;
@@ -4739,6 +4790,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var changed = false;
             if (MergeWorksheetSheetProperties(sourceSheetProperties, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
@@ -4755,6 +4808,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetSheetProtection(XElement? sourceSheetProtection, XElement targetRoot, XNamespace workbookNs)
+    {
+        if (sourceSheetProtection is null)
+            return false;
+
+        var targetSheetProtection = targetRoot.Element(workbookNs + "sheetProtection");
+        if (targetSheetProtection is null)
+        {
+            targetRoot.Add(new XElement(sourceSheetProtection));
+            return true;
+        }
+
+        var changed = false;
+        foreach (var attribute in sourceSheetProtection.Attributes())
+        {
+            if (targetSheetProtection.Attribute(attribute.Name) is not null)
+                continue;
+
+            targetSheetProtection.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
+        var existingChildNames = targetSheetProtection
+            .Elements()
+            .Select(element => element.Name)
+            .ToHashSet();
+        foreach (var sourceChild in sourceSheetProtection.Elements())
+        {
+            if (existingChildNames.Contains(sourceChild.Name))
+                continue;
+
+            targetSheetProtection.Add(new XElement(sourceChild));
+            existingChildNames.Add(sourceChild.Name);
+            changed = true;
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetSheetProperties(XElement? sourceSheetProperties, XElement targetRoot, XNamespace workbookNs)
