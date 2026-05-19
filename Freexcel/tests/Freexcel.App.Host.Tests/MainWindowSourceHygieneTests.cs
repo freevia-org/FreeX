@@ -72,11 +72,14 @@ public sealed class MainWindowSourceHygieneTests
     public void AutoFitMenuHandlers_UseSizingServiceAndSetExplicitSizes()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFitPlanner.cs"));
 
-        source.Should().Contain("AutoFitSizingService.EstimateRowHeight");
-        source.Should().Contain("AutoFitSizingService.EstimateColumnWidth");
-        source.Should().Contain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
-        source.Should().Contain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
+        source.Should().Contain("AutoFitPlanner.PlanRowHeights");
+        source.Should().Contain("AutoFitPlanner.PlanColumnWidths");
+        source.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        source.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
+        planner.Should().Contain("AutoFitSizingService.EstimateRowHeight");
+        planner.Should().Contain("AutoFitSizingService.EstimateColumnWidth");
         source.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
         source.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
     }
