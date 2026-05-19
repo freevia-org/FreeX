@@ -2210,6 +2210,15 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.PieChart:
                 ChartPieMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.BarChart:
+                ChartBarMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.AreaChart:
+                ChartAreaMenuItem_Click(sender, e);
+                break;
+            case QuickAnalysisCommand.ScatterChart:
+                ChartScatterMenuItem_Click(sender, e);
+                break;
             case QuickAnalysisCommand.Sum:
                 AutoSumSumMenuItem_Click(sender, e);
                 break;
