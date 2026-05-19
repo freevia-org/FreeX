@@ -138,9 +138,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"TitleBarAppX\"");
         xaml.Should().Contain("<TextBlock Text=\"FREE\"");
         xaml.Should().Contain("<TextBlock Text=\"X\"");
-        xaml.Should().Contain("<RowDefinition Height=\"7\"/>");
-        xaml.Should().Contain("<RowDefinition Height=\"2\"/>");
+        xaml.Should().Contain("<RowDefinition Height=\"8\"/>");
+        xaml.Should().Contain("<RowDefinition Height=\"1\"/>");
         xaml.Should().Contain("<RowDefinition Height=\"*\"/>");
+        xaml.Should().Contain("FontSize=\"5.8\"");
+        xaml.Should().Contain("Margin=\"0,-1,0,0\"");
         xaml.Should().NotContain("<Image Source=\"Resources/Freexcel.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreexcelGreenBrush}\"");
         theme.Should().Contain("x:Key=\"FreexcelTitleBarBrush\"");
