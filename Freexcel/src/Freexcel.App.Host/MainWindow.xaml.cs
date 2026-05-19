@@ -7359,7 +7359,7 @@ public partial class MainWindow : Window
         var startVal = sheet.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
         if (startVal is null) { MessageBox.Show("Select a cell with a numeric value to start a series."); return; }
         var stepInput = PromptForInput("Step value:", "1");
-        if (stepInput is null || !double.TryParse(stepInput, out var step)) return;
+        if (stepInput is null || !FillSeriesPlanner.TryParseStep(stepInput, out var step)) return;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Fill Series",
