@@ -299,6 +299,12 @@ public sealed class MainWindowSourceHygieneTests
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Line Color",
+            "Line Style",
+            "Black",
+            "Accent 1",
+            "Dashed",
+            "Dotted",
             "More Borders..."
         })
             xaml.Should().Contain($"Header=\"{label}\"");
@@ -310,6 +316,10 @@ public sealed class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderLineColorBlackMenuItem_Click",
+            "BorderLineColorAccent1MenuItem_Click",
+            "BorderLineStyleDashedMenuItem_Click",
+            "BorderLineStyleDottedMenuItem_Click",
             "BorderMoreMenuItem_Click"
         })
         {
@@ -320,6 +330,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ApplyRangeBorderPreset");
         source.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
+        source.Should().Contain("_borderPickerColor");
+        source.Should().Contain("_borderPickerStyle");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");
