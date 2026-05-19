@@ -57,9 +57,10 @@ public sealed class KeyboardShortcutMatcherTests
 
     [Theory]
     [InlineData(Key.Space, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectAll)]
+    [InlineData(Key.Space, ModifierKeys.Control, KeyboardSelectionShortcut.SelectWholeColumns)]
+    [InlineData(Key.Space, ModifierKeys.Shift, KeyboardSelectionShortcut.SelectWholeRows)]
     [InlineData(Key.Multiply, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.D8, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
-    [InlineData(Key.Space, ModifierKeys.Control, null)]
     [InlineData(Key.D8, ModifierKeys.Control, null)]
     public void TryGetSelectionShortcut_MapsExcelSelectionShortcuts(Key key, ModifierKeys modifiers, KeyboardSelectionShortcut? expected)
     {
