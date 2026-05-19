@@ -10,6 +10,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Add, Key.None, ModifierKeys.Control, true)]
     [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control, true)]
     [InlineData(Key.None, Key.Add, ModifierKeys.Control, true)]
+    [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Shift, true)]
+    [InlineData(Key.None, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
     public void IsCtrlPlus_RecognizesExcelInsertShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
