@@ -221,6 +221,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey is Key.OemPeriod or Key.Decimal)
+        {
+            shortcut = KeyboardCommandShortcut.CycleSelectionCorner;
+            return true;
+        }
+
         return false;
     }
 
@@ -330,7 +336,8 @@ public enum KeyboardCommandShortcut
     CopyFormulaFromAbove,
     CopyValueFromAbove,
     OpenActiveDropdown,
-    ScrollActiveCellIntoView
+    ScrollActiveCellIntoView,
+    CycleSelectionCorner
 }
 
 public enum BorderKeyboardShortcut
