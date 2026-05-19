@@ -8282,88 +8282,17 @@ public partial class MainWindow : Window
 
     private void PivotGrandTotalsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            ApplyPivotOptions(
-                pivotTable,
-                !pivotTable.ShowRowGrandTotals,
-                !pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotSubtotalsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            var showSubtotals = pivotTable.ShowSubtotals;
-            var subtotalPlacement = pivotTable.SubtotalPlacement;
-            if (!pivotTable.ShowSubtotals)
-            {
-                showSubtotals = true;
-                subtotalPlacement = PivotSubtotalPlacement.Bottom;
-            }
-            else if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
-            {
-                subtotalPlacement = PivotSubtotalPlacement.Top;
-            }
-            else
-            {
-                showSubtotals = false;
-                subtotalPlacement = PivotSubtotalPlacement.Bottom;
-            }
-
-            ApplyPivotOptions(
-                pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                showSubtotals,
-                subtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotReportLayoutBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            var reportLayout = pivotTable.ReportLayout switch
-            {
-                PivotReportLayout.Compact => PivotReportLayout.Outline,
-                PivotReportLayout.Outline => PivotReportLayout.Tabular,
-                _ => PivotReportLayout.Compact
-            };
-            ApplyPivotOptions(
-                pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                pivotTable.StyleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                reportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotBlankRowsBtn_Click(object sender, RoutedEventArgs e)
@@ -8387,29 +8316,7 @@ public partial class MainWindow : Window
 
     private void PivotStyleGalleryBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (TryGetActivePivotTable(out _, out var pivotTable))
-        {
-            var styleName = pivotTable.StyleName switch
-            {
-                "PivotStyleLight16" => "PivotStyleMedium9",
-                "PivotStyleMedium9" => "PivotStyleDark4",
-                _ => "PivotStyleLight16"
-            };
-            ApplyPivotOptions(
-                pivotTable,
-                pivotTable.ShowRowGrandTotals,
-                pivotTable.ShowColumnGrandTotals,
-                pivotTable.ShowSubtotals,
-                pivotTable.SubtotalPlacement,
-                pivotTable.RepeatItemLabels,
-                pivotTable.BlankLineAfterItems,
-                styleName,
-                pivotTable.ShowRowHeaders,
-                pivotTable.ShowColumnHeaders,
-                pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes,
-                pivotTable.ReportLayout);
-        }
+        ShowPivotTableOptionsDialog();
     }
 
     private void PivotRowHeadersBtn_Click(object sender, RoutedEventArgs e)
@@ -8524,6 +8431,34 @@ public partial class MainWindow : Window
 
         UpdateViewport();
     }
+
+    private void ShowPivotTableOptionsDialog()
+    {
+        if (!TryGetActivePivotTable(out _, out var pivotTable))
+            return;
+
+        var dialog = new PivotTableOptionsDialog(pivotTable) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyPivotOptions(pivotTable, dialog.Result);
+    }
+
+    private void ApplyPivotOptions(PivotTableModel pivotTable, PivotTableOptionsDialogResult result) =>
+        ApplyPivotOptions(
+            pivotTable,
+            result.ShowRowGrandTotals,
+            result.ShowColumnGrandTotals,
+            result.ShowSubtotals,
+            result.SubtotalPlacement,
+            result.RepeatItemLabels,
+            result.BlankLineAfterItems,
+            result.StyleName,
+            result.ShowRowHeaders,
+            result.ShowColumnHeaders,
+            result.ShowRowStripes,
+            result.ShowColumnStripes,
+            result.ReportLayout);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
