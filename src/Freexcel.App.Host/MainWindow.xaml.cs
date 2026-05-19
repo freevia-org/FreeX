@@ -5806,6 +5806,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.PasteSpecial:
                 PasteSpecialBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.InsertCells:
+                InsertCellsMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.InsertRowAbove:
                 InsertRows(address.Row);
                 break;
@@ -5817,6 +5820,9 @@ public partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.InsertColumnRight:
                 InsertColumns(address.Col + 1);
+                break;
+            case WorksheetContextMenuAction.DeleteCells:
+                DeleteCellsMenuItem_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.DeleteRows:
                 DeleteSelectedRows();
