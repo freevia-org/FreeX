@@ -6127,35 +6127,12 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Tries to export directly to PDF by routing through the "Microsoft Print to PDF"
-    /// virtual printer. If the printer is unavailable, falls back to XPS and informs the user.
+    /// Handles PDF requests through the deterministic XPS export path. WPF's managed
+    /// print APIs cannot set the target PDF file path for virtual PDF printers.
     /// </summary>
     private void ExportViaPrintToPdf(string pdfPath)
     {
-        // Look for a PDF-capable print queue (case-insensitive)
-        System.Printing.PrintQueue? pdfQueue = null;
-        try
-        {
-            using var server = new System.Printing.LocalPrintServer();
-            pdfQueue = server.GetPrintQueues()
-                .FirstOrDefault(q => q.Name.Contains("PDF", StringComparison.OrdinalIgnoreCase));
-        }
-        catch
-        {
-            // Print-spooler unavailable; fall through to XPS fallback.
-        }
-
-        if (pdfQueue != null)
-        {
-            // The WPF PrintDialog API can target a specific queue but cannot programmatically
-            // set the output file path for the Microsoft Print to PDF virtual printer through
-            // the managed API alone. Keep the file export path deterministic by writing XPS.
-            ExportPdfFallbackAsXps(pdfPath);
-        }
-        else
-        {
-            ExportPdfFallbackAsXps(pdfPath);
-        }
+        ExportPdfFallbackAsXps(pdfPath);
     }
 
     private void ExportPdfFallbackAsXps(string pdfPath)
