@@ -8875,6 +8875,154 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Load_CellWatches_MapsNativeRefsToWorkbookWatchedCells()
+    {
+        var workbook = new Workbook("CellWatchesLoadTest");
+        var firstSheet = workbook.AddSheet("Data");
+        var secondSheet = workbook.AddSheet("Summary");
+        firstSheet.SetFormula(new CellAddress(firstSheet.Id, 1, 1), "1+1");
+        secondSheet.SetFormula(new CellAddress(secondSheet.Id, 3, 3), "2+2");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCellWatches(
+            source,
+            "xl/worksheets/sheet1.xml",
+            ("A1", null, null),
+            ("B2", null, null),
+            ("A1", null, null),
+            ("A0", null, null),
+            ("XFE1", null, null),
+            ("NotARef", null, null));
+        AddWorksheetCellWatches(
+            source,
+            "xl/worksheets/sheet2.xml",
+            ("C3", null, null));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedFirstSheet = loaded.GetSheetAt(0);
+        var loadedSecondSheet = loaded.GetSheetAt(1);
+
+        loaded.WatchedCells.Should().Equal(
+            new CellAddress(loadedFirstSheet.Id, 1, 1),
+            new CellAddress(loadedFirstSheet.Id, 2, 2),
+            new CellAddress(loadedSecondSheet.Id, 3, 3));
+        loadedFirstSheet.GetCell(2, 2).Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_FreshWorkbook_WritesCellWatchesFromModel()
+    {
+        var workbook = new Workbook("CellWatchesSaveTest");
+        var firstSheet = workbook.AddSheet("Data");
+        var secondSheet = workbook.AddSheet("Summary");
+        workbook.WatchedCells.Add(new CellAddress(firstSheet.Id, 2, 2));
+        workbook.WatchedCells.Add(new CellAddress(firstSheet.Id, 1, 1));
+        workbook.WatchedCells.Add(new CellAddress(secondSheet.Id, 3, 3));
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var firstWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var secondWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet2.xml")!);
+
+        firstWorksheetXml.Root!
+            .Element(worksheetNs + "cellWatches")!
+            .Elements(worksheetNs + "cellWatch")
+            .Select(element => element.Attribute("r")?.Value)
+            .Should()
+            .Equal("A1", "B2");
+        secondWorksheetXml.Root!
+            .Element(worksheetNs + "cellWatches")!
+            .Elements(worksheetNs + "cellWatch")
+            .Select(element => element.Attribute("r")?.Value)
+            .Should()
+            .Equal("C3");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MergesNativeCellWatchesWithoutDuplicateRefs()
+    {
+        var workbook = new Workbook("CellWatchesMergeTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetCellWatches(
+            source,
+            "xl/worksheets/sheet1.xml",
+            ("A1", "unsupportedAttr", "kept"),
+            ("C3", null, null));
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loaded.WatchedCells.Add(new CellAddress(loadedSheet.Id, 2, 2));
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var entries = worksheetXml.Root!
+            .Element(worksheetNs + "cellWatches")!
+            .Elements(worksheetNs + "cellWatch")
+            .ToList();
+
+        entries.Select(entry => entry.Attribute("r")?.Value).Should().BeEquivalentTo(["A1", "B2", "C3"]);
+        entries.Select(entry => entry.Attribute("r")?.Value).Should().OnlyHaveUniqueItems();
+        entries.Single(entry => entry.Attribute("r")?.Value == "A1")
+            .Attribute("unsupportedAttr")!
+            .Value
+            .Should()
+            .Be("kept");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_FreshWorkbook_InsertsCellWatchesBeforeExtensionList()
+    {
+        var workbook = new Workbook("CellWatchesWithSparklineTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("3"));
+        workbook.WatchedCells.Add(new CellAddress(sheet.Id, 5, 5));
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            Kind = SparklineKind.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 3)),
+            Location = new CellAddress(sheet.Id, 1, 5)
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var orderedChildren = worksheetXml.Root!.Elements().ToList();
+        var cellWatchesIndex = orderedChildren.FindIndex(element => element.Name == worksheetNs + "cellWatches");
+        var extensionListIndex = orderedChildren.FindIndex(element => element.Name == worksheetNs + "extLst");
+
+        cellWatchesIndex.Should().BeGreaterThanOrEqualTo(0);
+        extensionListIndex.Should().BeGreaterThanOrEqualTo(0);
+        cellWatchesIndex.Should().BeLessThan(extensionListIndex);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCalculationProperties()
     {
         var workbook = new Workbook("WorksheetCalculationPropertiesRetentionTest");
@@ -10912,19 +11060,32 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddWorksheetCellWatches(MemoryStream packageStream)
+    private static void AddWorksheetCellWatches(MemoryStream packageStream) =>
+        AddWorksheetCellWatches(packageStream, "xl/worksheets/sheet1.xml", ("A1", null, null));
+
+    private static void AddWorksheetCellWatches(
+        MemoryStream packageStream,
+        string worksheetPath,
+        params (string Reference, string? AttributeName, string? AttributeValue)[] watches)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var worksheetXml = LoadPackageXml(archive.GetEntry(worksheetPath)!);
             worksheetXml.Root!.Add(new XElement(
                 worksheetNs + "cellWatches",
-                new XElement(
-                    worksheetNs + "cellWatch",
-                    new XAttribute("r", "A1"))));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+                watches.Select(watch =>
+                {
+                    var element = new XElement(
+                        worksheetNs + "cellWatch",
+                        new XAttribute("r", watch.Reference));
+                    if (!string.IsNullOrWhiteSpace(watch.AttributeName))
+                        element.SetAttributeValue(watch.AttributeName, watch.AttributeValue);
+
+                    return element;
+                })));
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
 
         packageStream.Position = 0;
