@@ -168,6 +168,16 @@ public sealed class ManageConditionalFormatsDialog : Window
         appliesToCol.CellTemplate = appliesToTemplate;
         gridView.Columns.Add(appliesToCol);
 
+        // Column 5 - Stop If True
+        var stopIfTrueCol = new GridViewColumn { Header = "Stop If True", Width = 85 };
+        var stopIfTrueTemplate = new DataTemplate();
+        var stopIfTrueFactory  = new FrameworkElementFactory(typeof(TextBlock));
+        stopIfTrueFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new StopIfTrueConverter() });
+        stopIfTrueFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        stopIfTrueTemplate.VisualTree = stopIfTrueFactory;
+        stopIfTrueCol.CellTemplate = stopIfTrueTemplate;
+        gridView.Columns.Add(stopIfTrueCol);
+
         _listView.View = gridView;
         root.Children.Add(_listView);
 
@@ -289,7 +299,11 @@ public sealed class ManageConditionalFormatsDialog : Window
     private void CommitResult()
     {
         ReassignPriorities();
-        ResultRules = [.. _rules];
+        ResultRules = BuildResultRules(
+            _sheet.ConditionalFormats,
+            _selection,
+            IsFilteringToSelection(),
+            _rules);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -304,6 +318,47 @@ public sealed class ManageConditionalFormatsDialog : Window
                 _rules[i] = CloneWithPriority(r, i + 1);
         }
     }
+
+    public static IReadOnlyList<ConditionalFormat> BuildResultRules(
+        IReadOnlyList<ConditionalFormat> sheetRules,
+        GridRange? selection,
+        bool filterToSelection,
+        IReadOnlyList<ConditionalFormat> editedRules)
+    {
+        if (!filterToSelection || selection is null)
+            return Reprioritize(editedRules);
+
+        var result = new List<ConditionalFormat>();
+        var insertedEditedRules = false;
+
+        foreach (var rule in sheetRules)
+        {
+            if (!RangesOverlap(rule.AppliesTo, selection.Value))
+            {
+                result.Add(rule);
+                continue;
+            }
+
+            if (insertedEditedRules)
+                continue;
+
+            result.AddRange(editedRules);
+            insertedEditedRules = true;
+        }
+
+        if (!insertedEditedRules)
+            result.AddRange(editedRules);
+
+        return Reprioritize(result);
+    }
+
+    private bool IsFilteringToSelection() =>
+        _selection.HasValue
+        && _scopeBox.SelectedItem is string selectedScope
+        && selectedScope == ScopeSelection;
+
+    private static IReadOnlyList<ConditionalFormat> Reprioritize(IReadOnlyList<ConditionalFormat> rules) =>
+        rules.Select((rule, index) => CloneWithPriority(rule, index + 1)).ToList();
 
     private static ConditionalFormat CloneWithPriority(ConditionalFormat src, int priority)
     {
@@ -418,6 +473,8 @@ public sealed class ManageConditionalFormatsDialog : Window
         var ec = CellAddress.NumberToColumnName(r.End.Col);
         return $"${sc}${r.Start.Row}:${ec}${r.End.Row}";
     }
+
+    public static string StopIfTrueText(ConditionalFormat cf) => cf.StopIfTrue ? "Yes" : "";
 }
 
 // ── Value converters used by the GridView cell templates ──────────────────────
@@ -444,6 +501,15 @@ internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.AppliesToString(cf.AppliesTo) : "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => Binding.DoNothing;
+}
+
+internal sealed class StopIfTrueConverter : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.StopIfTrueText(cf) : "";
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => Binding.DoNothing;

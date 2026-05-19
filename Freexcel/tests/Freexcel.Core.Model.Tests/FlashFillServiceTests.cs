@@ -104,6 +104,70 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_FirstInitialPeriodLast_CombinesSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["A. Lovelace", "G. Hopper"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["A. Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstInitialLastLowercase_CombinesSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["alovelace", "ghopper"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["aturing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastEmail_CombinesSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["ada.lovelace@example.com", "grace.hopper@example.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alan.turing@example.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_LastFirstInitialPeriod_CombinesSourceColumns()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["Lovelace A.", "Hopper G."],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["Turing A."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_DelimitedWordsInitials_WithMixedExampleDelimiters_ReturnsNull()
     {
         var result = FlashFillService.Fill(

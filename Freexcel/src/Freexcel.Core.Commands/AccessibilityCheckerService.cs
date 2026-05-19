@@ -6,11 +6,10 @@ public enum AccessibilityIssueKind
 {
     MergedCells,
     MissingAltText,
-    HiddenSheetContent,
-    HiddenRowContent,
-    HiddenColumnContent,
-    UnclearHyperlinkText,
-    MissingChartTitle
+    GenericAltText,
+    ChartMissingTitle,
+    HyperlinkDisplayTextIsUrl,
+    DefaultWorksheetName
 }
 
 public sealed record AccessibilityIssue(
@@ -22,13 +21,25 @@ public sealed record AccessibilityIssue(
 
 public static class AccessibilityCheckerService
 {
-    private static readonly HashSet<string> GenericHyperlinkText = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> GenericHyperlinkDisplayTexts = new(StringComparer.OrdinalIgnoreCase)
     {
         "click here",
         "here",
         "link",
         "more",
-        "read more"
+        "read more",
+        "learn more"
+    };
+
+    private static readonly HashSet<string> GenericAltTexts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image",
+        "picture",
+        "photo",
+        "shape",
+        "text box",
+        "object",
+        "graphic"
     };
 
     public static IReadOnlyList<AccessibilityIssue> FindIssues(Workbook workbook)
@@ -36,7 +47,17 @@ public static class AccessibilityCheckerService
         var issues = new List<AccessibilityIssue>();
         foreach (var sheet in workbook.Sheets)
         {
-            foreach (var range in sheet.MergedRegions.OrderBy(r => r.Start.Row).ThenBy(r => r.Start.Col))
+            if (IsDefaultWorksheetName(sheet.Name))
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.DefaultWorksheetName,
+                    sheet.Id,
+                    sheet.Name,
+                    sheet.Name,
+                    "Worksheet tab names should describe their contents."));
+            }
+
+            foreach (var range in sheet.MergedRegions)
             {
                 issues.Add(new AccessibilityIssue(
                     AccessibilityIssueKind.MergedCells,
@@ -46,64 +67,37 @@ public static class AccessibilityCheckerService
                     "Merged cells can make worksheet navigation harder for assistive technologies."));
             }
 
-            foreach (var issue in GetMissingAltTextIssues(sheet))
-                issues.Add(issue);
+            foreach (var picture in sheet.Pictures)
+                AddAltTextIssue(issues, sheet, picture.Anchor, "Picture", picture.AltText);
 
-            if ((sheet.IsHidden || sheet.IsVeryHidden) && SheetContainsContentOrObjects(sheet))
-            {
-                issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.HiddenSheetContent,
-                    sheet.Id,
-                    sheet.Name,
-                    "Sheet",
-                    "Hidden sheet contains content or objects that may be missed by assistive technologies."));
-            }
+            foreach (var shape in sheet.DrawingShapes)
+                AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText);
 
-            foreach (var row in GetEffectivelyHiddenRows(sheet).Where(row => RowContainsContentOrObjects(sheet, row)))
-            {
-                issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.HiddenRowContent,
-                    sheet.Id,
-                    sheet.Name,
-                    $"{row}:{row}",
-                    "Hidden row contains cells, comments, hyperlinks, charts, or anchored objects."));
-            }
+            foreach (var textBox in sheet.TextBoxes)
+                AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText);
 
-            foreach (var col in GetEffectivelyHiddenColumns(sheet).Where(col => ColumnContainsContentOrObjects(sheet, col)))
+            foreach (var (address, target) in sheet.Hyperlinks)
             {
-                var columnName = CellAddress.NumberToColumnName(col);
-                issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.HiddenColumnContent,
-                    sheet.Id,
-                    sheet.Name,
-                    $"{columnName}:{columnName}",
-                    "Hidden column contains cells, comments, hyperlinks, charts, or anchored objects."));
-            }
-
-            foreach (var (address, target) in sheet.Hyperlinks.OrderBy(link => link.Key.Row).ThenBy(link => link.Key.Col))
-            {
-                if (!HasUnclearHyperlinkDisplayText(sheet, address, target))
+                if (sheet.GetCell(address)?.Value is TextValue displayText &&
+                    IsDescriptiveHyperlinkText(displayText.Value, target))
                     continue;
 
                 issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.UnclearHyperlinkText,
+                    AccessibilityIssueKind.HyperlinkDisplayTextIsUrl,
                     sheet.Id,
                     sheet.Name,
                     address.ToA1(),
-                    "Hyperlink display text is blank, generic, or just a URL."));
+                    "Hyperlink display text should describe the destination."));
             }
 
-            foreach (var chart in sheet.Charts
-                .Where(chart => string.IsNullOrWhiteSpace(chart.Title))
-                .OrderBy(chart => chart.DataRange.Start.Row)
-                .ThenBy(chart => chart.DataRange.Start.Col))
+            foreach (var chart in sheet.Charts.Where(c => string.IsNullOrWhiteSpace(c.Title)))
             {
                 issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.MissingChartTitle,
+                    AccessibilityIssueKind.ChartMissingTitle,
                     sheet.Id,
                     sheet.Name,
                     FormatRange(chart.DataRange),
-                    "Chart is missing a title to use as its accessible label."));
+                    "Chart is missing a title."));
             }
         }
 
@@ -117,113 +111,61 @@ public static class AccessibilityCheckerService
         anchor.ToA1(),
         $"{objectType} is missing alternate text.");
 
-    private static IEnumerable<AccessibilityIssue> GetMissingAltTextIssues(Sheet sheet) =>
-        sheet.Pictures
-            .Where(picture => string.IsNullOrWhiteSpace(picture.AltText))
-            .Select(picture => (picture.Anchor, ObjectType: "Picture"))
-            .Concat(sheet.DrawingShapes
-                .Where(shape => string.IsNullOrWhiteSpace(shape.AltText))
-                .Select(shape => (shape.Anchor, ObjectType: "Shape")))
-            .Concat(sheet.TextBoxes
-                .Where(textBox => string.IsNullOrWhiteSpace(textBox.AltText))
-                .Select(textBox => (textBox.Anchor, ObjectType: "Text box")))
-            .OrderBy(item => item.Anchor.Row)
-            .ThenBy(item => item.Anchor.Col)
-            .ThenBy(item => item.ObjectType, StringComparer.Ordinal)
-            .Select(item => MissingAltText(sheet, item.Anchor, item.ObjectType));
+    private static void AddAltTextIssue(List<AccessibilityIssue> issues, Sheet sheet, CellAddress anchor, string objectType, string? altText)
+    {
+        if (string.IsNullOrWhiteSpace(altText))
+        {
+            issues.Add(MissingAltText(sheet, anchor, objectType));
+            return;
+        }
+
+        if (IsGenericAltText(altText))
+        {
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.GenericAltText,
+                sheet.Id,
+                sheet.Name,
+                anchor.ToA1(),
+                $"{objectType} alternate text should describe the object."));
+        }
+    }
+
+    private static bool IsDescriptiveHyperlinkText(string displayText, string target)
+    {
+        var text = displayText.Trim();
+        return text.Length > 0 &&
+            !GenericHyperlinkDisplayTexts.Contains(text) &&
+            !string.Equals(text, target.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            !LooksLikeUrl(text);
+    }
+
+    private static bool LooksLikeUrl(string text) =>
+        (Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp ||
+             uri.Scheme == Uri.UriSchemeHttps ||
+             uri.Scheme == Uri.UriSchemeMailto ||
+             uri.Scheme == Uri.UriSchemeFtp)) ||
+        text.StartsWith("www.", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsGenericAltText(string altText)
+    {
+        var text = altText.Trim();
+        return GenericAltTexts.Contains(text) ||
+            text.StartsWith("picture ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "picture ") ||
+            text.StartsWith("image ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "image ") ||
+            text.StartsWith("shape ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "shape ") ||
+            text.StartsWith("text box ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "text box ");
+    }
+
+    private static bool IsNumberSuffix(string text, string prefix) =>
+        int.TryParse(text[prefix.Length..], out _);
+
+    private static bool IsDefaultWorksheetName(string name) =>
+        name.StartsWith("Sheet", StringComparison.OrdinalIgnoreCase) &&
+        int.TryParse(name["Sheet".Length..], out _);
 
     private static string FormatRange(GridRange range) =>
         range.Start == range.End
             ? range.Start.ToA1()
             : $"{range.Start.ToA1()}:{range.End.ToA1()}";
-
-    private static IEnumerable<uint> GetEffectivelyHiddenRows(Sheet sheet) =>
-        sheet.HiddenRows.Concat(sheet.FilterHiddenRows).Concat(sheet.GroupHiddenRows).Distinct().Order();
-
-    private static IEnumerable<uint> GetEffectivelyHiddenColumns(Sheet sheet) =>
-        sheet.HiddenCols.Concat(sheet.GroupHiddenCols).Distinct().Order();
-
-    private static bool SheetContainsContentOrObjects(Sheet sheet) =>
-        sheet.EnumerateCells().Any(entry => IsNonBlank(entry.Cell)) ||
-        sheet.Comments.Count > 0 ||
-        sheet.Hyperlinks.Count > 0 ||
-        sheet.Pictures.Count > 0 ||
-        sheet.DrawingShapes.Count > 0 ||
-        sheet.TextBoxes.Count > 0 ||
-        sheet.Charts.Count > 0 ||
-        sheet.Sparklines.Count > 0;
-
-    private static bool RowContainsContentOrObjects(Sheet sheet, uint row) =>
-        sheet.EnumerateCells().Any(entry => entry.Address.Row == row && IsNonBlank(entry.Cell)) ||
-        sheet.Comments.Keys.Any(address => address.Row == row) ||
-        sheet.Hyperlinks.Keys.Any(address => address.Row == row) ||
-        sheet.Pictures.Any(picture => picture.Anchor.Row == row) ||
-        sheet.DrawingShapes.Any(shape => shape.Anchor.Row == row) ||
-        sheet.TextBoxes.Any(textBox => textBox.Anchor.Row == row) ||
-        sheet.Charts.Any(chart => RangeSpansRow(chart.DataRange, row)) ||
-        sheet.Sparklines.Any(sparkline => sparkline.Location.Row == row);
-
-    private static bool ColumnContainsContentOrObjects(Sheet sheet, uint col) =>
-        sheet.EnumerateCells().Any(entry => entry.Address.Col == col && IsNonBlank(entry.Cell)) ||
-        sheet.Comments.Keys.Any(address => address.Col == col) ||
-        sheet.Hyperlinks.Keys.Any(address => address.Col == col) ||
-        sheet.Pictures.Any(picture => picture.Anchor.Col == col) ||
-        sheet.DrawingShapes.Any(shape => shape.Anchor.Col == col) ||
-        sheet.TextBoxes.Any(textBox => textBox.Anchor.Col == col) ||
-        sheet.Charts.Any(chart => RangeSpansColumn(chart.DataRange, col)) ||
-        sheet.Sparklines.Any(sparkline => sparkline.Location.Col == col);
-
-    private static bool RangeSpansRow(GridRange range, uint row) =>
-        range.Start.Row <= row && row <= range.End.Row;
-
-    private static bool RangeSpansColumn(GridRange range, uint col) =>
-        range.Start.Col <= col && col <= range.End.Col;
-
-    private static bool IsNonBlank(Cell cell) =>
-        cell.HasFormula ||
-        cell.Value switch
-        {
-            BlankValue => false,
-            TextValue text => !string.IsNullOrWhiteSpace(text.Value),
-            _ => true
-        };
-
-    private static bool HasUnclearHyperlinkDisplayText(Sheet sheet, CellAddress address, string target)
-    {
-        var displayText = GetCellDisplayText(sheet.GetCell(address));
-        if (string.IsNullOrWhiteSpace(displayText))
-            return true;
-
-        var normalizedDisplay = displayText.Trim();
-        if (GenericHyperlinkText.Contains(normalizedDisplay))
-            return true;
-
-        return IsRawUrlDisplayText(normalizedDisplay, target);
-    }
-
-    private static string? GetCellDisplayText(Cell? cell) =>
-        cell?.Value switch
-        {
-            TextValue text => text.Value,
-            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-            DateTimeValue dateTime => dateTime.ToDateTime().ToString("G", System.Globalization.CultureInfo.InvariantCulture),
-            ErrorValue error => error.Code,
-            _ => null
-        };
-
-    private static bool IsRawUrlDisplayText(string displayText, string target)
-    {
-        if (displayText.Equals(target.Trim(), StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (displayText.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        return Uri.TryCreate(displayText, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttp ||
-             uri.Scheme == Uri.UriSchemeHttps ||
-             uri.Scheme == Uri.UriSchemeMailto ||
-             uri.Scheme == Uri.UriSchemeFtp);
-    }
 }

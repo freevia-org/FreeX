@@ -31,6 +31,15 @@ public static partial class SpellCheckService
         ["definately"] = "definitely",
         ["adress"] = "address",
         ["untill"] = "until",
+        ["acommodate"] = "accommodate",
+        ["calender"] = "calendar",
+        ["goverment"] = "government",
+        ["publically"] = "publicly",
+        ["recomend"] = "recommend",
+        ["recomendations"] = "recommendations",
+        ["sucess"] = "success",
+        ["tommorow"] = "tomorrow",
+        ["wierd"] = "weird",
     };
 
     public static IReadOnlyList<SpellingIssue> FindIssues(Workbook workbook, SheetId? sheetId = null)
@@ -149,6 +158,9 @@ public static partial class SpellCheckService
     {
         if (original.Length == 0 || replacement.Length == 0)
             return replacement;
+
+        if (original.Any(char.IsLetter) && original.Where(char.IsLetter).All(char.IsUpper))
+            return replacement.ToUpperInvariant();
 
         if (char.IsUpper(original[0]))
             return char.ToUpperInvariant(replacement[0]) + replacement[1..];

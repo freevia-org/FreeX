@@ -35,220 +35,185 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
-    public void FindIssues_FlagsHiddenSheetsRowsAndColumnsThatContainWorkbookContent()
-    {
-        var workbook = new Workbook("Accessibility");
-        var visible = workbook.AddSheet("Visible");
-        var hidden = workbook.AddSheet("Hidden");
-
-        visible.HiddenRows.Add(3);
-        visible.HiddenCols.Add(4);
-        visible.SetCell(new CellAddress(visible.Id, 3, 2), new TextValue("Hidden row value"));
-        visible.SetCell(new CellAddress(visible.Id, 5, 4), new NumberValue(12));
-        visible.Comments[new CellAddress(visible.Id, 3, 5)] = "Hidden row comment";
-        visible.Hyperlinks[new CellAddress(visible.Id, 6, 4)] = "https://example.com";
-        visible.Pictures.Add(new PictureModel
-        {
-            Anchor = new CellAddress(visible.Id, 3, 4),
-            Kind = PictureKind.Image,
-            AltText = "Logo"
-        });
-
-        hidden.IsHidden = true;
-        hidden.SetCell(new CellAddress(hidden.Id, 1, 1), new TextValue("Hidden sheet value"));
-
-        var issues = AccessibilityCheckerService.FindIssues(workbook);
-
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenSheetContent &&
-            i.SheetName == "Hidden" &&
-            i.Location == "Sheet");
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenRowContent &&
-            i.SheetName == "Visible" &&
-            i.Location == "3:3");
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenColumnContent &&
-            i.SheetName == "Visible" &&
-            i.Location == "D:D");
-    }
-
-    [Fact]
-    public void FindIssues_FlagsHiddenRowContainingOnlySparkline()
-    {
-        var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Sparklines");
-
-        sheet.HiddenRows.Add(4);
-        AddSparkline(sheet, 4, 7);
-
-        var issues = AccessibilityCheckerService.FindIssues(workbook);
-
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenRowContent &&
-            i.SheetName == "Sparklines" &&
-            i.Location == "4:4");
-    }
-
-    [Fact]
-    public void FindIssues_FlagsHiddenColumnContainingOnlySparkline()
-    {
-        var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Sparklines");
-
-        sheet.HiddenCols.Add(7);
-        AddSparkline(sheet, 4, 7);
-
-        var issues = AccessibilityCheckerService.FindIssues(workbook);
-
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenColumnContent &&
-            i.SheetName == "Sparklines" &&
-            i.Location == "G:G");
-    }
-
-    [Fact]
-    public void FindIssues_FlagsHiddenRowContainingOnlyCharts()
-    {
-        var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Charts");
-
-        sheet.HiddenRows.Add(4);
-        AddChart(sheet, 2, 1, 4, 3);
-        AddChart(sheet, 4, 5, 6, 7);
-
-        var issues = AccessibilityCheckerService.FindIssues(workbook);
-
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenRowContent &&
-            i.SheetName == "Charts" &&
-            i.Location == "4:4");
-    }
-
-    [Fact]
-    public void FindIssues_FlagsHiddenColumnContainingOnlyCharts()
-    {
-        var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Charts");
-
-        sheet.HiddenCols.Add(7);
-        AddChart(sheet, 2, 5, 4, 7);
-        AddChart(sheet, 6, 7, 8, 9);
-
-        var issues = AccessibilityCheckerService.FindIssues(workbook);
-
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.HiddenColumnContent &&
-            i.SheetName == "Charts" &&
-            i.Location == "G:G");
-    }
-
-    [Fact]
-    public void FindIssues_FlagsUnclearHyperlinkDisplayText()
-    {
-        var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Links");
-
-        AddHyperlink(sheet, 1, "https://example.com", null);
-        AddHyperlink(sheet, 2, "https://example.com/report", "https://example.com/report");
-        AddHyperlink(sheet, 3, "https://example.com/help", "Click here");
-        AddHyperlink(sheet, 4, "https://example.com/details", "Quarterly details");
-
-        var issues = AccessibilityCheckerService.FindIssues(workbook);
-
-        issues.Where(i => i.Kind == AccessibilityIssueKind.UnclearHyperlinkText)
-            .Select(i => i.Location)
-            .Should()
-            .Equal("A1", "A2", "A3");
-    }
-
-    [Fact]
-    public void FindIssues_FlagsChartsWithoutTitle()
+    public void FindIssues_FlagsChartsWithoutTitleText()
     {
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Charts");
         var dataRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
-            new CellAddress(sheet.Id, 3, 2));
+            new CellAddress(sheet.Id, 4, 2));
 
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Column,
-            DataRange = dataRange,
-            Title = " "
+            DataRange = dataRange
         });
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Line,
             DataRange = dataRange,
-            Title = "Revenue trend"
+            Title = "   "
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = dataRange,
+            Title = "Sales by quarter"
         });
 
         var issues = AccessibilityCheckerService.FindIssues(workbook);
 
-        issues.Should().ContainSingle(i =>
-            i.Kind == AccessibilityIssueKind.MissingChartTitle &&
-            i.Location == "A1:B3");
+        issues.Should().HaveCount(2);
+        issues.Should().OnlyContain(i => i.Kind == AccessibilityIssueKind.ChartMissingTitle);
+        issues.Should().OnlyContain(i => i.SheetId == sheet.Id);
+        issues.Should().OnlyContain(i => i.SheetName == "Charts");
+        issues.Should().OnlyContain(i => i.Location == "A1:B4");
+        issues.Should().OnlyContain(i => i.Message == "Chart is missing a title.");
+    }
+
+    [Theory]
+    [InlineData("Picture 1")]
+    [InlineData("Image")]
+    [InlineData("Shape")]
+    [InlineData("Text box")]
+    public void FindIssues_FlagsObjectsWithGenericAltText(string altText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = PictureKind.Image,
+            AltText = altText
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Quarterly revenue callout"
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.GenericAltText).Subject;
+        issue.Location.Should().Be("A3");
+        issue.Message.Should().Be("Picture alternate text should describe the object.");
     }
 
     [Fact]
-    public void FindIssues_OrdersIssuesBySheetThenStableCheckOrderAndCoordinates()
+    public void FindIssues_AllowsSpecificAltText()
     {
         var workbook = new Workbook("Accessibility");
-        var first = workbook.AddSheet("First");
-        var second = workbook.AddSheet("Second");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Q1 revenue rose 8%",
+            AltText = "Q1 revenue summary annotation"
+        });
 
-        first.HiddenRows.Add(5);
-        first.HiddenRows.Add(2);
-        first.HiddenCols.Add(3);
-        first.HiddenCols.Add(1);
-        first.SetCell(new CellAddress(first.Id, 5, 1), new TextValue("Later row"));
-        first.SetCell(new CellAddress(first.Id, 2, 1), new TextValue("Earlier row"));
-        first.SetCell(new CellAddress(first.Id, 1, 3), new TextValue("Later column"));
-        first.SetCell(new CellAddress(first.Id, 1, 1), new TextValue("Earlier column"));
-        second.HiddenRows.Add(1);
-        second.SetCell(new CellAddress(second.Id, 1, 1), new TextValue("Second sheet"));
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.GenericAltText);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsTheUrl()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var urlAddress = new CellAddress(sheet.Id, 1, 1);
+        var descriptiveAddress = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(urlAddress, new TextValue("https://example.com/report"));
+        sheet.Hyperlinks[urlAddress] = "https://example.com/report";
+        sheet.SetCell(descriptiveAddress, new TextValue("Quarterly report"));
+        sheet.Hyperlinks[descriptiveAddress] = "https://example.com/report";
 
         var issues = AccessibilityCheckerService.FindIssues(workbook);
 
-        issues.Select(i => $"{i.SheetName}:{i.Kind}:{i.Location}")
-            .Should()
-            .Equal(
-                "First:HiddenRowContent:2:2",
-                "First:HiddenRowContent:5:5",
-                "First:HiddenColumnContent:A:A",
-                "First:HiddenColumnContent:C:C",
-                "Second:HiddenRowContent:1:1");
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl).Subject;
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Location.Should().Be("A1");
+        issue.Message.Should().Be("Hyperlink display text should describe the destination.");
     }
 
-    private static void AddHyperlink(Sheet sheet, uint row, string target, string? displayText)
+    [Fact]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextLooksLikeAUrl()
     {
-        var address = new CellAddress(sheet.Id, row, 1);
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var urlAddress = new CellAddress(sheet.Id, 1, 1);
+        var descriptiveAddress = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(urlAddress, new TextValue("www.example.com/report"));
+        sheet.Hyperlinks[urlAddress] = "https://example.com/report?download=1";
+        sheet.SetCell(descriptiveAddress, new TextValue("Download the quarterly report"));
+        sheet.Hyperlinks[descriptiveAddress] = "https://example.com/report?download=1";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl).Subject;
+        issue.Location.Should().Be("A1");
+    }
+
+    [Theory]
+    [InlineData("HTTPS://EXAMPLE.COM/REPORT", "https://example.com/report")]
+    [InlineData("mailto:help@example.com", "mailto:help@example.com?subject=Support")]
+    [InlineData("ftp://example.com/report.csv", "ftp://example.com/report.csv?download=1")]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsARawDestination(string displayText, string target)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
         sheet.Hyperlinks[address] = target;
-        if (displayText is not null)
-            sheet.SetCell(address, new TextValue(displayText));
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
     }
 
-    private static void AddSparkline(Sheet sheet, uint row, uint col)
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("click here")]
+    [InlineData("Click Here")]
+    [InlineData("here")]
+    [InlineData("link")]
+    [InlineData("more")]
+    [InlineData("read more")]
+    [InlineData("learn more")]
+    public void FindIssues_FlagsHyperlinksWithBlankOrGenericDisplayText(string displayText)
     {
-        sheet.Sparklines.Add(new SparklineModel
-        {
-            DataRange = new GridRange(
-                new CellAddress(sheet.Id, row, 1),
-                new CellAddress(sheet.Id, row, 3)),
-            Location = new CellAddress(sheet.Id, row, col)
-        });
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = "https://example.com/report";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
     }
 
-    private static void AddChart(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol)
+    [Fact]
+    public void FindIssues_FlagsDefaultWorksheetNames()
     {
-        sheet.Charts.Add(new ChartModel
-        {
-            Type = ChartType.Column,
-            DataRange = new GridRange(
-                new CellAddress(sheet.Id, startRow, startCol),
-                new CellAddress(sheet.Id, endRow, endCol)),
-            Title = "Accessible chart"
-        });
+        var workbook = new Workbook("Accessibility");
+        var defaultSheet = workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Q1 Revenue");
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.DefaultWorksheetName).Subject;
+
+        issue.SheetId.Should().Be(defaultSheet.Id);
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Location.Should().Be("Sheet1");
+        issue.Message.Should().Be("Worksheet tab names should describe their contents.");
     }
 }

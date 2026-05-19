@@ -5,7 +5,7 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed class ConditionalFormatDialog : Window
+public class ConditionalFormatDialog : Window
 {
     public ConditionalFormat? ResultRule { get; private set; }
 
@@ -197,7 +197,7 @@ public sealed class ConditionalFormatDialog : Window
                 "Color Scale" => CfRuleType.ColorScale,
                 "Icon Set"    => CfRuleType.IconSet,
                 "Above Average" or "Below Average" => CfRuleType.AboveAverage,
-                "Top 10 Items" or "Bottom 10 Items" => CfRuleType.Top10,
+                "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => CfRuleType.Top10,
                 _ => CfRuleType.CellValue
             };
 
@@ -221,7 +221,8 @@ public sealed class ConditionalFormatDialog : Window
                 cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
             }
 
-            cf.AboveAverage = _ruleType != "Below Average" && _ruleType != "Bottom 10 Items";
+            cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
+            cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
         }
 
         if (cf.RuleType != CfRuleType.IconSet)
@@ -284,7 +285,9 @@ public sealed class ConditionalFormatDialog : Window
         CfRuleType.ColorScale  => "Color Scale",
         CfRuleType.IconSet     => "Icon Set",
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
-        CfRuleType.Top10       => cf.AboveAverage ? "Top 10 Items" : "Bottom 10 Items",
+        CfRuleType.Top10       => cf.TopBottomPercent
+            ? (cf.AboveAverage ? "Top 10%" : "Bottom 10%")
+            : (cf.AboveAverage ? "Top 10 Items" : "Bottom 10 Items"),
         CfRuleType.CellValue   => cf.Operator switch
         {
             CfOperator.GreaterThan => "Greater Than",
@@ -295,4 +298,74 @@ public sealed class ConditionalFormatDialog : Window
         },
         _ => "Greater Than"
     };
+}
+
+public sealed class HighlightCellsRuleDialog : ConditionalFormatDialog
+{
+    public HighlightCellsRuleDialog(string ruleType, GridRange range)
+        : base(ruleType, range)
+    {
+        Title = $"Highlight Cells Rule - {ruleType}";
+    }
+}
+
+public sealed class TopBottomRuleDialog : ConditionalFormatDialog
+{
+    public TopBottomRuleDialog(string ruleType, GridRange range)
+        : base(ruleType, range)
+    {
+        Title = $"Top/Bottom Rule - {ruleType}";
+    }
+}
+
+public sealed class DataBarRuleDialog : ConditionalFormatDialog
+{
+    public DataBarRuleDialog(GridRange range)
+        : base("Data Bar", range)
+    {
+        Title = "Data Bar Rule";
+    }
+}
+
+public sealed class ColorScaleRuleDialog : ConditionalFormatDialog
+{
+    public ColorScaleRuleDialog(GridRange range)
+        : base("Color Scale", range)
+    {
+        Title = "Color Scale Rule";
+    }
+}
+
+public sealed class IconSetRuleDialog : ConditionalFormatDialog
+{
+    public IconSetRuleDialog(GridRange range)
+        : base("Icon Set", range)
+    {
+        Title = "Icon Set Rule";
+    }
+}
+
+public sealed class NewConditionalFormatRuleDialog : ConditionalFormatDialog
+{
+    public NewConditionalFormatRuleDialog(string ruleType, GridRange range)
+        : base(ruleType, range)
+    {
+        Title = "New Formatting Rule";
+    }
+}
+
+public static class ConditionalFormatDialogFactory
+{
+    public static ConditionalFormatDialog Create(string ruleType, GridRange range) =>
+        ruleType switch
+        {
+            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" =>
+                new HighlightCellsRuleDialog(ruleType, range),
+            "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" or "Above Average" or "Below Average" =>
+                new TopBottomRuleDialog(ruleType, range),
+            "Data Bar" => new DataBarRuleDialog(range),
+            "Color Scale" => new ColorScaleRuleDialog(range),
+            "Icon Set" => new IconSetRuleDialog(range),
+            _ => new NewConditionalFormatRuleDialog(ruleType, range)
+        };
 }

@@ -97,6 +97,39 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_NumberTab_ExposesExpandedExcelLikeFormatFamilies()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var combo = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+                combo.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "General",
+                    "Number (#,##0.00)",
+                    "Currency ($#,##0.00)",
+                    "Accounting ($#,##0.00)",
+                    "Percentage (0.00%)",
+                    "Fraction (# ?/?)",
+                    "Scientific (0.00E+00)",
+                    "Text (@)"
+                });
+
+                FormatCellsDialog.ResolveNumberFormat("Accounting ($#,##0.00)", 3)
+                    .Should().Be("$#,##0.00");
+                FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
+                    .Should().Be("# ?/?");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_DoesNotEmitUnsupportedTextRotation()
     {
         StaTestRunner.Run(() =>

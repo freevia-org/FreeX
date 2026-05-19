@@ -8,6 +8,45 @@ namespace Freexcel.App.Host.Tests;
 public sealed class ManageConditionalFormatsDialogTests
 {
     [Fact]
+    public void BuildResultRules_ForCurrentSelectionPreservesRulesOutsideSelection()
+    {
+        var sheetId = SheetId.New();
+        var outsideBefore = CreateRule(sheetId, 1, 1, 1);
+        var selected = CreateRule(sheetId, 2, 2, 2);
+        var outsideAfter = CreateRule(sheetId, 4, 4, 3);
+        var editedSelected = CreateRule(sheetId, 2, 2, 9, selected.Id, stopIfTrue: true);
+
+        var result = ManageConditionalFormatsDialog.BuildResultRules(
+            [outsideBefore, selected, outsideAfter],
+            new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 2, 2)),
+            filterToSelection: true,
+            [editedSelected]);
+
+        result.Should().HaveCount(3);
+        result.Select(rule => rule.Id).Should().Equal(outsideBefore.Id, selected.Id, outsideAfter.Id);
+        result.Select(rule => rule.Priority).Should().Equal(1, 2, 3);
+        result[1].StopIfTrue.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildResultRules_ForCurrentSelectionCanDeleteSelectedRulesOnly()
+    {
+        var sheetId = SheetId.New();
+        var outsideBefore = CreateRule(sheetId, 1, 1, 1);
+        var selected = CreateRule(sheetId, 2, 2, 2);
+        var outsideAfter = CreateRule(sheetId, 4, 4, 3);
+
+        var result = ManageConditionalFormatsDialog.BuildResultRules(
+            [outsideBefore, selected, outsideAfter],
+            new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 2, 2)),
+            filterToSelection: true,
+            []);
+
+        result.Select(rule => rule.Id).Should().Equal(outsideBefore.Id, outsideAfter.Id);
+        result.Select(rule => rule.Priority).Should().Equal(1, 2);
+    }
+
+    [Fact]
     public void DescribeRule_IconSetIncludesStyleAndFlags()
     {
         var rule = new ConditionalFormat
@@ -32,6 +71,14 @@ public sealed class ManageConditionalFormatsDialogTests
         };
 
         ManageConditionalFormatsDialog.PreviewBrush(rule).Should().BeSameAs(Brushes.LightGray);
+    }
+
+    [Fact]
+    public void StopIfTrueText_ShowsEnabledRules()
+    {
+        var rule = new ConditionalFormat { StopIfTrue = true };
+
+        ManageConditionalFormatsDialog.StopIfTrueText(rule).Should().Be("Yes");
     }
 
     [Fact]
@@ -95,4 +142,22 @@ public sealed class ManageConditionalFormatsDialogTests
         method.Should().NotBeNull();
         return method!.Invoke(null, [source, priority]).Should().BeOfType<ConditionalFormat>().Subject;
     }
+
+    private static ConditionalFormat CreateRule(
+        SheetId sheetId,
+        uint row,
+        uint col,
+        int priority,
+        Guid? id = null,
+        bool stopIfTrue = false) =>
+        new()
+        {
+            Id = id ?? Guid.NewGuid(),
+            AppliesTo = new GridRange(new CellAddress(sheetId, row, col), new CellAddress(sheetId, row, col)),
+            Priority = priority,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "1",
+            StopIfTrue = stopIfTrue
+        };
 }

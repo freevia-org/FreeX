@@ -83,6 +83,89 @@ public sealed class MainWindowRibbonKeyTipTests
         });
     }
 
+    [Fact]
+    public void CrossTabMenuKeyTips_RouteThroughStaticRibbonMenus()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.P, Key.B);
+            harness.SelectedRibbonTabHeader.Should().Be("Page Layout");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Insert Page Break").Should().Be("I");
+            harness.ActiveMenuItemGestureText("Remove Page Break").Should().Be("R");
+            harness.HandleKeyTip(Key.Escape);
+
+            harness.OpenRibbonMenu(Key.M, Key.E, Key.C);
+            harness.SelectedRibbonTabHeader.Should().Be("Formulas");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Error Checking...").Should().Be("E");
+            harness.ActiveMenuItemGestureText("Error Checking Options...").Should().Be("O");
+            harness.HandleKeyTip(Key.Escape);
+
+            harness.OpenRibbonMenu(Key.W, Key.F);
+            harness.SelectedRibbonTabHeader.Should().Be("View");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Freeze Panes").Should().Be("F");
+            harness.ActiveMenuItemGestureText("Unfreeze All").Should().Be("U");
+            harness.HandleKeyTip(Key.Escape);
+
+            harness.OpenRibbonMenu(Key.W, Key.Q);
+            harness.ActiveMenuItemGestureText("100%").Should().Be("1");
+            harness.ActiveMenuItemGestureText("Custom...").Should().Be("C");
+            harness.HandleKeyTip(Key.Escape);
+
+            harness.OpenRibbonMenu(Key.W, Key.A);
+            harness.ActiveMenuItemGestureText("Tiled").Should().Be("T");
+            harness.ActiveMenuItemGestureText("Cascade").Should().Be("C");
+        });
+    }
+
+    [Fact]
+    public void FormulasFunctionLibraryDynamicMenu_IsKeyTipRoutable()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.M);
+            harness.HandleKeyTip(Key.L);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Formulas");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("IF").Should().Be("I");
+        });
+    }
+
+    [Fact]
+    public void FormulasUseInFormulaDynamicMenu_IsKeyTipRoutable()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create(workbook =>
+            {
+                var sheet = workbook.Sheets[0];
+                workbook.DefineNamedRange(
+                    "Sales",
+                    new GridRange(
+                        new CellAddress(sheet.Id, 1, 1),
+                        new CellAddress(sheet.Id, 1, 1)));
+            });
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.M);
+            harness.HandleKeyTip(Key.I);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Formulas");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Sales").Should().Be("S");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -157,7 +240,7 @@ public sealed class MainWindowRibbonKeyTipTests
                 ? EnumerateMenuItems(menu).FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
                 : null;
 
-        public static MainWindowHarness Create()
+        public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
@@ -177,6 +260,7 @@ public sealed class MainWindowRibbonKeyTipTests
             window.Height = 720;
             window.Show();
             PumpDispatcher();
+            configureWorkbook?.Invoke(workbookRef.Current);
             return new MainWindowHarness(window);
         }
 
@@ -191,6 +275,16 @@ public sealed class MainWindowRibbonKeyTipTests
         {
             _handleActiveRibbonKeyTip.Invoke(_window, [key]);
             PumpDispatcher();
+        }
+
+        public void OpenRibbonMenu(Key tabKeyTip, params Key[] commandKeyTips)
+        {
+            EnterKeyTipScope("TopLevel");
+            HandleKeyTip(tabKeyTip);
+            foreach (var keyTip in commandKeyTips)
+                HandleKeyTip(keyTip);
+
+            ActiveMenuIsOpen.Should().BeTrue();
         }
 
         public void Dispose()

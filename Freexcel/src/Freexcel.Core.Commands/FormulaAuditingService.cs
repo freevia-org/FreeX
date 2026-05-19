@@ -1,6 +1,7 @@
-using System.Globalization;
 using Freexcel.Core.Model;
 using Freexcel.Core.Formula;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace Freexcel.Core.Commands;
 
@@ -24,9 +25,6 @@ public sealed record FormulaErrorCheckingRule(string ErrorCode, string Label, st
 
 public static class FormulaErrorCheckingRuleCatalog
 {
-    public const string NumberStoredAsTextCode = "NumberStoredAsText";
-    public const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
-
     public static IReadOnlyList<FormulaErrorCheckingRule> SupportedRules { get; } =
     [
         new(ErrorValue.DivByZero.Code, "Formulas that divide by zero", "Flag formulas that result in #DIV/0!."),
@@ -38,8 +36,9 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
-        new(NumberStoredAsTextCode, "Numbers stored as text", "Flag text cells that parse as finite invariant-culture numbers."),
-        new(FormulaRefersToBlankCellsCode, "Formulas referring to blank cells", "Flag formulas whose direct precedents include blank cells.")
+        new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
+        new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
+        new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
     ];
 
     public static bool IsSupported(string errorCode) =>
@@ -66,7 +65,10 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
     {
         var cell = ctx.GetSheet(_sheetId).GetCell(_address);
         if (cell is null)
-            return new CommandOutcome(false, "No cell exists at the selected error.");
+            return new CommandOutcome(false, "No cell exists at the selected issue.");
+
+        if (_ignored && !FormulaAuditingService.HasIgnorableFormulaIssue(ctx.Workbook, _sheetId, cell))
+            return new CommandOutcome(false, "The selected cell does not currently contain an issue.");
 
         _previousIgnored = cell.IgnoreFormulaError;
         cell.IgnoreFormulaError = _ignored;
@@ -120,6 +122,10 @@ public sealed class SetFormulaErrorCheckingRuleCommand : IWorkbookCommand
 
 public static class FormulaAuditingService
 {
+    public const string FormulaRefersToBlankCellsErrorCode = "FormulaRefersToBlankCells";
+    public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
+    public const string TwoDigitYearTextDateErrorCode = "TwoDigitYearTextDate";
+
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {
         var sheet = workbook.GetSheet(formulaAddress.Sheet);
@@ -232,86 +238,165 @@ public static class FormulaAuditingService
 
     public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
     {
-        var result = new List<FormulaErrorIssue>();
+        var sheetOrder = workbook.Sheets
+            .Select((sheet, index) => (sheet.Id, index))
+            .ToDictionary(x => x.Id, x => x.index);
 
+        var result = FindFormulaErrors(workbook, sheetId)
+            .Select(error => new FormulaErrorIssue(
+                error.SheetId,
+                error.SheetName,
+                error.Address,
+                error.Address.ToA1(),
+                error.Error.Code,
+                error.FormulaText is null ? null : "=" + error.FormulaText,
+                DescribeError(error.Error)))
+            .ToList();
+
+        if (!workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode))
+            result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));
+
+        if (!workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode))
+            result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));
+
+        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode))
+            result.AddRange(FindFormulaRefersToBlankCellsIssues(workbook, sheetId));
+
+        return result
+            .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
+            .ThenBy(issue => issue.Address.Row)
+            .ThenBy(issue => issue.Address.Col)
+            .ToList();
+    }
+
+    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, Cell cell) =>
+        cell.Value is ErrorValue ||
+        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
+        (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
+        FormulaRefersToBlankCells(workbook, sheetId, cell);
+
+    private static bool HasIgnorableLiteralIssue(Cell cell) =>
+        cell.Value is ErrorValue ||
+        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value));
+
+    private static IEnumerable<FormulaErrorIssue> FindNumbersStoredAsTextIssues(Workbook workbook, SheetId? sheetId)
+    {
         foreach (var sheet in workbook.Sheets)
         {
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
                 continue;
 
-            foreach (var (address, cell) in sheet.EnumerateCells().OrderBy(c => c.Address.Row).ThenBy(c => c.Address.Col))
+            foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                if (cell.IgnoreFormulaError)
+                if (cell.IgnoreFormulaError || !HasIgnorableLiteralIssue(cell) || cell.Value is not TextValue)
                     continue;
 
-                if (cell.Value is ErrorValue error && !workbook.DisabledFormulaErrorCodes.Contains(error.Code))
-                {
-                    result.Add(new FormulaErrorIssue(
-                        sheet.Id,
-                        sheet.Name,
-                        address,
-                        address.ToA1(),
-                        error.Code,
-                        cell.HasFormula ? "=" + cell.FormulaText : null,
-                        DescribeError(error)));
-                }
-
-                if (IsNumberStoredAsTextIssue(cell) &&
-                    !workbook.DisabledFormulaErrorCodes.Contains(FormulaErrorCheckingRuleCatalog.NumberStoredAsTextCode))
-                {
-                    result.Add(new FormulaErrorIssue(
-                        sheet.Id,
-                        sheet.Name,
-                        address,
-                        address.ToA1(),
-                        FormulaErrorCheckingRuleCatalog.NumberStoredAsTextCode,
-                        null,
-                        "The cell contains a number stored as text."));
-                }
-
-                if (IsFormulaRefersToBlankCellsIssue(workbook, sheet.Id, cell) &&
-                    !workbook.DisabledFormulaErrorCodes.Contains(FormulaErrorCheckingRuleCatalog.FormulaRefersToBlankCellsCode))
-                {
-                    result.Add(new FormulaErrorIssue(
-                        sheet.Id,
-                        sheet.Name,
-                        address,
-                        address.ToA1(),
-                        FormulaErrorCheckingRuleCatalog.FormulaRefersToBlankCellsCode,
-                        "=" + cell.FormulaText,
-                        "The formula directly refers to one or more blank cells."));
-                }
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    NumberStoredAsTextErrorCode,
+                    null,
+                    "The number in this cell is formatted as text or preceded by an apostrophe.");
             }
         }
-
-        return result;
     }
 
-    private static bool IsNumberStoredAsTextIssue(Cell cell)
+    private static IEnumerable<FormulaErrorIssue> FindFormulaRefersToBlankCellsIssues(Workbook workbook, SheetId? sheetId)
     {
-        if (cell.HasFormula || cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
-            return false;
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
 
-        return double.TryParse(
-                text.Value,
-                NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.InvariantCulture,
-                out var parsed) &&
-            double.IsFinite(parsed);
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || !FormulaRefersToBlankCells(workbook, sheet.Id, cell))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    FormulaRefersToBlankCellsErrorCode,
+                    cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                    "The formula refers to one or more blank cells.");
+            }
+        }
     }
 
-    private static bool IsFormulaRefersToBlankCellsIssue(Workbook workbook, SheetId sheetId, Cell cell)
+    private static IEnumerable<FormulaErrorIssue> FindTwoDigitYearTextDateIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || cell.HasFormula || cell.Value is not TextValue text || !IsTextDateWithTwoDigitYear(text.Value))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    TwoDigitYearTextDateErrorCode,
+                    null,
+                    "The text date in this cell contains a two-digit year.");
+            }
+        }
+    }
+
+    private static bool FormulaRefersToBlankCells(Workbook workbook, SheetId sheetId, Cell cell)
     {
         if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
             return false;
 
-        foreach (var precedent in ExtractPrecedents(workbook, sheetId, cell.FormulaText))
-        {
-            var precedentSheet = workbook.GetSheet(precedent.Sheet);
-            var precedentCell = precedentSheet?.GetCell(precedent);
-            if (precedentCell is null || precedentCell.Value is BlankValue)
-                return true;
-        }
+        return ExtractPrecedents(workbook, sheetId, cell.FormulaText)
+            .Any(precedent => IsBlankPrecedent(workbook, precedent));
+    }
+
+    private static bool IsBlankPrecedent(Workbook workbook, CellAddress address)
+    {
+        var sheet = workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        return cell is null || (!cell.HasFormula && cell.Value is BlankValue);
+    }
+
+    private static bool IsNumberStoredAsText(string text) =>
+        double.TryParse(
+            text,
+            NumberStyles.Float | NumberStyles.AllowThousands,
+            CultureInfo.InvariantCulture,
+            out var value)
+        && !double.IsNaN(value)
+        && !double.IsInfinity(value);
+
+    private static bool IsTextDateWithTwoDigitYear(string text)
+    {
+        var value = text.Trim();
+        if (value.Length < 6)
+            return false;
+
+        if (Regex.IsMatch(value, @"^\d{1,2}[/-]\d{1,2}[/-]\d{2}$", RegexOptions.CultureInvariant))
+            return DateTime.TryParseExact(
+                value,
+                ["M/d/yy", "MM/dd/yy", "M-d-yy", "MM-dd-yy"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _);
+
+        if (Regex.IsMatch(value, @"^[A-Za-z]{3,9}\s+\d{1,2},\s*\d{2}$", RegexOptions.CultureInvariant))
+            return DateTime.TryParseExact(
+                value,
+                ["MMM d, yy", "MMM dd, yy", "MMMM d, yy", "MMMM dd, yy"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out _);
 
         return false;
     }

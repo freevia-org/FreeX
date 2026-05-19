@@ -8077,11 +8077,66 @@ public class FileAdapterSmokeTests
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreexcelNativeTableStyle")
             .Should().BeTrue();
+        loaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreexcelNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Any(element =>
+                element.Type == "wholeTable" &&
+                element.DifferentialFormatId == 0));
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Any(element => element.Attribute("name")?.Value == "FreexcelNativePivotStyle" &&
+                            element.Attribute("pivot")?.Value == "1")
+            .Should().BeTrue();
 
         var extensionList = stylesXml.Root!.Element(workbookNs + "extLst");
         extensionList.Should().NotBeNull();
         extensionList!.ToString().Should().Contain("{FFEEDDCC-7788-6655-4433-22110099AABB}");
         extensionList.ToString().Should().Contain("FreexcelNativeStylesExtension");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredPivotTableStyleMetadata()
+    {
+        var workbook = new Workbook("AuthoredPivotStyleMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("pivot style"));
+        var style = new PivotTableStyleModel
+        {
+            Name = "FreexcelAuthoredPivotStyle",
+            AppliesToPivotTables = true,
+            AppliesToTables = false
+        };
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
+        style.Elements.Add(new PivotTableStyleElementModel("firstRowStripe", 1, 1));
+        workbook.PivotTableStyles.Add(style);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var tableStyle = stylesXml.Root!
+                .Element(workbookNs + "tableStyles")!
+                .Elements(workbookNs + "tableStyle")
+                .Where(element => element.Attribute("name")?.Value == "FreexcelAuthoredPivotStyle")
+                .Should().ContainSingle()
+                .Subject;
+            tableStyle.Attribute("pivot")!.Value.Should().Be("1");
+            tableStyle.Attribute("table")!.Value.Should().Be("0");
+            tableStyle.Attribute("count")!.Value.Should().Be("2");
+            tableStyle.ToString().Should().Contain("type=\"firstRowStripe\"");
+            tableStyle.ToString().Should().Contain("size=\"1\"");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        loaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreexcelAuthoredPivotStyle" &&
+            style.Elements.Count == 2);
     }
 
     [Fact]
@@ -10000,6 +10055,332 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesNativePivotChartGraphAndCacheBinding()
+    {
+        var workbook = new Workbook("PivotChartPackageRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotTableDefinitionXml: StyledMinimalPivotTableDefinitionXml);
+        AddMinimalColumnChartPackage(source, chartXml: MinimalPivotChartXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PivotTables.Should().ContainSingle()
+            .Which.CacheId.Should().Be(1);
+        loadedSheet.Charts.Should().ContainSingle().Which.Should().Match<ChartModel>(
+            chart => chart.IsPivotChart &&
+                     chart.PivotTableName == "PivotTable1" &&
+                     chart.PivotCacheId == 1);
+
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("C"));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 2), new NumberValue(30));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/pivotTables/pivotTable1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().NotBeNull();
+        archive.GetEntry("xl/charts/chart1.xml").Should().NotBeNull();
+
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var pivotSource = chartXml.Root!.Element(chartNs + "pivotSource");
+        pivotSource.Should().NotBeNull();
+        pivotSource!.Element(chartNs + "name")!.Value.Should().Be("Data!PivotTable1");
+        pivotSource.Element(chartNs + "fmtId")!.Attribute("val")!.Value.Should().Be("0");
+
+        var pivotTableXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+        pivotTableXml.ToString().Should().Contain("pivotTableStyleInfo");
+        pivotTableXml.ToString().Should().Contain("PivotStyleMedium9");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString().Should().Contain("/xl/pivotCache/pivotCacheDefinition1.xml");
+        contentTypesXml.ToString().Should().Contain("/xl/pivotTables/pivotTable1.xml");
+        contentTypesXml.ToString().Should().Contain("/xl/drawings/drawing1.xml");
+        contentTypesXml.ToString().Should().Contain("/xl/charts/chart1.xml");
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString().Should().Contain("pivotCache/pivotCacheDefinition1.xml");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString().Should().Contain("../pivotTables/pivotTable1.xml");
+        worksheetRelsXml.ToString().Should().Contain("../drawings/drawing1.xml");
+
+        var drawingRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!);
+        drawingRelsXml.ToString().Should().Contain("../charts/chart1.xml");
+
+        var pivotTableRelsXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/_rels/pivotTable1.xml.rels")!);
+        pivotTableRelsXml.ToString().Should().Contain("../pivotCache/pivotCacheDefinition1.xml");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_ResolvesCrossSheetNativePivotChartCacheBinding()
+    {
+        var workbook = new Workbook("CrossSheetPivotChartPackageRetentionTest");
+        var dataSheet = workbook.AddSheet("Data");
+        var dashboardSheet = workbook.AddSheet("Dashboard");
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new TextValue("Category"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new TextValue("Amount"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 1), new TextValue("A"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 2, 2), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 1), new TextValue("B"));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 3, 2), new NumberValue(20));
+        dashboardSheet.SetCell(new CellAddress(dashboardSheet.Id, 1, 1), new TextValue("Dashboard"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source);
+        AddMinimalColumnChartPackage(source, worksheetPath: "xl/worksheets/sheet2.xml", chartXml: MinimalPivotChartXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var loadedDataSheet = loaded.GetSheetAt(0);
+        loadedDataSheet.PivotTables.Should().ContainSingle()
+            .Which.CacheId.Should().Be(1);
+        var loadedDashboardSheet = loaded.GetSheetAt(1);
+        loadedDashboardSheet.Charts.Should().ContainSingle().Which.Should().Match<ChartModel>(
+            chart => chart.IsPivotChart &&
+                     chart.PivotSourceSheetName == "Data" &&
+                     chart.PivotTableName == "PivotTable1" &&
+                     chart.PivotCacheId == 1);
+
+        loadedDashboardSheet.SetCell(new CellAddress(loadedDashboardSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        chartXml.Root!
+            .Element(chartNs + "pivotSource")!
+            .Element(chartNs + "name")!
+            .Value.Should().Be("Data!PivotTable1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredPivotChartStyleMetadata()
+    {
+        var workbook = new Workbook("AuthoredPivotChartStyleTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ChartStyleId = 42,
+            Uses1904DateSystem = true,
+            Language = "en-US",
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                OverrideMappings =
+                {
+                    ["bg1"] = "lt1",
+                    ["tx1"] = "dk1",
+                    ["accent1"] = "accent2"
+                }
+            },
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternalData1",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "linked-pivot-source.xlsx",
+                TargetMode = "External",
+                AutoUpdate = true
+            },
+            PlotAreaLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "outer",
+                XMode = "factor",
+                YMode = "edge",
+                WidthMode = "factor",
+                HeightMode = "factor",
+                X = 0.1,
+                Y = 0.2,
+                Width = 0.8,
+                Height = 0.6
+            },
+            LegendLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner",
+                XMode = "edge",
+                YMode = "edge",
+                WidthMode = "factor",
+                HeightMode = "factor",
+                X = 0.76,
+                Y = 0.15,
+                Width = 0.2,
+                Height = 0.7
+            },
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel
+                {
+                    Left = 0.7,
+                    Right = 0.7,
+                    Top = 0.75,
+                    Bottom = 0.75,
+                    Header = 0.3,
+                    Footer = 0.3
+                },
+                PageSetup = new ChartPageSetupModel
+                {
+                    PaperSize = "9",
+                    Orientation = "landscape",
+                    Copies = 2,
+                    BlackAndWhite = true,
+                    Draft = false
+                }
+            },
+            RoundedCorners = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            ShowDataLabelsOverMaximum = true,
+            AutoTitleDeleted = true,
+            ShowDataInHiddenRowsAndColumns = true,
+            Protection = new ChartProtectionModel
+            {
+                ChartObject = true,
+                Data = true,
+                Formatting = false,
+                Selection = true,
+                UserInterface = true
+            }
+        };
+        sheet.Charts.Add(chart);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+            XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            chartXml.Root!.Element(chartNs + "date1904")!.Attribute("val")!.Value.Should().Be("1");
+            chartXml.Root.Element(chartNs + "lang")!.Attribute("val")!.Value.Should().Be("en-US");
+            var colorMap = chartXml.Root.Element(chartNs + "clrMapOvr")!
+                .Element(drawingNs + "overrideClrMapping")!;
+            colorMap.Attribute("bg1")!.Value.Should().Be("lt1");
+            colorMap.Attribute("tx1")!.Value.Should().Be("dk1");
+            colorMap.Attribute("accent1")!.Value.Should().Be("accent2");
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var externalData = chartXml.Root.Element(chartNs + "externalData")!;
+            externalData.Attribute(relNs + "id")!.Value.Should().Be("rIdExternalData1");
+            externalData.Element(chartNs + "autoUpdate")!.Attribute("val")!.Value.Should().Be("1");
+            var chartRelsXml = LoadPackageXml(archive.GetEntry("xl/charts/_rels/chart1.xml.rels")!);
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            var externalRelationship = chartRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Where(relationship => relationship.Attribute("Id")?.Value == "rIdExternalData1")
+                .Should().ContainSingle()
+                .Which;
+            externalRelationship.Attribute("Type")!.Value.Should().Be("http://schemas.openxmlformats.org/officeDocument/2006/relationships/package");
+            externalRelationship.Attribute("Target")!.Value.Should().Be("linked-pivot-source.xlsx");
+            externalRelationship.Attribute("TargetMode")!.Value.Should().Be("External");
+            var plotAreaManualLayout = chartXml.Root.Element(chartNs + "chart")!
+                .Element(chartNs + "plotArea")!
+                .Element(chartNs + "layout")!
+                .Element(chartNs + "manualLayout")!;
+            plotAreaManualLayout.Element(chartNs + "layoutTarget")!.Attribute("val")!.Value.Should().Be("outer");
+            plotAreaManualLayout.Element(chartNs + "xMode")!.Attribute("val")!.Value.Should().Be("factor");
+            plotAreaManualLayout.Element(chartNs + "yMode")!.Attribute("val")!.Value.Should().Be("edge");
+            plotAreaManualLayout.Element(chartNs + "wMode")!.Attribute("val")!.Value.Should().Be("factor");
+            plotAreaManualLayout.Element(chartNs + "hMode")!.Attribute("val")!.Value.Should().Be("factor");
+            plotAreaManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.1");
+            plotAreaManualLayout.Element(chartNs + "y")!.Attribute("val")!.Value.Should().Be("0.2");
+            plotAreaManualLayout.Element(chartNs + "w")!.Attribute("val")!.Value.Should().Be("0.8");
+            plotAreaManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.6");
+            var legendManualLayout = chartXml.Root.Element(chartNs + "chart")!
+                .Element(chartNs + "legend")!
+                .Element(chartNs + "layout")!
+                .Element(chartNs + "manualLayout")!;
+            legendManualLayout.Element(chartNs + "layoutTarget")!.Attribute("val")!.Value.Should().Be("inner");
+            legendManualLayout.Element(chartNs + "x")!.Attribute("val")!.Value.Should().Be("0.76");
+            legendManualLayout.Element(chartNs + "h")!.Attribute("val")!.Value.Should().Be("0.7");
+            var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
+            var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
+            pageMargins.Attribute("l")!.Value.Should().Be("0.7");
+            pageMargins.Attribute("r")!.Value.Should().Be("0.7");
+            pageMargins.Attribute("t")!.Value.Should().Be("0.75");
+            pageMargins.Attribute("b")!.Value.Should().Be("0.75");
+            pageMargins.Attribute("header")!.Value.Should().Be("0.3");
+            pageMargins.Attribute("footer")!.Value.Should().Be("0.3");
+            var pageSetup = printSettings.Element(chartNs + "pageSetup")!;
+            pageSetup.Attribute("paperSize")!.Value.Should().Be("9");
+            pageSetup.Attribute("orientation")!.Value.Should().Be("landscape");
+            pageSetup.Attribute("copies")!.Value.Should().Be("2");
+            pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
+            pageSetup.Attribute("draft")!.Value.Should().Be("0");
+            chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
+            chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
+            var protection = chartXml.Root.Element(chartNs + "protection")!;
+            protection.Attribute("chartObject")!.Value.Should().Be("1");
+            protection.Attribute("data")!.Value.Should().Be("1");
+            protection.Attribute("formatting")!.Value.Should().Be("0");
+            protection.Attribute("selection")!.Value.Should().Be("1");
+            protection.Attribute("userInterface")!.Value.Should().Be("1");
+            chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "autoTitleDeleted")!.Attribute("val")!.Value.Should().Be("1");
+            chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "plotVisOnly")!.Attribute("val")!.Value.Should().Be("0");
+            chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "dispBlanksAs")!.Attribute("val")!.Value.Should().Be("zero");
+            chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "showDLblsOverMax")!.Attribute("val")!.Value.Should().Be("1");
+            chartXml.Root.Element(chartNs + "pivotSource").Should().NotBeNull();
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Which;
+        loadedChart.ChartStyleId.Should().Be(42);
+        loadedChart.Uses1904DateSystem.Should().BeTrue();
+        loadedChart.Language.Should().Be("en-US");
+        loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
+        loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
+        loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
+        loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
+        loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
+        loadedChart.RoundedCorners.Should().BeTrue();
+        loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+        loadedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        loadedChart.AutoTitleDeleted.Should().BeTrue();
+        loadedChart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        loadedChart.Protection.Should().BeEquivalentTo(new ChartProtectionModel
+        {
+            ChartObject = true,
+            Data = true,
+            Formatting = false,
+            Selection = true,
+            UserInterface = true
+        });
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_WritesAuthoredPivotTablePackageParts()
     {
         var workbook = new Workbook("AuthoredPivotXlsxTest");
@@ -10114,6 +10495,80 @@ public class FileAdapterSmokeTests
         loadedCache.EnableRefresh.Should().BeFalse();
         loadedCache.RefreshedVersion.Should().Be(7);
         loadedCache.RefreshedBy.Should().Be("Freexcel Tests");
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoad_RoundTripsExternalOlapPivotCacheMetadata()
+    {
+        var workbook = new Workbook("ExternalOlapPivotCacheTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotCacheDefinitionXml: ExternalOlapPivotCacheDefinitionXml);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedCache = loaded.PivotCaches.Should().ContainSingle().Subject;
+        loadedCache.SourceType.Should().Be(PivotCacheSourceType.External);
+        loadedCache.IsOlap.Should().BeTrue();
+        loadedCache.ConnectionId.Should().Be(2);
+        loadedCache.SourceSheetName.Should().BeNull();
+        loadedCache.SourceReference.Should().BeNull();
+
+        var authored = new Workbook("AuthoredExternalOlapPivotCacheTest");
+        var authoredSheet = authored.AddSheet("Data");
+        authoredSheet.SetCell(new CellAddress(authoredSheet.Id, 1, 1), new TextValue("Category"));
+        authoredSheet.SetCell(new CellAddress(authoredSheet.Id, 1, 2), new TextValue("Amount"));
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.External,
+            IsOlap = true,
+            ConnectionId = 2,
+            RefreshOnLoad = false,
+            SaveData = true,
+            EnableRefresh = true
+        };
+        cache.Fields.Add(new PivotCacheFieldModel("Category"));
+        cache.Fields.Add(new PivotCacheFieldModel("Amount"));
+        authored.PivotCaches.Add(cache);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(authoredSheet.Id, 1, 1), new CellAddress(authoredSheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(authoredSheet.Id, 4, 1), new CellAddress(authoredSheet.Id, 6, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        authoredSheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        adapter.Save(authored, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
+            cacheXml.Should().Contain("olap=\"1\"");
+            cacheXml.Should().Contain("type=\"external\"");
+            cacheXml.Should().Contain("connectionId=\"2\"");
+            cacheXml.Should().NotContain("worksheetSource");
+        }
+
+        saved.Position = 0;
+        var roundTripped = adapter.Load(saved);
+        var roundTrippedCache = roundTripped.PivotCaches.Should().ContainSingle().Subject;
+        roundTrippedCache.SourceType.Should().Be(PivotCacheSourceType.External);
+        roundTrippedCache.IsOlap.Should().BeTrue();
+        roundTrippedCache.ConnectionId.Should().Be(2);
     }
 
     [Fact]
@@ -10465,19 +10920,23 @@ public class FileAdapterSmokeTests
         loaded.Slicers.Should().ContainSingle().Which.Should().BeEquivalentTo(new SlicerModel
         {
             Name = "Region Slicer",
+            Caption = "Region",
             CacheName = "Slicer_Region",
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Region",
+            StyleName = "SlicerStyleLight2",
             PackagePart = "xl/slicers/slicer1.xml"
         });
         loaded.Timelines.Should().ContainSingle().Which.Should().BeEquivalentTo(new TimelineModel
         {
             Name = "Date Timeline",
+            Caption = "Order Date",
             CacheName = "Timeline_Date",
             SourcePivotTableName = "PivotTable1",
             SourceFieldName = "Date",
             StartDate = "2026-01-01",
             EndDate = "2026-03-31",
+            StyleName = "TimeSlicerStyleLight1",
             PackagePart = "xl/timelines/timeline1.xml"
         });
 
@@ -10491,6 +10950,12 @@ public class FileAdapterSmokeTests
         archive.GetEntry("xl/slicerCaches/slicerCache1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelines/timeline1.xml").Should().NotBeNull();
         archive.GetEntry("xl/timelineCaches/timelineCache1.xml").Should().NotBeNull();
+        var slicerXml = LoadPackageXml(archive.GetEntry("xl/slicers/slicer1.xml")!);
+        slicerXml.Root!.Attribute("caption")!.Value.Should().Be("Region");
+        slicerXml.Root.Attribute("style")!.Value.Should().Be("SlicerStyleLight2");
+        var timelineXml = LoadPackageXml(archive.GetEntry("xl/timelines/timeline1.xml")!);
+        timelineXml.Root!.Attribute("caption")!.Value.Should().Be("Order Date");
+        timelineXml.Root.Attribute("style")!.Value.Should().Be("TimeSlicerStyleLight1");
     }
 
     [Fact]
@@ -11264,6 +11729,16 @@ public class FileAdapterSmokeTests
                 new XAttribute("name", "FreexcelNativeTableStyle"),
                 new XAttribute("pivot", "0"),
                 new XAttribute("table", "1"),
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "wholeTable"),
+                    new XAttribute("dxfId", "0"))));
+            tableStyles.Add(new XElement(
+                workbookNs + "tableStyle",
+                new XAttribute("name", "FreexcelNativePivotStyle"),
+                new XAttribute("pivot", "1"),
+                new XAttribute("table", "0"),
                 new XAttribute("count", "1"),
                 new XElement(
                     workbookNs + "tableStyleElement",
@@ -12538,7 +13013,8 @@ public class FileAdapterSmokeTests
     private static void AddMinimalPivotTablePackage(
         MemoryStream packageStream,
         bool includeCacheRecords = false,
-        string? pivotCacheDefinitionXml = null)
+        string? pivotCacheDefinitionXml = null,
+        string? pivotTableDefinitionXml = null)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -12613,7 +13089,7 @@ public class FileAdapterSmokeTests
                 ReplacePackageXml(archive, "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels", cacheRelsXml);
                 ReplacePackageXml(archive, "xl/pivotCache/pivotCacheRecords1.xml", XDocument.Parse(MinimalPivotCacheRecordsXml));
             }
-            ReplacePackageXml(archive, "xl/pivotTables/pivotTable1.xml", XDocument.Parse(MinimalPivotTableDefinitionXml));
+            ReplacePackageXml(archive, "xl/pivotTables/pivotTable1.xml", XDocument.Parse(pivotTableDefinitionXml ?? MinimalPivotTableDefinitionXml));
         }
 
         packageStream.Position = 0;
@@ -12633,7 +13109,9 @@ public class FileAdapterSmokeTests
             ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
                 <slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
                         name="Region Slicer"
-                        cache="Slicer_Region"/>
+                        cache="Slicer_Region"
+                        caption="Region"
+                        style="SlicerStyleLight2"/>
                 """));
             ReplacePackageXml(archive, "xl/slicerCaches/slicerCache1.xml", XDocument.Parse("""
                 <slicerCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
@@ -12647,7 +13125,9 @@ public class FileAdapterSmokeTests
             ReplacePackageXml(archive, "xl/timelines/timeline1.xml", XDocument.Parse("""
                 <timeline xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
                           name="Date Timeline"
-                          cache="Timeline_Date"/>
+                          cache="Timeline_Date"
+                          caption="Order Date"
+                          style="TimeSlicerStyleLight1"/>
                 """));
             ReplacePackageXml(archive, "xl/timelineCaches/timelineCache1.xml", XDocument.Parse("""
                 <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
@@ -12723,7 +13203,8 @@ public class FileAdapterSmokeTests
         MemoryStream packageStream,
         bool useOneCellAnchor = false,
         bool useAbsoluteAnchor = false,
-        string? chartXml = null)
+        string? chartXml = null,
+        string worksheetPath = "xl/worksheets/sheet1.xml")
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -12740,13 +13221,15 @@ public class FileAdapterSmokeTests
             AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/charts/chart1.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
             ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
 
-            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            var worksheetEntry = archive.GetEntry(worksheetPath)!;
             var worksheetXml = LoadPackageXml(worksheetEntry);
             worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
             worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdFreexcelChartDrawing")));
-            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+            ReplacePackageXml(archive, worksheetPath, worksheetXml);
 
-            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetFileName = Path.GetFileName(worksheetPath);
+            var worksheetDirectory = Path.GetDirectoryName(worksheetPath)?.Replace('\\', '/') ?? "xl/worksheets";
+            var worksheetRelsPath = $"{worksheetDirectory}/_rels/{worksheetFileName}.rels";
             var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
                 ? LoadPackageXml(worksheetRelsEntry)
                 : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -12905,6 +13388,29 @@ public class FileAdapterSmokeTests
         </c:chartSpace>
         """;
 
+    private const string MinimalPivotChartXml = """
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <c:pivotSource>
+            <c:name>Data!PivotTable1</c:name>
+            <c:fmtId val="0"/>
+          </c:pivotSource>
+          <c:chart>
+            <c:title><c:tx><c:rich><a:p><a:r><a:t>Pivot Chart</a:t></a:r></a:p></c:rich></c:tx></c:title>
+            <c:plotArea>
+              <c:barChart>
+                <c:barDir val="col"/>
+                <c:ser>
+                  <c:tx><c:strRef><c:f>Data!$B$1</c:f></c:strRef></c:tx>
+                  <c:cat><c:strRef><c:f>Data!$A$2:$A$3</c:f></c:strRef></c:cat>
+                  <c:val><c:numRef><c:f>Data!$B$2:$B$3</c:f></c:numRef></c:val>
+                </c:ser>
+              </c:barChart>
+            </c:plotArea>
+          </c:chart>
+        </c:chartSpace>
+        """;
+
     private const string MinimalUnsupportedRadarChartXml = """
         <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -12938,6 +13444,27 @@ public class FileAdapterSmokeTests
                 <n v="10"/>
                 <n v="20"/>
               </sharedItems>
+            </cacheField>
+          </cacheFields>
+        </pivotCacheDefinition>
+        """;
+
+    private const string ExternalOlapPivotCacheDefinitionXml = """
+        <pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              refreshedBy="Freexcel Test"
+                              refreshOnLoad="0"
+                              saveData="1"
+                              enableRefresh="1"
+                              refreshedVersion="8"
+                              olap="1"
+                              recordCount="0">
+          <cacheSource type="external" connectionId="2"/>
+          <cacheFields count="2">
+            <cacheField name="Category">
+              <sharedItems count="0"/>
+            </cacheField>
+            <cacheField name="Amount">
+              <sharedItems containsNumber="1" count="0"/>
             </cacheField>
           </cacheFields>
         </pivotCacheDefinition>
@@ -13088,6 +13615,36 @@ public class FileAdapterSmokeTests
           <dataFields count="1">
             <dataField name="Sum of Amount" fld="1" subtotal="sum" numFmtId="0"/>
           </dataFields>
+        </pivotTableDefinition>
+        """;
+
+    private const string StyledMinimalPivotTableDefinitionXml = """
+        <pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              name="PivotTable1"
+                              cacheId="1"
+                              dataOnRows="0"
+                              applyNumberFormats="0"
+                              applyBorderFormats="0"
+                              applyFontFormats="0"
+                              applyPatternFormats="0"
+                              applyAlignmentFormats="0"
+                              applyWidthHeightFormats="1">
+          <location ref="D3:E5" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+          <pivotFields count="2">
+            <pivotField axis="axisRow" showAll="0"/>
+            <pivotField dataField="1" showAll="0"/>
+          </pivotFields>
+          <rowFields count="1">
+            <field x="0"/>
+          </rowFields>
+          <dataFields count="1">
+            <dataField name="Sum of Amount" fld="1" subtotal="sum" numFmtId="0"/>
+          </dataFields>
+          <pivotTableStyleInfo name="PivotStyleMedium9"
+                               showRowHeaders="1"
+                               showColHeaders="1"
+                               showRowStripes="1"
+                               showColStripes="0"/>
         </pivotTableDefinition>
         """;
 

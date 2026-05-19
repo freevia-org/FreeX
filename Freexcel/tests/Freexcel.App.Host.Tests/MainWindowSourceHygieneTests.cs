@@ -163,6 +163,35 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabs_UseContextualNavigationArrowsInsteadOfAHorizontalScrollbar()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var navigationStart = source.IndexOf("private void UpdateSheetTabNavigation()", StringComparison.Ordinal);
+        var navigationEnd = source.IndexOf("private void BringCurrentSheetTabIntoView()", navigationStart, StringComparison.Ordinal);
+        navigationStart.Should().BeGreaterThanOrEqualTo(0);
+        navigationEnd.Should().BeGreaterThan(navigationStart);
+        var navigationSource = source[navigationStart..navigationEnd];
+
+        xaml.Should().Contain("x:Name=\"SheetNavLeftBtn\" Grid.Column=\"0\"");
+        xaml.Should().Contain("x:Name=\"SheetTabsScroller\" Grid.Column=\"1\"");
+        xaml.Should().Contain("HorizontalScrollBarVisibility=\"Hidden\"");
+        xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
+        xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
+        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"2\"");
+        xaml.Should().Contain("Visibility=\"Hidden\"");
+        xaml.Should().NotContain("HorizontalScrollBarVisibility=\"Auto\"\r\n                              VerticalScrollBarVisibility=\"Disabled\">\r\n                    <StackPanel Orientation=\"Horizontal\">");
+
+        source.Should().Contain("UpdateSheetTabNavigation();");
+        navigationSource.Should().Contain("SheetNavLeftBtn.Visibility");
+        navigationSource.Should().Contain("SheetNavRightBtn.Visibility");
+        navigationSource.Should().Contain(": Visibility.Hidden;");
+        navigationSource.Should().NotContain(": Visibility.Collapsed;");
+        source.Should().NotContain("SheetTabsScroller.HorizontalOffset - 80");
+        source.Should().NotContain("SheetTabsScroller.HorizontalOffset + 80");
+    }
+
+    [Fact]
     public void MainWindow_DoesNotKeepLegacyZoomConversionHelpers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
@@ -335,6 +364,12 @@ public sealed class MainWindowSourceHygieneTests
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Line Color",
+            "Line Style",
+            "Black",
+            "Accent 1",
+            "Dashed",
+            "Dotted",
             "More Borders..."
         })
             xaml.Should().Contain($"Header=\"{label}\"");
@@ -346,6 +381,10 @@ public sealed class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderLineColorBlackMenuItem_Click",
+            "BorderLineColorAccent1MenuItem_Click",
+            "BorderLineStyleDashedMenuItem_Click",
+            "BorderLineStyleDottedMenuItem_Click",
             "BorderMoreMenuItem_Click"
         })
         {
@@ -356,6 +395,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ApplyRangeBorderPreset");
         source.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
+        source.Should().Contain("_borderPickerColor");
+        source.Should().Contain("_borderPickerStyle");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");
@@ -373,5 +414,89 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("TryExecuteSpellCheckEdits");
         source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
+    }
+
+    [Fact]
+    public void FormatAsTable_CreatesStructuredTableMetadataBeforeApplyingBanding()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new CreateTableDialog");
+        source.Should().Contain("new CreateStructuredTableCommand(");
+        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");
+        source.Should().Contain("\"TableStyleLight9\"");
+        source.Should().Contain("\"TableStyleMedium2\"");
+        source.Should().Contain("\"TableStyleDark1\"");
+        source.Should().Contain("TryExecuteApplyStyle(");
+    }
+
+    [Fact]
+    public void CellStyleMenu_UsesActiveWorkbookThemeForPresetPlanning()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
+    }
+
+    [Fact]
+    public void ExportWorkflow_SurfacesPlannedOptionsAndFallbackPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ExportViaPrintToPdf(request)");
+        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
+        source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("request.ActualPath");
+    }
+
+    [Fact]
+    public void RemainingStatusWorkflows_OpenNamedDialogsInsteadOfMessageBoxes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new PageBreakDialog");
+        source.Should().Contain("new GoalSeekStatusDialog");
+        source.Should().Contain("new WorkbookStatisticsDialog");
+        source.Should().Contain("new AccessibilityCheckerDialog");
+    }
+
+    [Fact]
+    public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("ConditionalFormatDialogFactory.Create(ruleType, range)");
+        source.Should().NotContain("new ConditionalFormatDialog(ruleType, range)");
+    }
+
+    [Fact]
+    public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
+        xaml.Should().NotContain("Cycle grand totals");
+        xaml.Should().NotContain("Cycle subtotals");
+        xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
+        source.Should().Contain("new PivotTableOptionsDialog(pivotTable)");
+        source.Should().Contain("ApplyPivotOptions(pivotTable, dialog.Result)");
+        source.Should().NotContain("var reportLayout = pivotTable.ReportLayout switch");
+        source.Should().NotContain("var styleName = pivotTable.StyleName switch");
+    }
+
+    [Fact]
+    public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
+        source.Should().Contain("PictureResetCropMenuItem_Click");
+        source.Should().Contain("new SetPictureCropCommand(");
+        source.Should().Contain("0, 0, 0, 0");
     }
 }
