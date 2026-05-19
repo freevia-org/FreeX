@@ -34,6 +34,7 @@ public sealed class FormatCellsDialogXamlTests
             "DlgIndentLevelBox", "DlgTextRotationBox",
             "DlgFontNameBox", "DlgFontSizeBox", "DlgBoldCheck", "DlgItalicCheck",
             "DlgUnderlineCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
+            "DlgSuperscriptCheck", "DlgSubscriptCheck",
             "DlgFillColorBox", "DlgClearFillCheck",
             "DlgBorderTopStyleBox", "DlgBorderTopColorBox",
             "DlgBorderRightStyleBox", "DlgBorderRightColorBox",
@@ -113,6 +114,8 @@ public sealed class FormatCellsDialogXamlTests
                 GetControl<CheckBox>(dialog, "DlgUnderlineCheck").IsChecked = true;
                 GetControl<CheckBox>(dialog, "DlgDoubleUnderlineCheck").IsChecked = true;
                 GetControl<CheckBox>(dialog, "DlgStrikeCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgSuperscriptCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgSubscriptCheck").IsChecked = false;
                 GetControl<TextBox>(dialog, "DlgFontColorBox").Text = "20,40,60";
 
                 ClickOkForTest(dialog);
@@ -125,6 +128,8 @@ public sealed class FormatCellsDialogXamlTests
                 dialog.ResultDiff.Underline.Should().BeTrue();
                 dialog.ResultDiff.DoubleUnderline.Should().BeTrue();
                 dialog.ResultDiff.Strikethrough.Should().BeTrue();
+                dialog.ResultDiff.Superscript.Should().BeTrue();
+                dialog.ResultDiff.Subscript.Should().BeFalse();
                 dialog.ResultDiff.FontColor.Should().Be(new CellColor(20, 40, 60));
             }
             finally

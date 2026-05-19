@@ -354,6 +354,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Match_TwoDimensionalLookupArray_ReturnsNA()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(2)),
+            (2, 1, new NumberValue(3)), (2, 2, new NumberValue(4)));
+
+        _eval.Evaluate("=MATCH(3,A1:B2,0)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Match_ExactTextWildcard_ReturnsPosition()
     {
         var sheet = MakeSheet(
@@ -1116,6 +1126,15 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=VALUE(\"50%\")", sheet).Should().Be(new NumberValue(0.5));
+    }
+
+    [Fact]
+    public void Value_ParsesCurrencyThousandsAndDateText()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=VALUE(\"$1,234.50\")", sheet).Should().Be(new NumberValue(1234.5));
+        _eval.Evaluate("=VALUE(\"1/2/2024\")", sheet).Should().Be(new NumberValue(45293));
     }
 
     [Fact]
