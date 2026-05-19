@@ -2189,8 +2189,17 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.ColorScale:
                 ShowCfDialog("Color Scale");
                 break;
+            case QuickAnalysisCommand.IconSet:
+                ShowCfDialog("Icon Set");
+                break;
             case QuickAnalysisCommand.GreaterThan:
                 ShowCfDialog("Greater Than");
+                break;
+            case QuickAnalysisCommand.Top10:
+                ShowCfDialog("Top 10 Items");
+                break;
+            case QuickAnalysisCommand.ClearConditionalFormatting:
+                CfClearRulesMenuItem_Click(sender, e);
                 break;
             case QuickAnalysisCommand.ColumnChart:
                 ChartColumnMenuItem_Click(sender, e);
@@ -5659,6 +5668,12 @@ public partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.FormatCells:
                 OpenFormatCellsDialog();
+                break;
+            case WorksheetContextMenuAction.ClearFormats:
+                ClearFormats();
+                break;
+            case WorksheetContextMenuAction.ClearHyperlinks:
+                ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ClearContents:
                 ExecuteClearSelection();
