@@ -5,7 +5,9 @@ namespace Freexcel.Core.Commands;
 public enum AccessibilityIssueKind
 {
     MergedCells,
-    MissingAltText
+    MissingAltText,
+    ChartMissingTitle,
+    HyperlinkDisplayTextIsUrl
 }
 
 public sealed record AccessibilityIssue(
@@ -40,6 +42,30 @@ public static class AccessibilityCheckerService
 
             foreach (var textBox in sheet.TextBoxes.Where(t => string.IsNullOrWhiteSpace(t.AltText)))
                 issues.Add(MissingAltText(sheet, textBox.Anchor, "Text box"));
+
+            foreach (var (address, target) in sheet.Hyperlinks)
+            {
+                if (sheet.GetCell(address)?.Value is not TextValue displayText ||
+                    !string.Equals(displayText.Value.Trim(), target.Trim(), StringComparison.Ordinal))
+                    continue;
+
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.HyperlinkDisplayTextIsUrl,
+                    sheet.Id,
+                    sheet.Name,
+                    address.ToA1(),
+                    "Hyperlink display text should describe the destination instead of repeating the URL."));
+            }
+
+            foreach (var chart in sheet.Charts.Where(c => string.IsNullOrWhiteSpace(c.Title)))
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.ChartMissingTitle,
+                    sheet.Id,
+                    sheet.Name,
+                    FormatRange(chart.DataRange),
+                    "Chart is missing a title."));
+            }
         }
 
         return issues;
