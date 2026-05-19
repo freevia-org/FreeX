@@ -1774,6 +1774,12 @@ public partial class MainWindow : Window
 
             if (KeyboardShortcutMatcher.TryGetCommandShortcut(e.Key, e.SystemKey, Keyboard.Modifiers, out var commandShortcut))
             {
+                if (commandShortcut == KeyboardCommandShortcut.ClearSelection &&
+                    Keyboard.FocusedElement is TextBox)
+                {
+                    return;
+                }
+
                 ExecuteCommandShortcut(commandShortcut, sender, e);
                 e.Handled = true;
                 return;
@@ -1873,21 +1879,6 @@ public partial class MainWindow : Window
                     break;
             }
 
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Delete && (Keyboard.Modifiers & ModifierKeys.Control) == 0
-            && Keyboard.FocusedElement is not TextBox)
-        {
-            ExecuteClearSelection();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.F2)
-        {
-            EnterEditMode();
             e.Handled = true;
             return;
         }
@@ -2154,6 +2145,12 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.SelectCellsWithComments:
                 SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true);
+                break;
+            case KeyboardCommandShortcut.EditCell:
+                EnterEditMode();
+                break;
+            case KeyboardCommandShortcut.ClearSelection:
+                ExecuteClearSelection();
                 break;
         }
     }

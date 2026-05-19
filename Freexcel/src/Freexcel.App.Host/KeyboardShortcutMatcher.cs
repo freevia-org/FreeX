@@ -469,6 +469,18 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.None && effectiveKey == Key.F2)
+        {
+            shortcut = KeyboardCommandShortcut.EditCell;
+            return true;
+        }
+
+        if ((modifiers & ModifierKeys.Control) == 0 && effectiveKey == Key.Delete)
+        {
+            shortcut = KeyboardCommandShortcut.ClearSelection;
+            return true;
+        }
+
         return false;
     }
 
@@ -625,7 +637,9 @@ public enum KeyboardCommandShortcut
     SelectDirectDependents,
     SelectAllPrecedents,
     SelectAllDependents,
-    SelectCellsWithComments
+    SelectCellsWithComments,
+    EditCell,
+    ClearSelection
 }
 
 public enum BorderKeyboardShortcut
