@@ -25,6 +25,12 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=MONTH(1)", 1)]
     [InlineData("=DAY(1)", 1)]
     [InlineData("=WEEKDAY(1)", 1)]
+    [InlineData("=YEAR(0)", 1900)]
+    [InlineData("=MONTH(0)", 1)]
+    [InlineData("=DAY(0)", 0)]
+    [InlineData("=WEEKDAY(0)", 7)]
+    [InlineData("=WEEKNUM(0)", 0)]
+    [InlineData("=ISOWEEKNUM(0)", 52)]
     [InlineData("=YEAR(59)", 1900)]
     [InlineData("=MONTH(59)", 2)]
     [InlineData("=DAY(59)", 28)]
@@ -40,6 +46,21 @@ public sealed class ExcelParityDateSerialTests
     public void DatePartFunctions_InterpretExcelSerialNumbers(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=YEAR(-1)")]
+    [InlineData("=MONTH(-1)")]
+    [InlineData("=DAY(-1)")]
+    [InlineData("=WEEKDAY(-1)")]
+    [InlineData("=WEEKNUM(-1)")]
+    [InlineData("=ISOWEEKNUM(-1)")]
+    [InlineData("=EDATE(-1,1)")]
+    [InlineData("=EOMONTH(-1,0)")]
+    [InlineData("=DATEDIF(-1,1,\"D\")")]
+    public void DateFunctions_ReturnNumForNegativeSerials(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Num);
     }
 
     [Theory]
