@@ -681,6 +681,14 @@
                                                 <MenuItem Header="Right Border"         local:RibbonTooltip.KeyTip="R" Click="BorderRightMenuItem_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Thick Bottom Border"  local:RibbonTooltip.KeyTip="K" Click="BorderThickBottomMenuItem_Click"/>
+                                                <MenuItem Header="Bottom Double Border" local:RibbonTooltip.KeyTip="D" Click="BorderBottomDoubleMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Thick Box Border" local:RibbonTooltip.KeyTip="X" Click="BorderThickBoxMenuItem_Click"/>
+                                                <MenuItem Header="Top and Bottom Border" local:RibbonTooltip.KeyTip="U" Click="BorderTopAndBottomMenuItem_Click"/>
+                                                <MenuItem Header="Top and Thick Bottom Border" local:RibbonTooltip.KeyTip="H" Click="BorderTopAndThickBottomMenuItem_Click"/>
+                                                <MenuItem Header="Top and Double Bottom Border" local:RibbonTooltip.KeyTip="J" Click="BorderTopAndDoubleBottomMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="More Borders..." local:RibbonTooltip.KeyTip="M" Click="BorderMoreMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                         <Grid Width="15" Height="15" SnapsToDevicePixels="True">
