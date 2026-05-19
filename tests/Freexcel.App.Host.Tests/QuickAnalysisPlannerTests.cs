@@ -30,6 +30,9 @@ public sealed class QuickAnalysisPlannerTests
             .Should()
             .Contain([
                 QuickAnalysisCommand.DataBar,
+                QuickAnalysisCommand.IconSet,
+                QuickAnalysisCommand.Top10,
+                QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
                 QuickAnalysisCommand.Sum,
                 QuickAnalysisCommand.FormatAsTable,

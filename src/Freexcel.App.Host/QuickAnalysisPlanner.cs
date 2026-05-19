@@ -13,7 +13,10 @@ public static class QuickAnalysisPlanner
         [
             new("Formatting", "Data Bars", QuickAnalysisCommand.DataBar),
             new("Formatting", "Color Scale", QuickAnalysisCommand.ColorScale),
+            new("Formatting", "Icon Set", QuickAnalysisCommand.IconSet),
             new("Formatting", "Greater Than...", QuickAnalysisCommand.GreaterThan),
+            new("Formatting", "Top 10...", QuickAnalysisCommand.Top10),
+            new("Formatting", "Clear Conditional Formatting", QuickAnalysisCommand.ClearConditionalFormatting),
             new("Charts", "Column", QuickAnalysisCommand.ColumnChart),
             new("Charts", "Line", QuickAnalysisCommand.LineChart),
             new("Charts", "Pie", QuickAnalysisCommand.PieChart),
@@ -35,7 +38,10 @@ public enum QuickAnalysisCommand
 {
     DataBar,
     ColorScale,
+    IconSet,
     GreaterThan,
+    Top10,
+    ClearConditionalFormatting,
     ColumnChart,
     LineChart,
     PieChart,
