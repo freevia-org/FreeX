@@ -167,6 +167,29 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneCellLayouts_DoesNotOverflowShrinkToFitTextAcrossEmptyCells()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(1, 1, "shrink text", new CellStyle { ShrinkToFit = true }),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18));
+    }
+
+    [Fact]
     public void HitTestViewportCell_UsesPinnedSplitPaneQuadrantsBeforeMainViewport()
     {
         var sheetId = SheetId.New();
@@ -538,8 +561,8 @@ public sealed class GridViewSplitPaneLayoutTests
             .Should().BeNull();
     }
 
-    private static DisplayCell Cell(uint row, uint col, string text) =>
-        new(row, col, new TextValue(text), text, null, StyleId.Default, null);
+    private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
+        new(row, col, new TextValue(text), text, null, StyleId.Default, null, style);
 
     private static ViewportModel SplitViewport() =>
         new(

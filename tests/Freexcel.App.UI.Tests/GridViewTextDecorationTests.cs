@@ -45,4 +45,22 @@ public sealed class GridViewTextDecorationTests
 
         floored.Should().Be(6);
     }
+
+    [Fact]
+    public void CanOverflowCellText_PreservesNormalTextOverflowButExcludesShrinkToFit()
+    {
+        GridView.CanOverflowCellText(
+                new CellStyle(),
+                new TextValue("normal"),
+                "normal",
+                merge: null)
+            .Should().BeTrue();
+
+        GridView.CanOverflowCellText(
+                new CellStyle { ShrinkToFit = true },
+                new TextValue("shrink"),
+                "shrink",
+                merge: null)
+            .Should().BeFalse();
+    }
 }
