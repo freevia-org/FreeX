@@ -275,4 +275,17 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
     }
+
+    [Fact]
+    public void FormatAsTable_CreatesStructuredTableMetadataBeforeApplyingBanding()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new CreateStructuredTableCommand(");
+        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId)");
+        source.Should().Contain("\"TableStyleLight9\"");
+        source.Should().Contain("\"TableStyleMedium2\"");
+        source.Should().Contain("\"TableStyleDark1\"");
+        source.Should().Contain("TryExecuteApplyStyle(");
+    }
 }

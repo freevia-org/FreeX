@@ -6454,16 +6454,8 @@ public partial class MainWindow : Window
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
-        var viewer = new System.Windows.Controls.DocumentViewer { Document = doc };
-        var previewWin = new Window
-        {
-            Title = $"Print Preview — {_workbook.Name}",
-            Width = 900, Height = 700,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = this,
-            Content = viewer
-        };
-        previewWin.ShowDialog();
+        var dialog = new PrintPreviewDialog(_workbook.Name, doc) { Owner = this };
+        dialog.ShowDialog();
     }
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
@@ -7066,6 +7058,20 @@ public partial class MainWindow : Window
     private void ApplyTableFormat(int variant)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        var tableStyleName = variant switch
+        {
+            1 => "TableStyleMedium2",
+            2 => "TableStyleDark1",
+            _ => "TableStyleLight9"
+        };
+        if (!TryExecuteGroupedSheetCommand(
+                "Format as Table",
+                sheetId => new CreateStructuredTableCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId),
+                    tableStyleName)))
+            return;
+
         var (headerFill, oddFill, evenFill) = variant switch
         {
             1 => (new CellColor(31, 78, 121), new CellColor(222, 235, 247), new CellColor(255, 255, 255)),

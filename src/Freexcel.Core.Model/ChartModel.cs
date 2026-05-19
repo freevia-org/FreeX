@@ -95,6 +95,7 @@ public sealed class ChartModel
     public string? PivotTableName { get; set; }
     public int? PivotCacheId { get; set; }
     public int? ChartStyleId { get; set; }
+    public bool RoundedCorners { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
