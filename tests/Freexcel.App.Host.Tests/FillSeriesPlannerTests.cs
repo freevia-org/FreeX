@@ -7,6 +7,22 @@ namespace Freexcel.App.Host.Tests;
 public sealed class FillSeriesPlannerTests
 {
     [Theory]
+    [InlineData("1", true, 1)]
+    [InlineData(" -2.5 ", true, -2.5)]
+    [InlineData("0", true, 0)]
+    [InlineData("", false, 0)]
+    [InlineData("NaN", false, 0)]
+    [InlineData("Infinity", false, 0)]
+    [InlineData("step", false, 0)]
+    public void TryParseStep_ParsesFiniteNumericStep(string input, bool expected, double expectedStep)
+    {
+        var result = FillSeriesPlanner.TryParseStep(input, out var step);
+
+        result.Should().Be(expected);
+        step.Should().Be(expectedStep);
+    }
+
+    [Theory]
     [InlineData(FillCellsDirection.Down, 2, 1, true)]
     [InlineData(FillCellsDirection.Up, 2, 1, true)]
     [InlineData(FillCellsDirection.Right, 1, 2, true)]

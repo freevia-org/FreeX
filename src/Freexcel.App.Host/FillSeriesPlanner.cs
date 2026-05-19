@@ -5,6 +5,19 @@ namespace Freexcel.App.Host;
 
 public static class FillSeriesPlanner
 {
+    public static bool TryParseStep(string input, out double step)
+    {
+        if (double.TryParse(input.Trim(), out var parsed) &&
+            double.IsFinite(parsed))
+        {
+            step = parsed;
+            return true;
+        }
+
+        step = 0;
+        return false;
+    }
+
     public static bool CanFill(GridRange range, FillCellsDirection direction) =>
         direction is FillCellsDirection.Down or FillCellsDirection.Up
             ? range.RowCount >= 2
