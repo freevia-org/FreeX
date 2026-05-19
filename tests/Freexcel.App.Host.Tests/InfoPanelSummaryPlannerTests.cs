@@ -10,7 +10,7 @@ public sealed class InfoPanelSummaryPlannerTests
     public void Create_UsesStatusCopyForProtectedWorkbookAndSheet()
     {
         var workbook = new Workbook { IsStructureProtected = true };
-        var sheet = workbook.AddSheet("Sheet1");
+        var sheet = workbook.AddSheet("Summary");
         sheet.IsProtected = true;
 
         var plan = InfoPanelSummaryPlanner.Create(workbook, sheet, CultureInfo.InvariantCulture);
@@ -23,7 +23,7 @@ public sealed class InfoPanelSummaryPlannerTests
     public void Create_UsesStatusCopyForUnprotectedWorkbookAndSheet()
     {
         var workbook = new Workbook();
-        var sheet = workbook.AddSheet("Sheet1");
+        var sheet = workbook.AddSheet("Summary");
 
         var plan = InfoPanelSummaryPlanner.Create(workbook, sheet, CultureInfo.InvariantCulture);
 
@@ -54,7 +54,7 @@ public sealed class InfoPanelSummaryPlannerTests
     public void Create_CountsAccessibilityIssuesFromWorkbook()
     {
         var workbook = new Workbook();
-        var sheet = workbook.AddSheet("Sheet1");
+        var sheet = workbook.AddSheet("Summary");
         sheet.AddMergedRegion(new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 1, 2)));

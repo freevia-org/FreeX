@@ -9,7 +9,7 @@ public sealed class BackstageInfoPlannerTests
     public void Build_SummarizesStatisticsAndAccessibilityIssuesForInfoPanel()
     {
         var workbook = new Workbook("Budget");
-        var sheet = workbook.AddSheet("Sheet1");
+        var sheet = workbook.AddSheet("Budget");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(42)));
         sheet.SetFormula(new CellAddress(sheet.Id, 1, 2), "A1*2");
         sheet.AddMergedRegion(new GridRange(
@@ -32,7 +32,7 @@ public sealed class BackstageInfoPlannerTests
     public void Build_UsesSavedDefaultsWhenWorkbookHasNoCurrentPathOrAccessibilityIssues()
     {
         var workbook = new Workbook("Book1");
-        workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Summary");
 
         var plan = BackstageInfoPlanner.Build(workbook, null);
 

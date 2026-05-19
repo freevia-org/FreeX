@@ -19,16 +19,9 @@ public sealed class MainWindowInfoPanelTests
             .ToHashSet(StringComparer.Ordinal);
 
         names.Should().Contain([
-            "InfoCellsWithData",
-            "InfoFormulaCount",
-            "InfoCommentCount",
-            "InfoChartCount",
-            "InfoPictureCount",
-            "InfoShapeCount",
-            "InfoNamedRangeCount",
-            "InfoWorkbookProtection",
-            "InfoSheetProtection",
-            "InfoAccessibilitySummary"
+            "InfoStatisticsSummary",
+            "InfoAccessibilitySummary",
+            "InfoFormulaErrorSummary"
         ]);
     }
 
@@ -37,11 +30,9 @@ public sealed class MainWindowInfoPanelTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
-        source.Should().Contain("InfoPanelSummaryPlanner.Create(");
-        source.Should().Contain("_workbook.GetSheet(_currentSheetId)");
-        source.Should().Contain("InfoCellsWithData.Text");
-        source.Should().Contain("InfoWorkbookProtection.Text");
-        source.Should().Contain("InfoSheetProtection.Text");
+        source.Should().Contain("BackstageInfoPlanner.Build(_workbook, _currentFilePath)");
+        source.Should().Contain("InfoStatisticsSummary.Text");
         source.Should().Contain("InfoAccessibilitySummary.Text");
+        source.Should().Contain("InfoFormulaErrorSummary.Text");
     }
 }
