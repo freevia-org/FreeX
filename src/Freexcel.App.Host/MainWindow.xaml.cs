@@ -1720,7 +1720,19 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.OpenActiveDropdown:
                 OpenActiveDropdown();
                 break;
+            case KeyboardCommandShortcut.ScrollActiveCellIntoView:
+                ScrollActiveCellIntoView();
+                break;
         }
+    }
+
+    private void ScrollActiveCellIntoView()
+    {
+        if (SheetGrid.SelectedRange?.Start is not { } activeCell)
+            return;
+
+        EnsureCellVisible(activeCell);
+        FocusSheetGridIfNeeded();
     }
 
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
