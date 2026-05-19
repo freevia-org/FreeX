@@ -16,6 +16,44 @@ public sealed class ChartCommandTests
         unsupportedTypes.Should().OnlyContain(type => !ChartTypeSupport.SupportsTrendlines(type));
     }
 
+    [Theory]
+    [InlineData(ChartType.Column)]
+    [InlineData(ChartType.StackedColumn)]
+    [InlineData(ChartType.PercentStackedColumn)]
+    [InlineData(ChartType.Line)]
+    [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.Doughnut)]
+    [InlineData(ChartType.Bar)]
+    [InlineData(ChartType.StackedBar)]
+    [InlineData(ChartType.PercentStackedBar)]
+    [InlineData(ChartType.Scatter)]
+    [InlineData(ChartType.Bubble)]
+    [InlineData(ChartType.Area)]
+    [InlineData(ChartType.Radar)]
+    [InlineData(ChartType.Stock)]
+    public void RenderableChartTypes_AreKnownAndRenderable(ChartType type)
+    {
+        ChartTypeSupport.IsKnown(type).Should().BeTrue();
+        ChartTypeSupport.IsRenderable(type).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Treemap)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Pareto)]
+    [InlineData(ChartType.BoxAndWhisker)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Funnel)]
+    [InlineData(ChartType.Map)]
+    [InlineData(ChartType.ThreeDColumn)]
+    public void AdvancedChartTypes_AreRecognizedButNotRenderable(ChartType type)
+    {
+        ChartTypeSupport.IsKnown(type).Should().BeTrue();
+        ChartTypeSupport.IsRenderable(type).Should().BeFalse();
+    }
+
     [Fact]
     public void ChartTypeSupport_IdentifiesSecondaryAxisChartTypes()
     {
@@ -302,6 +340,33 @@ public sealed class ChartCommandTests
 
         sheet.Charts.Should().ContainSingle().Which.Type.Should().Be(ChartType.Column);
         sheet.Charts[0].FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Treemap)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Pareto)]
+    [InlineData(ChartType.BoxAndWhisker)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Funnel)]
+    [InlineData(ChartType.Map)]
+    [InlineData(ChartType.ThreeDColumn)]
+    public void AddChartCommand_RejectsDeferredChartFamilies(ChartType type)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+
+        var outcome = new AddChartCommand(sheet.Id, range, type, "Sales").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
+        sheet.Charts.Should().BeEmpty();
     }
 
     [Fact]
