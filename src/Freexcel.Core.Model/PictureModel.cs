@@ -20,6 +20,10 @@ public sealed class PictureModel
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
     public double RotationDegrees { get; set; }
+    public double CropLeft { get; set; }
+    public double CropTop { get; set; }
+    public double CropRight { get; set; }
+    public double CropBottom { get; set; }
 }
 
 public sealed record PictureCellSnapshot(uint RowOffset, uint ColumnOffset, string Text);
