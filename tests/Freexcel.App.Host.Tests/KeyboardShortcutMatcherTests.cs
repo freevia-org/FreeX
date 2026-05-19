@@ -27,13 +27,14 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
-    [InlineData(Key.V, ModifierKeys.Control | ModifierKeys.Alt, true)]
-    [InlineData(Key.V, ModifierKeys.Control, false)]
-    [InlineData(Key.V, ModifierKeys.Control | ModifierKeys.Shift, false)]
-    [InlineData(Key.C, ModifierKeys.Control | ModifierKeys.Alt, false)]
-    public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, ModifierKeys modifiers, bool expected)
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control, false)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
-        KeyboardShortcutMatcher.IsPasteSpecialShortcut(key, modifiers).Should().Be(expected);
+        KeyboardShortcutMatcher.IsPasteSpecialShortcut(key, systemKey, modifiers).Should().Be(expected);
     }
 
     [Theory]
