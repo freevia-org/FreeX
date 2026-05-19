@@ -1222,6 +1222,11 @@ public class FileAdapterSmokeTests
         var workbook = new Workbook("CalculationNativeTest");
         workbook.AddSheet("Sheet1");
         workbook.CalculationMode = WorkbookCalculationMode.Manual;
+        workbook.FullCalculationOnLoad = true;
+        workbook.ForceFullCalculation = true;
+        workbook.IterativeCalculation = true;
+        workbook.MaxCalculationIterations = 50;
+        workbook.MaxCalculationChange = 0.01;
 
         var ms = new MemoryStream();
         var adapter = new NativeJsonAdapter();
@@ -1231,6 +1236,11 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        loaded.FullCalculationOnLoad.Should().BeTrue();
+        loaded.ForceFullCalculation.Should().BeTrue();
+        loaded.IterativeCalculation.Should().BeTrue();
+        loaded.MaxCalculationIterations.Should().Be(50);
+        loaded.MaxCalculationChange.Should().Be(0.01);
     }
 
     [Fact]
@@ -3107,6 +3117,48 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         loaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_WorkbookCalculationProperties()
+    {
+        var workbook = new Workbook("CalculationPropertiesTest")
+        {
+            CalculationMode = WorkbookCalculationMode.Manual,
+            FullCalculationOnLoad = true,
+            ForceFullCalculation = true,
+            IterativeCalculation = true,
+            MaxCalculationIterations = 123,
+            MaxCalculationChange = 0.001
+        };
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetFormula(new CellAddress(sheet.Id, 1, 1), "1+1");
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!).ToString();
+            workbookXml.Should().Contain("calcMode=\"manual\"");
+            workbookXml.Should().Contain("fullCalcOnLoad=\"1\"");
+            workbookXml.Should().Contain("forceFullCalc=\"1\"");
+            workbookXml.Should().Contain("iterate=\"1\"");
+            workbookXml.Should().Contain("iterateCount=\"123\"");
+            workbookXml.Should().Contain("iterateDelta=\"0.001\"");
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+
+        loaded.CalculationMode.Should().Be(WorkbookCalculationMode.Manual);
+        loaded.FullCalculationOnLoad.Should().BeTrue();
+        loaded.ForceFullCalculation.Should().BeTrue();
+        loaded.IterativeCalculation.Should().BeTrue();
+        loaded.MaxCalculationIterations.Should().Be(123);
+        loaded.MaxCalculationChange.Should().Be(0.001);
     }
 
     [Fact]

@@ -2810,7 +2810,10 @@
                                 <CheckBox Content="{Binding Caption}"
                                           IsChecked="{Binding IsChecked}"
                                           Click="PivotAvailableFieldCheckBox_Click"
-                                          AutomationProperties.Name="{Binding Caption}"/>
+                                          AutomationProperties.Name="{Binding Caption}"
+                                          local:RibbonTooltip.Title="{Binding Caption}"
+                                          local:RibbonTooltip.Description="Add or remove this field from the active PivotTable layout."
+                                          local:RibbonTooltip.KeyTip="X"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                         <ListBox.ContextMenu>
@@ -2995,7 +2998,8 @@
                                                     Tag="{Binding Name}"
                                                     Click="SlicerClearButton_Click"
                                                     Margin="0,6,0,0"
-                                                    MinHeight="24"/>
+                                                    MinHeight="24"
+                                                    AutomationProperties.Name="Clear Slicer Filter"/>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -3015,8 +3019,10 @@
                                                 <TextBox x:Name="TimelineEndBox" Text="{Binding SelectedEndDate, UpdateSourceTrigger=PropertyChanged}" Margin="3,0,0,0"/>
                                             </UniformGrid>
                                             <UniformGrid Columns="2" Margin="0,6,0,0">
-                                                <Button Content="Apply" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"/>
-                                                <Button Content="Clear" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"/>
+                                                <Button Content="Apply" Click="TimelineApplyButton_Click" MinHeight="24" Margin="0,0,3,0"
+                                                        AutomationProperties.Name="Apply Timeline Filter"/>
+                                                <Button Content="Clear" Click="TimelineClearButton_Click" MinHeight="24" Margin="3,0,0,0"
+                                                        AutomationProperties.Name="Clear Timeline Filter"/>
                                             </UniformGrid>
                                         </StackPanel>
                                     </Border>

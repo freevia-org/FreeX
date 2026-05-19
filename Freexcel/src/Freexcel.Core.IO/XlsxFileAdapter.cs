@@ -37,6 +37,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var workbookProtection = LoadWorkbookProtection(packageStream);
         packageStream.Position = 0;
+        var calculationProperties = LoadWorkbookCalculationProperties(packageStream);
+        packageStream.Position = 0;
         var pivotMetadata = LoadPivotMetadata(packageStream);
         packageStream.Position = 0;
         var slicerTimelineMetadata = LoadSlicerTimelineMetadata(packageStream);
@@ -57,6 +59,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
+        if (calculationProperties.Mode is { } calculationMode)
+            workbook.CalculationMode = calculationMode;
+        workbook.FullCalculationOnLoad = calculationProperties.FullCalculationOnLoad;
+        workbook.ForceFullCalculation = calculationProperties.ForceFullCalculation;
+        workbook.IterativeCalculation = calculationProperties.IterativeCalculation;
+        workbook.MaxCalculationIterations = calculationProperties.MaxIterations;
+        workbook.MaxCalculationChange = calculationProperties.MaxChange;
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
         foreach (var slicer in slicerTimelineMetadata.Slicers)
@@ -1736,6 +1745,53 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private sealed record WorkbookProtectionState(bool IsStructureProtected, string? PasswordHash)
     {
         public static WorkbookProtectionState None { get; } = new(false, null);
+    }
+
+    private static WorkbookCalculationProperties LoadWorkbookCalculationProperties(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return WorkbookCalculationProperties.Default;
+
+            var workbookXml = LoadXml(workbookEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
+            if (calcPr is null)
+                return WorkbookCalculationProperties.Default;
+
+            var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
+                ? WorkbookCalculationMode.Manual
+                : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
+                    ? WorkbookCalculationMode.Automatic
+                    : (WorkbookCalculationMode?)null;
+
+            return new WorkbookCalculationProperties(
+                mode,
+                ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
+                ReadBoolAttribute(calcPr, "forceFullCalc"),
+                ReadBoolAttribute(calcPr, "iterate"),
+                ReadIntAttribute(calcPr, "iterateCount"),
+                ReadDoubleAttribute(calcPr, "iterateDelta"));
+        }
+        catch
+        {
+            return WorkbookCalculationProperties.Default;
+        }
+    }
+
+    private sealed record WorkbookCalculationProperties(
+        WorkbookCalculationMode? Mode,
+        bool FullCalculationOnLoad,
+        bool ForceFullCalculation,
+        bool IterativeCalculation,
+        int? MaxIterations,
+        double? MaxChange)
+    {
+        public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
     }
 
     private static readonly (WorkbookThemeColorSlot Slot, string ElementName)[] ThemeColorElements =
@@ -3531,6 +3587,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SaveWorkbookProtection(packageStream, workbook);
         }
 
+        packageStream.Position = 0;
+        SaveWorkbookCalculationProperties(packageStream, workbook);
+
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
         {
             packageStream.Position = 0;
@@ -4699,6 +4758,43 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var replacement = archive.CreateEntry("xl/workbook.xml");
         using var stream = replacement.Open();
         workbookXml.Save(stream);
+    }
+
+    private static void SaveWorkbookCalculationProperties(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = workbookXml.Root;
+        if (root is null)
+            return;
+
+        var calcPr = root.Element(workbookNs + "calcPr");
+        if (calcPr is null)
+        {
+            calcPr = new XElement(workbookNs + "calcPr");
+            root.Add(calcPr);
+        }
+
+        calcPr.SetAttributeValue("calcMode", workbook.CalculationMode == WorkbookCalculationMode.Manual ? "manual" : "auto");
+        SetBooleanAttribute(calcPr, "fullCalcOnLoad", workbook.FullCalculationOnLoad);
+        SetBooleanAttribute(calcPr, "forceFullCalc", workbook.ForceFullCalculation);
+        SetBooleanAttribute(calcPr, "iterate", workbook.IterativeCalculation);
+        calcPr.SetAttributeValue(
+            "iterateCount",
+            workbook.MaxCalculationIterations is { } maxIterations ? maxIterations.ToString(CultureInfo.InvariantCulture) : null);
+        calcPr.SetAttributeValue(
+            "iterateDelta",
+            workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
+
+        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+        static void SetBooleanAttribute(XElement element, string name, bool value) =>
+            element.SetAttributeValue(name, value ? "1" : null);
     }
 
     private static void SaveAllowEditRanges(Stream xlsxStream, Workbook workbook)
