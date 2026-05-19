@@ -55,6 +55,31 @@ public sealed class ChartProtectionModel
     public bool? UserInterface { get; set; }
 }
 
+public sealed class ChartPrintSettingsModel
+{
+    public ChartPageMarginsModel? PageMargins { get; set; }
+    public ChartPageSetupModel? PageSetup { get; set; }
+}
+
+public sealed class ChartPageMarginsModel
+{
+    public double? Left { get; set; }
+    public double? Right { get; set; }
+    public double? Top { get; set; }
+    public double? Bottom { get; set; }
+    public double? Header { get; set; }
+    public double? Footer { get; set; }
+}
+
+public sealed class ChartPageSetupModel
+{
+    public string? PaperSize { get; set; }
+    public string? Orientation { get; set; }
+    public int? Copies { get; set; }
+    public bool? BlackAndWhite { get; set; }
+    public bool? Draft { get; set; }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -114,6 +139,7 @@ public sealed class ChartModel
     public bool AutoTitleDeleted { get; set; }
     public bool ShowDataInHiddenRowsAndColumns { get; set; }
     public ChartProtectionModel? Protection { get; set; }
+    public ChartPrintSettingsModel? PrintSettings { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }

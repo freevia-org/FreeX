@@ -9211,6 +9211,26 @@ public class FileAdapterSmokeTests
             ChartStyleId = 42,
             Uses1904DateSystem = true,
             Language = "en-US",
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel
+                {
+                    Left = 0.7,
+                    Right = 0.7,
+                    Top = 0.75,
+                    Bottom = 0.75,
+                    Header = 0.3,
+                    Footer = 0.3
+                },
+                PageSetup = new ChartPageSetupModel
+                {
+                    PaperSize = "9",
+                    Orientation = "landscape",
+                    Copies = 2,
+                    BlackAndWhite = true,
+                    Draft = false
+                }
+            },
             RoundedCorners = true,
             BlankDisplayMode = ChartBlankDisplayMode.Zero,
             ShowDataLabelsOverMaximum = true,
@@ -9237,6 +9257,20 @@ public class FileAdapterSmokeTests
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             chartXml.Root!.Element(chartNs + "date1904")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "lang")!.Attribute("val")!.Value.Should().Be("en-US");
+            var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
+            var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
+            pageMargins.Attribute("l")!.Value.Should().Be("0.7");
+            pageMargins.Attribute("r")!.Value.Should().Be("0.7");
+            pageMargins.Attribute("t")!.Value.Should().Be("0.75");
+            pageMargins.Attribute("b")!.Value.Should().Be("0.75");
+            pageMargins.Attribute("header")!.Value.Should().Be("0.3");
+            pageMargins.Attribute("footer")!.Value.Should().Be("0.3");
+            var pageSetup = printSettings.Element(chartNs + "pageSetup")!;
+            pageSetup.Attribute("paperSize")!.Value.Should().Be("9");
+            pageSetup.Attribute("orientation")!.Value.Should().Be("landscape");
+            pageSetup.Attribute("copies")!.Value.Should().Be("2");
+            pageSetup.Attribute("blackAndWhite")!.Value.Should().Be("1");
+            pageSetup.Attribute("draft")!.Value.Should().Be("0");
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
             chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
             var protection = chartXml.Root.Element(chartNs + "protection")!;
@@ -9258,6 +9292,7 @@ public class FileAdapterSmokeTests
         loadedChart.ChartStyleId.Should().Be(42);
         loadedChart.Uses1904DateSystem.Should().BeTrue();
         loadedChart.Language.Should().Be("en-US");
+        loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
         loadedChart.RoundedCorners.Should().BeTrue();
         loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
         loadedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
