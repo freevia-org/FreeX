@@ -966,7 +966,7 @@ public partial class MainWindow : Window
             ConfigureInsertRibbonSurface();
             NormalizeRibbonCommandGroups();
             AlignRibbonIconColumns();
-            DisableRibbonScrollBars();
+            HideRibbonScrollBars();
             ApplyToolbarDropdownWhiteBackgrounds();
             UpdateRibbonCompactMode(force: forceCompact);
         }
@@ -976,13 +976,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void DisableRibbonScrollBars()
+    private void HideRibbonScrollBars()
     {
         if (RibbonTabs is null)
             return;
 
         foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
-            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
