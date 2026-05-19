@@ -7978,6 +7978,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XElement(chartNs + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "c", chartNs),
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
                 ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",
