@@ -185,17 +185,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 }
                 catch (FormatException) { /* skip unparseable allow-edit ranges */ }
             }
-            if (sDto.BackgroundImage is { ImageBase64.Length: > 0 } backgroundDto)
-            {
-                try
-                {
-                    sheet.BackgroundImage = new WorksheetBackgroundImage(
-                        Convert.FromBase64String(backgroundDto.ImageBase64),
-                        string.IsNullOrWhiteSpace(backgroundDto.ContentType) ? "image/png" : backgroundDto.ContentType,
-                        backgroundDto.FileName);
-                }
-                catch (FormatException) { /* skip invalid background image payloads */ }
-            }
+            sheet.BackgroundImage = TryLoadWorksheetBackground(sDto.BackgroundImage);
             foreach (var pictureDto in sDto.Pictures ?? [])
             {
                 if (NativeJsonVisualDtoMapper.ToPicture(pictureDto, sheet.Id) is { } picture)
@@ -581,14 +571,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                     .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)
                     .Select(range => range.ToString())
                     .ToList(),
-                BackgroundImage = s.BackgroundImage is { } background
-                    ? new WorksheetBackgroundDto
-                    {
-                        ImageBase64 = Convert.ToBase64String(background.ImageBytes),
-                        ContentType = background.ContentType,
-                        FileName = background.FileName
-                    }
-                    : null,
+                BackgroundImage = ToWorksheetBackgroundDto(s.BackgroundImage),
                 Pictures = s.Pictures.Select(NativeJsonVisualDtoMapper.FromPicture).ToList(),
                 TextBoxes = s.TextBoxes.Select(NativeJsonVisualDtoMapper.FromTextBox).ToList(),
                 DrawingShapes = s.DrawingShapes.Select(NativeJsonVisualDtoMapper.FromDrawingShape).ToList(),
@@ -935,6 +918,34 @@ public sealed class NativeJsonAdapter : IFileAdapter
         Width = chart.Width,
         Height = chart.Height
     };
+
+    private static WorksheetBackgroundImage? TryLoadWorksheetBackground(WorksheetBackgroundDto? dto)
+    {
+        if (dto is not { ImageBase64.Length: > 0 })
+            return null;
+
+        try
+        {
+            return new WorksheetBackgroundImage(
+                Convert.FromBase64String(dto.ImageBase64),
+                string.IsNullOrWhiteSpace(dto.ContentType) ? "image/png" : dto.ContentType,
+                dto.FileName);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static WorksheetBackgroundDto? ToWorksheetBackgroundDto(WorksheetBackgroundImage? background) =>
+        background is null
+            ? null
+            : new WorksheetBackgroundDto
+            {
+                ImageBase64 = Convert.ToBase64String(background.ImageBytes),
+                ContentType = background.ContentType,
+                FileName = background.FileName
+            };
 
     private static void SanitizeLoadedChart(ChartModel chart)
     {
