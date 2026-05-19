@@ -39,8 +39,12 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.BarChart,
                 QuickAnalysisCommand.StackedBarChart,
                 QuickAnalysisCommand.PercentStackedBarChart,
+                QuickAnalysisCommand.DoughnutChart,
                 QuickAnalysisCommand.AreaChart,
                 QuickAnalysisCommand.ScatterChart,
+                QuickAnalysisCommand.BubbleChart,
+                QuickAnalysisCommand.RadarChart,
+                QuickAnalysisCommand.StockChart,
                 QuickAnalysisCommand.Sum,
                 QuickAnalysisCommand.Max,
                 QuickAnalysisCommand.Min,
@@ -57,10 +61,14 @@ public sealed class QuickAnalysisPlannerTests
                 "100% Stacked Column",
                 "Line",
                 "Pie",
+                "Doughnut",
                 "Bar",
                 "Stacked Bar",
                 "100% Stacked Bar",
                 "Area",
-                "Scatter");
+                "Scatter",
+                "Bubble",
+                "Radar",
+                "Stock");
     }
 }
