@@ -2322,6 +2322,9 @@ public partial class MainWindow : Window
             case QuickAnalysisCommand.ColumnChart:
                 ChartColumnMenuItem_Click(sender, e);
                 break;
+            case QuickAnalysisCommand.StackedColumnChart:
+                ChartStackedColumnMenuItem_Click(sender, e);
+                break;
             case QuickAnalysisCommand.LineChart:
                 ChartLineMenuItem_Click(sender, e);
                 break;
