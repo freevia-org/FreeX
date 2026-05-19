@@ -2445,7 +2445,7 @@
                                         Click="AccessibilityCheckerBtn_Click"
                                         local:RibbonTooltip.Title="Check Accessibility"
                                         local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Find merged cells and objects missing alternate text."/>
+                                        local:RibbonTooltip.Description="Find model-backed accessibility issues such as merged cells, hidden content, unclear links, missing alt text, and untitled charts."/>
                                 <Button Content="Alt Text" Width="96" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -3855,12 +3855,15 @@
                             <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                 <TextBlock Text="Protect Workbook"
                                            FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Control what types of changes others can make."
+                                <TextBlock x:Name="InfoWorkbookProtection"
+                                           FontSize="12" Foreground="#555" TextWrapping="Wrap"
+                                           Margin="0,0,0,6"/>
+                                <TextBlock x:Name="InfoSheetProtection"
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"
                                            Margin="0,0,0,20"/>
                                 <TextBlock Text="Check Accessibility"
                                            FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Find merged cells and objects missing alt text."
+                                <TextBlock x:Name="InfoAccessibilitySummary"
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"
                                            Margin="0,0,0,20"/>
                                 <TextBlock Text="Manage Workbook"
@@ -3890,6 +3893,48 @@
 
                                     <TextBlock Text="Format" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
                                     <TextBlock x:Name="InfoFormat" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+
+                                    <Rectangle Height="1" Fill="#E0E0E0" Margin="0,0,0,20"/>
+
+                                    <TextBlock Text="Workbook statistics"
+                                               FontSize="13" FontWeight="SemiBold" Foreground="#555"
+                                               Margin="0,0,0,10"/>
+                                    <Grid Margin="0,0,0,20">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Cells with data" FontSize="11" Foreground="#888" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="InfoCellsWithData" FontSize="12" Foreground="#1F1F1F" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Formulas" FontSize="11" Foreground="#888" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="InfoFormulaCount" FontSize="12" Foreground="#1F1F1F" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Comments" FontSize="11" Foreground="#888" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="InfoCommentCount" FontSize="12" Foreground="#1F1F1F" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Charts" FontSize="11" Foreground="#888" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" x:Name="InfoChartCount" FontSize="12" Foreground="#1F1F1F" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Pictures" FontSize="11" Foreground="#888" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" x:Name="InfoPictureCount" FontSize="12" Foreground="#1F1F1F" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Shapes/text boxes" FontSize="11" Foreground="#888" Margin="0,0,12,6"/>
+                                        <TextBlock Grid.Row="5" Grid.Column="1" x:Name="InfoShapeCount" FontSize="12" Foreground="#1F1F1F" Margin="0,0,0,6"/>
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Named ranges" FontSize="11" Foreground="#888" Margin="0,0,12,0"/>
+                                        <TextBlock Grid.Row="6" Grid.Column="1" x:Name="InfoNamedRangeCount" FontSize="12" Foreground="#1F1F1F"/>
+                                    </Grid>
 
                                     <Rectangle Height="1" Fill="#E0E0E0" Margin="0,0,0,20"/>
 

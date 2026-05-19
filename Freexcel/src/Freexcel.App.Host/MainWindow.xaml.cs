@@ -4182,6 +4182,23 @@ public partial class MainWindow : Window
         InfoFormat.Text = _currentFilePath is not null
             ? System.IO.Path.GetExtension(_currentFilePath).ToLower()
             : ".xlsx";
+
+        var plan = InfoPanelSummaryPlanner.Create(
+            _workbook,
+            _workbook.GetSheet(_currentSheetId),
+            CultureInfo.CurrentCulture);
+
+        InfoSheetCount.Text = plan.SheetCount;
+        InfoCellsWithData.Text = plan.CellsWithDataCount;
+        InfoFormulaCount.Text = plan.FormulaCount;
+        InfoCommentCount.Text = plan.CommentCount;
+        InfoChartCount.Text = plan.ChartCount;
+        InfoPictureCount.Text = plan.PictureCount;
+        InfoShapeCount.Text = plan.ShapeCount;
+        InfoNamedRangeCount.Text = plan.NamedRangeCount;
+        InfoWorkbookProtection.Text = plan.WorkbookProtectionSummary;
+        InfoSheetProtection.Text = plan.ActiveSheetProtectionSummary;
+        InfoAccessibilitySummary.Text = plan.AccessibilityIssueSummary;
     }
 
     private void UpdateSsGreeting()

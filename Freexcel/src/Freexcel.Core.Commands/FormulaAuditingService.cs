@@ -1,3 +1,4 @@
+using System.Globalization;
 using Freexcel.Core.Model;
 using Freexcel.Core.Formula;
 
@@ -23,6 +24,9 @@ public sealed record FormulaErrorCheckingRule(string ErrorCode, string Label, st
 
 public static class FormulaErrorCheckingRuleCatalog
 {
+    public const string NumberStoredAsTextCode = "NumberStoredAsText";
+    public const string FormulaRefersToBlankCellsCode = "FormulaRefersToBlankCells";
+
     public static IReadOnlyList<FormulaErrorCheckingRule> SupportedRules { get; } =
     [
         new(ErrorValue.DivByZero.Code, "Formulas that divide by zero", "Flag formulas that result in #DIV/0!."),
@@ -33,7 +37,9 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Num.Code, "Formulas with invalid numbers", "Flag formulas that result in #NUM!."),
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
-        new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!.")
+        new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
+        new(NumberStoredAsTextCode, "Numbers stored as text", "Flag text cells that parse as finite invariant-culture numbers."),
+        new(FormulaRefersToBlankCellsCode, "Formulas referring to blank cells", "Flag formulas whose direct precedents include blank cells.")
     ];
 
     public static bool IsSupported(string errorCode) =>
@@ -61,9 +67,6 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
         var cell = ctx.GetSheet(_sheetId).GetCell(_address);
         if (cell is null)
             return new CommandOutcome(false, "No cell exists at the selected error.");
-
-        if (_ignored && cell.Value is not ErrorValue)
-            return new CommandOutcome(false, "The selected cell does not currently contain an error.");
 
         _previousIgnored = cell.IgnoreFormulaError;
         cell.IgnoreFormulaError = _ignored;
@@ -227,17 +230,91 @@ public static class FormulaAuditingService
         return result;
     }
 
-    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null) =>
-        FindFormulaErrors(workbook, sheetId)
-            .Select(error => new FormulaErrorIssue(
-                error.SheetId,
-                error.SheetName,
-                error.Address,
-                error.Address.ToA1(),
-                error.Error.Code,
-                error.FormulaText is null ? null : "=" + error.FormulaText,
-                DescribeError(error.Error)))
-            .ToList();
+    public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
+    {
+        var result = new List<FormulaErrorIssue>();
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells().OrderBy(c => c.Address.Row).ThenBy(c => c.Address.Col))
+            {
+                if (cell.IgnoreFormulaError)
+                    continue;
+
+                if (cell.Value is ErrorValue error && !workbook.DisabledFormulaErrorCodes.Contains(error.Code))
+                {
+                    result.Add(new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        error.Code,
+                        cell.HasFormula ? "=" + cell.FormulaText : null,
+                        DescribeError(error)));
+                }
+
+                if (IsNumberStoredAsTextIssue(cell) &&
+                    !workbook.DisabledFormulaErrorCodes.Contains(FormulaErrorCheckingRuleCatalog.NumberStoredAsTextCode))
+                {
+                    result.Add(new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        FormulaErrorCheckingRuleCatalog.NumberStoredAsTextCode,
+                        null,
+                        "The cell contains a number stored as text."));
+                }
+
+                if (IsFormulaRefersToBlankCellsIssue(workbook, sheet.Id, cell) &&
+                    !workbook.DisabledFormulaErrorCodes.Contains(FormulaErrorCheckingRuleCatalog.FormulaRefersToBlankCellsCode))
+                {
+                    result.Add(new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        FormulaErrorCheckingRuleCatalog.FormulaRefersToBlankCellsCode,
+                        "=" + cell.FormulaText,
+                        "The formula directly refers to one or more blank cells."));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsNumberStoredAsTextIssue(Cell cell)
+    {
+        if (cell.HasFormula || cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
+            return false;
+
+        return double.TryParse(
+                text.Value,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out var parsed) &&
+            double.IsFinite(parsed);
+    }
+
+    private static bool IsFormulaRefersToBlankCellsIssue(Workbook workbook, SheetId sheetId, Cell cell)
+    {
+        if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
+            return false;
+
+        foreach (var precedent in ExtractPrecedents(workbook, sheetId, cell.FormulaText))
+        {
+            var precedentSheet = workbook.GetSheet(precedent.Sheet);
+            var precedentCell = precedentSheet?.GetCell(precedent);
+            if (precedentCell is null || precedentCell.Value is BlankValue)
+                return true;
+        }
+
+        return false;
+    }
 
     private static string DescribeError(ErrorValue error) => error.Code switch
     {
