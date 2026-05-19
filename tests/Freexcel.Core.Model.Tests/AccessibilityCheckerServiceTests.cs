@@ -108,6 +108,42 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsHiddenRowContainingOnlyCharts()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+
+        sheet.HiddenRows.Add(4);
+        AddChart(sheet, 2, 1, 4, 3);
+        AddChart(sheet, 4, 5, 6, 7);
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i =>
+            i.Kind == AccessibilityIssueKind.HiddenRowContent &&
+            i.SheetName == "Charts" &&
+            i.Location == "4:4");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenColumnContainingOnlyCharts()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+
+        sheet.HiddenCols.Add(7);
+        AddChart(sheet, 2, 5, 4, 7);
+        AddChart(sheet, 6, 7, 8, 9);
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i =>
+            i.Kind == AccessibilityIssueKind.HiddenColumnContent &&
+            i.SheetName == "Charts" &&
+            i.Location == "G:G");
+    }
+
+    [Fact]
     public void FindIssues_FlagsUnclearHyperlinkDisplayText()
     {
         var workbook = new Workbook("Accessibility");
@@ -201,6 +237,18 @@ public sealed class AccessibilityCheckerServiceTests
                 new CellAddress(sheet.Id, row, 1),
                 new CellAddress(sheet.Id, row, 3)),
             Location = new CellAddress(sheet.Id, row, col)
+        });
+    }
+
+    private static void AddChart(Sheet sheet, uint startRow, uint startCol, uint endRow, uint endCol)
+    {
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, startRow, startCol),
+                new CellAddress(sheet.Id, endRow, endCol)),
+            Title = "Accessible chart"
         });
     }
 }
