@@ -1694,17 +1694,17 @@ public partial class MainWindow : Window
 
         target ??= e.Key switch
         {
-            Key.Up    => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
+            Key.Up    => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
                                   : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
-            Key.Down  => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
+            Key.Down  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
                                   : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Left  => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
+            Key.Left  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
                                   : new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
-            Key.Right => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
+            Key.Right => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
                                   : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
 
             Key.Home     => new CellAddress(_currentSheetId, ctrlHeld ? 1u : current.Row, 1u),
-            Key.End      => ctrlHeld ? (CellAddress?)CtrlEndCell(sheet) : null,
+            Key.End      => ctrlHeld ? ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _currentSheetId) : null,
             Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
             Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Row + (uint)pageSize), current.Col),
 
@@ -3025,61 +3025,6 @@ public partial class MainWindow : Window
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────
-
-    private bool CellHasData(Sheet? sheet, uint row, uint col)
-    {
-        if (sheet == null) return false;
-        var v = sheet.GetValue(new CellAddress(_currentSheetId, row, col));
-        return v != null && v is not BlankValue;
-    }
-
-    private CellAddress FindDataBoundaryCol(Sheet? sheet, uint row, uint col, int dir)
-    {
-        const uint maxRow = 1_048_576;
-        bool startFull = CellHasData(sheet, row, col);
-        uint r = row;
-        while (true)
-        {
-            long next = (long)r + dir;
-            if (next < 1 || next > maxRow) break;
-            uint nr = (uint)next;
-            bool nextFull = CellHasData(sheet, nr, col);
-            if (startFull && !nextFull) break;   // stop before gap
-            r = nr;
-            if (!startFull && nextFull) break;   // landed on first data cell
-        }
-        return new CellAddress(_currentSheetId, r, col);
-    }
-
-    private CellAddress FindDataBoundaryRow(Sheet? sheet, uint row, uint col, int dir)
-    {
-        const uint maxCol = 16_384;
-        bool startFull = CellHasData(sheet, row, col);
-        uint c = col;
-        while (true)
-        {
-            long next = (long)c + dir;
-            if (next < 1 || next > maxCol) break;
-            uint nc = (uint)next;
-            bool nextFull = CellHasData(sheet, row, nc);
-            if (startFull && !nextFull) break;
-            c = nc;
-            if (!startFull && nextFull) break;
-        }
-        return new CellAddress(_currentSheetId, row, c);
-    }
-
-    private CellAddress CtrlEndCell(Sheet? sheet)
-    {
-        uint maxRow = 1, maxCol = 1;
-        if (sheet != null)
-            foreach (var (addr, _) in sheet.GetUsedCells())
-            {
-                if (addr.Row > maxRow) maxRow = addr.Row;
-                if (addr.Col > maxCol) maxCol = addr.Col;
-            }
-        return new CellAddress(_currentSheetId, maxRow, maxCol);
-    }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
