@@ -71,6 +71,51 @@ public sealed class AccessibilityCheckerServiceTests
         issues.Should().OnlyContain(i => i.Message == "Chart is missing a title.");
     }
 
+    [Theory]
+    [InlineData("Picture 1")]
+    [InlineData("Image")]
+    [InlineData("Shape")]
+    [InlineData("Text box")]
+    public void FindIssues_FlagsObjectsWithGenericAltText(string altText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = PictureKind.Image,
+            AltText = altText
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Quarterly revenue callout"
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.GenericAltText).Subject;
+        issue.Location.Should().Be("A3");
+        issue.Message.Should().Be("Picture alternate text should describe the object.");
+    }
+
+    [Fact]
+    public void FindIssues_AllowsSpecificAltText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Text = "Q1 revenue rose 8%",
+            AltText = "Q1 revenue summary annotation"
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.GenericAltText);
+    }
+
     [Fact]
     public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsTheUrl()
     {

@@ -9220,6 +9220,11 @@ public class FileAdapterSmokeTests
                     ["accent1"] = "accent2"
                 }
             },
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternalData1",
+                AutoUpdate = true
+            },
             PrintSettings = new ChartPrintSettingsModel
             {
                 PageMargins = new ChartPageMarginsModel
@@ -9272,6 +9277,10 @@ public class FileAdapterSmokeTests
             colorMap.Attribute("bg1")!.Value.Should().Be("lt1");
             colorMap.Attribute("tx1")!.Value.Should().Be("dk1");
             colorMap.Attribute("accent1")!.Value.Should().Be("accent2");
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var externalData = chartXml.Root.Element(chartNs + "externalData")!;
+            externalData.Attribute(relNs + "id")!.Value.Should().Be("rIdExternalData1");
+            externalData.Element(chartNs + "autoUpdate")!.Attribute("val")!.Value.Should().Be("1");
             var printSettings = chartXml.Root.Element(chartNs + "printSettings")!;
             var pageMargins = printSettings.Element(chartNs + "pageMargins")!;
             pageMargins.Attribute("l")!.Value.Should().Be("0.7");
@@ -9308,6 +9317,7 @@ public class FileAdapterSmokeTests
         loadedChart.Uses1904DateSystem.Should().BeTrue();
         loadedChart.Language.Should().Be("en-US");
         loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
+        loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
         loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
         loadedChart.RoundedCorners.Should().BeTrue();
         loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
