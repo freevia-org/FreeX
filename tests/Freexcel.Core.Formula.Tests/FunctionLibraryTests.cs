@@ -1179,6 +1179,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Value_ParsesExcelFakeLeapDayText()
+    {
+        _eval.Evaluate("=VALUE(\"2/29/1900\")", MakeSheet()).Should().Be(new NumberValue(60));
+        _eval.Evaluate("=VALUE(\"1900-02-29\")", MakeSheet()).Should().Be(new NumberValue(60));
+        _eval.Evaluate("=VALUE(\"2/29/1900 6:00 AM\")", MakeSheet()).Should().Be(new NumberValue(60.25));
+    }
+
+    [Fact]
     public void Value_InvalidText_ReturnsValueError()
     {
         var sheet = MakeSheet();
