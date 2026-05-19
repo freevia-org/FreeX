@@ -7370,6 +7370,33 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnknownWorkbookExtensionListEntries()
+    {
+        var workbook = new Workbook("WorkbookExtensionRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("workbook metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorkbookExtensionList(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString().Should().Contain("{00112233-4455-6677-8899-AABBCCDDEEFF}");
+        workbookXml.ToString().Should().Contain("FreexcelUnknownWorkbookExtension");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPrinterSettingsPackageAndWorksheetReference()
     {
         var workbook = new Workbook("PrinterSettingsRetentionTest");
@@ -8498,6 +8525,29 @@ public class FileAdapterSmokeTests
             var settingsEntry = archive.CreateEntry("xl/printerSettings/printerSettings1.bin");
             using var settingsStream = settingsEntry.Open();
             settingsStream.Write([0x46, 0x58, 0x4C, 0x50, 0x52, 0x4E]);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorkbookExtensionList(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace x15Ns = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "extLst",
+                new XElement(
+                    workbookNs + "ext",
+                    new XAttribute("uri", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                    new XElement(
+                        x15Ns + "futureMetadata",
+                        new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
+                        new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         packageStream.Position = 0;
