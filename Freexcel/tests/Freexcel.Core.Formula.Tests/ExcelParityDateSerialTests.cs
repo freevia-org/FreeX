@@ -115,5 +115,25 @@ public sealed class ExcelParityDateSerialTests
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=DAYS(DATE(1900,3,1),DATE(1900,1,1))", 60)]
+    [InlineData("=DAYS(DATE(1900,3,1),DATE(1900,2,28))", 2)]
+    [InlineData("=DAYS360(DATE(1900,1,1),DATE(1900,3,1))", 60)]
+    [InlineData("=DAYS360(DATE(1900,2,28),DATE(1900,3,1))", 3)]
+    public void DayCountFunctions_UseExcelSerialBoundaries(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=YEARFRAC(DATE(1900,1,1),DATE(1900,3,1),3)", 0.164383561643836)]
+    [InlineData("=YEARFRAC(DATE(1900,2,28),DATE(1900,3,1),3)", 0.00547945205479452)]
+    public void YearfracActual365_UsesExcelSerialBoundaries(string formula, double expected)
+    {
+        var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
+
+        result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
     private static Sheet Sheet() => new(SheetId.New(), "S");
 }

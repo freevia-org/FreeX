@@ -2943,7 +2943,7 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue e1) return e1;
         if (!TryOADateToDateTime(args[0], out var endDt))   return ErrorValue.Num;
         if (!TryOADateToDateTime(args[1], out var startDt)) return ErrorValue.Num;
-        return new NumberValue((endDt - startDt).Days);
+        return new NumberValue(DateToSerial(endDt) - DateToSerial(startDt));
     }
 
     private static ScalarValue Days360(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2973,7 +2973,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawBasis)) return ErrorValue.Num;
         int basis = (int)rawBasis;
         if (basis < 0 || basis > 4) return ErrorValue.Num;
-        double totalDays = (endDt - startDt).TotalDays;
+        double totalDays = DateToSerial(endDt) - DateToSerial(startDt);
         double result = basis switch
         {
             1 => totalDays / ActualActualDenominator(startDt, endDt),
