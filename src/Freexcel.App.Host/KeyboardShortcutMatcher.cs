@@ -215,6 +215,42 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Back)
+        {
+            shortcut = KeyboardCommandShortcut.ScrollActiveCellIntoView;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey is Key.OemPeriod or Key.Decimal)
+        {
+            shortcut = KeyboardCommandShortcut.CycleSelectionCorner;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemOpenBrackets)
+        {
+            shortcut = KeyboardCommandShortcut.SelectDirectPrecedents;
+            return true;
+        }
+
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemCloseBrackets)
+        {
+            shortcut = KeyboardCommandShortcut.SelectDirectDependents;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemOpenBrackets)
+        {
+            shortcut = KeyboardCommandShortcut.SelectAllPrecedents;
+            return true;
+        }
+
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemCloseBrackets)
+        {
+            shortcut = KeyboardCommandShortcut.SelectAllDependents;
+            return true;
+        }
+
         return false;
     }
 
@@ -323,7 +359,13 @@ public enum KeyboardCommandShortcut
     ZoomOut,
     CopyFormulaFromAbove,
     CopyValueFromAbove,
-    OpenActiveDropdown
+    OpenActiveDropdown,
+    ScrollActiveCellIntoView,
+    CycleSelectionCorner,
+    SelectDirectPrecedents,
+    SelectDirectDependents,
+    SelectAllPrecedents,
+    SelectAllDependents
 }
 
 public enum BorderKeyboardShortcut

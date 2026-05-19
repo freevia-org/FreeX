@@ -1814,7 +1814,108 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.OpenActiveDropdown:
                 OpenActiveDropdown();
                 break;
+            case KeyboardCommandShortcut.ScrollActiveCellIntoView:
+                ScrollActiveCellIntoView();
+                break;
+            case KeyboardCommandShortcut.CycleSelectionCorner:
+                CycleSelectionCorner();
+                break;
+            case KeyboardCommandShortcut.SelectDirectPrecedents:
+                SelectFormulaAuditCells(selectDependents: false, includeTransitive: false);
+                break;
+            case KeyboardCommandShortcut.SelectDirectDependents:
+                SelectFormulaAuditCells(selectDependents: true, includeTransitive: false);
+                break;
+            case KeyboardCommandShortcut.SelectAllPrecedents:
+                SelectFormulaAuditCells(selectDependents: false, includeTransitive: true);
+                break;
+            case KeyboardCommandShortcut.SelectAllDependents:
+                SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
+                break;
         }
+    }
+
+    private void SelectFormulaAuditCells(bool selectDependents, bool includeTransitive)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var activeCell = _selectionCursor ?? _selectionAnchor ?? range.Start;
+        var matches = GetFormulaAuditMatches(activeCell, selectDependents, includeTransitive)
+            .Where(address => address.Sheet == _currentSheetId)
+            .Distinct()
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            StatusReadyText.Visibility = Visibility.Visible;
+            var depth = includeTransitive ? "traceable" : "direct";
+            StatusReadyText.Text = selectDependents
+                ? $"No {depth} dependents on this sheet"
+                : $"No {depth} precedents on this sheet";
+            return;
+        }
+
+        var compressedRanges = SelectionRangeService.CompressAddresses(matches);
+        _selectionAnchor = matches[0];
+        _selectionCursor = matches[0];
+        SheetGrid.SelectedRange = new GridRange(matches[0], matches[0]);
+        SheetGrid.SelectedRanges = compressedRanges;
+        CellAddressBox.Text = compressedRanges.Count == 1
+            ? FormatRangeReference(compressedRanges[0].Start, compressedRanges[0].End)
+            : $"{matches.Count} cells";
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(matches[0]), matches[0]);
+        EnsureCellVisible(matches[0]);
+        UpdateViewport();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private IReadOnlyList<CellAddress> GetFormulaAuditMatches(
+        CellAddress activeCell,
+        bool selectDependents,
+        bool includeTransitive)
+    {
+        if (!includeTransitive)
+        {
+            return selectDependents
+                ? FormulaAuditingService.GetDirectDependents(_workbook, activeCell)
+                : FormulaAuditingService.GetDirectPrecedents(_workbook, activeCell);
+        }
+
+        var arrows = selectDependents
+            ? FormulaAuditingService.GetDependentTraceArrows(_workbook, activeCell)
+            : FormulaAuditingService.GetPrecedentTraceArrows(_workbook, activeCell);
+        return arrows
+            .Select(arrow => selectDependents ? arrow.To : arrow.From)
+            .ToList();
+    }
+
+    private void CycleSelectionCorner()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var currentCorner = _selectionCursor ?? _selectionAnchor ?? range.Start;
+        var nextCorner = SelectionCornerNavigator.GetNextCorner(range, currentCorner);
+        _selectionAnchor = nextCorner;
+        _selectionCursor = nextCorner;
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner);
+        EnsureCellVisible(nextCorner);
+        FocusSheetGridIfNeeded();
+        RefreshToolbar();
+        RefreshStatusBar();
+    }
+
+    private void ScrollActiveCellIntoView()
+    {
+        if (SheetGrid.SelectedRange?.Start is not { } activeCell)
+            return;
+
+        EnsureCellVisible(activeCell);
+        FocusSheetGridIfNeeded();
     }
 
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)

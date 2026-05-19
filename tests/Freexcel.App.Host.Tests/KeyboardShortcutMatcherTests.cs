@@ -98,6 +98,13 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.OemQuotes, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CopyFormulaFromAbove)]
     [InlineData(Key.OemQuotes, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.CopyValueFromAbove)]
     [InlineData(Key.None, Key.Down, ModifierKeys.Alt, KeyboardCommandShortcut.OpenActiveDropdown)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.ScrollActiveCellIntoView)]
+    [InlineData(Key.OemPeriod, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CycleSelectionCorner)]
+    [InlineData(Key.Decimal, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CycleSelectionCorner)]
+    [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectPrecedents)]
+    [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectDirectDependents)]
+    [InlineData(Key.OemOpenBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllPrecedents)]
+    [InlineData(Key.OemCloseBrackets, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.SelectAllDependents)]
     public void TryGetCommandShortcut_MapsCommonExcelShortcuts(
         Key key,
         Key systemKey,
