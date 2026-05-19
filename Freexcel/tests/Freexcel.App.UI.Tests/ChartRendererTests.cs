@@ -12,6 +12,41 @@ namespace Freexcel.App.UI.Tests;
 
 public sealed class ChartRendererTests
 {
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Treemap)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Pareto)]
+    [InlineData(ChartType.BoxAndWhisker)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Funnel)]
+    [InlineData(ChartType.Map)]
+    [InlineData(ChartType.ThreeDColumn)]
+    public void ChartRenderer_DoesNotRenderDeferredAdvancedChartFamiliesAsLineCharts(ChartType type)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = type,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildNullablePlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Category"),
+                Cell(1, 2, "Sales"),
+                Cell(2, 1, "A"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "B"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        model.Should().BeNull();
+    }
+
     [Fact]
     public void PivotChartRenderer_AddsFieldButtonAnnotations()
     {
@@ -1633,6 +1668,16 @@ public sealed class ChartRendererTests
             [typeof(ChartModel), typeof(ViewportModel)]);
         method.Should().NotBeNull();
         return method!.Invoke(null, [chart, viewport]).Should().BeOfType<PlotModel>().Subject;
+    }
+
+    private static PlotModel? BuildNullablePlotModel(ChartModel chart, ViewportModel viewport)
+    {
+        var method = typeof(ChartRenderer).GetMethod(
+            "BuildPlotModel",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            [typeof(ChartModel), typeof(ViewportModel)]);
+        method.Should().NotBeNull();
+        return method!.Invoke(null, [chart, viewport]) as PlotModel;
     }
 
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)

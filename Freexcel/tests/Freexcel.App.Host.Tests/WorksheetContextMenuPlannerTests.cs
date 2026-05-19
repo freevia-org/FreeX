@@ -13,13 +13,21 @@ public sealed class WorksheetContextMenuPlannerTests
             "Cut",
             "Copy",
             "Paste",
+            "Paste Special...",
             "Insert Row Above",
             "Delete Row(s)",
             "Sort A to Z",
             "Filter...",
+            "Hide Rows",
+            "Unhide Rows",
+            "Hide Columns",
+            "Unhide Columns",
             "New Note",
+            "Delete Note",
             "Hyperlink...",
             "Format Cells...",
+            "Clear Formats",
+            "Clear Hyperlinks",
             "Clear Contents");
     }
 }

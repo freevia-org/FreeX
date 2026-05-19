@@ -53,6 +53,8 @@ public partial class FormatCellsDialog : Window
         DlgUnderlineCheck.IsChecked = s.Underline;
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
+        DlgSuperscriptCheck.IsChecked = s.Superscript;
+        DlgSubscriptCheck.IsChecked = s.Subscript;
         DlgFontColorBox.Text        = $"{s.FontColor.R},{s.FontColor.G},{s.FontColor.B}";
 
         DlgFillColorBox.Text = s.FillColor.HasValue
@@ -139,6 +141,8 @@ public partial class FormatCellsDialog : Window
             Italic:          DlgItalicCheck.IsChecked,
             Underline:       DlgUnderlineCheck.IsChecked,
             Strikethrough:   DlgStrikeCheck.IsChecked,
+            Superscript:     DlgSuperscriptCheck.IsChecked,
+            Subscript:       DlgSubscriptCheck.IsChecked,
             FontName:        DlgFontNameBox.SelectedItem as string,
             FontSize:        fontSize,
             FontColor:       fontColor,

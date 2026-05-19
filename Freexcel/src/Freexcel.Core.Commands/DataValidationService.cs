@@ -118,7 +118,7 @@ public static class DataValidationService
             return null;
 
         // Split once; build case-insensitive set for O(1) lookup.
-        var trimmed = dv.Formula1.Split(',').Select(i => i.Trim()).ToArray();
+        var trimmed = ParseInlineListItems(dv.Formula1);
         return ValidateListAgainstValues(dv, value, trimmed);
     }
 
@@ -154,7 +154,43 @@ public static class DataValidationService
                 return new[] { ToValidationText(result) };
         }
 
-        return formulaText.Split(',').Select(i => i.Trim()).ToArray();
+        return ParseInlineListItems(formulaText);
+    }
+
+    private static IReadOnlyCollection<string> ParseInlineListItems(string text)
+    {
+        var items = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch == '"')
+            {
+                if (inQuotes && i + 1 < text.Length && text[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (ch == ',' && !inQuotes)
+            {
+                items.Add(current.ToString().Trim());
+                current.Clear();
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        items.Add(current.ToString().Trim());
+        return items;
     }
 
     private static bool TryReadRangeOrNamedSource(
