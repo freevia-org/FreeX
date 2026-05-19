@@ -9618,10 +9618,7 @@ public partial class MainWindow : Window
 
         var input = PromptForInput("Picture size (width x height):", $"{(int)picture.Width}x{(int)picture.Height}");
         if (input is null) return;
-        var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !double.TryParse(parts[0], out var width) ||
-            !double.TryParse(parts[1], out var height))
+        if (!DrawingInputParser.TryParseSize(input, out var width, out var height))
         {
             MessageBox.Show("Enter size as width x height, for example 320x180.",
                 "Picture Size", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -9875,10 +9872,7 @@ public partial class MainWindow : Window
 
         var input = PromptForInput("Object size (width x height):", $"{(int)target.Width}x{(int)target.Height}");
         if (input is null) return;
-        var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !double.TryParse(parts[0], out var width) ||
-            !double.TryParse(parts[1], out var height))
+        if (!DrawingInputParser.TryParseSize(input, out var width, out var height))
         {
             MessageBox.Show("Enter size as width x height, for example 160x90.",
                 "Object Size", MessageBoxButton.OK, MessageBoxImage.Warning);

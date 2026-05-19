@@ -51,6 +51,24 @@ public static class DrawingInputParser
         return false;
     }
 
+    public static bool TryParseSize(string input, out double width, out double height)
+    {
+        width = 0;
+        height = 0;
+
+        var parts = input.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 ||
+            !double.TryParse(parts[0], out width) ||
+            !double.TryParse(parts[1], out height))
+        {
+            width = 0;
+            height = 0;
+            return false;
+        }
+
+        return true;
+    }
+
     public static string FormatPictureCellText(ScalarValue value) =>
         value switch
         {
