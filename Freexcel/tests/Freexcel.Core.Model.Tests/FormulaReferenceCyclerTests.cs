@@ -60,6 +60,22 @@ public class FormulaReferenceCyclerTests
         selectionLength.Should().Be(9);
     }
 
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesLowercaseReferenceAndNormalizesColumnLetters()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=sum(a1:b2)",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=sum($A$1:$B$2)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(9);
+    }
+
     [Theory]
     [InlineData("=Sheet2!A1", 9, "=Sheet2!$A$1", 1, 11)]
     [InlineData("='Sales FY26'!A1", 14, "='Sales FY26'!$A$1", 1, 17)]
