@@ -7866,6 +7866,44 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_PreservesNativeSlicerTimelineDrawingAnchorsWhenWritingFreexcelDrawings()
+    {
+        var workbook = new Workbook("SlicerTimelineDrawingTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalSlicerTimelinePackage(source, includeDrawing: true);
+
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(loadedSheet.Id, 4, 6),
+            Kind = PictureKind.Image,
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png",
+            AltText = "Freexcel picture",
+            Width = 96,
+            Height = 64
+        });
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+        drawingXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("Native Slicer Shape");
+        drawingXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("Freexcel picture");
+
+        var drawingRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!);
+        drawingRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("media/freexcelPicture");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTripsAuthoredSlicerAndTimelineSelectionState()
     {
         var workbook = new Workbook("AuthoredSlicerTimelineStateTest");
@@ -8496,10 +8534,17 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
-    private static void AddMinimalSlicerTimelinePackage(MemoryStream packageStream)
+    private static void AddMinimalSlicerTimelinePackage(MemoryStream packageStream, bool includeDrawing = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+
             ReplacePackageXml(archive, "xl/slicers/slicer1.xml", XDocument.Parse("""
                 <slicer xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
                         name="Region Slicer"
@@ -8530,6 +8575,60 @@ public class FileAdapterSmokeTests
                   </pivotTables>
                 </timelineCacheDefinition>
                 """));
+
+            if (includeDrawing)
+            {
+                var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+                AddContentTypeOverride(contentTypesXml, contentTypeNs, "/xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml");
+                ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+                var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+                var worksheetXml = LoadPackageXml(worksheetEntry);
+                worksheetXml.Root!.Elements(worksheetNs + "drawing").Remove();
+                worksheetXml.Root!.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", "rIdNativeSlicerDrawing")));
+                ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+                var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+                var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                    ? LoadPackageXml(worksheetRelsEntry)
+                    : new XDocument(new XElement(packageRelNs + "Relationships"));
+                worksheetRelsXml.Root!.Add(new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", "rIdNativeSlicerDrawing"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
+                    new XAttribute("Target", "../drawings/drawing1.xml")));
+                ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+                var drawingXml = new XDocument(
+                    new XElement(spreadsheetDrawingNs + "wsDr",
+                        new XAttribute(XNamespace.Xmlns + "xdr", spreadsheetDrawingNs),
+                        new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                        new XAttribute(XNamespace.Xmlns + "r", relNs),
+                        new XElement(spreadsheetDrawingNs + "twoCellAnchor",
+                            new XElement(spreadsheetDrawingNs + "from",
+                                new XElement(spreadsheetDrawingNs + "col", "2"),
+                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                                new XElement(spreadsheetDrawingNs + "row", "2"),
+                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                            new XElement(spreadsheetDrawingNs + "to",
+                                new XElement(spreadsheetDrawingNs + "col", "5"),
+                                new XElement(spreadsheetDrawingNs + "colOff", "0"),
+                                new XElement(spreadsheetDrawingNs + "row", "10"),
+                                new XElement(spreadsheetDrawingNs + "rowOff", "0")),
+                            new XElement(spreadsheetDrawingNs + "sp",
+                                new XElement(spreadsheetDrawingNs + "nvSpPr",
+                                    new XElement(spreadsheetDrawingNs + "cNvPr",
+                                        new XAttribute("id", "100"),
+                                        new XAttribute("name", "Native Slicer Shape")),
+                                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+                                new XElement(spreadsheetDrawingNs + "spPr"),
+                                new XElement(spreadsheetDrawingNs + "txBody",
+                                    new XElement(drawingNs + "bodyPr"),
+                                    new XElement(drawingNs + "lstStyle"),
+                                    new XElement(drawingNs + "p"))),
+                            new XElement(spreadsheetDrawingNs + "clientData"))));
+                ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
+            }
         }
 
         packageStream.Position = 0;
