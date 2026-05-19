@@ -275,4 +275,12 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("\"TableStyleDark1\"");
         source.Should().Contain("TryExecuteApplyStyle(");
     }
+
+    [Fact]
+    public void CellStyleMenu_UsesActiveWorkbookThemeForPresetPlanning()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
+    }
 }
