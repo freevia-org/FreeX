@@ -3739,6 +3739,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         MergeContentTypes(sourceArchive, generatedArchive);
         MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive);
         PreservePivotXmlReferences(sourceArchive, generatedArchive);
         PreserveStructuredTableXmlReferences(sourceArchive, generatedArchive);
         PreserveExternalLinkReferences(sourceArchive, generatedArchive);
@@ -4473,6 +4474,29 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
+    private static void PreserveWorkbookMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
+        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
+        if (sourceWorkbookEntry is null || targetWorkbookEntry is null)
+            return;
+
+        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
+        if (sourceExtensionList is null)
+            return;
+
+        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
+        var targetRoot = targetWorkbookXml.Root;
+        if (targetRoot is null)
+            return;
+
+        if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
     private static void PreserveWorksheetMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -4547,7 +4571,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeWorksheetExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
                 changed = true;
 
             if (changed)
@@ -4555,7 +4579,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static bool MergeWorksheetExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceExtensionList is null)
             return false;
