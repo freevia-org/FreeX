@@ -75,7 +75,7 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        if (!TryParseRange(rangeText, out var range))
+        if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
         {
             MessageBox.Show(
                 "Invalid range format. Use: SheetName!A1:B10 or A1:B10",
@@ -113,47 +113,6 @@ public sealed partial class NamedRangeDialog : Window
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
-    // ── Range parsing ─────────────────────────────────────────────────────────
-
-    private bool TryParseRange(string text, out GridRange range)
-    {
-        range = default;
-        if (string.IsNullOrWhiteSpace(text)) return false;
-
-        // Try Sheet!A1:B10 format
-        var bangIdx = text.IndexOf('!');
-        if (bangIdx > 0)
-        {
-            var sheetName = text[..bangIdx].Trim();
-            var rangeAddr = text[(bangIdx + 1)..].Trim();
-            var sheet = _workbook.GetSheet(sheetName);
-            if (sheet == null)
-            {
-                // Fall back to first sheet
-                if (_workbook.SheetCount == 0) return false;
-                sheet = _workbook.GetSheetAt(0);
-            }
-            return TryParseRangeAddr(rangeAddr, sheet.Id, out range);
-        }
-
-        // No sheet qualifier — use first sheet
-        if (_workbook.SheetCount == 0) return false;
-        var defaultSheet = _workbook.GetSheetAt(0);
-        return TryParseRangeAddr(text, defaultSheet.Id, out range);
-    }
-
-    private static bool TryParseRangeAddr(string addr, SheetId sheetId, out GridRange range)
-    {
-        range = default;
-        var parts = addr.Split(':');
-        if (parts.Length != 2) return false;
-
-        if (!CellAddress.TryParse(parts[0].Trim(), sheetId, out var start)) return false;
-        if (!CellAddress.TryParse(parts[1].Trim(), sheetId, out var end)) return false;
-
-        range = new GridRange(start, end);
-        return true;
-    }
 }
 
 /// <summary>View model for a row in the named ranges list.</summary>
