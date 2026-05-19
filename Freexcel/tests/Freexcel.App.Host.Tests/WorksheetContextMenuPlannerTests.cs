@@ -20,6 +20,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Delete Row(s)",
             "Sort A to Z",
             "Filter...",
+            "Clear Filter",
             "Hide Rows",
             "Unhide Rows",
             "Hide Columns",
@@ -31,5 +32,8 @@ public sealed class WorksheetContextMenuPlannerTests
             "Clear Formats",
             "Clear Hyperlinks",
             "Clear Contents");
+
+        commands.Single(command => command.Header == "Clear Filter")
+            .Action.Should().Be(WorksheetContextMenuAction.ClearFilter);
     }
 }
