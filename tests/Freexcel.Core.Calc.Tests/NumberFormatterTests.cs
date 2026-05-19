@@ -20,6 +20,30 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData(1234.5, "$ 1,234.50")]
+    [InlineData(-1234.5, "$ (1,234.50)")]
+    [InlineData(0, "$ -")]
+    public void AccountingSubset_RemovesSpacingDirectivesAndPreservesVisibleLiterals(double value, string expected)
+    {
+        const string format = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
+
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("#,##0.0###", 1234.567, "1,234.567")]
+    [InlineData("# ?/?", 0.125, "1/8")]
+    [InlineData("0.00E+00", 1200, "1.20E+03")]
+    public void CustomNumberSubset_FormatsVariableDecimalsFractionsAndScientific(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void Format_DateSerial_WithDateFormat_ReturnsFormattedDate()
     {
