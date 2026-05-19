@@ -9208,7 +9208,8 @@ public class FileAdapterSmokeTests
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
             IsPivotChart = true,
             PivotTableName = "PivotTable1",
-            ChartStyleId = 42
+            ChartStyleId = 42,
+            RoundedCorners = true
         };
         sheet.Charts.Add(chart);
 
@@ -9221,12 +9222,15 @@ public class FileAdapterSmokeTests
             var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
+            chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "pivotSource").Should().NotBeNull();
         }
 
         saved.Position = 0;
         var loaded = new XlsxFileAdapter().Load(saved);
-        loaded.GetSheetAt(0).Charts.Should().ContainSingle().Which.ChartStyleId.Should().Be(42);
+        loaded.GetSheetAt(0).Charts.Should().ContainSingle().Which.Should().Match<ChartModel>(
+            chart => chart.ChartStyleId == 42 &&
+                     chart.RoundedCorners);
     }
 
     [Fact]

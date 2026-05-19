@@ -79,6 +79,11 @@ public static class XlsxChartPartReader
             .Value;
         if (int.TryParse(styleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleId))
             chart.ChartStyleId = styleId;
+
+        chart.RoundedCorners = IsTrue(chartXml.Root?
+            .Element(ChartNs + "roundedCorners")?
+            .Attribute("val")?
+            .Value);
     }
 
     private static (XElement Element, ChartType Type)? FindDeferredAdvancedChart(XElement? plotArea)
