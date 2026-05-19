@@ -70,4 +70,26 @@ public sealed class AccessibilityCheckerServiceTests
         issues.Should().OnlyContain(i => i.Location == "A1:B4");
         issues.Should().OnlyContain(i => i.Message == "Chart is missing a title.");
     }
+
+    [Fact]
+    public void FindIssues_FlagsHyperlinksWhoseDisplayTextIsTheUrl()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sheet1");
+        var urlAddress = new CellAddress(sheet.Id, 1, 1);
+        var descriptiveAddress = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(urlAddress, new TextValue("https://example.com/report"));
+        sheet.Hyperlinks[urlAddress] = "https://example.com/report";
+        sheet.SetCell(descriptiveAddress, new TextValue("Quarterly report"));
+        sheet.Hyperlinks[descriptiveAddress] = "https://example.com/report";
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl).Subject;
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Location.Should().Be("A1");
+        issue.Message.Should().Be("Hyperlink display text should describe the destination instead of repeating the URL.");
+    }
 }
