@@ -1806,7 +1806,8 @@ public static class BuiltInFunctions
         try
         {
             var anchor = new DateTime(end.Year, start.Month, start.Day);
-            return new NumberValue((end - (anchor > end ? anchor.AddYears(-1) : anchor)).Days);
+            var adjustedStart = anchor > end ? anchor.AddYears(-1) : anchor;
+            return new NumberValue(DateToSerial(end) - DateToSerial(adjustedStart));
         }
         catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
     }
@@ -1819,10 +1820,13 @@ public static class BuiltInFunctions
                 return new NumberValue(end.Day - start.Day);
             int prevYear  = end.Month == 1 ? end.Year - 1 : end.Year;
             int prevMonth = end.Month == 1 ? 12 : end.Month - 1;
-            return new NumberValue(end.Day + DateTime.DaysInMonth(prevYear, prevMonth) - start.Day);
+            return new NumberValue(end.Day + DaysInExcelMonth(prevYear, prevMonth) - start.Day);
         }
         catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
     }
+
+    private static int DaysInExcelMonth(int year, int month) =>
+        year == 1900 && month == 2 ? 29 : DateTime.DaysInMonth(year, month);
 
     // ═══════════════════════════════════════════════════════════════════
     // Phase 4.2  –  Math
