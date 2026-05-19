@@ -6311,7 +6311,7 @@ public partial class MainWindow : Window
                 currentRange =>
                 {
                     var addr = currentRange.Start;
-                    var formula = BuildAutoSumFormula(func, addr);
+                    var formula = AutoSumFormulaPlanner.BuildFormula(_workbook.GetSheet(_currentSheetId), func, addr);
                     var edits = new List<(CellAddress Address, Cell NewCell)> { (addr, Cell.FromFormula(formula)) };
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
@@ -6324,31 +6324,6 @@ public partial class MainWindow : Window
         RecalculateIfAutomatic(outcome.AffectedCells ?? [range.Start]);
         SetActiveCell(new CellAddress(_currentSheetId, range.Start.Row + 1, range.Start.Col));
         UpdateViewport();
-    }
-
-    private string BuildAutoSumFormula(string func, CellAddress addr)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return $"{func}({CellAddress.NumberToColumnName(addr.Col)}{Math.Max(1, addr.Row - 1)}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row})";
-
-        uint topRow = addr.Row;
-        while (topRow > 1 && sheet.GetValue(topRow - 1, addr.Col) is NumberValue) topRow--;
-        if (topRow == addr.Row)
-        {
-            uint leftCol = addr.Col;
-            while (leftCol > 1 && sheet.GetValue(addr.Row, leftCol - 1) is NumberValue) leftCol--;
-            if (leftCol < addr.Col)
-            {
-                var leftRangeRef = $"{CellAddress.NumberToColumnName(leftCol)}{addr.Row}:{CellAddress.NumberToColumnName(addr.Col - 1)}{addr.Row}";
-                return $"{func}({leftRangeRef})";
-            }
-        }
-
-        var rangeStr = topRow < addr.Row
-            ? $"{CellAddress.NumberToColumnName(addr.Col)}{topRow}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row - 1}"
-            : $"{CellAddress.NumberToColumnName(addr.Col)}{Math.Max(1, addr.Row - 1)}:{CellAddress.NumberToColumnName(addr.Col)}{addr.Row}";
-        return $"{func}({rangeStr})";
     }
 
     private void AutoSumSumMenuItem_Click(object sender, RoutedEventArgs e)   => InsertAutoSumFormula("SUM");
