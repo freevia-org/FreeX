@@ -7457,6 +7457,37 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
+    {
+        var workbook = new Workbook("WorkbookPropertiesRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("properties"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddUnsupportedWorkbookProperties(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
+        workbookPr.Should().NotBeNull();
+        workbookPr!.Attribute("date1904").Should().NotBeNull();
+        workbookPr.Attribute("date1904")!.Value.Should().Be("1");
+        workbookPr.Attribute("defaultThemeVersion")!.Value.Should().Be("166925");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesPrinterSettingsPackageAndWorksheetReference()
     {
         var workbook = new Workbook("PrinterSettingsRetentionTest");
@@ -8694,6 +8725,28 @@ public class FileAdapterSmokeTests
                 new XAttribute("tabRatio", "700"),
                 new XAttribute("firstSheet", "0"),
                 new XAttribute("activeTab", "0")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddUnsupportedWorkbookProperties(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            var workbookPr = workbookXml.Root!.Element(workbookNs + "workbookPr");
+            if (workbookPr is null)
+            {
+                workbookPr = new XElement(workbookNs + "workbookPr");
+                workbookXml.Root!.AddFirst(workbookPr);
+            }
+
+            workbookPr.SetAttributeValue("date1904", "1");
+            workbookPr.SetAttributeValue("defaultThemeVersion", "166925");
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
