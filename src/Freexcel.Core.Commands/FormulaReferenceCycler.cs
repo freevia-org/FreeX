@@ -63,6 +63,28 @@ public static partial class FormulaReferenceCycler
             return true;
         }
 
+        foreach (Match match in RowReferenceRegex().Matches(text))
+        {
+            var rowIndex = match.Groups["row"].Index;
+            if (IsInsideStructuredReference(text, rowIndex) || IsInsideStringLiteral(text, rowIndex))
+                continue;
+
+            if (!CaretTouchesMatch(caretIndex, match))
+                continue;
+
+            var qualifier = match.Groups["qualifier"].Value;
+            var rowReference = match.Groups["row"].Value;
+            var secondRowReference = match.Groups["row2"].Value;
+            if (!TryCycleRowReference(rowReference, out var cycledRowReference))
+                continue;
+
+            var cycled = $"{qualifier}{cycledRowReference}:{CycleMatchingRowReference(secondRowReference)}";
+            result = text.Remove(match.Index, match.Length).Insert(match.Index, cycled);
+            selectionStart = match.Index;
+            selectionLength = cycled.Length;
+            return true;
+        }
+
         return false;
     }
 
@@ -73,6 +95,11 @@ public static partial class FormulaReferenceCycler
 
     private static string CycleMatchingColumnReference(string reference) =>
         TryCycleColumnReference(reference, out var cycled)
+            ? cycled
+            : reference;
+
+    private static string CycleMatchingRowReference(string reference) =>
+        TryCycleRowReference(reference, out var cycled)
             ? cycled
             : reference;
 
@@ -152,13 +179,32 @@ public static partial class FormulaReferenceCycler
         return true;
     }
 
+    private static bool TryCycleRowReference(string reference, out string cycled)
+    {
+        cycled = reference;
+        var match = RowPartsRegex().Match(reference);
+        if (!match.Success)
+            return false;
+
+        var row = match.Groups["row"].Value;
+        if (!IsValidRowReference(row))
+            return false;
+
+        var absoluteRow = reference.StartsWith('$');
+        cycled = absoluteRow ? row : $"${row}";
+        return true;
+    }
+
     private static bool IsValidA1Reference(string column, string rowText)
     {
-        if (!uint.TryParse(rowText, out var row) || row is < 1 or > CellAddress.MaxRow)
+        if (!IsValidRowReference(rowText))
             return false;
 
         return IsValidColumnReference(column);
     }
+
+    private static bool IsValidRowReference(string rowText) =>
+        uint.TryParse(rowText, out var row) && row is >= 1 and <= CellAddress.MaxRow;
 
     private static bool IsValidColumnReference(string column)
     {
@@ -179,9 +225,15 @@ public static partial class FormulaReferenceCycler
     [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<column>\$?[A-Z]{1,3}):(?<column2>\$?[A-Z]{1,3})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex ColumnReferenceRegex();
 
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<row>\$?[1-9][0-9]{0,6}):(?<row2>\$?[1-9][0-9]{0,6})(?![A-Za-z0-9_])", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex RowReferenceRegex();
+
     [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})\$?(?<row>[1-9][0-9]{0,6})$", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex A1PartsRegex();
 
     [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})$", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex ColumnPartsRegex();
+
+    [GeneratedRegex(@"^\$?(?<row>[1-9][0-9]{0,6})$", RegexOptions.Compiled)]
+    private static partial Regex RowPartsRegex();
 }
