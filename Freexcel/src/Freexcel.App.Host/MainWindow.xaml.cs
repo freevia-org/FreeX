@@ -3379,7 +3379,31 @@ public partial class MainWindow : Window
             return;
         }
 
-        ApplyFilterPrompt(plan.Range, plan.FilterColumnOffset);
+        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
+        if (items.Count == 0)
+            return;
+
+        var dialog = new PivotFieldFilterDialog(items)
+        {
+            Owner = this,
+            Title = "AutoFilter"
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (dialog.SelectedItems.Count == 0)
+        {
+            MessageBox.Show("Select at least one filter item.", "AutoFilter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Filter",
+                plan.Range,
+                currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.SelectedItems)))
+            return;
+        UpdateViewport();
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)
