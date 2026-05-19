@@ -89,6 +89,26 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void DataTab_ExposesFlashFillCommand()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var dataTab = document
+            .Descendants(presentation + "TabItem")
+            .Single(element => element.Attribute("Header")?.Value == "Data");
+
+        var flashFillButton = dataTab
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == "Flash Fill");
+
+        flashFillButton.Attribute("Click")?.Value.Should().Be("FlashFillMenuItem_Click");
+        flashFillButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FF");
+        flashFillButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("examples");
+    }
+
+    [Fact]
     public void BackstageAccountEntryPoint_DisclosesLocalAccountDecision()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

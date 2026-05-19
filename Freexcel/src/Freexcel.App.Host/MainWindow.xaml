@@ -2297,6 +2297,10 @@
                                         local:RibbonTooltip.Title="Text to Columns"
                                         local:RibbonTooltip.KeyTip="E"
                                         local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space."/>
+                                <Button Content="Flash Fill"        Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
+                                        local:RibbonTooltip.Title="Flash Fill"
+                                        local:RibbonTooltip.KeyTip="FF"
+                                        local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns."/>
                                 <Button Content="Remove Duplicates" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
                                         local:RibbonTooltip.Title="Remove Duplicates"
                                         local:RibbonTooltip.KeyTip="M"
