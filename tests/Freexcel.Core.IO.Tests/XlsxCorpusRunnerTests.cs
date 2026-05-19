@@ -27,6 +27,7 @@ public class XlsxCorpusRunnerTests
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
             saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
 
             saved.Position = 0;
             var loaded = adapter.Load(saved);
@@ -146,6 +147,38 @@ public class XlsxCorpusRunnerTests
         summary.CriticalParts.Should().Contain("docProps/app.xml");
     }
 
+    [Fact]
+    public void PackageHealth_AllowsPercentEncodedInternalRelationshipTargets()
+    {
+        using var package = new MemoryStream();
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(archive, "[Content_Types].xml", """
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Default Extension="png" ContentType="image/png"/>
+                </Types>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/sheet1.xml", """
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>
+                """);
+            WritePackageEntry(archive, "xl/worksheets/_rels/sheet1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdImage"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                                Target="../media/image%201.png"/>
+                </Relationships>
+                """);
+            archive.CreateEntry("xl/media/image 1.png");
+        }
+
+        package.Position = 0;
+        var act = () => AssertPackageHealth(package, "percent-encoded relationship target");
+
+        act.Should().NotThrow();
+    }
+
     private static string[] CaptureKnownGapFixtureParts(string id)
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapPackage(id);
@@ -213,6 +246,7 @@ public class XlsxCorpusRunnerTests
             using var saved = new MemoryStream();
             adapter.Save(workbook, saved);
             saved.Length.Should().BeGreaterThan(0, row.Id);
+            AssertPackageHealth(saved, row.Id);
 
             saved.Position = 0;
             var roundTripped = adapter.Load(saved);
@@ -440,6 +474,96 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    private static void AssertPackageHealth(Stream stream, string because)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            var entries = archive.Entries
+                .Select(entry => entry.FullName.Replace('\\', '/'))
+                .ToArray();
+            entries.Should().OnlyHaveUniqueItems(because);
+
+            var entrySet = entries.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            archive.GetEntry("[Content_Types].xml").Should().NotBeNull(because);
+            foreach (var xmlEntry in archive.Entries.Where(entry =>
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ||
+                         entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+            {
+                using var xmlStream = xmlEntry.Open();
+                var load = () => XDocument.Load(xmlStream);
+                load.Should().NotThrow($"{because}: {xmlEntry.FullName} should be parseable XML");
+            }
+
+            foreach (var relsEntry in archive.Entries.Where(entry => entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
+            {
+                var sourcePart = RelationshipSourcePart(relsEntry.FullName.Replace('\\', '/'));
+                var sourceDirectory = Path.GetDirectoryName(sourcePart)?.Replace('\\', '/') ?? string.Empty;
+                var relsXml = LoadPackageXml(relsEntry);
+                XNamespace relNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+                foreach (var relationship in relsXml.Root?.Elements(relNs + "Relationship") ?? [])
+                {
+                    if (string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var target = relationship.Attribute("Target")?.Value;
+                    if (string.IsNullOrWhiteSpace(target) || target.StartsWith("/", StringComparison.Ordinal))
+                        continue;
+
+                    target = Uri.UnescapeDataString(target);
+                    var resolved = NormalizePackagePath(string.IsNullOrWhiteSpace(sourceDirectory)
+                        ? target
+                        : $"{sourceDirectory}/{target}");
+                    entrySet.Should().Contain(resolved, $"{because}: {relsEntry.FullName} relationship target should exist");
+                }
+            }
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static string RelationshipSourcePart(string relsPath)
+    {
+        if (string.Equals(relsPath, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var relsMarker = "/_rels/";
+        var markerIndex = relsPath.IndexOf(relsMarker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0 || !relsPath.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var prefix = relsPath[..markerIndex];
+        var fileName = relsPath[(markerIndex + relsMarker.Length)..^".rels".Length];
+        return string.IsNullOrWhiteSpace(prefix) ? fileName : $"{prefix}/{fileName}";
+    }
+
+    private static string NormalizePackagePath(string path)
+    {
+        var parts = new List<string>();
+        foreach (var part in path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == ".")
+                continue;
+            if (part == "..")
+            {
+                if (parts.Count > 0)
+                    parts.RemoveAt(parts.Count - 1);
+                continue;
+            }
+
+            parts.Add(part);
+        }
+
+        return string.Join("/", parts);
+    }
+
     private static bool IsFidelityCriticalPart(string path) =>
         path.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase) ||
@@ -506,6 +630,22 @@ public class XlsxCorpusRunnerTests
         var entry = archive.CreateEntry(entryName);
         using var stream = entry.Open();
         document.Save(stream);
+    }
+
+    private static void WritePackageEntry(ZipArchive archive, string entryName, string content)
+    {
+        try
+        {
+            archive.GetEntry(entryName)?.Delete();
+        }
+        catch (NotSupportedException)
+        {
+            // ZipArchiveMode.Create does not allow entry lookup.
+        }
+
+        var entry = archive.CreateEntry(entryName);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(content);
     }
 
     private sealed record WorkbookSummary(
