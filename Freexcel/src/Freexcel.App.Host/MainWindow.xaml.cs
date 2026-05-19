@@ -4150,6 +4150,25 @@ public partial class MainWindow : Window
         SheetGrid.Focus();
     }
 
+    private bool? ShowOwnedDialog(Window dialog)
+    {
+        dialog.Owner = this;
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        dialog.ShowActivated = true;
+        Activate();
+        return dialog.ShowDialog();
+    }
+
+    private MessageBoxResult ShowOwnedMessage(
+        string messageBoxText,
+        string caption,
+        MessageBoxButton button,
+        MessageBoxImage icon)
+    {
+        Activate();
+        return MessageBox.Show(this, messageBoxText, caption, button, icon);
+    }
+
     private void OpenPrintBackstage()
     {
         ShowStartScreen();
@@ -4573,7 +4592,7 @@ public partial class MainWindow : Window
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
     {
         var message = DeferredCommandMessages.LocalAccountInfo();
-        MessageBox.Show(
+        ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,
@@ -4595,8 +4614,8 @@ public partial class MainWindow : Window
 
     private void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes) { Owner = this };
-        if (dlg.ShowDialog() == true)
+        var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes);
+        if (ShowOwnedDialog(dlg) == true)
         {
             _options = dlg.Result;
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
@@ -11358,8 +11377,8 @@ public partial class MainWindow : Window
 
     private void InsertFunctionBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new InsertFunctionDialog { Owner = this };
-        if (dlg.ShowDialog() != true || string.IsNullOrEmpty(dlg.SelectedFormula)) return;
+        var dlg = new InsertFunctionDialog();
+        if (ShowOwnedDialog(dlg) != true || string.IsNullOrEmpty(dlg.SelectedFormula)) return;
         if (SheetGrid.SelectedRange is null) return;
         FormulaBar.Text = "=" + dlg.SelectedFormula;
         EnterEditMode();
@@ -13035,7 +13054,7 @@ public partial class MainWindow : Window
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show(
+        ShowOwnedMessage(
             AppInfo.AboutText,
             "About Freexcel", MessageBoxButton.OK, MessageBoxImage.Information);
     }
