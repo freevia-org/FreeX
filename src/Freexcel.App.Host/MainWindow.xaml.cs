@@ -10631,39 +10631,50 @@ public partial class MainWindow : Window
 
     private void PageBreaksBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (sender is Button btn && btn.ContextMenu is { } cm)
+        {
+            cm.PlacementTarget = btn;
+            cm.IsOpen = true;
+        }
+    }
+
+    private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
+    {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
         var selected = SheetGrid.SelectedRange?.Start;
-        var defaultValue = selected is { } address
-            ? $"row {Math.Max(2, address.Row)}"
-            : "clear";
-        var input = PromptForInput("Page break: row N, col N, or clear:", defaultValue);
-        if (input is null) return;
+        if (selected is null) return;
+        var address = selected.Value;
 
         var rowBreaks = sheet.RowPageBreaks.ToList();
         var columnBreaks = sheet.ColumnPageBreaks.ToList();
-        if (!PageLayoutInputParser.TryParsePageBreakInput(input, out var pageBreak))
-        {
-            MessageBox.Show("Enter row N, col N, or clear.", "Page Breaks", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
 
-        if (pageBreak.Kind == PageBreakInputKind.Clear)
-        {
-            rowBreaks.Clear();
-            columnBreaks.Clear();
-        }
-        else if (pageBreak is { Kind: PageBreakInputKind.Row, Row: { } rowBreak })
-        {
-            rowBreaks.Add(rowBreak);
-        }
-        else if (pageBreak is { Kind: PageBreakInputKind.Column, Column: { } columnBreak })
-        {
-            columnBreaks.Add(columnBreak);
-        }
-
+        rowBreaks.Add(Math.Max(2u, address.Row));
+        columnBreaks.Add(Math.Max(2u, address.Col));
         TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+    }
+
+    private void RemovePageBreakMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null) return;
+
+        var selected = SheetGrid.SelectedRange?.Start;
+        if (selected is null) return;
+        var address = selected.Value;
+
+        var rowBreaks = sheet.RowPageBreaks.ToList();
+        var columnBreaks = sheet.ColumnPageBreaks.ToList();
+
+        rowBreaks.Remove(Math.Max(2u, address.Row));
+        columnBreaks.Remove(Math.Max(2u, address.Col));
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+    }
+
+    private void ResetAllPageBreaksMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, [], []));
     }
 
     private void PrintTitlesBtn_Click(object sender, RoutedEventArgs e)
@@ -10884,7 +10895,7 @@ public partial class MainWindow : Window
         var issues = FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId);
         if (issues.Count == 0)
         {
-            MessageBox.Show("No errors found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("No issues found.", "Error Checking", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 

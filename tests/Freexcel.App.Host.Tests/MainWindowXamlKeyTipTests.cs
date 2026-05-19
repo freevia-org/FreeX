@@ -832,6 +832,34 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void PageLayoutBreaksButton_OpensExcelStyleBreaksMenu()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var breaksButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Breaks");
+
+        breaksButton.Attribute("Click")?.Value.Should().Be("PageBreaksBtn_Click");
+        breaksButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("B");
+        breaksButton.Descendants(presentation + "MenuItem")
+            .Select(item => new
+            {
+                Header = item.Attribute("Header")?.Value,
+                KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = item.Attribute("Click")?.Value
+            })
+            .Should()
+            .Equal([
+                new { Header = (string?)"Insert Page Break", KeyTip = (string?)"I", Click = (string?)"InsertPageBreakMenuItem_Click" },
+                new { Header = (string?)"Remove Page Break", KeyTip = (string?)"R", Click = (string?)"RemovePageBreakMenuItem_Click" },
+                new { Header = (string?)"Reset All Page Breaks", KeyTip = (string?)"A", Click = (string?)"ResetAllPageBreaksMenuItem_Click" }
+            ]);
+    }
+
+    [Fact]
     public void DeferredCommandButtons_DescribeDeferredStatusInTooltip()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
