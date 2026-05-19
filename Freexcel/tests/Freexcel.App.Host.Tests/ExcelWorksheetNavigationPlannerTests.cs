@@ -77,4 +77,50 @@ public sealed class ExcelWorksheetNavigationPlannerTests
             .Should()
             .Be(expected);
     }
+
+    [Fact]
+    public void FindVerticalDataBoundary_FromFilledCellStopsBeforeFirstGap()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 2, 3), new NumberValue(10));
+        sheet.SetCell(new CellAddress(SheetId, 3, 3), new NumberValue(20));
+
+        ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 2, 3),
+                rowDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 3, 3));
+    }
+
+    [Fact]
+    public void FindHorizontalDataBoundary_FromBlankCellStopsOnFirstFilledCell()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 5, 4), new TextValue("Found"));
+
+        ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(
+                sheet,
+                new CellAddress(SheetId, 5, 2),
+                columnDirection: 1)
+            .Should()
+            .Be(new CellAddress(SheetId, 5, 4));
+    }
+
+    [Fact]
+    public void GetCtrlEndCell_UsesBottomRightUsedCellOrA1ForEmptySheets()
+    {
+        var empty = new Sheet(SheetId, "Empty");
+        ExcelWorksheetNavigationPlanner.GetCtrlEndCell(empty, SheetId)
+            .Should()
+            .Be(new CellAddress(SheetId, 1, 1));
+
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 8, 3), new NumberValue(1));
+        sheet.SetCell(new CellAddress(SheetId, 2, 7), new NumberValue(2));
+
+        ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, SheetId)
+            .Should()
+            .Be(new CellAddress(SheetId, 8, 7));
+    }
 }

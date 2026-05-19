@@ -87,16 +87,6 @@ public partial class MainWindow : Window
     private bool _slicerTimelinePaneDismissed;
 
     private record InternalClipboard(GridRange SourceRange, List<(CellAddress Source, Cell Cell)> Cells, bool IsCut = false);
-    private sealed record PivotFieldListItem(string Caption, bool IsChecked);
-    private sealed record SlicerPaneItem(string Name, string FieldName, IReadOnlyList<SlicerTileItem> Tiles);
-    private sealed record SlicerTileItem(string SlicerName, string Caption, bool IsSelected);
-    private sealed class TimelinePaneItem
-    {
-        public string Name { get; init; } = "";
-        public string FieldName { get; init; } = "";
-        public string SelectedStartDate { get; set; } = "";
-        public string SelectedEndDate { get; set; } = "";
-    }
     private InternalClipboard? _internalClipboard;
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
@@ -1772,17 +1762,17 @@ public partial class MainWindow : Window
 
         target ??= e.Key switch
         {
-            Key.Up    => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
+            Key.Up    => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
                                   : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
-            Key.Down  => useDataBoundary ? FindDataBoundaryCol(sheet, current.Row, current.Col, +1)
+            Key.Down  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
                                   : new CellAddress(_currentSheetId, Math.Min(current.Row + 1, Freexcel.Core.Model.CellAddress.MaxRow), current.Col),
-            Key.Left  => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, -1)
+            Key.Left  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
                                   : new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
-            Key.Right => useDataBoundary ? FindDataBoundaryRow(sheet, current.Row, current.Col, +1)
+            Key.Right => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
                                   : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, Freexcel.Core.Model.CellAddress.MaxCol)),
 
             Key.Home     => new CellAddress(_currentSheetId, ctrlHeld ? 1u : current.Row, 1u),
-            Key.End      => ctrlHeld ? (CellAddress?)CtrlEndCell(sheet) : null,
+            Key.End      => ctrlHeld ? ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _currentSheetId) : null,
             Key.PageUp   => new CellAddress(_currentSheetId, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
             Key.PageDown => new CellAddress(_currentSheetId, (uint)Math.Min(1_048_576, current.Row + (uint)pageSize), current.Col),
 
@@ -3100,11 +3090,12 @@ public partial class MainWindow : Window
 
     private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
     {
-        var insertion = Environment.NewLine;
-        var start = editor.SelectionStart;
-        var length = editor.SelectionLength;
-        editor.Text = editor.Text.Remove(start, length).Insert(start, insertion);
-        editor.CaretIndex = start + insertion.Length;
+        var edit = ExcelTextEditorPlanner.InsertLineBreak(
+            editor.Text,
+            editor.SelectionStart,
+            editor.SelectionLength,
+            Environment.NewLine);
+        ApplyTextEdit(editor, edit);
     }
 
     private void InlineEditor_LostFocus(object sender, RoutedEventArgs e)
@@ -3221,61 +3212,6 @@ public partial class MainWindow : Window
 
     // ── Navigation helpers ────────────────────────────────────────────────────
 
-    private bool CellHasData(Sheet? sheet, uint row, uint col)
-    {
-        if (sheet == null) return false;
-        var v = sheet.GetValue(new CellAddress(_currentSheetId, row, col));
-        return v != null && v is not BlankValue;
-    }
-
-    private CellAddress FindDataBoundaryCol(Sheet? sheet, uint row, uint col, int dir)
-    {
-        const uint maxRow = 1_048_576;
-        bool startFull = CellHasData(sheet, row, col);
-        uint r = row;
-        while (true)
-        {
-            long next = (long)r + dir;
-            if (next < 1 || next > maxRow) break;
-            uint nr = (uint)next;
-            bool nextFull = CellHasData(sheet, nr, col);
-            if (startFull && !nextFull) break;   // stop before gap
-            r = nr;
-            if (!startFull && nextFull) break;   // landed on first data cell
-        }
-        return new CellAddress(_currentSheetId, r, col);
-    }
-
-    private CellAddress FindDataBoundaryRow(Sheet? sheet, uint row, uint col, int dir)
-    {
-        const uint maxCol = 16_384;
-        bool startFull = CellHasData(sheet, row, col);
-        uint c = col;
-        while (true)
-        {
-            long next = (long)c + dir;
-            if (next < 1 || next > maxCol) break;
-            uint nc = (uint)next;
-            bool nextFull = CellHasData(sheet, row, nc);
-            if (startFull && !nextFull) break;
-            c = nc;
-            if (!startFull && nextFull) break;
-        }
-        return new CellAddress(_currentSheetId, row, c);
-    }
-
-    private CellAddress CtrlEndCell(Sheet? sheet)
-    {
-        uint maxRow = 1, maxCol = 1;
-        if (sheet != null)
-            foreach (var (addr, _) in sheet.GetUsedCells())
-            {
-                if (addr.Row > maxRow) maxRow = addr.Row;
-                if (addr.Col > maxCol) maxCol = addr.Col;
-            }
-        return new CellAddress(_currentSheetId, maxRow, maxCol);
-    }
-
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.F4)
@@ -3331,21 +3267,19 @@ public partial class MainWindow : Window
 
     private static bool TryCycleFormulaReference(System.Windows.Controls.TextBox editor)
     {
-        if (!editor.Text.StartsWith("=", StringComparison.Ordinal))
+        var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(editor.Text, caretIndex, out var edit))
             return false;
 
-        if (!FormulaReferenceCycler.TryCycleReferenceAtCaret(
-                editor.Text,
-                editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex,
-                out var cycled,
-                out var selectionStart,
-                out var selectionLength))
-            return false;
-
-        editor.Text = cycled;
-        editor.SelectionStart = selectionStart;
-        editor.SelectionLength = selectionLength;
+        ApplyTextEdit(editor, edit);
         return true;
+    }
+
+    private static void ApplyTextEdit(System.Windows.Controls.TextBox editor, ExcelTextEdit edit)
+    {
+        editor.Text = edit.Text;
+        editor.SelectionStart = edit.SelectionStart;
+        editor.SelectionLength = edit.SelectionLength;
     }
 
     private bool CommitEdit()
@@ -3546,7 +3480,7 @@ public partial class MainWindow : Window
         SheetGrid.Pictures = sheet?.Pictures;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
-        SheetGrid.SparklineValues = sheet is null ? null : BuildSparklineValues(sheet);
+        SheetGrid.SparklineValues = sheet is null ? null : SparklineValuePlanner.BuildValues(sheet);
         SheetGrid.MergedRegions = sheet?.MergedRegions;
         SheetGrid.WorksheetViewMode = sheet?.ViewMode ?? WorksheetViewMode.Normal;
         SheetGrid.ShowGridLines = sheet?.ShowGridlines ?? true;
@@ -7579,13 +7513,7 @@ public partial class MainWindow : Window
             .ToList();
         var timelines = _workbook.Timelines
             .Where(timeline => !string.IsNullOrWhiteSpace(timeline.Name))
-            .Select(timeline => new TimelinePaneItem
-            {
-                Name = timeline.Name,
-                FieldName = timeline.SourceFieldName ?? timeline.CacheName,
-                SelectedStartDate = timeline.SelectedStartDate ?? timeline.StartDate ?? "",
-                SelectedEndDate = timeline.SelectedEndDate ?? timeline.EndDate ?? ""
-            })
+            .Select(SlicerTimelinePlanner.BuildTimelineItem)
             .ToList();
 
         SlicerItemsControl.ItemsSource = slicers;
@@ -7601,16 +7529,7 @@ public partial class MainWindow : Window
 
     private IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer)
     {
-        var selected = slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        var items = ReadSlicerSourceItems(slicer).ToList();
-        if (items.Count == 0)
-            items.AddRange(slicer.SelectedItems);
-
-        return items
-            .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)
-            .Select(item => new SlicerTileItem(slicer.Name, item, selected.Count == 0 || selected.Contains(item)))
-            .ToList();
+        return SlicerTimelinePlanner.BuildSlicerTiles(slicer, ReadSlicerSourceItems(slicer));
     }
 
     private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer)
@@ -7653,13 +7572,7 @@ public partial class MainWindow : Window
             return;
 
         var allItems = ReadSlicerSourceItems(slicer).ToList();
-        var selected = slicer.SelectedItems.Count == 0
-            ? allItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase)
-            : slicer.SelectedItems.ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-        if (!selected.Remove(tile.Caption))
-            selected.Add(tile.Caption);
-        if (selected.Count == allItems.Count)
-            selected.Clear();
+        var selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, tile.Caption);
 
         if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicer.Name, selected.ToList()), "Slicer"))
             return;
@@ -7684,7 +7597,10 @@ public partial class MainWindow : Window
             return;
 
         if (!TryExecuteCommand(
-                new SetTimelineRangeCommand(item.Name, EmptyToNull(item.SelectedStartDate), EmptyToNull(item.SelectedEndDate)),
+                new SetTimelineRangeCommand(
+                    item.Name,
+                    SlicerTimelinePlanner.NormalizeTimelineDateInput(item.SelectedStartDate),
+                    SlicerTimelinePlanner.NormalizeTimelineDateInput(item.SelectedEndDate)),
                 "Timeline"))
             return;
 
@@ -7701,9 +7617,6 @@ public partial class MainWindow : Window
 
         UpdateViewport();
     }
-
-    private static string? EmptyToNull(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private void SetPivotContextualTabsVisible(bool visible)
     {
@@ -8077,7 +7990,7 @@ public partial class MainWindow : Window
     {
         if (e.LeftButton != MouseButtonState.Pressed ||
             sender is not ListBox list ||
-            GetPivotListItemCaption(list.SelectedItem) is not { } caption)
+            PivotUiPlanner.GetFieldListCaption(list.SelectedItem) is not { } caption)
         {
             return;
         }
@@ -8385,17 +8298,17 @@ public partial class MainWindow : Window
         switch (targetZone)
         {
             case PivotFieldDropZone.Rows:
-                InsertAt(rowFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                PivotUiPlanner.InsertOrAppend(rowFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Columns:
-                InsertAt(columnFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                PivotUiPlanner.InsertOrAppend(columnFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Filters:
-                InsertAt(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
+                PivotUiPlanner.InsertOrAppend(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Values:
                 var valueField = draggedDataField ?? PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value);
-                InsertAt(dataFields, valueField, insertIndex);
+                PivotUiPlanner.InsertOrAppend(dataFields, valueField, insertIndex);
                 break;
         }
 
@@ -8486,20 +8399,12 @@ public partial class MainWindow : Window
 
         foreach (var list in new[] { PivotAvailableFieldsList, PivotRowsList, PivotColumnsList, PivotValuesList, PivotFiltersList })
         {
-            if (GetPivotListItemCaption(list.SelectedItem) is { } value)
+            if (PivotUiPlanner.GetFieldListCaption(list.SelectedItem) is { } value)
                 return value;
         }
 
         return null;
     }
-
-    private static string? GetPivotListItemCaption(object? item) =>
-        item switch
-        {
-            string value when !string.IsNullOrWhiteSpace(value) => value,
-            PivotFieldListItem field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
-            _ => null
-        };
 
     private Sheet GetPivotSourceSheet(Sheet fallbackSheet, PivotTableModel pivotTable) =>
         _workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
@@ -8574,14 +8479,6 @@ public partial class MainWindow : Window
         return sheet is null || sheet.Id == _currentSheetId
             ? reference
             : $"{PivotUiPlanner.QuoteSheetNameForReference(sheet.Name)}!{reference}";
-    }
-
-    private static void InsertAt<T>(List<T> items, T item, int index)
-    {
-        if (index < 0 || index > items.Count)
-            items.Add(item);
-        else
-            items.Insert(index, item);
     }
 
     private PivotFieldDropZone? GetPivotFieldDropZone(ListBox list)
@@ -9684,37 +9581,6 @@ public partial class MainWindow : Window
         SetActiveCell(location);
         EnsureCellVisible(location);
         UpdateViewport();
-    }
-
-    private static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildSparklineValues(Sheet sheet)
-    {
-        var values = new Dictionary<Guid, IReadOnlyList<double>>();
-        foreach (var sparkline in sheet.Sparklines)
-        {
-            var series = new List<double>();
-            for (var row = sparkline.DataRange.Start.Row; row <= sparkline.DataRange.End.Row; row++)
-            {
-                for (var col = sparkline.DataRange.Start.Col; col <= sparkline.DataRange.End.Col; col++)
-                {
-                    switch (sheet.GetValue(row, col))
-                    {
-                        case NumberValue number:
-                            series.Add(number.Value);
-                            break;
-                        case DateTimeValue date:
-                            series.Add(date.Value);
-                            break;
-                        case BoolValue boolean:
-                            series.Add(boolean.Value ? 1 : 0);
-                            break;
-                    }
-                }
-            }
-
-            values[sparkline.Id] = series;
-        }
-
-        return values;
     }
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
