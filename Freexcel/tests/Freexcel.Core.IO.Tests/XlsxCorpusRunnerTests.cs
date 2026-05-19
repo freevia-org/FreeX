@@ -480,6 +480,12 @@ public class XlsxCorpusRunnerTests
         if (tags.Contains("pivot-caches"))
             summary.PivotCacheCount.Should().BeGreaterThan(0, row.Id);
 
+        if (tags.Contains("pivot-styles"))
+        {
+            summary.PivotTableStyleCount.Should().BeGreaterThan(0, row.Id);
+            summary.PivotTableStyleElementCount.Should().BeGreaterThan(0, row.Id);
+        }
+
         if (tags.Contains("structured-tables") || tags.Contains("listobjects") || tags.Contains("tables"))
             summary.Sheets.Sum(sheet => sheet.StructuredTableCount).Should().BeGreaterThan(0, row.Id);
 
@@ -517,6 +523,8 @@ public class XlsxCorpusRunnerTests
             workbook.IsStructureProtected,
             workbook.PivotCaches.Count,
             workbook.PivotCaches.Sum(cache => cache.Fields.Count),
+            workbook.PivotTableStyles.Count,
+            workbook.PivotTableStyles.Sum(style => style.Elements.Count),
             workbook.Sheets.Select(CaptureSheetSummary).ToArray());
 
     private static SheetSummary CaptureSheetSummary(Sheet sheet) =>
@@ -782,6 +790,8 @@ public class XlsxCorpusRunnerTests
         bool IsStructureProtected,
         int PivotCacheCount,
         int PivotCacheFieldCount,
+        int PivotTableStyleCount,
+        int PivotTableStyleElementCount,
         IReadOnlyList<SheetSummary> Sheets);
 
     private sealed record SheetSummary(
