@@ -8178,6 +8178,38 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetSmartTags()
+    {
+        var workbook = new Workbook("WorksheetSmartTagsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Seattle"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetSmartTags(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var smartTags = worksheetXml.Root!.Element(worksheetNs + "smartTags");
+        smartTags.Should().NotBeNull();
+        smartTags!.ToString().Should().Contain("r=\"A1\"");
+        smartTags.ToString().Should().Contain("type=\"0\"");
+        smartTags.ToString().Should().Contain("key=\"place\"");
+        smartTags.ToString().Should().Contain("val=\"Seattle\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
@@ -9671,6 +9703,32 @@ public class FileAdapterSmokeTests
                     worksheetNs + "customPr",
                     new XAttribute("name", "FreexcelNativeProperty"),
                     new XAttribute("id", "1"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetSmartTags(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "smartTags",
+                new XElement(
+                    worksheetNs + "cellSmartTags",
+                    new XAttribute("r", "A1"),
+                    new XElement(
+                        worksheetNs + "cellSmartTag",
+                        new XAttribute("type", "0"),
+                        new XAttribute("deleted", "0"),
+                        new XElement(
+                            worksheetNs + "cellSmartTagPr",
+                            new XAttribute("key", "place"),
+                            new XAttribute("val", "Seattle"))))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
