@@ -130,6 +130,13 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if ((modifiers == ModifierKeys.None && effectiveKey == Key.F5) ||
+            (modifiers == ModifierKeys.Control && effectiveKey == Key.G))
+        {
+            shortcut = KeyboardCommandShortcut.GoTo;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Alt && effectiveKey == Key.F1)
         {
             shortcut = KeyboardCommandShortcut.InsertEmbeddedChart;
@@ -358,6 +365,7 @@ public enum KeyboardCommandShortcut
     ToggleFormulaBarExpansion,
     QuickAnalysis,
     OpenPrintBackstage,
+    GoTo,
     InsertEmbeddedChart,
     InsertChartSheet,
     OpenFormatCellsFont,
