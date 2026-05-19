@@ -4485,12 +4485,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
+        var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
+        var sourceFileSharing = sourceWorkbookXml.Root?.Element(workbookNs + "fileSharing");
         var sourceDefinedNames = sourceWorkbookXml.Root?.Element(workbookNs + "definedNames");
         var sourceBookViews = sourceWorkbookXml.Root?.Element(workbookNs + "bookViews");
+        var sourceCustomWorkbookViews = sourceWorkbookXml.Root?.Element(workbookNs + "customWorkbookViews");
         var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
         if (sourceExtensionList is null &&
+            sourceFileVersion is null &&
+            sourceFileSharing is null &&
             sourceDefinedNames is null &&
             sourceBookViews is null &&
+            sourceCustomWorkbookViews is null &&
             sourceWorkbookProperties is null)
         {
             return;
@@ -4502,9 +4508,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var changed = false;
+        if (MergeWorkbookChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceFileSharing, targetRoot, workbookNs + "fileSharing"))
+            changed = true;
         if (MergeWorkbookProperties(sourceWorkbookProperties, targetRoot, workbookNs))
             changed = true;
         if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceCustomWorkbookViews, targetRoot, workbookNs + "customWorkbookViews"))
             changed = true;
         if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
             changed = true;
@@ -4513,6 +4525,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (changed)
             ReplacePackageXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
+    }
+
+    private static bool MergeWorkbookChildBlock(XElement? sourceBlock, XElement targetRoot, XName blockName)
+    {
+        if (sourceBlock is null || targetRoot.Element(blockName) is not null)
+            return false;
+
+        targetRoot.Add(new XElement(sourceBlock));
+        return true;
     }
 
     private static bool MergeWorkbookProperties(XElement? sourceWorkbookProperties, XElement targetRoot, XNamespace workbookNs)
