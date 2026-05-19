@@ -14,7 +14,7 @@ public sealed class CommandParityStatusTests
         [
             ("Advanced Chart Families", "Deferred"),
             ("Export to PDF/XPS", "Partial"),
-            ("Cut (Ctrl+X)", "Partial"),
+            ("Cut (Ctrl+X)", "Implemented"),
             ("Copy (Ctrl+C)", "Implemented"),
             ("Paste (Ctrl+V)", "Partial"),
             ("Paste Special (values/formulas/formats/transpose/arithmetic/link/column-widths/picture)", "Partial"),
