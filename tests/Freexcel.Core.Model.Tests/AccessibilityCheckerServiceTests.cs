@@ -38,7 +38,7 @@ public sealed class AccessibilityCheckerServiceTests
     public void FindIssues_FlagsChartsWithoutTitleText()
     {
         var workbook = new Workbook("Accessibility");
-        var sheet = workbook.AddSheet("Sheet1");
+        var sheet = workbook.AddSheet("Charts");
         var dataRange = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 4, 2));
@@ -66,7 +66,7 @@ public sealed class AccessibilityCheckerServiceTests
         issues.Should().HaveCount(2);
         issues.Should().OnlyContain(i => i.Kind == AccessibilityIssueKind.ChartMissingTitle);
         issues.Should().OnlyContain(i => i.SheetId == sheet.Id);
-        issues.Should().OnlyContain(i => i.SheetName == "Sheet1");
+        issues.Should().OnlyContain(i => i.SheetName == "Charts");
         issues.Should().OnlyContain(i => i.Location == "A1:B4");
         issues.Should().OnlyContain(i => i.Message == "Chart is missing a title.");
     }
@@ -199,5 +199,21 @@ public sealed class AccessibilityCheckerServiceTests
 
         issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
             .Which.Location.Should().Be("A1");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsDefaultWorksheetNames()
+    {
+        var workbook = new Workbook("Accessibility");
+        var defaultSheet = workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Q1 Revenue");
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.DefaultWorksheetName).Subject;
+
+        issue.SheetId.Should().Be(defaultSheet.Id);
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Location.Should().Be("Sheet1");
+        issue.Message.Should().Be("Worksheet tab names should describe their contents.");
     }
 }
