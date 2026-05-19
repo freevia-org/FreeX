@@ -228,6 +228,13 @@ public partial class MainWindow : Window
         _recalcEngine.RecalculateAllFormulas(_workbook);
     }
 
+    private void RebuildDependenciesAndCalculate()
+    {
+        _recalcEngine.RebuildFormulaDependencies(_workbook);
+        _recalcEngine.RecalculateAllFormulas(_workbook);
+        UpdateViewport();
+    }
+
     private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
         if (_workbook.CalculationMode == WorkbookCalculationMode.Automatic)
@@ -1763,6 +1770,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.CalculateSheet:
                 CalcSheetBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.RebuildDependenciesAndCalculate:
+                RebuildDependenciesAndCalculate();
                 break;
             case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
                 FormulaBarExpandBtn_Click(sender, e);
