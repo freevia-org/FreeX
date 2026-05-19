@@ -65,6 +65,8 @@ public partial class MainWindow : Window
     private string? _currentFilePath;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     private bool _formatPainterActive;
+    private bool _formatPainterPersistent;
+    private bool _formatPainterTargetSelectionActive;
     private StyleId _formatPainterStyleId;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
@@ -1135,8 +1137,21 @@ public partial class MainWindow : Window
                 }
             }
 
-            if (TryApplyFormatPainter(newAddr))
+            if (_formatPainterActive)
             {
+                if (SheetGrid.SelectedRange is { } selectedRange &&
+                    selectedRange.Contains(newAddr) &&
+                    (selectedRange.Start != selectedRange.End || e.ClickCount > 1))
+                {
+                    TryApplyFormatPainter(selectedRange);
+                    e.Handled = true;
+                    return;
+                }
+
+                SetActiveCell(newAddr);
+                _formatPainterTargetSelectionActive = true;
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
                 e.Handled = true;
                 return;
             }
@@ -1298,6 +1313,18 @@ public partial class MainWindow : Window
             if (e.Key == Key.L && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
             {
                 FilterButton_Click(sender, e);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.PageUp && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            {
+                SelectAdjacentVisibleSheetGroup(-1);
+                e.Handled = true;
+                return;
+            }
+            if (e.Key == Key.PageDown && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            {
+                SelectAdjacentVisibleSheetGroup(1);
                 e.Handled = true;
                 return;
             }
@@ -1560,8 +1587,16 @@ public partial class MainWindow : Window
 
         var sheet = _workbook.GetSheet(_currentSheetId);
         int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
+        int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
 
-        CellAddress? target = e.Key switch
+        CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            e.Key,
+            e.SystemKey,
+            Keyboard.Modifiers,
+            current,
+            colPageSize);
+
+        target ??= e.Key switch
         {
             Key.Up    => ctrlHeld ? FindDataBoundaryCol(sheet, current.Row, current.Col, -1)
                                   : new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
@@ -1627,6 +1662,37 @@ public partial class MainWindow : Window
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
                 ChartColumnMenuItem_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.OpenFormatCellsFont:
+                OpenFormatCellsDialog(FormatCellsDialogTab.Font);
+                break;
+            case KeyboardCommandShortcut.WorkbookStatistics:
+                WorkbookStatisticsBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.NewNote:
+            case KeyboardCommandShortcut.NewThreadedComment:
+                ReviewNewCommentBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.SaveAs:
+                SaveWorkbookWithDialog();
+                break;
+            case KeyboardCommandShortcut.ShowKeyTips:
+                EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
+                break;
+            case KeyboardCommandShortcut.OpenContextMenu:
+                OpenKeyboardContextMenu();
+                break;
+            case KeyboardCommandShortcut.EditInFormulaBar:
+                EditActiveCellInFormulaBar();
+                break;
+            case KeyboardCommandShortcut.InsertWorksheet:
+                AddSheetButton_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ZoomIn:
+                ZoomInBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.ZoomOut:
+                ZoomOutBtn_Click(sender, e);
                 break;
         }
     }
@@ -1790,6 +1856,19 @@ public partial class MainWindow : Window
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (_formatPainterTargetSelectionActive)
+        {
+            _formatPainterTargetSelectionActive = false;
+            _dragSelectActive = false;
+            SheetGrid.ReleaseMouseCapture();
+
+            if (SheetGrid.SelectedRange is { } selectedRange)
+                TryApplyFormatPainter(selectedRange);
+
+            e.Handled = true;
+            return;
+        }
+
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
         SheetGrid.ReleaseMouseCapture();
@@ -2317,9 +2396,25 @@ public partial class MainWindow : Window
             ShowInlineEditor(_selectionAnchor.Value);
         else
         {
-            FormulaBar.Focus();
-            FormulaBar.CaretIndex = FormulaBar.Text.Length;
+            FocusFormulaBarAtEnd();
         }
+    }
+
+    private void EditActiveCellInFormulaBar()
+    {
+        if (SheetGrid.SelectedRange?.Start is { } address)
+        {
+            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);
+            FormulaBar.Text = FormatFormulaBarText(cell, address);
+        }
+
+        FocusFormulaBarAtEnd();
+    }
+
+    private void FocusFormulaBarAtEnd()
+    {
+        FormulaBar.Focus();
+        FormulaBar.CaretIndex = FormulaBar.Text.Length;
     }
 
     private void ShowInlineEditor(CellAddress addr)
@@ -2590,7 +2685,7 @@ public partial class MainWindow : Window
     {
         ClearClipboardVisualState();
         _internalClipboard = null;
-        _formatPainterActive = false;
+        CancelFormatPainter();
     }
 
     private void ClearClipboardVisualState()
@@ -4890,13 +4985,19 @@ public partial class MainWindow : Window
         AddItem("Delete Row(s)",    DeleteSelectedRows);
         AddItem("Delete Column(s)", DeleteSelectedColumns);
         menu.Items.Add(new Separator());
-        AddItem("Format Cells...",  OpenFormatCellsDialog);
+        AddItem("Format Cells...",  () => OpenFormatCellsDialog());
         menu.Items.Add(new Separator());
         AddItem("Clear Contents",   ExecuteClearSelection);
 
         MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
         menu.PlacementTarget = SheetGrid;
         menu.IsOpen = true;
+    }
+
+    private void OpenKeyboardContextMenu()
+    {
+        var address = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
+        OnGridContextMenuRequested(address, default);
     }
 
     private void InsertRows(uint beforeRow)
@@ -5105,13 +5206,13 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private void OpenFormatCellsDialog()
+    private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
         var currentStyle = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
-        var dlg = new FormatCellsDialog(currentStyle) { Owner = this };
+        var dlg = new FormatCellsDialog(currentStyle, initialTab) { Owner = this };
         if (dlg.ShowDialog() != true || dlg.ResultDiff is null) return;
         ApplyStyleDiff(dlg.ResultDiff);
     }
@@ -5642,27 +5743,57 @@ public partial class MainWindow : Window
 
     private void FormatPainterBtn_Click(object sender, RoutedEventArgs e)
     {
+        CaptureFormatPainterSource(persistent: false);
+    }
+
+    private void FormatPainterBtn_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2) return;
+
+        CaptureFormatPainterSource(persistent: true);
+        e.Handled = true;
+    }
+
+    private void CaptureFormatPainterSource(bool persistent)
+    {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         _formatPainterStyleId = sheet?.GetCell(range.Start)?.StyleId
             ?? sheet?.GetStyleOnly(range.Start.Row, range.Start.Col)
             ?? StyleId.Default;
         _formatPainterActive = true;
+        _formatPainterPersistent = persistent;
     }
 
-    // Call from cell-click path: if painter active, apply stored style
-    private bool TryApplyFormatPainter(CellAddress addr)
+    private void CancelFormatPainter()
+    {
+        _formatPainterActive = false;
+        _formatPainterPersistent = false;
+        _formatPainterTargetSelectionActive = false;
+    }
+
+    private bool TryApplyFormatPainter(GridRange targetRange)
     {
         if (!_formatPainterActive) return false;
-        _formatPainterActive = false;
+
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
+        {
+            if (!_formatPainterPersistent)
+                CancelFormatPainter();
             return true;
+        }
 
-        var targetRange = new GridRange(addr, addr);
         var command = FormatPainterCommandFactory.Create(_workbook, _formatPainterStyleId, targetRange);
         if (!TryExecuteCommand(command, "Format Painter"))
+        {
+            if (!_formatPainterPersistent)
+                CancelFormatPainter();
             return true;
+        }
+
+        if (!_formatPainterPersistent)
+            CancelFormatPainter();
 
         UpdateViewport();
         return true;
@@ -11493,6 +11624,28 @@ public partial class MainWindow : Window
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;
+        UpdateViewport();
+        RefreshSheetTabs();
+    }
+
+    private void SelectAdjacentVisibleSheetGroup(int direction)
+    {
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            _workbook,
+            _currentSheetId,
+            _sheetGroupAnchor,
+            direction);
+        if (plan is null)
+            return;
+
+        _currentSheetId = plan.CurrentSheetId;
+        _sheetGroupAnchor = plan.AnchorSheetId;
+        _groupedSheetIds.Clear();
+        foreach (var id in plan.GroupedSheetIds)
+            _groupedSheetIds.Add(id);
+        if (_groupedSheetIds.Count == 0)
+            _groupedSheetIds.Add(_currentSheetId);
+
         UpdateViewport();
         RefreshSheetTabs();
     }

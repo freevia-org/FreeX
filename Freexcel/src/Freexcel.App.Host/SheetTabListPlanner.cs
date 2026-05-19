@@ -1,8 +1,14 @@
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
 public sealed record SheetTabListPlan(SheetId CurrentSheetId, IReadOnlyList<SheetTabViewModel> Tabs);
+
+public sealed record SheetKeyboardGroupSelectionPlan(
+    SheetId CurrentSheetId,
+    SheetId AnchorSheetId,
+    IReadOnlyList<SheetId> GroupedSheetIds);
 
 public static class SheetTabListPlanner
 {
@@ -70,5 +76,32 @@ public static class SheetTabListPlanner
 
         var nextIndex = Math.Clamp(index + direction, 0, visibleSheets.Count - 1);
         return visibleSheets[nextIndex].Id;
+    }
+
+    public static SheetKeyboardGroupSelectionPlan? SelectAdjacentVisibleSheetGroup(
+        Workbook workbook,
+        SheetId currentSheetId,
+        SheetId? anchorSheetId,
+        int direction)
+    {
+        var visibleSheetIds = workbook.Sheets
+            .Where(sheet => !sheet.IsHidden)
+            .Select(sheet => sheet.Id)
+            .ToList();
+        if (visibleSheetIds.Count == 0)
+            return null;
+
+        var currentIndex = visibleSheetIds.IndexOf(currentSheetId);
+        if (currentIndex < 0)
+            currentIndex = 0;
+
+        var nextIndex = Math.Clamp(currentIndex + direction, 0, visibleSheetIds.Count - 1);
+        var nextSheetId = visibleSheetIds[nextIndex];
+        var anchor = anchorSheetId is { } id && visibleSheetIds.Contains(id)
+            ? id
+            : visibleSheetIds[currentIndex];
+        var selected = SheetGroupSelectionService.SelectRange(visibleSheetIds, anchor, nextSheetId);
+
+        return new SheetKeyboardGroupSelectionPlan(nextSheetId, anchor, selected);
     }
 }
