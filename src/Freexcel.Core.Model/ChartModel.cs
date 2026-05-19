@@ -61,6 +61,12 @@ public sealed class ChartPrintSettingsModel
     public ChartPageSetupModel? PageSetup { get; set; }
 }
 
+public sealed class ChartColorMapOverrideModel
+{
+    public bool UseMasterColorMapping { get; set; }
+    public Dictionary<string, string> OverrideMappings { get; set; } = new(StringComparer.Ordinal);
+}
+
 public sealed class ChartPageMarginsModel
 {
     public double? Left { get; set; }
@@ -133,6 +139,7 @@ public sealed class ChartModel
     public bool Uses1904DateSystem { get; set; }
     public string? Language { get; set; }
     public int? ChartStyleId { get; set; }
+    public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
     public bool RoundedCorners { get; set; }
     public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
     public bool ShowDataLabelsOverMaximum { get; set; }
