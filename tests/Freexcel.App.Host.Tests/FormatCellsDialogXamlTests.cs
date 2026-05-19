@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
 using FluentAssertions;
+using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
+using CellVAlign = Freexcel.Core.Model.VerticalAlignment;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -21,44 +23,36 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
-    public void FormatCellsDialog_MapsAllSupportedStyleDiffFields()
+    public void FormatCellsDialog_ContainsControlsForSupportedStyleFields()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
 
-        foreach (var field in new[]
+        foreach (var controlName in new[]
         {
-            "Bold", "Italic", "Underline", "Strikethrough", "FontName", "FontSize",
-            "FontColor", "FillColor", "HAlign", "VAlign", "WrapText", "ShrinkToFit",
-            "NumberFormat", "DoubleUnderline", "IndentLevel", "TextRotation",
-            "BorderTop", "BorderRight", "BorderBottom", "BorderLeft", "Locked", "ClearFill",
+            "NumberFormatCombo",
+            "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck",
+            "DlgIndentLevelBox", "DlgTextRotationBox",
+            "DlgFontNameBox", "DlgFontSizeBox", "DlgBoldCheck", "DlgItalicCheck",
+            "DlgUnderlineCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
+            "DlgFillColorBox", "DlgClearFillCheck",
+            "DlgBorderTopStyleBox", "DlgBorderTopColorBox",
+            "DlgBorderRightStyleBox", "DlgBorderRightColorBox",
+            "DlgBorderBottomStyleBox", "DlgBorderBottomColorBox",
+            "DlgBorderLeftStyleBox", "DlgBorderLeftColorBox",
+            "DlgLockedCheck",
         })
         {
-            source.Should().Contain($"{field}:");
+            xaml.Should().Contain($"x:Name=\"{controlName}\"");
         }
-
-        source.Should().Contain("s.DoubleUnderline");
-        source.Should().Contain("s.IndentLevel");
-        source.Should().Contain("s.TextRotation");
-        source.Should().Contain("s.BorderTop");
-        source.Should().Contain("s.BorderRight");
-        source.Should().Contain("s.BorderBottom");
-        source.Should().Contain("s.BorderLeft");
-        source.Should().Contain("s.Locked");
     }
 
     [Fact]
     public void FormatCellsDialog_ExposesShrinkToFitAndMapsItIntoStyleDiff()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
 
         xaml.Should().Contain("x:Name=\"DlgShrinkToFitCheck\"");
         xaml.Should().Contain("Content=\"Shrink to fit\"");
-        source.Should().Contain("DlgShrinkToFitCheck.IsChecked = s.ShrinkToFit;");
-        source.Should().Contain("ShrinkToFit:");
-        source.Should().Contain("DlgShrinkToFitCheck.IsChecked");
-        source.Should().Contain("Enum.GetNames(typeof(CellHAlign))");
-        source.Should().Contain("Enum.GetNames(typeof(CellVAlign))");
     }
 
     [Fact]
@@ -105,6 +99,76 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_MapsFontFieldsIntoStyleDiff()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ComboBox>(dialog, "DlgFontNameBox").SelectedItem = "Verdana";
+                GetControl<ComboBox>(dialog, "DlgFontSizeBox").Text = "13.5";
+                GetControl<CheckBox>(dialog, "DlgBoldCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgItalicCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgUnderlineCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgDoubleUnderlineCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgStrikeCheck").IsChecked = true;
+                GetControl<TextBox>(dialog, "DlgFontColorBox").Text = "20,40,60";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FontName.Should().Be("Verdana");
+                dialog.ResultDiff.FontSize.Should().Be(13.5);
+                dialog.ResultDiff.Bold.Should().BeTrue();
+                dialog.ResultDiff.Italic.Should().BeTrue();
+                dialog.ResultDiff.Underline.Should().BeTrue();
+                dialog.ResultDiff.DoubleUnderline.Should().BeTrue();
+                dialog.ResultDiff.Strikethrough.Should().BeTrue();
+                dialog.ResultDiff.FontColor.Should().Be(new CellColor(20, 40, 60));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_MapsNumberAndAlignmentFieldsIntoStyleDiff()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<ComboBox>(dialog, "NumberFormatCombo").SelectedIndex = 2;
+                GetControl<ComboBox>(dialog, "DlgHAlignBox").SelectedItem = nameof(CellHAlign.Right);
+                GetControl<ComboBox>(dialog, "DlgVAlignBox").SelectedItem = nameof(CellVAlign.Center);
+                GetControl<CheckBox>(dialog, "DlgWrapTextCheck").IsChecked = true;
+                GetControl<CheckBox>(dialog, "DlgShrinkToFitCheck").IsChecked = true;
+                GetControl<TextBox>(dialog, "DlgIndentLevelBox").Text = "7";
+                GetControl<TextBox>(dialog, "DlgTextRotationBox").Text = "-45";
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.NumberFormat.Should().Be("$#,##0.00");
+                dialog.ResultDiff.HAlign.Should().Be(CellHAlign.Right);
+                dialog.ResultDiff.VAlign.Should().Be(CellVAlign.Center);
+                dialog.ResultDiff.WrapText.Should().BeTrue();
+                dialog.ResultDiff.ShrinkToFit.Should().BeTrue();
+                dialog.ResultDiff.IndentLevel.Should().Be(7);
+                dialog.ResultDiff.TextRotation.Should().Be(-45);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_MapsFillBorderAndProtectionFields()
     {
         StaTestRunner.Run(() =>
@@ -127,11 +191,36 @@ public sealed class FormatCellsDialogXamlTests
 
                 dialog.ResultDiff.Should().NotBeNull();
                 dialog.ResultDiff!.FillColor.Should().Be(new CellColor(12, 34, 56));
+                dialog.ResultDiff.ClearFill.Should().BeNull();
                 dialog.ResultDiff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thick, new CellColor(1, 2, 3)));
                 dialog.ResultDiff.BorderRight.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(4, 5, 6)));
                 dialog.ResultDiff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dotted, new CellColor(7, 8, 9)));
                 dialog.ResultDiff.BorderLeft.Should().Be(new CellBorder(BorderStyle.Double, new CellColor(10, 11, 12)));
                 dialog.ResultDiff.Locked.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_MapsClearFillIntoStyleDiff()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var current = new CellStyle { FillColor = new CellColor(12, 34, 56) };
+            var dialog = ShowDialogForTest(current);
+            try
+            {
+                GetControl<CheckBox>(dialog, "DlgClearFillCheck").IsChecked = true;
+
+                ClickOkForTest(dialog);
+
+                dialog.ResultDiff.Should().NotBeNull();
+                dialog.ResultDiff!.FillColor.Should().BeNull();
+                dialog.ResultDiff.ClearFill.Should().BeTrue();
             }
             finally
             {
