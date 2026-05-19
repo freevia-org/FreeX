@@ -382,4 +382,19 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("new WorkbookStatisticsDialog");
         source.Should().Contain("new AccessibilityCheckerDialog");
     }
+
+    [Fact]
+    public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
+        source.Should().Contain("PictureResetCropMenuItem_Click");
+        source.Should().Contain("new SetPictureCropCommand(");
+        source.Should().Contain("0, 0, 0, 0");
+    }
 }
