@@ -8,6 +8,7 @@ public static class XlsxChartPartReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace OfficeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
     public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart)
     {
@@ -92,6 +93,7 @@ public static class XlsxChartPartReader
             chart.ChartStyleId = styleId;
 
         chart.ColorMapOverride = ReadColorMapOverride(chartXml.Root?.Element(ChartNs + "clrMapOvr"));
+        chart.ExternalData = ReadExternalData(chartXml.Root?.Element(ChartNs + "externalData"));
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
         chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
 
@@ -122,6 +124,26 @@ public static class XlsxChartPartReader
         }
 
         return result;
+    }
+
+    private static ChartExternalDataModel? ReadExternalData(XElement? externalData)
+    {
+        if (externalData is null)
+            return null;
+
+        var relationshipId = externalData.Attribute(OfficeRelNs + "id")?.Value;
+        var autoUpdate = ReadOptionalBool(externalData
+            .Element(ChartNs + "autoUpdate")?
+            .Attribute("val")?
+            .Value);
+        if (string.IsNullOrWhiteSpace(relationshipId) && autoUpdate is null)
+            return null;
+
+        return new ChartExternalDataModel
+        {
+            RelationshipId = relationshipId,
+            AutoUpdate = autoUpdate
+        };
     }
 
     private static ChartProtectionModel? ReadProtection(XElement? protection)
