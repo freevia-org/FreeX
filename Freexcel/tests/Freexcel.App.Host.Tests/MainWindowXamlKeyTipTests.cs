@@ -398,6 +398,56 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void CellStylesGallery_ExposesExpandedPresetLabelsAndRoutesThroughPlanner()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var cellStylesMenu = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Cell Styles")
+            .Descendants(presentation + "ContextMenu")
+            .Single();
+
+        var labels = cellStylesMenu
+            .Elements(presentation + "MenuItem")
+            .Select(item => item.Attribute("Header")?.Value)
+            .ToList();
+
+        labels.Should().Contain([
+            "Normal",
+            "Good",
+            "Bad",
+            "Neutral",
+            "Input",
+            "Output",
+            "Calculation",
+            "Check Cell",
+            "Linked Cell",
+            "Explanatory Text",
+            "Heading 1",
+            "Heading 2",
+            "Note",
+            "Warning Text",
+            "Total",
+            "20% - Accent 1",
+            "20% - Accent 2",
+            "20% - Accent 3",
+            "20% - Accent 4",
+            "20% - Accent 5",
+            "20% - Accent 6"
+        ]);
+
+        source.Should().Contain("ApplyCellStylePreset(CellStylePreset preset)");
+        source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset)");
+        source.Should().Contain("CellStyleInputMenuItem_Click");
+        source.Should().Contain("=> ApplyCellStylePreset(CellStylePreset.Input);");
+        source.Should().NotContain("CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)\r\n        => ApplyStyleDiff(new StyleDiff");
+    }
+
+    [Fact]
     public void BackstageCommandButtons_HaveAltKeyTips()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
