@@ -48,12 +48,9 @@ public static partial class SpellCheckService
                 sheetIssues.AddRange(FindIssuesInCell(address, textValue.Value));
             }
 
-            sheetIssues.Sort((a, b) =>
-            {
-                var rowCmp = a.Address.Row.CompareTo(b.Address.Row);
-                return rowCmp != 0 ? rowCmp : a.Address.Col.CompareTo(b.Address.Col);
-            });
-            result.AddRange(sheetIssues);
+            result.AddRange(sheetIssues
+                .OrderBy(issue => issue.Address.Row)
+                .ThenBy(issue => issue.Address.Col));
         }
 
         return result;

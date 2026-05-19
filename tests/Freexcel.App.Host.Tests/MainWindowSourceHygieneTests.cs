@@ -195,6 +195,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("replace all");
         source.Should().Contain("ignore");
         source.Should().Contain("BuildSpellCheckEdits");
-        source.Should().Contain("TryExecuteEditCells(edits, \"Spell Check\")");
+        source.Should().Contain("TryExecuteSpellCheckEdits");
+        source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
+        source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
     }
 }
