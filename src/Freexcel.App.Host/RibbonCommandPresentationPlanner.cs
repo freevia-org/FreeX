@@ -47,6 +47,29 @@ public static class RibbonCommandPresentationPlanner
                !name.Contains("recommended chart");
     }
 
+    public static bool IsInsertRibbonChartCommand(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return false;
+
+        var name = title.Trim().ToLowerInvariant();
+        return IsInsertChartType(name) ||
+               name is "column" or
+                       "stack col" or
+                       "100% col" or
+                       "line" or
+                       "pie" or
+                       "doughnut" or
+                       "bar" or
+                       "stack bar" or
+                       "100% bar" or
+                       "scatter" or
+                       "bubble" or
+                       "area" or
+                       "radar" or
+                       "stock";
+    }
+
     public static bool TryParseCompactWidths(string tag, out double fullWidth, out double compactWidth)
     {
         fullWidth = 0;
