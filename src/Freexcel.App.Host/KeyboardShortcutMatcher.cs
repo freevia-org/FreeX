@@ -5,6 +5,78 @@ namespace Freexcel.App.Host;
 
 public static class KeyboardShortcutMatcher
 {
+    private static readonly KeyboardCommandShortcutRule[] CommandShortcutRules =
+    [
+        new(KeyboardCommandShortcut.NewWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.N),
+        new(KeyboardCommandShortcut.OpenWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.O),
+        new(KeyboardCommandShortcut.SaveWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.S),
+        new(KeyboardCommandShortcut.Copy, (key, modifiers) => HasControl(modifiers) && key == Key.C),
+        new(KeyboardCommandShortcut.Cut, (key, modifiers) => HasControl(modifiers) && key == Key.X),
+        new(KeyboardCommandShortcut.Paste, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.V),
+        new(KeyboardCommandShortcut.SelectCurrentRegionOrAll, (key, modifiers) => HasControl(modifiers) && key == Key.A),
+        new(KeyboardCommandShortcut.Undo, (key, modifiers) => HasControl(modifiers) && key == Key.Z),
+        new(KeyboardCommandShortcut.Redo, (key, modifiers) => HasControl(modifiers) && key == Key.Y),
+        new(KeyboardCommandShortcut.CreateTable, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.T or Key.L),
+        new(KeyboardCommandShortcut.InsertHyperlink, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.K),
+        new(KeyboardCommandShortcut.FillDown, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.D),
+        new(KeyboardCommandShortcut.FillRight, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.R),
+        new(KeyboardCommandShortcut.FlashFill, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.E),
+        new(KeyboardCommandShortcut.InsertCurrentDate, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.OemSemicolon),
+        new(KeyboardCommandShortcut.InsertCurrentTime, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemSemicolon),
+        new(KeyboardCommandShortcut.ToggleShowFormulas, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Oem3),
+        new(KeyboardCommandShortcut.ActivatePreviousSheet, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.PageUp),
+        new(KeyboardCommandShortcut.ActivateNextSheet, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.PageDown),
+        new(KeyboardCommandShortcut.SelectPreviousSheetGroup, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.PageUp),
+        new(KeyboardCommandShortcut.SelectNextSheetGroup, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.PageDown),
+        new(KeyboardCommandShortcut.OpenFormatCells, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.D1 or Key.NumPad1),
+        new(KeyboardCommandShortcut.Find, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.F),
+        new(KeyboardCommandShortcut.Replace, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.H),
+        new(KeyboardCommandShortcut.InsertFunction, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F3),
+        new(KeyboardCommandShortcut.SpellCheck, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F7),
+        new(KeyboardCommandShortcut.CloseWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.F4 or Key.W),
+        new(KeyboardCommandShortcut.CalculateNow, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F9),
+        new(KeyboardCommandShortcut.CalculateSheet, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F9),
+        new(KeyboardCommandShortcut.CalculateNow, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && key == Key.F9),
+        new(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.F9),
+        new(KeyboardCommandShortcut.ToggleFormulaBarExpansion, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.U),
+        new(KeyboardCommandShortcut.ToggleFilter, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.L),
+        new(KeyboardCommandShortcut.QuickAnalysis, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Q),
+        new(KeyboardCommandShortcut.OpenPrintPreview, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.P),
+        new(KeyboardCommandShortcut.PasteValues, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.V),
+        new(KeyboardCommandShortcut.GoTo, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F5 || modifiers == ModifierKeys.Control && key == Key.G),
+        new(KeyboardCommandShortcut.InsertEmbeddedChart, (key, modifiers) => modifiers == ModifierKeys.Alt && key == Key.F1),
+        new(KeyboardCommandShortcut.AutoSum, (key, modifiers) => modifiers == ModifierKeys.Alt && key is Key.OemPlus or Key.Add),
+        new(KeyboardCommandShortcut.GroupSelection, (key, modifiers) => modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.Right),
+        new(KeyboardCommandShortcut.UngroupSelection, (key, modifiers) => modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.Left),
+        new(KeyboardCommandShortcut.InsertChartSheet, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F11),
+        new(KeyboardCommandShortcut.OpenFormatCellsFont, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.F or Key.P),
+        new(KeyboardCommandShortcut.WorkbookStatistics, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.G),
+        new(KeyboardCommandShortcut.NewNote, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F2),
+        new(KeyboardCommandShortcut.NewThreadedComment, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.F2),
+        new(KeyboardCommandShortcut.SaveAs, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F12),
+        new(KeyboardCommandShortcut.ShowKeyTips, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F10),
+        new(KeyboardCommandShortcut.OpenContextMenu, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F10 || modifiers == ModifierKeys.None && key == Key.Apps),
+        new(KeyboardCommandShortcut.EditInFormulaBar, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.F2),
+        new(KeyboardCommandShortcut.InsertWorksheet, (key, modifiers) => modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.F1 || modifiers == ModifierKeys.Shift && key == Key.F11),
+        new(KeyboardCommandShortcut.ZoomIn, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && key is Key.OemPlus or Key.Add),
+        new(KeyboardCommandShortcut.ZoomOut, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && key is Key.OemMinus or Key.Subtract),
+        new(KeyboardCommandShortcut.CopyFormulaFromAbove, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.OemQuotes),
+        new(KeyboardCommandShortcut.CopyValueFromAbove, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemQuotes),
+        new(KeyboardCommandShortcut.OpenActiveDropdown, (key, modifiers) => modifiers == ModifierKeys.Alt && key == Key.Down),
+        new(KeyboardCommandShortcut.SelectVisibleCellsOnly, (key, modifiers) => modifiers == ModifierKeys.Alt && key == Key.Oem1),
+        new(KeyboardCommandShortcut.ScrollActiveCellIntoView, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Back),
+        new(KeyboardCommandShortcut.CycleSelectionCorner, (key, modifiers) => modifiers == ModifierKeys.Control && key is Key.OemPeriod or Key.Decimal),
+        new(KeyboardCommandShortcut.SelectDirectPrecedents, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.OemOpenBrackets),
+        new(KeyboardCommandShortcut.SelectDirectDependents, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.OemCloseBrackets),
+        new(KeyboardCommandShortcut.SelectAllPrecedents, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemOpenBrackets),
+        new(KeyboardCommandShortcut.SelectAllDependents, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemCloseBrackets),
+        new(KeyboardCommandShortcut.SelectCellsWithComments, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.O),
+        new(KeyboardCommandShortcut.EditCell, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F2),
+        new(KeyboardCommandShortcut.ClearSelection, (key, modifiers) => !HasControl(modifiers) && key == Key.Delete),
+        new(KeyboardCommandShortcut.ClearSelectionAndEdit, (key, modifiers) => !HasControl(modifiers) && key == Key.Back),
+        new(KeyboardCommandShortcut.RepeatLastAction, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F4),
+    ];
+
     public static bool IsCtrlPlus(Key key, Key systemKey, ModifierKeys modifiers) =>
         modifiers == ModifierKeys.Control &&
             (key is Key.Add or Key.OemPlus || systemKey is Key.Add or Key.OemPlus) ||
@@ -82,414 +154,12 @@ public static class KeyboardShortcutMatcher
     {
         shortcut = default;
         var effectiveKey = key == Key.None ? systemKey : key;
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.N)
+        foreach (var rule in CommandShortcutRules)
         {
-            shortcut = KeyboardCommandShortcut.NewWorkbook;
-            return true;
-        }
+            if (!rule.Matches(effectiveKey, modifiers))
+                continue;
 
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.O)
-        {
-            shortcut = KeyboardCommandShortcut.OpenWorkbook;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.S)
-        {
-            shortcut = KeyboardCommandShortcut.SaveWorkbook;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.C)
-        {
-            shortcut = KeyboardCommandShortcut.Copy;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.X)
-        {
-            shortcut = KeyboardCommandShortcut.Cut;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.V)
-        {
-            shortcut = KeyboardCommandShortcut.Paste;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.A)
-        {
-            shortcut = KeyboardCommandShortcut.SelectCurrentRegionOrAll;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.Z)
-        {
-            shortcut = KeyboardCommandShortcut.Undo;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) != 0 && effectiveKey == Key.Y)
-        {
-            shortcut = KeyboardCommandShortcut.Redo;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey is Key.T or Key.L)
-        {
-            shortcut = KeyboardCommandShortcut.CreateTable;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.K)
-        {
-            shortcut = KeyboardCommandShortcut.InsertHyperlink;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.D)
-        {
-            shortcut = KeyboardCommandShortcut.FillDown;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.R)
-        {
-            shortcut = KeyboardCommandShortcut.FillRight;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.E)
-        {
-            shortcut = KeyboardCommandShortcut.FlashFill;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemSemicolon)
-        {
-            shortcut = KeyboardCommandShortcut.InsertCurrentDate;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemSemicolon)
-        {
-            shortcut = KeyboardCommandShortcut.InsertCurrentTime;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Oem3)
-        {
-            shortcut = KeyboardCommandShortcut.ToggleShowFormulas;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.PageUp)
-        {
-            shortcut = KeyboardCommandShortcut.ActivatePreviousSheet;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.PageDown)
-        {
-            shortcut = KeyboardCommandShortcut.ActivateNextSheet;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.PageUp)
-        {
-            shortcut = KeyboardCommandShortcut.SelectPreviousSheetGroup;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.PageDown)
-        {
-            shortcut = KeyboardCommandShortcut.SelectNextSheetGroup;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey is Key.D1 or Key.NumPad1)
-        {
-            shortcut = KeyboardCommandShortcut.OpenFormatCells;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.F)
-        {
-            shortcut = KeyboardCommandShortcut.Find;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.H)
-        {
-            shortcut = KeyboardCommandShortcut.Replace;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
-        {
-            shortcut = KeyboardCommandShortcut.InsertFunction;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F7)
-        {
-            shortcut = KeyboardCommandShortcut.SpellCheck;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey is Key.F4 or Key.W)
-        {
-            shortcut = KeyboardCommandShortcut.CloseWorkbook;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F9)
-        {
-            shortcut = KeyboardCommandShortcut.CalculateNow;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F9)
-        {
-            shortcut = KeyboardCommandShortcut.CalculateSheet;
-            return true;
-        }
-
-        if (effectiveKey == Key.F9 && modifiers == (ModifierKeys.Control | ModifierKeys.Alt))
-        {
-            shortcut = KeyboardCommandShortcut.CalculateNow;
-            return true;
-        }
-
-        if (effectiveKey == Key.F9 && modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift))
-        {
-            shortcut = KeyboardCommandShortcut.RebuildDependenciesAndCalculate;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.U)
-        {
-            shortcut = KeyboardCommandShortcut.ToggleFormulaBarExpansion;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.L)
-        {
-            shortcut = KeyboardCommandShortcut.ToggleFilter;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Q)
-        {
-            shortcut = KeyboardCommandShortcut.QuickAnalysis;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.P)
-        {
-            shortcut = KeyboardCommandShortcut.OpenPrintPreview;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.V)
-        {
-            shortcut = KeyboardCommandShortcut.PasteValues;
-            return true;
-        }
-
-        if ((modifiers == ModifierKeys.None && effectiveKey == Key.F5) ||
-            (modifiers == ModifierKeys.Control && effectiveKey == Key.G))
-        {
-            shortcut = KeyboardCommandShortcut.GoTo;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.F1)
-        {
-            shortcut = KeyboardCommandShortcut.InsertEmbeddedChart;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Alt && effectiveKey is Key.OemPlus or Key.Add)
-        {
-            shortcut = KeyboardCommandShortcut.AutoSum;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.Right)
-        {
-            shortcut = KeyboardCommandShortcut.GroupSelection;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.Left)
-        {
-            shortcut = KeyboardCommandShortcut.UngroupSelection;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F11)
-        {
-            shortcut = KeyboardCommandShortcut.InsertChartSheet;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey is Key.F or Key.P)
-        {
-            shortcut = KeyboardCommandShortcut.OpenFormatCellsFont;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.G)
-        {
-            shortcut = KeyboardCommandShortcut.WorkbookStatistics;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F2)
-        {
-            shortcut = KeyboardCommandShortcut.NewNote;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.F2)
-        {
-            shortcut = KeyboardCommandShortcut.NewThreadedComment;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F12)
-        {
-            shortcut = KeyboardCommandShortcut.SaveAs;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F10)
-        {
-            shortcut = KeyboardCommandShortcut.ShowKeyTips;
-            return true;
-        }
-
-        if ((modifiers == ModifierKeys.Shift && effectiveKey == Key.F10) ||
-            (modifiers == ModifierKeys.None && effectiveKey == Key.Apps))
-        {
-            shortcut = KeyboardCommandShortcut.OpenContextMenu;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.F2)
-        {
-            shortcut = KeyboardCommandShortcut.EditInFormulaBar;
-            return true;
-        }
-
-        if ((modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && effectiveKey == Key.F1) ||
-            (modifiers == ModifierKeys.Shift && effectiveKey == Key.F11))
-        {
-            shortcut = KeyboardCommandShortcut.InsertWorksheet;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && effectiveKey is Key.OemPlus or Key.Add)
-        {
-            shortcut = KeyboardCommandShortcut.ZoomIn;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && effectiveKey is Key.OemMinus or Key.Subtract)
-        {
-            shortcut = KeyboardCommandShortcut.ZoomOut;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemQuotes)
-        {
-            shortcut = KeyboardCommandShortcut.CopyFormulaFromAbove;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemQuotes)
-        {
-            shortcut = KeyboardCommandShortcut.CopyValueFromAbove;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.Down)
-        {
-            shortcut = KeyboardCommandShortcut.OpenActiveDropdown;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Alt && effectiveKey == Key.Oem1)
-        {
-            shortcut = KeyboardCommandShortcut.SelectVisibleCellsOnly;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.Back)
-        {
-            shortcut = KeyboardCommandShortcut.ScrollActiveCellIntoView;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey is Key.OemPeriod or Key.Decimal)
-        {
-            shortcut = KeyboardCommandShortcut.CycleSelectionCorner;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemOpenBrackets)
-        {
-            shortcut = KeyboardCommandShortcut.SelectDirectPrecedents;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.Control && effectiveKey == Key.OemCloseBrackets)
-        {
-            shortcut = KeyboardCommandShortcut.SelectDirectDependents;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemOpenBrackets)
-        {
-            shortcut = KeyboardCommandShortcut.SelectAllPrecedents;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.OemCloseBrackets)
-        {
-            shortcut = KeyboardCommandShortcut.SelectAllDependents;
-            return true;
-        }
-
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && effectiveKey == Key.O)
-        {
-            shortcut = KeyboardCommandShortcut.SelectCellsWithComments;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F2)
-        {
-            shortcut = KeyboardCommandShortcut.EditCell;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) == 0 && effectiveKey == Key.Delete)
-        {
-            shortcut = KeyboardCommandShortcut.ClearSelection;
-            return true;
-        }
-
-        if ((modifiers & ModifierKeys.Control) == 0 && effectiveKey == Key.Back)
-        {
-            shortcut = KeyboardCommandShortcut.ClearSelectionAndEdit;
-            return true;
-        }
-
-        if (modifiers == ModifierKeys.None && effectiveKey == Key.F4)
-        {
-            shortcut = KeyboardCommandShortcut.RepeatLastAction;
+            shortcut = rule.Shortcut;
             return true;
         }
 
@@ -567,6 +237,13 @@ public static class KeyboardShortcutMatcher
 
         return false;
     }
+
+    private static bool HasControl(ModifierKeys modifiers) =>
+        (modifiers & ModifierKeys.Control) != 0;
+
+    private readonly record struct KeyboardCommandShortcutRule(
+        KeyboardCommandShortcut Shortcut,
+        Func<Key, ModifierKeys, bool> Matches);
 }
 
 public enum KeyboardGridShortcut
