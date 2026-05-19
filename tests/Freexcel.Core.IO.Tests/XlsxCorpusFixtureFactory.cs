@@ -128,7 +128,7 @@ internal static class XlsxCorpusFixtureFactory
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
               <c:chart>
                 <c:plotArea>
-                  <c:radarChart/>
+                  <c:surfaceChart/>
                 </c:plotArea>
               </c:chart>
             </c:chartSpace>
