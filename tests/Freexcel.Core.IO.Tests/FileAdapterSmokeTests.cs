@@ -9213,7 +9213,15 @@ public class FileAdapterSmokeTests
             BlankDisplayMode = ChartBlankDisplayMode.Zero,
             ShowDataLabelsOverMaximum = true,
             AutoTitleDeleted = true,
-            ShowDataInHiddenRowsAndColumns = true
+            ShowDataInHiddenRowsAndColumns = true,
+            Protection = new ChartProtectionModel
+            {
+                ChartObject = true,
+                Data = true,
+                Formatting = false,
+                Selection = true,
+                UserInterface = true
+            }
         };
         sheet.Charts.Add(chart);
 
@@ -9227,6 +9235,12 @@ public class FileAdapterSmokeTests
             XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
             chartXml.Root!.Element(chartNs + "style")!.Attribute("val")!.Value.Should().Be("42");
             chartXml.Root.Element(chartNs + "roundedCorners")!.Attribute("val")!.Value.Should().Be("1");
+            var protection = chartXml.Root.Element(chartNs + "protection")!;
+            protection.Attribute("chartObject")!.Value.Should().Be("1");
+            protection.Attribute("data")!.Value.Should().Be("1");
+            protection.Attribute("formatting")!.Value.Should().Be("0");
+            protection.Attribute("selection")!.Value.Should().Be("1");
+            protection.Attribute("userInterface")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "autoTitleDeleted")!.Attribute("val")!.Value.Should().Be("1");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "plotVisOnly")!.Attribute("val")!.Value.Should().Be("0");
             chartXml.Root.Element(chartNs + "chart")!.Element(chartNs + "dispBlanksAs")!.Attribute("val")!.Value.Should().Be("zero");
@@ -9242,7 +9256,13 @@ public class FileAdapterSmokeTests
                      chart.BlankDisplayMode == ChartBlankDisplayMode.Zero &&
                      chart.ShowDataLabelsOverMaximum &&
                      chart.AutoTitleDeleted &&
-                     chart.ShowDataInHiddenRowsAndColumns);
+                     chart.ShowDataInHiddenRowsAndColumns &&
+                     chart.Protection != null &&
+                     chart.Protection.ChartObject == true &&
+                     chart.Protection.Data == true &&
+                     chart.Protection.Formatting == false &&
+                     chart.Protection.Selection == true &&
+                     chart.Protection.UserInterface == true);
     }
 
     [Fact]

@@ -7980,6 +7980,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                 chart.ChartStyleId is { } styleId ? new XElement(chartNs + "style", new XAttribute("val", styleId.ToString(CultureInfo.InvariantCulture))) : null,
                 chart.RoundedCorners ? new XElement(chartNs + "roundedCorners", new XAttribute("val", "1")) : null,
+                ToChartProtectionXml(chart, chartNs),
                 ToChartAreaShapeProperties(chart, chartNs, drawingNs),
                 ToPivotSourceXml(chart, sheet, chartNs),
                 new XElement(chartNs + "chart",
@@ -8004,6 +8005,26 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ? null
             : new XElement(chartNs + "dispBlanksAs",
                 new XAttribute("val", chart.BlankDisplayMode == ChartBlankDisplayMode.Span ? "span" : "zero"));
+
+    private static XElement? ToChartProtectionXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.Protection is not { } protection)
+            return null;
+
+        var element = new XElement(chartNs + "protection");
+        AddOptionalBoolAttribute(element, "chartObject", protection.ChartObject);
+        AddOptionalBoolAttribute(element, "data", protection.Data);
+        AddOptionalBoolAttribute(element, "formatting", protection.Formatting);
+        AddOptionalBoolAttribute(element, "selection", protection.Selection);
+        AddOptionalBoolAttribute(element, "userInterface", protection.UserInterface);
+        return element.HasAttributes ? element : null;
+    }
+
+    private static void AddOptionalBoolAttribute(XElement element, string name, bool? value)
+    {
+        if (value is { } boolValue)
+            element.SetAttributeValue(name, boolValue ? "1" : "0");
+    }
 
     private static XElement? ToPivotSourceXml(ChartModel chart, Sheet sheet, XNamespace chartNs)
     {

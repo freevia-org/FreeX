@@ -274,6 +274,7 @@ public sealed class XlsxChartPartReaderTests
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
                           xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
               <c:style val="42"/>
+              <c:protection chartObject="1" data="1" formatting="0" selection="1" userInterface="1"/>
               <c:pivotSource>
                 <c:name>Data!PivotTable1</c:name>
                 <c:fmtId val="0"/>
@@ -309,6 +310,14 @@ public sealed class XlsxChartPartReaderTests
         chart.ShowDataLabelsOverMaximum.Should().BeTrue();
         chart.AutoTitleDeleted.Should().BeTrue();
         chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        chart.Protection.Should().BeEquivalentTo(new ChartProtectionModel
+        {
+            ChartObject = true,
+            Data = true,
+            Formatting = false,
+            Selection = true,
+            UserInterface = true
+        });
     }
 
     [Fact]

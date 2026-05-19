@@ -81,10 +81,35 @@ public static class XlsxChartPartReader
         if (int.TryParse(styleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var styleId))
             chart.ChartStyleId = styleId;
 
+        chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
+
         chart.RoundedCorners = IsTrue(chartXml.Root?
             .Element(ChartNs + "roundedCorners")?
             .Attribute("val")?
             .Value);
+    }
+
+    private static ChartProtectionModel? ReadProtection(XElement? protection)
+    {
+        if (protection is null)
+            return null;
+
+        return new ChartProtectionModel
+        {
+            ChartObject = ReadOptionalBool(protection.Attribute("chartObject")?.Value),
+            Data = ReadOptionalBool(protection.Attribute("data")?.Value),
+            Formatting = ReadOptionalBool(protection.Attribute("formatting")?.Value),
+            Selection = ReadOptionalBool(protection.Attribute("selection")?.Value),
+            UserInterface = ReadOptionalBool(protection.Attribute("userInterface")?.Value)
+        };
+    }
+
+    private static bool? ReadOptionalBool(string? value)
+    {
+        if (value is null)
+            return null;
+
+        return IsTrue(value);
     }
 
     private static void ApplyChartBehaviorMetadata(XDocument chartXml, ChartModel chart)
