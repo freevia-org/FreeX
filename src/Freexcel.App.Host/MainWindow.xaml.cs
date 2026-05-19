@@ -1944,13 +1944,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if ((e.Key == Key.F5 && Keyboard.Modifiers == ModifierKeys.None) ||
-                (e.Key == Key.G && Keyboard.Modifiers == ModifierKeys.Control))
-            {
-                FindGoToMenuItem_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
         }
 
         if (KeyboardShortcutMatcher.TryGetFontToggleShortcut(e.Key, Keyboard.Modifiers, out var fontToggleShortcut))
@@ -2185,6 +2178,9 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.OpenPrintBackstage:
                 OpenPrintBackstage();
+                break;
+            case KeyboardCommandShortcut.GoTo:
+                FindGoToMenuItem_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
             case KeyboardCommandShortcut.InsertChartSheet:
