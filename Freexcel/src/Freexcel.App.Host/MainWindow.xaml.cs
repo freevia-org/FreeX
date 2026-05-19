@@ -6844,23 +6844,50 @@ public partial class MainWindow : Window
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
+    private void ApplyCellStylePreset(CellStylePreset preset)
+        => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset));
+    private void CellStyleNormalMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Normal);
     private void CellStyleGoodMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(198, 239, 206), FontColor: new CellColor(0, 97, 0)));
+        => ApplyCellStylePreset(CellStylePreset.Good);
     private void CellStyleBadMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 199, 206), FontColor: new CellColor(156, 0, 6)));
+        => ApplyCellStylePreset(CellStylePreset.Bad);
     private void CellStyleNeutralMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 235, 156), FontColor: new CellColor(156, 101, 0)));
+        => ApplyCellStylePreset(CellStylePreset.Neutral);
+    private void CellStyleInputMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Input);
+    private void CellStyleOutputMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Output);
+    private void CellStyleCalculationMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Calculation);
+    private void CellStyleCheckCellMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.CheckCell);
+    private void CellStyleLinkedCellMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.LinkedCell);
+    private void CellStyleExplanatoryTextMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.ExplanatoryText);
     private void CellStyleH1MenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(Bold: true, FontSize: 16, FillColor: new CellColor(31, 115, 70), FontColor: CellColor.White));
+        => ApplyCellStylePreset(CellStylePreset.Heading1);
     private void CellStyleH2MenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(Bold: true, FontSize: 14));
+        => ApplyCellStylePreset(CellStylePreset.Heading2);
     private void CellStyleNoteMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 255, 204), BorderBottom: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyCellStylePreset(CellStylePreset.Note);
     private void CellStyleWarningMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(FillColor: new CellColor(255, 192, 0), FontColor: CellColor.Black, Bold: true));
+        => ApplyCellStylePreset(CellStylePreset.WarningText);
     private void CellStyleTotalMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(Bold: true, BorderTop: new CellBorder(BorderStyle.Thin, CellColor.Black),
-            BorderBottom: new CellBorder(BorderStyle.Double, CellColor.Black)));
+        => ApplyCellStylePreset(CellStylePreset.Total);
+    private void CellStyleAccent1_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent1_20);
+    private void CellStyleAccent2_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent2_20);
+    private void CellStyleAccent3_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent3_20);
+    private void CellStyleAccent4_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent4_20);
+    private void CellStyleAccent5_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent5_20);
+    private void CellStyleAccent6_20MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent6_20);
 
     // ── Cells group (pickers) ────────────────────────────────────────────────
 

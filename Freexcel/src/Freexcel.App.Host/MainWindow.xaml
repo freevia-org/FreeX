@@ -1033,15 +1033,31 @@
                                         local:RibbonTooltip.Description="Apply a predefined cell style.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Good"         local:RibbonTooltip.KeyTip="G" Click="CellStyleGoodMenuItem_Click"/>
-                                            <MenuItem Header="Bad"          local:RibbonTooltip.KeyTip="B" Click="CellStyleBadMenuItem_Click"/>
-                                            <MenuItem Header="Neutral"      local:RibbonTooltip.KeyTip="N" Click="CellStyleNeutralMenuItem_Click"/>
+                                            <MenuItem Header="Normal"       local:RibbonTooltip.KeyTip="NM" Click="CellStyleNormalMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Good"         local:RibbonTooltip.KeyTip="GD" Click="CellStyleGoodMenuItem_Click"/>
+                                            <MenuItem Header="Bad"          local:RibbonTooltip.KeyTip="BD" Click="CellStyleBadMenuItem_Click"/>
+                                            <MenuItem Header="Neutral"      local:RibbonTooltip.KeyTip="NT" Click="CellStyleNeutralMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Input"        local:RibbonTooltip.KeyTip="IN" Click="CellStyleInputMenuItem_Click"/>
+                                            <MenuItem Header="Output"       local:RibbonTooltip.KeyTip="OP" Click="CellStyleOutputMenuItem_Click"/>
+                                            <MenuItem Header="Calculation"  local:RibbonTooltip.KeyTip="CA" Click="CellStyleCalculationMenuItem_Click"/>
+                                            <MenuItem Header="Check Cell"   local:RibbonTooltip.KeyTip="CK" Click="CellStyleCheckCellMenuItem_Click"/>
+                                            <MenuItem Header="Linked Cell"  local:RibbonTooltip.KeyTip="LK" Click="CellStyleLinkedCellMenuItem_Click"/>
+                                            <MenuItem Header="Explanatory Text" local:RibbonTooltip.KeyTip="EX" Click="CellStyleExplanatoryTextMenuItem_Click"/>
                                             <Separator/>
                                             <MenuItem Header="Heading 1"    local:RibbonTooltip.KeyTip="H1" Click="CellStyleH1MenuItem_Click"/>
                                             <MenuItem Header="Heading 2"    local:RibbonTooltip.KeyTip="H2" Click="CellStyleH2MenuItem_Click"/>
-                                            <MenuItem Header="Note"         local:RibbonTooltip.KeyTip="O" Click="CellStyleNoteMenuItem_Click"/>
-                                            <MenuItem Header="Warning Text" local:RibbonTooltip.KeyTip="W" Click="CellStyleWarningMenuItem_Click"/>
-                                            <MenuItem Header="Total"        local:RibbonTooltip.KeyTip="T" Click="CellStyleTotalMenuItem_Click"/>
+                                            <MenuItem Header="Note"         local:RibbonTooltip.KeyTip="NO" Click="CellStyleNoteMenuItem_Click"/>
+                                            <MenuItem Header="Warning Text" local:RibbonTooltip.KeyTip="WT" Click="CellStyleWarningMenuItem_Click"/>
+                                            <MenuItem Header="Total"        local:RibbonTooltip.KeyTip="TT" Click="CellStyleTotalMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="20% - Accent 1" local:RibbonTooltip.KeyTip="A1" Click="CellStyleAccent1_20MenuItem_Click"/>
+                                            <MenuItem Header="20% - Accent 2" local:RibbonTooltip.KeyTip="A2" Click="CellStyleAccent2_20MenuItem_Click"/>
+                                            <MenuItem Header="20% - Accent 3" local:RibbonTooltip.KeyTip="A3" Click="CellStyleAccent3_20MenuItem_Click"/>
+                                            <MenuItem Header="20% - Accent 4" local:RibbonTooltip.KeyTip="A4" Click="CellStyleAccent4_20MenuItem_Click"/>
+                                            <MenuItem Header="20% - Accent 5" local:RibbonTooltip.KeyTip="A5" Click="CellStyleAccent5_20MenuItem_Click"/>
+                                            <MenuItem Header="20% - Accent 6" local:RibbonTooltip.KeyTip="A6" Click="CellStyleAccent6_20MenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center">
