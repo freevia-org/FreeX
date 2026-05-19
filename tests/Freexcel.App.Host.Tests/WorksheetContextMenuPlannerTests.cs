@@ -22,6 +22,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Filter...",
             "Clear Filter",
             "Pick From Drop-down List...",
+            "Quick Analysis",
             "Hide Rows",
             "Unhide Rows",
             "Hide Columns",
@@ -42,6 +43,8 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ClearFilter);
         commands.Single(command => command.Header == "Pick From Drop-down List...")
             .Action.Should().Be(WorksheetContextMenuAction.PickFromDropDown);
+        commands.Single(command => command.Header == "Quick Analysis")
+            .Action.Should().Be(WorksheetContextMenuAction.QuickAnalysis);
         commands.Single(command => command.Header == "Clear All")
             .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
         commands.Single(command => command.Header == "Clear Comments")
