@@ -7151,7 +7151,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(input))
             return;
 
-        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, ParseChartType(input)), "Change PivotChart Type"))
+        if (!TryExecuteCommand(new ChangePivotChartTypeCommand(_currentSheetId, chart.Id, ChartOptionCycler.ParseChartType(input)), "Change PivotChart Type"))
             return;
 
         UpdateViewport();
@@ -8521,20 +8521,11 @@ public partial class MainWindow : Window
                 null,
                 chart => new ChartLayoutOptions(
                     ShowDataLabels: true,
-                    DataLabelPosition: GetNextDataLabelPosition(chart.DataLabelPosition))))
+                    DataLabelPosition: ChartOptionCycler.NextDataLabelPosition(chart.DataLabelPosition))))
             return;
 
         UpdateViewport();
     }
-
-    private static ChartDataLabelPosition GetNextDataLabelPosition(ChartDataLabelPosition current) =>
-        current switch
-        {
-            ChartDataLabelPosition.BestFit => ChartDataLabelPosition.OutsideEnd,
-            ChartDataLabelPosition.OutsideEnd => ChartDataLabelPosition.InsideEnd,
-            ChartDataLabelPosition.InsideEnd => ChartDataLabelPosition.Center,
-            _ => ChartDataLabelPosition.BestFit
-        };
 
     private void ChartDataLabelCategoryBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -8584,13 +8575,7 @@ public partial class MainWindow : Window
             "Label Number Format",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelNumberFormat: chart.DataLabelNumberFormat switch
-                {
-                    ChartDataLabelNumberFormat.General => ChartDataLabelNumberFormat.Number,
-                    ChartDataLabelNumberFormat.Number => ChartDataLabelNumberFormat.Currency,
-                    ChartDataLabelNumberFormat.Currency => ChartDataLabelNumberFormat.Percent,
-                    _ => ChartDataLabelNumberFormat.General
-                }));
+                DataLabelNumberFormat: ChartOptionCycler.NextDataLabelNumberFormat(chart.DataLabelNumberFormat)));
     }
 
     private void ChartDataLabelCalloutBtn_Click(object sender, RoutedEventArgs e)
@@ -8608,7 +8593,7 @@ public partial class MainWindow : Window
             "Data Label Fill",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelFillColor: GetNextSeriesColor(chart.DataLabelFillColor)));
+                DataLabelFillColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelFillColor)));
     }
 
     private void ChartDataLabelTextBtn_Click(object sender, RoutedEventArgs e)
@@ -8617,7 +8602,7 @@ public partial class MainWindow : Window
             "Data Label Text",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelTextColor: GetNextSeriesColor(chart.DataLabelTextColor)));
+                DataLabelTextColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelTextColor)));
     }
 
     private void ChartDataLabelBorderBtn_Click(object sender, RoutedEventArgs e)
@@ -8626,7 +8611,7 @@ public partial class MainWindow : Window
             "Data Label Border",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelBorderColor: GetNextSeriesColor(chart.DataLabelBorderColor),
+                DataLabelBorderColor: ChartOptionCycler.NextSeriesColor(chart.DataLabelBorderColor),
                 DataLabelBorderThickness: chart.DataLabelBorderThickness >= 3 ? 0.75 : chart.DataLabelBorderThickness + 0.75));
     }
 
@@ -8645,7 +8630,7 @@ public partial class MainWindow : Window
             "Data Label Angle",
             chart => new ChartLayoutOptions(
                 ShowDataLabels: true,
-                DataLabelAngle: GetNextAxisLabelAngle(chart.DataLabelAngle)));
+                DataLabelAngle: ChartOptionCycler.NextAxisLabelAngle(chart.DataLabelAngle)));
     }
 
     private void ChartPointDataLabelBtn_Click(object sender, RoutedEventArgs e)
@@ -8663,10 +8648,10 @@ public partial class MainWindow : Window
                     var current = existingIndex >= 0 ? formats[existingIndex] : new ChartPointDataLabelFormat(0, 0);
                     var updated = current with
                     {
-                        FillColor = GetNextSeriesColor(current.FillColor),
-                        BorderColor = GetNextSeriesColor(current.BorderColor ?? current.FillColor),
+                        FillColor = ChartOptionCycler.NextSeriesColor(current.FillColor),
+                        BorderColor = ChartOptionCycler.NextSeriesColor(current.BorderColor ?? current.FillColor),
                         BorderThickness = current.BorderThickness is null or >= 3 ? 0.75 : current.BorderThickness.Value + 0.75,
-                        TextColor = GetNextSeriesColor(current.TextColor),
+                        TextColor = ChartOptionCycler.NextSeriesColor(current.TextColor),
                         FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
                     };
                     if (existingIndex >= 0)
@@ -8686,14 +8671,14 @@ public partial class MainWindow : Window
     {
         ToggleChartAreaOption(
             "Chart Area Fill",
-            chart => new ChartLayoutOptions(ChartAreaFillColor: GetNextSeriesColor(chart.ChartAreaFillColor)));
+            chart => new ChartLayoutOptions(ChartAreaFillColor: ChartOptionCycler.NextSeriesColor(chart.ChartAreaFillColor)));
     }
 
     private void ChartTitleColorBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Chart Title Color",
-            chart => new ChartLayoutOptions(ChartTitleTextColor: GetNextSeriesColor(chart.ChartTitleTextColor)));
+            chart => new ChartLayoutOptions(ChartTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.ChartTitleTextColor)));
     }
 
     private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -8707,7 +8692,7 @@ public partial class MainWindow : Window
     {
         ToggleChartAreaOption(
             "Axis Title Color",
-            chart => new ChartLayoutOptions(AxisTitleTextColor: GetNextSeriesColor(chart.AxisTitleTextColor)));
+            chart => new ChartLayoutOptions(AxisTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.AxisTitleTextColor)));
     }
 
     private void ChartAxisTitleSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -8721,7 +8706,7 @@ public partial class MainWindow : Window
     {
         ToggleChartAreaOption(
             "Plot Area Fill",
-            chart => new ChartLayoutOptions(PlotAreaFillColor: GetNextSeriesColor(chart.PlotAreaFillColor)));
+            chart => new ChartLayoutOptions(PlotAreaFillColor: ChartOptionCycler.NextSeriesColor(chart.PlotAreaFillColor)));
     }
 
     private void ChartPlotAreaBorderBtn_Click(object sender, RoutedEventArgs e)
@@ -8729,7 +8714,7 @@ public partial class MainWindow : Window
         ToggleChartAreaOption(
             "Plot Area Border",
             chart => new ChartLayoutOptions(
-                PlotAreaBorderColor: GetNextSeriesColor(chart.PlotAreaBorderColor),
+                PlotAreaBorderColor: ChartOptionCycler.NextSeriesColor(chart.PlotAreaBorderColor),
                 PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3 ? 1 : chart.PlotAreaBorderThickness + 0.75));
     }
 
@@ -8737,14 +8722,14 @@ public partial class MainWindow : Window
     {
         ToggleChartAreaOption(
             "Legend Text",
-            chart => new ChartLayoutOptions(LegendTextColor: GetNextSeriesColor(chart.LegendTextColor)));
+            chart => new ChartLayoutOptions(LegendTextColor: ChartOptionCycler.NextSeriesColor(chart.LegendTextColor)));
     }
 
     private void ChartLegendFillBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(
             "Legend Fill",
-            chart => new ChartLayoutOptions(LegendFillColor: GetNextSeriesColor(chart.LegendFillColor)));
+            chart => new ChartLayoutOptions(LegendFillColor: ChartOptionCycler.NextSeriesColor(chart.LegendFillColor)));
     }
 
     private void ChartLegendBorderBtn_Click(object sender, RoutedEventArgs e)
@@ -8752,7 +8737,7 @@ public partial class MainWindow : Window
         ToggleChartAreaOption(
             "Legend Border",
             chart => new ChartLayoutOptions(
-                LegendBorderColor: GetNextSeriesColor(chart.LegendBorderColor),
+                LegendBorderColor: ChartOptionCycler.NextSeriesColor(chart.LegendBorderColor),
                 LegendBorderThickness: chart.LegendBorderThickness >= 3 ? 0.75 : chart.LegendBorderThickness + 0.75));
     }
 
@@ -8769,15 +8754,6 @@ public partial class MainWindow : Window
             "Legend Overlay",
             chart => new ChartLayoutOptions(ShowLegend: true, LegendOverlay: !chart.LegendOverlay));
     }
-
-    private static ChartDataLabelNumberFormat GetNextDataLabelNumberFormat(ChartDataLabelNumberFormat current) =>
-        current switch
-        {
-            ChartDataLabelNumberFormat.General => ChartDataLabelNumberFormat.Number,
-            ChartDataLabelNumberFormat.Number => ChartDataLabelNumberFormat.Currency,
-            ChartDataLabelNumberFormat.Currency => ChartDataLabelNumberFormat.Percent,
-            _ => ChartDataLabelNumberFormat.General
-        };
 
     private void ToggleDataLabelOption(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
     {
@@ -8827,22 +8803,11 @@ public partial class MainWindow : Window
                 "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
                 chart => new ChartLayoutOptions(
                     ShowLinearTrendline: true,
-                    TrendlineType: GetNextTrendlineType(chart.TrendlineType))))
+                    TrendlineType: ChartOptionCycler.NextTrendlineType(chart.TrendlineType))))
             return;
 
         UpdateViewport();
     }
-
-    private static ChartTrendlineType GetNextTrendlineType(ChartTrendlineType current) =>
-        current switch
-        {
-            ChartTrendlineType.Linear => ChartTrendlineType.Exponential,
-            ChartTrendlineType.Exponential => ChartTrendlineType.Logarithmic,
-            ChartTrendlineType.Logarithmic => ChartTrendlineType.Power,
-            ChartTrendlineType.Power => ChartTrendlineType.MovingAverage,
-            ChartTrendlineType.MovingAverage => ChartTrendlineType.Polynomial,
-            _ => ChartTrendlineType.Linear
-        };
 
     private void ChartTrendlinePeriodBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -8900,7 +8865,7 @@ public partial class MainWindow : Window
             "Trendline Color",
             chart => new ChartLayoutOptions(
                 ShowLinearTrendline: true,
-                TrendlineColor: GetNextTrendlineColor(chart.TrendlineColor)));
+                TrendlineColor: ChartOptionCycler.NextTrendlineColor(chart.TrendlineColor)));
     }
 
     private void ChartTrendlineDashBtn_Click(object sender, RoutedEventArgs e)
@@ -8924,17 +8889,6 @@ public partial class MainWindow : Window
             chart => new ChartLayoutOptions(
                 ShowLinearTrendline: true,
                 TrendlineThickness: chart.TrendlineThickness >= 3 ? 1.5 : chart.TrendlineThickness + 0.75));
-    }
-
-    private static CellColor GetNextTrendlineColor(CellColor? current)
-    {
-        if (current is null)
-            return new CellColor(217, 83, 25);
-        if (current.Value.R == 217 && current.Value.G == 83 && current.Value.B == 25)
-            return new CellColor(0, 114, 178);
-        if (current.Value.R == 0 && current.Value.G == 114 && current.Value.B == 178)
-            return new CellColor(0, 158, 115);
-        return new CellColor(128, 128, 128);
     }
 
     private void ToggleTrendlineInfo(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
@@ -9077,8 +9031,8 @@ public partial class MainWindow : Window
                 chart =>
                 {
                     var (major, minor) = useXAxis
-                        ? GetNextAxisTickState(chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle)
-                        : GetNextAxisTickState(chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle);
+                        ? ChartOptionCycler.NextAxisTickState(chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle)
+                        : ChartOptionCycler.NextAxisTickState(chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle);
                     return useXAxis
                         ? new ChartLayoutOptions(XAxisMajorTickStyle: major, XAxisMinorTickStyle: minor)
                         : new ChartLayoutOptions(YAxisMajorTickStyle: major, YAxisMinorTickStyle: minor);
@@ -9116,7 +9070,7 @@ public partial class MainWindow : Window
                 {
                     var currentColor = useXAxis ? chart.XAxisLabelTextColor : chart.YAxisLabelTextColor;
                     var currentSize = useXAxis ? chart.XAxisLabelFontSize : chart.YAxisLabelFontSize;
-                    var nextColor = GetNextSeriesColor(currentColor);
+                    var nextColor = ChartOptionCycler.NextSeriesColor(currentColor);
                     var nextSize = currentSize >= 14 ? 9 : currentSize + 1;
                     return useXAxis
                         ? new ChartLayoutOptions(XAxisLabelTextColor: nextColor, XAxisLabelFontSize: nextSize)
@@ -9138,7 +9092,7 @@ public partial class MainWindow : Window
                 chart =>
                 {
                     var currentAngle = useXAxis ? chart.XAxisLabelAngle : chart.YAxisLabelAngle;
-                    var nextAngle = GetNextAxisLabelAngle(currentAngle);
+                    var nextAngle = ChartOptionCycler.NextAxisLabelAngle(currentAngle);
                     return useXAxis
                         ? new ChartLayoutOptions(XAxisLabelAngle: nextAngle)
                         : new ChartLayoutOptions(YAxisLabelAngle: nextAngle);
@@ -9160,7 +9114,7 @@ public partial class MainWindow : Window
                 {
                     var currentColor = useXAxis ? chart.XAxisLineColor : chart.YAxisLineColor;
                     var currentThickness = useXAxis ? chart.XAxisLineThickness : chart.YAxisLineThickness;
-                    var (nextColor, nextThickness) = GetNextAxisLineState(currentColor, currentThickness);
+                    var (nextColor, nextThickness) = ChartOptionCycler.NextAxisLineState(currentColor, currentThickness);
                     return useXAxis
                         ? new ChartLayoutOptions(XAxisLineColor: nextColor, XAxisLineThickness: nextThickness)
                         : new ChartLayoutOptions(YAxisLineColor: nextColor, YAxisLineThickness: nextThickness);
@@ -9168,41 +9122,6 @@ public partial class MainWindow : Window
             return;
 
         UpdateViewport();
-    }
-
-    private static (ChartAxisTickStyle Major, ChartAxisTickStyle Minor) GetNextAxisTickState(
-        ChartAxisTickStyle currentMajor,
-        ChartAxisTickStyle currentMinor)
-    {
-        if (currentMajor == ChartAxisTickStyle.Outside && currentMinor == ChartAxisTickStyle.None)
-            return (ChartAxisTickStyle.Inside, ChartAxisTickStyle.None);
-        if (currentMajor == ChartAxisTickStyle.Inside && currentMinor == ChartAxisTickStyle.None)
-            return (ChartAxisTickStyle.Cross, ChartAxisTickStyle.Inside);
-        if (currentMajor == ChartAxisTickStyle.Cross)
-            return (ChartAxisTickStyle.None, ChartAxisTickStyle.None);
-        return (ChartAxisTickStyle.Outside, ChartAxisTickStyle.None);
-    }
-
-    private static double GetNextAxisLabelAngle(double currentAngle)
-    {
-        if (Math.Abs(currentAngle) < 0.5)
-            return -45;
-        if (currentAngle <= -44.5)
-            return 45;
-        if (currentAngle < 89.5)
-            return 90;
-        return 0;
-    }
-
-    private static (CellColor Color, double Thickness) GetNextAxisLineState(CellColor? currentColor, double currentThickness)
-    {
-        if (currentColor is null || currentThickness < 1.5)
-            return (new CellColor(89, 89, 89), 1.5);
-        if (currentThickness < 2.5)
-            return (new CellColor(0, 114, 178), 2.5);
-        if (currentThickness < 3.5)
-            return (new CellColor(213, 94, 0), 3.5);
-        return (new CellColor(89, 89, 89), 1);
     }
 
     private void ToggleChartAxisGridlines(bool useXAxis)
@@ -9216,8 +9135,8 @@ public partial class MainWindow : Window
                 chart =>
                 {
                     var (showMajor, showMinor) = useXAxis
-                        ? GetNextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
-                        : GetNextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
+                        ? ChartOptionCycler.NextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
+                        : ChartOptionCycler.NextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
                     return useXAxis
                         ? new ChartLayoutOptions(ShowXAxisMajorGridlines: showMajor, ShowXAxisMinorGridlines: showMinor)
                         : new ChartLayoutOptions(ShowYAxisMajorGridlines: showMajor, ShowYAxisMinorGridlines: showMinor);
@@ -9225,15 +9144,6 @@ public partial class MainWindow : Window
             return;
 
         UpdateViewport();
-    }
-
-    private static (bool ShowMajor, bool ShowMinor) GetNextGridlineState(bool currentMajor, bool currentMinor)
-    {
-        if (!currentMajor)
-            return (true, false);
-        if (!currentMinor)
-            return (true, true);
-        return (false, false);
     }
 
     private void ToggleChartAxisGridlineStyle(bool useXAxis)
@@ -9249,8 +9159,8 @@ public partial class MainWindow : Window
                     var currentMajorColor = useXAxis ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
                     var currentMinorColor = useXAxis ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
                     var currentThickness = useXAxis ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
-                    var nextMajorColor = GetNextSeriesColor(currentMajorColor);
-                    var nextMinorColor = GetNextSeriesColor(currentMinorColor ?? currentMajorColor);
+                    var nextMajorColor = ChartOptionCycler.NextSeriesColor(currentMajorColor);
+                    var nextMinorColor = ChartOptionCycler.NextSeriesColor(currentMinorColor ?? currentMajorColor);
                     var nextThickness = currentThickness >= 3 ? 1 : currentThickness + 0.5;
                     return useXAxis
                         ? new ChartLayoutOptions(
@@ -9279,7 +9189,7 @@ public partial class MainWindow : Window
                 null,
                 chart =>
                 {
-                    var next = GetNextDataLabelNumberFormat(useXAxis ? chart.XAxisNumberFormat : chart.YAxisNumberFormat);
+                    var next = ChartOptionCycler.NextDataLabelNumberFormat(useXAxis ? chart.XAxisNumberFormat : chart.YAxisNumberFormat);
                     return useXAxis
                         ? new ChartLayoutOptions(XAxisNumberFormat: next)
                         : new ChartLayoutOptions(YAxisNumberFormat: next);
@@ -9526,8 +9436,8 @@ public partial class MainWindow : Window
             "Series Color",
             format => format with
             {
-                FillColor = GetNextSeriesColor(format.FillColor),
-                StrokeColor = GetNextSeriesColor(format.StrokeColor ?? format.FillColor)
+                FillColor = ChartOptionCycler.NextSeriesColor(format.FillColor),
+                StrokeColor = ChartOptionCycler.NextSeriesColor(format.StrokeColor ?? format.FillColor)
             });
     }
 
@@ -9617,42 +9527,9 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private static CellColor GetNextSeriesColor(CellColor? current)
-    {
-        if (current is null)
-            return new CellColor(0, 114, 178);
-        if (current.Value.R == 0 && current.Value.G == 114 && current.Value.B == 178)
-            return new CellColor(213, 94, 0);
-        if (current.Value.R == 213 && current.Value.G == 94 && current.Value.B == 0)
-            return new CellColor(0, 158, 115);
-        return new CellColor(0, 114, 178);
-    }
-
     private void InsertChartOfType(string type)
     {
-        InsertChartOfType(ParseChartType(type));
-    }
-
-    private static ChartType ParseChartType(string type)
-    {
-        var normalized = type.Trim().ToLowerInvariant();
-        return normalized switch
-        {
-            "line" => ChartType.Line,
-            "pie" => ChartType.Pie,
-            "doughnut" or "donut" => ChartType.Doughnut,
-            "bar" => ChartType.Bar,
-            "stackedbar" or "stacked bar" => ChartType.StackedBar,
-            "percentstackedbar" or "100% stacked bar" or "100%stackedbar" => ChartType.PercentStackedBar,
-            "stackedcolumn" or "stacked column" => ChartType.StackedColumn,
-            "percentstackedcolumn" or "100% stacked column" or "100%stackedcolumn" => ChartType.PercentStackedColumn,
-            "scatter" => ChartType.Scatter,
-            "bubble" => ChartType.Bubble,
-            "area" => ChartType.Area,
-            "radar" => ChartType.Radar,
-            "stock" => ChartType.Stock,
-            _ => ChartType.Column
-        };
+        InsertChartOfType(ChartOptionCycler.ParseChartType(type));
     }
 
     private void SparklineLineBtn_Click(object sender, RoutedEventArgs e)    => InsertSparkline("line");
@@ -12402,18 +12279,12 @@ public partial class MainWindow : Window
         if (tab == null) return;
         var sheet = _workbook.GetSheet(tab.Id);
         var defaultValue = sheet?.TabColor is { } color
-            ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
+            ? ColorInputParser.FormatHexColor(color)
             : "#217346";
         var input = PromptForInput("Tab color (#RRGGBB or none):", defaultValue);
         if (input is null) return;
 
-        CellColor? tabColor;
-        if (input.Equals("none", StringComparison.OrdinalIgnoreCase) ||
-            input.Equals("clear", StringComparison.OrdinalIgnoreCase))
-        {
-            tabColor = null;
-        }
-        else if (!TryParseHexColor(input, out tabColor))
+        if (!ColorInputParser.TryParseOptionalHexColor(input, out var tabColor))
         {
             MessageBox.Show("Enter a color as #RRGGBB, or type none.", "Tab Color",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -12509,24 +12380,6 @@ public partial class MainWindow : Window
         }
 
         return null;
-    }
-
-    private static bool TryParseHexColor(string text, out CellColor? color)
-    {
-        color = null;
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], System.Globalization.NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(normalized[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(normalized[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
-        return true;
     }
 
     // ── Help tab ──────────────────────────────────────────────────────────────
