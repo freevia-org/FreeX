@@ -84,7 +84,7 @@ public sealed class ErrorCheckingDialog : Window
             {
                 new GridViewColumn { Header = "Sheet", Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.SheetName)) },
                 new GridViewColumn { Header = "Cell", Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Cell)) },
-                new GridViewColumn { Header = "Error", Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.ErrorCode)) },
+                new GridViewColumn { Header = "Issue", Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.ErrorCode)) },
                 new GridViewColumn { Header = "Formula", Width = 150, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.FormulaText)) },
                 new GridViewColumn { Header = "Description", Width = 260, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Description)) }
             }
@@ -141,7 +141,7 @@ public sealed class ErrorCheckingDialog : Window
 
     private void RefreshHeader()
     {
-        _header.Text = $"{_issues.Count} error(s) found.";
+        _header.Text = $"{_issues.Count} issue(s) found.";
     }
 
     private void TraceSelected()
