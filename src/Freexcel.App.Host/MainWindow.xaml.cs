@@ -6308,7 +6308,7 @@ public partial class MainWindow : Window
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)))
+        if (!TryExecuteGroupedSheetCommand("Auto Row Height", sheetId => CreateAutoFitRowHeightCommand(sheetId, range)))
             return;
         UpdateViewport();
     }
@@ -6324,9 +6324,68 @@ public partial class MainWindow : Window
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)))
+        if (!TryExecuteGroupedSheetCommand("Auto Column Width", sheetId => CreateAutoFitColumnWidthCommand(sheetId, range)))
             return;
         UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateAutoFitRowHeightCommand(SheetId sheetId, GridRange range)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new FailedWorkbookCommand("Sheet not found.");
+
+        var height = AutoFitSizingService.EstimateRowHeight(
+            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Rows),
+            sheet.DefaultRowHeight);
+        return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height);
+    }
+
+    private IWorkbookCommand CreateAutoFitColumnWidthCommand(SheetId sheetId, GridRange range)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return new FailedWorkbookCommand("Sheet not found.");
+
+        var width = AutoFitSizingService.EstimateColumnWidth(
+            CollectAutoFitDisplayTexts(sheet, range, AutoFitAxis.Columns),
+            sheet.DefaultColumnWidth);
+        return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width);
+    }
+
+    private enum AutoFitAxis
+    {
+        Rows,
+        Columns
+    }
+
+    private IEnumerable<string> CollectAutoFitDisplayTexts(Sheet sheet, GridRange range, AutoFitAxis axis)
+    {
+        var usedRange = sheet.GetUsedRange();
+        if (usedRange is null)
+            yield break;
+
+        var rowStart = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.Start.Row : range.Start.Row;
+        var rowEnd = axis == AutoFitAxis.Columns && range.RowCount == 1 ? usedRange.Value.End.Row : range.End.Row;
+        var colStart = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.Start.Col : range.Start.Col;
+        var colEnd = axis == AutoFitAxis.Rows && range.ColCount == 1 ? usedRange.Value.End.Col : range.End.Col;
+
+        foreach (var (address, cell) in sheet.GetUsedCells())
+        {
+            if (address.Row < rowStart || address.Row > rowEnd ||
+                address.Col < colStart || address.Col > colEnd)
+                continue;
+
+            yield return GetAutoFitDisplayText(sheet, cell);
+        }
+    }
+
+    private string GetAutoFitDisplayText(Sheet sheet, Cell cell)
+    {
+        var style = _workbook.GetStyle(cell.StyleId);
+        return sheet.ShowFormulas && cell.FormulaText is not null
+            ? "=" + cell.FormulaText
+            : NumberFormatter.Format(cell.Value, style.NumberFormat);
     }
     private void FormatDefaultWidthMenuItem_Click(object sender, RoutedEventArgs e) { FormatColWidthMenuItem_Click(sender, e); }
     private void FormatHideRowMenuItem_Click(object sender, RoutedEventArgs e)
