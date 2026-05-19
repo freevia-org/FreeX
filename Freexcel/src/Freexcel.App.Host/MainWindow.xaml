@@ -2433,7 +2433,7 @@
                                         Click="AccessibilityCheckerBtn_Click"
                                         local:RibbonTooltip.Title="Check Accessibility"
                                         local:RibbonTooltip.KeyTip="A"
-                                        local:RibbonTooltip.Description="Find merged cells and objects missing alternate text."/>
+                                        local:RibbonTooltip.Description="Find model-backed accessibility issues such as merged cells, hidden content, unclear links, missing alt text, and untitled charts."/>
                                 <Button Content="Alt Text" Width="96" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
