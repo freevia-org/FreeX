@@ -1774,7 +1774,8 @@ public partial class MainWindow : Window
 
             if (KeyboardShortcutMatcher.TryGetCommandShortcut(e.Key, e.SystemKey, Keyboard.Modifiers, out var commandShortcut))
             {
-                if (commandShortcut == KeyboardCommandShortcut.ClearSelection &&
+                if ((commandShortcut == KeyboardCommandShortcut.ClearSelection ||
+                     commandShortcut == KeyboardCommandShortcut.ClearSelectionAndEdit) &&
                     Keyboard.FocusedElement is TextBox)
                 {
                     return;
@@ -1879,14 +1880,6 @@ public partial class MainWindow : Window
                     break;
             }
 
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Back && Keyboard.FocusedElement is not TextBox)
-        {
-            ExecuteClearSelection();
-            EnterEditMode();
             e.Handled = true;
             return;
         }
@@ -2151,6 +2144,10 @@ public partial class MainWindow : Window
                 break;
             case KeyboardCommandShortcut.ClearSelection:
                 ExecuteClearSelection();
+                break;
+            case KeyboardCommandShortcut.ClearSelectionAndEdit:
+                ExecuteClearSelection();
+                EnterEditMode();
                 break;
         }
     }
