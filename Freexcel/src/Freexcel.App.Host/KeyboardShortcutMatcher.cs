@@ -160,6 +160,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey is Key.D1 or Key.NumPad1)
+        {
+            shortcut = KeyboardCommandShortcut.OpenFormatCells;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -510,6 +516,7 @@ public enum KeyboardCommandShortcut
     ActivateNextSheet,
     SelectPreviousSheetGroup,
     SelectNextSheetGroup,
+    OpenFormatCells,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,
