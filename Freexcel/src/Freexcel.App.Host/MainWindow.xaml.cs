@@ -5820,20 +5820,7 @@ public partial class MainWindow : Window
 
     private void ApplyOutlineBorderShortcut()
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
-            {
-                var address = new CellAddress(_currentSheetId, r, c);
-                var diff = BorderShortcutService.GetOutlineBorderDiff(range, address);
-                if (!TryExecuteApplyStyle(new GridRange(address, address), diff, "Outline Border"))
-                    return;
-            }
-        }
-
-        UpdateViewport();
+        ApplyRangeBorderPreset(BorderShortcutService.GetOutlineBorderDiff, "Outline Border");
     }
 
     private void ExecuteKeyboardInsert()
@@ -6886,29 +6873,85 @@ public partial class MainWindow : Window
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
 
-    private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ApplyRangeBorderPreset(Func<GridRange, CellAddress, StyleDiff> createDiff, string title)
     {
-        var b = new CellBorder(BorderStyle.Thin, CellColor.Black);
-        ApplyStyleDiff(new StyleDiff(BorderTop: b, BorderRight: b, BorderBottom: b, BorderLeft: b));
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        IWorkbookCommand CreateSheetCommand(SheetId sheetId)
+        {
+            var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(range, sheetId);
+            var commands = sheetRange
+                .AllCells()
+                .Select(address => (Address: address, Diff: createDiff(sheetRange, address)))
+                .Where(plan => BorderShortcutService.HasBorderChanges(plan.Diff))
+                .Select(plan => (IWorkbookCommand)new ApplyStyleCommand(
+                    sheetId,
+                    new GridRange(plan.Address, plan.Address),
+                    plan.Diff))
+                .ToList();
+
+            return commands.Count == 1
+                ? commands[0]
+                : new CompositeWorkbookCommand(title, commands);
+        }
+
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var command = targetSheetIds.Count == 1
+            ? CreateSheetCommand(_currentSheetId)
+            : new CompositeWorkbookCommand(title, targetSheetIds.Select(CreateSheetCommand).ToList());
+
+        if (!TryExecuteCommand(command, title))
+            return;
+
+        UpdateViewport();
+        RefreshStatusBar();
     }
+
+    private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff());
+
     private void BorderOutsideMenuItem_Click(object sender, RoutedEventArgs e)
     {
         ApplyOutlineBorderShortcut();
     }
+
     private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
     {
         ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());
     }
+
     private void BorderBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderBottom: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thin));
+
     private void BorderTopMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderTop: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, BorderStyle.Thin));
+
     private void BorderLeftMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderLeft: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, BorderStyle.Thin));
+
     private void BorderRightMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderRight: new CellBorder(BorderStyle.Thin, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, BorderStyle.Thin));
+
     private void BorderThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(new StyleDiff(BorderBottom: new CellBorder(BorderStyle.Thick, CellColor.Black)));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick));
+
+    private void BorderBottomDoubleMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double));
+
+    private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick), "Thick Box Border");
+
+    private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thin), "Top and Bottom Border");
+
+    private void BorderTopAndThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thick), "Top and Thick Bottom Border");
+
+    private void BorderTopAndDoubleBottomMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Double), "Top and Double Bottom Border");
+
+    private void BorderMoreMenuItem_Click(object sender, RoutedEventArgs e)
+        => OpenFormatCellsDialog(FormatCellsDialogTab.Border);
 
     // ── Alignment group additions ────────────────────────────────────────────
 
