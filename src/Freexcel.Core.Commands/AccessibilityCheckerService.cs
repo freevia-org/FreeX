@@ -19,6 +19,15 @@ public sealed record AccessibilityIssue(
 
 public static class AccessibilityCheckerService
 {
+    private static readonly HashSet<string> GenericHyperlinkDisplayTexts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "click here",
+        "here",
+        "link",
+        "read more",
+        "learn more"
+    };
+
     public static IReadOnlyList<AccessibilityIssue> FindIssues(Workbook workbook)
     {
         var issues = new List<AccessibilityIssue>();
@@ -45,8 +54,8 @@ public static class AccessibilityCheckerService
 
             foreach (var (address, target) in sheet.Hyperlinks)
             {
-                if (sheet.GetCell(address)?.Value is not TextValue displayText ||
-                    !string.Equals(displayText.Value.Trim(), target.Trim(), StringComparison.Ordinal))
+                if (sheet.GetCell(address)?.Value is TextValue displayText &&
+                    IsDescriptiveHyperlinkText(displayText.Value, target))
                     continue;
 
                 issues.Add(new AccessibilityIssue(
@@ -54,7 +63,7 @@ public static class AccessibilityCheckerService
                     sheet.Id,
                     sheet.Name,
                     address.ToA1(),
-                    "Hyperlink display text should describe the destination instead of repeating the URL."));
+                    "Hyperlink display text should describe the destination."));
             }
 
             foreach (var chart in sheet.Charts.Where(c => string.IsNullOrWhiteSpace(c.Title)))
@@ -77,6 +86,20 @@ public static class AccessibilityCheckerService
         sheet.Name,
         anchor.ToA1(),
         $"{objectType} is missing alternate text.");
+
+    private static bool IsDescriptiveHyperlinkText(string displayText, string target)
+    {
+        var text = displayText.Trim();
+        return text.Length > 0 &&
+            !GenericHyperlinkDisplayTexts.Contains(text) &&
+            !string.Equals(text, target.Trim(), StringComparison.Ordinal) &&
+            !LooksLikeUrl(text);
+    }
+
+    private static bool LooksLikeUrl(string text) =>
+        (Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) ||
+        text.StartsWith("www.", StringComparison.OrdinalIgnoreCase);
 
     private static string FormatRange(GridRange range) =>
         range.Start == range.End
