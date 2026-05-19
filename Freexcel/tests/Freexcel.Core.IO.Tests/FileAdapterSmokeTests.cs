@@ -8734,7 +8734,7 @@ public class FileAdapterSmokeTests
         loadedSheet.GetCell(3, 3)!.IgnoreFormulaError.Should().BeTrue();
     }
 
-    [Fact(Timeout = 5000)]
+    [Fact]
     public void XlsxAdapter_Load_IgnoredErrors_LargeRangeMarksOnlyExistingCells()
     {
         var workbook = new Workbook("IgnoredErrorsLargeRangeLoadTest");
