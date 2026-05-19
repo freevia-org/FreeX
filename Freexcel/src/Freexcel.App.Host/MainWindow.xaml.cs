@@ -11444,14 +11444,13 @@ public partial class MainWindow : Window
         var mode = PromptForInput("Data table type (one/two):", "one");
         if (mode is null)
             return;
-        var twoVariable = mode.Trim().Equals("two", StringComparison.OrdinalIgnoreCase) ||
-                          mode.Trim().Equals("2", StringComparison.OrdinalIgnoreCase);
+        var twoVariable = DataTableInputParser.IsTwoVariableMode(mode);
 
-        var formulaDefault = new CellAddress(_currentSheetId, range.Start.Row, twoVariable ? range.Start.Col : range.Start.Col + 1).ToA1();
+        var formulaDefault = DataTableInputParser.GetDefaultFormulaCell(range, twoVariable).ToA1();
         var formulaInput = PromptForInput("Formula cell:", formulaDefault);
         if (formulaInput is null)
             return;
-        if (!CellAddress.TryParse(formulaInput.Trim(), _currentSheetId, out var formulaCell))
+        if (!DataTableInputParser.TryParseCell(formulaInput, _currentSheetId, out var formulaCell))
         {
             MessageBox.Show("Enter a valid formula cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -11463,7 +11462,7 @@ public partial class MainWindow : Window
             var rowInputText = PromptForInput("Row input cell:", formulaCell.ToA1());
             if (rowInputText is null)
                 return;
-            if (!CellAddress.TryParse(rowInputText.Trim(), _currentSheetId, out var rowInputCell))
+            if (!DataTableInputParser.TryParseCell(rowInputText, _currentSheetId, out var rowInputCell))
             {
                 MessageBox.Show("Enter a valid row input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -11472,7 +11471,7 @@ public partial class MainWindow : Window
             var columnInputText = PromptForInput("Column input cell:", formulaCell.ToA1());
             if (columnInputText is null)
                 return;
-            if (!CellAddress.TryParse(columnInputText.Trim(), _currentSheetId, out var columnInputCell))
+            if (!DataTableInputParser.TryParseCell(columnInputText, _currentSheetId, out var columnInputCell))
             {
                 MessageBox.Show("Enter a valid column input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -11485,7 +11484,7 @@ public partial class MainWindow : Window
             var inputInput = PromptForInput("Column input cell:", formulaCell.ToA1());
             if (inputInput is null)
                 return;
-            if (!CellAddress.TryParse(inputInput.Trim(), _currentSheetId, out var inputCell))
+            if (!DataTableInputParser.TryParseCell(inputInput, _currentSheetId, out var inputCell))
             {
                 MessageBox.Show("Enter a valid input cell address.", "Data Table", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
