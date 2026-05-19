@@ -35,7 +35,9 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells),
         WorksheetContextMenuCommand.Separator,
+        new("Clear All", WorksheetContextMenuAction.ClearAll),
         new("Clear Formats", WorksheetContextMenuAction.ClearFormats),
+        new("Clear Comments", WorksheetContextMenuAction.ClearComments),
         new("Clear Hyperlinks", WorksheetContextMenuAction.ClearHyperlinks),
         new("Clear Contents", WorksheetContextMenuAction.ClearContents)
     ];
@@ -74,7 +76,9 @@ public enum WorksheetContextMenuAction
     DeleteNote,
     Hyperlink,
     FormatCells,
+    ClearAll,
     ClearFormats,
+    ClearComments,
     ClearHyperlinks,
     ClearContents
 }

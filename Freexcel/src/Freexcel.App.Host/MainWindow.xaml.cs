@@ -5890,8 +5890,14 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.FormatCells:
                 OpenFormatCellsDialog();
                 break;
+            case WorksheetContextMenuAction.ClearAll:
+                ClearAllMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.ClearFormats:
                 ClearFormats();
+                break;
+            case WorksheetContextMenuAction.ClearComments:
+                ClearCommentsMenuItem_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ClearHyperlinks:
                 ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs());
