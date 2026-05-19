@@ -29,6 +29,33 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void HomeRibbon_CollapsesEditingBeforeLabelsClipAtWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(1465);
+
+            harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Find & Select", harness.DebugRibbonChildren);
+        });
+    }
+
+    [Fact]
+    public void FormulasRibbon_CollapsesFunctionLibraryAtShortWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Formulas", 1465);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Function Library", harness.DebugActiveRibbonChildren);
+        });
+    }
+
+    [Fact]
     public void IconOnlyRibbonCommandsRemainCenterAligned()
     {
         StaTestRunner.Run(() =>
@@ -72,7 +99,9 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.VisibleRibbonCommandLabels.Should().NotContain("Label Border", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);
-            harness.VisibleRibbonCommandLabels.Should().Contain("Column", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuHeaders("Charts").Should().Contain("Column Chart", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuHeaders("Charts").Should().NotContain("Data Label Border", harness.DebugActiveRibbonChildren);
         });
     }
 
@@ -97,6 +126,14 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupNames =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
         public IReadOnlyList<ContextMenu> CollapsedRibbonGroupMenus =>
             HomeRibbonChildren
                 .OfType<Button>()
@@ -108,6 +145,16 @@ public sealed class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<string> CollapsedMenuHeaders(string groupName) =>
             HomeRibbonChildren
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
+                .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
+                .Select(item => item.Header?.ToString() ?? "")
+                .Where(header => !string.IsNullOrWhiteSpace(header))
+                .ToList();
+
+        public IReadOnlyList<string> CollapsedActiveMenuHeaders(string groupName) =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
                 .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
                 .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
@@ -138,7 +185,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
                     .OfType<Button>()
                     .Distinct()
-                    .Where(button => button.Visibility == Visibility.Visible)
+                    .Where(IsEffectivelyVisible)
                     .Select(GetButtonLabel)
                     .Where(label => !string.IsNullOrWhiteSpace(label)))
             .ToList();
@@ -254,6 +301,21 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<TextBlock>()
                 .FirstOrDefault(textBlock => string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
                 ?.Text ?? "";
+        }
+
+        private static bool IsEffectivelyVisible(DependencyObject element)
+        {
+            var current = element;
+            while (current is not null)
+            {
+                if (current is UIElement { Visibility: not Visibility.Visible })
+                    return false;
+
+                current = System.Windows.Media.VisualTreeHelper.GetParent(current) ??
+                          LogicalTreeHelper.GetParent(current);
+            }
+
+            return true;
         }
     }
 
