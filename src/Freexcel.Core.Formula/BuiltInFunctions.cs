@@ -805,12 +805,12 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(number)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(number);
         if (digits >= 0)
             return NumberResult(Math.Round(number, digits, MidpointRounding.AwayFromZero));
 
-        double factor = Math.Pow(10, -digits);
-        return NumberResult(Math.Round(number / factor, 0, MidpointRounding.AwayFromZero) * factor);
+        return NumberResult(RoundWithExcelDigits(number, digits));
     }
 
     private static ScalarValue NumberResult(double value) =>
@@ -1791,10 +1791,23 @@ public static class BuiltInFunctions
         if (double.TryParse(text, System.Globalization.NumberStyles.Any,
                 usCulture, out var d))
             return new NumberValue(d);
+        if (TryParseExcelFakeLeapDayValueText(text, usCulture, out var fakeLeapSerial))
+            return new NumberValue(fakeLeapSerial);
         if (DateTime.TryParse(text, usCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
-            return new NumberValue(Math.Floor(DateToSerial(dt)));
+            return new NumberValue(IsTimeOnlyText(text) ? dt.TimeOfDay.TotalDays : DateToSerial(dt));
         return ErrorValue.Value;
+    }
+
+    private static bool IsTimeOnlyText(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Contains('/') || trimmed.Contains('-')) return false;
+        if (Regex.IsMatch(trimmed, @"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)", RegexOptions.IgnoreCase))
+            return false;
+
+        return trimmed.Contains(':')
+            || Regex.IsMatch(trimmed, @"\b(?:am|pm)\b", RegexOptions.IgnoreCase);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1860,6 +1873,21 @@ public static class BuiltInFunctions
         return true;
     }
 
+    private static bool TryNonNegativeSerialToTimeParts(ScalarValue v, out int hour, out int minute, out int second)
+    {
+        hour = minute = second = 0;
+        var num = ToNumber(v);
+        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
+            return false;
+
+        var fraction = num - Math.Floor(num);
+        var totalSeconds = (int)Math.Floor(fraction * 86400.0 + 1e-9) % 86400;
+        hour = totalSeconds / 3600;
+        minute = totalSeconds % 3600 / 60;
+        second = totalSeconds % 60;
+        return true;
+    }
+
     private static DateTime OADateToDateTime(ScalarValue v) =>
         DateTime.FromOADate(ToNumber(v));
 
@@ -1890,19 +1918,19 @@ public static class BuiltInFunctions
     private static ScalarValue Hour(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Hour) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out var hour, out _, out _) ? new NumberValue(hour) : ErrorValue.Num;
     }
 
     private static ScalarValue Minute(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Minute) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out _, out var minute, out _) ? new NumberValue(minute) : ErrorValue.Num;
     }
 
     private static ScalarValue Second(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        return TryNonNegativeOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Second) : ErrorValue.Num;
+        return TryNonNegativeSerialToTimeParts(args[0], out _, out _, out var second) ? new NumberValue(second) : ErrorValue.Num;
     }
 
     private static ScalarValue Weekday(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2705,8 +2733,10 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult((n >= 0 ? Math.Floor(n * factor) : Math.Ceiling(n * factor)) / factor);
     }
 
@@ -2718,8 +2748,10 @@ public static class BuiltInFunctions
         var rawDigits = ToNumber(args[1]);
         if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
         int digits = (int)Math.Truncate(rawDigits);
-        if (digits < -15 || digits > 15) return ErrorValue.Num;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult((n >= 0 ? Math.Ceiling(n * factor) : Math.Floor(n * factor)) / factor);
     }
 
@@ -2734,9 +2766,11 @@ public static class BuiltInFunctions
             var rawDigits = ToNumber(args[1]);
             if (!double.IsFinite(rawDigits)) return ErrorValue.Num;
             digits = (int)Math.Truncate(rawDigits);
-            if (digits < -15 || digits > 15) return ErrorValue.Num;
         }
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (digits > 15) return new NumberValue(n);
         double factor = Math.Pow(10, digits);
+        if (factor == 0) return new NumberValue(0);
         return NumberResult(Math.Truncate(n * factor) / factor);
     }
 
@@ -3056,10 +3090,29 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var text = ToText(args[0]);
+        if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
         return ErrorValue.Value;
+    }
+
+    private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
+    {
+        serial = 0;
+        var trimmed = text.Trim();
+        var match = Regex.Match(trimmed, @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$", RegexOptions.IgnoreCase);
+        if (!match.Success) return false;
+
+        serial = 60;
+        if (match.Groups[1].Success)
+        {
+            if (!DateTime.TryParse(match.Groups[1].Value, culture, DateTimeStyles.None, out var time))
+                return false;
+            serial += time.TimeOfDay.TotalDays;
+        }
+
+        return true;
     }
 
     private static ScalarValue Eomonth(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -3904,7 +3957,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
         if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
 
-        double rounded = decimals is >= -15 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
+        double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
         return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
@@ -5051,6 +5104,9 @@ public static class BuiltInFunctions
 
         // Strip whitespace (Excel allows whitespace anywhere)
         text = text.Replace(" ", "").Replace("\t", "");
+        bool accountingNegative = text.StartsWith('(') && text.EndsWith(')');
+        if (accountingNegative)
+            text = text[1..^1];
 
         // Trailing percent
         int pctCount = 0;
@@ -5071,6 +5127,7 @@ public static class BuiltInFunctions
             return ErrorValue.Value;
 
         for (int i = 0; i < pctCount; i++) v /= 100.0;
+        if (accountingNegative) v = -v;
         return NumberResult(v);
     }
 
