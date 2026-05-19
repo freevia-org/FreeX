@@ -207,7 +207,6 @@ public static class XlsxFeatureInspector
 
         if (normalized.StartsWith("customxml/", StringComparison.Ordinal))
         {
-            yield return Feature(XlsxUnsupportedFeatureKind.CustomXmlParts);
             yield break;
         }
 

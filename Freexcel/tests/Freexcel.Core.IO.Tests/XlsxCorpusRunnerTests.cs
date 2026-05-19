@@ -211,7 +211,6 @@ public class XlsxCorpusRunnerTests
             [XlsxUnsupportedFeatureKind.Macros] = "excluded VBA macro disclosed",
             [XlsxUnsupportedFeatureKind.Charts] = "unsupported chart package disclosed",
             [XlsxUnsupportedFeatureKind.EmbeddedObjects] = "unsupported embedded object disclosed",
-            [XlsxUnsupportedFeatureKind.CustomXmlParts] = "unsupported custom XML disclosed",
             [XlsxUnsupportedFeatureKind.ConditionalFormats] = "unsupported conditional-format rule disclosed",
             [XlsxUnsupportedFeatureKind.DrawingObjects] = "unsupported drawing object disclosed",
             [XlsxUnsupportedFeatureKind.PowerQuery] = "excluded Power Query disclosed",
@@ -281,9 +280,6 @@ public class XlsxCorpusRunnerTests
 
         if (tags.Contains("embedded-objects"))
             expected.Add(XlsxUnsupportedFeatureKind.EmbeddedObjects);
-
-        if (tags.Contains("custom-xml"))
-            expected.Add(XlsxUnsupportedFeatureKind.CustomXmlParts);
 
         if (tags.Contains("connectors") || tags.Contains("group-shapes"))
             expected.Add(XlsxUnsupportedFeatureKind.DrawingObjects);
