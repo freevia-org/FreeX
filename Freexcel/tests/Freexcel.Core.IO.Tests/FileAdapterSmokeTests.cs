@@ -8593,6 +8593,213 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectModeledPrintOptionsAttributes()
+    {
+        var workbook = new Workbook("WorksheetPrintOptionsAuthority");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Print options"));
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.CenterVerticallyOnPage = true;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPrintOptionsModeledAndNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrintGridlines = false;
+        loadedSheet.PrintHeadings = false;
+        loadedSheet.CenterHorizontallyOnPage = false;
+        loadedSheet.CenterVerticallyOnPage = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull();
+        printOptions!.Attribute("gridLinesSet")!.Value.Should().Be("1");
+        printOptions.Attribute("customAttr")!.Value.Should().Be("print-native");
+        printOptions.Attribute("gridLines")?.Value.Should().NotBe("1");
+        printOptions.Attribute("headings")?.Value.Should().NotBe("1");
+        printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1");
+        printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotReAddPrintOptionsWhenSourceOnlyHadModeledAttributes()
+    {
+        var workbook = new Workbook("WorksheetPrintOptionsModeledOnly");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Print options"));
+        sheet.PrintGridlines = true;
+        sheet.PrintHeadings = true;
+        sheet.CenterHorizontallyOnPage = true;
+        sheet.CenterVerticallyOnPage = true;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPrintOptionsModeledOnlyAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PrintGridlines = false;
+        loadedSheet.PrintHeadings = false;
+        loadedSheet.CenterHorizontallyOnPage = false;
+        loadedSheet.CenterVerticallyOnPage = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+        printOptions.Should().NotBeNull();
+        printOptions!.Attribute("gridLines")?.Value.Should().NotBe("1");
+        printOptions.Attribute("headings")?.Value.Should().NotBe("1");
+        printOptions.Attribute("horizontalCentered")?.Value.Should().NotBe("1");
+        printOptions.Attribute("verticalCentered")?.Value.Should().NotBe("1");
+        printOptions.Attribute("customAttr").Should().BeNull();
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectModeledPageSetupAttributes()
+    {
+        var workbook = new Workbook("WorksheetPageSetupAuthority");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page setup"));
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Legal;
+        sheet.ScaleToFit = new WorksheetScaleToFit(null, 2, 3);
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.FirstPageNumber = 7;
+        sheet.PrintBlackAndWhite = true;
+        sheet.PrintDraftQuality = true;
+        sheet.PrintQualityDpi = 600;
+        sheet.PrintErrorValue = WorksheetPrintErrorValue.Dash;
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPageSetupModeledAndNativeAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        loadedSheet.PaperSize = WorksheetPaperSize.A4;
+        loadedSheet.ScaleToFit = WorksheetScaleToFit.Default;
+        loadedSheet.PageOrder = WorksheetPageOrder.DownThenOver;
+        loadedSheet.FirstPageNumber = null;
+        loadedSheet.PrintBlackAndWhite = false;
+        loadedSheet.PrintDraftQuality = false;
+        loadedSheet.PrintQualityDpi = null;
+        loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
+        loadedSheet.PrintComments = WorksheetPrintComments.None;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull();
+        pageSetup!.Attribute("usePrinterDefaults")!.Value.Should().Be("1");
+        pageSetup.Attribute("copies")!.Value.Should().Be("3");
+        pageSetup.Attribute("customAttr")!.Value.Should().Be("page-setup-native");
+        pageSetup.Attribute("orientation")?.Value.Should().NotBe("landscape");
+        pageSetup.Attribute("paperSize")?.Value.Should().NotBe("5");
+        pageSetup.Attribute("fitToWidth")?.Value.Should().NotBe("2");
+        pageSetup.Attribute("fitToHeight")?.Value.Should().NotBe("3");
+        pageSetup.Attribute("pageOrder")?.Value.Should().NotBe("overThenDown");
+        pageSetup.Attribute("firstPageNumber")?.Value.Should().NotBe("7");
+        pageSetup.Attribute("blackAndWhite")?.Value.Should().NotBe("1");
+        pageSetup.Attribute("draft")?.Value.Should().NotBe("1");
+        pageSetup.Attribute("horizontalDpi")?.Value.Should().NotBe("600");
+        pageSetup.Attribute("verticalDpi")?.Value.Should().NotBe("600");
+        pageSetup.Attribute("errors")?.Value.Should().NotBe("dash");
+        pageSetup.Attribute("cellComments")?.Value.Should().NotBe("atEnd");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_DoesNotReAddPageSetupWhenSourceOnlyHadModeledAttributes()
+    {
+        var workbook = new Workbook("WorksheetPageSetupModeledOnly");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page setup"));
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Legal;
+        sheet.ScaleToFit = new WorksheetScaleToFit(null, 2, 3);
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.FirstPageNumber = 7;
+        sheet.PrintBlackAndWhite = true;
+        sheet.PrintDraftQuality = true;
+        sheet.PrintQualityDpi = 600;
+        sheet.PrintErrorValue = WorksheetPrintErrorValue.Dash;
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPageSetupModeledOnlyAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        loadedSheet.PaperSize = WorksheetPaperSize.A4;
+        loadedSheet.ScaleToFit = WorksheetScaleToFit.Default;
+        loadedSheet.PageOrder = WorksheetPageOrder.DownThenOver;
+        loadedSheet.FirstPageNumber = null;
+        loadedSheet.PrintBlackAndWhite = false;
+        loadedSheet.PrintDraftQuality = false;
+        loadedSheet.PrintQualityDpi = null;
+        loadedSheet.PrintErrorValue = WorksheetPrintErrorValue.Displayed;
+        loadedSheet.PrintComments = WorksheetPrintComments.None;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+        pageSetup.Should().NotBeNull();
+        pageSetup!.Attribute("orientation")?.Value.Should().NotBe("landscape");
+        pageSetup.Attribute("paperSize")?.Value.Should().NotBe("5");
+        pageSetup.Attribute("fitToWidth")?.Value.Should().NotBe("2");
+        pageSetup.Attribute("fitToHeight")?.Value.Should().NotBe("3");
+        pageSetup.Attribute("pageOrder")?.Value.Should().NotBe("overThenDown");
+        pageSetup.Attribute("firstPageNumber")?.Value.Should().NotBe("7");
+        pageSetup.Attribute("blackAndWhite")?.Value.Should().NotBe("1");
+        pageSetup.Attribute("draft")?.Value.Should().NotBe("1");
+        pageSetup.Attribute("horizontalDpi")?.Value.Should().NotBe("600");
+        pageSetup.Attribute("verticalDpi")?.Value.Should().NotBe("600");
+        pageSetup.Attribute("errors")?.Value.Should().NotBe("dash");
+        pageSetup.Attribute("cellComments")?.Value.Should().NotBe("atEnd");
+        pageSetup.Attribute("customAttr").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetRowNativeAttributes()
     {
         var workbook = new Workbook("WorksheetRowNativeMetadata");
@@ -11138,6 +11345,52 @@ public class FileAdapterSmokeTests
         packageStream.Position = 0;
     }
 
+    private static void AddWorksheetPrintOptionsModeledAndNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var printOptions = worksheetXml.Root!.Element(worksheetNs + "printOptions");
+            if (printOptions is null)
+            {
+                printOptions = new XElement(worksheetNs + "printOptions");
+                worksheetXml.Root!.Add(printOptions);
+            }
+
+            printOptions.SetAttributeValue("gridLines", "1");
+            printOptions.SetAttributeValue("headings", "1");
+            printOptions.SetAttributeValue("horizontalCentered", "1");
+            printOptions.SetAttributeValue("verticalCentered", "1");
+            printOptions.SetAttributeValue("gridLinesSet", "1");
+            printOptions.SetAttributeValue("customAttr", "print-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPrintOptionsModeledOnlyAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "printOptions")?.Remove();
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "printOptions",
+                new XAttribute("gridLines", "1"),
+                new XAttribute("headings", "1"),
+                new XAttribute("horizontalCentered", "1"),
+                new XAttribute("verticalCentered", "1")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
     private static void AddWorksheetPageSetupNativeAttributes(MemoryStream packageStream)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
@@ -11155,6 +11408,70 @@ public class FileAdapterSmokeTests
             pageSetup.SetAttributeValue("usePrinterDefaults", "1");
             pageSetup.SetAttributeValue("copies", "3");
             pageSetup.SetAttributeValue("customAttr", "page-setup-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPageSetupModeledAndNativeAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var pageSetup = worksheetXml.Root!.Element(worksheetNs + "pageSetup");
+            if (pageSetup is null)
+            {
+                pageSetup = new XElement(worksheetNs + "pageSetup");
+                worksheetXml.Root!.Add(pageSetup);
+            }
+
+            pageSetup.SetAttributeValue("paperSize", "5");
+            pageSetup.SetAttributeValue("scale", null);
+            pageSetup.SetAttributeValue("fitToWidth", "2");
+            pageSetup.SetAttributeValue("fitToHeight", "3");
+            pageSetup.SetAttributeValue("pageOrder", "overThenDown");
+            pageSetup.SetAttributeValue("orientation", "landscape");
+            pageSetup.SetAttributeValue("firstPageNumber", "7");
+            pageSetup.SetAttributeValue("blackAndWhite", "1");
+            pageSetup.SetAttributeValue("draft", "1");
+            pageSetup.SetAttributeValue("horizontalDpi", "600");
+            pageSetup.SetAttributeValue("verticalDpi", "600");
+            pageSetup.SetAttributeValue("cellComments", "atEnd");
+            pageSetup.SetAttributeValue("errors", "dash");
+            pageSetup.SetAttributeValue("usePrinterDefaults", "1");
+            pageSetup.SetAttributeValue("copies", "3");
+            pageSetup.SetAttributeValue("customAttr", "page-setup-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPageSetupModeledOnlyAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Element(worksheetNs + "pageSetup")?.Remove();
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "pageSetup",
+                new XAttribute("paperSize", "5"),
+                new XAttribute("fitToWidth", "2"),
+                new XAttribute("fitToHeight", "3"),
+                new XAttribute("pageOrder", "overThenDown"),
+                new XAttribute("orientation", "landscape"),
+                new XAttribute("firstPageNumber", "7"),
+                new XAttribute("blackAndWhite", "1"),
+                new XAttribute("draft", "1"),
+                new XAttribute("horizontalDpi", "600"),
+                new XAttribute("verticalDpi", "600"),
+                new XAttribute("cellComments", "atEnd"),
+                new XAttribute("errors", "dash")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
