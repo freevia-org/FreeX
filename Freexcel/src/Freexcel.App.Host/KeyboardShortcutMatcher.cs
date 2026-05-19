@@ -76,6 +76,12 @@ public static class KeyboardShortcutMatcher
             return true;
         }
 
+        if (modifiers == ModifierKeys.Control && effectiveKey == Key.K)
+        {
+            shortcut = KeyboardCommandShortcut.InsertHyperlink;
+            return true;
+        }
+
         if (modifiers == ModifierKeys.Shift && effectiveKey == Key.F3)
         {
             shortcut = KeyboardCommandShortcut.InsertFunction;
@@ -405,6 +411,7 @@ public enum KeyboardSelectionShortcut
 public enum KeyboardCommandShortcut
 {
     CreateTable,
+    InsertHyperlink,
     InsertFunction,
     SpellCheck,
     CloseWorkbook,

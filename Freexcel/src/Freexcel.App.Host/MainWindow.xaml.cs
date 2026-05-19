@@ -1878,12 +1878,6 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
-            if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                InsertLinkBtn_Click(sender, e);
-                e.Handled = true;
-                return;
-            }
             if (e.Key == Key.OemSemicolon && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 InsertCurrentDateOrTime(insertTime: false);
@@ -2124,6 +2118,9 @@ public partial class MainWindow : Window
         {
             case KeyboardCommandShortcut.CreateTable:
                 TableBtn_Click(sender, e);
+                break;
+            case KeyboardCommandShortcut.InsertHyperlink:
+                InsertLinkBtn_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.InsertFunction:
                 InsertFunctionBtn_Click(sender, e);
