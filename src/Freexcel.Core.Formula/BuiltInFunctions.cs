@@ -1662,7 +1662,7 @@ public static class BuiltInFunctions
     {
         dt = default;
         var num = ToNumber(v);
-        if (!double.IsFinite(num) || num < -657435.0 || num > 2958465.0)
+        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
             return false;
         dt = SerialToDate(num);
         return true;
@@ -1685,6 +1685,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (IsExcelFakeLeapDay(args[0])) return new NumberValue(1900);
+        if (IsExcelZeroDate(args[0])) return new NumberValue(1900);
         return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Year) : ErrorValue.Num;
     }
 
@@ -1692,6 +1693,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (IsExcelFakeLeapDay(args[0])) return new NumberValue(2);
+        if (IsExcelZeroDate(args[0])) return new NumberValue(1);
         return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Month) : ErrorValue.Num;
     }
 
@@ -1699,6 +1701,7 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (IsExcelFakeLeapDay(args[0])) return new NumberValue(29);
+        if (IsExcelZeroDate(args[0])) return new NumberValue(0);
         return TryOADateToDateTime(args[0], out var dt) ? new NumberValue(dt.Day) : ErrorValue.Num;
     }
 
@@ -1725,7 +1728,7 @@ public static class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args.Count > 1 && args[1] is ErrorValue returnTypeError) return returnTypeError;
         double rawSerial = ToNumber(args[0]);
-        if (!double.IsFinite(rawSerial)) return ErrorValue.Num;
+        if (!double.IsFinite(rawSerial) || rawSerial < 0) return ErrorValue.Num;
         double rawReturnType = args.Count > 1 ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
@@ -2838,6 +2841,8 @@ public static class BuiltInFunctions
         double rawReturnType = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
+        if (Math.Floor(ToNumber(args[0])) == 0)
+            return new NumberValue(0);
         if (returnType == 21)
             return new NumberValue(ExcelIsoWeeknum(dt));
 
@@ -7650,6 +7655,13 @@ public static class BuiltInFunctions
         if (value is ErrorValue) return false;
         double serial = ToNumber(value);
         return double.IsFinite(serial) && Math.Abs(serial - 60) < 1e-10;
+    }
+
+    private static bool IsExcelZeroDate(ScalarValue value)
+    {
+        if (value is ErrorValue) return false;
+        double serial = ToNumber(value);
+        return double.IsFinite(serial) && Math.Abs(serial) < 1e-10;
     }
 
     private static double ActualYearLength(DateTime d1, DateTime d2)
