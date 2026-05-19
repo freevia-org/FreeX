@@ -13,5 +13,6 @@
         <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlLightLightBrushKey}" Color="White"/>
         <SolidColorBrush x:Key="{x:Static sys:SystemColors.ControlTextBrushKey}" Color="#111111"/>
         <SolidColorBrush x:Key="{x:Static sys:SystemColors.MenuTextBrushKey}" Color="#111111"/>
+        <SolidColorBrush x:Key="FreexcelTitleBarBrush" Color="#217346"/>
     </Application.Resources>
 </Application>

@@ -9,6 +9,10 @@
         <Setter Property="TextAlignment" Value="Center"/>
     </Style>
 
+    <Style x:Key="FreexcelQatOnAccentIcon" BasedOn="{StaticResource FreexcelQatIcon}" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
     <Style x:Key="FreexcelAppMarkText" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
