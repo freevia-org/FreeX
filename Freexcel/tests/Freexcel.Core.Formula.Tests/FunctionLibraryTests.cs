@@ -3903,6 +3903,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Textjoin_RangeArgument_FlattensCellsAndHonorsIgnoreEmpty()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("a")),
+            (1, 3, new TextValue("b")));
+
+        _eval.Evaluate("=TEXTJOIN(\"|\",TRUE,A1:C1)", sheet).Should().Be(new TextValue("a|b"));
+        _eval.Evaluate("=TEXTJOIN(\"|\",FALSE,A1:C1)", sheet).Should().Be(new TextValue("a||b"));
+    }
+
+    [Fact]
     public void Textjoin_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet(
