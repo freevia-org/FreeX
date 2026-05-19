@@ -360,6 +360,11 @@ public static class XlsxChartPartReader
 
     private static void ApplyPivotSourceMetadata(XDocument chartXml, ChartModel chart)
     {
+        chart.PivotFormatsXml = chartXml.Root?
+            .Element(ChartNs + "chart")?
+            .Element(ChartNs + "pivotFmts")?
+            .ToString(SaveOptions.DisableFormatting);
+
         var pivotSourceName = chartXml.Root?
             .Element(ChartNs + "pivotSource")?
             .Element(ChartNs + "name")?
