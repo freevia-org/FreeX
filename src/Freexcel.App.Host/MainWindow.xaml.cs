@@ -3066,7 +3066,7 @@ public partial class MainWindow : Window
         SheetGrid.Pictures = sheet?.Pictures;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
-        SheetGrid.SparklineValues = sheet is null ? null : BuildSparklineValues(sheet);
+        SheetGrid.SparklineValues = sheet is null ? null : SparklineValuePlanner.BuildValues(sheet);
         SheetGrid.MergedRegions = sheet?.MergedRegions;
         SheetGrid.WorksheetViewMode = sheet?.ViewMode ?? WorksheetViewMode.Normal;
         SheetGrid.ShowGridLines = sheet?.ShowGridlines ?? true;
@@ -9011,37 +9011,6 @@ public partial class MainWindow : Window
         SetActiveCell(location);
         EnsureCellVisible(location);
         UpdateViewport();
-    }
-
-    private static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildSparklineValues(Sheet sheet)
-    {
-        var values = new Dictionary<Guid, IReadOnlyList<double>>();
-        foreach (var sparkline in sheet.Sparklines)
-        {
-            var series = new List<double>();
-            for (var row = sparkline.DataRange.Start.Row; row <= sparkline.DataRange.End.Row; row++)
-            {
-                for (var col = sparkline.DataRange.Start.Col; col <= sparkline.DataRange.End.Col; col++)
-                {
-                    switch (sheet.GetValue(row, col))
-                    {
-                        case NumberValue number:
-                            series.Add(number.Value);
-                            break;
-                        case DateTimeValue date:
-                            series.Add(date.Value);
-                            break;
-                        case BoolValue boolean:
-                            series.Add(boolean.Value ? 1 : 0);
-                            break;
-                    }
-                }
-            }
-
-            values[sparkline.Id] = series;
-        }
-
-        return values;
     }
 
     private void InsertLinkBtn_Click(object sender, RoutedEventArgs e)
