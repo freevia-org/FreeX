@@ -7,7 +7,9 @@ public static class KeyboardShortcutMatcher
 {
     public static bool IsCtrlPlus(Key key, Key systemKey, ModifierKeys modifiers) =>
         modifiers == ModifierKeys.Control &&
-        (key is Key.Add or Key.OemPlus || systemKey is Key.Add or Key.OemPlus);
+            (key is Key.Add or Key.OemPlus || systemKey is Key.Add or Key.OemPlus) ||
+        modifiers == (ModifierKeys.Control | ModifierKeys.Shift) &&
+            (key == Key.OemPlus || systemKey == Key.OemPlus);
 
     public static bool IsCtrlMinus(Key key, Key systemKey, ModifierKeys modifiers) =>
         modifiers == ModifierKeys.Control &&
