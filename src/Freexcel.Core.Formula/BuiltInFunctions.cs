@@ -3919,7 +3919,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(value)) throw new FormulaEvalException("#NUM!", "Invalid number");
         if (decimals > 32767) throw new FormulaEvalException("#VALUE!", "Formatted text exceeds Excel cell text limit");
 
-        double rounded = decimals is >= -15 and <= 15 ? RoundWithExcelDigits(value, decimals) : value;
+        double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
         return rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
