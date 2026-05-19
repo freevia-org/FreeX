@@ -5999,11 +5999,23 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.SortDescending:
                 SortDescButton_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.CustomSort:
+                SortCustomMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.Filter:
                 FilterButton_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ClearFilter:
                 ClearFilterButton_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ReapplyFilter:
+                FilterReapplyMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.PickFromDropDown:
+                OpenActiveDropdown();
+                break;
+            case WorksheetContextMenuAction.QuickAnalysis:
+                ShowQuickAnalysisMenu();
                 break;
             case WorksheetContextMenuAction.HideRows:
                 ExecuteRowsHidden(hidden: true);
@@ -6011,17 +6023,35 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.UnhideRows:
                 ExecuteRowsHidden(hidden: false);
                 break;
+            case WorksheetContextMenuAction.RowHeight:
+                FormatRowHeightMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.AutoFitRowHeight:
+                FormatAutoRowMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.HideColumns:
                 ExecuteColumnsHidden(hidden: true);
                 break;
             case WorksheetContextMenuAction.UnhideColumns:
                 ExecuteColumnsHidden(hidden: false);
                 break;
+            case WorksheetContextMenuAction.ColumnWidth:
+                FormatColWidthMenuItem_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.AutoFitColumnWidth:
+                FormatAutoColMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.NewNote:
+                ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.EditNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.DeleteNote:
                 ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ShowNotes:
+                ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.Hyperlink:
                 InsertLinkBtn_Click(this, new RoutedEventArgs());
