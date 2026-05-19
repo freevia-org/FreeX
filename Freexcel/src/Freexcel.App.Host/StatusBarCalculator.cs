@@ -1,4 +1,5 @@
 using System.Linq;
+using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -39,5 +40,28 @@ public static class StatusBarCalculator
 
         double? average = count > 0 ? sum / count : null;
         return new Stats(sum, count, average, min, max);
+    }
+
+    public static string FormatNumber(double value)
+    {
+        if (value == Math.Floor(value) && Math.Abs(value) < 1e15)
+            return value.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
+
+        return value.ToString("G10", System.Globalization.CultureInfo.CurrentCulture);
+    }
+
+    public static string GetReadyStatusText(Sheet sheet, CellAddress activeCell)
+    {
+        var prompt = DataValidationService.GetInputPrompt(sheet, activeCell);
+        if (prompt is null)
+            return "Ready";
+
+        if (prompt.Title.Length == 0)
+            return prompt.Message;
+
+        if (prompt.Message.Length == 0)
+            return prompt.Title;
+
+        return $"{prompt.Title}: {prompt.Message}";
     }
 }
