@@ -11891,12 +11891,7 @@ public partial class MainWindow : Window
         var input = PromptForInput("Range to allow editing while protected:", defaultRange);
         if (input is null) return;
 
-        GridRange range;
-        try
-        {
-            range = GridRange.Parse(input, _currentSheetId);
-        }
-        catch
+        if (!ProtectionInputParser.TryParseAllowEditRange(input, _currentSheetId, out var range))
         {
             MessageBox.Show("Invalid range.", "Allow Edit Ranges", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
