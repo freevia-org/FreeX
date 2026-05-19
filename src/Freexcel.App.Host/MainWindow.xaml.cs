@@ -79,6 +79,8 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private CellColor _borderPickerColor = CellColor.Black;
+    private BorderStyle _borderPickerStyle = BorderStyle.Thin;
     private static readonly (string Label, string Code)[] NumberFormatOptions =
     [
         ("General", "General"),
@@ -7271,12 +7273,12 @@ public partial class MainWindow : Window
     }
 
     private void BorderAllMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff());
+        => ApplyStyleDiff(BorderShortcutService.GetAllBorderDiff(_borderPickerStyle, _borderPickerColor));
 
     private void BorderOutsideMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ApplyOutlineBorderShortcut();
-    }
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+            "Outside Borders");
 
     private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -7284,34 +7286,70 @@ public partial class MainWindow : Window
     }
 
     private void BorderBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, _borderPickerStyle, _borderPickerColor));
 
     private void BorderTopMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Top, _borderPickerStyle, _borderPickerColor));
 
     private void BorderLeftMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Left, _borderPickerStyle, _borderPickerColor));
 
     private void BorderRightMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, BorderStyle.Thin));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Right, _borderPickerStyle, _borderPickerColor));
 
     private void BorderThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Thick, _borderPickerColor));
 
     private void BorderBottomDoubleMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double));
+        => ApplyStyleDiff(BorderShortcutService.GetSingleBorderDiff(BorderEdge.Bottom, BorderStyle.Double, _borderPickerColor));
 
     private void BorderThickBoxMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick), "Thick Box Border");
+        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, BorderStyle.Thick, _borderPickerColor), "Thick Box Border");
 
     private void BorderTopAndBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thin), "Top and Bottom Border");
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, _borderPickerStyle, _borderPickerColor),
+            "Top and Bottom Border");
 
     private void BorderTopAndThickBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Thick), "Top and Thick Bottom Border");
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Thick, _borderPickerColor),
+            "Top and Thick Bottom Border");
 
     private void BorderTopAndDoubleBottomMenuItem_Click(object sender, RoutedEventArgs e)
-        => ApplyRangeBorderPreset((range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, BorderStyle.Double), "Top and Double Bottom Border");
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetTopAndBottomBorderDiff(range, address, _borderPickerStyle, BorderStyle.Double, _borderPickerColor),
+            "Top and Double Bottom Border");
+
+    private void BorderLineColorBlackMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = CellColor.Black;
+
+    private void BorderLineColorGrayMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = new CellColor(128, 128, 128);
+
+    private void BorderLineColorAccent1MenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent1);
+
+    private void BorderLineColorAccent2MenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerColor = _workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2);
+
+    private void BorderLineStyleThinMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Thin;
+
+    private void BorderLineStyleMediumMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Medium;
+
+    private void BorderLineStyleThickMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Thick;
+
+    private void BorderLineStyleDashedMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Dashed;
+
+    private void BorderLineStyleDottedMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Dotted;
+
+    private void BorderLineStyleDoubleMenuItem_Click(object sender, RoutedEventArgs e)
+        => _borderPickerStyle = BorderStyle.Double;
 
     private void BorderMoreMenuItem_Click(object sender, RoutedEventArgs e)
         => OpenFormatCellsDialog(FormatCellsDialogTab.Border);
