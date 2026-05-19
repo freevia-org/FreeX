@@ -25,6 +25,7 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells),
         WorksheetContextMenuCommand.Separator,
+        new("Clear Formats", WorksheetContextMenuAction.ClearFormats),
         new("Clear Contents", WorksheetContextMenuAction.ClearContents)
     ];
 }
@@ -53,5 +54,6 @@ public enum WorksheetContextMenuAction
     NewNote,
     Hyperlink,
     FormatCells,
+    ClearFormats,
     ClearContents
 }
