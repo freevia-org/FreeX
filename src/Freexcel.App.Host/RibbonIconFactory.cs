@@ -65,6 +65,24 @@ public static class RibbonIconFactory
             case RibbonCommandIconKind.Decimal:
                 DrawText(canvas, ".0", glyphBrush, 12, FontWeights.Bold);
                 break;
+            case RibbonCommandIconKind.ChevronDown:
+                AddPath(canvas, "M7,9 L12,14 L17,9", glyphBrush, 1.8);
+                break;
+            case RibbonCommandIconKind.WindowClose:
+                DrawDelete(canvas, glyphBrush);
+                break;
+            case RibbonCommandIconKind.WindowMaximize:
+                AddRectangle(canvas, 6, 6, 12, 12, glyphBrush, radius: 0.8);
+                break;
+            case RibbonCommandIconKind.WindowMinimize:
+                AddLine(canvas, 6, 17, 18, 17, glyphBrush, 1.7);
+                break;
+            case RibbonCommandIconKind.Insert:
+                DrawInsert(canvas, glyphBrush);
+                break;
+            case RibbonCommandIconKind.Pin:
+                DrawPin(canvas, glyphBrush);
+                break;
             case RibbonCommandIconKind.Align:
                 DrawAlign(canvas, glyphBrush);
                 break;
@@ -298,6 +316,18 @@ public static class RibbonIconFactory
         AddLine(canvas, 15, 8, 19, 8, brush, 1.6);
         AddRectangle(canvas, 8, 11, 6, 3, brush, radius: 0.5);
         AddPath(canvas, "M10,14 L13,14 L12,20 L9,20 Z", brush, 1.4);
+    }
+
+    private static void DrawInsert(Canvas canvas, Brush brush)
+    {
+        AddRectangle(canvas, 5, 5, 14, 14, brush, radius: 1);
+        AddLine(canvas, 12, 8, 12, 16, brush, 1.6);
+        AddLine(canvas, 8, 12, 16, 12, brush, 1.6);
+    }
+
+    private static void DrawPin(Canvas canvas, Brush brush)
+    {
+        AddPath(canvas, "M9,4 L17,12 L14,15 L20,21 L18,23 L12,17 L9,20 L7,18 L10,15 L3,8 Z", brush, 1.4);
     }
 
     private static void DrawMerge(Canvas canvas, Brush brush)

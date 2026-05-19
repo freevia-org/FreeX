@@ -51,15 +51,74 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void QuickAccessToolbar_UsesConsistentIconFontGlyphs()
+    public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("NumberFormatOptions.Select(option => option.Label)");
+        source.Should().Contain("NumberFormatOptions[NumberFormatBox.SelectedIndex].Code");
+        source.Should().Contain("Accounting ($#,##0.00)");
+        source.Should().Contain("Fraction (# ?/?)");
+        source.Should().Contain("Scientific (0.00E+00)");
+        source.Should().Contain("\"# ?/?\"");
+        source.Should().Contain("\"0.00E+00\"");
+    }
+
+    [Fact]
+    public void ArrangeAllMenu_ReflectsStoredWorkbookArrangement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
+        xaml.Should().Contain("IsCheckable=\"True\"");
+        source.Should().Contain("ArrangeAllContextMenu_Opened");
+        source.Should().Contain("_workbook.WindowArrangement.ToString()");
+        source.Should().Contain("item.IsChecked = string.Equals(item.Tag?.ToString(), current, StringComparison.Ordinal)");
+    }
+
+    [Fact]
+    public void SplitRibbonCommand_ReflectsActiveSplitState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        xaml.Should().Contain("<ToggleButton x:Name=\"SplitViewBtn\"");
+        xaml.Should().Contain("Style=\"{StaticResource RibbonToggleBtn}\"");
+        source.Should().Contain("SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null");
+    }
+
+    [Fact]
+    public void QuickAccessToolbar_UsesVectorIcons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
 
         xaml.Should().Contain("x:Name=\"SaveQatBtn\"");
-        xaml.Should().Contain("FreexcelQatOnAccentIcon");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Save\"");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Undo\"");
+        xaml.Should().Contain("<local:RibbonIcon Kind=\"Redo\"");
+        xaml.Should().NotContain("FreexcelQatOnAccentIcon");
+        iconResources.Should().NotContain("FreexcelQatIcon");
         xaml.Should().NotContain("Content=\"💾\"");
         xaml.Should().NotContain("Content=\"↩\"");
         xaml.Should().NotContain("Content=\"↪\"");
+    }
+
+    [Fact]
+    public void ToolbarIcons_DoNotUseFontGlyphAssets()
+    {
+        var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
+        var appHostDirectory = Path.GetDirectoryName(mainWindowPath)!;
+        var xaml = File.ReadAllText(mainWindowPath);
+        var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
+
+        xaml.Should().NotContain("Segoe MDL2 Assets");
+        xaml.Should().NotContain("RibbonIconGlyph");
+        xaml.Should().NotContain("FreexcelQatOnAccentIcon");
+        iconResources.Should().NotContain("Segoe MDL2 Assets");
+        iconResources.Should().NotContain("FreexcelRibbonGlyph");
     }
 
     [Fact]
