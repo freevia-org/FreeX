@@ -7768,6 +7768,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookFunctionGroups()
+    {
+        var workbook = new Workbook("WorkbookFunctionGroupsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("function group"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorkbookFunctionGroups(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var functionGroups = workbookXml.Root!.Element(workbookNs + "functionGroups");
+        functionGroups.Should().NotBeNull();
+        functionGroups!.ToString().Should().Contain("builtInGroupCount=\"16\"");
+        functionGroups.ToString().Should().Contain("name=\"FreexcelNativeFunctions\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedWorkbookProperties()
     {
         var workbook = new Workbook("WorkbookPropertiesRetentionTest");
@@ -9534,6 +9564,25 @@ public class FileAdapterSmokeTests
                         workbookNs + "smartTagType",
                         new XAttribute("namespaceUri", "urn:schemas-microsoft-com:office:smarttags"),
                         new XAttribute("name", "place"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorkbookFunctionGroups(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "functionGroups",
+                new XAttribute("builtInGroupCount", "16"),
+                new XElement(
+                    workbookNs + "functionGroup",
+                    new XAttribute("name", "FreexcelNativeFunctions"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
