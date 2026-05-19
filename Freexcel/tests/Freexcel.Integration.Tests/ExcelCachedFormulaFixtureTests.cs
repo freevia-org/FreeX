@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using Freexcel.Core.Formula;
 using Freexcel.Core.IO;
@@ -10,6 +11,28 @@ namespace Freexcel.Integration.Tests;
 
 public sealed class ExcelCachedFormulaFixtureTests
 {
+    public static IEnumerable<object[]> CachedFormulaFixtureFiles()
+    {
+        var directory = FindWorkspacePath("test-corpus", "regressions", "formula-cached");
+        if (!Directory.Exists(directory))
+            yield break;
+
+        foreach (var path in Directory.EnumerateFiles(directory, "*.xlsx").Order(StringComparer.OrdinalIgnoreCase))
+            yield return [path];
+    }
+
+    [Theory]
+    [MemberData(nameof(CachedFormulaFixtureFiles))]
+    public void ExcelCachedFormulaFixture_MatchesFreexcelEvaluation(string path)
+    {
+        using var stream = File.OpenRead(path);
+        var workbook = new XlsxFileAdapter().Load(stream);
+
+        var mismatches = CompareFormulaCellsToCachedResults(workbook).ToArray();
+
+        mismatches.Should().BeEmpty(Path.GetFileName(path));
+    }
+
     [Fact]
     public void CachedFormulaFixtureHarness_ComparesFreexcelEvaluationToWorkbookCachedResults()
     {
@@ -141,5 +164,27 @@ public sealed class ExcelCachedFormulaFixtureTests
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var writer = new StreamWriter(entry.Open());
         writer.Write(XDocument.Parse(xml).ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static string FindWorkspacePath(params string[] relativeParts)
+    {
+        return FindWorkspacePathFromSource(relativeParts);
+    }
+
+    private static string FindWorkspacePathFromSource(
+        string[] relativeParts,
+        [CallerFilePath] string sourceFilePath = "")
+    {
+        var current = new DirectoryInfo(Path.GetDirectoryName(sourceFilePath) ?? AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeParts).ToArray());
+            if (Directory.Exists(candidate))
+                return candidate;
+
+            current = current.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
     }
 }

@@ -84,7 +84,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 Cell cell;
                 if (xlCell.HasFormula)
                 {
-                    cell = Cell.FromFormula(xlCell.FormulaA1);
+                    cell = Cell.FromFormula(NormalizeExcelFormulaText(xlCell.FormulaA1));
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
                     var cached = MapValue(xlCell);
@@ -7603,6 +7603,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return MapValue(xlCell.Value);
+    }
+
+    private static string NormalizeExcelFormulaText(string formulaText)
+    {
+        return formulaText
+            .Replace("_xlfn.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("_xlws.", "", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ScalarValue MapValue(XLCellValue xlValue)
