@@ -44,6 +44,8 @@ public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
+public enum ChartBlankDisplayMode { Gap, Span, Zero }
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -96,6 +98,8 @@ public sealed class ChartModel
     public int? PivotCacheId { get; set; }
     public int? ChartStyleId { get; set; }
     public bool RoundedCorners { get; set; }
+    public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
+    public bool ShowDataLabelsOverMaximum { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }

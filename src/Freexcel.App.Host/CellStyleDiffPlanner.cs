@@ -67,6 +67,9 @@ public static class CellStyleDiffPlanner
         new(DoubleUnderline: enabled, Underline: enabled ? false : null, Strikethrough: enabled ? false : null);
 
     public static StyleDiff GetCellStylePresetDiff(CellStylePreset preset) =>
+        GetCellStylePresetDiff(preset, WorkbookTheme.Office);
+
+    public static StyleDiff GetCellStylePresetDiff(CellStylePreset preset, WorkbookTheme theme) =>
         preset switch
         {
             CellStylePreset.Normal => ClearFormatsDiff(),
@@ -134,12 +137,12 @@ public static class CellStyleDiffPlanner
                 Bold: true,
                 BorderTop: new CellBorder(BorderStyle.Thin, CellColor.Black),
                 BorderBottom: new CellBorder(BorderStyle.Double, CellColor.Black)),
-            CellStylePreset.Accent1_20 => Accent20(new CellColor(221, 235, 247), new CellColor(91, 155, 213)),
-            CellStylePreset.Accent2_20 => Accent20(new CellColor(226, 239, 218), new CellColor(112, 173, 71)),
-            CellStylePreset.Accent3_20 => Accent20(new CellColor(255, 242, 204), new CellColor(255, 192, 0)),
-            CellStylePreset.Accent4_20 => Accent20(new CellColor(252, 228, 214), new CellColor(237, 125, 49)),
-            CellStylePreset.Accent5_20 => Accent20(new CellColor(234, 232, 246), new CellColor(112, 48, 160)),
-            CellStylePreset.Accent6_20 => Accent20(new CellColor(218, 238, 243), new CellColor(75, 172, 198)),
+            CellStylePreset.Accent1_20 => Accent20(theme, WorkbookThemeColorSlot.Accent1),
+            CellStylePreset.Accent2_20 => Accent20(theme, WorkbookThemeColorSlot.Accent2),
+            CellStylePreset.Accent3_20 => Accent20(theme, WorkbookThemeColorSlot.Accent3),
+            CellStylePreset.Accent4_20 => Accent20(theme, WorkbookThemeColorSlot.Accent4),
+            CellStylePreset.Accent5_20 => Accent20(theme, WorkbookThemeColorSlot.Accent5),
+            CellStylePreset.Accent6_20 => Accent20(theme, WorkbookThemeColorSlot.Accent6),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null)
         };
 
@@ -157,11 +160,11 @@ public static class CellStyleDiffPlanner
             BorderLeft: border);
     }
 
-    private static StyleDiff Accent20(CellColor fillColor, CellColor borderColor) =>
+    private static StyleDiff Accent20(WorkbookTheme theme, WorkbookThemeColorSlot slot) =>
         new(
-            FillColor: fillColor,
+            FillColor: theme.ResolveColor(slot, 0.8),
             FontColor: CellColor.Black,
-            BorderBottom: new CellBorder(BorderStyle.Thin, borderColor));
+            BorderBottom: new CellBorder(BorderStyle.Thin, theme.GetColor(slot)));
 
     private static CellBorder ThinGrayBorder() =>
         new(BorderStyle.Thin, new CellColor(128, 128, 128));
