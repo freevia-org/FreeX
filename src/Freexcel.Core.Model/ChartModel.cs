@@ -67,6 +67,12 @@ public sealed class ChartColorMapOverrideModel
     public Dictionary<string, string> OverrideMappings { get; set; } = new(StringComparer.Ordinal);
 }
 
+public sealed class ChartExternalDataModel
+{
+    public string? RelationshipId { get; set; }
+    public bool? AutoUpdate { get; set; }
+}
+
 public sealed class ChartPageMarginsModel
 {
     public double? Left { get; set; }
@@ -140,6 +146,7 @@ public sealed class ChartModel
     public string? Language { get; set; }
     public int? ChartStyleId { get; set; }
     public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
+    public ChartExternalDataModel? ExternalData { get; set; }
     public bool RoundedCorners { get; set; }
     public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
     public bool ShowDataLabelsOverMaximum { get; set; }
