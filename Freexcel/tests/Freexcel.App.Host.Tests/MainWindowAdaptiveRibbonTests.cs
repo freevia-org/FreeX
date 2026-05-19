@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
@@ -25,6 +26,33 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
             harness.CollapsedRibbonGroupMenus.Should().Contain(menu => menu.Items.Count > 0);
             harness.CollapsedMenuHeaders("Editing").Should().Contain(["AutoSum", "Fill", "Clear", "Sort & Filter", "Find & Select"]);
+        });
+    }
+
+    [Fact]
+    public void HomeRibbon_CollapsesEditingBeforeLabelsClipAtWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(1465);
+
+            harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Find & Select", harness.DebugRibbonChildren);
+        });
+    }
+
+    [Fact]
+    public void FormulasRibbon_CollapsesFunctionLibraryAtShortWideWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Formulas", 1465);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Function Library", harness.DebugActiveRibbonChildren);
         });
     }
 
@@ -61,6 +89,72 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void InsertRibbon_HidesChartFormattingCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Insert", 1024);
+
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Label Border", harness.DebugActiveRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().NotContain("Y Bounds", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain("Charts", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuHeaders("Charts").Should().Contain("Column Chart", harness.DebugActiveRibbonChildren);
+            harness.CollapsedActiveMenuHeaders("Charts").Should().NotContain("Data Label Border", harness.DebugActiveRibbonChildren);
+        });
+    }
+
+    [Fact]
+    public void RibbonTabs_RemainSingleRowAtNarrowWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(640);
+
+            harness.VisibleRibbonTabHeaderRows.Should().HaveCount(1, "Excel keeps the main ribbon tabs on one row while the command groups collapse");
+        });
+    }
+
+    [Fact]
+    public void DenseRibbonCommandColumns_UseShortRowButtons()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1465);
+
+                harness.DenseColumnButtonHeights.Should().OnlyContain(
+                    height => height <= 24,
+                    $"{tab} dense ribbon columns should use Excel-like short row commands instead of tall large-button footprints");
+            }
+        });
+    }
+
+    [Fact]
+    public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 640);
+
+                harness.RibbonHorizontalScrollBarModes.Should().OnlyContain(
+                    mode => mode == ScrollBarVisibility.Hidden,
+                    $"{tab} should keep the ribbon face clean while preserving hidden horizontal fallback scrolling");
+            }
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -76,6 +170,14 @@ public sealed class MainWindowAdaptiveRibbonTests
 
         public IReadOnlyList<string> CollapsedRibbonGroupNames =>
             HomeRibbonChildren
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
+        public IReadOnlyList<string> CollapsedActiveRibbonGroupNames =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
                 .OfType<Button>()
                 .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
                 .Select(button => RibbonTooltip.GetTitle(button) ?? "")
@@ -101,6 +203,16 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(header => !string.IsNullOrWhiteSpace(header))
                 .ToList();
 
+        public IReadOnlyList<string> CollapsedActiveMenuHeaders(string groupName) =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => button.Tag is string tag && tag == "RibbonCollapsedGroupButton" && button.Visibility == Visibility.Visible)
+                .Where(button => string.Equals(RibbonTooltip.GetTitle(button), groupName, StringComparison.Ordinal))
+                .SelectMany(button => button.ContextMenu?.Items.OfType<MenuItem>() ?? [])
+                .Select(item => item.Header?.ToString() ?? "")
+                .Where(header => !string.IsNullOrWhiteSpace(header))
+                .ToList();
+
         private IEnumerable<UIElement> HomeRibbonChildren =>
             (_window.FindName("HomeRibbonPanel") as StackPanel)?.Children.Cast<UIElement>() ?? [];
 
@@ -110,6 +222,72 @@ public sealed class MainWindowAdaptiveRibbonTests
                     ? $"{child.GetType().Name}:{fe.Tag}:{fe.Visibility}:{RibbonTooltip.GetTitle(fe) ?? fe.Name}"
                     : child.GetType().Name));
 
+        public string DebugActiveRibbonChildren =>
+            string.Join(", ", ActiveRibbonPanel?.Children.Cast<UIElement>().Select(child =>
+                child is FrameworkElement fe
+                    ? $"{child.GetType().Name}:{fe.Tag}:{fe.Visibility}:{RibbonTooltip.GetTitle(fe) ?? fe.Name}"
+                    : child.GetType().Name) ?? []);
+
+        public IReadOnlyList<string> VisibleRibbonCommandLabels =>
+            (SelectedRibbonTab is null
+                ? []
+                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                    .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                    .OfType<Button>()
+                    .Distinct()
+                    .Where(IsEffectivelyVisible)
+                    .Select(GetButtonLabel)
+                    .Where(label => !string.IsNullOrWhiteSpace(label)))
+            .ToList();
+
+        public IReadOnlyList<int> VisibleRibbonTabHeaderRows =>
+            _window.FindName("RibbonTabs") is TabControl tabs
+                ? EnumerateSelfAndVisualDescendants(tabs)
+                    .OfType<TabItem>()
+                    .Where(item => item.Visibility == Visibility.Visible && item.ActualHeight > 0)
+                    .Select(item => (int)Math.Round(item.TransformToAncestor(tabs).Transform(new Point(0, 0)).Y))
+                    .Distinct()
+                    .OrderBy(row => row)
+                    .ToList()
+                : [];
+
+        public IReadOnlyList<double> DenseColumnButtonHeights =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<UniformGrid>()
+                .Where(grid => grid.Rows == 3 && grid.Children.OfType<Button>().Count() > 3)
+                .SelectMany(grid => grid.Children.OfType<Button>())
+                .Where(IsEffectivelyVisible)
+                .Select(button => button.Height)
+                .ToList();
+
+        public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
+            _window.FindName("RibbonTabs") is TabControl tabs
+                ? EnumerateSelfAndVisualDescendants(tabs)
+                    .OfType<ScrollViewer>()
+                    .Where(IsEffectivelyVisible)
+                    .Select(scrollViewer => scrollViewer.HorizontalScrollBarVisibility)
+                    .ToList()
+                : [];
+
+        private TabItem? SelectedRibbonTab =>
+            (_window.FindName("RibbonTabs") as TabControl)?.SelectedItem as TabItem;
+
+        private DependencyObject SelectedRibbonContentRoot =>
+            SelectedRibbonTab?.Content as DependencyObject ??
+            (DependencyObject?)SelectedRibbonTab ??
+            _window;
+
+        private StackPanel? ActiveRibbonPanel =>
+            SelectedRibbonTab is { } tabItem
+                ? EnumerateSelfAndVisualDescendants(tabItem.Content as DependencyObject ?? tabItem)
+                    .Concat(EnumerateLogicalDescendants(tabItem.Content as DependencyObject ?? tabItem))
+                    .OfType<StackPanel>()
+                    .Distinct()
+                    .OrderByDescending(panel => panel.Children.OfType<Grid>().Count())
+                    .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
+                                             panel.Children.OfType<Grid>().Any())
+                : null;
+
         public void SetRibbonWidth(double width)
         {
             if (_window.FindName("RibbonTabs") is TabControl tabs)
@@ -118,6 +296,22 @@ public sealed class MainWindowAdaptiveRibbonTests
             _window.Width = width;
             _window.UpdateLayout();
             _updateRibbonCompactMode.Invoke(_window, [true]);
+            PumpDispatcher();
+        }
+
+        public void SelectRibbonTab(string header, double width)
+        {
+            if (_window.FindName("RibbonTabs") is TabControl tabs)
+            {
+                tabs.SelectedItem = tabs.Items
+                    .OfType<TabItem>()
+                    .First(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+            }
+
+            _window.WindowState = WindowState.Normal;
+            _window.Width = width;
+            _window.UpdateLayout();
+            PumpDispatcher();
             PumpDispatcher();
         }
 
@@ -148,6 +342,59 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             _window.Close();
             PumpDispatcher();
+        }
+
+        private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
+        {
+            yield return root;
+
+            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+                foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
+                    yield return descendant;
+            }
+        }
+
+        private static IEnumerable<DependencyObject> EnumerateLogicalDescendants(DependencyObject root)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is not DependencyObject dependencyObject)
+                    continue;
+
+                yield return dependencyObject;
+
+                foreach (var descendant in EnumerateLogicalDescendants(dependencyObject))
+                    yield return descendant;
+            }
+        }
+
+        private static string GetButtonLabel(Button button)
+        {
+            if (button.Content is string text)
+                return text;
+
+            return EnumerateSelfAndVisualDescendants(button)
+                .Concat(EnumerateLogicalDescendants(button))
+                .OfType<TextBlock>()
+                .FirstOrDefault(textBlock => string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
+                ?.Text ?? "";
+        }
+
+        private static bool IsEffectivelyVisible(DependencyObject element)
+        {
+            var current = element;
+            while (current is not null)
+            {
+                if (current is UIElement { Visibility: not Visibility.Visible })
+                    return false;
+
+                current = System.Windows.Media.VisualTreeHelper.GetParent(current) ??
+                          LogicalTreeHelper.GetParent(current);
+            }
+
+            return true;
         }
     }
 

@@ -38,8 +38,8 @@ public static class DeferredCommandMessages
 
         return new(
             "Unsupported XLSX Features",
-            "This workbook contains features Freexcel does not preserve yet. " +
-            $"Saving to .xlsx may remove: {featureList}.\n\nContinue saving?");
+            "This workbook contains features Freexcel retains as opaque package parts, but does not run, render, author, or deeply edit: " +
+            $"{featureList}.{DigitalSignatureWarning(report)}\n\nContinue saving?");
     }
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureOpenWarning(XlsxFeatureReport report)
@@ -52,7 +52,8 @@ public static class DeferredCommandMessages
         return new(
             "Unsupported XLSX Features Detected",
             "Freexcel opened this workbook, but it contains unsupported or excluded XLSX features: " +
-            $"{featureList}. These features may be removed if you save the workbook from Freexcel.");
+            $"{featureList}. These features are retained as opaque package parts where safe, but will not be executed, refreshed, rendered, or edited by Freexcel." +
+            DigitalSignatureWarning(report));
     }
 
     public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
@@ -84,6 +85,11 @@ public static class DeferredCommandMessages
             .Select(f => FormatUnsupportedXlsxFeatureKind(f.Kind))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(name => name, StringComparer.Ordinal);
+
+    private static string DigitalSignatureWarning(XlsxFeatureReport report) =>
+        report.Features.Any(feature => feature.Kind == XlsxUnsupportedFeatureKind.DigitalSignatures)
+            ? " Digital signatures may no longer validate after workbook edits."
+            : string.Empty;
 }
 
 public sealed record DeferredCommandMessage(string Title, string Body);

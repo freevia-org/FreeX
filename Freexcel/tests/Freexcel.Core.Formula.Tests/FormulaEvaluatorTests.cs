@@ -672,6 +672,8 @@ public class FormulaEvaluatorTests
     [InlineData("#NAME?")]
     [InlineData("#NULL!")]
     [InlineData("#NUM!")]
+    [InlineData("#SPILL!")]
+    [InlineData("#CALC!")]
     public void ErrorLiteral_EvaluatesToErrorValue(string errorCode)
     {
         var sheet = new Sheet(SheetId.New(), "S");

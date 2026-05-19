@@ -329,6 +329,8 @@ public sealed class Parser
         "#NULL!" => Model.ErrorValue.Null,
         "#N/A" => Model.ErrorValue.NA,
         "#NUM!" => Model.ErrorValue.Num,
+        "#SPILL!" => Model.ErrorValue.Spill,
+        "#CALC!" => Model.ErrorValue.Calc,
         _ => new Model.ErrorValue(code)
     };
 

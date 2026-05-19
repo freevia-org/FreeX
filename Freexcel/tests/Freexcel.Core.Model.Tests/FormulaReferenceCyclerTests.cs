@@ -32,6 +32,22 @@ public class FormulaReferenceCyclerTests
     public void TryCycleReferenceAtCaret_CyclesReferenceInsideFormula()
     {
         var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(A1)+B2",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM($A$1)+B2");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(4);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesRangeReferenceAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
             "=SUM(A1:B2)",
             caretIndex: 6,
             out var result,
@@ -39,9 +55,89 @@ public class FormulaReferenceCyclerTests
             out var selectionLength);
 
         changed.Should().BeTrue();
-        result.Should().Be("=SUM($A$1:B2)");
+        result.Should().Be("=SUM($A$1:$B$2)");
         selectionStart.Should().Be(5);
-        selectionLength.Should().Be(4);
+        selectionLength.Should().Be(9);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesLowercaseReferenceAndNormalizesColumnLetters()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=sum(a1:b2)",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=sum($A$1:$B$2)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(9);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesFullColumnReferenceAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(A:A)",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM($A:$A)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(5);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesSheetQualifiedFullColumnReference()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(Sheet2!A:A)",
+            caretIndex: 13,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM(Sheet2!$A:$A)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(12);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesFullRowReferenceAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(1:1)",
+            caretIndex: 6,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM($1:$1)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(5);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesSheetQualifiedFullRowReference()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(Sheet2!1:1)",
+            caretIndex: 13,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM(Sheet2!$1:$1)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(12);
     }
 
     [Theory]
@@ -68,6 +164,22 @@ public class FormulaReferenceCyclerTests
         result.Should().Be(expected);
         selectionStart.Should().Be(expectedSelectionStart);
         selectionLength.Should().Be(expectedSelectionLength);
+    }
+
+    [Fact]
+    public void TryCycleReferenceAtCaret_CyclesRangeWithRepeatedSheetQualifierAsOneToken()
+    {
+        var changed = FormulaReferenceCycler.TryCycleReferenceAtCaret(
+            "=SUM(Sheet1!A1:Sheet1!B2)",
+            caretIndex: 13,
+            out var result,
+            out var selectionStart,
+            out var selectionLength);
+
+        changed.Should().BeTrue();
+        result.Should().Be("=SUM(Sheet1!$A$1:Sheet1!$B$2)");
+        selectionStart.Should().Be(5);
+        selectionLength.Should().Be(23);
     }
 
     [Fact]
