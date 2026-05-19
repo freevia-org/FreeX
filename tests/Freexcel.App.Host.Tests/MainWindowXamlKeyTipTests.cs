@@ -171,6 +171,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute("Click")?.Value is
                 "ReviewNewCommentBtn_Click" or
                 "ReviewDeleteCommentBtn_Click" or
+                "ReviewPrevCommentBtn_Click" or
+                "ReviewNextCommentBtn_Click" or
                 "ReviewShowCommentsBtn_Click")
             .ToList();
 
@@ -182,12 +184,16 @@ public sealed class MainWindowXamlKeyTipTests
             })
             .ToList();
 
-        tooltipTexts.Should().HaveCount(3);
+        tooltipTexts.Should().HaveCount(6);
         tooltipTexts.Should().OnlyContain(text =>
             text.Title.Contains("Note", StringComparison.OrdinalIgnoreCase) ||
             text.Description.Contains("note", StringComparison.OrdinalIgnoreCase));
         tooltipTexts
             .Single(text => text.Title.Equals("New Note", StringComparison.OrdinalIgnoreCase))
+            .Description.Should()
+            .Contain("threaded comments are not implemented");
+        tooltipTexts
+            .Single(text => text.Title.Equals("Edit Note", StringComparison.OrdinalIgnoreCase))
             .Description.Should()
             .Contain("threaded comments are not implemented");
     }
