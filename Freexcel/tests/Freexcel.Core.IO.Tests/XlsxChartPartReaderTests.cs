@@ -171,7 +171,8 @@ public sealed class XlsxChartPartReaderTests
         var sheetId = SheetId.New();
         var chartXml = XDocument.Parse($$"""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
-                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
               <c:chart>
                 <c:title><c:tx><c:rich><a:p><a:r><a:t>Market View</a:t></a:r></a:p></c:rich></c:tx></c:title>
                 <c:plotArea>
@@ -232,7 +233,8 @@ public sealed class XlsxChartPartReaderTests
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
-                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
               <c:chart>
                 <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
                 <c:plotArea>
@@ -272,7 +274,8 @@ public sealed class XlsxChartPartReaderTests
         var sheetId = new SheetId(Guid.NewGuid());
         var chartXml = XDocument.Parse("""
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
-                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
               <c:date1904 val="1"/>
               <c:lang val="en-US"/>
               <c:style val="42"/>
@@ -305,6 +308,9 @@ public sealed class XlsxChartPartReaderTests
                 <c:dispBlanksAs val="span"/>
                 <c:showDLblsOverMax val="1"/>
               </c:chart>
+              <c:externalData r:id="rIdExternalData1">
+                <c:autoUpdate val="1"/>
+              </c:externalData>
             </c:chartSpace>
             """);
 
@@ -329,6 +335,11 @@ public sealed class XlsxChartPartReaderTests
                 ["tx1"] = "dk1",
                 ["accent1"] = "accent2"
             }
+        });
+        chart.ExternalData.Should().BeEquivalentTo(new ChartExternalDataModel
+        {
+            RelationshipId = "rIdExternalData1",
+            AutoUpdate = true
         });
         chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
         {
