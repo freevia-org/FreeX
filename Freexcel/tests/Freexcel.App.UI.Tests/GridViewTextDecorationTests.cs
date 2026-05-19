@@ -26,4 +26,23 @@ public sealed class GridViewTextDecorationTests
     {
         GridView.BuildTextDecorations(new CellStyle()).Should().BeNull();
     }
+
+    [Fact]
+    public void ResolveShrinkFontSize_ReducesFontSizeUntilTextFitsAndRespectsFloor()
+    {
+        var reduced = GridView.ResolveShrinkFontSize(
+            requestedFontSize: 11,
+            availableWidth: 50,
+            measureTextWidth: fontSize => fontSize * 8);
+
+        reduced.Should().BeLessThan(11);
+        (reduced * 8).Should().BeLessThanOrEqualTo(50);
+
+        var floored = GridView.ResolveShrinkFontSize(
+            requestedFontSize: 11,
+            availableWidth: 10,
+            measureTextWidth: fontSize => fontSize * 8);
+
+        floored.Should().Be(6);
+    }
 }

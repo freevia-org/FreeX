@@ -45,7 +45,9 @@ public enum HorizontalAlignment
     General,
     Left,
     Center,
-    Right
+    Right,
+    Justify,
+    Distributed
 }
 
 /// <summary>
@@ -55,7 +57,9 @@ public enum VerticalAlignment
 {
     Top,
     Center,
-    Bottom
+    Bottom,
+    Justify,
+    Distributed
 }
 
 /// <summary>
@@ -111,6 +115,9 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Whether text wraps within the cell.</summary>
     public bool WrapText { get; set; }
 
+    /// <summary>Whether text should shrink horizontally to fit within the cell.</summary>
+    public bool ShrinkToFit { get; set; }
+
     /// <summary>Double-underline (accounting style).</summary>
     public bool DoubleUnderline { get; set; }
 
@@ -145,6 +152,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         HorizontalAlignment = HorizontalAlignment,
         VerticalAlignment = VerticalAlignment,
         WrapText = WrapText,
+        ShrinkToFit = ShrinkToFit,
         DoubleUnderline = DoubleUnderline,
         IndentLevel = IndentLevel,
         TextRotation = TextRotation,
@@ -175,6 +183,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && HorizontalAlignment == other.HorizontalAlignment
             && VerticalAlignment == other.VerticalAlignment
             && WrapText == other.WrapText
+            && ShrinkToFit == other.ShrinkToFit
             && DoubleUnderline == other.DoubleUnderline
             && IndentLevel == other.IndentLevel
             && TextRotation == other.TextRotation
@@ -201,6 +210,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(HorizontalAlignment);
         h.Add(VerticalAlignment);
         h.Add(WrapText);
+        h.Add(ShrinkToFit);
         h.Add(DoubleUnderline);
         h.Add(IndentLevel);
         h.Add(TextRotation);
@@ -225,6 +235,7 @@ public record StyleDiff(
     HorizontalAlignment? HAlign = null,
     VerticalAlignment? VAlign   = null,
     bool? WrapText              = null,
+    bool? ShrinkToFit           = null,
     string? NumberFormat        = null,
     bool? DoubleUnderline       = null,
     int? IndentLevel            = null,
@@ -250,6 +261,7 @@ public record StyleDiff(
         HAlign:          style.HorizontalAlignment,
         VAlign:          style.VerticalAlignment,
         WrapText:        style.WrapText,
+        ShrinkToFit:     style.ShrinkToFit,
         NumberFormat:    style.NumberFormat,
         DoubleUnderline: style.DoubleUnderline,
         IndentLevel:     style.IndentLevel,
@@ -277,6 +289,7 @@ public record StyleDiff(
         if (HAlign         is not null) s.HorizontalAlignment = HAlign.Value;
         if (VAlign         is not null) s.VerticalAlignment   = VAlign.Value;
         if (WrapText       is not null) s.WrapText      = WrapText.Value;
+        if (ShrinkToFit    is not null) s.ShrinkToFit   = ShrinkToFit.Value;
         if (NumberFormat   is not null) s.NumberFormat  = NumberFormat;
         if (DoubleUnderline is not null) s.DoubleUnderline = DoubleUnderline.Value;
         if (IndentLevel    is not null) s.IndentLevel   = Math.Clamp(IndentLevel.Value, 0, 15);

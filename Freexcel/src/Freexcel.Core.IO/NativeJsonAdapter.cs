@@ -1313,6 +1313,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             HorizontalAlignment = ValidEnumOrDefault(dto.HorizontalAlignment, HorizontalAlignment.General),
             VerticalAlignment = ValidEnumOrDefault(dto.VerticalAlignment, VerticalAlignment.Bottom),
             WrapText = dto.WrapText,
+            ShrinkToFit = dto.ShrinkToFit,
             DoubleUnderline = dto.DoubleUnderline,
             IndentLevel = Math.Clamp(dto.IndentLevel, 0, 15),
             TextRotation = ValidTextRotationOrDefault(dto.TextRotation),
@@ -1343,6 +1344,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             HorizontalAlignment = style.HorizontalAlignment,
             VerticalAlignment = style.VerticalAlignment,
             WrapText = style.WrapText,
+            ShrinkToFit = style.ShrinkToFit,
             DoubleUnderline = style.DoubleUnderline,
             IndentLevel = style.IndentLevel,
             TextRotation = style.TextRotation,
@@ -1367,6 +1369,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             HorizontalAlignment = safeStyle.HorizontalAlignment,
             VerticalAlignment = safeStyle.VerticalAlignment,
             WrapText = safeStyle.WrapText,
+            ShrinkToFit = safeStyle.ShrinkToFit,
             DoubleUnderline = safeStyle.DoubleUnderline,
             IndentLevel = safeStyle.IndentLevel,
             TextRotation = safeStyle.TextRotation,
@@ -1840,6 +1843,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public HorizontalAlignment HorizontalAlignment { get; set; } = HorizontalAlignment.General;
         public VerticalAlignment VerticalAlignment { get; set; } = VerticalAlignment.Bottom;
         public bool WrapText { get; set; }
+        public bool ShrinkToFit { get; set; }
         public bool DoubleUnderline { get; set; }
         public int IndentLevel { get; set; }
         public int TextRotation { get; set; }
