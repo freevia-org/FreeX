@@ -90,13 +90,6 @@ public partial class MainWindow : Window
     private InternalClipboard? _internalClipboard;
     private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
     private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
-    private sealed class FailedWorkbookCommand(string message) : IWorkbookCommand
-    {
-        public string Label => "Unavailable";
-        public CommandOutcome Apply(ICommandContext ctx) => new(false, message);
-        public void Revert(ICommandContext ctx) { }
-    }
-
     public MainWindow(
         ILogger<MainWindow> logger,
         IViewportService viewportService,
