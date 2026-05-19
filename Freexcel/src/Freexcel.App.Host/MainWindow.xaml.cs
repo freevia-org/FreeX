@@ -7717,7 +7717,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableChartLayout(
                 caption,
                 "Insert or select a chart before changing point data-label formatting.",
-                chart => GetChartSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
+                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
                 "Add chart data points before changing point data-label formatting.",
                 chart =>
                 {
@@ -7988,7 +7988,7 @@ public partial class MainWindow : Window
                 "Secondary Axis",
                 "Insert or select a chart before changing secondary axes.",
                 chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) &&
-                         (chart.ShowSecondaryAxis || GetChartSeriesCount(chart) >= 2),
+                         (chart.ShowSecondaryAxis || ChartOptionCycler.GetSeriesCount(chart) >= 2),
                 "Secondary value axes require a supported chart with at least two data series.",
                 chart => new ChartLayoutOptions(
                     ShowSecondaryAxis: !chart.ShowSecondaryAxis,
@@ -8298,7 +8298,7 @@ public partial class MainWindow : Window
                 ? new ChartLayoutOptions(XAxisLogScale: enableLog)
                 : new ChartLayoutOptions(YAxisLogScale: enableLog);
 
-            if (enableLog && TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            if (enableLog && ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
             {
                 var positiveMinimum = minimum > 0 ? minimum : 1;
                 var positiveMaximum = maximum > positiveMinimum ? maximum : positiveMinimum * 10;
@@ -8347,7 +8347,7 @@ public partial class MainWindow : Window
                     ? new ChartLayoutOptions(ClearXAxisBounds: true)
                     : new ChartLayoutOptions(ClearYAxisBounds: true);
             }
-            else if (TryGetChartAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
+            else if (ChartOptionCycler.TryGetAxisBounds(sheet, chart, useXAxis, out var minimum, out var maximum))
             {
                 var majorUnit = Math.Max(double.Epsilon, (maximum - minimum) / 5);
                 var minorUnit = Math.Max(double.Epsilon, majorUnit / 2);
@@ -8374,64 +8374,16 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private static bool TryGetChartAxisBounds(Sheet sheet, ChartModel chart, bool useXAxis, out double minimum, out double maximum)
-    {
-        minimum = 0;
-        maximum = 0;
-        var values = new List<double>();
-        var startRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        if (startRow > chart.DataRange.End.Row)
-            return false;
-
-        if (useXAxis)
-        {
-            var xColumns = ChartTypeSupport.GetXAxisValueColumns(chart);
-            foreach (var xColumn in xColumns)
-            {
-                for (var row = startRow; row <= chart.DataRange.End.Row; row++)
-                {
-                    if (sheet.GetValue(row, xColumn) is NumberValue number)
-                        values.Add(number.Value);
-                }
-            }
-        }
-        else
-        {
-            var yColumns = ChartTypeSupport.GetYAxisValueColumns(chart);
-            for (var row = startRow; row <= chart.DataRange.End.Row; row++)
-            {
-                foreach (var col in yColumns)
-                {
-                    if (sheet.GetValue(row, col) is NumberValue number)
-                        values.Add(number.Value);
-                }
-            }
-        }
-
-        if (values.Count == 0)
-            return false;
-
-        minimum = values.Min();
-        maximum = values.Max();
-        if (Math.Abs(maximum - minimum) < double.Epsilon)
-        {
-            minimum -= 1;
-            maximum += 1;
-        }
-
-        return true;
-    }
-
     private void ChartSecondaryAxisSeriesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Secondary Axis Series",
                 "Insert or select a chart before changing secondary-axis series.",
-                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && GetChartSeriesCount(chart) >= 2,
+                chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && ChartOptionCycler.GetSeriesCount(chart) >= 2,
                 "Secondary value axes require a supported chart with at least two data series.",
                 chart =>
                 {
-                    var next = GetNextSecondaryAxisSeries(chart, GetChartSeriesCount(chart));
+                    var next = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
                     return new ChartLayoutOptions(
                         ShowSecondaryAxis: next.ShowSecondaryAxis,
                         SecondaryAxisSeriesIndexes: next.SeriesIndexes);
@@ -8439,38 +8391,6 @@ public partial class MainWindow : Window
             return;
 
         UpdateViewport();
-    }
-
-    private static int GetChartSeriesCount(ChartModel chart)
-    {
-        return ChartTypeSupport.GetDataSeriesCount(chart);
-    }
-
-    private static (bool ShowSecondaryAxis, int[] SeriesIndexes) GetNextSecondaryAxisSeries(ChartModel chart, int seriesCount)
-    {
-        if (!chart.ShowSecondaryAxis)
-            return (true, [1]);
-
-        if (chart.SecondaryAxisSeriesIndexes.Count == 0)
-            return (false, []);
-
-        var current = chart.SecondaryAxisSeriesIndexes.Min();
-        if (current + 1 < seriesCount)
-            return (true, [current + 1]);
-
-        return (true, []);
-    }
-
-    private static int[] GetNextComboLineSeries(ChartModel chart, int seriesCount)
-    {
-        if (!chart.UseComboLineForSecondarySeries || chart.ComboLineSeriesIndexes.Count == 0)
-            return [1];
-
-        var current = chart.ComboLineSeriesIndexes.Min();
-        if (current + 1 < seriesCount)
-            return [current + 1];
-
-        return [];
     }
 
     private void ChartComboBtn_Click(object sender, RoutedEventArgs e)
@@ -8498,7 +8418,7 @@ public partial class MainWindow : Window
                 "Combo line overlays require a supported chart with at least two data series.",
                 chart =>
                 {
-                    var nextIndexes = GetNextComboLineSeries(chart, GetChartSeriesCount(chart));
+                    var nextIndexes = ChartOptionCycler.GetNextComboLineSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
                     return new ChartLayoutOptions(
                         UseComboLineForSecondarySeries: nextIndexes.Length > 0,
                         ComboLineSeriesIndexes: nextIndexes);
@@ -8586,7 +8506,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableChartLayout(
                 caption,
                 "Insert or select a chart before changing series formatting.",
-                chart => GetChartSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
+                chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
                 unsupportedMessage ?? "Add data series before changing series formatting.",
                 chart =>
                 {
