@@ -549,7 +549,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             if (string.IsNullOrWhiteSpace(viewDto?.Name)) continue;
             workbook.CustomViews.Add(new WorkbookCustomView(
                 viewDto.Name,
-                (viewDto.Sheets ?? []).Select(ToWorksheetCustomViewState).ToList()));
+                (viewDto.Sheets ?? []).Select(ToWorksheetCustomViewState).ToList(),
+                string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id));
         }
 
         foreach (var watchDto in dto.WatchedCells ?? [])
@@ -642,6 +643,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             CustomViews = workbook.CustomViews.Select(view => new CustomViewDto
             {
                 Name = view.Name,
+                Id = view.Id,
                 Sheets = view.Sheets.Select(ToCustomViewSheetDto).ToList()
             }).ToList(),
             WatchedCells = workbook.WatchedCells.Select(address =>
@@ -1714,6 +1716,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
     private class CustomViewDto
     {
         public string Name { get; set; } = "";
+        public string? Id { get; set; }
         public List<CustomViewSheetDto> Sheets { get; set; } = [];
     }
 
