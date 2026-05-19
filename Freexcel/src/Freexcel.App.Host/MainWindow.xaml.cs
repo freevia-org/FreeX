@@ -5860,11 +5860,17 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.SortDescending:
                 SortDescButton_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.CustomSort:
+                SortCustomMenuItem_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.Filter:
                 FilterButton_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ClearFilter:
                 ClearFilterButton_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.ReapplyFilter:
+                FilterReapplyMenuItem_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.PickFromDropDown:
                 OpenActiveDropdown();
