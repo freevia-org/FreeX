@@ -10596,25 +10596,24 @@ public partial class MainWindow : Window
 
         var rowBreaks = sheet.RowPageBreaks.ToList();
         var columnBreaks = sheet.ColumnPageBreaks.ToList();
-        var trimmed = input.Trim();
-        if (trimmed.Equals("clear", StringComparison.OrdinalIgnoreCase))
+        if (!PageLayoutInputParser.TryParsePageBreakInput(input, out var pageBreak))
+        {
+            MessageBox.Show("Enter row N, col N, or clear.", "Page Breaks", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (pageBreak.Kind == PageBreakInputKind.Clear)
         {
             rowBreaks.Clear();
             columnBreaks.Clear();
         }
-        else if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak))
+        else if (pageBreak is { Kind: PageBreakInputKind.Row, Row: { } rowBreak })
         {
             rowBreaks.Add(rowBreak);
         }
-        else if (PageLayoutInputParser.TryParseBreakInput(trimmed, "col", out var columnBreak) ||
-                 PageLayoutInputParser.TryParseBreakInput(trimmed, "column", out columnBreak))
+        else if (pageBreak is { Kind: PageBreakInputKind.Column, Column: { } columnBreak })
         {
             columnBreaks.Add(columnBreak);
-        }
-        else
-        {
-            MessageBox.Show("Enter row N, col N, or clear.", "Page Breaks", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
         }
 
         TryExecuteGroupedSheetCommand("Page Breaks", sheetId => new SetPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
