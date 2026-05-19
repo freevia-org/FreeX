@@ -1782,7 +1782,14 @@
                                 <Button Content="Crop"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
                                         local:RibbonTooltip.Title="Crop Picture"
                                         local:RibbonTooltip.KeyTip="CR"
-                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge."/>
+                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
+                                            <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                             </UniformGrid>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Objects" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -1865,7 +1872,14 @@
                                 <Button Content="Crop" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PictureCropBtn_Click"
                                         local:RibbonTooltip.Title="Crop Picture"
                                         local:RibbonTooltip.KeyTip="C"
-                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge."/>
+                                        local:RibbonTooltip.Description="Crop the selected or most recent picture by percentage from each edge.">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Crop..." local:RibbonTooltip.KeyTip="C" Click="PictureCropDialogMenuItem_Click"/>
+                                            <MenuItem Header="Reset Crop" local:RibbonTooltip.KeyTip="R" Click="PictureResetCropMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
                                 <Button Content="Gradient" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectGradientBtn_Click"
                                         local:RibbonTooltip.Title="Shape Gradient"
                                         local:RibbonTooltip.KeyTip="G"
