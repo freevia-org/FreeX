@@ -66,7 +66,7 @@ public static class AccessibilityCheckerService
                     sheet.Id,
                     sheet.Name,
                     $"{row}:{row}",
-                    "Hidden row contains cells, comments, hyperlinks, or anchored objects."));
+                    "Hidden row contains cells, comments, hyperlinks, charts, or anchored objects."));
             }
 
             foreach (var col in GetEffectivelyHiddenColumns(sheet).Where(col => ColumnContainsContentOrObjects(sheet, col)))
@@ -77,7 +77,7 @@ public static class AccessibilityCheckerService
                     sheet.Id,
                     sheet.Name,
                     $"{columnName}:{columnName}",
-                    "Hidden column contains cells, comments, hyperlinks, or anchored objects."));
+                    "Hidden column contains cells, comments, hyperlinks, charts, or anchored objects."));
             }
 
             foreach (var (address, target) in sheet.Hyperlinks.OrderBy(link => link.Key.Row).ThenBy(link => link.Key.Col))
@@ -160,6 +160,7 @@ public static class AccessibilityCheckerService
         sheet.Pictures.Any(picture => picture.Anchor.Row == row) ||
         sheet.DrawingShapes.Any(shape => shape.Anchor.Row == row) ||
         sheet.TextBoxes.Any(textBox => textBox.Anchor.Row == row) ||
+        sheet.Charts.Any(chart => RangeSpansRow(chart.DataRange, row)) ||
         sheet.Sparklines.Any(sparkline => sparkline.Location.Row == row);
 
     private static bool ColumnContainsContentOrObjects(Sheet sheet, uint col) =>
@@ -169,7 +170,14 @@ public static class AccessibilityCheckerService
         sheet.Pictures.Any(picture => picture.Anchor.Col == col) ||
         sheet.DrawingShapes.Any(shape => shape.Anchor.Col == col) ||
         sheet.TextBoxes.Any(textBox => textBox.Anchor.Col == col) ||
+        sheet.Charts.Any(chart => RangeSpansColumn(chart.DataRange, col)) ||
         sheet.Sparklines.Any(sparkline => sparkline.Location.Col == col);
+
+    private static bool RangeSpansRow(GridRange range, uint row) =>
+        range.Start.Row <= row && row <= range.End.Row;
+
+    private static bool RangeSpansColumn(GridRange range, uint col) =>
+        range.Start.Col <= col && col <= range.End.Col;
 
     private static bool IsNonBlank(Cell cell) =>
         cell.HasFormula ||
