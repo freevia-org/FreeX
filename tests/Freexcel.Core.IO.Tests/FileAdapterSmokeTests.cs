@@ -7994,11 +7994,66 @@ public class FileAdapterSmokeTests
         tableStyles.Elements(workbookNs + "tableStyle")
             .Any(element => element.Attribute("name")?.Value == "FreexcelNativeTableStyle")
             .Should().BeTrue();
+        loaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreexcelNativePivotStyle" &&
+            style.AppliesToPivotTables &&
+            !style.AppliesToTables &&
+            style.Elements.Any(element =>
+                element.Type == "wholeTable" &&
+                element.DifferentialFormatId == 0));
+        tableStyles.Elements(workbookNs + "tableStyle")
+            .Any(element => element.Attribute("name")?.Value == "FreexcelNativePivotStyle" &&
+                            element.Attribute("pivot")?.Value == "1")
+            .Should().BeTrue();
 
         var extensionList = stylesXml.Root!.Element(workbookNs + "extLst");
         extensionList.Should().NotBeNull();
         extensionList!.ToString().Should().Contain("{FFEEDDCC-7788-6655-4433-22110099AABB}");
         extensionList.ToString().Should().Contain("FreexcelNativeStylesExtension");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_WritesAuthoredPivotTableStyleMetadata()
+    {
+        var workbook = new Workbook("AuthoredPivotStyleMetadataTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("pivot style"));
+        var style = new PivotTableStyleModel
+        {
+            Name = "FreexcelAuthoredPivotStyle",
+            AppliesToPivotTables = true,
+            AppliesToTables = false
+        };
+        style.Elements.Add(new PivotTableStyleElementModel("wholeTable", 0));
+        style.Elements.Add(new PivotTableStyleElementModel("firstRowStripe", 1, 1));
+        workbook.PivotTableStyles.Add(style);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var tableStyle = stylesXml.Root!
+                .Element(workbookNs + "tableStyles")!
+                .Elements(workbookNs + "tableStyle")
+                .Where(element => element.Attribute("name")?.Value == "FreexcelAuthoredPivotStyle")
+                .Should().ContainSingle()
+                .Subject;
+            tableStyle.Attribute("pivot")!.Value.Should().Be("1");
+            tableStyle.Attribute("table")!.Value.Should().Be("0");
+            tableStyle.Attribute("count")!.Value.Should().Be("2");
+            tableStyle.ToString().Should().Contain("type=\"firstRowStripe\"");
+            tableStyle.ToString().Should().Contain("size=\"1\"");
+        }
+
+        saved.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(saved);
+        loaded.PivotTableStyles.Should().ContainSingle(style =>
+            style.Name == "FreexcelAuthoredPivotStyle" &&
+            style.Elements.Count == 2);
     }
 
     [Fact]
@@ -10485,6 +10540,16 @@ public class FileAdapterSmokeTests
                 new XAttribute("name", "FreexcelNativeTableStyle"),
                 new XAttribute("pivot", "0"),
                 new XAttribute("table", "1"),
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "wholeTable"),
+                    new XAttribute("dxfId", "0"))));
+            tableStyles.Add(new XElement(
+                workbookNs + "tableStyle",
+                new XAttribute("name", "FreexcelNativePivotStyle"),
+                new XAttribute("pivot", "1"),
+                new XAttribute("table", "0"),
                 new XAttribute("count", "1"),
                 new XElement(
                     workbookNs + "tableStyleElement",

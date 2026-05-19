@@ -561,6 +561,12 @@ public partial class MainWindow : Window
                 if (CloneRibbonMenuItem(child) is { } childItem)
                     item.Items.Add(childItem);
             }
+
+            item.SubmenuOpened += (_, _) =>
+            {
+                contextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, contextMenu));
+                SynchronizeClonedMenuItems(contextMenu.Items, item.Items);
+            };
         }
         else
         {
@@ -582,6 +588,8 @@ public partial class MainWindow : Window
         {
             Header = sourceItem.Header,
             IsEnabled = sourceItem.IsEnabled,
+            IsCheckable = sourceItem.IsCheckable,
+            IsChecked = sourceItem.IsChecked,
             InputGestureText = sourceItem.InputGestureText
         };
 
@@ -595,6 +603,12 @@ public partial class MainWindow : Window
                 item.Items.Add(childItem);
         }
 
+        item.SubmenuOpened += (_, _) =>
+        {
+            sourceItem.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, sourceItem));
+            SynchronizeMenuItemState(sourceItem, item);
+        };
+
         item.Click += (_, args) =>
         {
             if (args.OriginalSource is MenuItem original && original.Items.Count > 0)
@@ -604,6 +618,43 @@ public partial class MainWindow : Window
         };
 
         return item;
+    }
+
+    private static void SynchronizeClonedMenuItems(ItemCollection sourceItems, ItemCollection clonedItems)
+    {
+        var clonedIndex = 0;
+        foreach (var source in sourceItems)
+        {
+            if (source is Separator)
+            {
+                clonedIndex++;
+                continue;
+            }
+
+            if (source is not MenuItem sourceItem)
+                continue;
+
+            while (clonedIndex < clonedItems.Count && clonedItems[clonedIndex] is not MenuItem)
+                clonedIndex++;
+
+            if (clonedIndex >= clonedItems.Count)
+                break;
+
+            if (clonedItems[clonedIndex] is MenuItem clonedItem)
+                SynchronizeMenuItemState(sourceItem, clonedItem);
+
+            clonedIndex++;
+        }
+    }
+
+    private static void SynchronizeMenuItemState(MenuItem sourceItem, MenuItem clonedItem)
+    {
+        clonedItem.IsEnabled = sourceItem.IsEnabled;
+        clonedItem.IsCheckable = sourceItem.IsCheckable;
+        clonedItem.IsChecked = sourceItem.IsChecked;
+        clonedItem.InputGestureText = sourceItem.InputGestureText;
+
+        SynchronizeClonedMenuItems(sourceItem.Items, clonedItem.Items);
     }
 
     private static void InvokeRibbonButton(ButtonBase button)
