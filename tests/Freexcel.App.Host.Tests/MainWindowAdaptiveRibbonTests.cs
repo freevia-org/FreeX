@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Freexcel.Core.Calc;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
@@ -118,6 +119,42 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void DenseRibbonCommandColumns_UseShortRowButtons()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1465);
+
+                harness.DenseColumnButtonHeights.Should().OnlyContain(
+                    height => height <= 24,
+                    $"{tab} dense ribbon columns should use Excel-like short row commands instead of tall large-button footprints");
+            }
+        });
+    }
+
+    [Fact]
+    public void RibbonScrollViewers_HideHorizontalScrollBarsWithoutDisablingFallbackScroll()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 640);
+
+                harness.RibbonHorizontalScrollBarModes.Should().OnlyContain(
+                    mode => mode == ScrollBarVisibility.Hidden,
+                    $"{tab} should keep the ribbon face clean while preserving hidden horizontal fallback scrolling");
+            }
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -211,6 +248,24 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Select(item => (int)Math.Round(item.TransformToAncestor(tabs).Transform(new Point(0, 0)).Y))
                     .Distinct()
                     .OrderBy(row => row)
+                    .ToList()
+                : [];
+
+        public IReadOnlyList<double> DenseColumnButtonHeights =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<UniformGrid>()
+                .Where(grid => grid.Rows == 3 && grid.Children.OfType<Button>().Count() > 3)
+                .SelectMany(grid => grid.Children.OfType<Button>())
+                .Where(IsEffectivelyVisible)
+                .Select(button => button.Height)
+                .ToList();
+
+        public IReadOnlyList<ScrollBarVisibility> RibbonHorizontalScrollBarModes =>
+            _window.FindName("RibbonTabs") is TabControl tabs
+                ? EnumerateSelfAndVisualDescendants(tabs)
+                    .OfType<ScrollViewer>()
+                    .Where(IsEffectivelyVisible)
+                    .Select(scrollViewer => scrollViewer.HorizontalScrollBarVisibility)
                     .ToList()
                 : [];
 
