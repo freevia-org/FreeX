@@ -3348,6 +3348,7 @@ public partial class MainWindow : Window
             Owner = this,
             Title = "AutoFilter"
         };
+        PositionAutoFilterDialogAtActiveCell(dialog, activeCell);
 
         if (dialog.ShowDialog() != true)
             return;
@@ -3375,6 +3376,17 @@ public partial class MainWindow : Window
                 currentRange => new FilterCommand(_currentSheetId, currentRange, plan.FilterColumnOffset, dialog.Result.SelectedValues)))
             return;
         UpdateViewport();
+    }
+
+    private void PositionAutoFilterDialogAtActiveCell(Window dialog, CellAddress activeCell)
+    {
+        if (TryGetCellOverlayRect(activeCell) is not { } rect)
+            return;
+
+        var screenPoint = SheetGrid.PointToScreen(new Point(rect.Left, rect.Bottom));
+        dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+        dialog.Left = screenPoint.X;
+        dialog.Top = screenPoint.Y;
     }
 
     private Rect? TryGetCellOverlayRect(CellAddress addr)

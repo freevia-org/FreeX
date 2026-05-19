@@ -204,6 +204,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
+        source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
+        source.Should().Contain("TryGetCellOverlayRect(activeCell)");
+        source.Should().Contain("SheetGrid.PointToScreen");
+        source.Should().Contain("WindowStartupLocation.Manual");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
