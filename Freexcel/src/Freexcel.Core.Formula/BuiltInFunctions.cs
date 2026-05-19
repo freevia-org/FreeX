@@ -2826,20 +2826,20 @@ public static class BuiltInFunctions
         if (returnType == 21)
             return new NumberValue(System.Globalization.ISOWeek.GetWeekOfYear(dt));
 
-        DayOfWeek firstDay = returnType switch
+        int firstDay = returnType switch
         {
-            1 or 17 => DayOfWeek.Sunday,
-            2 or 11 => DayOfWeek.Monday,
-            12 => DayOfWeek.Tuesday,
-            13 => DayOfWeek.Wednesday,
-            14 => DayOfWeek.Thursday,
-            15 => DayOfWeek.Friday,
-            16 => DayOfWeek.Saturday,
-            _ => (DayOfWeek)(-1)
+            1 or 17 => 6,
+            2 or 11 => 0,
+            12 => 1,
+            13 => 2,
+            14 => 3,
+            15 => 4,
+            16 => 5,
+            _ => -1
         };
-        if ((int)firstDay < 0) return ErrorValue.Num;
+        if (firstDay < 0) return ErrorValue.Num;
         var jan1 = new DateTime(dt.Year, 1, 1);
-        int jan1Dow = ((int)jan1.DayOfWeek - (int)firstDay + 7) % 7;
+        int jan1Dow = (ExcelDowToMonIndex(jan1) - firstDay + 7) % 7;
         int dayOfYear = (dt - jan1).Days;
         return new NumberValue((dayOfYear + jan1Dow) / 7 + 1);
     }
