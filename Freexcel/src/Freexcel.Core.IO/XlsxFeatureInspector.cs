@@ -213,9 +213,6 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
             normalized.EndsWith(".xml", StringComparison.Ordinal))
         {
-            if (WorksheetHasUnsupportedConditionalFormats(entry))
-                yield return Feature(XlsxUnsupportedFeatureKind.ConditionalFormats);
-
             yield break;
         }
 
@@ -240,45 +237,6 @@ public static class XlsxFeatureInspector
             using var stream = entry.Open();
             var chartXml = XDocument.Load(stream);
             return XlsxChartPartReader.TryReadSupportedChart(chartXml, SheetId.New(), out _);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool WorksheetHasUnsupportedConditionalFormats(ZipArchiveEntry entry)
-    {
-        try
-        {
-            using var stream = entry.Open();
-            var worksheetXml = XDocument.Load(stream);
-            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-            return worksheetXml
-                .Descendants(worksheetNs + "cfRule")
-                .Any(rule =>
-                {
-                    var type = rule.Attribute("type")?.Value;
-                    return !string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "aboveAverage", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "top10", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "uniqueValues", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "duplicateValues", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "containsText", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "notContainsText", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "beginsWith", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "endsWith", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "timePeriod", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "containsBlanks", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "notContainsBlanks", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "containsErrors", StringComparison.OrdinalIgnoreCase) &&
-                           !string.Equals(type, "notContainsErrors", StringComparison.OrdinalIgnoreCase);
-                });
         }
         catch
         {

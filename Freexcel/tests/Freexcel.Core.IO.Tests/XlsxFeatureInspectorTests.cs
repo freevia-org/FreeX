@@ -334,7 +334,7 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
-    public void Inspect_WorksheetWithUnsupportedConditionalFormatting_DetectsConditionalFormats()
+    public void Inspect_WorksheetWithRetainedUnknownConditionalFormatting_DoesNotWarn()
     {
         using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
             <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -348,9 +348,7 @@ public class XlsxFeatureInspectorTests
 
         var report = XlsxFeatureInspector.Inspect(package);
 
-        report.Features.Should().Contain(f =>
-            f.Kind == XlsxUnsupportedFeatureKind.ConditionalFormats &&
-            f.PackagePart == "xl/worksheets/sheet1.xml");
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.ConditionalFormats);
     }
 
     [Fact]
