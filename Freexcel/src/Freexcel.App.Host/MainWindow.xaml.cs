@@ -5918,7 +5918,7 @@ public partial class MainWindow : Window
 
     private void ExecuteFillCells(FillCellsDirection direction)
     {
-        if (SheetGrid.SelectedRange is not { } range || !CanFill(range, direction))
+        if (SheetGrid.SelectedRange is not { } range || !FillSeriesPlanner.CanFill(range, direction))
             return;
 
         var title = direction switch
@@ -5940,11 +5940,6 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private static bool CanFill(GridRange range, FillCellsDirection direction) =>
-        direction is FillCellsDirection.Down or FillCellsDirection.Up
-            ? range.RowCount >= 2
-            : range.ColCount >= 2;
-
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         // Basic: fill a linear series starting from selected cell
@@ -5960,7 +5955,10 @@ public partial class MainWindow : Window
                 range,
                 currentRange =>
                 {
-                    var edits = BuildFillSeriesEdits(currentRange, step);
+                    var currentSheet = _workbook.GetSheet(_currentSheetId);
+                    List<(CellAddress Address, Cell NewCell)> edits = currentSheet is null
+                        ? []
+                        : FillSeriesPlanner.BuildLinearSeriesEdits(currentSheet, currentRange, step);
                     var targetSheetIds = CurrentGroupedEditSheetIds();
                     return targetSheetIds.Count > 1
                         ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
@@ -5971,33 +5969,6 @@ public partial class MainWindow : Window
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
-    }
-
-    private List<(CellAddress Address, Cell NewCell)> BuildFillSeriesEdits(GridRange range, double step)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var startValue = sheet?.GetValue(range.Start.Row, range.Start.Col) as NumberValue;
-        if (startValue is null)
-            return [];
-
-        var edits = new List<(CellAddress, Cell)>();
-        var value = startValue.Value;
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            for (uint c = range.Start.Col; c <= range.End.Col; c++)
-            {
-                if (r == range.Start.Row && c == range.Start.Col)
-                {
-                    value += step;
-                    continue;
-                }
-
-                edits.Add((new CellAddress(_currentSheetId, r, c), Cell.FromValue(new NumberValue(value))));
-                value += step;
-            }
-        }
-
-        return edits;
     }
 
     private void FlashFillMenuItem_Click(object sender, RoutedEventArgs e) => TryFlashFill();
