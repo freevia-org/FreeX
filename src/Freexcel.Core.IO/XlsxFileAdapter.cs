@@ -4641,7 +4641,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XName[] retainedChildNames =
         [
             workbookNs + "customSheetViews",
-            workbookNs + "scenarios"
+            workbookNs + "scenarios",
+            workbookNs + "ignoredErrors"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
