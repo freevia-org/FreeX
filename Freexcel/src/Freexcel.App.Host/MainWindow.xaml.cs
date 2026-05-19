@@ -9011,12 +9011,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        GridRange dataRange;
-        try
-        {
-            dataRange = GridRange.Parse(dialog.Result.SourceRangeText, _currentSheetId);
-        }
-        catch
+        if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, out var dataRange))
         {
             MessageBox.Show("Enter a valid chart data range.", "Select Data Source", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
