@@ -23,6 +23,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Hide Columns",
             "Unhide Columns",
             "New Note",
+            "Delete Note",
             "Hyperlink...",
             "Format Cells...",
             "Clear Formats",
