@@ -101,6 +101,7 @@ public sealed class ChartModel
     public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
     public bool ShowDataLabelsOverMaximum { get; set; }
     public bool AutoTitleDeleted { get; set; }
+    public bool ShowDataInHiddenRowsAndColumns { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
