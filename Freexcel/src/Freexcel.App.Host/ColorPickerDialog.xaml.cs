@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
@@ -19,7 +18,7 @@ public partial class ColorPickerDialog : Window
         SwatchList.ItemsSource = BuildDefaultSwatches();
 
         if (initialColor is { } color)
-            CustomColorTextBox.Text = FormatHexColor(color);
+            CustomColorTextBox.Text = ColorInputParser.FormatHexColor(color);
     }
 
     public CellColor? SelectedColor { get; private set; }
@@ -49,27 +48,7 @@ public partial class ColorPickerDialog : Window
 
     public static bool TryParseColorText(string text, out CellColor color)
     {
-        color = default;
-        var normalized = text.Trim();
-        if (ColorInputParser.TryParseHexColor(normalized, out var hexColor) && hexColor is { } parsedHex)
-        {
-            color = parsedHex;
-            return true;
-        }
-
-        var parts = normalized.Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 3)
-            return false;
-
-        if (!TryParseByte(parts[0], out var r) ||
-            !TryParseByte(parts[1], out var g) ||
-            !TryParseByte(parts[2], out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
-        return true;
+        return ColorInputParser.TryParseColorText(text, out color);
     }
 
     private void SwatchList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -115,9 +94,4 @@ public partial class ColorPickerDialog : Window
         return new ColorPickerSwatch(hex, color);
     }
 
-    private static bool TryParseByte(string text, out byte value) =>
-        byte.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
-
-    private static string FormatHexColor(CellColor color) =>
-        $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 }
