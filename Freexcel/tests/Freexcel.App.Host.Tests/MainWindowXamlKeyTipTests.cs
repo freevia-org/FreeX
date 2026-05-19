@@ -184,7 +184,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "SpellCheckBtn_Click");
 
         spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("known misspellings");
-        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("active sheet");
+        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("text cells");
+        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("replace all");
         spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("proofing engine");
     }
 

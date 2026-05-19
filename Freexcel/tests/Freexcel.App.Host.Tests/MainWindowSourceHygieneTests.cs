@@ -237,4 +237,18 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");
     }
+
+    [Fact]
+    public void SpellCheckWorkflow_RoutesReplaceAllAndIgnoreThroughKnownCorrectionsPlan()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId)");
+        source.Should().Contain("replace all");
+        source.Should().Contain("ignore");
+        source.Should().Contain("BuildSpellCheckEdits");
+        source.Should().Contain("TryExecuteSpellCheckEdits");
+        source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
+        source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
+    }
 }
