@@ -1,3 +1,4 @@
+using System.Globalization;
 using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -59,6 +60,24 @@ public sealed class ExcelParityDateSerialTests
     }
 
     [Theory]
+    [InlineData(1900, 1, 1, 1)]
+    [InlineData(1900, 2, 28, 59)]
+    [InlineData(1900, 2, 29, 60)]
+    [InlineData(1900, 3, 1, 61)]
+    [InlineData(1999, 12, 31, 36525)]
+    [InlineData(2024, 2, 29, 45351)]
+    public void DateAndDateParts_RoundTripAcrossExcelSerialBoundaries(int year, int month, int day, double serial)
+    {
+        var sheet = Sheet();
+        var dateExpression = $"DATE({year},{month},{day})";
+
+        _eval.Evaluate($"={dateExpression}", sheet).Should().Be(new NumberValue(serial));
+        _eval.Evaluate($"=YEAR({dateExpression})", sheet).Should().Be(new NumberValue(year));
+        _eval.Evaluate($"=MONTH({dateExpression})", sheet).Should().Be(new NumberValue(month));
+        _eval.Evaluate($"=DAY({dateExpression})", sheet).Should().Be(new NumberValue(day));
+    }
+
+    [Theory]
     [InlineData("=YEAR(-1)")]
     [InlineData("=MONTH(-1)")]
     [InlineData("=DAY(-1)")]
@@ -107,6 +126,30 @@ public sealed class ExcelParityDateSerialTests
         var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
 
         result.Value.Should().BeApproximately(expected, 1e-12);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0, 0, 0, 0)]
+    [InlineData(12, 0, 0, 12, 0, 0)]
+    [InlineData(23, 59, 59, 23, 59, 59)]
+    [InlineData(25, 61, 61, 2, 2, 1)]
+    [InlineData(1.9, 2.9, 3.9, 1, 2, 3)]
+    public void TimeAndTimeParts_RoundTripTruncatedWrappedComponents(
+        double hour,
+        double minute,
+        double second,
+        double expectedHour,
+        double expectedMinute,
+        double expectedSecond)
+    {
+        var sheet = Sheet();
+        var timeExpression = string.Create(
+            CultureInfo.InvariantCulture,
+            $"TIME({hour},{minute},{second})");
+
+        _eval.Evaluate($"=HOUR({timeExpression})", sheet).Should().Be(new NumberValue(expectedHour));
+        _eval.Evaluate($"=MINUTE({timeExpression})", sheet).Should().Be(new NumberValue(expectedMinute));
+        _eval.Evaluate($"=SECOND({timeExpression})", sheet).Should().Be(new NumberValue(expectedSecond));
     }
 
     [Theory]
