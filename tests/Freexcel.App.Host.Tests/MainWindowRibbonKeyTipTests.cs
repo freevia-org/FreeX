@@ -122,6 +122,50 @@ public sealed class MainWindowRibbonKeyTipTests
         });
     }
 
+    [Fact]
+    public void FormulasFunctionLibraryDynamicMenu_IsKeyTipRoutable()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.M);
+            harness.HandleKeyTip(Key.L);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Formulas");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("IF").Should().Be("I");
+        });
+    }
+
+    [Fact]
+    public void FormulasUseInFormulaDynamicMenu_IsKeyTipRoutable()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create(workbook =>
+            {
+                var sheet = workbook.Sheets[0];
+                workbook.DefineNamedRange(
+                    "Sales",
+                    new GridRange(
+                        new CellAddress(sheet.Id, 1, 1),
+                        new CellAddress(sheet.Id, 1, 1)));
+            });
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.M);
+            harness.HandleKeyTip(Key.I);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Formulas");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuIsOpen.Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Sales").Should().Be("S");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -196,7 +240,7 @@ public sealed class MainWindowRibbonKeyTipTests
                 ? EnumerateMenuItems(menu).FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
                 : null;
 
-        public static MainWindowHarness Create()
+        public static MainWindowHarness Create(Action<Workbook>? configureWorkbook = null)
         {
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
@@ -216,6 +260,7 @@ public sealed class MainWindowRibbonKeyTipTests
             window.Height = 720;
             window.Show();
             PumpDispatcher();
+            configureWorkbook?.Invoke(workbookRef.Current);
             return new MainWindowHarness(window);
         }
 
