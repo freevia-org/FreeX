@@ -63,13 +63,13 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ColumnWidth);
         commands.Single(command => command.Header == "AutoFit Column Width")
             .Action.Should().Be(WorksheetContextMenuAction.AutoFitColumnWidth);
-        commands.Single(command => command.Header == "Edit Note...")
-            .Action.Should().Be(WorksheetContextMenuAction.EditNote);
-        commands.Single(command => command.Header == "Show Notes")
-            .Action.Should().Be(WorksheetContextMenuAction.ShowNotes);
         commands.Single(command => command.Header == "Clear All")
             .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
         commands.Single(command => command.Header == "Clear Comments")
             .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
+        commands.Single(command => command.Header == "Edit Note...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditNote);
+        commands.Single(command => command.Header == "Show Notes")
+            .Action.Should().Be(WorksheetContextMenuAction.ShowNotes);
     }
 }
