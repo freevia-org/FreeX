@@ -761,6 +761,21 @@
                                                 <MenuItem Header="Top and Thick Bottom Border" local:RibbonTooltip.KeyTip="H" Click="BorderTopAndThickBottomMenuItem_Click"/>
                                                 <MenuItem Header="Top and Double Bottom Border" local:RibbonTooltip.KeyTip="J" Click="BorderTopAndDoubleBottomMenuItem_Click"/>
                                                 <Separator/>
+                                                <MenuItem Header="Line Color" local:RibbonTooltip.KeyTip="C">
+                                                    <MenuItem Header="Black" local:RibbonTooltip.KeyTip="K" Click="BorderLineColorBlackMenuItem_Click"/>
+                                                    <MenuItem Header="Gray" local:RibbonTooltip.KeyTip="G" Click="BorderLineColorGrayMenuItem_Click"/>
+                                                    <MenuItem Header="Accent 1" local:RibbonTooltip.KeyTip="1" Click="BorderLineColorAccent1MenuItem_Click"/>
+                                                    <MenuItem Header="Accent 2" local:RibbonTooltip.KeyTip="2" Click="BorderLineColorAccent2MenuItem_Click"/>
+                                                </MenuItem>
+                                                <MenuItem Header="Line Style" local:RibbonTooltip.KeyTip="S">
+                                                    <MenuItem Header="Thin" local:RibbonTooltip.KeyTip="T" Click="BorderLineStyleThinMenuItem_Click"/>
+                                                    <MenuItem Header="Medium" local:RibbonTooltip.KeyTip="M" Click="BorderLineStyleMediumMenuItem_Click"/>
+                                                    <MenuItem Header="Thick" local:RibbonTooltip.KeyTip="K" Click="BorderLineStyleThickMenuItem_Click"/>
+                                                    <MenuItem Header="Dashed" local:RibbonTooltip.KeyTip="D" Click="BorderLineStyleDashedMenuItem_Click"/>
+                                                    <MenuItem Header="Dotted" local:RibbonTooltip.KeyTip="O" Click="BorderLineStyleDottedMenuItem_Click"/>
+                                                    <MenuItem Header="Double" local:RibbonTooltip.KeyTip="U" Click="BorderLineStyleDoubleMenuItem_Click"/>
+                                                </MenuItem>
+                                                <Separator/>
                                                 <MenuItem Header="More Borders..." local:RibbonTooltip.KeyTip="M" Click="BorderMoreMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
@@ -3582,9 +3597,13 @@
                             local:RibbonTooltip.Title="Local Account"
                             local:RibbonTooltip.KeyTip="AC"
                             local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options."/>
-                    <Button Content="Options" HorizontalAlignment="Stretch"
+                    <Button x:Name="SsOptionsNavBtn"
+                            Content="Options" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsOptionsBtn_Click"
+                            IsTabStop="True"
+                            AutomationProperties.Name="Options"
+                            AutomationProperties.HelpText="Open Freexcel settings and formula error checking options."
                             local:RibbonTooltip.Title="Options"
                             local:RibbonTooltip.KeyTip="T"/>
                 </StackPanel>

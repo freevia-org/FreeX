@@ -287,6 +287,37 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ChartKeyboardShortcuts_UseSeparateEmbeddedAndChartSheetPaths()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case KeyboardCommandShortcut.InsertEmbeddedChart:");
+        source.Should().Contain("InsertEmbeddedChart();");
+        source.Should().Contain("case KeyboardCommandShortcut.InsertChartSheet:");
+        source.Should().Contain("InsertChartSheet();");
+        source.Should().NotContain(
+            "case KeyboardCommandShortcut.InsertEmbeddedChart:\r\n            case KeyboardCommandShortcut.InsertChartSheet:");
+    }
+
+    [Fact]
+    public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
+        source.Should().Contain("OpenActiveDropdown();");
+    }
+
+    [Fact]
+    public void WorksheetContextMenuQuickAnalysis_ReusesCtrlQPath()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.QuickAnalysis:");
+        source.Should().Contain("ShowQuickAnalysisMenu();");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
@@ -299,6 +330,12 @@ public sealed class MainWindowSourceHygieneTests
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
             "Top and Double Bottom Border",
+            "Line Color",
+            "Line Style",
+            "Black",
+            "Accent 1",
+            "Dashed",
+            "Dotted",
             "More Borders..."
         })
             xaml.Should().Contain($"Header=\"{label}\"");
@@ -310,6 +347,10 @@ public sealed class MainWindowSourceHygieneTests
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
             "BorderTopAndDoubleBottomMenuItem_Click",
+            "BorderLineColorBlackMenuItem_Click",
+            "BorderLineColorAccent1MenuItem_Click",
+            "BorderLineStyleDashedMenuItem_Click",
+            "BorderLineStyleDottedMenuItem_Click",
             "BorderMoreMenuItem_Click"
         })
         {
@@ -320,6 +361,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ApplyRangeBorderPreset");
         source.Should().Contain("new CompositeWorkbookCommand(title, commands)");
         source.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Border)");
+        source.Should().Contain("_borderPickerColor");
+        source.Should().Contain("_borderPickerStyle");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");

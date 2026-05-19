@@ -276,6 +276,9 @@ public sealed class XlsxChartPartReaderTests
               <c:date1904 val="1"/>
               <c:lang val="en-US"/>
               <c:style val="42"/>
+              <c:clrMapOvr>
+                <a:overrideClrMapping bg1="lt1" tx1="dk1" accent1="accent2"/>
+              </c:clrMapOvr>
               <c:protection chartObject="1" data="1" formatting="0" selection="1" userInterface="1"/>
               <c:printSettings>
                 <c:pageMargins l="0.7" r="0.7" t="0.75" b="0.75" header="0.3" footer="0.3"/>
@@ -318,6 +321,15 @@ public sealed class XlsxChartPartReaderTests
         chart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
         chart.Uses1904DateSystem.Should().BeTrue();
         chart.Language.Should().Be("en-US");
+        chart.ColorMapOverride.Should().BeEquivalentTo(new ChartColorMapOverrideModel
+        {
+            OverrideMappings =
+            {
+                ["bg1"] = "lt1",
+                ["tx1"] = "dk1",
+                ["accent1"] = "accent2"
+            }
+        });
         chart.PrintSettings.Should().BeEquivalentTo(new ChartPrintSettingsModel
         {
             PageMargins = new ChartPageMarginsModel
