@@ -31,7 +31,10 @@ public static partial class FormulaReferenceCycler
             if (!TryCycleReference(cellReference, out var cycledCellReference))
                 continue;
 
-            var cycled = $"{qualifier}{cycledCellReference}";
+            var secondCellReference = match.Groups["cell2"].Value;
+            var cycled = string.IsNullOrEmpty(secondCellReference)
+                ? $"{qualifier}{cycledCellReference}"
+                : $"{qualifier}{cycledCellReference}:{CycleMatchingReference(secondCellReference)}";
             result = text.Remove(match.Index, match.Length).Insert(match.Index, cycled);
             selectionStart = match.Index;
             selectionLength = cycled.Length;
@@ -40,6 +43,11 @@ public static partial class FormulaReferenceCycler
 
         return false;
     }
+
+    private static string CycleMatchingReference(string reference) =>
+        TryCycleReference(reference, out var cycled)
+            ? cycled
+            : reference;
 
     private static bool CaretTouchesMatch(int caretIndex, Match match) =>
         caretIndex >= match.Index && caretIndex <= match.Index + match.Length;
@@ -117,7 +125,7 @@ public static partial class FormulaReferenceCycler
         }
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?![A-Za-z0-9_])", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?<qualifier>(?:(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*)(?::(?:'(?:[^']|'')+'|(?:\[[^\]]+\])?[A-Za-z_][A-Za-z0-9_ .]*))?!)?)(?<cell>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6})(?::(?<cell2>\$?[A-Z]{1,3}\$?[1-9][0-9]{0,6}))?(?![A-Za-z0-9_])", RegexOptions.Compiled)]
     private static partial Regex A1ReferenceRegex();
 
     [GeneratedRegex(@"^\$?(?<column>[A-Z]{1,3})\$?(?<row>[1-9][0-9]{0,6})$", RegexOptions.Compiled)]
