@@ -1313,6 +1313,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             Italic = dto.Italic,
             Underline = dto.Underline,
             Strikethrough = dto.Strikethrough,
+            Superscript = dto.Superscript,
+            Subscript = dto.Subscript,
             FontColor = dto.FontColor,
             FillColor = dto.FillColor,
             BorderTop = ToCellBorder(dto.BorderTop),
@@ -1344,6 +1346,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             Italic = style.Italic,
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
+            Superscript = style.Superscript,
+            Subscript = style.Subscript,
             FontColor = style.FontColor,
             FillColor = style.FillColor,
             BorderTop = FromCellBorder(style.BorderTop),
@@ -1369,6 +1373,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             Italic = safeStyle.Italic,
             Underline = safeStyle.Underline,
             Strikethrough = safeStyle.Strikethrough,
+            Superscript = safeStyle.Superscript,
+            Subscript = safeStyle.Subscript,
             FontColor = safeStyle.FontColor,
             FillColor = safeStyle.FillColor,
             BorderTop = FromCellBorder(safeStyle.BorderTop),
@@ -1848,6 +1854,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool Italic { get; set; }
         public bool Underline { get; set; }
         public bool Strikethrough { get; set; }
+        public bool Superscript { get; set; }
+        public bool Subscript { get; set; }
         public CellColor FontColor { get; set; } = CellColor.Black;
         public CellColor? FillColor { get; set; }
         public CellBorderDto? BorderTop { get; set; }
