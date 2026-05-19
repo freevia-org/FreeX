@@ -2057,8 +2057,10 @@ public partial class MainWindow : Window
                 FindGoToMenuItem_Click(sender, e);
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
+                InsertEmbeddedChart();
+                break;
             case KeyboardCommandShortcut.InsertChartSheet:
-                ChartColumnMenuItem_Click(sender, e);
+                InsertChartSheet();
                 break;
             case KeyboardCommandShortcut.AutoSum:
                 InsertAutoSumFormula("SUM");
@@ -4783,6 +4785,40 @@ public partial class MainWindow : Window
 
     private void InsertChartButton_Click(object sender, RoutedEventArgs e)
         => InsertChartOfType(ChartType.Column);
+
+    private void InsertEmbeddedChart() => InsertChartOfType(ChartType.Column);
+
+    private void InsertChartSheet()
+    {
+        if (SheetGrid.SelectedRange is not { } range) return;
+
+        AddChartSheetCommand? command = null;
+        IWorkbookCommand CreateCommand()
+        {
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            command = new AddChartSheetCommand(_currentSheetId, currentRange, ChartType.Column, "Chart");
+            return command;
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, "Insert Chart Sheet");
+            return;
+        }
+
+        _repeatPostAction = null;
+        if (command?.CreatedSheetId is { } createdSheetId)
+        {
+            _currentSheetId = createdSheetId;
+            _groupedSheetIds.Clear();
+            _groupedSheetIds.Add(_currentSheetId);
+            _sheetGroupAnchor = _currentSheetId;
+        }
+
+        RefreshSheetTabs();
+        UpdateViewport();
+    }
 
     private void InsertChartOfType(ChartType type)
     {
