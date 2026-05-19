@@ -70,6 +70,9 @@ public sealed class ChartColorMapOverrideModel
 public sealed class ChartExternalDataModel
 {
     public string? RelationshipId { get; set; }
+    public string? RelationshipType { get; set; }
+    public string? Target { get; set; }
+    public string? TargetMode { get; set; }
     public bool? AutoUpdate { get; set; }
 }
 
