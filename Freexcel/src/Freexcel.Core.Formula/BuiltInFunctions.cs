@@ -1742,7 +1742,7 @@ public static class BuiltInFunctions
         try
         {
             var result = dt.AddMonths(months);
-            return new NumberValue(result.ToOADate());
+            return new NumberValue(DateToSerial(result));
         }
         catch { return ErrorValue.Num; }
     }
@@ -2810,7 +2810,7 @@ public static class BuiltInFunctions
         {
             var target = dt.AddMonths(months + 1);
             var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
-            return new NumberValue(eomonth.ToOADate());
+            return new NumberValue(DateToSerial(eomonth));
         }
         catch { return ErrorValue.Num; }
     }
