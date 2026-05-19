@@ -11274,7 +11274,7 @@ public partial class MainWindow : Window
             : "A1:C10";
         var listInput = PromptForInput("List range:", defaultList);
         if (listInput is null) return;
-        if (!TryParseWorkbookRange(_currentSheetId, listInput, out var listRange))
+        if (!TryParseAdvancedFilterRange(listInput, out var listRange))
         {
             MessageBox.Show("Invalid list range.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -11282,31 +11282,23 @@ public partial class MainWindow : Window
 
         var criteriaInput = PromptForInput("Criteria range:", "E1:F2");
         if (criteriaInput is null) return;
-        if (!TryParseWorkbookRange(_currentSheetId, criteriaInput, out var criteriaRange))
+        if (!TryParseAdvancedFilterRange(criteriaInput, out var criteriaRange))
         {
             MessageBox.Show("Invalid criteria range.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        CellAddress? copyTo = null;
         var copyInput = PromptForInput("Copy to cell (leave blank to filter in place):", "");
         if (copyInput is null) return;
-        if (!string.IsNullOrWhiteSpace(copyInput))
+        if (!AdvancedFilterInputParser.TryParseCopyDestination(copyInput, _currentSheetId, out var copyTo))
         {
-            if (!CellAddress.TryParse(copyInput.Trim(), _currentSheetId, out var destination))
-            {
-                MessageBox.Show("Invalid copy destination.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            copyTo = destination;
+            MessageBox.Show("Invalid copy destination.", "Advanced Filter", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
 
         var uniqueInput = PromptForInput("Unique records only? (yes/no):", "no");
         if (uniqueInput is null) return;
-        var unique = uniqueInput.Trim().Equals("yes", StringComparison.OrdinalIgnoreCase) ||
-                     uniqueInput.Trim().Equals("y", StringComparison.OrdinalIgnoreCase) ||
-                     uniqueInput.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+        var unique = AdvancedFilterInputParser.ParseUniqueOnly(uniqueInput);
 
         var outcome = _commandBus.Execute(
             _workbook.Id,
@@ -11322,6 +11314,14 @@ public partial class MainWindow : Window
             SetActiveCell(destinationCell);
         UpdateViewport();
     }
+
+    private bool TryParseAdvancedFilterRange(string input, out GridRange range)
+        => AdvancedFilterInputParser.TryParseRange(
+            _currentSheetId,
+            input,
+            sheetName => _workbook.Sheets.FirstOrDefault(item =>
+                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id,
+            out range);
 
     private void ConsolidateBtn_Click(object sender, RoutedEventArgs e)
     {
