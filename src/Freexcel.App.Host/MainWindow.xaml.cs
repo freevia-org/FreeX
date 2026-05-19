@@ -1836,23 +1836,22 @@ public partial class MainWindow : Window
         }
         if (KeyboardShortcutMatcher.TryGetSelectionShortcut(e.Key, Keyboard.Modifiers, out var selectionShortcut))
         {
-            if (selectionShortcut == KeyboardSelectionShortcut.SelectAll)
-                SelectAll();
-            else
-                SelectCurrentRegionOnly();
+            switch (selectionShortcut)
+            {
+                case KeyboardSelectionShortcut.SelectAll:
+                    SelectAll();
+                    break;
+                case KeyboardSelectionShortcut.SelectCurrentRegion:
+                    SelectCurrentRegionOnly();
+                    break;
+                case KeyboardSelectionShortcut.SelectWholeColumns:
+                    SelectWholeColumnsFromSelection();
+                    break;
+                case KeyboardSelectionShortcut.SelectWholeRows:
+                    SelectWholeRowsFromSelection();
+                    break;
+            }
 
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            SelectWholeColumnsFromSelection();
-            e.Handled = true;
-            return;
-        }
-        if (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.Shift)
-        {
-            SelectWholeRowsFromSelection();
             e.Handled = true;
             return;
         }
