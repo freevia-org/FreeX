@@ -11218,6 +11218,197 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoad_RoundTripsPivotCustomValueNumberFormatCatalog()
+    {
+        var workbook = new Workbook("AuthoredPivotCustomNumberFormatXlsxTest");
+        workbook.NumberFormatCatalog[165] = "#,##0.0 \"kg\"";
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2"
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1,
+            "Sum of Amount",
+            "sum",
+            NumberFormatId: 165,
+            NumberFormatCode: "#,##0.0 \"kg\""));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            stylesXml.ToString().Should().Contain("numFmtId=\"165\"");
+            stylesXml.ToString().Should().Contain("formatCode=\"#,##0.0 &quot;kg&quot;\"");
+            var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+            pivotXml.ToString().Should().Contain("numFmtId=\"165\"");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        loaded.NumberFormatCatalog.Should().Contain(165, "#,##0.0 \"kg\"");
+        var loadedField = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.DataFields
+            .Should().ContainSingle().Subject;
+        loadedField.NumberFormatId.Should().Be(165);
+        loadedField.NumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoad_RemapPivotCustomNumberFormatWhenCellStylesUseSameId()
+    {
+        var workbook = new Workbook("PivotCustomNumberFormatCollisionXlsxTest");
+        workbook.NumberFormatCatalog[164] = "#,##0.0 \"kg\"";
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var conflictingStyle = CellStyle.Default.Clone();
+        conflictingStyle.NumberFormat = "0.0000";
+        var styledCell = Cell.FromValue(new NumberValue(10));
+        styledCell.StyleId = workbook.RegisterStyle(conflictingStyle);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), styledCell);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2"
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1,
+            "Sum of Amount",
+            "sum",
+            NumberFormatId: 164,
+            NumberFormatCode: "#,##0.0 \"kg\""));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesText = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString();
+            stylesText.Should().Contain("formatCode=\"0.0000\"");
+            stylesText.Should().Contain("formatCode=\"#,##0.0 &quot;kg&quot;\"");
+            var pivotText = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!).ToString();
+            pivotText.Should().NotContain("numFmtId=\"164\"");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedField = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.DataFields
+            .Should().ContainSingle().Subject;
+        loadedField.NumberFormatId.Should().NotBe(164);
+        loadedField.NumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+        loaded.NumberFormatCatalog[loadedField.NumberFormatId!.Value].Should().Be("#,##0.0 \"kg\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_RemapPreservedPivotCustomNumberFormatWhenCellStylesUseSameId()
+    {
+        var source = new Workbook("LoadedPivotCustomNumberFormatCollisionXlsxTest");
+        source.NumberFormatCatalog[164] = "#,##0.0 \"kg\"";
+        var sourceSheet = source.AddSheet("Data");
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new TextValue("Category"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 2), new TextValue("Amount"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 1), new TextValue("A"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 2), new NumberValue(10));
+        source.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2"
+        });
+        source.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        source.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sourceSheet.Id, 1, 1), new CellAddress(sourceSheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sourceSheet.Id, 5, 1), new CellAddress(sourceSheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1,
+            "Sum of Amount",
+            "sum",
+            NumberFormatId: 164,
+            NumberFormatCode: "#,##0.0 \"kg\""));
+        sourceSheet.PivotTables.Add(pivot);
+
+        var adapter = new XlsxFileAdapter();
+        var sourceBytes = new MemoryStream();
+        adapter.Save(source, sourceBytes);
+        sourceBytes.Position = 0;
+
+        var loaded = adapter.Load(sourceBytes);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var conflictingStyle = CellStyle.Default.Clone();
+        conflictingStyle.NumberFormat = "0.0000";
+        var styledCell = Cell.FromValue(new NumberValue(10));
+        styledCell.StyleId = loaded.RegisterStyle(conflictingStyle);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 2), styledCell);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesText = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString();
+            stylesText.Should().Contain("formatCode=\"0.0000\"");
+            stylesText.Should().Contain("formatCode=\"#,##0.0 &quot;kg&quot;\"");
+            var pivotText = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!).ToString();
+            pivotText.Should().NotContain("numFmtId=\"164\"");
+        }
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedField = reloaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.DataFields
+            .Should().ContainSingle().Subject;
+        reloadedField.NumberFormatId.Should().NotBe(164);
+        reloadedField.NumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+        reloaded.NumberFormatCatalog[reloadedField.NumberFormatId!.Value].Should().Be("#,##0.0 \"kg\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_SaveLoad_RoundTripsPivotCacheRefreshFlags()
     {
         var workbook = new Workbook("PivotCacheFlagsRoundTrip");
