@@ -12396,6 +12396,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableAutoFilterNativeMetadata()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableAutoFilterMetadataTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeAutoFilterMetadata: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.NativeAutoFilterAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("auto-filter-native");
+        table.NativeAutoFilterChildXmls.Should().ContainSingle()
+            .Which.Should().Contain("{FREEXCEL-TABLE-AUTOFILTER-EXT}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("customAttr=\"auto-filter-native\"");
+        tableXml.Should().Contain("extLst");
+        tableXml.Should().Contain("{FREEXCEL-TABLE-AUTOFILTER-EXT}");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeSortState()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableSortStateTest");
@@ -14131,7 +14161,8 @@ public class FileAdapterSmokeTests
         bool includeColumnAttributes = false,
         bool includeStyleInfoExtension = false,
         bool includeRootMetadata = false,
-        bool includeFilterColumnAttributes = false)
+        bool includeFilterColumnAttributes = false,
+        bool includeAutoFilterMetadata = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -14173,6 +14204,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeAutoFilterMetadata
+                            ? StructuredTableWithAutoFilterMetadataXml
                         : includeFilterColumnAttributes
                             ? StructuredTableWithFilterColumnAttributesXml
                         : includeRootMetadata
@@ -15211,6 +15244,35 @@ public class FileAdapterSmokeTests
                totalsRowShown="0">
           <autoFilter ref="A1:B3">
             <filterColumn colId="0" hiddenButton="1" showButton="0"/>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithAutoFilterMetadataXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3" customAttr="auto-filter-native">
+            <filterColumn colId="0">
+              <filters blank="1">
+                <filter val="A"/>
+              </filters>
+            </filterColumn>
+            <extLst>
+              <ext uri="{FREEXCEL-TABLE-AUTOFILTER-EXT}"/>
+            </extLst>
           </autoFilter>
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
