@@ -34,8 +34,10 @@ public sealed class CommandInventoryDocumentTests
         inventory.SchemaVersion.Should().Be(1);
         inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "File/Backstage");
         inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "QAT");
+        inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "Home");
         inventory.MenuToolbarRows.Should().Contain(section => section.Name == "File/Backstage");
         inventory.MenuToolbarRows.Should().Contain(section => section.Name == "QAT");
+        inventory.MenuToolbarRows.Should().Contain(section => section.Name == "Home");
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Home", "H"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Insert", "N"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Formulas", "M"));
@@ -77,6 +79,21 @@ public sealed class CommandInventoryDocumentTests
         ExtractGeneratedBlock(commandSurfaceDoc, "command-inventory:command-surface:qat").Should().Be(
             BuildCommandRows(commandSurfaceSection));
         ExtractGeneratedBlock(menuToolbarDoc, "command-inventory:menu-toolbar:qat").Should().Be(
+            BuildCommandRows(menuToolbarSection));
+    }
+
+    [Fact]
+    public void HomeRows_AreGeneratedFromInventory()
+    {
+        var inventory = LoadInventory();
+        var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "MENU_TOOLBAR_PARITY.md"));
+        var commandSurfaceSection = inventory.CommandSurfaceRows.Single(section => section.Name == "Home");
+        var menuToolbarSection = inventory.MenuToolbarRows.Single(section => section.Name == "Home");
+
+        ExtractGeneratedBlock(commandSurfaceDoc, "command-inventory:command-surface:home").Should().Be(
+            BuildCommandRows(commandSurfaceSection));
+        ExtractGeneratedBlock(menuToolbarDoc, "command-inventory:menu-toolbar:home").Should().Be(
             BuildCommandRows(menuToolbarSection));
     }
 
@@ -140,14 +157,35 @@ public sealed class CommandInventoryDocumentTests
 
     private static string BuildCommandRows(CommandInventoryCommandSection section)
     {
-        var itemHeader = section.ItemColumn ?? "Command";
+        if (section.Groups is { Count: > 0 })
+        {
+            var groupBlocks = section.Groups.Select(group =>
+            {
+                var lines = new List<string>
+                {
+                    $"### {group.Heading}",
+                    "",
+                    BuildCommandTable(section.ItemColumn, group.Rows)
+                };
+                return string.Join("\n", lines);
+            });
+
+            return string.Join("\n\n", groupBlocks);
+        }
+
+        return BuildCommandTable(section.ItemColumn, section.Rows ?? []);
+    }
+
+    private static string BuildCommandTable(string? itemColumn, IReadOnlyList<CommandInventoryCommandRow> rows)
+    {
+        var itemHeader = itemColumn ?? "Command";
         var lines = new List<string>
         {
             $"| {itemHeader} | Status | Notes |",
             "|---|---|---|"
         };
 
-        lines.AddRange(section.Rows.Select(row => $"| {row.Name} | {row.Status} | {row.Notes} |"));
+        lines.AddRange(rows.Select(row => $"| {row.Name} | {row.Status} | {row.Notes} |"));
         return string.Join("\n", lines);
     }
 
@@ -181,6 +219,11 @@ public sealed class CommandInventoryDocumentTests
     private sealed record CommandInventoryCommandSection(
         string Name,
         string? ItemColumn,
+        IReadOnlyList<CommandInventoryCommandRow>? Rows,
+        IReadOnlyList<CommandInventoryCommandGroup>? Groups);
+
+    private sealed record CommandInventoryCommandGroup(
+        string Heading,
         IReadOnlyList<CommandInventoryCommandRow> Rows);
 
     private sealed record CommandInventoryCommandRow(string Name, string Status, string Notes);

@@ -75,13 +75,31 @@ function New-CoverageSummary {
 function New-CommandRows {
     param($Section)
 
-    $itemColumn = if ($Section.itemColumn) { [string]$Section.itemColumn } else { "Command" }
+    if ($Section.PSObject.Properties.Name -contains "groups" -and $Section.groups) {
+        $groupBlocks = @()
+        foreach ($group in $Section.groups) {
+            $groupBlocks += "### $($group.heading)`n`n$(New-CommandTable $Section.itemColumn $group.rows)"
+        }
+
+        return ($groupBlocks -join "`n`n")
+    }
+
+    return New-CommandTable $Section.itemColumn $Section.rows
+}
+
+function New-CommandTable {
+    param(
+        [string]$ItemColumn,
+        [array]$Rows
+    )
+
+    $itemColumn = if ($ItemColumn) { [string]$ItemColumn } else { "Command" }
     $lines = @(
         "| $itemColumn | Status | Notes |",
         "|---|---|---|"
     )
 
-    foreach ($row in $Section.rows) {
+    foreach ($row in $Rows) {
         $lines += "| $($row.name) | $($row.status) | $($row.notes) |"
     }
 
