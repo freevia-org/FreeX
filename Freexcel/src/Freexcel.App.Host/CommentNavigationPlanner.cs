@@ -42,7 +42,7 @@ public static class CommentNavigationPlanner
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
         string.Join(Environment.NewLine,
             OrderedCommentAddresses(comments, threadedComments)
-                .Select(address => $"{address.ToA1()}: {GetCommentText(comments, threadedComments, address)}"));
+                .SelectMany(address => GetCommentListLines(comments, threadedComments, address)));
 
     public static string GetDefaultCommentText(IReadOnlyDictionary<CellAddress, string> comments, CellAddress address) =>
         comments.TryGetValue(address, out var comment)
@@ -56,4 +56,29 @@ public static class CommentNavigationPlanner
         comments.TryGetValue(address, out var comment)
             ? comment
             : threadedComments[address].Text;
+
+    private static IEnumerable<string> GetCommentListLines(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        CellAddress address)
+    {
+        var prefix = address.ToA1();
+
+        if (comments.TryGetValue(address, out var note) &&
+            threadedComments.TryGetValue(address, out var thread))
+        {
+            yield return $"{prefix}: Note: {note}";
+            yield return $"{prefix}: Threaded: {thread.Text}";
+            yield break;
+        }
+
+        if (comments.TryGetValue(address, out note))
+        {
+            yield return $"{prefix}: {note}";
+            yield break;
+        }
+
+        if (threadedComments.TryGetValue(address, out thread))
+            yield return $"{prefix}: {thread.Text}";
+    }
 }
