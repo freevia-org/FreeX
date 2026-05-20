@@ -33,9 +33,27 @@ public sealed class ErrorCheckingDialogSourceTests
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
 
         dialogSource.Should().Contain("Action? openOptions");
-        dialogSource.Should().Contain("Content = \"Options...\"");
+        dialogSource.Should().Contain("Content = \"_Options...\"");
         dialogSource.Should().Contain("_openOptions?.Invoke()");
         formulaSource.Should().Contain("ShowOptionsDialog");
         backstageSource.Should().Contain("private void ShowOptionsDialog()");
+    }
+
+    [Fact]
+    public void ErrorCheckingDialog_ExposesKeyboardAccessKeysForCommandButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Go To",
+            "_Previous",
+            "_Next",
+            "_Ignore Error",
+            "_Trace Error",
+            "_Options...",
+            "_Close"
+        })
+            source.Should().Contain($"Content = \"{content}\"");
     }
 }
