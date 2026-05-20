@@ -82,6 +82,26 @@ public class InsertDeleteRowsTests
     }
 
     [Fact]
+    public void InsertRow_ShiftsThreadedCommentsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var original = new CellAddress(sheet.Id, 3, 2);
+        var shifted = new CellAddress(sheet.Id, 5, 2);
+        sheet.ThreadedComments[original] = new ThreadedComment("Check this", "Quinn");
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ThreadedComments.Should().NotContainKey(original);
+        sheet.ThreadedComments[shifted].Should().Be(new ThreadedComment("Check this", "Quinn"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[original].Should().Be(new ThreadedComment("Check this", "Quinn"));
+        sheet.ThreadedComments.Should().NotContainKey(shifted);
+    }
+
+    [Fact]
     public void InsertRow_ShiftsRuleRangesAndUndoRestores()
     {
         var (wb, sheet, ctx) = Setup();
@@ -300,6 +320,30 @@ public class InsertDeleteRowsTests
         sheet.Comments[deleted].Should().Be("Remove with row");
         sheet.Comments[originalBelow].Should().Be("Move up");
         sheet.Comments.Should().NotContainKey(shiftedBelow);
+    }
+
+    [Fact]
+    public void DeleteRow_ShiftsThreadedCommentsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var deleted = new CellAddress(sheet.Id, 3, 2);
+        var originalBelow = new CellAddress(sheet.Id, 6, 2);
+        var shiftedBelow = new CellAddress(sheet.Id, 4, 2);
+        sheet.ThreadedComments[deleted] = new ThreadedComment("Remove with row", "Quinn");
+        sheet.ThreadedComments[originalBelow] = new ThreadedComment("Move up", "Codex");
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ThreadedComments.Should().NotContainKey(deleted);
+        sheet.ThreadedComments.Should().NotContainKey(originalBelow);
+        sheet.ThreadedComments[shiftedBelow].Should().Be(new ThreadedComment("Move up", "Codex"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[deleted].Should().Be(new ThreadedComment("Remove with row", "Quinn"));
+        sheet.ThreadedComments[originalBelow].Should().Be(new ThreadedComment("Move up", "Codex"));
+        sheet.ThreadedComments.Should().NotContainKey(shiftedBelow);
     }
 
     [Fact]
