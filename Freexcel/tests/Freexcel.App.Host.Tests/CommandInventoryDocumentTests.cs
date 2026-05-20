@@ -32,12 +32,10 @@ public sealed class CommandInventoryDocumentTests
         var inventory = LoadInventory();
 
         inventory.SchemaVersion.Should().Be(1);
-        inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "File/Backstage");
-        inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "QAT");
-        inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "Home");
-        inventory.MenuToolbarRows.Should().Contain(section => section.Name == "File/Backstage");
-        inventory.MenuToolbarRows.Should().Contain(section => section.Name == "QAT");
-        inventory.MenuToolbarRows.Should().Contain(section => section.Name == "Home");
+        inventory.CommandSurfaceRows.Select(section => section.Name).Should().BeEquivalentTo(
+            inventory.CommandSurfaceTabs.Select(tab => tab.Name));
+        inventory.MenuToolbarRows.Select(section => section.Name).Should().BeEquivalentTo(
+            inventory.MenuToolbarTabs.Select(tab => tab.Name));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Home", "H"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Insert", "N"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Formulas", "M"));
@@ -95,6 +93,26 @@ public sealed class CommandInventoryDocumentTests
             BuildCommandRows(commandSurfaceSection));
         ExtractGeneratedBlock(menuToolbarDoc, "command-inventory:menu-toolbar:home").Should().Be(
             BuildCommandRows(menuToolbarSection));
+    }
+
+    [Fact]
+    public void AllCommandRowSections_AreGeneratedFromInventory()
+    {
+        var inventory = LoadInventory();
+        var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "MENU_TOOLBAR_PARITY.md"));
+
+        foreach (var section in inventory.CommandSurfaceRows)
+        {
+            ExtractGeneratedBlock(commandSurfaceDoc, $"command-inventory:command-surface:{Slug(section.Name)}").Should().Be(
+                BuildCommandRows(section));
+        }
+
+        foreach (var section in inventory.MenuToolbarRows)
+        {
+            ExtractGeneratedBlock(menuToolbarDoc, $"command-inventory:menu-toolbar:{Slug(section.Name)}").Should().Be(
+                BuildCommandRows(section));
+        }
     }
 
     private static CommandInventory LoadInventory()
@@ -191,6 +209,10 @@ public sealed class CommandInventoryDocumentTests
 
     private static string NormalizeLineEndings(string text) =>
         text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    private static string Slug(string text) =>
+        string.Join("-", text.Split(text.Where(ch => !char.IsLetterOrDigit(ch)).Distinct().ToArray(), StringSplitOptions.RemoveEmptyEntries))
+            .ToLowerInvariant();
 
     private sealed record CommandInventory(
         int SchemaVersion,
