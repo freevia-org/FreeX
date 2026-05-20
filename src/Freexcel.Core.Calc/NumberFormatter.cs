@@ -110,7 +110,7 @@ public static class NumberFormatter
         return value switch
         {
             NumberValue n   => FormatNumber(n.Value, sections),
-            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections[0]),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections),
             TextValue t     => FormatTextWithColor(t.Value, sections),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
@@ -730,10 +730,25 @@ public static class NumberFormatter
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 
-    private static FormatResult FormatDateTimeWithColor(double oaDate, string section)
+    private static FormatResult FormatDateTimeWithColor(double oaDate, string[] sections)
     {
-        var parsed = ParseSection(section);
+        var parsed = SelectDateTimeSection(oaDate, sections);
         return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
+    }
+
+    private static ParsedSection SelectDateTimeSection(double value, string[] sections)
+    {
+        var parsedSections = sections.Select(ParseSection).ToArray();
+        if (!parsedSections.Any(section => section.Condition is not null))
+            return parsedSections[0];
+
+        var selectedIndex = Array.FindIndex(parsedSections, section =>
+            section.Condition is not null && section.Condition.Matches(value));
+        if (selectedIndex >= 0)
+            return parsedSections[selectedIndex];
+
+        selectedIndex = Array.FindIndex(parsedSections, section => section.Condition is null);
+        return selectedIndex >= 0 ? parsedSections[selectedIndex] : parsedSections[0];
     }
 
     private static string FormatDateTime(double oaDate, string format)
