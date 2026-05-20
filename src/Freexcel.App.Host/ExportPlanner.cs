@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 
 namespace Freexcel.App.Host;
@@ -15,10 +16,19 @@ internal enum ExportContentScope
     EntireWorkbook
 }
 
+internal sealed record ExportPageRange(int FromPage, int ToPage)
+{
+    public override string ToString() =>
+        FromPage == ToPage
+            ? $"page {FromPage}"
+            : $"pages {FromPage}-{ToPage}";
+}
+
 internal sealed record ExportOptions(
     ExportContentScope Scope,
     bool IncludeDocumentProperties,
-    bool OpenAfterPublish)
+    bool OpenAfterPublish,
+    ExportPageRange? PageRange = null)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -65,6 +75,9 @@ internal static class ExportPlanner
             ExportContentScope.EntireWorkbook => "Entire workbook",
             _ => "Active sheet only"
         };
+        var pageRange = options.PageRange is null
+            ? null
+            : options.PageRange.ToString();
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
@@ -72,9 +85,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return open is null
-            ? $"{scope}; {properties}."
-            : $"{scope}; {properties}; {open}.";
+        return JoinOptionParts(scope, pageRange, properties, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -97,6 +108,9 @@ internal static class ExportPlanner
             ExportContentScope.EntireWorkbook => "Entire workbook",
             _ => "Active sheet only"
         };
+        var pageRange = options.PageRange is null
+            ? null
+            : options.PageRange.ToString();
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
@@ -107,8 +121,42 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return open is null
-            ? $"{scope}; {properties}."
-            : $"{scope}; {properties}; {open}.";
+        return JoinOptionParts(scope, pageRange, properties, open);
     }
+
+    public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
+    {
+        range = null;
+        error = null;
+
+        var fromBlank = string.IsNullOrWhiteSpace(fromText);
+        var toBlank = string.IsNullOrWhiteSpace(toText);
+        if (fromBlank && toBlank)
+            return true;
+
+        if (!int.TryParse(fromText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromPage) ||
+            !int.TryParse(toText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var toPage))
+        {
+            error = "Page range must include whole-number From and To values.";
+            return false;
+        }
+
+        if (fromPage < 1 || toPage < 1)
+        {
+            error = "Page numbers must be 1 or greater.";
+            return false;
+        }
+
+        if (fromPage > toPage)
+        {
+            error = "From page must be less than or equal to To page.";
+            return false;
+        }
+
+        range = new ExportPageRange(fromPage, toPage);
+        return true;
+    }
+
+    private static string JoinOptionParts(params string?[] parts) =>
+        string.Join("; ", parts.Where(part => !string.IsNullOrWhiteSpace(part))) + ".";
 }
