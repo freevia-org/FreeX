@@ -9409,26 +9409,26 @@ public partial class MainWindow : Window
     private void ReviewShowCommentsBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || sheet.Comments.Count == 0)
+        if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
         {
             MessageBox.Show("No comments on this sheet.", "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var text = CommentNavigationPlanner.FormatCommentList(sheet.Comments);
+        var text = CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments);
         MessageBox.Show(text, "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void NavigateComment(bool previous)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || sheet.Comments.Count == 0)
+        if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
         {
             MessageBox.Show("No comments on this sheet.", "Comments", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var comments = CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments);
+        var comments = CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments);
         var current = SheetGrid.SelectedRange?.Start ?? comments[0];
         var target = CommentNavigationPlanner.FindNext(comments, current, previous);
 

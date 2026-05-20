@@ -22,6 +22,25 @@ public sealed class CommentNavigationPlannerTests
     }
 
     [Fact]
+    public void OrderedComments_IncludesThreadedComments()
+    {
+        var sheetId = SheetId.New();
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 4, 1)] = "Note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [new(sheetId, 2, 1)] = new("Thread"),
+            [new(sheetId, 3, 2)] = new("Discussion")
+        };
+
+        CommentNavigationPlanner.OrderedCommentAddresses(comments, threadedComments)
+            .Should()
+            .Equal(new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 3, 2), new CellAddress(sheetId, 4, 1));
+    }
+
+    [Fact]
     public void NextComment_WrapsForwardAndBackward()
     {
         var sheetId = SheetId.New();
@@ -56,6 +75,24 @@ public sealed class CommentNavigationPlannerTests
         CommentNavigationPlanner.FormatCommentList(comments)
             .Should()
             .Be(string.Join(Environment.NewLine, "A1: First", "B3: Later"));
+    }
+
+    [Fact]
+    public void FormatCommentList_IncludesThreadedComments()
+    {
+        var sheetId = SheetId.New();
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [new(sheetId, 3, 2)] = "Later note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [new(sheetId, 1, 1)] = new("First thread")
+        };
+
+        CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "A1: First thread", "B3: Later note"));
     }
 
     [Fact]

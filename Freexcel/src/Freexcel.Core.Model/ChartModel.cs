@@ -291,6 +291,9 @@ public sealed class ChartModel
     public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
     public double ErrorBarValue { get; set; } = 5;
     public bool ErrorBarEndCaps { get; set; } = true;
+    public bool ShowDropLines { get; set; }
+    public bool ShowHighLowLines { get; set; }
+    public bool ShowUpDownBars { get; set; }
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
