@@ -77,23 +77,23 @@ public sealed class PasteSpecialDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        _rbAll      = new RadioButton { Content = "All",            IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
-        _rbValues   = new RadioButton { Content = "Values only",    Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormulas = new RadioButton { Content = "Formulas only",  Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormats  = new RadioButton { Content = "Formats only",   Margin = new Thickness(0, 0, 0, 6) };
-        _rbComments = new RadioButton { Content = "Comments and notes", Margin = new Thickness(0, 0, 0, 6) };
-        _rbValidation = new RadioButton { Content = "Validation", Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllUsingSourceTheme = new RadioButton { Content = "All using source theme", Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllExceptBorders = new RadioButton { Content = "All except borders", Margin = new Thickness(0, 0, 0, 6) };
-        _rbColumnWidths = new RadioButton { Content = "Column widths", Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number formats", Margin = new Thickness(0, 0, 0, 6) };
-        _rbValuesAndNumberFormats = new RadioButton { Content = "Values and number formats", Margin = new Thickness(0, 0, 0, 6) };
-        _rbPicture  = new RadioButton { Content = "Picture",        Margin = new Thickness(0, 0, 0, 12) };
-        _rbLinkedPicture = new RadioButton { Content = "Linked picture", Margin = new Thickness(0, 0, 0, 12) };
-        _pasteLink  = new CheckBox { Content = "Paste Link", Margin = new Thickness(0, 0, 0, 8) };
-        _skipBlanks = new CheckBox { Content = "Skip blanks", Margin = new Thickness(0, 0, 0, 8) };
-        _transpose  = new CheckBox { Content = "Transpose", Margin = new Thickness(0, 4, 0, 8) };
-        _keepColumnWidths = new CheckBox { Content = "Keep source column widths", Margin = new Thickness(0, 0, 0, 8) };
+        _rbAll      = new RadioButton { Content = "_All",            IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
+        _rbValues   = new RadioButton { Content = "_Values only",    Margin = new Thickness(0, 0, 0, 6) };
+        _rbFormulas = new RadioButton { Content = "_Formulas only",  Margin = new Thickness(0, 0, 0, 6) };
+        _rbFormats  = new RadioButton { Content = "Forma_ts only",   Margin = new Thickness(0, 0, 0, 6) };
+        _rbComments = new RadioButton { Content = "_Comments and notes", Margin = new Thickness(0, 0, 0, 6) };
+        _rbValidation = new RadioButton { Content = "Validatio_n", Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllUsingSourceTheme = new RadioButton { Content = "All using source t_heme", Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllExceptBorders = new RadioButton { Content = "All e_xcept borders", Margin = new Thickness(0, 0, 0, 6) };
+        _rbColumnWidths = new RadioButton { Content = "Column _widths", Margin = new Thickness(0, 0, 0, 6) };
+        _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number fo_rmats", Margin = new Thickness(0, 0, 0, 6) };
+        _rbValuesAndNumberFormats = new RadioButton { Content = "Values and number for_mats", Margin = new Thickness(0, 0, 0, 6) };
+        _rbPicture  = new RadioButton { Content = "_Picture",        Margin = new Thickness(0, 0, 0, 12) };
+        _rbLinkedPicture = new RadioButton { Content = "_Linked picture", Margin = new Thickness(0, 0, 0, 12) };
+        _pasteLink  = new CheckBox { Content = "Paste _Link", Margin = new Thickness(0, 0, 0, 8) };
+        _skipBlanks = new CheckBox { Content = "S_kip blanks", Margin = new Thickness(0, 0, 0, 8) };
+        _transpose  = new CheckBox { Content = "Transpos_e", Margin = new Thickness(0, 4, 0, 8) };
+        _keepColumnWidths = new CheckBox { Content = "Keep source column _widths", Margin = new Thickness(0, 0, 0, 8) };
         _operation  = new ComboBox { Margin = new Thickness(0, 0, 0, 12), Width = 150, HorizontalAlignment = HorizontalAlignment.Left };
         foreach (var op in new[] { "None", "Add", "Subtract", "Multiply", "Divide" })
             _operation.Items.Add(new ComboBoxItem { Content = op });
