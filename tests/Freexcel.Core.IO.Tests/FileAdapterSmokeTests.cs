@@ -8224,6 +8224,42 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetLegacyDrawingAlongsideModelEdits()
+    {
+        var workbook = new Workbook("LegacyDrawingRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetLegacyDrawingPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/drawings/vmlDrawing1.vml").Should().NotBeNull();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("legacyDrawing");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("rIdFreexcelLegacyDrawing");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../drawings/vmlDrawing1.vml");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("/xl/drawings/vmlDrawing1.vml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
@@ -13444,6 +13480,57 @@ public class FileAdapterSmokeTests
                     worksheetNs + "formControlPr",
                     new XAttribute("objectType", "Button"),
                     new XAttribute("checked", "Unchecked"))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorksheetLegacyDrawingPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/drawings/vmlDrawing1.vml",
+                "application/vnd.openxmlformats-officedocument.vmlDrawing");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelLegacyDrawing"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"),
+                new XAttribute("Target", "../drawings/vmlDrawing1.vml")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "legacyDrawing",
+                new XAttribute(relNs + "id", "rIdFreexcelLegacyDrawing")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            archive.GetEntry("xl/drawings/vmlDrawing1.vml")?.Delete();
+            var vmlEntry = archive.CreateEntry("xl/drawings/vmlDrawing1.vml");
+            using var writer = new StreamWriter(vmlEntry.Open(), Encoding.UTF8);
+            writer.Write("""
+                <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                     xmlns:o="urn:schemas-microsoft-com:office:office"
+                     xmlns:x="urn:schemas-microsoft-com:office:excel">
+                  <v:shape id="FreexcelLegacyDrawingShape" type="#_x0000_t201">
+                    <x:ClientData ObjectType="Note"/>
+                  </v:shape>
+                </xml>
+                """);
         }
 
         packageStream.Position = 0;
