@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Content Include="Resources\Freexcel.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Resources\CommandIcons\**\*.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

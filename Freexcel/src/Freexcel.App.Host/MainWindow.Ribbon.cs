@@ -340,7 +340,8 @@ public partial class MainWindow
 
         var item = new MenuItem
         {
-            Header = sourceItem.Header,
+            Header = CloneRibbonMenuContent(sourceItem.Header),
+            Icon = CloneRibbonMenuContent(sourceItem.Icon),
             IsEnabled = sourceItem.IsEnabled,
             IsCheckable = sourceItem.IsCheckable,
             IsChecked = sourceItem.IsChecked,
@@ -372,6 +373,72 @@ public partial class MainWindow
         };
 
         return item;
+    }
+
+    private static object? CloneRibbonMenuContent(object? content)
+    {
+        if (content is null or string)
+            return content;
+
+        if (content is Image image)
+        {
+            return new Image
+            {
+                Source = image.Source,
+                Width = image.Width,
+                Height = image.Height,
+                MaxWidth = image.MaxWidth,
+                MaxHeight = image.MaxHeight,
+                Stretch = image.Stretch,
+                SnapsToDevicePixels = image.SnapsToDevicePixels,
+                UseLayoutRounding = image.UseLayoutRounding,
+                Margin = image.Margin,
+                Opacity = image.Opacity
+            };
+        }
+
+        if (content is TextBlock textBlock)
+        {
+            return new TextBlock
+            {
+                Text = textBlock.Text,
+                FontSize = textBlock.FontSize,
+                FontWeight = textBlock.FontWeight,
+                FontStyle = textBlock.FontStyle,
+                Foreground = textBlock.Foreground,
+                Margin = textBlock.Margin,
+                VerticalAlignment = textBlock.VerticalAlignment,
+                HorizontalAlignment = textBlock.HorizontalAlignment
+            };
+        }
+
+        if (content is FrameworkElement element)
+        {
+            try
+            {
+                return System.Windows.Markup.XamlReader.Parse(System.Windows.Markup.XamlWriter.Save(element));
+            }
+            catch (InvalidOperationException)
+            {
+                return ExtractRibbonMenuText(element) ?? element.ToString();
+            }
+        }
+
+        return content;
+    }
+
+    private static string? ExtractRibbonMenuText(DependencyObject element)
+    {
+        if (element is TextBlock textBlock && !string.IsNullOrWhiteSpace(textBlock.Text))
+            return textBlock.Text;
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+        {
+            if (ExtractRibbonMenuText(VisualTreeHelper.GetChild(element, i)) is { } text)
+                return text;
+        }
+
+        return null;
     }
 
     private static void SynchronizeClonedMenuItems(ItemCollection sourceItems, ItemCollection clonedItems)
@@ -582,9 +649,11 @@ public partial class MainWindow
             var commandName = string.IsNullOrWhiteSpace(title) ? label : title;
             var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
             ApplyRibbonCommandSize(button, layoutKind);
+            if (layoutKind is RibbonCommandLayoutKind.Small)
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
             var fullWidth = button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64);
             var compactWidth = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 30;
-            button.Tag ??= $"RibbonCompact:{fullWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{compactWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+            SetRibbonCompactWidthTag(button, fullWidth, compactWidth);
 
             button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
             button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
@@ -725,18 +794,26 @@ public partial class MainWindow
 
         foreach (var stack in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
         {
+            if (string.Equals(stack.Tag?.ToString(), "RibbonCommandContent", StringComparison.Ordinal))
+                continue;
+
             if (stack.Orientation != Orientation.Horizontal || stack.Children.Count < 2)
                 continue;
 
-            if (stack.Children[0] is not FrameworkElement icon || stack.Children[1] is not TextBlock)
+            if (stack.Children[0] is not FrameworkElement icon || stack.Children[1] is not TextBlock label)
                 continue;
 
             if (FindVisualAncestor<ButtonBase>(stack) is null)
                 continue;
 
-            icon.Width = Math.Max(icon.Width is > 0 ? icon.Width : 0, 18);
+            if (icon is not Image)
+                icon.Width = Math.Max(icon.Width is > 0 ? icon.Width : 0, 18);
             icon.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
             icon.Margin = new Thickness(0, icon.Margin.Top, 4, icon.Margin.Bottom);
+            label.MinWidth = Math.Max(label.MinWidth, 84);
+            label.FontSize = Math.Max(label.FontSize, 12);
+            label.TextTrimming = TextTrimming.None;
+            label.TextWrapping = TextWrapping.NoWrap;
             stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         }
     }
@@ -745,13 +822,23 @@ public partial class MainWindow
     {
         foreach (var button in EnumerateVisualDescendants(this).OfType<ButtonBase>())
         {
+            if (TryNormalizeHomeCompactIconButton(button))
+                continue;
+
+            if (TryNormalizeHomeSmallCommandButton(button))
+                continue;
+
+            if (TryNormalizeStaticRibbonCommandButton(button))
+                continue;
+
             var tall = button is FrameworkElement element && element.Height >= 46;
             ReplaceRibbonGlyphIcons(button.Content, button, tall);
+            NormalizeRibbonButtonSizeForCommandIcons(button, tall);
             foreach (var textBlock in EnumerateRibbonTextContent(button.Content))
             {
                 if (string.Equals(textBlock.Tag?.ToString(), "RibbonLabel", StringComparison.Ordinal))
                 {
-                    textBlock.FontSize = 10;
+                    textBlock.FontSize = 12;
                     textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
                     textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                     if (tall)
@@ -777,11 +864,185 @@ public partial class MainWindow
         }
     }
 
+    private bool TryNormalizeHomeCompactIconButton(ButtonBase button)
+    {
+        if (HomeRibbonPanel is null ||
+            !ReferenceEquals(FindHomeRibbonAncestor(button), HomeRibbonPanel) ||
+            button is not FrameworkElement element ||
+            element.Width > 46 ||
+            element.Height > 32)
+        {
+            return false;
+        }
+
+        var commandName = GetRibbonButtonTitleOrLabel(button);
+        if (string.IsNullOrWhiteSpace(commandName))
+            return false;
+
+        element.Width = 26;
+        element.Height = 26;
+        SetRibbonCompactWidthTag(button, 26, 24);
+        element.Margin = new Thickness(1, 0, 1, 0);
+        if (button is Control control)
+            control.Padding = new Thickness(1);
+
+        button.Content = CreateRibbonIconOnlyContent(commandName, 40);
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+        button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
+        return true;
+    }
+
+    private bool TryNormalizeHomeSmallCommandButton(ButtonBase button)
+    {
+        if (HomeRibbonPanel is null ||
+            !ReferenceEquals(FindHomeRibbonAncestor(button), HomeRibbonPanel) ||
+            button.Content is string ||
+            ContainsUnreplacedRibbonIcon(button.Content) ||
+            button is not FrameworkElement element ||
+            element.Height > 34)
+        {
+            return false;
+        }
+
+        var commandName = GetRibbonButtonTitleOrLabel(button);
+        if (string.IsNullOrWhiteSpace(commandName))
+            return false;
+
+        element.Width = GetSmallRibbonCommandWidth(commandName);
+        element.Height = 30;
+        SetRibbonCompactWidthTag(button, element.Width, 30);
+        if (button is Control control)
+            control.Padding = new Thickness(4, 2, 4, 2);
+        button.Content = CreateRibbonCommandContent(commandName, commandName, RibbonCommandLayoutKind.Small);
+        button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+        button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
+        return true;
+    }
+
+    private static StackPanel? FindHomeRibbonAncestor(DependencyObject element)
+    {
+        var current = element;
+        while (current is not null)
+        {
+            if (current is StackPanel { Name: "HomeRibbonPanel" } stack)
+                return stack;
+
+            current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private bool TryNormalizeStaticRibbonCommandButton(ButtonBase button)
+    {
+        if (RibbonTabs is null ||
+            button is not Button commandButton ||
+            FindVisualAncestor<TabControl>(commandButton) != RibbonTabs ||
+            !ContainsUnreplacedRibbonIcon(commandButton.Content))
+        {
+            return false;
+        }
+
+        var commandName = GetRibbonButtonTitleOrLabel(commandButton);
+        if (string.IsNullOrWhiteSpace(commandName))
+            return false;
+
+        var label = commandName;
+        var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+        ApplyRibbonCommandSize(commandButton, layoutKind);
+        if (layoutKind is RibbonCommandLayoutKind.Small)
+            commandButton.Width = Math.Max(commandButton.Width is > 0 ? commandButton.Width : 0, GetSmallRibbonCommandWidth(label));
+        SetRibbonCompactWidthTag(
+            commandButton,
+            commandButton.Width is > 0 ? commandButton.Width : Math.Max(commandButton.ActualWidth, 64),
+            layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 30);
+
+        commandButton.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
+        commandButton.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
+            ? System.Windows.HorizontalAlignment.Left
+            : System.Windows.HorizontalAlignment.Center;
+        return true;
+    }
+
+    private static void NormalizeRibbonButtonSizeForCommandIcons(ButtonBase button, bool tall)
+    {
+        if (button is not FrameworkElement element || !ContainsRibbonCommandIcon(button.Content))
+            return;
+
+        if (tall)
+        {
+            var tallLabel = FindRibbonContentLabel(button.Content) ?? GetRibbonButtonTitleOrLabel(button);
+            element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetLargeRibbonCommandWidth(tallLabel));
+            element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 72);
+            SetRibbonCompactWidthTag(button, element.Width, 38);
+            return;
+        }
+
+        var label = FindRibbonContentLabel(button.Content);
+        if (string.IsNullOrWhiteSpace(label))
+            return;
+
+        var minWidth = label.Length switch
+        {
+            <= 3 => 58,
+            <= 6 => 66,
+            <= 10 => 92,
+            <= 14 => 126,
+            _ => Math.Min(150, 44 + label.Length * 6)
+        };
+
+        element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, minWidth);
+        element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 30);
+        SetRibbonCompactWidthTag(button, element.Width, 30);
+    }
+
+    private static void SetRibbonCompactWidthTag(ButtonBase button, double fullWidth, double compactWidth)
+    {
+        button.Tag = $"RibbonCompact:{fullWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}:{compactWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+    }
+
+    private static bool ContainsRibbonCommandIcon(object? content)
+    {
+        switch (content)
+        {
+            case FrameworkElement element when string.Equals(element.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal):
+                return true;
+            case Panel panel:
+                return panel.Children.Cast<object>().Any(ContainsRibbonCommandIcon);
+            case Decorator decorator:
+                return ContainsRibbonCommandIcon(decorator.Child);
+            case ContentControl contentControl when !ReferenceEquals(contentControl.Content, content):
+                return ContainsRibbonCommandIcon(contentControl.Content);
+            default:
+                return false;
+        }
+    }
+
+    private static bool ContainsUnreplacedRibbonIcon(object? content)
+    {
+        switch (content)
+        {
+            case RibbonIcon:
+                return true;
+            case Panel panel:
+                return panel.Children.Cast<object>().Any(ContainsUnreplacedRibbonIcon);
+            case Decorator decorator:
+                return ContainsUnreplacedRibbonIcon(decorator.Child);
+            case ContentControl contentControl when !ReferenceEquals(contentControl.Content, content):
+                return ContainsUnreplacedRibbonIcon(contentControl.Content);
+            default:
+                return false;
+        }
+    }
+
     private static void ReplaceRibbonGlyphIcons(object? content, ButtonBase owner, bool tall)
     {
         switch (content)
         {
             case null:
+                return;
+            case RibbonIcon ribbonIcon:
+                owner.Content = CreateStaticRibbonCommandIcon(owner, ribbonIcon, tall);
                 return;
             case TextBlock textBlock when IsRibbonIconTextBlock(textBlock):
                 owner.Content = CreateStaticRibbonVectorIcon(owner, textBlock, tall);
@@ -789,6 +1050,14 @@ public partial class MainWindow
             case Panel panel:
                 for (var i = 0; i < panel.Children.Count; i++)
                 {
+                    if (panel.Children[i] is RibbonIcon childRibbonIcon)
+                    {
+                        var replacement = CreateStaticRibbonCommandIcon(owner, childRibbonIcon, tall);
+                        panel.Children.RemoveAt(i);
+                        panel.Children.Insert(i, replacement);
+                        continue;
+                    }
+
                     if (panel.Children[i] is TextBlock childText && IsRibbonIconTextBlock(childText))
                     {
                         var replacement = CreateStaticRibbonVectorIcon(owner, childText, tall);
@@ -802,13 +1071,17 @@ public partial class MainWindow
 
                 return;
             case Decorator decorator:
-                if (decorator.Child is TextBlock decoratorText && IsRibbonIconTextBlock(decoratorText))
+                if (decorator.Child is RibbonIcon decoratorRibbonIcon)
+                    decorator.Child = CreateStaticRibbonCommandIcon(owner, decoratorRibbonIcon, tall);
+                else if (decorator.Child is TextBlock decoratorText && IsRibbonIconTextBlock(decoratorText))
                     decorator.Child = CreateStaticRibbonVectorIcon(owner, decoratorText, tall);
                 else
                     ReplaceRibbonGlyphIcons(decorator.Child, owner, tall);
                 return;
             case ContentControl contentControl when !ReferenceEquals(contentControl, owner):
-                if (contentControl.Content is TextBlock contentText && IsRibbonIconTextBlock(contentText))
+                if (contentControl.Content is RibbonIcon contentRibbonIcon)
+                    contentControl.Content = CreateStaticRibbonCommandIcon(owner, contentRibbonIcon, tall);
+                else if (contentControl.Content is TextBlock contentText && IsRibbonIconTextBlock(contentText))
                     contentControl.Content = CreateStaticRibbonVectorIcon(owner, contentText, tall);
                 else
                     ReplaceRibbonGlyphIcons(contentControl.Content, owner, tall);
@@ -821,28 +1094,79 @@ public partial class MainWindow
         return string.Equals(textBlock.Tag?.ToString(), "RibbonIcon", StringComparison.Ordinal);
     }
 
+    private static FrameworkElement CreateStaticRibbonCommandIcon(ButtonBase owner, RibbonIcon source, bool tall)
+    {
+        var commandName = source.Kind == RibbonCommandIconKind.Previous
+            ? "Back to workbook"
+            : GetStaticRibbonIconCommandName(owner, source.Kind.ToString());
+        var fallbackIcon = new RibbonCommandIcon(source.Kind);
+        var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 64 : 40;
+        var commandIcon = RibbonIconFactory.CreateCommandIcon(
+            commandName,
+            fallbackIcon,
+            iconSize,
+            source.Foreground ?? owner.Foreground);
+        commandIcon.Tag = "RibbonIcon";
+        commandIcon.HorizontalAlignment = source.HorizontalAlignment;
+        commandIcon.VerticalAlignment = source.VerticalAlignment;
+        commandIcon.Margin = source.Margin;
+        return commandIcon;
+    }
+
     private static FrameworkElement CreateStaticRibbonVectorIcon(ButtonBase owner, TextBlock source, bool tall)
+    {
+        var commandName = GetStaticRibbonIconCommandName(owner, source.Text);
+        var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
+        var iconSize = tall ? 64 : 40;
+        var commandIcon = RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, source.Foreground);
+        commandIcon.Tag = "RibbonIcon";
+        commandIcon.HorizontalAlignment = source.HorizontalAlignment;
+        commandIcon.VerticalAlignment = source.VerticalAlignment;
+        commandIcon.Margin = source.Margin;
+        return commandIcon;
+    }
+
+    private static string GetStaticRibbonIconCommandName(ButtonBase owner, string fallback)
     {
         var title = owner is FrameworkElement element
             ? RibbonTooltip.GetTitle(element)
             : null;
-        var commandName = !string.IsNullOrWhiteSpace(title)
-            ? title
-            : owner.Name;
-        if (string.IsNullOrWhiteSpace(commandName))
-            commandName = source.Text;
+        if (!string.IsNullOrWhiteSpace(title))
+            return title;
 
-        var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
-        var iconSize = tall
-            ? 22
-            : Math.Max(11, Math.Min(16, source.FontSize is > 0 ? source.FontSize : 13));
-        var vector = RibbonIconFactory.CreateIcon(icon, iconSize, source.Foreground);
-        vector.Tag = "RibbonIcon";
-        vector.HorizontalAlignment = source.HorizontalAlignment;
-        vector.VerticalAlignment = source.VerticalAlignment;
-        vector.Margin = source.Margin;
-        return vector;
+        if (!string.IsNullOrWhiteSpace(owner.Name))
+        {
+            var name = owner.Name;
+            foreach (var suffix in new[] { "Button", "Btn" })
+            {
+                if (name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length)
+                {
+                    name = name[..^suffix.Length];
+                    break;
+                }
+            }
+
+            return name;
+        }
+
+        return fallback switch
+        {
+            nameof(RibbonCommandIconKind.WindowMinimize) => "Minimize",
+            nameof(RibbonCommandIconKind.WindowMaximize) => "Maximize",
+            nameof(RibbonCommandIconKind.WindowClose) => "Close",
+            nameof(RibbonCommandIconKind.Previous) => "Back to workbook",
+            _ => fallback
+        };
     }
+
+    private static bool IsWhiteBrush(Brush brush)
+    {
+        return brush is SolidColorBrush solid &&
+               solid.Color.R >= 245 &&
+               solid.Color.G >= 245 &&
+               solid.Color.B >= 245;
+    }
+
 
     private static IEnumerable<TextBlock> EnumerateRibbonTextContent(object? content)
     {
@@ -942,52 +1266,54 @@ public partial class MainWindow
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
         var iconSize = layoutKind switch
         {
-            RibbonCommandLayoutKind.Large => 23,
-            RibbonCommandLayoutKind.Medium => 19,
-            _ => 12
+            RibbonCommandLayoutKind.Large => 64,
+            _ => 40
         };
         var iconSlot = new Border
         {
             Width = layoutKind switch
             {
-                RibbonCommandLayoutKind.Large => 34,
-                RibbonCommandLayoutKind.Medium => 28,
-                _ => 18
+                RibbonCommandLayoutKind.Large => 38,
+                RibbonCommandLayoutKind.Medium => 24,
+                _ => 24
             },
             Height = layoutKind switch
             {
-                RibbonCommandLayoutKind.Large => 30,
+                RibbonCommandLayoutKind.Large => 36,
                 RibbonCommandLayoutKind.Medium => 24,
-                _ => 16
+                _ => 24
             },
             CornerRadius = tall ? new CornerRadius(3) : new CornerRadius(2),
             Background = slotBackground,
             BorderBrush = slotBorder,
             BorderThickness = slotBorder is null ? new Thickness(0) : new Thickness(1),
-            Child = RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush),
+            Child = RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush),
             SnapsToDevicePixels = true,
-            HorizontalAlignment = tall ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Margin = tall ? new Thickness(0, 1, 0, 2) : new Thickness(0, 0, 4, 0)
+            Margin = tall ? new Thickness(0, 0, 0, 2) : new Thickness(0, 0, 5, 0)
         };
 
         var labelBlock = new TextBlock
         {
             Text = label,
             Tag = "RibbonLabel",
-            FontSize = 10,
+            FontSize = 12,
+            FontWeight = FontWeights.Normal,
             TextWrapping = tall ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            MaxWidth = tall ? 72 : double.PositiveInfinity,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = tall ? 96 : double.PositiveInfinity,
+            TextTrimming = tall ? TextTrimming.None : TextTrimming.CharacterEllipsis,
             HorizontalAlignment = tall ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            TextAlignment = tall ? TextAlignment.Center : TextAlignment.Left
+            TextAlignment = tall ? TextAlignment.Center : TextAlignment.Left,
+            LineHeight = tall ? 14 : double.NaN
         };
 
         if (tall)
         {
             return new StackPanel
             {
+                Tag = "RibbonCommandContent",
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
@@ -1000,6 +1326,7 @@ public partial class MainWindow
 
         return new StackPanel
         {
+            Tag = "RibbonCommandContent",
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
@@ -1008,6 +1335,24 @@ public partial class MainWindow
                 iconSlot,
                 labelBlock
             }
+        };
+    }
+
+    private static FrameworkElement CreateRibbonIconOnlyContent(string commandName, double iconSize)
+    {
+        var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
+        var (_, _, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
+        var iconElement = RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush);
+        iconElement.Tag = "RibbonIcon";
+
+        return new Grid
+        {
+            Tag = "RibbonCommandContent",
+            Width = 24,
+            Height = 24,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Children = { iconElement }
         };
     }
 
@@ -1037,20 +1382,23 @@ public partial class MainWindow
         switch (layoutKind)
         {
             case RibbonCommandLayoutKind.Large:
-                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, 74);
-                button.Height = 64;
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetLargeRibbonCommandWidth(GetRibbonButtonTitleOrLabel(button)));
+                button.Height = 72;
                 button.Padding = new Thickness(3, 2, 3, 2);
                 button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                 break;
             case RibbonCommandLayoutKind.Medium:
-                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, 58);
-                button.Height = 50;
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, 74);
+                button.Height = 56;
                 button.Padding = new Thickness(3, 2, 3, 2);
                 button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                 break;
             default:
-                button.Height = button.Height is > 0 ? button.Height : 22;
-                button.Padding = new Thickness(3, 1, 3, 1);
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, 72);
+                button.Height = Math.Max(button.Height is > 0 ? button.Height : 0, 30);
+                button.Padding = new Thickness(4, 2, 4, 2);
+                button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
                 break;
         }
     }
@@ -1130,10 +1478,37 @@ public partial class MainWindow
             return;
 
         var label = FindRibbonContentLabel(button.Content) ?? commandName;
-        button.Height = 22;
-        button.Padding = new Thickness(3, 1, 3, 1);
+        button.Height = 30;
+        button.Width = GetSmallRibbonCommandWidth(label);
+        SetRibbonCompactWidthTag(button, button.Width, 30);
+        button.Padding = new Thickness(4, 2, 4, 2);
         button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
+    }
+
+    private static double GetSmallRibbonCommandWidth(string label)
+    {
+        var length = string.IsNullOrWhiteSpace(label) ? 0 : label.Trim().Length;
+        return length switch
+        {
+            <= 3 => 58,
+            <= 6 => 66,
+            <= 10 => 92,
+            <= 14 => 126,
+            _ => Math.Min(150, 44 + length * 6)
+        };
+    }
+
+    private static double GetLargeRibbonCommandWidth(string label)
+    {
+        var length = string.IsNullOrWhiteSpace(label) ? 0 : label.Trim().Length;
+        return length switch
+        {
+            <= 5 => 62,
+            <= 9 => 76,
+            <= 14 => 88,
+            _ => 96
+        };
     }
 }
