@@ -12175,6 +12175,38 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeSortState()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableSortStateTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeSortState: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.NativeSortStateXml.Should().Contain("sortState");
+        table.NativeSortStateXml.Should().Contain("descending=\"1\"");
+        table.NativeSortStateXml.Should().Contain("ref=\"B2:B3\"");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("sortState");
+        tableXml.Should().Contain("descending=\"1\"");
+        tableXml.Should().Contain("ref=\"B2:B3\"");
+        tableXml.IndexOf("autoFilter", StringComparison.Ordinal).Should().BeLessThan(tableXml.IndexOf("sortState", StringComparison.Ordinal));
+        tableXml.IndexOf("sortState", StringComparison.Ordinal).Should().BeLessThan(tableXml.IndexOf("tableColumns", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
@@ -13751,7 +13783,8 @@ public class FileAdapterSmokeTests
         bool includeFilterValues = false,
         bool includeColumnFormulas = false,
         bool includeCustomFilter = false,
-        bool includeCustomFilterWithExtension = false)
+        bool includeCustomFilterWithExtension = false,
+        bool includeSortState = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13793,6 +13826,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeSortState
+                            ? StructuredTableWithSortStateXml
                         : includeCustomFilterWithExtension
                             ? StructuredTableWithCustomFilterAndExtensionXml
                         : includeCustomFilter
@@ -14798,6 +14833,29 @@ public class FileAdapterSmokeTests
               </extLst>
             </filterColumn>
           </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithSortStateXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3"/>
+          <sortState ref="A1:B3">
+            <sortCondition descending="1" ref="B2:B3"/>
+          </sortState>
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
             <tableColumn id="2" name="Amount"/>
