@@ -1456,6 +1456,10 @@
                                         local:RibbonTooltip.Title="Move Chart"
                                         local:RibbonTooltip.KeyTip="MC"
                                         local:RibbonTooltip.Description="Move the current chart to another sheet or a new chart sheet."/>
+                                <Button Content="Chart Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartStylesBtn_Click"
+                                        local:RibbonTooltip.Title="Chart Styles"
+                                        local:RibbonTooltip.KeyTip="CY"
+                                        local:RibbonTooltip.Description="Choose a saved Excel chart style for the current chart."/>
                                 <Button Content="Line"   Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
                                         local:RibbonTooltip.Title="Line Chart"
                                         local:RibbonTooltip.KeyTip="L"

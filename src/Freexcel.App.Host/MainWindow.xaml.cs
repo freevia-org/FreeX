@@ -7975,6 +7975,21 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void ChartStylesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog("Chart Styles", "Insert or select a chart before choosing a chart style.", out var chart))
+            return;
+
+        var dialog = new ChartStyleDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(new SetChartStyleCommand(_currentSheetId, chart.Id, dialog.Result.ChartStyleId), "Chart Styles"))
+            return;
+
+        UpdateViewport();
+    }
+
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
