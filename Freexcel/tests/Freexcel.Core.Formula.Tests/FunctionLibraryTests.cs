@@ -4235,6 +4235,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Lookup_TreatsScalarLookupAndResultVectorsAsSingleItemArrays()
+    {
+        _eval.Evaluate("=LOOKUP(5,5,\"found\")", MakeSheet()).Should().Be(new TextValue("found"));
+    }
+
+    [Fact]
     public void Lookup_ArrayForm_SearchesFirstRowAndReturnsLastRowWhenWiderThanTall()
     {
         var sheet = MakeSheet(
