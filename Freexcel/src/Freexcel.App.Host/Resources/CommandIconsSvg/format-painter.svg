@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Format Painter">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
+      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
+    </style>
+  </defs>
+  <rect width="54" height="54" fill="none"/>
+  <g><rect fill="#8a5a1f" stroke="#202124" stroke-width="1.7" x="23.22" y="6.48" width="7.56" height="18.36" rx="1.89"/><rect fill="#f8fafc" stroke="#202124" stroke-width="1.7" x="15.66" y="23.22" width="22.68" height="7.56" rx="1.35"/><path fill="#217346" stroke="#202124" stroke-width="1.6" stroke-linejoin="round" d="M14.58 30.78h24.84v5.4c0 5.94-4.32 9.72-8.64 11.88l-3.78 2.16l-3.78-2.16c-4.32-2.16-8.64-5.94-8.64-11.88z"/><path stroke="#f6d14a" stroke-width="1.8" stroke-linecap="round" d="M18.36 34.56h17.28"/>  </g>
+</svg>
+

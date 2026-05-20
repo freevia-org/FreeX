@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Paste">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
+      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
+    </style>
+  </defs>
+  <rect width="54" height="54" fill="none"/>
+  <g><rect class="paper" stroke="#202124" stroke-width="2" x="13.5" y="15.12" width="27" height="31.32" rx="2.16"/><path class="s" d="M20.52 15.12c0-5.4 12.96-5.4 12.96 0v4.86h-12.96z"/><path class="s" d="M19.98 29.16h14.04M19.98 36.72h14.04"/>  </g>
+</svg>
+

@@ -2,26 +2,24 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using SharpVectors.Converters;
+using SharpVectors.Renderers.Wpf;
 
 namespace Freexcel.App.Host;
 
 public static class RibbonIconFactory
 {
     private const double Artboard = 24;
-    private const int UltraCommandIconPixels = 96;
-    private const int VeryLargeCommandIconPixels = 80;
-    private const int MegaCommandIconPixels = 72;
-    private const int SuperCommandIconPixels = 64;
-    private const int JumboCommandIconPixels = 56;
-    private const int ExtraLargeCommandIconPixels = 48;
-    private const int LargeCommandIconPixels = 40;
-    private const int MediumCommandIconPixels = 32;
-    private const int SmallCommandIconPixels = 24;
     private static readonly object CommandIconCacheGate = new();
     private static readonly Dictionary<string, ImageSource> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> MissingCommandIcons = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly WpfDrawingSettings SvgDrawingSettings = new()
+    {
+        IncludeRuntime = false,
+        OptimizePath = true,
+        TextAsGeometry = true
+    };
 
     public static FrameworkElement CreateCommandIcon(
         string commandName,
@@ -37,14 +35,12 @@ public static class RibbonIconFactory
             var image = new Image
             {
                 Source = source,
+                Width = size,
+                Height = size,
                 Stretch = Stretch.Uniform,
                 SnapsToDevicePixels = true,
                 UseLayoutRounding = true
             };
-            SetDpiAwareIconSize(image, size);
-            image.Loaded += (_, _) => SetDpiAwareIconSize(image, size);
-            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
-            RenderOptions.SetEdgeMode(image, EdgeMode.Aliased);
             return image;
         }
 
@@ -318,36 +314,15 @@ public static class RibbonIconFactory
         };
     }
 
-    private static void SetDpiAwareIconSize(FrameworkElement element, double physicalPixels)
-    {
-        var dpi = VisualTreeHelper.GetDpi(element);
-        var dpiScaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1;
-        var dpiScaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
-        element.Width = physicalPixels / dpiScaleX;
-        element.Height = physicalPixels / dpiScaleY;
-    }
-
     private static ImageSource? TryLoadCommandIcon(string commandName, double size)
     {
         var slug = ToCommandIconSlug(commandName);
         if (slug.Length == 0)
             return null;
 
-        var pixelSize = size switch
-        {
-            >= 96 => UltraCommandIconPixels,
-            >= 80 => VeryLargeCommandIconPixels,
-            >= 72 => MegaCommandIconPixels,
-            >= 64 => SuperCommandIconPixels,
-            >= 56 => JumboCommandIconPixels,
-            >= 48 => ExtraLargeCommandIconPixels,
-            >= 40 => LargeCommandIconPixels,
-            >= 32 => MediumCommandIconPixels,
-            _ => SmallCommandIconPixels
-        };
         foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
         {
-            var cacheKey = $"{pixelSize}/{candidateSlug}";
+            var cacheKey = candidateSlug;
             lock (CommandIconCacheGate)
             {
                 if (CommandIconCache.TryGetValue(cacheKey, out var cached))
@@ -359,9 +334,8 @@ public static class RibbonIconFactory
             var filePath = System.IO.Path.Combine(
                 AppContext.BaseDirectory,
                 "Resources",
-                "CommandIcons",
-                pixelSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                candidateSlug + ".png");
+                "CommandIconsSvg",
+                candidateSlug + ".svg");
             if (!File.Exists(filePath))
             {
                 lock (CommandIconCacheGate)
@@ -369,18 +343,21 @@ public static class RibbonIconFactory
                 continue;
             }
 
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.DecodePixelWidth = pixelSize;
-            bitmap.DecodePixelHeight = pixelSize;
-            bitmap.UriSource = new System.Uri(filePath, System.UriKind.Absolute);
-            bitmap.EndInit();
-            bitmap.Freeze();
+            using var reader = new FileSvgReader(SvgDrawingSettings);
+            var drawing = reader.Read(filePath);
+            if (drawing is null)
+            {
+                lock (CommandIconCacheGate)
+                    MissingCommandIcons.Add(cacheKey);
+                continue;
+            }
+
+            var vectorImage = new DrawingImage(drawing);
+            vectorImage.Freeze();
 
             lock (CommandIconCacheGate)
-                CommandIconCache[cacheKey] = bitmap;
-            return bitmap;
+                CommandIconCache[cacheKey] = vectorImage;
+            return vectorImage;
         }
 
         return null;
