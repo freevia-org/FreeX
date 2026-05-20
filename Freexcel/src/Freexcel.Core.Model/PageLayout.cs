@@ -139,6 +139,19 @@ public static class WorksheetPageLayout
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns)
     {
+        return GetDisplayedCommentOverlays(
+            comments,
+            EmptyThreadedComments,
+            pageRows,
+            pageColumns);
+    }
+
+    public static IReadOnlyList<WorksheetDisplayedComment> GetDisplayedCommentOverlays(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        IReadOnlyList<uint> pageRows,
+        IReadOnlyList<uint> pageColumns)
+    {
         var rowIndexes = pageRows
             .Select((row, index) => (row, index))
             .ToDictionary(item => item.row, item => item.index);
@@ -146,7 +159,12 @@ public static class WorksheetPageLayout
             .Select((column, index) => (column, index))
             .ToDictionary(item => item.column, item => item.index);
 
-        return comments
+        var mergedComments = comments
+            .Concat(threadedComments
+                .Where(pair => !comments.ContainsKey(pair.Key))
+                .Select(pair => new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Text)));
+
+        return mergedComments
             .Where(pair => rowIndexes.ContainsKey(pair.Key.Row) && columnIndexes.ContainsKey(pair.Key.Col))
             .OrderBy(pair => rowIndexes[pair.Key.Row])
             .ThenBy(pair => columnIndexes[pair.Key.Col])
@@ -157,6 +175,9 @@ public static class WorksheetPageLayout
                 columnIndexes[pair.Key.Col]))
             .ToList();
     }
+
+    private static readonly IReadOnlyDictionary<CellAddress, ThreadedComment> EmptyThreadedComments =
+        new Dictionary<CellAddress, ThreadedComment>();
 
     private static double ClampFraction(double value) =>
         Math.Clamp(value, 0.0, 1.0);
