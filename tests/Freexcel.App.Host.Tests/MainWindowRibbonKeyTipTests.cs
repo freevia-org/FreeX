@@ -123,6 +123,26 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void HomePasteKeyTip_OpensExcelStylePasteMenu()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.OpenRibbonMenu(Key.H, Key.V);
+
+            harness.SelectedRibbonTabHeader.Should().Be("Home");
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemGestureText("Paste").Should().Be("P");
+            harness.ActiveMenuItemGestureText("Values").Should().Be("V");
+            harness.ActiveMenuItemGestureText("Formulas").Should().Be("F");
+            harness.ActiveMenuItemGestureText("Formatting").Should().Be("R");
+            harness.ActiveMenuItemGestureText("Transpose").Should().Be("T");
+            harness.ActiveMenuItemGestureText("Paste Special...").Should().Be("S");
+        });
+    }
+
+    [Fact]
     public void FormulasFunctionLibraryDynamicMenu_IsKeyTipRoutable()
     {
         RunSta(() =>
