@@ -168,7 +168,8 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new SubtotalDialog { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new SubtotalDialog(sheet is null ? null : SubtotalDialog.BuildColumnChoices(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         if (!TryExecuteRepeatableCurrentRangeCommand(

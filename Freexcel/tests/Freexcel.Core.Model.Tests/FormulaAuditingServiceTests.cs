@@ -257,6 +257,43 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsInColumn()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(40));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), Cell.FromFormula("SUM(B1:B3)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("B5");
+        issue.FormulaText.Should().Be("=SUM(B1:B3)");
+        issue.Description.Should().Contain("omits adjacent cells");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsInRow()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 4), new NumberValue(40));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 5), Cell.FromFormula("SUM(A2:C2)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("E2");
+        issue.FormulaText.Should().Be("=SUM(A2:C2)");
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledFormulaRefersToBlankCellsRule()
     {
         var wb = new Workbook("test");
@@ -339,6 +376,21 @@ public sealed class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("B2*2"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 3), Cell.FromFormula("A2*2"));
         wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.InconsistentFormulaErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledFormulaOmitsAdjacentCellsRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("SUM(A1:A2)"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
 
         FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
             .Should().BeEmpty();
@@ -433,6 +485,30 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresFormulaOmitsAdjacentCellsIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 4, 1);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(address, Cell.FromFormula("SUM(A1:A2)"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -463,6 +539,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
                 (FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas"),
+                (FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region"),
                 (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
                 (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
