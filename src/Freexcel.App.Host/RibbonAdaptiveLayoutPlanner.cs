@@ -242,14 +242,6 @@ public static class RibbonAdaptiveLayoutPlanner
         IReadOnlyList<string> groupNames,
         RibbonAdaptiveGroupState[] states)
     {
-        if (availableWidth is > 1320 and <= 1500 &&
-            TryFindGroupIndex(groupNames, "Editing", out var editingIndex))
-        {
-            for (var i = editingIndex; i < states.Length; i++)
-                states[i] = RibbonAdaptiveGroupState.Collapsed;
-            return;
-        }
-
         if (availableWidth <= 900 &&
             TryFindGroupIndex(groupNames, "Font", out var fontIndex))
         {
@@ -266,10 +258,18 @@ public static class RibbonAdaptiveLayoutPlanner
             return;
         }
 
-        if (availableWidth <= 1320 &&
+        if (availableWidth <= 1800 &&
             TryFindGroupIndex(groupNames, "Styles", out var stylesIndex))
         {
             for (var i = stylesIndex; i < states.Length; i++)
+                states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return;
+        }
+
+        if (availableWidth <= 2000 &&
+            TryFindGroupIndex(groupNames, "Cells", out var cellsIndex))
+        {
+            for (var i = cellsIndex; i < states.Length; i++)
                 states[i] = RibbonAdaptiveGroupState.Collapsed;
         }
     }

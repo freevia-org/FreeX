@@ -1,6 +1,8 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
 namespace Freexcel.App.Host;
@@ -8,6 +10,54 @@ namespace Freexcel.App.Host;
 public static class RibbonIconFactory
 {
     private const double Artboard = 24;
+    private const int UltraCommandIconPixels = 96;
+    private const int VeryLargeCommandIconPixels = 80;
+    private const int MegaCommandIconPixels = 72;
+    private const int SuperCommandIconPixels = 64;
+    private const int JumboCommandIconPixels = 56;
+    private const int ExtraLargeCommandIconPixels = 48;
+    private const int LargeCommandIconPixels = 40;
+    private const int MediumCommandIconPixels = 32;
+    private const int SmallCommandIconPixels = 24;
+    private static readonly object CommandIconCacheGate = new();
+    private static readonly Dictionary<string, ImageSource> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> MissingCommandIcons = new(StringComparer.OrdinalIgnoreCase);
+
+    public static FrameworkElement CreateCommandIcon(
+        string commandName,
+        RibbonCommandIcon fallbackIcon,
+        double size,
+        Brush glyphBrush)
+    {
+        if (IsWhiteBrush(glyphBrush))
+            return CreateIcon(fallbackIcon, size, glyphBrush);
+
+        if (TryLoadCommandIcon(commandName, size) is { } source)
+        {
+            var image = new Image
+            {
+                Source = source,
+                Stretch = Stretch.Uniform,
+                SnapsToDevicePixels = true,
+                UseLayoutRounding = true
+            };
+            SetDpiAwareIconSize(image, size);
+            image.Loaded += (_, _) => SetDpiAwareIconSize(image, size);
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+            RenderOptions.SetEdgeMode(image, EdgeMode.Aliased);
+            return image;
+        }
+
+        return CreateIcon(fallbackIcon, size, glyphBrush);
+    }
+
+    private static bool IsWhiteBrush(Brush brush)
+    {
+        return brush is SolidColorBrush solid &&
+               solid.Color.R >= 245 &&
+               solid.Color.G >= 245 &&
+               solid.Color.B >= 245;
+    }
 
     public static FrameworkElement CreateIcon(RibbonCommandIcon icon, double size, Brush glyphBrush)
     {
@@ -266,6 +316,123 @@ public static class RibbonIconFactory
             Child = canvas,
             SnapsToDevicePixels = true
         };
+    }
+
+    private static void SetDpiAwareIconSize(FrameworkElement element, double physicalPixels)
+    {
+        var dpi = VisualTreeHelper.GetDpi(element);
+        var dpiScaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1;
+        var dpiScaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
+        element.Width = physicalPixels / dpiScaleX;
+        element.Height = physicalPixels / dpiScaleY;
+    }
+
+    private static ImageSource? TryLoadCommandIcon(string commandName, double size)
+    {
+        var slug = ToCommandIconSlug(commandName);
+        if (slug.Length == 0)
+            return null;
+
+        var pixelSize = size switch
+        {
+            >= 96 => UltraCommandIconPixels,
+            >= 80 => VeryLargeCommandIconPixels,
+            >= 72 => MegaCommandIconPixels,
+            >= 64 => SuperCommandIconPixels,
+            >= 56 => JumboCommandIconPixels,
+            >= 48 => ExtraLargeCommandIconPixels,
+            >= 40 => LargeCommandIconPixels,
+            >= 32 => MediumCommandIconPixels,
+            _ => SmallCommandIconPixels
+        };
+        foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
+        {
+            var cacheKey = $"{pixelSize}/{candidateSlug}";
+            lock (CommandIconCacheGate)
+            {
+                if (CommandIconCache.TryGetValue(cacheKey, out var cached))
+                    return cached;
+                if (MissingCommandIcons.Contains(cacheKey))
+                    continue;
+            }
+
+            var filePath = System.IO.Path.Combine(
+                AppContext.BaseDirectory,
+                "Resources",
+                "CommandIcons",
+                pixelSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                candidateSlug + ".png");
+            if (!File.Exists(filePath))
+            {
+                lock (CommandIconCacheGate)
+                    MissingCommandIcons.Add(cacheKey);
+                continue;
+            }
+
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.DecodePixelWidth = pixelSize;
+            bitmap.DecodePixelHeight = pixelSize;
+            bitmap.UriSource = new System.Uri(filePath, System.UriKind.Absolute);
+            bitmap.EndInit();
+            bitmap.Freeze();
+
+            lock (CommandIconCacheGate)
+                CommandIconCache[cacheKey] = bitmap;
+            return bitmap;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
+    {
+        yield return slug;
+
+        var alias = slug switch
+        {
+            "increase-font-size" => "grow-font",
+            "decrease-font-size" => "shrink-font",
+            "accounting-number-format" => "accounting-currency",
+            "increase-decimal-places" => "increase-decimal",
+            "decrease-decimal-places" => "decrease-decimal",
+            "merge-and-center" => "merge-center",
+            "sort-and-filter" => "sort",
+            "find-and-select" => "find",
+            "percent-style" => "percent-style",
+            _ => ""
+        };
+
+        if (alias.Length > 0 && !string.Equals(alias, slug, StringComparison.Ordinal))
+            yield return alias;
+    }
+
+    private static string ToCommandIconSlug(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var lower = text.Trim().ToLowerInvariant().Replace("&amp;", "and", StringComparison.Ordinal);
+        var builder = new System.Text.StringBuilder(lower.Length);
+        var pendingDash = false;
+
+        foreach (var ch in lower)
+        {
+            if (ch is >= 'a' and <= 'z' or >= '0' and <= '9')
+            {
+                if (pendingDash && builder.Length > 0)
+                    builder.Append('-');
+                builder.Append(ch);
+                pendingDash = false;
+            }
+            else
+            {
+                pendingDash = builder.Length > 0;
+            }
+        }
+
+        return builder.ToString().Trim('-');
     }
 
     private static Canvas CreateCanvas() => new()
@@ -751,7 +918,7 @@ public static class RibbonIconFactory
 
     private static void AddPath(Canvas canvas, string data, Brush brush, double thickness, Brush? fill = null, double fillOpacity = 1)
     {
-        var path = new Path
+        var path = new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(data),
             Stroke = brush,
