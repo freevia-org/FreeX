@@ -11,6 +11,7 @@ using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
 namespace Freexcel.App.UI;
 
 public readonly record struct DrawingObjectColors(CellColor Fill, CellColor Outline);
+public sealed record ConditionalIconCellLayout(Rect IconRect, Rect TextRect, bool ShouldDrawText);
 
 /// <summary>
 /// A high-performance, virtualized spreadsheet grid control.
@@ -78,6 +79,8 @@ public class GridView : FrameworkElement
     private static readonly Brush    SplitScrollbarThumbBrush = MakeBrush(188, 188, 188);
     private static readonly Pen      SplitScrollbarPen        = new(MakeBrush(196, 196, 196), 1);
     private static readonly Brush    FormulaTraceArrowBrush   = MakeBrush(0, 102, 204);
+    private const double ConditionalIconGutterWidth = 20;
+    private const double ConditionalIconSize = 10;
     private static readonly Pen      FormulaTraceArrowPen     = MakeFormulaTraceArrowPen();
 
     private static double ToDisplayFontSize(double pointSize) =>
@@ -2841,10 +2844,23 @@ public class GridView : FrameworkElement
                 DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
             }
 
-            if (string.IsNullOrEmpty(cell.DisplayText))
+            if (string.IsNullOrEmpty(cell.DisplayText) && cell.ConditionalIcon is null)
             {
                 dc.Pop();
                 continue;
+            }
+
+            if (cell.ConditionalIcon is { } splitIcon)
+            {
+                var iconLayout = CalculateConditionalIconCellLayout(rect, splitIcon);
+                DrawConditionalIcon(dc, splitIcon, iconLayout.IconRect);
+                if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
+                {
+                    dc.Pop();
+                    continue;
+                }
+
+                rect = iconLayout.TextRect;
             }
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
@@ -3028,14 +3044,14 @@ public class GridView : FrameworkElement
 
         var occupied = new HashSet<(uint, uint)>(
             Viewport.Cells
-                .Where(c => !string.IsNullOrEmpty(c.DisplayText))
+                .Where(c => !string.IsNullOrEmpty(c.DisplayText) || c.ConditionalIcon is not null)
                 .Select(c => (c.Row, c.Col)));
 
         foreach (var cell in Viewport.Cells)
         {
             if (!rowLookup.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;
-            if (string.IsNullOrEmpty(cell.DisplayText)) continue;
+            if (string.IsNullOrEmpty(cell.DisplayText) && cell.ConditionalIcon is null) continue;
 
             var cellMerge = FindMerge(cell.Row, cell.Col);
             if (cellMerge.HasValue && (cell.Row != cellMerge.Value.Start.Row || cell.Col != cellMerge.Value.Start.Col))
@@ -3055,12 +3071,22 @@ public class GridView : FrameworkElement
 
             var rect = new Rect(
                 colMetric.LeftOffset + ActualRowHeaderWidth, rowMetric.TopOffset + EffectiveColHeaderHeight, w, h);
+            double renderWidth = w;
+
+            if (cell.ConditionalIcon is { } icon)
+            {
+                var iconLayout = CalculateConditionalIconCellLayout(rect, icon);
+                DrawConditionalIcon(dc, icon, iconLayout.IconRect);
+                if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
+                    continue;
+                rect = iconLayout.TextRect;
+                renderWidth = rect.Width;
+            }
 
             var hAlign   = style?.HorizontalAlignment ?? CellHAlign.General;
             bool isNumeric = cell.RawValue is NumberValue or DateTimeValue;
             bool wrapText  = style?.WrapText == true;
 
-            double renderWidth = w;
             bool canOverflow = CanOverflowCellText(style, cell.RawValue, cell.DisplayText, cellMerge);
 
             if (canOverflow)
@@ -3160,6 +3186,91 @@ public class GridView : FrameworkElement
             }
             dc.Pop();
         }
+    }
+
+    public static ConditionalIconCellLayout CalculateConditionalIconCellLayout(
+        Rect cellRect,
+        ConditionalFormatIcon icon)
+    {
+        var size = Math.Min(ConditionalIconSize, Math.Max(6, cellRect.Height - 6));
+        var iconRect = new Rect(
+            Math.Round(cellRect.Left + 4),
+            Math.Round(cellRect.Top + (cellRect.Height - size) / 2),
+            size,
+            size);
+
+        if (!icon.ShowValue)
+            return new ConditionalIconCellLayout(iconRect, Rect.Empty, ShouldDrawText: false);
+
+        var textLeft = Math.Min(cellRect.Right, cellRect.Left + ConditionalIconGutterWidth);
+        var textRect = new Rect(
+            textLeft,
+            cellRect.Top,
+            Math.Max(0, cellRect.Right - textLeft),
+            cellRect.Height);
+        return new ConditionalIconCellLayout(iconRect, textRect, ShouldDrawText: true);
+    }
+
+    private static void DrawConditionalIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
+    {
+        if (icon.Style.Contains("TrafficLights", StringComparison.OrdinalIgnoreCase))
+        {
+            var brush = icon.IconIndex switch
+            {
+                0 => MakeBrush(192, 0, 0),
+                1 => MakeBrush(255, 192, 0),
+                _ => MakeBrush(0, 176, 80)
+            };
+            dc.DrawEllipse(brush, new Pen(MakeBrush(96, 96, 96), 0.75), Center(rect), rect.Width / 2, rect.Height / 2);
+            return;
+        }
+
+        var arrowBrush = icon.IconIndex switch
+        {
+            0 => MakeBrush(192, 0, 0),
+            1 => MakeBrush(255, 192, 0),
+            _ => MakeBrush(0, 176, 80)
+        };
+        var geometry = CreateArrowGeometry(rect, icon.IconIndex);
+        dc.DrawGeometry(arrowBrush, new Pen(MakeBrush(96, 96, 96), 0.75), geometry);
+    }
+
+    private static Point Center(Rect rect) =>
+        new(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
+
+    private static StreamGeometry CreateArrowGeometry(Rect rect, int iconIndex)
+    {
+        var geometry = new StreamGeometry();
+        using var context = geometry.Open();
+        if (iconIndex == 1)
+        {
+            context.BeginFigure(new Point(rect.Left, rect.Top + rect.Height / 2), true, true);
+            context.LineTo(new Point(rect.Right - 3, rect.Top + rect.Height / 2), true, false);
+            context.LineTo(new Point(rect.Right - 3, rect.Top + 2), true, false);
+            context.LineTo(new Point(rect.Right, rect.Top + rect.Height / 2), true, false);
+            context.LineTo(new Point(rect.Right - 3, rect.Bottom - 2), true, false);
+            context.LineTo(new Point(rect.Right - 3, rect.Top + rect.Height / 2), true, false);
+        }
+        else if (iconIndex == 0)
+        {
+            context.BeginFigure(new Point(rect.Left + rect.Width / 2, rect.Bottom), true, true);
+            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Top + 3), true, false);
+            context.LineTo(new Point(rect.Left + 2, rect.Top + 3), true, false);
+            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Top), true, false);
+            context.LineTo(new Point(rect.Right - 2, rect.Top + 3), true, false);
+            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Top + 3), true, false);
+        }
+        else
+        {
+            context.BeginFigure(new Point(rect.Left + rect.Width / 2, rect.Top), true, true);
+            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom - 3), true, false);
+            context.LineTo(new Point(rect.Left + 2, rect.Bottom - 3), true, false);
+            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom), true, false);
+            context.LineTo(new Point(rect.Right - 2, rect.Bottom - 3), true, false);
+            context.LineTo(new Point(rect.Left + rect.Width / 2, rect.Bottom - 3), true, false);
+        }
+        geometry.Freeze();
+        return geometry;
     }
 
     private static void DrawBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2)
