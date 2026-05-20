@@ -7,6 +7,11 @@ namespace Freexcel.App.Host;
 public sealed class PrintPreviewDialog : Window
 {
     public PrintPreviewDialog(string workbookName, FixedDocument document)
+        : this(workbookName, document, new PrintSettingsPlan(["Print active sheet"]))
+    {
+    }
+
+    public PrintPreviewDialog(string workbookName, FixedDocument document, PrintSettingsPlan settings)
     {
         Title = CreateTitle(workbookName);
         Width = 900;
@@ -26,6 +31,15 @@ public sealed class PrintPreviewDialog : Window
         };
         printButton.Click += (_, _) => ShowNativePrintDialog(document);
         toolbar.Items.Add(printButton);
+        toolbar.Items.Add(new Separator());
+        toolbar.Items.Add(new TextBlock
+        {
+            Text = settings.Summary,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 620
+        });
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
         root.Children.Add(new DocumentViewer { Document = document });
