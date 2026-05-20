@@ -100,6 +100,31 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void DrawingAndPictureController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var drawingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Drawing.cs");
+
+        File.Exists(drawingSourcePath).Should().BeTrue();
+        var drawingSource = File.ReadAllText(drawingSourcePath);
+
+        mainSource.Should().NotContain("private void InsertPictureBtn_Click(");
+        mainSource.Should().NotContain("private void PictureCropBtn_Click(");
+        mainSource.Should().NotContain("private void InsertTextBox()");
+        mainSource.Should().NotContain("private void InsertDrawingShape(");
+        mainSource.Should().NotContain("private void ResizeSelectedDrawingObject()");
+        mainSource.Should().NotContain("private DrawingObjectTarget? GetTargetDrawingObject(");
+
+        drawingSource.Should().Contain("private void InsertPictureBtn_Click(");
+        drawingSource.Should().Contain("private void PictureCropBtn_Click(");
+        drawingSource.Should().Contain("private void InsertTextBox()");
+        drawingSource.Should().Contain("private void InsertDrawingShape(");
+        drawingSource.Should().Contain("private void ResizeSelectedDrawingObject()");
+        drawingSource.Should().Contain("private DrawingObjectTarget? GetTargetDrawingObject(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -631,7 +656,7 @@ public sealed class MainWindowSourceHygieneTests
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
         xaml.Should().Contain("Header=\"Crop...\"");
         xaml.Should().Contain("Header=\"Reset Crop\"");
