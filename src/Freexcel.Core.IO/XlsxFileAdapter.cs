@@ -675,14 +675,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-            var relTargets = relsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var relTargets = XlsxRelationshipReader.ReadTargets(
+                relsXml,
+                packageRelNs,
+                XlsxPackagePath.NormalizeWorkbookTarget);
 
             var differentialStyles = XlsxDifferentialStyleReader.ReadAll(archive, workbookNs);
 
@@ -743,14 +739,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-            var workbookRels = workbookRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var workbookRels = XlsxRelationshipReader.ReadTargets(
+                workbookRelsXml,
+                packageRelNs,
+                target => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target));
 
             var pivotCaches = XlsxPivotCacheReader.Load(archive, workbookXml, workbookRels, workbookNs, relNs);
             var pivotCachesById = pivotCaches.ToDictionary(cache => cache.CacheId);
@@ -906,7 +898,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (pivotRelIds.Count == 0)
                 continue;
 
-            var worksheetRels = LoadRelationshipTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
+            var worksheetRels = XlsxRelationshipReader.LoadTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
             foreach (var pivotRelId in pivotRelIds)
             {
                 if (!worksheetRels.TryGetValue(pivotRelId, out var pivotPath))
@@ -937,22 +929,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ZipArchive archive,
         string relsPath,
         string sourcePart,
-        XNamespace packageRelNs)
-    {
-        var relsEntry = archive.GetEntry(relsPath);
-        if (relsEntry is null)
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var relsXml = LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    }
+        XNamespace packageRelNs) =>
+        XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
 
     private static bool TryReadPivotTable(
         XDocument pivotXml,
