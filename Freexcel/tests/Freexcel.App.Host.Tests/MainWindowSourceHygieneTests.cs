@@ -6,6 +6,148 @@ namespace Freexcel.App.Host.Tests;
 public sealed class MainWindowSourceHygieneTests
 {
     [Fact]
+    public void ViewportAndScrollbarController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var viewportSourcePath = Path.Combine(appHostDirectory, "MainWindow.Viewport.cs");
+
+        File.Exists(viewportSourcePath).Should().BeTrue();
+        var viewportSource = File.ReadAllText(viewportSourcePath);
+
+        mainSource.Should().NotContain("private void UpdateViewport()");
+        mainSource.Should().NotContain("private ViewportModel CreateViewport(");
+        mainSource.Should().NotContain("private void EnsureCellVisible(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseWheel(");
+        mainSource.Should().NotContain("private void Scroll_ValueChanged(");
+
+        viewportSource.Should().Contain("private void UpdateViewport()");
+        viewportSource.Should().Contain("private ViewportModel CreateViewport(");
+        viewportSource.Should().Contain("private void EnsureCellVisible(");
+        viewportSource.Should().Contain("private void SheetGrid_MouseWheel(");
+        viewportSource.Should().Contain("private void Scroll_ValueChanged(");
+    }
+
+    [Fact]
+    public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var backstageSourcePath = Path.Combine(appHostDirectory, "MainWindow.Backstage.cs");
+
+        File.Exists(backstageSourcePath).Should().BeTrue();
+        var backstageSource = File.ReadAllText(backstageSourcePath);
+
+        mainSource.Should().NotContain("private void ShowStartScreen()");
+        mainSource.Should().NotContain("private void UpdateSsRecentList(");
+        mainSource.Should().NotContain("private async Task OpenFileAsync(");
+        mainSource.Should().NotContain("private async void OpenButton_Click(");
+        mainSource.Should().NotContain("private bool SaveWorkbookWithDialog()");
+
+        backstageSource.Should().Contain("private void ShowStartScreen()");
+        backstageSource.Should().Contain("private void UpdateSsRecentList(");
+        backstageSource.Should().Contain("private async Task OpenFileAsync(");
+        backstageSource.Should().Contain("private async void OpenButton_Click(");
+        backstageSource.Should().Contain("private bool SaveWorkbookWithDialog()");
+    }
+
+    [Fact]
+    public void SheetTabsController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var sheetTabsSourcePath = Path.Combine(appHostDirectory, "MainWindow.SheetTabs.cs");
+
+        File.Exists(sheetTabsSourcePath).Should().BeTrue();
+        var sheetTabsSource = File.ReadAllText(sheetTabsSourcePath);
+
+        mainSource.Should().NotContain("private void RefreshSheetTabs()");
+        mainSource.Should().NotContain("private void SheetTab_MouseLeftButtonDown(");
+        mainSource.Should().NotContain("private void UpdateSheetTabNavigation()");
+        mainSource.Should().NotContain("private void RenameSheetFromTab(");
+        mainSource.Should().NotContain("private void MoveSheetTab(");
+
+        sheetTabsSource.Should().Contain("private void RefreshSheetTabs()");
+        sheetTabsSource.Should().Contain("private void SheetTab_MouseLeftButtonDown(");
+        sheetTabsSource.Should().Contain("private void UpdateSheetTabNavigation()");
+        sheetTabsSource.Should().Contain("private void RenameSheetFromTab(");
+        sheetTabsSource.Should().Contain("private void MoveSheetTab(");
+    }
+
+    [Fact]
+    public void ViewWindowAndZoomController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var viewSourcePath = Path.Combine(appHostDirectory, "MainWindow.ViewCommands.cs");
+
+        File.Exists(viewSourcePath).Should().BeTrue();
+        var viewSource = File.ReadAllText(viewSourcePath);
+
+        mainSource.Should().NotContain("private void ViewGridlinesChk_Changed(");
+        mainSource.Should().NotContain("private void SetWorksheetViewMode(");
+        mainSource.Should().NotContain("private void FreezeAtSelectionMenuItem_Click(");
+        mainSource.Should().NotContain("private void ZoomInBtn_Click(");
+        mainSource.Should().NotContain("private void FormulaBarExpandBtn_Click(");
+        mainSource.Should().NotContain("private void RibbonScroll_PreviewMouseWheel(");
+
+        viewSource.Should().Contain("private void ViewGridlinesChk_Changed(");
+        viewSource.Should().Contain("private void SetWorksheetViewMode(");
+        viewSource.Should().Contain("private void FreezeAtSelectionMenuItem_Click(");
+        viewSource.Should().Contain("private void ZoomInBtn_Click(");
+        viewSource.Should().Contain("private void FormulaBarExpandBtn_Click(");
+        viewSource.Should().Contain("private void RibbonScroll_PreviewMouseWheel(");
+    }
+
+    [Fact]
+    public void DrawingAndPictureController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var drawingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Drawing.cs");
+
+        File.Exists(drawingSourcePath).Should().BeTrue();
+        var drawingSource = File.ReadAllText(drawingSourcePath);
+
+        mainSource.Should().NotContain("private void InsertPictureBtn_Click(");
+        mainSource.Should().NotContain("private void PictureCropBtn_Click(");
+        mainSource.Should().NotContain("private void InsertTextBox()");
+        mainSource.Should().NotContain("private void InsertDrawingShape(");
+        mainSource.Should().NotContain("private void ResizeSelectedDrawingObject()");
+        mainSource.Should().NotContain("private DrawingObjectTarget? GetTargetDrawingObject(");
+
+        drawingSource.Should().Contain("private void InsertPictureBtn_Click(");
+        drawingSource.Should().Contain("private void PictureCropBtn_Click(");
+        drawingSource.Should().Contain("private void InsertTextBox()");
+        drawingSource.Should().Contain("private void InsertDrawingShape(");
+        drawingSource.Should().Contain("private void ResizeSelectedDrawingObject()");
+        drawingSource.Should().Contain("private DrawingObjectTarget? GetTargetDrawingObject(");
+    }
+
+    [Fact]
+    public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var printSourcePath = Path.Combine(appHostDirectory, "MainWindow.PrintExport.cs");
+
+        File.Exists(printSourcePath).Should().BeTrue();
+        var printSource = File.ReadAllText(printSourcePath);
+
+        mainSource.Should().NotContain("private void PrintButton_Click(");
+        mainSource.Should().NotContain("private void ExportPdfButton_Click(");
+        mainSource.Should().NotContain("private void ExportViaPrintToPdf(");
+        mainSource.Should().NotContain("private void ExportPdfFallbackAsXps(");
+        mainSource.Should().NotContain("private bool ExportAsXps(");
+
+        printSource.Should().Contain("private void PrintButton_Click(");
+        printSource.Should().Contain("private void ExportPdfButton_Click(");
+        printSource.Should().Contain("private void ExportViaPrintToPdf(");
+        printSource.Should().Contain("private void ExportPdfFallbackAsXps(");
+        printSource.Should().Contain("private bool ExportAsXps(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -68,7 +210,7 @@ public sealed class MainWindowSourceHygieneTests
     public void ArrangeAllMenu_ReflectsStoredWorkbookArrangement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
 
         xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
         xaml.Should().Contain("IsCheckable=\"True\"");
@@ -487,7 +629,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ExportWorkflow_SurfacesPlannedOptionsAndFallbackPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("ExportViaPrintToPdf(request)");
         source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
@@ -550,7 +692,7 @@ public sealed class MainWindowSourceHygieneTests
     public void PictureCropRibbon_OffersCropAndResetCropMenuActions()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Drawing.cs"));
 
         xaml.Should().Contain("Header=\"Crop...\"");
         xaml.Should().Contain("Header=\"Reset Crop\"");
