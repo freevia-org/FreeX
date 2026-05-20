@@ -4302,7 +4302,9 @@ public static class BuiltInFunctions
     private static ScalarValue SortBy(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue arrayRange
+            ? arrayRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
 
         var keys = new List<(RangeValue Range, int Order)>();
         bool? sortRows = null;
@@ -4310,7 +4312,9 @@ public static class BuiltInFunctions
         for (int i = 1; i < args.Count; i++)
         {
             if (args[i] is ErrorValue keyError) return keyError;
-            if (args[i] is not RangeValue byArray) return ErrorValue.Value;
+            var byArray = args[i] is RangeValue byArrayRange
+                ? byArrayRange
+                : new RangeValue(new ScalarValue[1, 1] { { args[i] } });
 
             if (!TryGetSortByOrientation(arr, byArray, out bool keySortsRows)) return ErrorValue.Value;
             if (sortRows.HasValue && sortRows.Value != keySortsRows) return ErrorValue.Value;
