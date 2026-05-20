@@ -121,8 +121,8 @@ public sealed class StructuredTableCommandTests
         var sheet = wb.AddSheet("Sheet1");
         SeedTable(sheet);
         var table = CreateSalesTable(sheet);
-        table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["North"]));
-        table.FilterColumns.Add(new StructuredTableFilterColumnModel(2, ["Open"], IncludeBlank: true));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["North"]));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["Open"], IncludeBlank: true));
         sheet.StructuredTables.Add(table);
         sheet.FilterHiddenRows.Add(20u);
         var ctx = new SimpleCtx(wb);
@@ -138,6 +138,25 @@ public sealed class StructuredTableCommandTests
         command.Revert(ctx);
 
         sheet.FilterHiddenRows.Should().BeEquivalentTo([20u]);
+    }
+
+    [Fact]
+    public void ApplyStructuredTableFiltersCommand_UsesZeroBasedFilterColumnIdsLoadedFromXlsx()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTable(sheet);
+        var table = CreateSalesTable(sheet);
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["North"]));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["Open"], IncludeBlank: true));
+        sheet.StructuredTables.Add(table);
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().Contain([3u, 4u]);
+        sheet.FilterHiddenRows.Should().NotContain([1u, 2u, 5u]);
     }
 
     [Fact]
