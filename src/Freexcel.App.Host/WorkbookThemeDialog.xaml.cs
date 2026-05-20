@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -56,6 +57,28 @@ public partial class WorkbookThemeDialog : Window
 
     private void GrayscalePresetButton_Click(object sender, RoutedEventArgs e) =>
         LoadTheme(WorkbookThemeWorkflow.CreateGrayscaleTheme());
+
+    private void ThemeColorPickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string colorBoxName } ||
+            FindName(colorBoxName) is not TextBox colorBox)
+        {
+            return;
+        }
+
+        CellColor? initialColor = null;
+        try
+        {
+            initialColor = WorkbookThemeDialogColorCodec.ParseColor(colorBox.Text);
+        }
+        catch (FormatException)
+        {
+        }
+
+        var dialog = new ColorPickerDialog(initialColor) { Owner = this };
+        if (dialog.ShowDialog() == true && dialog.SelectedColor.HasValue)
+            colorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(dialog.SelectedColor.Value);
+    }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
