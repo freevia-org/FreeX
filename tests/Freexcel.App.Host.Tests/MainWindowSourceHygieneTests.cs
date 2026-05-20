@@ -328,12 +328,16 @@ public sealed class MainWindowSourceHygieneTests
         var clipboardSource = File.ReadAllText(clipboardSourcePath);
 
         mainSource.Should().NotContain("private record InternalClipboard(");
+        mainSource.Should().NotContain("private void CutBtn_Click(");
+        mainSource.Should().NotContain("private void PasteMenuItem_Click(");
         mainSource.Should().NotContain("private void ExecuteCopy(");
         mainSource.Should().NotContain("private void ExecutePaste(");
         mainSource.Should().NotContain("private void PasteSpecialBtn_Click(");
         mainSource.Should().NotContain("private void ExecutePasteLink(");
 
         clipboardSource.Should().Contain("private record InternalClipboard(");
+        clipboardSource.Should().Contain("private void CutBtn_Click(");
+        clipboardSource.Should().Contain("private void PasteMenuItem_Click(");
         clipboardSource.Should().Contain("private void ExecuteCopy(");
         clipboardSource.Should().Contain("private void ExecutePaste(");
         clipboardSource.Should().Contain("private void PasteSpecialBtn_Click(");
