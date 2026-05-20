@@ -216,6 +216,53 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void DateOccurring_HighlightsDatesInSelectedPeriod()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var today = DateTime.Today;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(today.AddDays(-3)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), DateTimeValue.FromDateTime(today.AddDays(-8)));
+
+        var green = new CellStyle { FillColor = new CellColor(198, 239, 206) };
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.DateOccurring,
+            DateOccurringPeriod = "last7Days",
+            FormatIfTrue = green
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
+        GetCell(vp, 2, 1).Style!.FillColor.Should().NotBe(new CellColor(198, 239, 206));
+    }
+
+    [Fact]
+    public void DuplicateValues_UsesDateValuesInsteadOfTreatingDatesAsBlank()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var today = DateTime.Today;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(today));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), DateTimeValue.FromDateTime(today.AddDays(1)));
+
+        var yellow = new CellStyle { FillColor = new CellColor(255, 235, 132) };
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.DuplicateValues,
+            FormatIfTrue = yellow
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).Style!.FillColor.Should().NotBe(new CellColor(255, 235, 132));
+        GetCell(vp, 2, 1).Style!.FillColor.Should().NotBe(new CellColor(255, 235, 132));
+    }
+
+    [Fact]
     public void MergeStyles_CfBoldOverridesBaseStyle()
     {
         // Arrange
