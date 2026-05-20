@@ -502,6 +502,28 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void FormulaTraceLayoutPlanner_ReturnsCenterPointsOutsideGridView()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)],
+            null,
+            []);
+
+        var arrows = FormulaTraceLayoutPlanner.CalculateLayouts(
+            viewport,
+            [new FormulaTraceArrow(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))],
+            sheetId);
+
+        arrows.Should().ContainSingle().Which.Should().Be(
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new Point(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
+    }
+
+    [Fact]
     public void CalculateFormulaTraceArrowLayouts_ReturnsMarkersForCrossSheetAndOffscreenCells()
     {
         var sheetId = SheetId.New();
