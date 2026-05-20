@@ -971,7 +971,7 @@ public class GridView : FrameworkElement
         if (charts is null)
             return null;
 
-        foreach (var chart in charts.Where(chart => chart.IsPivotChart).Reverse())
+        foreach (var chart in charts.Where(chart => chart.IsPivotChart && chart.ShowPivotChartFieldButtons).Reverse())
         {
             var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
             var topButton = new Rect(rect.Left + 6, rect.Top + 6, Math.Min(150, Math.Max(80, rect.Width - 12)), 24);

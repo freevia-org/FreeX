@@ -911,7 +911,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "minValue"),
                     sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "maxValue"),
                     sharedItems?.Attribute("minDate")?.Value,
-                    sharedItems?.Attribute("maxDate")?.Value));
+                    sharedItems?.Attribute("maxDate")?.Value,
+                    sharedItems is null ? null : ReadPivotCacheSharedItemValues(sharedItems, workbookNs)));
             }
 
             result.Add(cache);
@@ -919,6 +920,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return result;
     }
+
+    private static IReadOnlyList<string> ReadPivotCacheSharedItemValues(XElement sharedItems, XNamespace workbookNs) =>
+        sharedItems
+            .Elements()
+            .Where(element => element.Name == workbookNs + "s" ||
+                              element.Name == workbookNs + "n" ||
+                              element.Name == workbookNs + "d" ||
+                              element.Name == workbookNs + "b" ||
+                              element.Name == workbookNs + "m")
+            .Select(element => element.Attribute("v")?.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToList();
 
     private static PivotCacheSourceType GetPivotCacheSourceType(XElement? cacheSource, XElement? worksheetSource)
     {
@@ -9180,7 +9194,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
             field.MinValue is { } minValue ? new XAttribute("minValue", minValue.ToString(CultureInfo.InvariantCulture)) : null,
             field.MaxValue is { } maxValue ? new XAttribute("maxValue", maxValue.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(field.MinDate) ? new XAttribute("minDate", field.MinDate) : null,
-            !string.IsNullOrWhiteSpace(field.MaxDate) ? new XAttribute("maxDate", field.MaxDate) : null);
+            !string.IsNullOrWhiteSpace(field.MaxDate) ? new XAttribute("maxDate", field.MaxDate) : null,
+            (field.SharedItems ?? []).Select(item => ToPivotCacheSharedItemXml(item, workbookNs)));
+
+    private static XElement ToPivotCacheSharedItemXml(string item, XNamespace workbookNs)
+    {
+        if (double.TryParse(item, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+            return new XElement(workbookNs + "n", new XAttribute("v", item));
+        if (bool.TryParse(item, out var boolean))
+            return new XElement(workbookNs + "b", new XAttribute("v", boolean ? "1" : "0"));
+        if (DateTime.TryParse(item, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            return new XElement(workbookNs + "d", new XAttribute("v", item));
+        return new XElement(workbookNs + "s", new XAttribute("v", item));
+    }
 
     private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
         new(new XElement(packageRelNs + "Relationships"));

@@ -1533,6 +1533,7 @@ public sealed class MainWindowXamlKeyTipTests
             "PivotTableShowDetailsBtn_Click",
             "PivotChartBtn_Click",
             "PivotChartChangeTypeBtn_Click",
+            "PivotChartOptionsBtn_Click",
             "PivotInsertSlicerBtn_Click",
             "PivotInsertTimelineBtn_Click",
             "PivotGrandTotalsBtn_Click",

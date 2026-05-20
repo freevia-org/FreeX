@@ -6697,6 +6697,50 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void PivotChartOptionsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+        {
+            MessageBox.Show(
+                "Select a cell inside an existing PivotTable before changing PivotChart options.",
+                "PivotChart Options",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var chart = FindPivotChartForPivotTable(sheet, pivotTable);
+        if (chart is null)
+        {
+            MessageBox.Show(
+                "Insert or select a PivotChart connected to this PivotTable before changing its options.",
+                "PivotChart Options",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new PivotChartOptionsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(
+                new ConfigurePivotChartOptionsCommand(
+                    _currentSheetId,
+                    chart.Id,
+                    dialog.Result.ChartStyleId,
+                    dialog.Result.ShowFieldButtons),
+                "PivotChart Options"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private static ChartModel? FindPivotChartForPivotTable(Sheet sheet, PivotTableModel pivotTable) =>
+        sheet.Charts.FirstOrDefault(item =>
+            item.IsPivotChart &&
+            string.Equals(item.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase));
+
     private void OnPivotChartFieldButtonRequested(ChartModel chart, string fieldButton, System.Windows.Point position)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);

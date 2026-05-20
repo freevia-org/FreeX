@@ -77,6 +77,36 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void PivotChartRenderer_HidesFieldButtonAnnotationsWhenDisabled()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartFieldButtons = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Region"),
+                Cell(1, 2, "Sum of Amount"),
+                Cell(2, 1, "East"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .NotContain(["PivotTable1", "Axis Fields", "Values"]);
+    }
+
+    [Fact]
     public void GridView_HitTestsPivotChartFieldButtons()
     {
         var sheetId = SheetId.New();
@@ -115,6 +145,32 @@ public sealed class ChartRendererTests
                 columnHeaderHeight: 24)
             .Should()
             .Be((chart, "Values"));
+    }
+
+    [Fact]
+    public void GridView_DoesNotHitTestHiddenPivotChartFieldButtons()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartFieldButtons = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            Left = 100,
+            Top = 80,
+            Width = 400,
+            Height = 300
+        };
+
+        GridView.HitTestPivotChartFieldButton(
+                [chart],
+                new System.Windows.Point(148, 116),
+                rowHeaderWidth: 40,
+                columnHeaderHeight: 24)
+            .Should()
+            .BeNull();
     }
 
     [Fact]
