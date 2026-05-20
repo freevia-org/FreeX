@@ -61,17 +61,19 @@ public static class FlashFillService
         if (exampleSources.Any(s => s.Count < 2) || remainingSources.Any(s => s.Count < 2))
             return null;
 
-        Func<IReadOnlyList<string>, string>[] patterns =
-        [
+        var patterns = new List<Func<IReadOnlyList<string>, string>>
+        {
             s => s[0] + " " + s[1],
             s => s[1] + ", " + s[0],
             s => s[0] + "." + s[1],
             s => GetFirstInitial(s[0]) + GetFirstInitial(s[1]),
             s => GetFirstInitial(s[0]) + ". " + s[1],
             s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant(),
-            s => (s[0] + "." + s[1]).ToLowerInvariant() + "@example.com",
             s => s[1] + " " + GetFirstInitial(s[0]) + "."
-        ];
+        };
+
+        if (TryFirstLastEmailPattern(exampleSources, exampleOutputs) is { } emailPattern)
+            patterns.Insert(6, emailPattern);
 
         foreach (var pattern in patterns)
         {
@@ -360,4 +362,30 @@ public static class FlashFillService
 
     private static string GetFirstInitial(string value) =>
         string.IsNullOrEmpty(value) ? string.Empty : value[0].ToString();
+
+    private static Func<IReadOnlyList<string>, string>? TryFirstLastEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        string? domain = null;
+        for (var i = 0; i < exampleSources.Count; i++)
+        {
+            var expectedPrefix = (exampleSources[i][0] + "." + exampleSources[i][1]).ToLowerInvariant() + "@";
+            if (!exampleOutputs[i].StartsWith(expectedPrefix, StringComparison.Ordinal))
+                return null;
+
+            var currentDomain = exampleOutputs[i][expectedPrefix.Length..];
+            if (string.IsNullOrWhiteSpace(currentDomain) || !currentDomain.Contains('.', StringComparison.Ordinal))
+                return null;
+
+            if (domain is null)
+                domain = currentDomain;
+            else if (!string.Equals(domain, currentDomain, StringComparison.Ordinal))
+                return null;
+        }
+
+        return domain is null
+            ? null
+            : s => (s[0] + "." + s[1]).ToLowerInvariant() + "@" + domain;
+    }
 }
