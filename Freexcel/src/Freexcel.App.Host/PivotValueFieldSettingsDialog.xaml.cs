@@ -77,6 +77,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         BaseItemBox.Text = field.BaseItem ?? "";
 
         NumberFormatBox.Text = field.NumberFormatId?.ToString(CultureInfo.InvariantCulture) ?? "";
+        NumberFormatCodeBox.Text = field.NumberFormatCode ?? "";
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -86,6 +87,9 @@ public partial class PivotValueFieldSettingsDialog : Window
             MessageBox.Show(this, "Number format ID must be a whole number.", "Value Field Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+
+        var numberFormatCode = PivotValueFieldSettingsInputParser.ResolveOptionalNumberFormatCode(NumberFormatCodeBox.Text);
+        numberFormatId = PivotValueFieldSettingsInputParser.ResolveNumberFormatIdForCode(numberFormatId, numberFormatCode);
 
         var summaryFunction = SummaryFunctions[Math.Max(0, SummaryFunctionBox.SelectedIndex)].Value;
         var showValuesAs = ShowValuesAsOptions[Math.Max(0, ShowValuesAsBox.SelectedIndex)].Value;
@@ -102,6 +106,7 @@ public partial class PivotValueFieldSettingsDialog : Window
             Name = name,
             SummaryFunction = summaryFunction,
             NumberFormatId = numberFormatId,
+            NumberFormatCode = numberFormatCode,
             ShowValuesAs = showValuesAs,
             BaseFieldIndex = baseFieldIndex,
             BaseItem = baseItem
