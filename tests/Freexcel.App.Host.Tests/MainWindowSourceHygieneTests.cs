@@ -463,6 +463,36 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ChartCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var chartSourcePath = Path.Combine(appHostDirectory, "MainWindow.ChartCommands.cs");
+
+        File.Exists(chartSourcePath).Should().BeTrue();
+        var chartSource = File.ReadAllText(chartSourcePath);
+
+        mainSource.Should().NotContain("private void InsertChartButton_Click(");
+        mainSource.Should().NotContain("private void InsertChartPickerBtn_Click(");
+        mainSource.Should().NotContain("private void ChangeChartTypeBtn_Click(");
+        mainSource.Should().NotContain("private void ChartDataLabelsBtn_Click(");
+        mainSource.Should().NotContain("private void ChartTrendlineBtn_Click(");
+        mainSource.Should().NotContain("private void ChartSecondaryAxisSeriesBtn_Click(");
+        mainSource.Should().NotContain("private void ChartSeriesMarkerSizeBtn_Click(");
+        mainSource.Should().NotContain("private void InsertChartOfType(");
+
+        chartSource.Should().Contain("private void InsertChartButton_Click(");
+        chartSource.Should().Contain("private void InsertChartPickerBtn_Click(");
+        chartSource.Should().Contain("private void ChangeChartTypeBtn_Click(");
+        chartSource.Should().Contain("private void ChartDataLabelsBtn_Click(");
+        chartSource.Should().Contain("private void ChartTrendlineBtn_Click(");
+        chartSource.Should().Contain("private void ChartSecondaryAxisSeriesBtn_Click(");
+        chartSource.Should().Contain("private void ChartSeriesMarkerSizeBtn_Click(");
+        chartSource.Should().Contain("private void InsertChartOfType(");
+        chartSource.Should().Contain("ChartOptionCycler");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");

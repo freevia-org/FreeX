@@ -112,6 +112,25 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void DialogCommands_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_OK",
+            "_Cancel",
+            "_Apply",
+            "_New Rule",
+            "_Edit Rule",
+            "_Delete Rule"
+        })
+            source.Should().Contain($"Content = \"{content}\"");
+
+        source.Should().Contain("Content = \"Show formatting _rules for:\"");
+    }
+
+    [Fact]
     public void NewRuleChooser_OffersSupportedExcelRuleFamilies()
     {
         StaTestRunner.Run(() =>
