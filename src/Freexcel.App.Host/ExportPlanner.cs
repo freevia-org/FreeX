@@ -60,11 +60,20 @@ internal static class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var format = InferExportFormat(path);
-        return new ExportRequest(path, format, options, null);
+        var normalizedPath = NormalizeExportPath(path, format);
+        return new ExportRequest(normalizedPath, format, options, null);
     }
 
     public static string GetFallbackXpsPath(string requestedPath) =>
         Path.ChangeExtension(requestedPath, ".xps");
+
+    private static string NormalizeExportPath(string path, ExportFormat format)
+    {
+        if (!string.IsNullOrEmpty(Path.GetExtension(path)))
+            return path;
+
+        return Path.ChangeExtension(path, format == ExportFormat.Xps ? ".xps" : ".pdf");
+    }
 
     public static string DescribeOptions(ExportOptions options)
     {

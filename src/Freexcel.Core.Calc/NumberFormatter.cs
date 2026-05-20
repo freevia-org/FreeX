@@ -347,7 +347,7 @@ public static class NumberFormatter
         var elapsedMatch = Regex.Match(format, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
         if (elapsedMatch.Success)
         {
-            return FormatElapsedTime(value, format, elapsedMatch);
+            return FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch);
         }
 
         // Remove any remaining bracket content (conditions, locale, etc.)
@@ -802,6 +802,7 @@ public static class NumberFormatter
         var (_, cleanFmt) = ExtractColor(format);
         cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
         cleanFmt = Regex.Replace(cleanFmt, @"\[[^\]]*\]", "");
+        cleanFmt = RemoveSpacingAndFillDirectives(cleanFmt);
         try
         {
             var dt = DateTime.FromOADate(oaDate);
@@ -844,6 +845,17 @@ public static class NumberFormatter
                 if (end < 0) end = excelFmt.Length - 1;
                 sb.Append(excelFmt[i..(end + 1)]);
                 i = end + 1;
+                continue;
+            }
+            if (c == '\\' && i + 1 < excelFmt.Length)
+            {
+                sb.Append('\'');
+                if (excelFmt[i + 1] == '\'')
+                    sb.Append("''");
+                else
+                    sb.Append(excelFmt[i + 1]);
+                sb.Append('\'');
+                i += 2;
                 continue;
             }
             // Longest-match for each token group
@@ -952,6 +964,11 @@ public static class NumberFormatter
                 sb.Append(remSeconds.ToString("D2"));
                 i += 2;
             }
+            else if (format[i] == '\\' && i + 1 < format.Length)
+            {
+                sb.Append(format[i + 1]);
+                i += 2;
+            }
             else
             {
                 sb.Append(format[i++]);
@@ -973,13 +990,28 @@ public static class NumberFormatter
 
     private static string ApplyTextSection(string section, string text)
     {
-        // `@` is the text placeholder; surrounding quotes are literals
+        // `@` is the text placeholder; surrounding quotes and escaped characters are literals.
+        // Spacing/fill directives affect layout in Excel, not the displayed text payload.
         var result = new System.Text.StringBuilder();
         bool inQuote = false;
-        foreach (char c in section)
+        for (int i = 0; i < section.Length; i++)
         {
+            char c = section[i];
             if (c == '"') { inQuote = !inQuote; continue; }
             if (inQuote) { result.Append(c); continue; }
+
+            if (c == '\\' && i + 1 < section.Length)
+            {
+                result.Append(section[++i]);
+                continue;
+            }
+
+            if (c is '_' or '*' && i + 1 < section.Length)
+            {
+                i++;
+                continue;
+            }
+
             if (c == '@') result.Append(text);
             else result.Append(c);
         }

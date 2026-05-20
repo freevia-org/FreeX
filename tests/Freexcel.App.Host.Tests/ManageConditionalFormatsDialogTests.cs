@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -97,6 +98,17 @@ public sealed class ManageConditionalFormatsDialogTests
         var rule = new ConditionalFormat { StopIfTrue = true };
 
         ManageConditionalFormatsDialog.StopIfTrueText(rule).Should().Be("Yes");
+    }
+
+    [Fact]
+    public void StopIfTrueColumn_UsesEditableTwoWayCheckbox()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        source.Should().Contain("typeof(CheckBox)");
+        source.Should().Contain("nameof(ConditionalFormat.StopIfTrue)");
+        source.Should().Contain("BindingMode.TwoWay");
+        source.Should().Contain("UpdateSourceTrigger.PropertyChanged");
     }
 
     [Fact]

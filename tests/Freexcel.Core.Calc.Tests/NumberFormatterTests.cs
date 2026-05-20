@@ -199,6 +199,32 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("m/d/yyyy_)", "1/1/2024")]
+    [InlineData("m/d/yyyy*-", "1/1/2024")]
+    [InlineData("\\D: m/d/yyyy", "D: 1/1/2024")]
+    public void CustomNumberSubset_CleansDateTimeSectionSpacingFillAndEscapes(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[h]:mm:ss_)", "36:00:00")]
+    [InlineData("[h]:mm:ss*-", "36:00:00")]
+    [InlineData("\\T [h]:mm:ss", "T 36:00:00")]
+    public void CustomNumberSubset_CleansElapsedTimeSectionSpacingFillAndEscapes(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(1.5), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
     {
@@ -241,6 +267,21 @@ public class NumberFormatterTests
     public void Format_TextValue_PassesThrough(string format, string value, string expected)
     {
         var result = NumberFormatter.Format(new TextValue(value), format);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("0;0;0;_(@_)", "hello", "hello")]
+    [InlineData("0;0;0;@*-", "hello", "hello")]
+    [InlineData("0;0;0;\"SKU \"@", "A1", "SKU A1")]
+    [InlineData("0;0;0;\\@@", "A1", "@A1")]
+    public void CustomNumberSubset_CleansTextSectionSpacingFillAndEscapes(
+        string format,
+        string value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new TextValue(value), format);
+
         Assert.Equal(expected, result);
     }
 
