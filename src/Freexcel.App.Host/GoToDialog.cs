@@ -27,10 +27,12 @@ public sealed class GoToDialog : Window
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        root.Children.Add(new TextBlock
+        root.Children.Add(new Label
         {
-            Text = "Reference:",
+            Content = "_Reference:",
+            Target = _addressBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 8, 12)
         });
 
@@ -48,10 +50,10 @@ public sealed class GoToDialog : Window
         Grid.SetColumnSpan(buttons, 2);
         root.Children.Add(buttons);
 
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", Width = 72, IsCancel = true });
+        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
 
         Content = root;
     }
