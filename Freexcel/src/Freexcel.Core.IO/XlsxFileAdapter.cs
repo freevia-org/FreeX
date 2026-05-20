@@ -833,9 +833,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             var pivotCaches = LoadPivotCaches(archive, workbookXml, workbookRels, workbookNs, relNs);
+            var pivotCachesById = pivotCaches.ToDictionary(cache => cache.CacheId);
             var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
                 .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
-            var pivotTablesBySheetName = LoadPivotTablesBySheetName(archive, sheetsByPath, workbookNs, relNs, packageRelNs);
+            var pivotTablesBySheetName = LoadPivotTablesBySheetName(archive, sheetsByPath, pivotCachesById, workbookNs, relNs, packageRelNs);
 
             return new PivotPackageMetadata(pivotCaches, pivotTablesBySheetName);
         }
@@ -1398,6 +1399,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static Dictionary<string, List<PendingPivotTableModel>> LoadPivotTablesBySheetName(
         ZipArchive archive,
         IReadOnlyDictionary<string, string> sheetsByPath,
+        IReadOnlyDictionary<int, PivotCacheModel> pivotCachesById,
         XNamespace workbookNs,
         XNamespace relNs,
         XNamespace packageRelNs)
@@ -1430,7 +1432,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     continue;
 
                 var pivotXml = LoadXml(pivotEntry);
-                if (TryReadPivotTable(pivotXml, pivotPath, out var pivotTable))
+                if (TryReadPivotTable(pivotXml, pivotPath, pivotCachesById, out var pivotTable))
                 {
                     if (!result.TryGetValue(sheetName, out var sheetTables))
                     {
@@ -1467,7 +1469,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
-    private static bool TryReadPivotTable(XDocument pivotXml, string pivotPath, out PendingPivotTableModel pivotTable)
+    private static bool TryReadPivotTable(
+        XDocument pivotXml,
+        string pivotPath,
+        IReadOnlyDictionary<int, PivotCacheModel> pivotCachesById,
+        out PendingPivotTableModel pivotTable)
     {
         pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, "PivotStyleLight16", true, true, false, false, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
@@ -1481,6 +1487,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(name) || cacheId <= 0 || string.IsNullOrWhiteSpace(targetReference))
             return false;
 
+        pivotCachesById.TryGetValue(cacheId, out var pivotCache);
+        var nativeFieldSelections = ReadNativePivotFieldSelections(root.Element(workbookNs + "pivotFields"), pivotCache, workbookNs);
         var calculatedFields = ReadPivotCalculatedFields(root.Element(workbookNs + "calculatedFields"), workbookNs);
         var styleInfo = root.Element(workbookNs + "pivotTableStyleInfo");
         pivotTable = new PendingPivotTableModel(
@@ -1503,9 +1511,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadBoolAttribute(styleInfo, "showColHeaders", defaultValue: true),
             ReadBoolAttribute(styleInfo, "showRowStripes"),
             ReadBoolAttribute(styleInfo, "showColStripes"),
-            ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs),
-            ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs),
-            ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs),
+            ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections),
+            ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections),
+            ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections),
             ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields),
             calculatedFields,
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
@@ -1568,7 +1576,45 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return result;
     }
 
-    private static List<PivotFieldModel> ReadPivotFieldIndexes(XElement? fieldsElement, XNamespace workbookNs)
+    private static Dictionary<int, IReadOnlyList<string>> ReadNativePivotFieldSelections(
+        XElement? pivotFieldsElement,
+        PivotCacheModel? pivotCache,
+        XNamespace workbookNs)
+    {
+        if (pivotFieldsElement is null || pivotCache is null)
+            return [];
+
+        var result = new Dictionary<int, IReadOnlyList<string>>();
+        var pivotFields = pivotFieldsElement.Elements(workbookNs + "pivotField").ToList();
+        for (var fieldIndex = 0; fieldIndex < pivotFields.Count && fieldIndex < pivotCache.Fields.Count; fieldIndex++)
+        {
+            var sharedItems = pivotCache.Fields[fieldIndex].SharedItems;
+            if (sharedItems is null || sharedItems.Count == 0)
+                continue;
+
+            var hiddenIndexes = pivotFields[fieldIndex]
+                .Element(workbookNs + "items")?
+                .Elements(workbookNs + "item")
+                .Where(item => ReadBoolAttribute(item, "hidden"))
+                .Select(item => ReadIntAttribute(item, "x"))
+                .Where(index => index.HasValue && index.Value >= 0 && index.Value < sharedItems.Count)
+                .Select(index => index!.Value)
+                .ToHashSet() ?? [];
+            if (hiddenIndexes.Count == 0)
+                continue;
+
+            result[fieldIndex] = sharedItems
+                .Where((_, itemIndex) => !hiddenIndexes.Contains(itemIndex))
+                .ToList();
+        }
+
+        return result;
+    }
+
+    private static List<PivotFieldModel> ReadPivotFieldIndexes(
+        XElement? fieldsElement,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections = null)
     {
         if (fieldsElement is null)
             return [];
@@ -1582,7 +1628,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ? new PivotFieldModel(
                         index.Value,
                         field.Attribute("name")?.Value,
-                        ReadCsvAttribute(field.Attribute("selectedItems")?.Value),
+                        ReadCsvAttribute(field.Attribute("selectedItems")?.Value) ?? ReadNativePivotFieldSelection(nativeFieldSelections, index.Value),
                         Grouping: ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value),
                         GroupStart: ReadDoubleAttribute(field, "groupStart"),
                         GroupEnd: ReadDoubleAttribute(field, "groupEnd"),
@@ -1594,7 +1640,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .ToList();
     }
 
-    private static List<PivotFieldModel> ReadPivotPageFields(XElement? fieldsElement, XNamespace workbookNs)
+    private static List<PivotFieldModel> ReadPivotPageFields(
+        XElement? fieldsElement,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections = null)
     {
         if (fieldsElement is null)
             return [];
@@ -1604,7 +1653,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Select(field => new PivotFieldModel(
                 ReadIntAttribute(field, "fld") ?? -1,
                 field.Attribute("name")?.Value,
-                ReadCsvAttribute(field.Attribute("selectedItems")?.Value),
+                ReadCsvAttribute(field.Attribute("selectedItems")?.Value) ?? ReadNativePivotFieldSelection(nativeFieldSelections, ReadIntAttribute(field, "fld") ?? -1),
                 ReadPivotFieldGrouping(field.Attribute("groupBy")?.Value),
                 ReadDoubleAttribute(field, "groupStart"),
                 ReadDoubleAttribute(field, "groupEnd"),
@@ -1614,8 +1663,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (pageFields.Count > 0)
             return pageFields;
 
-        return ReadPivotFieldIndexes(fieldsElement, workbookNs);
+        return ReadPivotFieldIndexes(fieldsElement, workbookNs, nativeFieldSelections);
     }
+
+    private static IReadOnlyList<string>? ReadNativePivotFieldSelection(
+        IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections,
+        int fieldIndex) =>
+        nativeFieldSelections is not null && nativeFieldSelections.TryGetValue(fieldIndex, out var selectedItems)
+            ? selectedItems
+            : null;
 
     private static List<PivotDataFieldModel> ReadPivotDataFields(
         XElement? dataFieldsElement,

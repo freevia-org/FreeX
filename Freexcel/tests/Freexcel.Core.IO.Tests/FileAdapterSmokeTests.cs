@@ -11314,6 +11314,34 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_ImportsNativePivotHiddenItemSelections()
+    {
+        var workbook = new Workbook("PivotHiddenItemSelectionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotTableDefinitionXml: PivotTableDefinitionWithHiddenItemsXml);
+
+        var loaded = adapter.Load(source);
+
+        var pivotTable = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject;
+        pivotTable.RowFields.Should().ContainSingle()
+            .Which.SelectedItems.Should().Equal("A");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        var roundTripped = adapter.Load(saved);
+        roundTripped.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.RowFields
+            .Should().ContainSingle()
+            .Which.SelectedItems.Should().Equal("A");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesNativePivotCacheRecordsRelationship()
     {
         var workbook = new Workbook("PivotCacheRecordsRetentionTest");
@@ -14534,6 +14562,36 @@ public class FileAdapterSmokeTests
                                showColHeaders="1"
                                showRowStripes="1"
                                showColStripes="0"/>
+        </pivotTableDefinition>
+        """;
+
+    private const string PivotTableDefinitionWithHiddenItemsXml = """
+        <pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              name="PivotTable1"
+                              cacheId="1"
+                              dataOnRows="0"
+                              applyNumberFormats="0"
+                              applyBorderFormats="0"
+                              applyFontFormats="0"
+                              applyPatternFormats="0"
+                              applyAlignmentFormats="0"
+                              applyWidthHeightFormats="1">
+          <location ref="D3:E5" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+          <pivotFields count="2">
+            <pivotField axis="axisRow" showAll="0">
+              <items count="2">
+                <item x="0"/>
+                <item x="1" hidden="1"/>
+              </items>
+            </pivotField>
+            <pivotField dataField="1" showAll="0"/>
+          </pivotFields>
+          <rowFields count="1">
+            <field x="0"/>
+          </rowFields>
+          <dataFields count="1">
+            <dataField name="Sum of Amount" fld="1" subtotal="sum" numFmtId="0"/>
+          </dataFields>
         </pivotTableDefinition>
         """;
 
