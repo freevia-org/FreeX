@@ -796,6 +796,36 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void HomePasteButton_ExposesPasteSpecialMenuChoices()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var pasteButton = document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Paste");
+
+        var headers = pasteButton
+            .Descendants(presentation + "MenuItem")
+            .Select(item => item.Attribute("Header")?.Value)
+            .Where(header => !string.IsNullOrWhiteSpace(header))
+            .ToList();
+
+        headers.Should().ContainInOrder([
+            "Paste",
+            "Values",
+            "Formulas",
+            "Formatting",
+            "Transpose",
+            "Paste Special..."
+        ]);
+
+        pasteButton.Descendants(presentation + "MenuItem")
+            .Should().OnlyContain(item => item.Attribute(local + "RibbonTooltip.KeyTip") != null);
+    }
+
+    [Fact]
     public void NonRibbonTooltipClickButtons_HaveAccessibleNames()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

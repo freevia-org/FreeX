@@ -4299,6 +4299,17 @@ public partial class MainWindow : Window
     private void CopyBtn_Click(object sender, RoutedEventArgs e)  { ExecuteCopy(); }
     private void PasteBtn_Click(object sender, RoutedEventArgs e) { ExecutePaste(); }
 
+    private void PasteMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePaste();
+
+    private void PasteValuesMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePaste(PasteMode.Values);
+
+    private void PasteFormulasMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePaste(PasteMode.Formulas);
+
+    private void PasteFormattingMenuItem_Click(object sender, RoutedEventArgs e) => ExecutePaste(PasteMode.Formats);
+
+    private void PasteTransposeMenuItem_Click(object sender, RoutedEventArgs e) =>
+        ExecutePaste(PasteMode.All, new PasteSpecialOptions(Transpose: true));
+
     // ── Ribbon cells (insert / delete rows & columns) ────────────────────────
 
     private void InsertRowBtn_Click(object sender, RoutedEventArgs e)
