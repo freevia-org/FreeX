@@ -589,6 +589,36 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void GridStatusAndResizeController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var gridSourcePath = Path.Combine(appHostDirectory, "MainWindow.GridStatus.cs");
+
+        File.Exists(gridSourcePath).Should().BeTrue();
+        var gridSource = File.ReadAllText(gridSourcePath);
+
+        mainSource.Should().NotContain("private void RefreshStatusBar(");
+        mainSource.Should().NotContain("private void OnColumnResizing(");
+        mainSource.Should().NotContain("private void OnColumnResized(");
+        mainSource.Should().NotContain("private void OnRowResizing(");
+        mainSource.Should().NotContain("private void OnRowResized(");
+        mainSource.Should().NotContain("private void OnPageMarginsChanged(");
+        mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
+        mainSource.Should().NotContain("private void RestoreRowResizeSnapshot(");
+
+        gridSource.Should().Contain("private void RefreshStatusBar(");
+        gridSource.Should().Contain("private void OnColumnResizing(");
+        gridSource.Should().Contain("private void OnColumnResized(");
+        gridSource.Should().Contain("private void OnRowResizing(");
+        gridSource.Should().Contain("private void OnRowResized(");
+        gridSource.Should().Contain("private void OnPageMarginsChanged(");
+        gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
+        gridSource.Should().Contain("private void RestoreRowResizeSnapshot(");
+        gridSource.Should().Contain("StatusBarCalculator");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
