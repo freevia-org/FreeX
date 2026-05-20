@@ -1,5 +1,6 @@
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -75,6 +76,17 @@ public sealed class ObjectDialogTests
         result.Should().Be(new ShapeGradientDialogResult(
             new CellColor(31, 119, 180),
             new CellColor(180, 210, 240)));
+    }
+
+    [Fact]
+    public void ShapeGradientDialog_ExposesColorPickerButtonsForStartAndEndColors()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("_startColorButton");
+        source.Should().Contain("_endColorButton");
+        source.Should().Contain("new ColorPickerDialog(_startColor)");
+        source.Should().Contain("new ColorPickerDialog(_endColor)");
     }
 
     [Fact]

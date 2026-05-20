@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -311,12 +312,18 @@ public sealed class MoveChartDialog : Window
     }
 }
 
-public sealed record SelectDataSourceDialogResult(string SourceRangeText, bool FirstColumnIsCategories);
+public sealed record SelectDataSourceDialogResult(
+    string SourceRangeText,
+    bool FirstColumnIsCategories,
+    bool SwitchRowColumn = false);
 
 public sealed class SelectDataSourceDialog : Window
 {
     private readonly TextBox _rangeBox = new();
     private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains category labels" };
+    private readonly CheckBox _switchRowColumnBox = new() { Content = "Switch Row/Column" };
+    private readonly ListBox _seriesList = new() { Height = 72 };
+    private readonly ListBox _axisLabelsList = new() { Height = 72 };
 
     public SelectDataSourceDialogResult Result { get; private set; }
 
@@ -324,8 +331,8 @@ public sealed class SelectDataSourceDialog : Window
     {
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
         Title = "Select Data Source";
-        Width = 420;
-        Height = 190;
+        Width = 520;
+        Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -333,20 +340,84 @@ public sealed class SelectDataSourceDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = "Chart data range", Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
-        stack.Children.Add(_rangeBox);
+        stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
+        _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
+        stack.Children.Add(_switchRowColumnBox);
+        stack.Children.Add(CreateSourceListPanel("Legend Entries (Series)", _seriesList));
+        stack.Children.Add(CreateSourceListPanel("Horizontal (Category) Axis Labels", _axisLabelsList));
         _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
         _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 16);
         stack.Children.Add(_firstColumnCategoriesBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
-            Result = CreateResult(_rangeBox.Text, _firstColumnCategoriesBox.IsChecked == true);
+            Result = CreateResult(
+                _rangeBox.Text,
+                _firstColumnCategoriesBox.IsChecked == true,
+                _switchRowColumnBox.IsChecked == true);
             DialogResult = true;
         }));
         Content = stack;
     }
 
-    public static SelectDataSourceDialogResult CreateResult(string sourceRangeText, bool firstColumnIsCategories) =>
-        new(sourceRangeText.Trim(), firstColumnIsCategories);
+    public static SelectDataSourceDialogResult CreateResult(
+        string sourceRangeText,
+        bool firstColumnIsCategories,
+        bool switchRowColumn = false) =>
+        new(sourceRangeText.Trim(), firstColumnIsCategories, switchRowColumn);
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel();
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
+    }
+
+    private static Grid CreateSourceListPanel(string title, ListBox list)
+    {
+        var panel = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        panel.Children.Add(new TextBlock { Text = title, Margin = new Thickness(0, 0, 0, 4) });
+        Grid.SetRow(list, 1);
+        panel.Children.Add(list);
+
+        var buttons = AddEditRemoveButtons();
+        Grid.SetColumn(buttons, 1);
+        Grid.SetRowSpan(buttons, 2);
+        panel.Children.Add(buttons);
+        return panel;
+    }
+
+    private static StackPanel AddEditRemoveButtons()
+    {
+        var stack = new StackPanel { Margin = new Thickness(8, 20, 0, 0) };
+        stack.Children.Add(new Button { Content = "Add", Width = 74, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Button { Content = "Edit", Width = 74, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Button { Content = "Remove", Width = 74 });
+        return stack;
+    }
 }
 
 public sealed record ChartAreaLegendDialogResult(
@@ -452,16 +523,16 @@ public sealed class ChartAreaLegendDialog : Window
     private StackPanel CreateContent()
     {
         var stack = ChartDialogHelpers.DialogStack();
-        ChartDialogHelpers.AddText(stack, "Chart area fill color", _chartAreaFillBox);
-        ChartDialogHelpers.AddText(stack, "Plot area fill color", _plotAreaFillBox);
-        ChartDialogHelpers.AddText(stack, "Plot area border color", _plotAreaBorderBox);
+        ChartDialogHelpers.AddColorText(stack, "Chart area fill color", _chartAreaFillBox);
+        ChartDialogHelpers.AddColorText(stack, "Plot area fill color", _plotAreaFillBox);
+        ChartDialogHelpers.AddColorText(stack, "Plot area border color", _plotAreaBorderBox);
         ChartDialogHelpers.AddText(stack, "Plot area border width", _plotAreaBorderThicknessBox);
         ChartDialogHelpers.AddCheck(stack, _showLegendBox);
         ChartDialogHelpers.AddCombo(stack, "Legend position", _legendPositionBox, Enum.GetValues<ChartLegendPosition>());
         ChartDialogHelpers.AddCheck(stack, _legendOverlayBox);
-        ChartDialogHelpers.AddText(stack, "Legend text color", _legendTextBox);
-        ChartDialogHelpers.AddText(stack, "Legend fill color", _legendFillBox);
-        ChartDialogHelpers.AddText(stack, "Legend border color", _legendBorderBox);
+        ChartDialogHelpers.AddColorText(stack, "Legend text color", _legendTextBox);
+        ChartDialogHelpers.AddColorText(stack, "Legend fill color", _legendFillBox);
+        ChartDialogHelpers.AddColorText(stack, "Legend border color", _legendBorderBox);
         ChartDialogHelpers.AddText(stack, "Legend border width", _legendBorderThicknessBox);
         ChartDialogHelpers.AddText(stack, "Legend font size", _legendFontSizeBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
@@ -616,9 +687,9 @@ public sealed class ChartDataLabelsDialog : Window
         ChartDialogHelpers.AddCombo(stack, "Separator", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
         ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
         ChartDialogHelpers.AddCheck(stack, _calloutsBox);
-        ChartDialogHelpers.AddText(stack, "Fill color", _fillBox);
-        ChartDialogHelpers.AddText(stack, "Border color", _borderBox);
-        ChartDialogHelpers.AddText(stack, "Text color", _textBox);
+        ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
+        ChartDialogHelpers.AddColorText(stack, "Border color", _borderBox);
+        ChartDialogHelpers.AddColorText(stack, "Text color", _textBox);
         ChartDialogHelpers.AddText(stack, "Border thickness", _borderThicknessBox);
         ChartDialogHelpers.AddText(stack, "Font size", _fontSizeBox);
         ChartDialogHelpers.AddText(stack, "Text angle", _angleBox);
@@ -747,7 +818,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
         ChartDialogHelpers.AddText(stack, "Polynomial order", _orderBox);
         ChartDialogHelpers.AddCheck(stack, _equationBox);
         ChartDialogHelpers.AddCheck(stack, _rSquaredBox);
-        ChartDialogHelpers.AddText(stack, "Line color", _colorBox);
+        ChartDialogHelpers.AddColorText(stack, "Line color", _colorBox);
         ChartDialogHelpers.AddText(stack, "Line width", _thicknessBox);
         ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>());
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
@@ -1028,16 +1099,16 @@ public sealed class ChartAxisFormatDialog : Window
         ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
         ChartDialogHelpers.AddCheck(stack, _majorGridBox);
         ChartDialogHelpers.AddCheck(stack, _minorGridBox);
-        ChartDialogHelpers.AddText(stack, "Major gridline color", _majorGridColorBox);
-        ChartDialogHelpers.AddText(stack, "Minor gridline color", _minorGridColorBox);
+        ChartDialogHelpers.AddColorText(stack, "Major gridline color", _majorGridColorBox);
+        ChartDialogHelpers.AddColorText(stack, "Minor gridline color", _minorGridColorBox);
         ChartDialogHelpers.AddText(stack, "Gridline width", _gridlineThicknessBox);
         ChartDialogHelpers.AddCombo(stack, "Major tick marks", _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
         ChartDialogHelpers.AddCombo(stack, "Minor tick marks", _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
         ChartDialogHelpers.AddCheck(stack, _labelsBox);
-        ChartDialogHelpers.AddText(stack, "Label color", _labelColorBox);
+        ChartDialogHelpers.AddColorText(stack, "Label color", _labelColorBox);
         ChartDialogHelpers.AddText(stack, "Label font size", _labelFontSizeBox);
         ChartDialogHelpers.AddText(stack, "Label angle", _labelAngleBox);
-        ChartDialogHelpers.AddText(stack, "Axis line color", _lineColorBox);
+        ChartDialogHelpers.AddColorText(stack, "Axis line color", _lineColorBox);
         ChartDialogHelpers.AddText(stack, "Axis line width", _lineThicknessBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return stack;
@@ -1168,8 +1239,8 @@ public sealed class ChartSeriesFormatDialog : Window
     {
         var stack = ChartDialogHelpers.DialogStack();
         ChartDialogHelpers.AddCombo(stack, "Series", _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => $"Series {index + 1}").ToArray());
-        ChartDialogHelpers.AddText(stack, "Fill color", _fillBox);
-        ChartDialogHelpers.AddText(stack, "Line color", _strokeBox);
+        ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
+        ChartDialogHelpers.AddColorText(stack, "Line color", _strokeBox);
         ChartDialogHelpers.AddText(stack, "Line width", _strokeThicknessBox);
         ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend("(none)").ToArray());
         ChartDialogHelpers.AddCombo(stack, "Marker", _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend("(none)").ToArray());
@@ -1226,6 +1297,42 @@ public static void AddText(Panel stack, string label, TextBox textBox)
     stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
     textBox.Margin = new Thickness(0, 0, 0, 8);
     stack.Children.Add(textBox);
+}
+
+public static void AddColorText(Panel stack, string label, TextBox textBox)
+{
+    stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
+    var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+    var pickerButton = new Button
+    {
+        Content = "...",
+        Width = 28,
+        Margin = new Thickness(0, 0, 6, 0),
+        Tag = textBox
+    };
+    AutomationProperties.SetName(pickerButton, $"Pick {label}");
+    pickerButton.Click += ColorPickerButton_Click;
+    panel.Children.Add(pickerButton);
+    panel.Children.Add(textBox);
+    stack.Children.Add(panel);
+}
+
+private static void ColorPickerButton_Click(object sender, RoutedEventArgs e)
+{
+    if (sender is not FrameworkElement { Tag: TextBox textBox })
+        return;
+
+    var initialColor = ParseColor(textBox.Text);
+    var dialog = new ColorPickerDialog(initialColor, allowNoColor: true)
+    {
+        Owner = Window.GetWindow(textBox)
+    };
+    if (dialog.ShowDialog() != true)
+        return;
+
+    textBox.Text = dialog.SelectedColor is { } color
+        ? FormatColor(color)
+        : "none";
 }
 
 public static T Selected<T>(ComboBox comboBox, T fallback) =>

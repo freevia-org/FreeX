@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Freexcel.Core.Model;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -84,5 +85,16 @@ public sealed class SelectionPanePlannerTests
             SelectionPaneObjectKind.Picture,
             item.Id,
             IsVisible: false));
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_ExposesShowAllAndHideAllBulkButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("_showAllButton");
+        source.Should().Contain("_hideAllButton");
+        source.Should().Contain("SetAllVisibility(true)");
+        source.Should().Contain("SetAllVisibility(false)");
     }
 }
