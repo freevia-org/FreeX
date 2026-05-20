@@ -93,4 +93,25 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("FilterItems(_allItems, _searchBox.Text)");
         source.Should().Contain("BuildResult(GetSortDirection(), _allItems");
     }
+
+    [Fact]
+    public void DialogControls_ExposeExcelStyleKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_No sort",
+            "Sort _A to Z",
+            "Sort _Z to A",
+            "_Select All",
+            "_Clear All",
+            "_OK",
+            "_Cancel"
+        })
+            source.Should().Contain($"Content = \"{content}\"");
+
+        source.Should().Contain("Content = \"_Criteria text\"");
+        source.Should().Contain("Content = \"_Search\"");
+    }
 }
