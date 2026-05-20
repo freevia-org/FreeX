@@ -16,6 +16,10 @@ public sealed class ConditionalFormatDialogPlannerTests
     [InlineData(CfRuleType.Top10, null, false, false, "Bottom 10 Items")]
     [InlineData(CfRuleType.Top10, null, true, true, "Top 10%")]
     [InlineData(CfRuleType.CellValue, CfOperator.Between, true, false, "Between")]
+    [InlineData(CfRuleType.ContainsText, null, true, false, "Text Contains")]
+    [InlineData(CfRuleType.DateOccurring, null, true, false, "Date Occurring")]
+    [InlineData(CfRuleType.DuplicateValues, null, true, false, "Duplicate Values")]
+    [InlineData(CfRuleType.UniqueValues, null, true, false, "Duplicate Values")]
     public void RuleTypeLabel_MapsConditionalFormatToDialogLabel(
         CfRuleType ruleType,
         CfOperator? op,
