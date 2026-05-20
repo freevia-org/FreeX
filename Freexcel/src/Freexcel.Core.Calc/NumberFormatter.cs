@@ -872,8 +872,8 @@ public static class NumberFormatter
                 TryConsume(excelFmt, i, "yy",   "yy",   sb, out ni) ||
                 TryConsume(excelFmt, i, "mmmm", "MMMM", sb, out ni) ||
                 TryConsume(excelFmt, i, "mmm",  "MMM",  sb, out ni) ||
-                TryConsume(excelFmt, i, "mm",   "MM",   sb, out ni) ||
-                TryConsume(excelFmt, i, "m",    "M",    sb, out ni) ||
+                TryConsumeMonthOrMinute(excelFmt, i, "mm", sb, out ni) ||
+                TryConsumeMonthOrMinute(excelFmt, i, "m", sb, out ni) ||
                 TryConsume(excelFmt, i, "dddd", "dddd", sb, out ni) ||
                 TryConsume(excelFmt, i, "ddd",  "ddd",  sb, out ni) ||
                 TryConsume(excelFmt, i, "dd",   "dd",   sb, out ni) ||
@@ -907,6 +907,67 @@ public static class NumberFormatter
         newPos = pos;
         return false;
     }
+
+    private static bool TryConsumeMonthOrMinute(
+        string src,
+        int pos,
+        string token,
+        System.Text.StringBuilder sb,
+        out int newPos)
+    {
+        if (pos + token.Length > src.Length ||
+            string.Compare(src, pos, token, 0, token.Length, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            newPos = pos;
+            return false;
+        }
+
+        bool isMinute = IsAdjacentToTimeToken(src, pos, token.Length);
+        sb.Append(isMinute
+            ? token.Length == 2 ? "mm" : "m"
+            : token.Length == 2 ? "MM" : "M");
+        newPos = pos + token.Length;
+        return true;
+    }
+
+    private static bool IsAdjacentToTimeToken(string format, int tokenStart, int tokenLength)
+    {
+        int before = PreviousFormatTokenIndex(format, tokenStart - 1);
+        if (before >= 0 && IsTimeToken(format[before]))
+            return true;
+
+        int after = NextFormatTokenIndex(format, tokenStart + tokenLength);
+        return after >= 0 && IsTimeToken(format[after]);
+    }
+
+    private static int PreviousFormatTokenIndex(string format, int index)
+    {
+        for (int i = index; i >= 0; i--)
+        {
+            char c = format[i];
+            if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
+                continue;
+            return i;
+        }
+
+        return -1;
+    }
+
+    private static int NextFormatTokenIndex(string format, int index)
+    {
+        for (int i = index; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
+                continue;
+            return i;
+        }
+
+        return -1;
+    }
+
+    private static bool IsTimeToken(char c)
+        => c is 'h' or 'H' or 's' or 'S';
 
     // ── Elapsed time format [h]:mm:ss, [m]:ss, [s] ───────────────────────────
 
