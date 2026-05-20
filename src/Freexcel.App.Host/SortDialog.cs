@@ -1,46 +1,113 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed record SortDialogLevel(uint ColumnOffset, bool Ascending);
+public sealed record SortColumnChoice(string Label, uint ColumnOffset);
+
+public sealed record SortDirectionChoice(string Label, bool Ascending);
+
+public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
+{
+    public SortDialogLevel(uint columnOffset, bool ascending)
+    {
+        ColumnOffset = columnOffset;
+        Ascending = ascending;
+    }
+
+    public uint ColumnOffset { get; set; }
+
+    public bool Ascending { get; set; }
+
+    public bool Equals(SortDialogLevel? other) =>
+        other is not null &&
+        ColumnOffset == other.ColumnOffset &&
+        Ascending == other.Ascending;
+
+    public override bool Equals(object? obj) => Equals(obj as SortDialogLevel);
+
+    public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending);
+
+    public override string ToString() => $"Column offset {ColumnOffset}, {(Ascending ? "Ascending" : "Descending")}";
+}
 
 public sealed class SortDialog : Window
 {
+    private static readonly IReadOnlyList<SortDirectionChoice> DirectionChoices =
+    [
+        new("A to Z", true),
+        new("Z to A", false)
+    ];
+
     private readonly ObservableCollection<SortDialogLevel> _levels;
+    private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
 
     public IReadOnlyList<SortKey> ResultSortKeys { get; private set; }
 
-    public SortDialog(IEnumerable<SortDialogLevel>? levels = null)
+    public SortDialog(
+        IEnumerable<SortDialogLevel>? levels = null,
+        IEnumerable<SortColumnChoice>? columnChoices = null)
     {
         _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
+        _columnChoices = NormalizeColumnChoices(columnChoices);
         ResultSortKeys = BuildSortKeys(_levels);
 
         Title = "Sort";
-        Width = 420;
-        Height = 320;
+        Width = 500;
+        Height = 340;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
         var root = new DockPanel { Margin = new Thickness(16) };
-        var list = new ListBox
+        var list = new DataGrid
         {
             ItemsSource = _levels,
-            DisplayMemberPath = nameof(SortDialogLevel),
+            AutoGenerateColumns = false,
+            CanUserAddRows = false,
+            CanUserDeleteRows = false,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            SelectionMode = DataGridSelectionMode.Single,
             Margin = new Thickness(0, 0, 0, 12)
         };
-        list.ItemTemplate = CreateLevelTemplate();
+        list.Columns.Add(new DataGridComboBoxColumn
+        {
+            Header = "Sort by",
+            ItemsSource = _columnChoices,
+            DisplayMemberPath = nameof(SortColumnChoice.Label),
+            SelectedValuePath = nameof(SortColumnChoice.ColumnOffset),
+            SelectedValueBinding = new Binding(nameof(SortDialogLevel.ColumnOffset))
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            },
+            Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+        });
+        list.Columns.Add(new DataGridComboBoxColumn
+        {
+            Header = "Order",
+            ItemsSource = DirectionChoices,
+            DisplayMemberPath = nameof(SortDirectionChoice.Label),
+            SelectedValuePath = nameof(SortDirectionChoice.Ascending),
+            SelectedValueBinding = new Binding(nameof(SortDialogLevel.Ascending))
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            },
+            Width = new DataGridLength(140)
+        });
         DockPanel.SetDock(list, Dock.Top);
         root.Children.Add(list);
 
         var helperRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 16)
         };
         var add = new Button { Content = "_Add Level", Width = 98, Margin = new Thickness(0, 0, 8, 0) };
@@ -62,7 +129,7 @@ public sealed class SortDialog : Window
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
         var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
@@ -105,45 +172,40 @@ public sealed class SortDialog : Window
         return updated.Count == 0 ? [new SortDialogLevel(0, true)] : updated;
     }
 
+    public static IReadOnlyList<SortDialogLevel> UpdateLevel(
+        IEnumerable<SortDialogLevel> levels,
+        int index,
+        uint columnOffset,
+        bool ascending)
+    {
+        var updated = NormalizeLevels(levels).ToList();
+        if (index >= 0 && index < updated.Count)
+            updated[index] = new SortDialogLevel(columnOffset, ascending);
+
+        return updated;
+    }
+
+    public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(GridRange range)
+    {
+        var choices = new List<SortColumnChoice>();
+        for (uint offset = 0; offset < range.ColCount; offset++)
+        {
+            var columnName = CellAddress.NumberToColumnName(range.Start.Col + offset);
+            choices.Add(new SortColumnChoice($"Column {columnName}", offset));
+        }
+
+        return choices.Count == 0 ? [new SortColumnChoice("Column A", 0)] : choices;
+    }
+
     private static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels)
     {
         var normalized = levels?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortDialogLevel(0, true)] : normalized;
     }
 
-    private static DataTemplate CreateLevelTemplate()
+    private static IReadOnlyList<SortColumnChoice> NormalizeColumnChoices(IEnumerable<SortColumnChoice>? choices)
     {
-        var panel = new FrameworkElementFactory(typeof(StackPanel));
-        panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-
-        var column = new FrameworkElementFactory(typeof(TextBlock));
-        column.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(SortDialogLevel.ColumnOffset))
-        {
-            StringFormat = "Column offset {0}"
-        });
-        column.SetValue(FrameworkElement.WidthProperty, 150d);
-        panel.AppendChild(column);
-
-        var direction = new FrameworkElementFactory(typeof(TextBlock));
-        direction.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(SortDialogLevel.Ascending))
-        {
-            Converter = new SortDirectionTextConverter()
-        });
-        panel.AppendChild(direction);
-
-        return new DataTemplate { VisualTree = panel };
-    }
-}
-
-internal sealed class SortDirectionTextConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-    {
-        return value is bool ascending && !ascending ? "Descending" : "Ascending";
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-    {
-        return value is string text && text.Equals("Descending", StringComparison.OrdinalIgnoreCase) ? false : true;
+        var normalized = choices?.ToList() ?? [];
+        return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
     }
 }
