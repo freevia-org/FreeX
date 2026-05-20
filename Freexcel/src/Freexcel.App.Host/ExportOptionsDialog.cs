@@ -10,6 +10,8 @@ internal sealed class ExportOptionsDialog : Window
     private readonly RadioButton _entireWorkbookButton = new() { Content = "Entire workbook" };
     private readonly CheckBox _documentPropertiesBox = new() { Content = "Include document properties" };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "Open after publishing" };
+    private readonly TextBox _fromPageBox = new() { Width = 56 };
+    private readonly TextBox _toPageBox = new() { Width = 56 };
 
     public ExportOptions Result { get; private set; } = ExportOptions.ExcelLikeDefault;
 
@@ -17,7 +19,7 @@ internal sealed class ExportOptionsDialog : Window
     {
         Title = "Export Options";
         Width = 360;
-        Height = 250;
+        Height = 305;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -30,6 +32,14 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_activeSheetButton);
         stack.Children.Add(_selectionButton);
         stack.Children.Add(_entireWorkbookButton);
+
+        var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+        pageRangePanel.Children.Add(new TextBlock { Text = "Pages from", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        pageRangePanel.Children.Add(_fromPageBox);
+        pageRangePanel.Children.Add(new TextBlock { Text = "to", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) });
+        pageRangePanel.Children.Add(_toPageBox);
+        stack.Children.Add(pageRangePanel);
+
         stack.Children.Add(_documentPropertiesBox);
         stack.Children.Add(_openAfterPublishBox);
 
@@ -41,6 +51,12 @@ internal sealed class ExportOptionsDialog : Window
         var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
+            if (!ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out var pageRange, out var error))
+            {
+                MessageBox.Show(this, error, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             Result = CreateResult(
                 _entireWorkbookButton.IsChecked == true
                     ? ExportContentScope.EntireWorkbook
@@ -48,7 +64,8 @@ internal sealed class ExportOptionsDialog : Window
                         ? ExportContentScope.Selection
                         : ExportContentScope.ActiveSheet,
                 _documentPropertiesBox.IsChecked == true,
-                _openAfterPublishBox.IsChecked == true);
+                _openAfterPublishBox.IsChecked == true,
+                pageRange);
             DialogResult = true;
         };
         buttons.Children.Add(ok);
@@ -61,9 +78,11 @@ internal sealed class ExportOptionsDialog : Window
     public static ExportOptions CreateResult(
         ExportContentScope scope,
         bool includeDocumentProperties,
-        bool openAfterPublish) =>
+        bool openAfterPublish,
+        ExportPageRange? pageRange = null) =>
         new(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
-            openAfterPublish);
+            openAfterPublish,
+            pageRange);
 }

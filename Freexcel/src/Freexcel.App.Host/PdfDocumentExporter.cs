@@ -17,6 +17,29 @@ internal static class PdfDocumentExporter
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
+        SavePages(document, path, properties, firstPageIndex: 0, lastPageIndexInclusive: document.Pages.Count - 1);
+    }
+
+    public static void Save(FixedDocument document, string path, PdfDocumentProperties? properties, ExportPageRange? pageRange)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
+        var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive);
+    }
+
+    private static void SavePages(
+        FixedDocument document,
+        string path,
+        PdfDocumentProperties? properties,
+        int firstPageIndex,
+        int lastPageIndexInclusive)
+    {
+        if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
+            throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
+
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
@@ -25,7 +48,7 @@ internal static class PdfDocumentExporter
         pdf.Info.Creator = "Freexcel";
         ApplyProperties(pdf, properties);
 
-        for (int i = 0; i < document.Pages.Count; i++)
+        for (int i = firstPageIndex; i <= lastPageIndexInclusive; i++)
         {
             var fixedPage = GetFixedPage(document.Pages[i]);
             var pageSize = GetPageSize(document, fixedPage);

@@ -47,7 +47,7 @@ public partial class MainWindow
         {
             var document = RenderExportDocument(options);
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
-            PdfDocumentExporter.Save(document, pdfPath, properties);
+            PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
@@ -143,9 +143,17 @@ public partial class MainWindow
             : PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ResolveExportRange(options));
 
     private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options) =>
-        options.Scope == ExportContentScope.EntireWorkbook
+        ApplyExportPageRange(options,
+            options.Scope == ExportContentScope.EntireWorkbook
             ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService)
-            : RenderExportDocument(options).DocumentPaginator;
+            : RenderExportDocument(options).DocumentPaginator);
+
+    private static System.Windows.Documents.DocumentPaginator ApplyExportPageRange(
+        ExportOptions options,
+        System.Windows.Documents.DocumentPaginator paginator) =>
+        options.PageRange is { } pageRange
+            ? new PageRangeDocumentPaginator(paginator, pageRange)
+            : paginator;
 
     private static void OpenExportedFile(string path)
     {
