@@ -295,6 +295,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FormulaCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var formulaSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormulaCommands.cs");
+
+        File.Exists(formulaSourcePath).Should().BeTrue();
+        var formulaSource = File.ReadAllText(formulaSourcePath);
+
+        mainSource.Should().NotContain("private void SelectFormulaAuditCells(");
+        mainSource.Should().NotContain("private void InsertFunctionBtn_Click(");
+        mainSource.Should().NotContain("private void TracePrecedentsBtn_Click(");
+        mainSource.Should().NotContain("private void EvaluateFormulaBtn_Click(");
+        mainSource.Should().NotContain("private void FormulaLogicalBtn_Click(");
+
+        formulaSource.Should().Contain("private void SelectFormulaAuditCells(");
+        formulaSource.Should().Contain("private void InsertFunctionBtn_Click(");
+        formulaSource.Should().Contain("private void TracePrecedentsBtn_Click(");
+        formulaSource.Should().Contain("private void EvaluateFormulaBtn_Click(");
+        formulaSource.Should().Contain("private void FormulaLogicalBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");

@@ -696,6 +696,8 @@ public sealed class Sheet
                 ShowColumnStripes = table.ShowColumnStripes,
                 PackagePart = table.PackagePart,
                 NativeSortStateXml = table.NativeSortStateXml,
+                NativeAttributes = table.NativeAttributes,
+                NativeChildXmls = table.NativeChildXmls,
                 NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
                 NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
             };
