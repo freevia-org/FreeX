@@ -2381,11 +2381,11 @@
                                 <Button Content="Get Data"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="GetDataBtn_Click"
                                         local:RibbonTooltip.Title="Get Data"
                                         local:RibbonTooltip.KeyTip="D"
-                                        local:RibbonTooltip.Description="Import data from an external source such as a file, database, or web page."/>
+                                        local:RibbonTooltip.Description="Import data from a local CSV file. Database, web, and Power Query connectors are excluded."/>
                                 <Button Content="Refresh All" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshAllBtn_Click"
                                         local:RibbonTooltip.Title="Refresh All"
                                         local:RibbonTooltip.KeyTip="R"
-                                        local:RibbonTooltip.Description="Refresh all data connections and queries in the workbook."/>
+                                        local:RibbonTooltip.Description="Recalculate formulas and refresh Freexcel-managed workbook data. External data connections and Power Query are excluded."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Get &amp; Transform" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
