@@ -279,6 +279,32 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteCommentsCommand_CopiesThreadedCommentsAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var destination = new CellAddress(sheet.Id, 3, 2);
+        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn");
+        sheet.ThreadedComments[destination] = new ThreadedComment("old", "Codex");
+
+        var command = new PasteCommentsCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            destination,
+            transpose: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.ThreadedComments[destination].Should().Be(new ThreadedComment("copy me", "Quinn"));
+
+        command.Revert(ctx);
+
+        sheet.ThreadedComments[destination].Should().Be(new ThreadedComment("old", "Codex"));
+    }
+
+    [Fact]
     public void PasteCommentsCommand_CopiesCommentsAcrossSheets()
     {
         var wb = new Workbook("test");
