@@ -696,7 +696,8 @@ public sealed class Sheet
 
         // Conditional formats
         foreach (var cf in ConditionalFormats)
-            copy.ConditionalFormats.Add(new ConditionalFormat
+        {
+            var clonedFormat = new ConditionalFormat
             {
                 AppliesTo            = RemapRange(cf.AppliesTo, newId),
                 Priority             = cf.Priority,
@@ -733,7 +734,10 @@ public sealed class Sheet
                 TextRuleText         = cf.TextRuleText,
                 DateOccurringPeriod  = cf.DateOccurringPeriod,
                 StopIfTrue           = cf.StopIfTrue
-            });
+            };
+            clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
+            copy.ConditionalFormats.Add(clonedFormat);
+        }
 
         // Data validations
         foreach (var dv in DataValidations)

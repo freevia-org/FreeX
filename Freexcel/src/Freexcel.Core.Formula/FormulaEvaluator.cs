@@ -117,22 +117,20 @@ public sealed class FormulaEvaluator
         if (node is RangeRefNode range)
             return BuildRangeValue(range, context);
 
+        if (node is NamedRangeNode named)
+        {
+            var binding = context.TryResolveLambdaBinding(named.Name);
+            if (binding is not null)
+                return binding;
+
+            var resolvedRange = context.TryResolveNamedRange(named.Name);
+            return resolvedRange is null
+                ? ErrorValue.Name
+                : BuildRangeValue(resolvedRange.Value, context);
+        }
+
         var value = EvaluateNode(node, context);
-        if (value is not RangeValue || node is not NamedRangeNode named)
-            return value;
-
-        var resolvedRange = context.TryResolveNamedRange(named.Name);
-        if (resolvedRange is null)
-            return value;
-
-        var r = resolvedRange.Value;
-        var start = new CellRefNode(
-            Freexcel.Core.Model.CellAddress.NumberToColumnName(r.Start.Col),
-            r.Start.Row);
-        var end = new CellRefNode(
-            Freexcel.Core.Model.CellAddress.NumberToColumnName(r.End.Col),
-            r.End.Row);
-        return BuildRangeValue(new RangeRefNode(start, end), context);
+        return value;
     }
 
     private static ScalarValue PowerOp(ScalarValue left, ScalarValue right)
@@ -452,15 +450,7 @@ public sealed class FormulaEvaluator
                         var r = resolvedRange.Value;
                         if (isStructured)
                         {
-                            // Build a RangeRefNode-equivalent structure for structured functions
-                            var start = new CellRefNode(
-                                Freexcel.Core.Model.CellAddress.NumberToColumnName(r.Start.Col),
-                                r.Start.Row);
-                            var end = new CellRefNode(
-                                Freexcel.Core.Model.CellAddress.NumberToColumnName(r.End.Col),
-                                r.End.Row);
-                            var syntheticRange = new RangeRefNode(start, end);
-                            expandedArgs.Add(BuildRangeValue(syntheticRange, context));
+                            expandedArgs.Add(BuildRangeValue(r, context));
                         }
                         else
                         {
@@ -560,6 +550,20 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
         return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
+    }
+
+    private static RangeValue BuildRangeValue(Freexcel.Core.Model.GridRange range, IEvalContext context)
+    {
+        var sheetName = context.TryGetSheetName(range.Start.Sheet);
+        var start = new CellRefNode(
+            Freexcel.Core.Model.CellAddress.NumberToColumnName(range.Start.Col),
+            range.Start.Row,
+            SheetName: sheetName);
+        var end = new CellRefNode(
+            Freexcel.Core.Model.CellAddress.NumberToColumnName(range.End.Col),
+            range.End.Row,
+            SheetName: sheetName);
+        return BuildRangeValue(new RangeRefNode(start, end, sheetName), context);
     }
 
     private static bool TryAsRangeRef(FormulaNode node, out RangeRefNode range)

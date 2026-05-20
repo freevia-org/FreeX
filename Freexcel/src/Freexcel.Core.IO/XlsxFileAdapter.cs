@@ -1229,11 +1229,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ReadIntAttribute(column, "id") ?? 0,
                     column.Attribute("name")?.Value ?? "",
                     column.Attribute("totalsRowLabel")?.Value,
-                    column.Attribute("totalsRowFunction")?.Value))
+                    column.Attribute("totalsRowFunction")?.Value,
+                    ReadTableColumnFormula(column, workbookNs, "calculatedColumnFormula"),
+                    ReadTableColumnFormula(column, workbookNs, "totalsRowFormula")))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? [],
             ReadStructuredTableFilterColumns(root.Element(workbookNs + "autoFilter"), workbookNs));
         return true;
+    }
+
+    private static string? ReadTableColumnFormula(XElement column, XNamespace workbookNs, string elementName)
+    {
+        var formula = column.Element(workbookNs + elementName)?.Value;
+        return string.IsNullOrWhiteSpace(formula) ? null : formula;
     }
 
     private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
@@ -2825,7 +2833,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 else if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
                          rule.Element(worksheetNs + "iconSet") is { } iconSet)
                 {
-                    result.Add(new ConditionalFormat
+                    var format = new ConditionalFormat
                     {
                         AppliesTo = appliesTo,
                         Priority = priority,
@@ -2834,7 +2842,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         IconSetShowValue = !IsFalse(iconSet.Attribute("showValue")?.Value),
                         IconSetReverse = IsTruthy(iconSet.Attribute("reverse")?.Value),
                         FormatIfTrue = formatIfTrue
-                    });
+                    };
+                    format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));
+                    result.Add(format);
                 }
                 else if (TryMapLongTailConditionalFormatRule(type, out var mappedType))
                 {
@@ -3048,8 +3058,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
         apply((FromCfvoType(element.Attribute("type")?.Value), element.Attribute("val")?.Value));
     }
 
-    private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId) =>
-        new()
+    private static IReadOnlyList<CfThresholdModel> ReadCfvoThresholds(XElement parent, XNamespace worksheetNs) =>
+        parent
+            .Elements(worksheetNs + "cfvo")
+            .Select(element => new CfThresholdModel(
+                FromCfvoType(element.Attribute("type")?.Value),
+                element.Attribute("val")?.Value))
+            .ToList();
+
+    private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId)
+    {
+        var format = new ConditionalFormat
         {
             AppliesTo = new GridRange(
                 new CellAddress(sheetId, source.AppliesTo.Start.Row, source.AppliesTo.Start.Col),
@@ -3089,6 +3108,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             DateOccurringPeriod = source.DateOccurringPeriod,
             StopIfTrue = source.StopIfTrue
         };
+        format.IconSetThresholds.AddRange(source.IconSetThresholds);
+        return format;
+    }
 
     private static uint? ParsePaneSplit(string? value)
     {
@@ -8588,7 +8610,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XAttribute("id", column.Id),
                 new XAttribute("name", column.Name),
                 string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
-                string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction)))));
+                string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction),
+                string.IsNullOrWhiteSpace(column.CalculatedColumnFormula)
+                    ? null
+                    : new XElement(workbookNs + "calculatedColumnFormula", column.CalculatedColumnFormula),
+                string.IsNullOrWhiteSpace(column.TotalsRowFormula)
+                    ? null
+                    : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula)))));
         if (!string.IsNullOrWhiteSpace(table.StyleName))
         {
             root.Add(new XElement(
@@ -9422,9 +9450,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle),
                     new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                     new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
-                    ToCfvoXml(worksheetNs, CfThresholdType.Percent, "0"),
-                    ToCfvoXml(worksheetNs, CfThresholdType.Percent, "33"),
-                    ToCfvoXml(worksheetNs, CfThresholdType.Percent, "67")));
+                    GetIconSetThresholds(cf).Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value))));
                 break;
             case CfRuleType.AboveAverage:
                 rule.SetAttributeValue("aboveAverage", cf.AboveAverage ? "1" : "0");
@@ -9461,6 +9487,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return rule;
     }
+
+    private static IReadOnlyList<CfThresholdModel> GetIconSetThresholds(ConditionalFormat cf) =>
+        cf.IconSetThresholds.Count > 0
+            ? cf.IconSetThresholds
+            :
+            [
+                new CfThresholdModel(CfThresholdType.Percent, "0"),
+                new CfThresholdModel(CfThresholdType.Percent, "33"),
+                new CfThresholdModel(CfThresholdType.Percent, "67")
+            ];
 
     private static XElement ToCfvoXml(XNamespace worksheetNs, CfThresholdType type, string? value)
     {

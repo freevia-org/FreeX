@@ -3819,10 +3819,26 @@ public class FileAdapterSmokeTests
             IconSetShowValue = false,
             IconSetReverse = true
         });
+        sheet.ConditionalFormats.Single().IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)")
+        ]);
 
         var ms = new MemoryStream();
         var adapter = new XlsxFileAdapter();
         adapter.Save(workbook, ms);
+        ms.Position = 0;
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            xml.Should().Contain("type=\"num\" val=\"0\"");
+            xml.Should().Contain("type=\"percentile\" val=\"50\"");
+            xml.Should().Contain("type=\"formula\" val=\"AVERAGE($A$1:$A$5)\"");
+        }
+
         ms.Position = 0;
         var loaded = adapter.Load(ms);
 
@@ -3831,6 +3847,10 @@ public class FileAdapterSmokeTests
         iconSet.IconSetStyle.Should().Be("3TrafficLights1");
         iconSet.IconSetShowValue.Should().BeFalse();
         iconSet.IconSetReverse.Should().BeTrue();
+        iconSet.IconSetThresholds.Should().Equal(
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)"));
     }
 
     [Fact]
@@ -11752,6 +11772,34 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableColumnFormulas()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableFormulaTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeColumnFormulas: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.Columns[1].CalculatedColumnFormula.Should().Be("SUM(Table1[@[Q1]:[Q2]])");
+        table.Columns[1].TotalsRowFormula.Should().Be("SUBTOTAL(109,[Amount])");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("<calculatedColumnFormula>SUM(Table1[@[Q1]:[Q2]])</calculatedColumnFormula>");
+        tableXml.Should().Contain("<totalsRowFormula>SUBTOTAL(109,[Amount])</totalsRowFormula>");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsStructuredTableAutoFilterValues()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterTest");
@@ -13314,7 +13362,8 @@ public class FileAdapterSmokeTests
     private static void AddMinimalStructuredTablePackage(
         MemoryStream packageStream,
         bool includeTotalsRow = false,
-        bool includeFilterValues = false)
+        bool includeFilterValues = false,
+        bool includeColumnFormulas = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13354,6 +13403,8 @@ public class FileAdapterSmokeTests
                     ? StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeColumnFormulas
+                            ? StructuredTableWithColumnFormulasXml
                         : MinimalStructuredTableXml));
         }
 
@@ -14278,6 +14329,29 @@ public class FileAdapterSmokeTests
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
             <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithColumnFormulasXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B4"
+               totalsRowShown="1">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount">
+              <calculatedColumnFormula>SUM(Table1[@[Q1]:[Q2]])</calculatedColumnFormula>
+              <totalsRowFormula>SUBTOTAL(109,[Amount])</totalsRowFormula>
+            </tableColumn>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"
