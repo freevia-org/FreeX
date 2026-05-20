@@ -176,14 +176,9 @@ public sealed class ChartStyleDialog : Window
         new(NormalizeStyleId(chartStyleId));
 
     public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
-    [
-        new(null, "Automatic"),
-        new(2, "Style 2 - Clean"),
-        new(4, "Style 4 - Colorful"),
-        new(10, "Style 10 - Accent"),
-        new(26, "Style 26 - Strong"),
-        new(42, "Style 42 - Pivot")
-    ];
+        new[] { new ChartStyleOption(null, "Automatic") }
+            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, $"Style {index}")))
+            .ToList();
 
     private void Accept()
     {
