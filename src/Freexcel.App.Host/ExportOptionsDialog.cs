@@ -5,11 +5,11 @@ namespace Freexcel.App.Host;
 
 internal sealed class ExportOptionsDialog : Window
 {
-    private readonly RadioButton _activeSheetButton = new() { Content = "Active sheet", IsChecked = true };
-    private readonly RadioButton _selectionButton = new() { Content = "Selection" };
-    private readonly RadioButton _entireWorkbookButton = new() { Content = "Entire workbook" };
-    private readonly CheckBox _documentPropertiesBox = new() { Content = "Include document properties" };
-    private readonly CheckBox _openAfterPublishBox = new() { Content = "Open after publishing" };
+    private readonly RadioButton _activeSheetButton = new() { Content = "_Active sheet", IsChecked = true };
+    private readonly RadioButton _selectionButton = new() { Content = "_Selection" };
+    private readonly RadioButton _entireWorkbookButton = new() { Content = "_Entire workbook" };
+    private readonly CheckBox _documentPropertiesBox = new() { Content = "_Include document properties" };
+    private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly TextBox _fromPageBox = new() { Width = 56 };
     private readonly TextBox _toPageBox = new() { Width = 56 };
 
@@ -34,9 +34,9 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_entireWorkbookButton);
 
         var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
-        pageRangePanel.Children.Add(new TextBlock { Text = "Pages from", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        pageRangePanel.Children.Add(new Label { Content = "_Pages from", Target = _fromPageBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         pageRangePanel.Children.Add(_fromPageBox);
-        pageRangePanel.Children.Add(new TextBlock { Text = "to", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) });
+        pageRangePanel.Children.Add(new Label { Content = "t_o", Target = _toPageBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) });
         pageRangePanel.Children.Add(_toPageBox);
         stack.Children.Add(pageRangePanel);
 
@@ -47,8 +47,8 @@ internal sealed class ExportOptionsDialog : Window
         _openAfterPublishBox.Margin = new Thickness(0, 0, 0, 18);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
             if (!ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out var pageRange, out var error))

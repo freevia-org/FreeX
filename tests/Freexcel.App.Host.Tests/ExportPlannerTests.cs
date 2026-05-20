@@ -133,6 +133,28 @@ public class ExportPlannerTests
                 PageRange: new ExportPageRange(3, 3)));
     }
 
+    [Fact]
+    public void ExportOptionsDialog_ExposesKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        foreach (var expected in new[]
+        {
+            "Content = \"_Active sheet\"",
+            "Content = \"_Selection\"",
+            "Content = \"_Entire workbook\"",
+            "Content = \"_Include document properties\"",
+            "Content = \"_Open after publishing\"",
+            "Content = \"_Pages from\"",
+            "Target = _fromPageBox",
+            "Content = \"t_o\"",
+            "Target = _toPageBox",
+            "Content = \"_OK\"",
+            "Content = \"_Cancel\""
+        })
+            source.Should().Contain(expected);
+    }
+
     [Theory]
     [InlineData("", "", true, null, null)]
     [InlineData("2", "4", true, 2, 4)]
