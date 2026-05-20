@@ -130,11 +130,11 @@ public class ExportPlannerTests
     public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
-        var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("PrintSettingsPlan settings");
         source.Should().Contain("settings.Summary");
-        mainWindow.Should().Contain("PrintSettingsPlanner.Build(sheet)");
-        mainWindow.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
+        printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        printExport.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
     }
 }
