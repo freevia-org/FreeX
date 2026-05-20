@@ -62,6 +62,30 @@ public sealed class PasteSpecialDialogTests
         });
     }
 
+    [Theory]
+    [InlineData("_opNone", "None")]
+    [InlineData("_opAdd", "Add")]
+    [InlineData("_opSubtract", "Subtract")]
+    [InlineData("_opMultiply", "Multiply")]
+    [InlineData("_opDivide", "Divide")]
+    public void Operation_UsesExcelStyleRadioButtons(string fieldName, string expectedOperation)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PasteSpecialDialog();
+            try
+            {
+                GetRadioButton(dialog, fieldName).IsChecked = true;
+
+                dialog.Operation.Should().Be(expectedOperation);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static RadioButton GetRadioButton(PasteSpecialDialog dialog, string fieldName)
     {
         var field = typeof(PasteSpecialDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
