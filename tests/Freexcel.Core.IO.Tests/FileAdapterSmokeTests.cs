@@ -4048,6 +4048,53 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsConditionalFormatDifferentialStyleNativeMetadata()
+    {
+        var workbook = new Workbook("CfDxfNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 10));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.Top10,
+            Priority = 1,
+            TopBottomRank = 3,
+            FormatIfTrue = new CellStyle
+            {
+                Bold = true,
+                FillColor = new CellColor(255, 242, 204),
+                NumberFormat = "0.00"
+            }
+        });
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddConditionalFormatDifferentialStyleNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedStyle = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject.FormatIfTrue;
+        loadedStyle.Should().NotBeNull();
+        loadedStyle!.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
+        loadedStyle.NativeDifferentialChildXmls.Should().ContainSingle()
+            .Which.Should().Contain("{FREEXCEL-DXF-NATIVE}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        stylesXml.Should().Contain("customAttr=\"dxf-native\"");
+        stylesXml.Should().Contain("{FREEXCEL-DXF-NATIVE}");
+        stylesXml.Should().Contain("formatCode=\"0.00\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_DataValidation_ListRule_Survives()
     {
         var workbook = new Workbook("DvTest");
@@ -4388,7 +4435,9 @@ public class FileAdapterSmokeTests
             {
                 Bold = true,
                 FillColor = new CellColor(255, 0, 0),
-                FontColor = new CellColor(255, 255, 255)
+                FontColor = new CellColor(255, 255, 255),
+                NativeDifferentialAttributes = new Dictionary<string, string> { ["customAttr"] = "dxf-native" },
+                NativeDifferentialChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-DXF-NATIVE}\" /></extLst>"]
             }
         };
         sheet.ConditionalFormats.Add(cf);
@@ -4418,6 +4467,8 @@ public class FileAdapterSmokeTests
         rule.FormatIfTrue!.Bold.Should().BeTrue();
         rule.FormatIfTrue.FillColor.Should().Be(new CellColor(255, 0, 0));
         rule.FormatIfTrue.FontColor.Should().Be(new CellColor(255, 255, 255));
+        rule.FormatIfTrue.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
+        rule.FormatIfTrue.NativeDifferentialChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-DXF-NATIVE}");
     }
 
     [Fact]
@@ -12885,6 +12936,26 @@ public class FileAdapterSmokeTests
                 new XElement(worksheetNs + "negativeFillColor", new XAttribute("rgb", "FFFF0000")),
                 new XElement(worksheetNs + "axisColor", new XAttribute("rgb", "FF000000")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddConditionalFormatDifferentialStyleNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            var dxf = stylesXml.Root!
+                .Element(workbookNs + "dxfs")!
+                .Elements(workbookNs + "dxf")
+                .Single();
+            dxf.SetAttributeValue("customAttr", "dxf-native");
+            dxf.Add(new XElement(
+                workbookNs + "extLst",
+                new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEXCEL-DXF-NATIVE}"))));
+            ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
         }
 
         packageStream.Position = 0;
