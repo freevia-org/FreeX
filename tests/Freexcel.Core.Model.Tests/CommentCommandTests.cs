@@ -116,6 +116,39 @@ public class CommentCommandTests
         sheet.Comments[addr].Should().Be("Keep");
     }
 
+    [Fact]
+    public void SetThreadedCommentCommand_AddsThreadedCommentAndUndoRemovesIt()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+
+        var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "Start discussion");
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ThreadedComments[addr].Text.Should().Be("Start discussion");
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments.Should().NotContainKey(addr);
+    }
+
+    [Fact]
+    public void SetThreadedCommentCommand_ReplacesExistingThreadedCommentAndUndoRestoresIt()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[addr] = new ThreadedComment("Old", "Quinn");
+
+        var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "New", "Codex");
+        cmd.Apply(ctx);
+        sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("New", "Codex"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("Old", "Quinn"));
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;

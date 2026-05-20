@@ -1,5 +1,7 @@
 namespace Freexcel.Core.Model;
 
+public sealed record ThreadedComment(string Text, string Author = "Freexcel");
+
 /// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
@@ -272,6 +274,9 @@ public sealed class Sheet
 
     /// <summary>Cell comments keyed by address.</summary>
     public Dictionary<CellAddress, string> Comments { get; } = [];
+
+    /// <summary>Threaded cell comments keyed by address.</summary>
+    public Dictionary<CellAddress, ThreadedComment> ThreadedComments { get; } = [];
 
     /// <summary>Cell hyperlinks keyed by address. Value is the target URL/location.</summary>
     public Dictionary<CellAddress, string> Hyperlinks { get; } = [];
@@ -627,6 +632,8 @@ public sealed class Sheet
         // Comments and hyperlinks
         foreach (var (address, comment) in Comments)
             copy.Comments[RemapAddress(address, newId)] = comment;
+        foreach (var (address, comment) in ThreadedComments)
+            copy.ThreadedComments[RemapAddress(address, newId)] = comment;
         foreach (var (address, hyperlink) in Hyperlinks)
             copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
 
