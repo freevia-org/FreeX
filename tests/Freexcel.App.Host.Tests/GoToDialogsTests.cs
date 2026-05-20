@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -23,6 +24,17 @@ public sealed class GoToDialogsTests
     public void TryParseAddress_RejectsInvalidReference(string input)
     {
         GoToDialog.TryParseAddress(input, SheetId.New(), out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void GoToDialog_ExposesKeyboardAccessKeysForReferenceAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
+
+        source.Should().Contain("Content = \"_Reference:\"");
+        source.Should().Contain("Target = _addressBox");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
     }
 
     [Fact]
