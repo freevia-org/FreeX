@@ -7990,6 +7990,21 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
+    private void FormatChartAreaBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog("Format Chart Area", "Insert or select a chart before formatting the chart area.", out var chart))
+            return;
+
+        var dialog = new ChartAreaLegendDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!ApplyChartLayoutDialogResult("Format Chart Area", chart, dialog.Result.ToOptions()))
+            return;
+
+        UpdateViewport();
+    }
+
     private bool TryGetActiveNormalChart(string caption, out ChartModel chart)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
