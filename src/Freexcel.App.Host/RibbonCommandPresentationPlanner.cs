@@ -94,16 +94,29 @@ public static class RibbonCommandPresentationPlanner
         if (name.Contains("copy")) return new(RibbonCommandIconKind.Copy);
         if (name.Contains("format painter")) return new(RibbonCommandIconKind.FormatPainter);
         if (name.Contains("paste")) return new(RibbonCommandIconKind.Paste);
+        if (name.Contains("increase font") || name.Contains("grow font")) return new(RibbonCommandIconKind.Font);
+        if (name.Contains("decrease font") || name.Contains("shrink font")) return new(RibbonCommandIconKind.Font);
         if (name.Contains("bold")) return new(RibbonCommandIconKind.Bold);
         if (name.Contains("italic")) return new(RibbonCommandIconKind.Italic);
         if (name.Contains("underline")) return new(RibbonCommandIconKind.Underline);
         if (name.Contains("strikethrough")) return new(RibbonCommandIconKind.Strikethrough);
+        if (name.Contains("top align")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("middle align")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("bottom align")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("align left")) return new(RibbonCommandIconKind.Align);
+        if (name == "center") return new(RibbonCommandIconKind.Align);
+        if (name.Contains("align right")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("decrease indent")) return new(RibbonCommandIconKind.Align);
+        if (name.Contains("increase indent")) return new(RibbonCommandIconKind.Align);
         if (name.Contains("merge")) return new(RibbonCommandIconKind.Merge);
         if (name.Contains("wrap")) return new(RibbonCommandIconKind.Wrap);
+        if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("align")) return new(RibbonCommandIconKind.Align);
         if (name.Contains("accounting") || name.Contains("currency")) return new(RibbonCommandIconKind.Currency);
         if (name.Contains("percent")) return new(RibbonCommandIconKind.Percent);
         if (name.Contains("comma style")) return new(RibbonCommandIconKind.Comma);
+        if (name.Contains("increase decimal")) return new(RibbonCommandIconKind.Decimal);
+        if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
@@ -285,6 +298,10 @@ public static class RibbonCommandPresentationPlanner
                 "stock chart";
 
     private static bool IsLargeRibbonCommand(string name) =>
+        name == "paste" ||
+        name.Contains("conditional formatting") ||
+        name.Contains("format as table") ||
+        name.Contains("cell styles") ||
         name.Contains("pivottable") ||
         name is "table" ||
         name.Contains("recommended chart") ||
