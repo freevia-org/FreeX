@@ -887,7 +887,7 @@ public static class PivotTableRefreshService
         PivotDataFieldModel dataField)
     {
         var cell = Cell.FromValue(new NumberValue(value));
-        if (TryResolveBuiltInNumberFormat(dataField.NumberFormatId, out var formatCode) &&
+        if (TryResolveNumberFormat(workbook, dataField, out var formatCode) &&
             formatCode != CellStyle.Default.NumberFormat)
         {
             var style = CellStyle.Default.Clone();
@@ -896,6 +896,25 @@ public static class PivotTableRefreshService
         }
 
         sheet.SetCell(address, cell);
+    }
+
+    private static bool TryResolveNumberFormat(Workbook workbook, PivotDataFieldModel dataField, out string formatCode)
+    {
+        if (!string.IsNullOrWhiteSpace(dataField.NumberFormatCode))
+        {
+            formatCode = dataField.NumberFormatCode;
+            return true;
+        }
+
+        if (dataField.NumberFormatId is >= 164 and var numberFormatId &&
+            workbook.NumberFormatCatalog.TryGetValue(numberFormatId, out var catalogFormatCode) &&
+            !string.IsNullOrWhiteSpace(catalogFormatCode))
+        {
+            formatCode = catalogFormatCode;
+            return true;
+        }
+
+        return TryResolveBuiltInNumberFormat(dataField.NumberFormatId, out formatCode);
     }
 
     private static bool TryResolveBuiltInNumberFormat(int? numberFormatId, out string formatCode)

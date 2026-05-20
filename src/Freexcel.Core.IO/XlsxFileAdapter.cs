@@ -67,7 +67,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var calculationProperties = LoadWorkbookCalculationProperties(packageStream);
         packageStream.Position = 0;
-        var pivotMetadata = LoadPivotMetadata(packageStream);
+        var numberFormatCatalog = LoadNumberFormatCatalog(packageStream);
+        packageStream.Position = 0;
+        var pivotMetadata = LoadPivotMetadata(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
         var slicerTimelineMetadata = LoadSlicerTimelineMetadata(packageStream);
         packageStream.Position = 0;
@@ -98,6 +100,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         workbook.IterativeCalculation = calculationProperties.IterativeCalculation;
         workbook.MaxCalculationIterations = calculationProperties.MaxIterations;
         workbook.MaxCalculationChange = calculationProperties.MaxChange;
+        foreach (var (numberFormatId, formatCode) in numberFormatCatalog)
+            workbook.NumberFormatCatalog[numberFormatId] = formatCode;
         foreach (var pivotCache in pivotMetadata.PivotCaches)
             workbook.PivotCaches.Add(pivotCache);
         foreach (var slicer in slicerTimelineMetadata.Slicers)
@@ -806,7 +810,39 @@ public sealed class XlsxFileAdapter : IFileAdapter
             TryReadCellColor(edge.Element(workbookNs + "color"), out var color) ? color : CellColor.Black);
     }
 
-    private static PivotPackageMetadata LoadPivotMetadata(Stream xlsxStream)
+    private static Dictionary<int, string> LoadNumberFormatCatalog(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var stylesEntry = archive.GetEntry("xl/styles.xml");
+            if (stylesEntry is null)
+                return [];
+
+            var stylesXml = LoadXml(stylesEntry);
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var result = new Dictionary<int, string>();
+            foreach (var format in stylesXml.Root?
+                         .Element(workbookNs + "numFmts")?
+                         .Elements(workbookNs + "numFmt") ?? [])
+            {
+                var id = ReadIntAttribute(format, "numFmtId");
+                var code = format.Attribute("formatCode")?.Value;
+                if (id is >= 164 && !string.IsNullOrWhiteSpace(code))
+                    result[id.Value] = code;
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static PivotPackageMetadata LoadPivotMetadata(
+        Stream xlsxStream,
+        IReadOnlyDictionary<int, string> numberFormatCatalog)
     {
         try
         {
@@ -836,7 +872,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var pivotCachesById = pivotCaches.ToDictionary(cache => cache.CacheId);
             var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
                 .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
-            var pivotTablesBySheetName = LoadPivotTablesBySheetName(archive, sheetsByPath, pivotCachesById, workbookNs, relNs, packageRelNs);
+            var pivotTablesBySheetName = LoadPivotTablesBySheetName(archive, sheetsByPath, pivotCachesById, numberFormatCatalog, workbookNs, relNs, packageRelNs);
 
             return new PivotPackageMetadata(pivotCaches, pivotTablesBySheetName);
         }
@@ -1429,6 +1465,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ZipArchive archive,
         IReadOnlyDictionary<string, string> sheetsByPath,
         IReadOnlyDictionary<int, PivotCacheModel> pivotCachesById,
+        IReadOnlyDictionary<int, string> numberFormatCatalog,
         XNamespace workbookNs,
         XNamespace relNs,
         XNamespace packageRelNs)
@@ -1461,7 +1498,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     continue;
 
                 var pivotXml = LoadXml(pivotEntry);
-                if (TryReadPivotTable(pivotXml, pivotPath, pivotCachesById, out var pivotTable))
+                if (TryReadPivotTable(pivotXml, pivotPath, pivotCachesById, numberFormatCatalog, out var pivotTable))
                 {
                     if (!result.TryGetValue(sheetName, out var sheetTables))
                     {
@@ -1502,6 +1539,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XDocument pivotXml,
         string pivotPath,
         IReadOnlyDictionary<int, PivotCacheModel> pivotCachesById,
+        IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
         pivotTable = new PendingPivotTableModel("", 0, "", pivotPath, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, "PivotStyleLight16", true, true, false, false, [], [], [], [], [], [], [], [], []);
@@ -1555,7 +1593,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), workbookNs, nativeFieldSelections, nativeFieldGroups),
-            ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields),
+            ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields, numberFormatCatalog),
             calculatedFields,
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
             valueFilters,
@@ -1758,7 +1796,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static List<PivotDataFieldModel> ReadPivotDataFields(
         XElement? dataFieldsElement,
         XNamespace workbookNs,
-        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields)
+        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
+        IReadOnlyDictionary<int, string> numberFormatCatalog)
     {
         if (dataFieldsElement is null)
             return [];
@@ -1768,17 +1807,21 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Select(field =>
             {
                 var fieldIndex = ReadIntAttribute(field, "fld") ?? -1;
+                var numberFormatId = ReadIntAttribute(field, "numFmtId");
                 var calculatedFieldName = field.Attribute("calculatedField")?.Value ??
                     calculatedFields.FirstOrDefault(calculated => string.Equals(calculated.Name, field.Attribute("name")?.Value, StringComparison.OrdinalIgnoreCase))?.Name;
                 return new PivotDataFieldModel(
                     calculatedFieldName is null ? fieldIndex : -1,
                     field.Attribute("name")?.Value ?? "",
                     field.Attribute("subtotal")?.Value ?? "sum",
-                    ReadIntAttribute(field, "numFmtId"),
+                    numberFormatId,
                     calculatedFieldName,
                     ReadPivotShowValuesAs(field.Attribute("showValuesAs")?.Value),
                     ReadIntAttribute(field, "baseField"),
-                    field.Attribute("baseItem")?.Value);
+                    field.Attribute("baseItem")?.Value,
+                    numberFormatId is not null && numberFormatCatalog.TryGetValue(numberFormatId.Value, out var formatCode)
+                        ? formatCode
+                        : null);
             })
             .Where(field => field.SourceFieldIndex >= 0 || field.CalculatedFieldName is not null)
             .ToList();
@@ -4611,12 +4654,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
             SavePivotTableStyles(packageStream, workbook);
         }
 
+        IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
+        if (workbook.NumberFormatCatalog.Count > 0 ||
+            workbook.Sheets.SelectMany(sheet => sheet.PivotTables)
+                .SelectMany(pivot => pivot.DataFields)
+                .Any(field => field.NumberFormatId is >= 164 && !string.IsNullOrWhiteSpace(field.NumberFormatCode)))
+        {
+            packageStream.Position = 0;
+            numberFormatIdMap = SaveNumberFormatCatalog(packageStream, workbook);
+        }
+
         if (!SourcePackages.TryGetValue(workbook, out _) &&
             workbook.PivotCaches.Count > 0 &&
             workbook.Sheets.Any(sheet => sheet.PivotTables.Count > 0))
         {
             packageStream.Position = 0;
-            SavePivotTables(packageStream, workbook);
+            SavePivotTables(packageStream, workbook, numberFormatIdMap);
         }
 
         if (!SourcePackages.TryGetValue(workbook, out _) &&
@@ -4628,6 +4681,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         packageStream.Position = 0;
         PreserveSourcePackageParts(workbook, packageStream);
+
+        if (numberFormatIdMap.Any(pair => pair.Key != pair.Value))
+        {
+            packageStream.Position = 0;
+            RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
+        }
 
         packageStream.Position = 0;
         packageStream.CopyTo(stream);
@@ -9216,6 +9275,148 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 : null);
     }
 
+    private static IReadOnlyDictionary<int, int> SaveNumberFormatCatalog(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var stylesEntry = archive.GetEntry("xl/styles.xml") ?? archive.CreateEntry("xl/styles.xml");
+        var stylesXml = LoadXml(stylesEntry);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = stylesXml.Root;
+        if (root is null)
+            return new Dictionary<int, int>();
+
+        var catalog = BuildNumberFormatCatalog(workbook);
+        if (catalog.Count == 0)
+            return new Dictionary<int, int>();
+
+        var numFmts = root.Element(workbookNs + "numFmts");
+        if (numFmts is null)
+        {
+            numFmts = new XElement(workbookNs + "numFmts");
+            var firstFormatPeer = root.Elements()
+                .FirstOrDefault(element => element.Name == workbookNs + "fonts" ||
+                                           element.Name == workbookNs + "fills" ||
+                                           element.Name == workbookNs + "borders" ||
+                                           element.Name == workbookNs + "cellStyleXfs" ||
+                                           element.Name == workbookNs + "cellXfs");
+            if (firstFormatPeer is null)
+                root.AddFirst(numFmts);
+            else
+                firstFormatPeer.AddBeforeSelf(numFmts);
+        }
+
+        var remap = new Dictionary<int, int>();
+        var usedIds = numFmts.Elements(workbookNs + "numFmt")
+            .Select(element => ReadIntAttribute(element, "numFmtId"))
+            .Where(id => id is not null)
+            .Select(id => id!.Value)
+            .ToHashSet();
+        var nextId = Math.Max(164, usedIds.Count == 0 ? 164 : usedIds.Max() + 1);
+        foreach (var (numberFormatId, formatCode) in catalog.OrderBy(pair => pair.Key))
+        {
+            var existing = numFmts.Elements(workbookNs + "numFmt")
+                .FirstOrDefault(element => ReadIntAttribute(element, "numFmtId") == numberFormatId);
+            if (existing is not null &&
+                string.Equals(existing.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal))
+            {
+                remap[numberFormatId] = numberFormatId;
+                continue;
+            }
+
+            if (existing is not null)
+            {
+                var equivalent = numFmts.Elements(workbookNs + "numFmt")
+                    .FirstOrDefault(element =>
+                        string.Equals(element.Attribute("formatCode")?.Value, formatCode, StringComparison.Ordinal) &&
+                        ReadIntAttribute(element, "numFmtId") is { } equivalentId &&
+                        equivalentId >= 164);
+                if (equivalent is not null && ReadIntAttribute(equivalent, "numFmtId") is { } equivalentId)
+                {
+                    remap[numberFormatId] = equivalentId;
+                    continue;
+                }
+
+                while (usedIds.Contains(nextId))
+                    nextId++;
+                remap[numberFormatId] = nextId;
+                usedIds.Add(nextId);
+                numFmts.Add(new XElement(
+                    workbookNs + "numFmt",
+                    new XAttribute("numFmtId", nextId.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("formatCode", formatCode)));
+                nextId++;
+                continue;
+            }
+
+            remap[numberFormatId] = numberFormatId;
+            usedIds.Add(numberFormatId);
+            numFmts.Add(new XElement(
+                workbookNs + "numFmt",
+                new XAttribute("numFmtId", numberFormatId.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("formatCode", formatCode)));
+        }
+
+        numFmts.SetAttributeValue("count", numFmts.Elements(workbookNs + "numFmt").Count().ToString(CultureInfo.InvariantCulture));
+        ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+        return remap;
+    }
+
+    private static void RemapPivotTableNumberFormats(
+        Stream xlsxStream,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
+    {
+        var effectiveMap = numberFormatIdMap
+            .Where(pair => pair.Key != pair.Value)
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        if (effectiveMap.Count == 0)
+            return;
+
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        foreach (var pivotEntry in archive.Entries
+                     .Where(entry =>
+                         entry.FullName.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase) &&
+                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var pivotXml = LoadXml(pivotEntry);
+            var changed = false;
+            foreach (var dataField in pivotXml.Descendants().Where(element => element.Name.LocalName == "dataField"))
+            {
+                if (ReadIntAttribute(dataField, "numFmtId") is not { } numberFormatId ||
+                    !effectiveMap.TryGetValue(numberFormatId, out var mappedId))
+                {
+                    continue;
+                }
+
+                dataField.SetAttributeValue("numFmtId", mappedId.ToString(CultureInfo.InvariantCulture));
+                changed = true;
+            }
+
+            if (changed)
+                ReplacePackageXml(archive, pivotEntry.FullName, pivotXml);
+        }
+    }
+
+    private static Dictionary<int, string> BuildNumberFormatCatalog(Workbook workbook)
+    {
+        var catalog = workbook.NumberFormatCatalog
+            .Where(pair => pair.Key >= 164 && !string.IsNullOrWhiteSpace(pair.Value))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        foreach (var field in workbook.Sheets
+                     .SelectMany(sheet => sheet.PivotTables)
+                     .SelectMany(pivot => pivot.DataFields))
+        {
+            if (field.NumberFormatId is >= 164 and var numberFormatId &&
+                !string.IsNullOrWhiteSpace(field.NumberFormatCode))
+            {
+                catalog[numberFormatId] = field.NumberFormatCode;
+            }
+        }
+
+        return catalog;
+    }
+
     private static bool HasDifferentialFont(CellStyle style)
     {
         var def = CellStyle.Default;
@@ -9331,7 +9532,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static void SavePivotTables(Stream xlsxStream, Workbook workbook)
+    private static void SavePivotTables(
+        Stream xlsxStream,
+        Workbook workbook,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -9414,7 +9618,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            WriteWorksheetPivotTables(archive, worksheetPath, sheet, cachePartById, ref pivotIndex, workbookNs, relNs, packageRelNs);
+            WriteWorksheetPivotTables(archive, worksheetPath, sheet, cachePartById, numberFormatIdMap, ref pivotIndex, workbookNs, relNs, packageRelNs);
         }
     }
 
@@ -9423,6 +9627,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string worksheetPath,
         Sheet sheet,
         IReadOnlyDictionary<int, string> cachePartById,
+        IReadOnlyDictionary<int, int> numberFormatIdMap,
         ref int pivotIndex,
         XNamespace workbookNs,
         XNamespace relNs,
@@ -9446,7 +9651,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var pivotPath = $"xl/pivotTables/pivotTable{pivotIndex++}.xml";
             var cacheRelId = "rIdPivotCache";
-            ReplacePackageXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, workbookNs, cacheRelId));
+            ReplacePackageXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, workbookNs, cacheRelId, numberFormatIdMap));
             ReplacePackageXml(archive, GetWorksheetRelsPath(pivotPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
@@ -9543,7 +9748,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static XDocument ToPivotCacheDefinitionRelsXml(XNamespace packageRelNs) =>
         new(new XElement(packageRelNs + "Relationships"));
 
-    private static XDocument ToPivotTableDefinitionXml(PivotTableModel pivot, XNamespace workbookNs, string cacheRelId) =>
+    private static XDocument ToPivotTableDefinitionXml(
+        PivotTableModel pivot,
+        XNamespace workbookNs,
+        string cacheRelId,
+        IReadOnlyDictionary<int, int> numberFormatIdMap) =>
         new(new XElement(
             workbookNs + "pivotTableDefinition",
             new XAttribute("name", string.IsNullOrWhiteSpace(pivot.Name) ? "PivotTable" : pivot.Name),
@@ -9571,7 +9780,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ToPivotFieldCollectionXml("rowFields", pivot.RowFields, workbookNs),
             ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs),
             ToPivotPageFieldsXml(pivot.PageFields, workbookNs),
-            ToPivotDataFieldsXml(pivot.DataFields, workbookNs),
+            ToPivotDataFieldsXml(pivot.DataFields, workbookNs, numberFormatIdMap),
             ToPivotCalculatedFieldsXml(pivot.CalculatedFields, workbookNs),
             ToPivotCalculatedItemsXml(pivot.CalculatedItems, workbookNs),
             ToPivotValueFiltersXml(pivot.ValueFilters, workbookNs),
@@ -9643,7 +9852,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     field.GroupEnd is null ? null : new XAttribute("groupEnd", FormatInvariant(field.GroupEnd.Value)),
                     field.GroupInterval is null ? null : new XAttribute("groupInterval", FormatInvariant(field.GroupInterval.Value)))));
 
-    private static XElement? ToPivotDataFieldsXml(IReadOnlyList<PivotDataFieldModel> fields, XNamespace workbookNs) =>
+    private static XElement? ToPivotDataFieldsXml(
+        IReadOnlyList<PivotDataFieldModel> fields,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<int, int> numberFormatIdMap) =>
         fields.Count == 0
             ? null
             : new XElement(
@@ -9658,7 +9870,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     field.ShowValuesAs == PivotShowValuesAs.None ? null : new XAttribute("showValuesAs", ToPivotShowValuesAsText(field.ShowValuesAs)),
                     field.BaseFieldIndex is { } baseField ? new XAttribute("baseField", baseField.ToString(CultureInfo.InvariantCulture)) : null,
                     string.IsNullOrWhiteSpace(field.BaseItem) ? null : new XAttribute("baseItem", field.BaseItem),
-                    field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null)));
+                    ToPivotNumberFormatAttribute(field, numberFormatIdMap))));
+
+    private static XAttribute? ToPivotNumberFormatAttribute(
+        PivotDataFieldModel field,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
+    {
+        if (field.NumberFormatId is not { } numberFormatId)
+            return null;
+
+        var mappedId = numberFormatIdMap.TryGetValue(numberFormatId, out var remapped)
+            ? remapped
+            : numberFormatId;
+        return new XAttribute("numFmtId", mappedId.ToString(CultureInfo.InvariantCulture));
+    }
 
     private static XElement? ToPivotCalculatedFieldsXml(IReadOnlyList<PivotCalculatedFieldModel> fields, XNamespace workbookNs) =>
         fields.Count == 0
