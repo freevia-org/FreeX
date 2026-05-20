@@ -460,6 +460,39 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_ReadsBarSpacingAndVaryColors()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="clustered"/>
+                    <c:varyColors val="1"/>
+                    <c:ser>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                    <c:overlap val="-20"/>
+                    <c:gapWidth val="75"/>
+                  </c:barChart>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.Type.Should().Be(ChartType.Column);
+        chart.VaryColorsByPoint.Should().BeTrue();
+        chart.BarOverlap.Should().Be(-20);
+        chart.BarGapWidth.Should().Be(75);
+    }
+
+    [Fact]
     public void TryReadSupportedChart_ReadsConcreteSeriesFill()
     {
         var sheetId = new SheetId(Guid.NewGuid());

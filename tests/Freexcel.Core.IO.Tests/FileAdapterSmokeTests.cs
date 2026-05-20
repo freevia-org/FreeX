@@ -7297,6 +7297,44 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesBarChartSpacingAndVaryColors()
+    {
+        var workbook = new Workbook("ChartBarSpacingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            VaryColorsByPoint = true,
+            BarOverlap = -20,
+            BarGapWidth = 75
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var barChart = chartXml.Descendants(chartNs + "barChart").Single();
+
+        barChart.Element(chartNs + "varyColors")!.Attribute("val")!.Value.Should().Be("1");
+        barChart.Element(chartNs + "overlap")!.Attribute("val")!.Value.Should().Be("-20");
+        barChart.Element(chartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("75");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_DropsUnsupportedComboSeriesMarkersPackagePart()
     {
         var workbook = new Workbook("ChartUnsupportedComboMarkerPackageSave");
@@ -11832,6 +11870,50 @@ public class FileAdapterSmokeTests
         tableXml.Should().Contain("val=\"B\"");
     }
 
+    [Fact]
+    public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("C"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeFilterValues: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.StructuredTables.Should().ContainSingle();
+        loadedSheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+        loadedSheet.HiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_StructuredTableAutoFilterDoesNotHideTotalsRow()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableTotalsFilterVisibilityTest");
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("C"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Grand Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeTotalsRow: true, includeFilterValues: true);
+
+        source.Position = 0;
+        var loadedSheet = adapter.Load(source).GetSheetAt(0);
+
+        loadedSheet.FilterHiddenRows.Should().Contain(3u);
+        loadedSheet.FilterHiddenRows.Should().NotContain(4u);
+    }
+
     private static Workbook CreateStructuredTableWorkbook(string name)
     {
         var workbook = new Workbook(name);
@@ -13400,7 +13482,9 @@ public class FileAdapterSmokeTests
                 archive,
                 "xl/tables/table1.xml",
                 XDocument.Parse(includeTotalsRow
-                    ? StructuredTableWithTotalsRowXml
+                    ? includeFilterValues
+                        ? StructuredTableWithTotalsRowAndFilterValuesXml
+                        : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
                         : includeColumnFormulas
@@ -14352,6 +14436,33 @@ public class FileAdapterSmokeTests
               <calculatedColumnFormula>SUM(Table1[@[Q1]:[Q2]])</calculatedColumnFormula>
               <totalsRowFormula>SUBTOTAL(109,[Amount])</totalsRowFormula>
             </tableColumn>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithTotalsRowAndFilterValuesXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B4"
+               totalsRowShown="1">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="0">
+              <filters>
+                <filter val="A"/>
+                <filter val="B"/>
+              </filters>
+            </filterColumn>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category" totalsRowLabel="Total"/>
+            <tableColumn id="2" name="Amount" totalsRowFunction="sum"/>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"
