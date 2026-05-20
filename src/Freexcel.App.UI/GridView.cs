@@ -65,8 +65,6 @@ public class GridView : FrameworkElement
     private const double MinCellSize   = 5;
     private const double DefaultCellFontSizePoints = 11.0;
     private const double PageMarginGuideHitZone = 5;
-    private const double PageMarginRulerHandleLength = 12;
-    private const double PageMarginRulerHandleThickness = 8;
 
     private static readonly Typeface DefaultTypeface       = new("Calibri");
     private static readonly Brush    GridLineBrush         = MakeBrush(220, 220, 220);
@@ -2119,53 +2117,15 @@ public class GridView : FrameworkElement
         Rect pageBounds,
         WorksheetPaperSize paperSize,
         WorksheetPageOrientation orientation,
-        WorksheetPageMargins margins)
-    {
-        var guide = WorksheetPageLayout.GetMarginGuideFractions(paperSize, orientation, margins);
-        var marginLeft = pageBounds.Left + pageBounds.Width * guide.Left;
-        var marginRight = pageBounds.Left + pageBounds.Width * guide.Right;
-        var marginTop = pageBounds.Top + pageBounds.Height * guide.Top;
-        var marginBottom = pageBounds.Top + pageBounds.Height * guide.Bottom;
-
-        return new PageMarginRulerHandles(
-            new Rect(
-                marginLeft - PageMarginRulerHandleThickness / 2,
-                pageBounds.Top - PageMarginRulerHandleLength - 2,
-                PageMarginRulerHandleThickness,
-                PageMarginRulerHandleLength),
-            new Rect(
-                marginRight - PageMarginRulerHandleThickness / 2,
-                pageBounds.Top - PageMarginRulerHandleLength - 2,
-                PageMarginRulerHandleThickness,
-                PageMarginRulerHandleLength),
-            new Rect(
-                pageBounds.Left - PageMarginRulerHandleLength - 2,
-                marginTop - PageMarginRulerHandleThickness / 2,
-                PageMarginRulerHandleLength,
-                PageMarginRulerHandleThickness),
-            new Rect(
-                pageBounds.Left - PageMarginRulerHandleLength - 2,
-                marginBottom - PageMarginRulerHandleThickness / 2,
-                PageMarginRulerHandleLength,
-                PageMarginRulerHandleThickness));
-    }
+        WorksheetPageMargins margins) =>
+        PageMarginRulerLayoutPlanner.CalculateHandles(pageBounds, paperSize, orientation, margins);
 
     public static WorksheetPageMarginEdge? HitTestPageMarginRulerHandles(
         PageMarginRulerHandles handles,
         Point pos,
         bool showRulers = true)
     {
-        if (!showRulers) return null;
-        if (handles.Left.Contains(pos))
-            return WorksheetPageMarginEdge.Left;
-        if (handles.Right.Contains(pos))
-            return WorksheetPageMarginEdge.Right;
-        if (handles.Top.Contains(pos))
-            return WorksheetPageMarginEdge.Top;
-        if (handles.Bottom.Contains(pos))
-            return WorksheetPageMarginEdge.Bottom;
-
-        return null;
+        return PageMarginRulerLayoutPlanner.HitTestHandles(handles, pos, showRulers);
     }
 
     private (double Top, double Left, double Bottom, double Right,
