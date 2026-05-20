@@ -3046,21 +3046,8 @@ public class GridView : FrameworkElement
         dc.DrawLine(pen, p1, p2);
     }
 
-    public static TextDecorationCollection? BuildTextDecorations(CellStyle? style)
-    {
-        if (style is null)
-            return null;
-
-        var decorations = new TextDecorationCollection();
-        if (style.Underline || style.DoubleUnderline)
-            foreach (var decoration in TextDecorations.Underline)
-                decorations.Add(decoration);
-        if (style.Strikethrough)
-            foreach (var decoration in TextDecorations.Strikethrough)
-                decorations.Add(decoration);
-
-        return decorations.Count == 0 ? null : decorations;
-    }
+    public static TextDecorationCollection? BuildTextDecorations(CellStyle? style) =>
+        CellTextDecorationPlanner.Build(style);
 }
 
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
