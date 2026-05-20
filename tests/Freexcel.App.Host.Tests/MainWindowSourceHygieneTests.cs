@@ -345,6 +345,31 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void HomeFormattingCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var formattingSourcePath = Path.Combine(appHostDirectory, "MainWindow.HomeFormatting.cs");
+
+        File.Exists(formattingSourcePath).Should().BeTrue();
+        var formattingSource = File.ReadAllText(formattingSourcePath);
+
+        mainSource.Should().NotContain("private void BoldButton_Click(");
+        mainSource.Should().NotContain("private IWorkbookCommand CreateMergeAndCenterCommand(");
+        mainSource.Should().NotContain("private void ApplyRangeBorderPreset(");
+        mainSource.Should().NotContain("private void CfPickerBtn_Click(");
+        mainSource.Should().NotContain("private void FormatTableBtn_Click(");
+        mainSource.Should().NotContain("private void CellStylesBtn_Click(");
+
+        formattingSource.Should().Contain("private void BoldButton_Click(");
+        formattingSource.Should().Contain("private IWorkbookCommand CreateMergeAndCenterCommand(");
+        formattingSource.Should().Contain("private void ApplyRangeBorderPreset(");
+        formattingSource.Should().Contain("private void CfPickerBtn_Click(");
+        formattingSource.Should().Contain("private void FormatTableBtn_Click(");
+        formattingSource.Should().Contain("private void CellStylesBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -392,7 +417,9 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         source.Should().Contain("NumberFormatOptions.Select(option => option.Label)");
         source.Should().Contain("NumberFormatOptions[NumberFormatBox.SelectedIndex].Code");
@@ -755,7 +782,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         foreach (var label in new[]
@@ -806,7 +833,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void MainWindow_RoutesColorChoicesThroughColorPickerDialog()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         source.Should().NotContain("input.Split(',')");
         source.Should().Contain("private bool TryShowColorPicker(");
@@ -833,7 +860,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void FormatAsTable_CreatesStructuredTableMetadataAndBandingAsOneCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         source.Should().Contain("new CreateTableDialog");
         source.Should().Contain("new CreateStyledStructuredTableCommand(");
@@ -846,7 +873,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void CellStyleMenu_UsesActiveWorkbookThemeForPresetPlanning()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         source.Should().Contain("CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme)");
     }
@@ -897,7 +924,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ConditionalFormattingEllipsisCommands_UseRuleFamilyDialogFactory()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         source.Should().Contain("ConditionalFormatDialogFactory.Create(ruleType, range)");
         source.Should().NotContain("new ConditionalFormatDialog(ruleType, range)");
