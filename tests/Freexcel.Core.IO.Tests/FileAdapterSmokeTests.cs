@@ -3905,6 +3905,50 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatPayloadNativeMetadata()
+    {
+        var workbook = new Workbook("CfPayloadNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 10));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            Priority = 1,
+            DataBarShowValue = true,
+            DataBarColor = new RgbColor(99, 142, 198)
+        });
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedConditionalFormatPayloadNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedRule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        loadedRule.NativePayloadAttributes.Should().ContainKey("border").WhoseValue.Should().Be("1");
+        loadedRule.NativePayloadAttributes.Should().ContainKey("axisPosition").WhoseValue.Should().Be("middle");
+        loadedRule.NativePayloadChildXmls.Should().Contain(xml => xml.Contains("negativeFillColor", StringComparison.Ordinal));
+        loadedRule.NativePayloadChildXmls.Should().Contain(xml => xml.Contains("axisColor", StringComparison.Ordinal));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetXml.Should().Contain("dataBar");
+        worksheetXml.Should().Contain("border=\"1\"");
+        worksheetXml.Should().Contain("axisPosition=\"middle\"");
+        worksheetXml.Should().Contain("negativeFillColor");
+        worksheetXml.Should().Contain("axisColor");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_ConditionalFormat_LongTailMetadata_Survives()
     {
         var workbook = new Workbook("LongTailCfXlsxTest");
@@ -4336,6 +4380,8 @@ public class FileAdapterSmokeTests
             StopIfTrue = true,
             NativeAttributes = new Dictionary<string, string> { ["customAttr"] = "cf-native" },
             NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-CF-EXT}\" /></extLst>"],
+            NativePayloadAttributes = new Dictionary<string, string> { ["border"] = "1" },
+            NativePayloadChildXmls = ["<axisColor xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" rgb=\"FF000000\" />"],
             NativeContainerAttributes = new Dictionary<string, string> { ["customBlockAttr"] = "cf-container" },
             NativeContainerChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-CF-CONTAINER-EXT}\" /></extLst>"],
             FormatIfTrue = new CellStyle
@@ -4366,6 +4412,8 @@ public class FileAdapterSmokeTests
         rule.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-CF-CONTAINER-EXT}");
         rule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
         rule.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-CF-EXT}");
+        rule.NativePayloadAttributes.Should().ContainKey("border").WhoseValue.Should().Be("1");
+        rule.NativePayloadChildXmls.Should().ContainSingle().Which.Should().Contain("axisColor");
         rule.FormatIfTrue.Should().NotBeNull();
         rule.FormatIfTrue!.Bold.Should().BeTrue();
         rule.FormatIfTrue.FillColor.Should().Be(new CellColor(255, 0, 0));
@@ -12816,6 +12864,26 @@ public class FileAdapterSmokeTests
             rule.Add(new XElement(
                 worksheetNs + "extLst",
                 new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEXCEL-CF-EXT}"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddAdvancedConditionalFormatPayloadNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var dataBar = worksheetXml.Root!
+                .Descendants(worksheetNs + "dataBar")
+                .First();
+            dataBar.SetAttributeValue("border", "1");
+            dataBar.SetAttributeValue("axisPosition", "middle");
+            dataBar.Add(
+                new XElement(worksheetNs + "negativeFillColor", new XAttribute("rgb", "FFFF0000")),
+                new XElement(worksheetNs + "axisColor", new XAttribute("rgb", "FF000000")));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
