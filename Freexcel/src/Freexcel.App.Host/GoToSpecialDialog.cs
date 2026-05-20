@@ -49,22 +49,22 @@ public sealed class GoToSpecialDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", Width = 72, IsCancel = true });
+        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
 
         Content = root;
     }
 
     public static IReadOnlyList<GoToSpecialChoice> GetChoices() =>
         [
-            new(GoToSpecialKind.Blanks, "Blanks"),
-            new(GoToSpecialKind.Constants, "Constants"),
-            new(GoToSpecialKind.Formulas, "Formulas"),
-            new(GoToSpecialKind.Comments, "Comments"),
-            new(GoToSpecialKind.DataValidation, "Data validation"),
-            new(GoToSpecialKind.VisibleCellsOnly, "Visible cells only")
+            new(GoToSpecialKind.Blanks, "_Blanks"),
+            new(GoToSpecialKind.Constants, "_Constants"),
+            new(GoToSpecialKind.Formulas, "_Formulas"),
+            new(GoToSpecialKind.Comments, "Co_mments"),
+            new(GoToSpecialKind.DataValidation, "_Data validation"),
+            new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
         ];
 
     public static bool TryParseChoice(string text, out GoToSpecialKind kind)
