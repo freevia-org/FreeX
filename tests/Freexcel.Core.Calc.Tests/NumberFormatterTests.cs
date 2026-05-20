@@ -242,6 +242,19 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("h:mm A/P", 45292.06527777778, "1:34 A")]
+    [InlineData("h:mm A/P", 45292.56527777778, "1:34 P")]
+    public void CustomNumberSubset_FormatsCompactAmPmMarkers(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[h]:mm:ss_)", "36:00:00")]
     [InlineData("[h]:mm:ss*-", "36:00:00")]
     [InlineData("\\T [h]:mm:ss", "T 36:00:00")]
