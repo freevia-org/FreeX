@@ -2,9 +2,21 @@ using System.Globalization;
 
 namespace Freexcel.App.Host;
 
+public sealed record PivotValueNumberFormatPreset(string Label, int? NumberFormatId);
+
 public static class PivotValueFieldSettingsInputParser
 {
     public const int DefaultCustomNumberFormatId = 164;
+
+    public static IReadOnlyList<PivotValueNumberFormatPreset> NumberFormatPresets { get; } =
+    [
+        new("General", null),
+        new("Number", 2),
+        new("Number with thousands", 4),
+        new("Percentage", 10),
+        new("Date", 14),
+        new("Accounting", 44)
+    ];
 
     public static bool TryParseOptionalNumberFormatId(string input, out int? numberFormatId)
     {
@@ -34,5 +46,15 @@ public static class PivotValueFieldSettingsInputParser
         return numberFormatId is >= DefaultCustomNumberFormatId
             ? numberFormatId
             : DefaultCustomNumberFormatId;
+    }
+
+    public static int? ResolvePresetNumberFormatId(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+            return null;
+
+        return NumberFormatPresets
+            .FirstOrDefault(preset => string.Equals(preset.Label, label.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?.NumberFormatId;
     }
 }
