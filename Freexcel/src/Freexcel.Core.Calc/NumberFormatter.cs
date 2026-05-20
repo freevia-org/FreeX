@@ -340,7 +340,7 @@ public static class NumberFormatter
         if (string.IsNullOrEmpty(format) || format == "General")
             return FormatNumberGeneral(value);
 
-        format = PreserveLocaleCurrencyTokens(format);
+        format = PreserveLocaleCurrencyTokens(format, out var numberFormat);
 
         // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds
         // and must be handled before the generic bracket-stripping pass.
@@ -368,9 +368,9 @@ public static class NumberFormatter
             try
             {
                 return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt,
-                    CultureInfo.InvariantCulture) + "%";
+                    numberFormat) + "%";
             }
-            catch { return pctValue.ToString("0", CultureInfo.InvariantCulture) + "%"; }
+            catch { return pctValue.ToString("0", numberFormat) + "%"; }
         }
 
         // Date / time format
@@ -388,7 +388,7 @@ public static class NumberFormatter
             return FormatSimpleFraction(value, format);
 
         if (IsScientificFormat(format))
-            return FormatScientific(value, format);
+            return FormatScientific(value, format, numberFormat);
 
         // Accounting / text literals — strip quoted strings to expose the numeric pattern
         var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
@@ -409,14 +409,15 @@ public static class NumberFormatter
 
         // Pass the cleaned format to .NET — it understands #,##0.00, 0.00, 0, # etc.
         string numStr;
-        try   { numStr = value.ToString(format, CultureInfo.InvariantCulture); }
-        catch { numStr = value.ToString(CultureInfo.InvariantCulture); }
+        try   { numStr = value.ToString(format, numberFormat); }
+        catch { numStr = value.ToString(numberFormat); }
 
         return prefix + numStr + suffix;
     }
 
-    private static string PreserveLocaleCurrencyTokens(string format)
+    private static string PreserveLocaleCurrencyTokens(string format, out NumberFormatInfo numberFormat)
     {
+        numberFormat = CultureInfo.InvariantCulture.NumberFormat;
         var sb = new System.Text.StringBuilder(format.Length);
         bool inQuote = false;
 
@@ -440,6 +441,13 @@ public static class NumberFormatter
                 {
                     string token = format[(i + 2)..close];
                     int localeSeparator = token.LastIndexOf('-');
+                    var localeToken = localeSeparator >= 0 ? token[(localeSeparator + 1)..] : null;
+                    if (localeToken is not null &&
+                        TryCreateLocaleNumberFormat(localeToken, out var localeNumberFormat))
+                    {
+                        numberFormat = localeNumberFormat;
+                    }
+
                     if (localeSeparator == 0)
                     {
                         i = close;
@@ -471,6 +479,33 @@ public static class NumberFormatter
         }
 
         return sb.ToString();
+    }
+
+    private static bool TryCreateLocaleNumberFormat(string localeToken, out NumberFormatInfo numberFormat)
+    {
+        numberFormat = CultureInfo.InvariantCulture.NumberFormat;
+        var normalized = localeToken.Trim().TrimStart('0').ToUpperInvariant();
+        if (normalized.Length == 0)
+            normalized = "0";
+
+        (string DecimalSeparator, string GroupSeparator)? separators = normalized switch
+        {
+            "409" => (".", ","),
+            "407" => (",", "."),
+            "40C" => (",", " "),
+            "422" => (",", " "),
+            _ => null
+        };
+
+        if (separators is null)
+            return false;
+
+        numberFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
+        numberFormat.NumberDecimalSeparator = separators.Value.DecimalSeparator;
+        numberFormat.NumberGroupSeparator = separators.Value.GroupSeparator;
+        numberFormat.PercentDecimalSeparator = separators.Value.DecimalSeparator;
+        numberFormat.PercentGroupSeparator = separators.Value.GroupSeparator;
+        return true;
     }
 
     private static string RemoveSpacingAndFillDirectives(string format)
@@ -667,7 +702,7 @@ public static class NumberFormatter
         return Regex.IsMatch(stripped, @"E[+-]0+", RegexOptions.IgnoreCase);
     }
 
-    private static string FormatScientific(double value, string format)
+    private static string FormatScientific(double value, string format, IFormatProvider formatProvider)
     {
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
         var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
@@ -676,7 +711,7 @@ public static class NumberFormatter
             ? mantissa[(mantissa.IndexOf('.') + 1)..].Count(c => c == '0' || c == '#')
             : 0;
 
-        string result = value.ToString("E" + decimals.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        string result = value.ToString("E" + decimals.ToString(CultureInfo.InvariantCulture), formatProvider);
         result = Regex.Replace(result, @"E([+-])(\d{2,})$", match =>
         {
             string sign = match.Groups[1].Value;

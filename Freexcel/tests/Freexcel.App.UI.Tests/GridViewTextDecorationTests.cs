@@ -86,4 +86,20 @@ public sealed class GridViewTextDecorationTests
         iconsOnly.TextRect.Should().Be(Rect.Empty);
         iconsOnly.ShouldDrawText.Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData(0, 5, "#C00000")]
+    [InlineData(1, 5, "#ED7D31")]
+    [InlineData(2, 5, "#FFC000")]
+    [InlineData(3, 5, "#92D050")]
+    [InlineData(4, 5, "#00B050")]
+    public void ResolveConditionalIconColor_UsesExcelLikeFiveBandPalette(
+        int iconIndex,
+        int iconCount,
+        string expected)
+    {
+        GridView.ResolveConditionalIconColor(new ConditionalFormatIcon("5Arrows", iconIndex, iconCount, true))
+            .Should()
+            .Be(expected);
+    }
 }

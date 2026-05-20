@@ -606,7 +606,7 @@ public sealed class MainWindowXamlKeyTipTests
     public void CellStylesGallery_ExposesExpandedPresetLabelsAndRoutesThroughPlanner()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
