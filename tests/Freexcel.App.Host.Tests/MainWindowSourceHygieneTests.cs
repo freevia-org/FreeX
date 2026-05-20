@@ -136,14 +136,12 @@ public sealed class MainWindowSourceHygieneTests
 
         mainSource.Should().NotContain("private void PrintButton_Click(");
         mainSource.Should().NotContain("private void ExportPdfButton_Click(");
-        mainSource.Should().NotContain("private void ExportViaPrintToPdf(");
-        mainSource.Should().NotContain("private void ExportPdfFallbackAsXps(");
+        mainSource.Should().NotContain("private bool ExportAsPdf(");
         mainSource.Should().NotContain("private bool ExportAsXps(");
 
         printSource.Should().Contain("private void PrintButton_Click(");
         printSource.Should().Contain("private void ExportPdfButton_Click(");
-        printSource.Should().Contain("private void ExportViaPrintToPdf(");
-        printSource.Should().Contain("private void ExportPdfFallbackAsXps(");
+        printSource.Should().Contain("private bool ExportAsPdf(");
         printSource.Should().Contain("private bool ExportAsXps(");
     }
 
@@ -223,7 +221,7 @@ public sealed class MainWindowSourceHygieneTests
     public void SplitRibbonCommand_ReflectsActiveSplitState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Viewport.cs"));
 
         xaml.Should().Contain("<ToggleButton x:Name=\"SplitViewBtn\"");
         xaml.Should().Contain("Style=\"{StaticResource RibbonToggleBtn}\"");
@@ -308,7 +306,7 @@ public sealed class MainWindowSourceHygieneTests
     public void SheetTabs_UseContextualNavigationArrowsInsteadOfAHorizontalScrollbar()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.SheetTabs.cs"));
         var navigationStart = source.IndexOf("private void UpdateSheetTabNavigation()", StringComparison.Ordinal);
         var navigationEnd = source.IndexOf("private void BringCurrentSheetTabIntoView()", navigationStart, StringComparison.Ordinal);
         navigationStart.Should().BeGreaterThanOrEqualTo(0);
@@ -610,12 +608,10 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("new CreateTableDialog");
         source.Should().Contain("new CreateStyledStructuredTableCommand(");
-        source.Should().Contain("new StructuredTableStyleBanding(");
+        source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant)");
         source.Should().NotContain("new CreateStructuredTableCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");
-        source.Should().Contain("\"TableStyleLight9\"");
-        source.Should().Contain("\"TableStyleMedium2\"");
-        source.Should().Contain("\"TableStyleDark1\"");
+        source.Should().Contain("tableStyle.Banding");
     }
 
     [Fact]
@@ -627,14 +623,14 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void ExportWorkflow_SurfacesPlannedOptionsAndFallbackPath()
+    public void ExportWorkflow_SurfacesPlannedPdfAndXpsPaths()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
-        source.Should().Contain("ExportViaPrintToPdf(request)");
+        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request))");
         source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
-        source.Should().Contain("request.ActualPath");
+        source.Should().NotContain("ExportPdfFallbackAsXps");
     }
 
     [Fact]
