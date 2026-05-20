@@ -9,6 +9,7 @@ public sealed class TextBoxModel
     public double Width { get; set; } = 180;
     public double Height { get; set; } = 80;
     public double RotationDegrees { get; set; }
+    public bool IsVisible { get; set; } = true;
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }
     public WorkbookThemeColorReference? FillThemeColor { get; set; }
