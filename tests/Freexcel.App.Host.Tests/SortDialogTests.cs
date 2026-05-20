@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Freexcel.Core.Commands;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -46,5 +47,35 @@ public sealed class SortDialogTests
         SortDialog.RemoveLevel([new SortDialogLevel(3, false)], 0)
             .Should()
             .Equal(new SortDialogLevel(0, true));
+    }
+
+    [Fact]
+    public void BuildColumnChoices_UsesSelectedRangeColumnsInDisplayOrder()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 7, 5));
+
+        SortDialog.BuildColumnChoices(range).Should().Equal(
+            new SortColumnChoice("Column C", 0),
+            new SortColumnChoice("Column D", 1),
+            new SortColumnChoice("Column E", 2));
+    }
+
+    [Fact]
+    public void UpdateLevel_ReplacesRequestedSortLevel()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true),
+            new SortDialogLevel(1, false)
+        };
+
+        SortDialog.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
+            .Should()
+            .Equal(
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(2, true));
     }
 }
