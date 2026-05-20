@@ -6606,7 +6606,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "rowBreaks",
             workbookNs + "colBreaks",
             workbookNs + "queryTableParts",
-            workbookNs + "webPublishItems"
+            workbookNs + "webPublishItems",
+            workbookNs + "oleObjects"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
