@@ -1227,7 +1227,10 @@ public sealed class MainWindowXamlKeyTipTests
 
         namedElements.Should().Contain([
             "PivotFieldListPane",
+            "PivotFieldListSearchBox",
             "PivotAvailableFieldsList",
+            "PivotFieldListDeferLayoutCheckBox",
+            "PivotFieldListUpdateBtn",
             "PivotRowsList",
             "PivotColumnsList",
             "PivotValuesList",
@@ -1244,8 +1247,34 @@ public sealed class MainWindowXamlKeyTipTests
                 "PivotFieldToValuesBtn_Click",
                 "PivotFieldToFiltersBtn_Click",
                 "PivotFieldRemoveBtn_Click",
+                "PivotFieldListUpdateBtn_Click",
                 "PivotFieldListCloseBtn_Click"
             ]);
+
+        document
+            .Descendants(presentation + "CheckBox")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotFieldListDeferLayoutCheckBox")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("PivotFieldListDeferLayoutCheckBox_Click");
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_SearchAppearsBeforeAvailableFieldsList()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var searchBox = document
+            .Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotFieldListSearchBox");
+        var availableFieldsList = document
+            .Descendants(presentation + "ListBox")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotAvailableFieldsList");
+
+        searchBox.Attribute("AutomationProperties.Name")?.Value.Should().Be("Search PivotTable Fields");
+        searchBox.IsBefore(availableFieldsList).Should().BeTrue("search should be above the available fields list");
     }
 
     [Fact]
