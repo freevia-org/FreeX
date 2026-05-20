@@ -171,6 +171,7 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
     private readonly CellAddress _destination;
     private readonly bool _transpose;
     private Dictionary<CellAddress, string?>? _previous;
+    private Dictionary<CellAddress, ThreadedComment?>? _previousThreaded;
 
     public string Label => "Paste Comments";
 
@@ -196,7 +197,12 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             .Where(sourceSheet.Comments.ContainsKey)
             .Select(address => (Address: address, Comment: sourceSheet.Comments[address]))
             .ToList();
+        var sourceThreadedComments = _sourceRange.AllCells()
+            .Where(sourceSheet.ThreadedComments.ContainsKey)
+            .Select(address => (Address: address, Comment: sourceSheet.ThreadedComments[address]))
+            .ToList();
         _previous = [];
+        _previousThreaded = [];
         var affected = new List<CellAddress>();
         foreach (var (source, comment) in sourceComments)
         {
@@ -208,12 +214,22 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             affected.Add(destination);
         }
 
-        return new CommandOutcome(true, AffectedCells: affected);
+        foreach (var (source, comment) in sourceThreadedComments)
+        {
+            var destination = MapDestination(source, _sourceRange, _destination, _transpose);
+            _previousThreaded[destination] = targetSheet.ThreadedComments.TryGetValue(destination, out var oldComment)
+                ? oldComment
+                : null;
+            targetSheet.ThreadedComments[destination] = comment;
+            affected.Add(destination);
+        }
+
+        return new CommandOutcome(true, AffectedCells: affected.Distinct().ToList());
     }
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previous is null)
+        if (_previous is null || _previousThreaded is null)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
@@ -223,6 +239,14 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
                 sheet.Comments.Remove(address);
             else
                 sheet.Comments[address] = comment;
+        }
+
+        foreach (var (address, comment) in _previousThreaded)
+        {
+            if (comment is null)
+                sheet.ThreadedComments.Remove(address);
+            else
+                sheet.ThreadedComments[address] = comment;
         }
     }
 
