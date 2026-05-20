@@ -102,4 +102,32 @@ public sealed class GridViewTextDecorationTests
             .Should()
             .Be(expected);
     }
+
+    [Theory]
+    [InlineData("3Arrows", ConditionalIconGlyphKind.Arrow)]
+    [InlineData("3ArrowsGray", ConditionalIconGlyphKind.Arrow)]
+    [InlineData("3TrafficLights1", ConditionalIconGlyphKind.TrafficLight)]
+    [InlineData("4RedToBlack", ConditionalIconGlyphKind.TrafficLight)]
+    [InlineData("3Signs", ConditionalIconGlyphKind.Sign)]
+    [InlineData("3Symbols", ConditionalIconGlyphKind.Symbol)]
+    [InlineData("3Flags", ConditionalIconGlyphKind.Flag)]
+    [InlineData("4Rating", ConditionalIconGlyphKind.Rating)]
+    [InlineData("5Quarters", ConditionalIconGlyphKind.Quarter)]
+    [InlineData("5Boxes", ConditionalIconGlyphKind.Box)]
+    public void ResolveConditionalIconGlyphKind_UsesIconSetStyleTaxonomy(
+        string style,
+        ConditionalIconGlyphKind expected)
+    {
+        GridView.ResolveConditionalIconGlyphKind(new ConditionalFormatIcon(style, 0, 3, true))
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void ResolveConditionalIconColor_UsesGrayPaletteForGrayArrowSets()
+    {
+        GridView.ResolveConditionalIconColor(new ConditionalFormatIcon("5ArrowsGray", 4, 5, true))
+            .Should()
+            .Be("#666666");
+    }
 }
