@@ -102,6 +102,34 @@ public class CommentCommandTests
     }
 
     [Fact]
+    public void ClearCommentsCommand_RemovesThreadedCommentsInRangeAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        sheet.ThreadedComments[a1] = new ThreadedComment("A", "Quinn");
+        sheet.ThreadedComments[b1] = new ThreadedComment("B", "Codex");
+        sheet.ThreadedComments[c1] = new ThreadedComment("C", "Freexcel");
+        var range = new GridRange(a1, b1);
+
+        var cmd = new ClearCommentsCommand(sheet.Id, range);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().BeEquivalentTo([a1, b1]);
+        sheet.ThreadedComments.Should().NotContainKey(a1);
+        sheet.ThreadedComments.Should().NotContainKey(b1);
+        sheet.ThreadedComments[c1].Should().Be(new ThreadedComment("C", "Freexcel"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[a1].Should().Be(new ThreadedComment("A", "Quinn"));
+        sheet.ThreadedComments[b1].Should().Be(new ThreadedComment("B", "Codex"));
+        sheet.ThreadedComments[c1].Should().Be(new ThreadedComment("C", "Freexcel"));
+    }
+
+    [Fact]
     public void ClearCommentsCommand_RejectsProtectedSheet()
     {
         var (_, sheet, ctx) = Setup();

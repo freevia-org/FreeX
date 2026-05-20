@@ -11500,6 +11500,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     : null,
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToErrorBarsXml(chart, seriesIndex, chartNs),
                 ToCategoryRangeXml(categoryRange, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
@@ -11545,6 +11546,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToErrorBarsXml(chart, seriesIndex, chartNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", xValueRange))),
@@ -11607,6 +11609,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToErrorBarsXml(chart, seriesIndex, chartNs),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", xValueRange))),
@@ -11928,6 +11931,44 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ChartTrendlineType.MovingAverage => "movingAvg",
             ChartTrendlineType.Polynomial => "poly",
             _ => "linear"
+        };
+
+    private static XElement? ToErrorBarsXml(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs)
+    {
+        if (!chart.ShowErrorBars || seriesIndex != 0 || !SupportsErrorBars(chart.Type))
+            return null;
+
+        return new XElement(chartNs + "errBars",
+            new XElement(chartNs + "errBarType", new XAttribute("val", ToXlsxErrorBarDirection(chart.ErrorBarDirection))),
+            new XElement(chartNs + "errValType", new XAttribute("val", ToXlsxErrorBarKind(chart.ErrorBarKind))),
+            chart.ErrorBarEndCaps ? null : new XElement(chartNs + "noEndCap", new XAttribute("val", "1")),
+            chart.ErrorBarKind is ChartErrorBarKind.Percentage or ChartErrorBarKind.FixedValue
+                ? new XElement(chartNs + "val", new XAttribute("val", Math.Clamp(chart.ErrorBarValue, 0, 1000).ToString(CultureInfo.InvariantCulture)))
+                : null);
+    }
+
+    private static bool SupportsErrorBars(ChartType chartType) =>
+        chartType is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn or
+            ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or
+            ChartType.Line or ChartType.Scatter or ChartType.Area;
+
+    private static string ToXlsxErrorBarKind(ChartErrorBarKind kind) =>
+        kind switch
+        {
+            ChartErrorBarKind.Percentage => "percentage",
+            ChartErrorBarKind.FixedValue => "fixedVal",
+            _ => "stdErr"
+        };
+
+    private static string ToXlsxErrorBarDirection(ChartErrorBarDirection direction) =>
+        direction switch
+        {
+            ChartErrorBarDirection.Plus => "plus",
+            ChartErrorBarDirection.Minus => "minus",
+            _ => "both"
         };
 
     private static string ToDrawingSchemeColor(WorkbookThemeColorSlot slot) =>

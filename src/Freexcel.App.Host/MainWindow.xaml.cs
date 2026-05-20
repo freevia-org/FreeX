@@ -4450,6 +4450,9 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.AutoFitColumnWidth:
                 FormatAutoColMenuItem_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.NewComment:
+                ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;
