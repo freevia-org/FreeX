@@ -340,7 +340,7 @@ public partial class MainWindow
 
         var item = new MenuItem
         {
-            Header = sourceItem.Header,
+            Header = CloneMenuHeader(sourceItem.Header),
             IsEnabled = sourceItem.IsEnabled,
             IsCheckable = sourceItem.IsCheckable,
             IsChecked = sourceItem.IsChecked,
@@ -373,6 +373,16 @@ public partial class MainWindow
 
         return item;
     }
+
+    private static object? CloneMenuHeader(object? header) =>
+        header switch
+        {
+            TextBlock textBlock => textBlock.Text,
+            AccessText accessText => accessText.Text,
+            string text => text,
+            null => null,
+            _ => header.ToString()
+        };
 
     private static void SynchronizeClonedMenuItems(ItemCollection sourceItems, ItemCollection clonedItems)
     {

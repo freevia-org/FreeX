@@ -619,6 +619,36 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RibbonKeyTipController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var keyTipSourcePath = Path.Combine(appHostDirectory, "MainWindow.KeyTips.cs");
+
+        File.Exists(keyTipSourcePath).Should().BeTrue();
+        var keyTipSource = File.ReadAllText(keyTipSourcePath);
+
+        mainSource.Should().NotContain("private void EnterRibbonKeyTipMode(");
+        mainSource.Should().NotContain("private void HandleActiveRibbonKeyTip(");
+        mainSource.Should().NotContain("private void ShowKeyTipOverlay(");
+        mainSource.Should().NotContain("private bool TryInvokeVisibleCommandKeyTip(");
+        mainSource.Should().NotContain("private void EnterRibbonMenuKeyTipScope(");
+        mainSource.Should().NotContain("private bool TryInvokeTopLevelQatKeyTip(");
+        mainSource.Should().NotContain("private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(");
+        mainSource.Should().NotContain("private enum RibbonKeyTipScope");
+
+        keyTipSource.Should().Contain("private void EnterRibbonKeyTipMode(");
+        keyTipSource.Should().Contain("private void HandleActiveRibbonKeyTip(");
+        keyTipSource.Should().Contain("private void ShowKeyTipOverlay(");
+        keyTipSource.Should().Contain("private bool TryInvokeVisibleCommandKeyTip(");
+        keyTipSource.Should().Contain("private void EnterRibbonMenuKeyTipScope(");
+        keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(");
+        keyTipSource.Should().Contain("private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(");
+        keyTipSource.Should().Contain("private enum RibbonKeyTipScope");
+        keyTipSource.Should().Contain("RibbonKeyTipRouting");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
