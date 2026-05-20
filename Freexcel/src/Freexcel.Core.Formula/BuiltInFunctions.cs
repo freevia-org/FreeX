@@ -4160,9 +4160,13 @@ public static class BuiltInFunctions
     private static ScalarValue Filter(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue arrayRange
+            ? arrayRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue includeError) return includeError;
-        if (args[1] is not RangeValue include) return ErrorValue.Value;
+        var include = args[1] is RangeValue includeRange
+            ? includeRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         var ifEmpty = args.Count > 2 ? args[2] : ErrorValue.Calc;
 
         if (include.ColCount == 1 && include.RowCount == arr.RowCount)
