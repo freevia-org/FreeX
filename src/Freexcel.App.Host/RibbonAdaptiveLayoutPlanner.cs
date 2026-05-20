@@ -67,6 +67,9 @@ public static class RibbonAdaptiveLayoutPlanner
             return states;
         }
 
+        if (TryApplyTabSpecificBreakpointOverrides(availableWidth, groupNames, states))
+            return states;
+
         var collapseFrom = availableWidth switch
         {
             <= 900 => 0,
@@ -82,6 +85,42 @@ public static class RibbonAdaptiveLayoutPlanner
             states[i] = RibbonAdaptiveGroupState.Collapsed;
 
         return states;
+    }
+
+    private static bool TryApplyTabSpecificBreakpointOverrides(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states)
+    {
+        if (IsTinyRibbonGroupSet(groupNames))
+            return true;
+
+        var firstCollapsedIndex = GetFirstCollapsedIndexForKnownTab(availableWidth, groupNames);
+        if (firstCollapsedIndex is null)
+            return false;
+
+        CollapseFrom(states, firstCollapsedIndex.Value);
+        return true;
+    }
+
+    private static int? GetFirstCollapsedIndexForKnownTab(double availableWidth, IReadOnlyList<string> groupNames)
+    {
+        if (availableWidth <= 900)
+            return 0;
+
+        if (IsDataRibbonGroupSet(groupNames) || IsViewRibbonGroupSet(groupNames) || IsReviewRibbonGroupSet(groupNames))
+            return availableWidth <= 1120 ? 2 : availableWidth <= 1320 ? 3 : null;
+
+        if (IsPageLayoutRibbonGroupSet(groupNames) || IsDrawRibbonGroupSet(groupNames))
+            return availableWidth <= 1120 ? 1 : availableWidth <= 1320 ? 2 : null;
+
+        return null;
+    }
+
+    private static void CollapseFrom(RibbonAdaptiveGroupState[] states, int firstCollapsedIndex)
+    {
+        for (var i = Math.Clamp(firstCollapsedIndex, 0, states.Length); i < states.Length; i++)
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
 
     private static bool Fits(
@@ -120,6 +159,42 @@ public static class RibbonAdaptiveLayoutPlanner
         groupNames.Count >= 4 &&
         TryFindGroupIndex(groupNames, "Function Library", out _) &&
         TryFindGroupIndex(groupNames, "Formula Auditing", out _);
+
+    private static bool IsDataRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 5 &&
+        TryFindGroupIndex(groupNames, "Get & Transform", out _) &&
+        TryFindGroupIndex(groupNames, "Sort & Filter", out _) &&
+        TryFindGroupIndex(groupNames, "Data Tools", out _);
+
+    private static bool IsViewRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 5 &&
+        TryFindGroupIndex(groupNames, "Workbook Views", out _) &&
+        TryFindGroupIndex(groupNames, "Show", out _) &&
+        TryFindGroupIndex(groupNames, "Freeze Panes", out _);
+
+    private static bool IsReviewRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 4 &&
+        TryFindGroupIndex(groupNames, "Proofing", out _) &&
+        TryFindGroupIndex(groupNames, "Accessibility", out _) &&
+        TryFindGroupIndex(groupNames, "Comments", out _);
+
+    private static bool IsPageLayoutRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 3 &&
+        TryFindGroupIndex(groupNames, "Themes", out _) &&
+        TryFindGroupIndex(groupNames, "Page Setup", out _) &&
+        TryFindGroupIndex(groupNames, "Sheet Options", out _);
+
+    private static bool IsDrawRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count >= 3 &&
+        TryFindGroupIndex(groupNames, "Draw", out _) &&
+        TryFindGroupIndex(groupNames, "Arrange", out _) &&
+        TryFindGroupIndex(groupNames, "Format", out _);
+
+    private static bool IsTinyRibbonGroupSet(IReadOnlyList<string> groupNames) =>
+        groupNames.Count <= 2 &&
+        (TryFindGroupIndex(groupNames, "Help", out _) ||
+         TryFindGroupIndex(groupNames, "PivotTable", out _) ||
+         TryFindGroupIndex(groupNames, "Layout", out _));
 
     private static void ApplyInsertBreakpointOverrides(
         double availableWidth,

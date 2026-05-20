@@ -26,4 +26,27 @@ public sealed class PrintRendererPageSetupTests
             document.Pages.Should().HaveCount(1);
         });
     }
+
+    [Fact]
+    public void RenderWorksheet_UsesExplicitPrintRangeForSelectionExport()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Selection export");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Outside"));
+            sheet.SetCell(new CellAddress(sheet.Id, 40, 20), new TextValue("Selected"));
+            var selectedRange = new GridRange(
+                new CellAddress(sheet.Id, 40, 20),
+                new CellAddress(sheet.Id, 40, 20));
+
+            var document = PrintRenderer.RenderWorksheet(
+                workbook,
+                sheet.Id,
+                new ViewportService(),
+                printRangeOverride: selectedRange);
+
+            document.Pages.Should().HaveCount(1);
+        });
+    }
 }

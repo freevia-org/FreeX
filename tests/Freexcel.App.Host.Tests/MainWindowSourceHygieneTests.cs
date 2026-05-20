@@ -521,6 +521,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ReviewCommentNavigation_IncludesThreadedComments()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().Contain("sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
@@ -682,9 +692,10 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
-        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request))");
-        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
+        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), ResolveExportRange(request.Options))");
+        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), ResolveExportRange(request.Options))");
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
     }
 
