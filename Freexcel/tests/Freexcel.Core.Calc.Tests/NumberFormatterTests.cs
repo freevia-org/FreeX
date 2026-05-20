@@ -213,6 +213,35 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("h:mm:ss", 45292.52425925926, "12:34:56")]
+    [InlineData("hh:mm AM/PM", 45292.56527777778, "01:34 PM")]
+    [InlineData("m/d/yyyy h:mm", 45292.52430555556, "1/1/2024 12:35")]
+    public void CustomNumberSubset_TreatsMinuteTokensAsMinutesNearTimeTokens(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("h:mm:ss.0", "12:34:56.8")]
+    [InlineData("h:mm:ss.00", "12:34:56.79")]
+    [InlineData("h:mm:ss.000", "12:34:56.789")]
+    public void CustomNumberSubset_FormatsFractionalSecondTokens(
+        string format,
+        string expected)
+    {
+        var value = new DateTime(2024, 1, 1, 12, 34, 56, 789).ToOADate();
+
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[h]:mm:ss_)", "36:00:00")]
     [InlineData("[h]:mm:ss*-", "36:00:00")]
     [InlineData("\\T [h]:mm:ss", "T 36:00:00")]
@@ -221,6 +250,21 @@ public class NumberFormatterTests
         string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(1.5), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[h]:mm:ss.000", "36:00:00.789")]
+    [InlineData("[m]:ss.00", "2160:00.79")]
+    [InlineData("[s].0", "129600.8")]
+    public void CustomNumberSubset_FormatsElapsedFractionalSecondTokens(
+        string format,
+        string expected)
+    {
+        var value = (TimeSpan.FromHours(36) + TimeSpan.FromMilliseconds(789)).TotalDays;
+
+        var result = NumberFormatter.Format(new NumberValue(value), format);
 
         Assert.Equal(expected, result);
     }

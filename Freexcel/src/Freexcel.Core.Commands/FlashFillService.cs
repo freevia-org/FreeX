@@ -75,6 +75,12 @@ public static class FlashFillService
         if (TryFirstLastEmailPattern(exampleSources, exampleOutputs) is { } emailPattern)
             patterns.Insert(6, emailPattern);
 
+        if (TryFirstInitialLastEmailPattern(exampleSources, exampleOutputs) is { } initialLastEmailPattern)
+            patterns.Insert(7, initialLastEmailPattern);
+
+        if (TryLastFirstInitialEmailPattern(exampleSources, exampleOutputs) is { } lastInitialEmailPattern)
+            patterns.Add(lastInitialEmailPattern);
+
         foreach (var pattern in patterns)
         {
             var allExamplesMatch = true;
@@ -367,10 +373,41 @@ public static class FlashFillService
         IReadOnlyList<IReadOnlyList<string>> exampleSources,
         IReadOnlyList<string> exampleOutputs)
     {
+        return TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => (s[0] + "." + s[1]).ToLowerInvariant());
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryFirstInitialLastEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        return TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant());
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryLastFirstInitialEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        return TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => (s[1] + GetFirstInitial(s[0])).ToLowerInvariant());
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TrySharedDomainEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs,
+        Func<IReadOnlyList<string>, string> localPart)
+    {
         string? domain = null;
         for (var i = 0; i < exampleSources.Count; i++)
         {
-            var expectedPrefix = (exampleSources[i][0] + "." + exampleSources[i][1]).ToLowerInvariant() + "@";
+            var expectedPrefix = localPart(exampleSources[i]) + "@";
             if (!exampleOutputs[i].StartsWith(expectedPrefix, StringComparison.Ordinal))
                 return null;
 
@@ -386,6 +423,6 @@ public static class FlashFillService
 
         return domain is null
             ? null
-            : s => (s[0] + "." + s[1]).ToLowerInvariant() + "@" + domain;
+            : s => localPart(s) + "@" + domain;
     }
 }

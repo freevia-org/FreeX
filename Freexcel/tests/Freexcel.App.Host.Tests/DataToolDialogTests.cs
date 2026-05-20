@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -96,6 +97,23 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialog_ExposesKeyboardAccessKeysForStaticOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Replace current subtotals",
+            "_Page break between groups",
+            "_Summary below data",
+            "_At each change in:",
+            "_Add subtotal to:",
+            "_Use function:"
+        })
+            source.Should().Contain($"Content = \"{content}\"");
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_ParsesRangesAndOptionalCopyToCellOnCurrentSheet()
     {
         var sheetId = SheetId.New();
@@ -153,6 +171,40 @@ public sealed class DataToolDialogTests
 
         parsed.Should().BeFalse();
         error.Should().Be("Enter a valid copy-to cell.");
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_InPlaceModeIgnoresCopyToText()
+    {
+        var sheetId = SheetId.New();
+
+        var parsed = AdvancedFilterDialog.TryParse(
+            sheetId,
+            listRangeText: "A1:D20",
+            criteriaRangeText: "F1:G2",
+            copyToCellText: "NotACell",
+            copyToAnotherLocation: false,
+            uniqueRecordsOnly: false,
+            out var result,
+            out var error);
+
+        parsed.Should().BeTrue(error);
+        result.CopyToCell.Should().BeNull();
+    }
+
+    [Fact]
+    public void AdvancedFilterDialog_ExposesExcelStyleModesAndReferencePickers()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AdvancedFilterDialog.cs"));
+
+        source.Should().Contain("_filterInPlaceButton");
+        source.Should().Contain("_copyToAnotherLocationButton");
+        source.Should().Contain("Filter the list, in-place");
+        source.Should().Contain("Copy to another location");
+        source.Should().Contain("CreateReferenceEditor(_listRangeBox");
+        source.Should().Contain("CreateReferenceEditor(_criteriaRangeBox");
+        source.Should().Contain("CreateReferenceEditor(_copyToBox");
+        source.Should().Contain("ReferencePickerButton_Click");
     }
 
     [Fact]

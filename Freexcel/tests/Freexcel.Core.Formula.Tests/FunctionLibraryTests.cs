@@ -2354,6 +2354,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_And_Xmatch_TreatScalarLookupArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=XMATCH(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=XLOOKUP(5,5,\"found\")", MakeSheet()).Should().Be(new TextValue("found"));
+    }
+
+    [Fact]
     public void Xlookup_WildcardMatchMode_MatchesTextPattern()
     {
         var sheet = MakeSheet(
@@ -4228,6 +4235,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Lookup_TreatsScalarLookupAndResultVectorsAsSingleItemArrays()
+    {
+        _eval.Evaluate("=LOOKUP(5,5,\"found\")", MakeSheet()).Should().Be(new TextValue("found"));
+    }
+
+    [Fact]
     public void Lookup_ArrayForm_SearchesFirstRowAndReturnsLastRowWhenWiderThanTall()
     {
         var sheet = MakeSheet(
@@ -4713,6 +4726,17 @@ public class FunctionLibraryTests
         rv.Cells[0, 0].Should().Be(new TextValue("B"));
         rv.Cells[1, 0].Should().Be(new TextValue("C"));
         rv.Cells[2, 0].Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
+    public void Sortby_TreatsScalarArrayAndKeyAsSingleCellArrays()
+    {
+        var result = _eval.Evaluate("=SORTBY(5,1)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(5));
     }
 
     [Fact]
