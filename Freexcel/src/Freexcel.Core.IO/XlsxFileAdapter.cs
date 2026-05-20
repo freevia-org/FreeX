@@ -682,7 +682,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
                 .ToDictionary(
                     e => e.Attribute("Id")!.Value,
-                    e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                    e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                     StringComparer.OrdinalIgnoreCase)
                 ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -928,7 +928,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
                 .ToDictionary(
                     e => e.Attribute("Id")!.Value,
-                    e => ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
+                    e => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
                     StringComparer.OrdinalIgnoreCase)
                 ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1187,7 +1187,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 }
 
                 var model = new ExternalLinkModel { PackagePart = externalLinkPath };
-                var externalLinkRelsEntry = archive.GetEntry(GetWorksheetRelsPath(externalLinkPath));
+                var externalLinkRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(externalLinkPath));
                 if (externalLinkRelsEntry is not null)
                 {
                     var externalLinkRelsXml = LoadXml(externalLinkRelsEntry);
@@ -1232,7 +1232,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
                 .ToDictionary(
                     e => e.Attribute("Id")!.Value,
-                    e => ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
+                    e => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
                     StringComparer.OrdinalIgnoreCase)
                 ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1272,7 +1272,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (tableRelIds.Count == 0)
                 continue;
 
-            var worksheetRels = LoadRelationshipTargets(archive, GetWorksheetRelsPath(worksheetPath), worksheetPath, packageRelNs);
+            var worksheetRels = LoadRelationshipTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
             foreach (var tableRelId in tableRelIds)
             {
                 if (!worksheetRels.TryGetValue(tableRelId, out var tablePath))
@@ -1650,7 +1650,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (pivotRelIds.Count == 0)
                 continue;
 
-            var worksheetRels = LoadRelationshipTargets(archive, GetWorksheetRelsPath(worksheetPath), worksheetPath, packageRelNs);
+            var worksheetRels = LoadRelationshipTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
             foreach (var pivotRelId in pivotRelIds)
             {
                 if (!worksheetRels.TryGetValue(pivotRelId, out var pivotPath))
@@ -1693,7 +1693,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
@@ -2745,158 +2745,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             CfThresholdType.Formula => "formula",
             _ => "min"
         };
-
-    private static string NormalizeWorkbookTarget(string target)
-    {
-        target = target.Replace('\\', '/').TrimStart('/');
-        return target.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
-            ? target
-            : $"xl/{target}";
-    }
-
-    private static string GetWorksheetRelsPath(string worksheetPath)
-    {
-        var normalized = worksheetPath.Replace('\\', '/');
-        var slash = normalized.LastIndexOf('/');
-        if (slash < 0)
-            return $"_rels/{normalized}.rels";
-
-        return $"{normalized[..slash]}/_rels/{normalized[(slash + 1)..]}.rels";
-    }
-
-    private static string ResolveRelationshipTarget(string sourcePath, string target)
-    {
-        var normalizedTarget = target.Replace('\\', '/');
-        if (normalizedTarget.StartsWith('/'))
-            return normalizedTarget.TrimStart('/');
-        if (normalizedTarget.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
-            return normalizedTarget;
-
-        var sourceDirectory = sourcePath.Replace('\\', '/');
-        var slash = sourceDirectory.LastIndexOf('/');
-        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
-        return NormalizeZipPath($"{sourceDirectory}/{normalizedTarget}");
-    }
-
-    private static string GetRelativeTarget(string sourcePath, string targetPath)
-    {
-        var sourceDirectory = sourcePath.Replace('\\', '/');
-        var slash = sourceDirectory.LastIndexOf('/');
-        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../media/{targetPath["xl/media/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../drawings/{targetPath["xl/drawings/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../tables/{targetPath["xl/tables/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../charts/{targetPath["xl/charts/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../media/{targetPath["xl/media/".Length..]}";
-        }
-
-        return targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
-            ? targetPath["xl/".Length..]
-            : targetPath;
-    }
-
-    private static string NormalizeZipPath(string path)
-    {
-        var parts = new List<string>();
-        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (part == ".")
-                continue;
-            if (part == "..")
-            {
-                if (parts.Count > 0)
-                    parts.RemoveAt(parts.Count - 1);
-                continue;
-            }
-
-            parts.Add(part);
-        }
-
-        return string.Join('/', parts);
-    }
-
-    private static string GetContentTypeFromPath(string path)
-    {
-        var extension = Path.GetExtension(path).ToLowerInvariant();
-        return extension switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".bmp" => "image/bmp",
-            ".gif" => "image/gif",
-            _ => "image/png"
-        };
-    }
-
-    private static string GetExtensionFromContentType(string contentType) =>
-        contentType.ToLowerInvariant() switch
-        {
-            "image/jpeg" => ".jpg",
-            "image/bmp" => ".bmp",
-            "image/gif" => ".gif",
-            _ => ".png"
-        };
-
-    private static string GetWorksheetBackgroundMediaFileName(string? fileName, int backgroundIndex, string extension)
-    {
-        var candidate = Path.GetFileName(fileName ?? "");
-        if (string.IsNullOrWhiteSpace(candidate) ||
-            candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-        {
-            return $"freexcelBackground{backgroundIndex}{extension}";
-        }
-
-        return Path.HasExtension(candidate)
-            ? candidate
-            : $"{candidate}{extension}";
-    }
 
     private static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
     {
@@ -3979,7 +3827,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(relId))
             return null;
 
-        var relsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        var relsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
         if (relsEntry is null)
             return null;
 
@@ -3991,7 +3839,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(target))
             return null;
 
-        var imagePath = ResolveRelationshipTarget(worksheetPath, target);
+        var imagePath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
         var imageEntry = archive.GetEntry(imagePath);
         if (imageEntry is null)
             return null;
@@ -4001,7 +3849,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         imageStream.CopyTo(ms);
         return new WorksheetBackgroundImage(
             ms.ToArray(),
-            GetContentTypeFromPath(imagePath),
+            XlsxPackagePath.GetImageContentType(imagePath),
             Path.GetFileName(imagePath));
     }
 
@@ -4024,7 +3872,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(drawingRelId))
             return charts;
 
-        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        var worksheetRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
         if (worksheetRelsEntry is null)
             return charts;
 
@@ -4037,7 +3885,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(drawingTarget))
             return charts;
 
-        var drawingPath = ResolveRelationshipTarget(worksheetPath, drawingTarget);
+        var drawingPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, drawingTarget);
         var drawingEntry = archive.GetEntry(drawingPath);
         if (drawingEntry is null)
             return charts;
@@ -4049,7 +3897,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (chartElements.Count == 0)
             return charts;
 
-        var drawingRelsEntry = archive.GetEntry(GetWorksheetRelsPath(drawingPath));
+        var drawingRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(drawingPath));
         if (drawingRelsEntry is null)
             return charts;
 
@@ -4068,11 +3916,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (string.IsNullOrWhiteSpace(chartTarget))
                 continue;
 
-            var chartPath = ResolveRelationshipTarget(drawingPath, chartTarget);
+            var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
             var chartEntry = archive.GetEntry(chartPath);
             if (chartEntry is null)
                 continue;
-            var chartRelationships = archive.GetEntry(GetWorksheetRelsPath(chartPath)) is { } chartRelsEntry
+            var chartRelationships = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(chartPath)) is { } chartRelsEntry
                 ? LoadXml(chartRelsEntry)
                 : null;
 
@@ -4114,7 +3962,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(drawingRelId))
             return pictures;
 
-        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        var worksheetRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
         if (worksheetRelsEntry is null)
             return pictures;
 
@@ -4127,12 +3975,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(drawingTarget))
             return pictures;
 
-        var drawingPath = ResolveRelationshipTarget(worksheetPath, drawingTarget);
+        var drawingPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, drawingTarget);
         var drawingEntry = archive.GetEntry(drawingPath);
         if (drawingEntry is null)
             return pictures;
 
-        var drawingRelsEntry = archive.GetEntry(GetWorksheetRelsPath(drawingPath));
+        var drawingRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(drawingPath));
         if (drawingRelsEntry is null)
             return pictures;
 
@@ -4155,7 +4003,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (string.IsNullOrWhiteSpace(imageTarget))
                 continue;
 
-            var imagePath = ResolveRelationshipTarget(drawingPath, imageTarget);
+            var imagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, imageTarget);
             var imageEntry = archive.GetEntry(imagePath);
             if (imageEntry is null)
                 continue;
@@ -4186,7 +4034,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             pictures.Add(new XlsxPicturePackagePart(
                 ms.ToArray(),
-                GetContentTypeFromPath(imagePath),
+                XlsxPackagePath.GetImageContentType(imagePath),
                 altText,
                 anchor,
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
@@ -4295,7 +4143,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(drawingRelId))
             return null;
 
-        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        var worksheetRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
         if (worksheetRelsEntry is null)
             return null;
 
@@ -4308,7 +4156,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(drawingTarget))
             return null;
 
-        var drawingEntry = archive.GetEntry(ResolveRelationshipTarget(worksheetPath, drawingTarget));
+        var drawingEntry = archive.GetEntry(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, drawingTarget));
         return drawingEntry is null ? null : LoadXml(drawingEntry);
     }
 
@@ -5121,7 +4969,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
         var generatedEntriesBeforeMerge = generatedArchive.Entries
-            .Select(entry => NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceEntry in sourceArchive.Entries)
@@ -5405,12 +5253,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XElement(freexcelNs + "selectedItems",
                         slicer.SelectedItems.Select(item =>
                             new XElement(freexcelNs + "selectedItem", new XAttribute("value", item)))))));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(slicerPath), new XDocument(
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(slicerPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
                         new XAttribute("Id", "rIdSlicerCache"),
                         new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicerCache"),
-                        new XAttribute("Target", GetRelativeTarget(slicerPath, cachePath))))));
+                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(slicerPath, cachePath))))));
             EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
             EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.slicerCache+xml");
             slicerIndex++;
@@ -5440,12 +5288,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
                     new XElement(slicerNs + "pivotTables",
                         new XElement(slicerNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(timelinePath), new XDocument(
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(timelinePath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
                         new XAttribute("Id", "rIdTimelineCache"),
                         new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/timelineCache"),
-                        new XAttribute("Target", GetRelativeTarget(timelinePath, cachePath))))));
+                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(timelinePath, cachePath))))));
             EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.timeline+xml");
             EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.timelineCache+xml");
             timelineIndex++;
@@ -5589,7 +5437,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(target))
             return false;
 
-        var targetPart = ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
+        var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
         return !string.IsNullOrWhiteSpace(targetPart) &&
                !generatedEntriesBeforeMerge.Contains(targetPart) &&
                targetArchive.GetEntry(targetPart) is not null;
@@ -5603,7 +5451,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static string RelationshipPartToSourcePart(string relationshipPartPath)
     {
-        var normalized = NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
         if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
             return "";
 
@@ -5774,10 +5622,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var sourceWorksheetRels = LoadRelationshipTargets(
                 sourceArchive,
-                GetWorksheetRelsPath(sourceWorksheetPath),
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
                 sourceWorksheetPath,
                 packageRelNs);
-            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
             var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
                 ? LoadXml(targetWorksheetRelsEntry)
@@ -5845,7 +5693,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            var resolvedTarget = ResolveRelationshipTarget(sourcePart, target);
+            var resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
             if (string.Equals(resolvedTarget, targetPart, StringComparison.OrdinalIgnoreCase))
                 return relationship.Attribute("Id")?.Value ?? "";
         }
@@ -5855,7 +5703,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             packageRelNs + "Relationship",
             new XAttribute("Id", id),
             new XAttribute("Type", relationshipType),
-            new XAttribute("Target", GetRelativeTarget(sourcePart, targetPart))));
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(sourcePart, targetPart))));
         return id;
     }
 
@@ -5998,7 +5846,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            var targetPart = ResolveRelationshipTarget("xl/workbook.xml", target);
+            var targetPart = XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target);
             if (targetArchive.GetEntry(targetPart) is null)
                 continue;
 
@@ -6082,13 +5930,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var sourceWorksheetRels = LoadRelationshipTargets(
                 sourceArchive,
-                GetWorksheetRelsPath(sourceWorksheetPath),
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
                 sourceWorksheetPath,
                 packageRelNs);
             if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var drawingPath))
                 continue;
 
-            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
             var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
                 ? LoadXml(targetWorksheetRelsEntry)
@@ -6163,7 +6011,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var sourceWorksheetRels = LoadRelationshipTargets(
                 sourceArchive,
-                GetWorksheetRelsPath(sourceWorksheetPath),
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
                 sourceWorksheetPath,
                 packageRelNs);
             if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var printerSettingsPath) ||
@@ -6173,7 +6021,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
                 ? LoadXml(targetWorksheetRelsEntry)
                 : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -9073,7 +8921,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         var worksheetRels = LoadRelationshipTargets(
             archive,
-            GetWorksheetRelsPath(worksheetPath),
+            XlsxPackagePath.GetRelationshipPartPath(worksheetPath),
             worksheetPath,
             packageRelNs);
         return worksheetRels.TryGetValue(drawingRelId, out var drawingPath)
@@ -9136,12 +8984,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace packageRelNs)
     {
         var relIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sourceRelsPath = GetWorksheetRelsPath(sourceDrawingPath);
+        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceDrawingPath);
         var sourceRelsEntry = sourceArchive.GetEntry(sourceRelsPath);
         if (sourceRelsEntry is null)
             return relIdMap;
 
-        var targetRelsPath = GetWorksheetRelsPath(targetDrawingPath);
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetDrawingPath);
         var sourceRelsXml = LoadXml(sourceRelsEntry);
         var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
             ? LoadXml(targetRelsEntry)
@@ -9172,14 +9020,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var targetMode = sourceRelationship.Attribute("TargetMode")?.Value;
             var resolvedTarget = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                 ? target
-                : ResolveRelationshipTarget(sourceDrawingPath, target);
+                : XlsxPackagePath.ResolveRelationshipTarget(sourceDrawingPath, target);
             var targetRelationship = targetRelationships.FirstOrDefault(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, type, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(rel.Attribute("TargetMode")?.Value, targetMode, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(
                     string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                         ? rel.Attribute("Target")?.Value
-                        : ResolveRelationshipTarget(targetDrawingPath, rel.Attribute("Target")?.Value ?? ""),
+                        : XlsxPackagePath.ResolveRelationshipTarget(targetDrawingPath, rel.Attribute("Target")?.Value ?? ""),
                     resolvedTarget,
                     StringComparison.OrdinalIgnoreCase));
             if (targetRelationship is not null)
@@ -9200,7 +9048,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XAttribute("Type", type),
                 new XAttribute("Target", string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                     ? target
-                    : GetRelativeTarget(targetDrawingPath, resolvedTarget)),
+                    : XlsxPackagePath.GetRelationshipTarget(targetDrawingPath, resolvedTarget)),
                 string.IsNullOrWhiteSpace(targetMode) ? null : new XAttribute("TargetMode", targetMode)));
             changed = true;
         }
@@ -9346,7 +9194,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -9473,7 +9321,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -9533,7 +9381,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -9561,7 +9409,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (worksheetRoot is null)
                 continue;
 
-            var worksheetRelsPath = GetWorksheetRelsPath(worksheetPath);
+            var worksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
             var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
             var worksheetRelsXml = worksheetRelsEntry is not null
                 ? LoadXml(worksheetRelsEntry)
@@ -9839,7 +9687,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -9984,7 +9832,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -10379,7 +10227,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -10456,7 +10304,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheIndex++}.xml";
             ReplacePackageXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, workbookNs, relNs));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs));
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs));
             EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
 
             var cacheRelId = EnsureRelationshipForPackagePart(
@@ -10495,7 +10343,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -10534,7 +10382,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var worksheetXml = LoadXml(worksheetEntry);
-        var worksheetRelsPath = GetWorksheetRelsPath(worksheetPath);
+        var worksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
             ? LoadXml(worksheetRelsEntry)
             : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -10548,12 +10396,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var pivotPath = $"xl/pivotTables/pivotTable{pivotIndex++}.xml";
             var cacheRelId = "rIdPivotCache";
             ReplacePackageXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, workbookNs, cacheRelId, numberFormatIdMap));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(pivotPath), new XDocument(
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(pivotPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
                         new XAttribute("Id", cacheRelId),
                         new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"),
-                        new XAttribute("Target", GetRelativeTarget(pivotPath, cachePath))))));
+                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(pivotPath, cachePath))))));
             EnsureSpecificContentType(archive, $"/{pivotPath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml");
 
             var pivotRelId = EnsureRelationshipForPackagePart(
@@ -11248,7 +11096,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -11295,7 +11143,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
         var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
-        var drawingRelsPath = GetWorksheetRelsPath(drawingPath);
+        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
@@ -11316,7 +11164,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 packageRelNs + "Relationship",
                 new XAttribute("Id", chartRelId),
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
-                new XAttribute("Target", GetRelativeTarget(drawingPath, chartPath))));
+                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
             anchors.Add(ToAbsoluteChartAnchor(chart, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
         }
@@ -11340,7 +11188,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         for (var i = chartIndex - charts.Count; i < chartIndex; i++)
             EnsureContentTypeOverride(archive, $"/xl/charts/chart{i}.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
 
-        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relsEntry = archive.GetEntry(relsPath);
         XDocument worksheetRelsXml;
         if (relsEntry is null)
@@ -11358,7 +11206,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             packageRelNs + "Relationship",
             new XAttribute("Id", drawingRelId),
             new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
-            new XAttribute("Target", GetRelativeTarget(worksheetPath, drawingPath))));
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, drawingPath))));
         var updatedRelsEntry = archive.CreateEntry(relsPath);
         using (var relsStream = updatedRelsEntry.Open())
             worksheetRelsXml.Save(relsStream);
@@ -11392,7 +11240,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
         }
 
-        var relsPath = GetWorksheetRelsPath(chartPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
         archive.GetEntry(relsPath)?.Delete();
         ReplacePackageXml(archive, relsPath, new XDocument(new XElement(
             packageRelNs + "Relationships",
@@ -11454,7 +11302,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -11503,7 +11351,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 
         var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
-        var drawingRelsPath = GetWorksheetRelsPath(drawingPath);
+        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
@@ -11513,7 +11361,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             var currentPictureIndex = pictureIndex++;
             var contentType = string.IsNullOrWhiteSpace(picture.ContentType) ? "image/png" : picture.ContentType;
-            var extension = GetExtensionFromContentType(contentType).TrimStart('.');
+            var extension = XlsxPackagePath.GetImageExtension(contentType).TrimStart('.');
             var mediaPath = $"xl/media/freexcelPicture{currentPictureIndex}.{extension}";
             archive.GetEntry(mediaPath)?.Delete();
             var mediaEntry = archive.CreateEntry(mediaPath);
@@ -11526,7 +11374,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 packageRelNs + "Relationship",
                 new XAttribute("Id", imageRelId),
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-                new XAttribute("Target", GetRelativeTarget(drawingPath, mediaPath))));
+                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, mediaPath))));
             anchors.Add(ToOneCellPictureAnchor(
                 picture,
                 currentPictureIndex,
@@ -11562,7 +11410,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
         EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
 
-        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(relsPath) is { } relsEntry
             ? LoadXml(relsEntry)
             : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -13359,7 +13207,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -13394,8 +13242,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-        var extension = GetExtensionFromContentType(background.ContentType);
-        var mediaFileName = GetWorksheetBackgroundMediaFileName(background.FileName, backgroundIndex, extension);
+        var extension = XlsxPackagePath.GetImageExtension(background.ContentType);
+        var mediaFileName = XlsxPackagePath.GetWorksheetBackgroundMediaFileName(background.FileName, backgroundIndex, extension);
         var imagePath = $"xl/media/{mediaFileName}";
         var existingImageEntry = archive.GetEntry(imagePath);
         existingImageEntry?.Delete();
@@ -13405,7 +13253,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         EnsureContentType(archive, extension.TrimStart('.'), background.ContentType);
 
-        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relsEntry = archive.GetEntry(relsPath);
         XDocument relsXml;
         if (relsEntry is null)
@@ -13423,7 +13271,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             packageRelNs + "Relationship",
             new XAttribute("Id", relId),
             new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-            new XAttribute("Target", GetRelativeTarget(worksheetPath, imagePath))));
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, imagePath))));
 
         var updatedRelsEntry = archive.CreateEntry(relsPath);
         using (var relsStream = updatedRelsEntry.Open())
@@ -13464,7 +13312,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
