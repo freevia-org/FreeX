@@ -199,6 +199,19 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("m/d/yyyy_)", "1/1/2024")]
+    [InlineData("m/d/yyyy*-", "1/1/2024")]
+    [InlineData("\\D: m/d/yyyy", "D: 1/1/2024")]
+    public void CustomNumberSubset_CleansDateTimeSectionSpacingFillAndEscapes(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
     {

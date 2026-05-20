@@ -802,6 +802,7 @@ public static class NumberFormatter
         var (_, cleanFmt) = ExtractColor(format);
         cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
         cleanFmt = Regex.Replace(cleanFmt, @"\[[^\]]*\]", "");
+        cleanFmt = RemoveSpacingAndFillDirectives(cleanFmt);
         try
         {
             var dt = DateTime.FromOADate(oaDate);
@@ -844,6 +845,17 @@ public static class NumberFormatter
                 if (end < 0) end = excelFmt.Length - 1;
                 sb.Append(excelFmt[i..(end + 1)]);
                 i = end + 1;
+                continue;
+            }
+            if (c == '\\' && i + 1 < excelFmt.Length)
+            {
+                sb.Append('\'');
+                if (excelFmt[i + 1] == '\'')
+                    sb.Append("''");
+                else
+                    sb.Append(excelFmt[i + 1]);
+                sb.Append('\'');
+                i += 2;
                 continue;
             }
             // Longest-match for each token group
