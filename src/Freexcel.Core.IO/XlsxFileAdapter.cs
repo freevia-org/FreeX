@@ -1275,7 +1275,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Select(column =>
             {
                 var filters = column.Element(workbookNs + "filters");
-                var nativeFilter = ReadStructuredTableNativeFilterXml(column, workbookNs);
+                var nativeFilters = ReadStructuredTableNativeFilterXmls(column, workbookNs);
                 return new StructuredTableFilterColumnModel(
                     ReadIntAttribute(column, "colId") ?? -1,
                     filters?
@@ -1285,18 +1285,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         .Select(value => value!)
                         .ToList() ?? [],
                     ReadBoolAttribute(filters, "blank"),
-                    nativeFilter);
+                    nativeFilters);
             })
-            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || !string.IsNullOrWhiteSpace(column.NativeFilterXml)))
+            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || column.NativeFilterXmls.Count > 0))
             .ToList();
     }
 
-    private static string? ReadStructuredTableNativeFilterXml(XElement filterColumn, XNamespace workbookNs)
-    {
-        var nativeFilter = filterColumn.Elements()
-            .FirstOrDefault(element => element.Name != workbookNs + "filters");
-        return nativeFilter?.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-    }
+    private static List<string> ReadStructuredTableNativeFilterXmls(XElement filterColumn, XNamespace workbookNs) =>
+        filterColumn.Elements()
+            .Where(element => element.Name != workbookNs + "filters")
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
 
     private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
     {
@@ -8981,11 +8980,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))));
         }
 
-        if (!string.IsNullOrWhiteSpace(filterColumn.NativeFilterXml))
+        foreach (var nativeFilterXml in filterColumn.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
             try
             {
-                var nativeFilter = XElement.Parse(filterColumn.NativeFilterXml);
+                var nativeFilter = XElement.Parse(nativeFilterXml);
                 if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters")
                     element.Add(nativeFilter);
             }
