@@ -73,10 +73,11 @@ public class ExportPlannerTests
         var options = new ExportOptions(
             ExportContentScope.Selection,
             IncludeDocumentProperties: true,
-            OpenAfterPublish: true);
+            OpenAfterPublish: true,
+            PageRange: new ExportPageRange(2, 4));
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; document properties are included; open after publishing.");
+            .Should().Be("Selection; pages 2-4; document properties are included; open after publishing.");
     }
 
     [Fact]
@@ -109,12 +110,49 @@ public class ExportPlannerTests
         ExportOptionsDialog.CreateResult(
                 ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
-                openAfterPublish: true)
+                openAfterPublish: true,
+                pageRange: new ExportPageRange(3, 3))
             .Should()
             .Be(new ExportOptions(
                 ExportContentScope.EntireWorkbook,
                 IncludeDocumentProperties: true,
-                OpenAfterPublish: true));
+                OpenAfterPublish: true,
+                PageRange: new ExportPageRange(3, 3)));
+    }
+
+    [Theory]
+    [InlineData("", "", true, null, null)]
+    [InlineData("2", "4", true, 2, 4)]
+    [InlineData("3", "3", true, 3, 3)]
+    [InlineData("0", "3", false, null, null)]
+    [InlineData("4", "2", false, null, null)]
+    [InlineData("x", "2", false, null, null)]
+    [InlineData("2", "", false, null, null)]
+    public void TryCreatePageRange_ValidatesOptionalOneBasedPageRange(
+        string fromText,
+        string toText,
+        bool expectedSuccess,
+        int? expectedFrom,
+        int? expectedTo)
+    {
+        var success = ExportPlanner.TryCreatePageRange(fromText, toText, out var range, out var error);
+
+        success.Should().Be(expectedSuccess);
+        if (expectedSuccess && expectedFrom is not null && expectedTo is not null)
+        {
+            range.Should().Be(new ExportPageRange(expectedFrom.Value, expectedTo.Value));
+            error.Should().BeNull();
+        }
+        else if (expectedSuccess)
+        {
+            range.Should().BeNull();
+            error.Should().BeNull();
+        }
+        else
+        {
+            range.Should().BeNull();
+            error.Should().NotBeNullOrWhiteSpace();
+        }
     }
 
     [Fact]
@@ -216,6 +254,28 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesRequestedPageRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 3);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, null, new ExportPageRange(2, 2));
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(1);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WithoutRequestedPropertiesOnlyWritesProducerMetadata()
     {
         StaTestRunner.Run(() =>
@@ -294,19 +354,26 @@ public class ExportPlannerTests
     }
 
     private static FixedDocument CreateOnePageDocument()
+        => CreateDocument(pageCount: 1);
+
+    private static FixedDocument CreateDocument(int pageCount)
     {
         var document = new FixedDocument();
         document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
-        var page = new FixedPage
+        for (var i = 0; i < pageCount; i++)
         {
-            Width = 160,
-            Height = 120,
-            Background = Brushes.White
-        };
-        page.Children.Add(new TextBlock { Text = "Freexcel PDF", Margin = new System.Windows.Thickness(12) });
-        var content = new PageContent();
-        ((IAddChild)content).AddChild(page);
-        document.Pages.Add(content);
+            var page = new FixedPage
+            {
+                Width = 160,
+                Height = 120,
+                Background = Brushes.White
+            };
+            page.Children.Add(new TextBlock { Text = $"Freexcel PDF {i + 1}", Margin = new System.Windows.Thickness(12) });
+            var content = new PageContent();
+            ((IAddChild)content).AddChild(page);
+            document.Pages.Add(content);
+        }
+
         return document;
     }
 
@@ -371,11 +438,12 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result)");
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("RenderExportPaginator(options)");
+        printExport.Should().Contain("ApplyExportPageRange(options");
         printExport.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
-        printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties)");
+        printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 }
