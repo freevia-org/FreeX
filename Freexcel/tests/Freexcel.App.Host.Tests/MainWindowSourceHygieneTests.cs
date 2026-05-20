@@ -418,6 +418,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenuController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var contextMenuSourcePath = Path.Combine(appHostDirectory, "MainWindow.WorksheetContextMenu.cs");
+
+        File.Exists(contextMenuSourcePath).Should().BeTrue();
+        var contextMenuSource = File.ReadAllText(contextMenuSourcePath);
+
+        mainSource.Should().NotContain("private void OnGridContextMenuRequested(");
+        mainSource.Should().NotContain("private void ExecuteWorksheetContextMenuAction(");
+        mainSource.Should().NotContain("private void OpenKeyboardContextMenu(");
+
+        contextMenuSource.Should().Contain("private void OnGridContextMenuRequested(");
+        contextMenuSource.Should().Contain("private void ExecuteWorksheetContextMenuAction(");
+        contextMenuSource.Should().Contain("private void OpenKeyboardContextMenu(");
+        contextMenuSource.Should().Contain("WorksheetContextMenuPlanner.BuildCommands()");
+        contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
