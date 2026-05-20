@@ -267,6 +267,19 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("mmmmm d, yyyy", 45292, "J 1, 2024")]
+    [InlineData("mmmmm d, yyyy", 45323, "F 1, 2024")]
+    public void CustomNumberSubset_FormatsFiveMonthTokensAsMonthInitial(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[h]:mm:ss_)", "36:00:00")]
     [InlineData("[h]:mm:ss*-", "36:00:00")]
     [InlineData("\\T [h]:mm:ss", "T 36:00:00")]

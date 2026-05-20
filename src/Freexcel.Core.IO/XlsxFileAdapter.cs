@@ -6615,6 +6615,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "picture",
             workbookNs + "customProperties",
             workbookNs + "smartTags",
+            workbookNs + "singleXmlCells",
             workbookNs + "autoFilter",
             workbookNs + "protectedRanges",
             workbookNs + "rowBreaks",
