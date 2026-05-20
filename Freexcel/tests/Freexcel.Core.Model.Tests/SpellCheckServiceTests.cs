@@ -75,6 +75,17 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssuesInCell_IgnoresInternetEmailAndFileAddressSpans()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var text = "Visit https://teh.example.com, www.adn.test, email teh@example.com, or C:\\teh\\report.xlsx; recieve this note.";
+
+        var issues = SpellCheckService.FindIssuesInCell(address, text);
+
+        issues.Select(issue => issue.Word).Should().Equal("recieve");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_ReplacesAllKnownWholeWordsPreservingCapitalization()
     {
         var wb = new Workbook("test");
@@ -147,6 +158,22 @@ public sealed class SpellCheckServiceTests
         plan.Edits[0].Address.Should().Be(textAddress);
         plan.Edits[0].CorrectedText.Should().Be("Calendar recommendations for tomorrow were a success, although weird.");
         plan.Edits[0].ReplacementCount.Should().Be(5);
+    }
+
+    [Fact]
+    public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(textAddress, new TextValue("Open https://teh.example.com and C:\\adn\\file.txt, then recieve teh package."));
+
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        plan.IssueCount.Should().Be(2);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].CorrectedText.Should().Be("Open https://teh.example.com and C:\\adn\\file.txt, then receive the package.");
+        plan.Edits[0].ReplacementCount.Should().Be(2);
     }
 
     [Fact]

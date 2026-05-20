@@ -37,6 +37,8 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
         new(FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas", "Flag formulas whose relative reference pattern differs from adjacent formulas."),
+        new(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region", "Flag SUM formulas that omit adjacent cells in the region."),
+        new(FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas", "Flag formula cells that are not locked for worksheet protection."),
         new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
         new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
         new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
@@ -127,6 +129,8 @@ public static class FormulaAuditingService
     public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
     public const string TwoDigitYearTextDateErrorCode = "TwoDigitYearTextDate";
     public const string InconsistentFormulaErrorCode = "InconsistentFormula";
+    public const string FormulaOmitsAdjacentCellsErrorCode = "FormulaOmitsAdjacentCells";
+    public const string UnlockedFormulaCellsErrorCode = "UnlockedFormulaCells";
 
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {
@@ -267,6 +271,12 @@ public static class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(InconsistentFormulaErrorCode))
             result.AddRange(FindInconsistentFormulaIssues(workbook, sheetId));
 
+        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaOmitsAdjacentCellsErrorCode))
+            result.AddRange(FindFormulaOmitsAdjacentCellsIssues(workbook, sheetId));
+
+        if (!workbook.DisabledFormulaErrorCodes.Contains(UnlockedFormulaCellsErrorCode))
+            result.AddRange(FindUnlockedFormulaCellIssues(workbook, sheetId));
+
         return result
             .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
             .ThenBy(issue => issue.Address.Row)
@@ -279,7 +289,9 @@ public static class FormulaAuditingService
         (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
         (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
         FormulaRefersToBlankCells(workbook, sheetId, cell) ||
-        IsInconsistentFormula(workbook, sheetId, address);
+        IsInconsistentFormula(workbook, sheetId, address) ||
+        FormulaOmitsAdjacentCells(workbook, sheetId, address, cell) ||
+        IsUnlockedFormulaCell(workbook, cell);
 
     private static bool HasIgnorableLiteralIssue(Cell cell) =>
         cell.Value is ErrorValue ||
@@ -444,6 +456,139 @@ public static class FormulaAuditingService
             .Any(issue => issue.Address == address);
 
     private sealed record FormulaPattern(CellAddress Address, string FormulaText, string Pattern);
+
+    private static IEnumerable<FormulaErrorIssue> FindFormulaOmitsAdjacentCellsIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || !FormulaOmitsAdjacentCells(workbook, sheet.Id, address, cell))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    FormulaOmitsAdjacentCellsErrorCode,
+                    cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                    "The formula omits adjacent cells in the region.");
+            }
+        }
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindUnlockedFormulaCellIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || !IsUnlockedFormulaCell(workbook, cell))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    UnlockedFormulaCellsErrorCode,
+                    cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                    "The formula cell is unlocked and may be changed when the worksheet is protected.");
+            }
+        }
+    }
+
+    private static bool IsUnlockedFormulaCell(Workbook workbook, Cell cell) =>
+        cell.HasFormula && !workbook.GetStyle(cell.StyleId).Locked;
+
+    private static bool FormulaOmitsAdjacentCells(Workbook workbook, SheetId sheetId, CellAddress formulaAddress, Cell cell)
+    {
+        if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
+            return false;
+
+        foreach (var range in ExtractSumRanges(sheetId, cell.FormulaText))
+        {
+            if (range.Start.Sheet != range.End.Sheet)
+                continue;
+
+            if (IsVerticalRange(range) && HasIncludedValues(workbook, range))
+            {
+                if (range.Start.Row > 1 &&
+                    HasValueAt(workbook, new CellAddress(range.Start.Sheet, range.Start.Row - 1, range.Start.Col)))
+                    return true;
+
+                if (HasValueAt(workbook, new CellAddress(range.End.Sheet, range.End.Row + 1, range.End.Col)))
+                    return true;
+            }
+
+            if (IsHorizontalRange(range) && HasIncludedValues(workbook, range))
+            {
+                if (range.Start.Col > 1 && HasValueAt(workbook, new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - 1)))
+                    return true;
+
+                if (HasValueAt(workbook, new CellAddress(range.End.Sheet, range.End.Row, range.End.Col + 1)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<GridRange> ExtractSumRanges(SheetId sheetId, string formulaText)
+    {
+        foreach (Match match in Regex.Matches(
+                     formulaText,
+                     @"\bSUM\s*\(\s*(\$?[A-Za-z]{1,3}\$?[0-9]{1,7})\s*:\s*(\$?[A-Za-z]{1,3}\$?[0-9]{1,7})\s*\)",
+                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            yield return new GridRange(
+                ParseLocalAddress(sheetId, match.Groups[1].Value),
+                ParseLocalAddress(sheetId, match.Groups[2].Value));
+        }
+    }
+
+    private static bool IsVerticalRange(GridRange range) =>
+        range.Start.Col == range.End.Col && range.Start.Row < range.End.Row;
+
+    private static bool IsHorizontalRange(GridRange range) =>
+        range.Start.Row == range.End.Row && range.Start.Col < range.End.Col;
+
+    private static bool HasIncludedValues(Workbook workbook, GridRange range)
+    {
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+            {
+                if (HasValueAt(workbook, new CellAddress(range.Start.Sheet, row, col)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasValueAt(Workbook workbook, CellAddress address)
+    {
+        var sheet = workbook.GetSheet(address.Sheet);
+        var cell = sheet?.GetCell(address);
+        return cell is not null && !cell.HasFormula && cell.Value is not BlankValue;
+    }
+
+    private static CellAddress ParseLocalAddress(SheetId sheetId, string token)
+    {
+        var normalized = token.Replace("$", string.Empty, StringComparison.Ordinal);
+        var match = Regex.Match(normalized, @"^([A-Za-z]{1,3})([0-9]{1,7})$", RegexOptions.CultureInvariant);
+        var col = CellAddress.ColumnNameToNumber(match.Groups[1].Value);
+        var row = uint.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+        return new CellAddress(sheetId, row, col);
+    }
 
     private static string NormalizeFormulaPattern(CellAddress address, string formulaText) =>
         Regex.Replace(
