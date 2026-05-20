@@ -4260,6 +4260,8 @@ public class FileAdapterSmokeTests
             Value1 = "5",
             Priority = 2,
             StopIfTrue = true,
+            NativeAttributes = new Dictionary<string, string> { ["customAttr"] = "cf-native" },
+            NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-CF-EXT}\" /></extLst>"],
             FormatIfTrue = new CellStyle
             {
                 Bold = true,
@@ -4284,6 +4286,8 @@ public class FileAdapterSmokeTests
         rule.Value1.Should().Be("5");
         rule.Priority.Should().Be(2);
         rule.StopIfTrue.Should().BeTrue();
+        rule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
+        rule.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-CF-EXT}");
         rule.FormatIfTrue.Should().NotBeNull();
         rule.FormatIfTrue!.Bold.Should().BeTrue();
         rule.FormatIfTrue.FillColor.Should().Be(new CellColor(255, 0, 0));
