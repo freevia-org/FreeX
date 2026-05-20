@@ -24,13 +24,13 @@ public sealed class DialogButtonRowFactoryTests
             row.Children.Count.Should().Be(2);
 
             var ok = row.Children[0].Should().BeOfType<Button>().Subject;
-            ok.Content.Should().Be("OK");
+            ok.Content.Should().Be("_OK");
             ok.Width.Should().Be(72);
             ok.Margin.Should().Be(new Thickness(0, 0, 8, 0));
             ok.IsDefault.Should().BeTrue();
 
             var cancel = row.Children[1].Should().BeOfType<Button>().Subject;
-            cancel.Content.Should().Be("Cancel");
+            cancel.Content.Should().Be("_Cancel");
             cancel.Width.Should().Be(72);
             cancel.IsCancel.Should().BeTrue();
 
