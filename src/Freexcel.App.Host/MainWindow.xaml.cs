@@ -3113,14 +3113,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var items = AutoFilterDropdownPlanner.CreateChecklistItems(sheet, plan);
-        if (items.Count == 0)
+        var menuPlan = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+        if (menuPlan.Entries.All(entry => entry.Kind != AutoFilterMenuEntryKind.ChecklistItem))
             return;
 
-        var dialog = new AutoFilterDialog(items)
+        var dialog = new AutoFilterDialog(menuPlan)
         {
-            Owner = this,
-            Title = "AutoFilter"
+            Owner = this
         };
         PositionAutoFilterDialogAtActiveCell(dialog, activeCell);
 
@@ -4915,10 +4914,11 @@ public partial class MainWindow : Window
     private void ApplyFilterPrompt(GridRange range, uint filterColOffset)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var items = sheet is null
-            ? Array.Empty<AutoFilterChecklistItem>()
-            : AutoFilterDropdownPlanner.CreateChecklistItems(sheet, new AutoFilterDropdownPlan(range, filterColOffset));
-        var dialog = new AutoFilterDialog(items) { Owner = this, Title = "Filter" };
+        var dialog = sheet is null
+            ? new AutoFilterDialog(Array.Empty<AutoFilterChecklistItem>())
+            : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
+        dialog.Owner = this;
+        dialog.Title = "Filter";
         if (dialog.ShowDialog() != true) return;
 
         if (!ApplyAutoFilterDialogResult(range, filterColOffset, dialog.Result, "Filter"))

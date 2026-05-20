@@ -38,6 +38,14 @@ public sealed class AutoFilterDialog : Window
     {
     }
 
+    public AutoFilterDialog(AutoFilterMenuPlan menuPlan)
+        : this(CreateDialogItems(menuPlan))
+    {
+        Title = $"AutoFilter - {menuPlan.HeaderText}";
+        if (menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily) is { } filterEntry)
+            _criteriaBox.ToolTip = $"Criteria suggestions: {string.Join(", ", filterEntry.CriteriaSuggestions)}";
+    }
+
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)
     {
         _items = new ObservableCollection<AutoFilterDialogItem>(items);
@@ -151,6 +159,11 @@ public sealed class AutoFilterDialog : Window
             searchText?.Trim() ?? string.Empty,
             normalizedCriteria);
     }
+
+    private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>
+        menuPlan.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .Select(entry => new AutoFilterDialogItem(entry.Header, entry.Value, true));
 
     private void ReplaceItems(IEnumerable<AutoFilterDialogItem> items)
     {
