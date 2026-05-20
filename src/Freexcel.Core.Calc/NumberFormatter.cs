@@ -347,7 +347,7 @@ public static class NumberFormatter
         var elapsedMatch = Regex.Match(format, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
         if (elapsedMatch.Success)
         {
-            return FormatElapsedTime(value, format, elapsedMatch);
+            return FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch);
         }
 
         // Remove any remaining bracket content (conditions, locale, etc.)
@@ -962,6 +962,11 @@ public static class NumberFormatter
             else if (i + 1 < format.Length && format[i] == 's' && format[i + 1] == 's')
             {
                 sb.Append(remSeconds.ToString("D2"));
+                i += 2;
+            }
+            else if (format[i] == '\\' && i + 1 < format.Length)
+            {
+                sb.Append(format[i + 1]);
                 i += 2;
             }
             else

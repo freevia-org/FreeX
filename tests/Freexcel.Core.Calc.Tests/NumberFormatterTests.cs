@@ -212,6 +212,19 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("[h]:mm:ss_)", "36:00:00")]
+    [InlineData("[h]:mm:ss*-", "36:00:00")]
+    [InlineData("\\T [h]:mm:ss", "T 36:00:00")]
+    public void CustomNumberSubset_CleansElapsedTimeSectionSpacingFillAndEscapes(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(1.5), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
     {
