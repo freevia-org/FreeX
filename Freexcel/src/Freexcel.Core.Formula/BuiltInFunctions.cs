@@ -1077,7 +1077,9 @@ public static class BuiltInFunctions
     private static ScalarValue Index(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue table) return ErrorValue.Value;
+        var table = args[0] is RangeValue tableRange
+            ? tableRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
@@ -1128,7 +1130,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue table) return ErrorValue.Value;
+        var table = args[1] is RangeValue tableRange
+            ? tableRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
 
