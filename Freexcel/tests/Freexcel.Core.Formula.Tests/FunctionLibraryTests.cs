@@ -96,6 +96,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_And_Hlookup_TreatScalarTablesAsSingleCellArrays()
+    {
+        _eval.Evaluate("=VLOOKUP(5,5,1,FALSE)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=HLOOKUP(5,5,1,FALSE)", MakeSheet()).Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Vlookup_NotFound_ReturnsNA()
     {
         var sheet = MakeSheet(
@@ -1963,6 +1970,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Large_Small_And_Rank_TreatScalarArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=LARGE(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=SMALL(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=RANK(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Large_SecondLargest()
     {
         var sheet = MakeSheet(
@@ -3243,6 +3258,15 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,new NumberValue(4)),(3,1,new NumberValue(6)));
         _eval.Evaluate("=PERCENTILE(A1:A3,0.5)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Percentile_And_Quartile_TreatScalarArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=PERCENTILE(5,0)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=PERCENTILE(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=QUARTILE(5,0)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=QUARTILE(5,4)", MakeSheet()).Should().Be(new NumberValue(5));
     }
 
     [Fact] public void Percentile_RangeError_PropagatesError()
