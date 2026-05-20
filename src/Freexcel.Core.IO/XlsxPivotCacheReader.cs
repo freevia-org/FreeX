@@ -1,5 +1,4 @@
 using Freexcel.Core.Model;
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -19,7 +18,7 @@ internal static class XlsxPivotCacheReader
                      .Element(workbookNs + "pivotCaches")?
                      .Elements(workbookNs + "pivotCache") ?? [])
         {
-            var cacheId = ReadIntAttribute(pivotCacheElement, "cacheId") ?? 0;
+            var cacheId = XlsxXmlAttributeReader.ReadIntAttribute(pivotCacheElement, "cacheId") ?? 0;
             var relId = pivotCacheElement.Attribute(relNs + "id")?.Value;
             if (cacheId <= 0 || string.IsNullOrWhiteSpace(relId) || !workbookRels.TryGetValue(relId, out var cachePath))
                 continue;
@@ -42,13 +41,13 @@ internal static class XlsxPivotCacheReader
                 SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
                 SourceReference = worksheetSource?.Attribute("ref")?.Value,
                 SourceTableName = worksheetSource?.Attribute("name")?.Value,
-                ConnectionId = cacheSource is null ? null : ReadIntAttribute(cacheSource, "connectionId"),
-                IsOlap = ReadBoolAttribute(root, "olap"),
+                ConnectionId = cacheSource is null ? null : XlsxXmlAttributeReader.ReadIntAttribute(cacheSource, "connectionId"),
+                IsOlap = XlsxXmlAttributeReader.ReadBoolAttribute(root, "olap"),
                 PackagePart = cachePath,
-                RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
-                SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
-                EnableRefresh = ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
-                RefreshedVersion = ReadIntAttribute(root, "refreshedVersion"),
+                RefreshOnLoad = XlsxXmlAttributeReader.ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
+                SaveData = XlsxXmlAttributeReader.ReadBoolAttribute(root, "saveData", defaultValue: true),
+                EnableRefresh = XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
+                RefreshedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "refreshedVersion"),
                 RefreshedBy = root.Attribute("refreshedBy")?.Value
             };
 
@@ -59,19 +58,19 @@ internal static class XlsxPivotCacheReader
                 var sharedItems = field.Element(workbookNs + "sharedItems");
                 cache.Fields.Add(new PivotCacheFieldModel(
                     field.Attribute("name")?.Value ?? "",
-                    ReadIntAttribute(field, "numFmtId"),
-                    sharedItems is null ? null : ReadIntAttribute(sharedItems, "count"),
-                    ReadBoolAttribute(sharedItems, "containsBlank"),
-                    ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsMixedTypes"),
-                    ReadBoolAttribute(sharedItems, "containsSemiMixedTypes"),
-                    ReadBoolAttribute(sharedItems, "containsNonDate"),
-                    ReadBoolAttribute(sharedItems, "containsInteger"),
-                    ReadBoolAttribute(sharedItems, "longText"),
-                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "minValue"),
-                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "maxValue"),
+                    XlsxXmlAttributeReader.ReadIntAttribute(field, "numFmtId"),
+                    sharedItems is null ? null : XlsxXmlAttributeReader.ReadIntAttribute(sharedItems, "count"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsBlank"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsMixedTypes"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsSemiMixedTypes"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsNonDate"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "containsInteger"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(sharedItems, "longText"),
+                    sharedItems is null ? null : XlsxXmlAttributeReader.ReadDoubleAttribute(sharedItems, "minValue"),
+                    sharedItems is null ? null : XlsxXmlAttributeReader.ReadDoubleAttribute(sharedItems, "maxValue"),
                     sharedItems?.Attribute("minDate")?.Value,
                     sharedItems?.Attribute("maxDate")?.Value,
                     sharedItems is null ? null : ReadSharedItemValues(sharedItems, workbookNs)));
@@ -120,22 +119,5 @@ internal static class XlsxPivotCacheReader
         return PivotCacheSourceType.Unknown;
     }
 
-    private static int? ReadIntAttribute(XElement element, string name) =>
-        int.TryParse(element.Attribute(name)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
-
-    private static double? ReadDoubleAttribute(XElement element, string name) =>
-        double.TryParse(element.Attribute(name)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
-
-    private static bool ReadBoolAttribute(XElement? element, string name, bool defaultValue = false)
-    {
-        var value = element?.Attribute(name)?.Value;
-        if (value is null)
-            return defaultValue;
-
-        return value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
-    }
 }
+

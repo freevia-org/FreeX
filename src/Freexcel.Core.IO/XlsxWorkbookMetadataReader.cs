@@ -1,5 +1,4 @@
 using Freexcel.Core.Model;
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -23,7 +22,7 @@ internal static class XlsxWorkbookMetadataReader
                          .Element(workbookNs + "numFmts")?
                          .Elements(workbookNs + "numFmt") ?? [])
             {
-                var id = ReadIntAttribute(format, "numFmtId");
+                var id = XlsxXmlAttributeReader.ReadIntAttribute(format, "numFmtId");
                 var code = format.Attribute("formatCode")?.Value;
                 if (id is >= 164 && !string.IsNullOrWhiteSpace(code))
                     result[id.Value] = code;
@@ -53,8 +52,8 @@ internal static class XlsxWorkbookMetadataReader
                 return WorkbookProtectionState.None;
 
             var isStructureProtected =
-                IsTruthy(protection.Attribute("lockStructure")?.Value) ||
-                IsTruthy(protection.Attribute("lockWindows")?.Value);
+                XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure") ||
+                XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockWindows");
 
             if (!isStructureProtected)
                 return WorkbookProtectionState.None;
@@ -95,11 +94,11 @@ internal static class XlsxWorkbookMetadataReader
 
             return new WorkbookCalculationProperties(
                 mode,
-                ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
-                ReadBoolAttribute(calcPr, "forceFullCalc"),
-                ReadBoolAttribute(calcPr, "iterate"),
-                ReadIntAttribute(calcPr, "iterateCount"),
-                ReadDoubleAttribute(calcPr, "iterateDelta"));
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
+                XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
+                XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
+                XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
         }
         catch
         {
@@ -144,27 +143,6 @@ internal static class XlsxWorkbookMetadataReader
         return XDocument.Load(stream);
     }
 
-    private static int? ReadIntAttribute(XElement element, string name) =>
-        int.TryParse(element.Attribute(name)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
-
-    private static double? ReadDoubleAttribute(XElement element, string name) =>
-        double.TryParse(element.Attribute(name)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
-
-    private static bool ReadBoolAttribute(XElement? element, string name, bool defaultValue = false)
-    {
-        var value = element?.Attribute(name)?.Value;
-        if (value is null)
-            return defaultValue;
-
-        return IsTruthy(value);
-    }
-
-    private static bool IsTruthy(string? value) =>
-        value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed record WorkbookProtectionState(bool IsStructureProtected, string? PasswordHash)
@@ -184,3 +162,4 @@ internal sealed record WorkbookCalculationProperties(
 }
 
 internal sealed record XlsxWorkbookCustomView(string Id, string Name);
+
