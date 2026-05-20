@@ -207,7 +207,12 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void DialogEntryPointHandlers_UseOwnedActivatedDialogs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var source = string.Join(
+            Environment.NewLine,
+            Directory.GetFiles(appHostDirectory, "MainWindow*.cs")
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(File.ReadAllText));
         var invokeButtonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutomationInvokeButton.cs"));
 
         source.Should().Contain("ShowOwnedDialog(");
@@ -245,7 +250,7 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void BackstageExportEntryPoint_DisclosesXpsBackedPdfExport()
+    public void BackstageExportEntryPoint_DisclosesRealPdfAndXpsExport()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
@@ -258,8 +263,9 @@ public sealed class MainWindowXamlKeyTipTests
                 element.Attribute("Click")?.Value == "ExportPdfButton_Click");
 
         exportButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Export PDF/XPS");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PDF");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("XPS");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PDF printer");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("PDF printer");
     }
 
     [Fact]
