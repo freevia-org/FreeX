@@ -249,6 +249,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void DataCommandsController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var dataSourcePath = Path.Combine(appHostDirectory, "MainWindow.DataCommands.cs");
+
+        File.Exists(dataSourcePath).Should().BeTrue();
+        var dataSource = File.ReadAllText(dataSourcePath);
+
+        mainSource.Should().NotContain("private void GetDataBtn_Click(");
+        mainSource.Should().NotContain("private void TextToColumnsBtn_Click(");
+        mainSource.Should().NotContain("private void AdvancedFilterBtn_Click(");
+        mainSource.Should().NotContain("private void ScenariosBtn_Click(");
+        mainSource.Should().NotContain("private void DataTableBtn_Click(");
+
+        dataSource.Should().Contain("private void GetDataBtn_Click(");
+        dataSource.Should().Contain("private void TextToColumnsBtn_Click(");
+        dataSource.Should().Contain("private void AdvancedFilterBtn_Click(");
+        dataSource.Should().Contain("private void ScenariosBtn_Click(");
+        dataSource.Should().Contain("private void DataTableBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -774,9 +797,10 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
         pageLayoutSource.Should().Contain("new PageBreakDialog");
-        source.Should().Contain("new GoalSeekStatusDialog");
+        dataSource.Should().Contain("new GoalSeekStatusDialog");
         source.Should().Contain("new WorkbookStatisticsDialog");
         source.Should().Contain("new AccessibilityCheckerDialog");
     }
