@@ -106,4 +106,68 @@ public sealed class AutoFilterDropdownPlannerTests
             new AutoFilterChecklistItem("#DIV/0!", "#DIV/0!"),
             new AutoFilterChecklistItem("(Blanks)", ""));
     }
+
+    [Fact]
+    public void CreateMenuPlan_BuildsExcelStyleTextFilterMenuSections()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
+
+        menu.HeaderText.Should().Be("Fruit");
+        menu.FilterKind.Should().Be(AutoFilterMenuFilterKind.Text);
+        menu.Entries.Select(entry => entry.Header).Should().ContainInOrder(
+            "Sort A to Z",
+            "Sort Z to A",
+            "Clear Filter From \"Fruit\"",
+            "Filter by Color",
+            "Text Filters",
+            "Search",
+            "(Select All)",
+            "Apple",
+            "Banana");
+        menu.Entries.Single(entry => entry.Header == "Text Filters")
+            .CriteriaSuggestions.Should().Equal("equals:", "text<>", "contains:", "notcontains:", "begins:", "ends:");
+    }
+
+    [Fact]
+    public void CreateMenuPlan_ChoosesNumberAndDateFilterFamiliesFromBodyValues()
+    {
+        var numberSheet = new Sheet(SheetId, "Sheet1");
+        numberSheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Amount"));
+        numberSheet.SetCell(new CellAddress(SheetId, 2, 1), new NumberValue(10));
+        numberSheet.SetCell(new CellAddress(SheetId, 3, 1), new NumberValue(20));
+        var numberPlan = new AutoFilterDropdownPlan(
+            new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var dateSheet = new Sheet(SheetId, "Sheet1");
+        dateSheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Due"));
+        dateSheet.SetCell(new CellAddress(SheetId, 2, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 20)));
+        dateSheet.SetCell(new CellAddress(SheetId, 3, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 21)));
+        var datePlan = new AutoFilterDropdownPlan(
+            new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
+            .FilterKind.Should().Be(AutoFilterMenuFilterKind.Number);
+        AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
+            .Entries.Single(entry => entry.Header == "Number Filters")
+            .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "above average", "below average");
+
+        AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
+            .FilterKind.Should().Be(AutoFilterMenuFilterKind.Date);
+        AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
+            .Entries.Single(entry => entry.Header == "Date Filters")
+            .CriteriaSuggestions.Should().Equal("date=", "date>", "date<", "datebetween:");
+    }
 }

@@ -348,6 +348,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AutoFilterKeyboardDropdown_UsesExcelStyleMenuPlanner()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)");
+        source.Should().Contain("new AutoFilterDialog(menuPlan)");
+        dialog.Should().Contain("AutoFilterMenuPlan menuPlan");
+        dialog.Should().Contain("CriteriaSuggestions");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
