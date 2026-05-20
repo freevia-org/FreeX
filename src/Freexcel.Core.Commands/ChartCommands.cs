@@ -742,6 +742,11 @@ public sealed record ChartLayoutOptions(
     CellColor? TrendlineColor = null,
     double? TrendlineThickness = null,
     ChartLineDashStyle? TrendlineDashStyle = null,
+    bool? ShowErrorBars = null,
+    ChartErrorBarKind? ErrorBarKind = null,
+    ChartErrorBarDirection? ErrorBarDirection = null,
+    double? ErrorBarValue = null,
+    bool? ErrorBarEndCaps = null,
     bool? ShowSecondaryAxis = null,
     IReadOnlyList<int>? SecondaryAxisSeriesIndexes = null,
     IReadOnlyList<int>? ComboLineSeriesIndexes = null,
@@ -884,6 +889,11 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
             chart.TrendlineColor,
             chart.TrendlineThickness,
             chart.TrendlineDashStyle,
+            chart.ShowErrorBars,
+            chart.ErrorBarKind,
+            chart.ErrorBarDirection,
+            chart.ErrorBarValue,
+            chart.ErrorBarEndCaps,
             chart.ShowSecondaryAxis,
             chart.SecondaryAxisSeriesIndexes.ToArray(),
             chart.ComboLineSeriesIndexes.ToArray(),
@@ -1111,6 +1121,16 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
             chart.TrendlineThickness = ClampFinite(options.TrendlineThickness.Value, 0.5, 10);
         if (options.TrendlineDashStyle is not null)
             chart.TrendlineDashStyle = ValidEnumOrDefault(options.TrendlineDashStyle.Value, ChartLineDashStyle.Dash);
+        if (options.ShowErrorBars is not null)
+            chart.ShowErrorBars = options.ShowErrorBars.Value;
+        if (options.ErrorBarKind is not null)
+            chart.ErrorBarKind = ValidEnumOrDefault(options.ErrorBarKind.Value, ChartErrorBarKind.StandardError);
+        if (options.ErrorBarDirection is not null)
+            chart.ErrorBarDirection = ValidEnumOrDefault(options.ErrorBarDirection.Value, ChartErrorBarDirection.Both);
+        if (options.ErrorBarValue is not null)
+            chart.ErrorBarValue = ClampFinite(options.ErrorBarValue.Value, 0, 1000);
+        if (options.ErrorBarEndCaps is not null)
+            chart.ErrorBarEndCaps = options.ErrorBarEndCaps.Value;
         if (options.ShowSecondaryAxis is not null)
             chart.ShowSecondaryAxis = options.ShowSecondaryAxis.Value;
         if (options.SecondaryAxisSeriesIndexes is not null)
@@ -1444,6 +1464,11 @@ public sealed class SetChartLayoutCommand : IWorkbookCommand
         chart.TrendlineThemeColor = snapshot.TrendlineThemeColor;
         chart.TrendlineThickness = snapshot.TrendlineThickness ?? 1.5;
         chart.TrendlineDashStyle = snapshot.TrendlineDashStyle ?? ChartLineDashStyle.Dash;
+        chart.ShowErrorBars = snapshot.ShowErrorBars ?? false;
+        chart.ErrorBarKind = snapshot.ErrorBarKind ?? ChartErrorBarKind.StandardError;
+        chart.ErrorBarDirection = snapshot.ErrorBarDirection ?? ChartErrorBarDirection.Both;
+        chart.ErrorBarValue = snapshot.ErrorBarValue ?? 5;
+        chart.ErrorBarEndCaps = snapshot.ErrorBarEndCaps ?? true;
         chart.ShowSecondaryAxis = snapshot.ShowSecondaryAxis ?? false;
         chart.SecondaryAxisSeriesIndexes = snapshot.SecondaryAxisSeriesIndexes?.ToList() ?? [];
         chart.ComboLineSeriesIndexes = snapshot.ComboLineSeriesIndexes?.ToList() ?? [];
