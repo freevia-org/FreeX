@@ -250,7 +250,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         DateOccurringPeriod = formatDto.DateOccurringPeriod,
                         StopIfTrue = formatDto.StopIfTrue,
                         NativeAttributes = formatDto.NativeAttributes,
-                        NativeChildXmls = formatDto.NativeChildXmls
+                        NativeChildXmls = formatDto.NativeChildXmls,
+                        NativeContainerAttributes = formatDto.NativeContainerAttributes,
+                        NativeContainerChildXmls = formatDto.NativeContainerChildXmls
                     });
                 }
                 catch (FormatException) { /* skip conditional formats with unparseable ranges */ }
@@ -583,7 +585,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         DateOccurringPeriod = format.DateOccurringPeriod,
                         StopIfTrue = format.StopIfTrue,
                         NativeAttributes = format.NativeAttributes,
-                        NativeChildXmls = format.NativeChildXmls
+                        NativeChildXmls = format.NativeChildXmls,
+                        NativeContainerAttributes = format.NativeContainerAttributes,
+                        NativeContainerChildXmls = format.NativeContainerChildXmls
                     }).ToList(),
                 Cells = s.GetUsedCells().Select(pair => new CellDto
                 {
@@ -1890,6 +1894,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool StopIfTrue { get; set; }
         public IReadOnlyDictionary<string, string>? NativeAttributes { get; set; }
         public IReadOnlyList<string>? NativeChildXmls { get; set; }
+        public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; set; }
+        public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
     }
 
     private class CellStyleDto
