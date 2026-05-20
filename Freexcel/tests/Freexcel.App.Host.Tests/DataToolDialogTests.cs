@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -93,6 +94,23 @@ public sealed class DataToolDialogTests
             new SubtotalColumnChoice(0, "Region", false),
             new SubtotalColumnChoice(1, "Sales", true),
             new SubtotalColumnChoice(2, "Column D", true));
+    }
+
+    [Fact]
+    public void SubtotalDialog_ExposesKeyboardAccessKeysForStaticOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Replace current subtotals",
+            "_Page break between groups",
+            "_Summary below data",
+            "_At each change in:",
+            "_Add subtotal to:",
+            "_Use function:"
+        })
+            source.Should().Contain($"Content = \"{content}\"");
     }
 
     [Fact]

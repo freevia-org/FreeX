@@ -4716,6 +4716,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Sortby_TreatsScalarArrayAndKeyAsSingleCellArrays()
+    {
+        var result = _eval.Evaluate("=SORTBY(5,1)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Sortby_SortsColumnsBySeparateKeyArrayDescending()
     {
         var sheet = MakeSheet(
