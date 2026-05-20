@@ -388,7 +388,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (structuredTableMetadata.TablesBySheetName.TryGetValue(xlSheet.Name, out var structuredTables))
             {
                 foreach (var structuredTable in structuredTables)
-                    sheet.StructuredTables.Add(ToStructuredTableModel(structuredTable, sheet.Id));
+                {
+                    var table = ToStructuredTableModel(structuredTable, sheet.Id);
+                    sheet.StructuredTables.Add(table);
+                    MaterializeStructuredTableFilters(sheet, table);
+                }
             }
 
             if (layout?.PaneState is "frozen" or "frozenSplit")
@@ -1283,6 +1287,72 @@ public sealed class XlsxFileAdapter : IFileAdapter
         table.FilterColumns.AddRange(pending.FilterColumns);
         return table;
     }
+
+    private static void MaterializeStructuredTableFilters(Sheet sheet, StructuredTableModel table)
+    {
+        if (table.FilterColumns.Count == 0)
+            return;
+
+        var filters = BuildStructuredTableFilters(table).ToList();
+        if (filters.Count != table.FilterColumns.Count)
+            return;
+
+        var lastDataRow = table.TotalsRowShown && table.Range.End.Row > table.Range.Start.Row
+            ? table.Range.End.Row - 1
+            : table.Range.End.Row;
+        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
+        {
+            if (!StructuredTableRowMatchesAllFilters(sheet, row, filters))
+                sheet.FilterHiddenRows.Add(row);
+        }
+    }
+
+    private static IEnumerable<StructuredTableFilterState> BuildStructuredTableFilters(StructuredTableModel table)
+    {
+        foreach (var filterColumn in table.FilterColumns)
+        {
+            var tableColumnIndex = filterColumn.ColumnId;
+            if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
+                continue;
+
+            yield return new StructuredTableFilterState(
+                table.Range.Start.Col + (uint)tableColumnIndex,
+                new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
+                filterColumn.IncludeBlank);
+        }
+    }
+
+    private static bool StructuredTableRowMatchesAllFilters(
+        Sheet sheet,
+        uint row,
+        IReadOnlyList<StructuredTableFilterState> filters)
+    {
+        foreach (var filter in filters)
+        {
+            var text = ToStructuredTableFilterText(sheet.GetValue(row, filter.Column));
+            if (text.Length == 0 && filter.IncludeBlank)
+                continue;
+            if (!filter.AllowedValues.Contains(text))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static string ToStructuredTableFilterText(ScalarValue value) => value switch
+    {
+        TextValue text => text.Value,
+        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        ErrorValue error => error.Code,
+        _ => string.Empty
+    };
+
+    private sealed record StructuredTableFilterState(
+        uint Column,
+        HashSet<string> AllowedValues,
+        bool IncludeBlank);
 
     private static IEnumerable<(string SheetName, string WorksheetPath)> GetWorkbookSheetPaths(
         XDocument workbookXml,
