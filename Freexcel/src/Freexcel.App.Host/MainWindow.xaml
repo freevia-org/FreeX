@@ -2637,15 +2637,19 @@
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewThreadedCommentBtn_Click"
+                                        local:RibbonTooltip.Title="New Comment"
+                                        local:RibbonTooltip.KeyTip="C"
+                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell (Ctrl+Shift+F2)."/>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="New"    Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
                                             local:RibbonTooltip.Title="New Note"
-                                            local:RibbonTooltip.KeyTip="C"
-                                            local:RibbonTooltip.Description="Add a simple cell note to the selected cell; threaded comments are not implemented."/>
+                                            local:RibbonTooltip.KeyTip="O"
+                                            local:RibbonTooltip.Description="Add a simple cell note to the selected cell."/>
                                     <Button Content="Edit"   Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewCommentBtn_Click"
                                             local:RibbonTooltip.Title="Edit Note"
                                             local:RibbonTooltip.KeyTip="E"
-                                            local:RibbonTooltip.Description="Edit the simple cell note on the selected cell; threaded comments are not implemented."/>
+                                            local:RibbonTooltip.Description="Edit the simple cell note on the selected cell."/>
                                     <Button Content="Delete" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteCommentBtn_Click"
                                             local:RibbonTooltip.Title="Delete Note"
                                             local:RibbonTooltip.KeyTip="D"
