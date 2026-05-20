@@ -1252,7 +1252,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     column.Attribute("totalsRowLabel")?.Value,
                     column.Attribute("totalsRowFunction")?.Value,
                     ReadTableColumnFormula(column, workbookNs, "calculatedColumnFormula"),
-                    ReadTableColumnFormula(column, workbookNs, "totalsRowFormula")))
+                    ReadTableColumnFormula(column, workbookNs, "totalsRowFormula"),
+                    ReadNativeTableColumnChildXmls(column, workbookNs)))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? [],
             ReadStructuredTableFilterColumns(root.Element(workbookNs + "autoFilter"), workbookNs));
@@ -1264,6 +1265,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var formula = column.Element(workbookNs + elementName)?.Value;
         return string.IsNullOrWhiteSpace(formula) ? null : formula;
     }
+
+    private static List<string> ReadNativeTableColumnChildXmls(XElement column, XNamespace workbookNs) =>
+        column.Elements()
+            .Where(element =>
+                element.Name != workbookNs + "calculatedColumnFormula" &&
+                element.Name != workbookNs + "totalsRowFormula")
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
 
     private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
         XElement? autoFilter,
@@ -8951,18 +8960,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
-            columns.Select(column => new XElement(
-                workbookNs + "tableColumn",
-                new XAttribute("id", column.Id),
-                new XAttribute("name", column.Name),
-                string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
-                string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction),
-                string.IsNullOrWhiteSpace(column.CalculatedColumnFormula)
-                    ? null
-                    : new XElement(workbookNs + "calculatedColumnFormula", column.CalculatedColumnFormula),
-                string.IsNullOrWhiteSpace(column.TotalsRowFormula)
-                    ? null
-                    : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula)))));
+            columns.Select(column => ToStructuredTableColumnXml(column, workbookNs))));
         if (!string.IsNullOrWhiteSpace(table.StyleName))
         {
             root.Add(new XElement(
@@ -8975,6 +8973,39 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return new XDocument(root);
+    }
+
+    private static XElement ToStructuredTableColumnXml(StructuredTableColumnModel column, XNamespace workbookNs)
+    {
+        var element = new XElement(
+            workbookNs + "tableColumn",
+            new XAttribute("id", column.Id),
+            new XAttribute("name", column.Name),
+            string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
+            string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction),
+            string.IsNullOrWhiteSpace(column.CalculatedColumnFormula)
+                ? null
+                : new XElement(workbookNs + "calculatedColumnFormula", column.CalculatedColumnFormula),
+            string.IsNullOrWhiteSpace(column.TotalsRowFormula)
+                ? null
+                : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
+
+        foreach (var nativeChildXml in (column.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == workbookNs &&
+                    nativeChild.Name.LocalName is not "calculatedColumnFormula" and not "totalsRowFormula")
+                    element.Add(nativeChild);
+            }
+            catch
+            {
+                // Ignore malformed native table-column payloads from older saves.
+            }
+        }
+
+        return element;
     }
 
     private static XElement ToStructuredTableAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
