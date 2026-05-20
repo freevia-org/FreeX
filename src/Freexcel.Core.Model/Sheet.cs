@@ -774,7 +774,11 @@ public sealed class Sheet
                 ErrorTitle        = dv.ErrorTitle,
                 ErrorMessage      = dv.ErrorMessage,
                 PromptTitle       = dv.PromptTitle,
-                PromptMessage     = dv.PromptMessage
+                PromptMessage     = dv.PromptMessage,
+                NativeAttributes  = dv.NativeAttributes,
+                NativeChildXmls   = dv.NativeChildXmls,
+                NativeContainerAttributes = dv.NativeContainerAttributes,
+                NativeContainerChildXmls = dv.NativeContainerChildXmls
             });
 
         // Note: Charts, TextBoxes, DrawingShapes, Pictures, and Sparklines are intentionally

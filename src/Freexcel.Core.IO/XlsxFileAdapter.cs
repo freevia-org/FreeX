@@ -515,6 +515,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             // Load data validation rules (best-effort)
             try { LoadDataValidations(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] DV load failed: {ex.Message}"); }
+            if (layout is not null)
+                ApplyNativeDataValidationMetadata(sheet, layout.DataValidationNativeMetadata);
 
             // Load merged regions (best-effort)
             try { LoadMergedRegions(xlSheet, sheet); }
@@ -589,6 +591,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<XlsxShapePackagePart> ShapeParts,
         IReadOnlyList<SparklineModel> Sparklines,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
+        IReadOnlyList<DataValidationNativeMetadata> DataValidationNativeMetadata,
         IgnoredErrorLayout IgnoredErrors,
         IReadOnlyList<CellAddress> CellWatches,
         IReadOnlyList<WorkbookScenario> Scenarios,
@@ -2987,6 +2990,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var (textBoxParts, shapeParts) = ReadWorksheetShapeParts(archive, worksheetPath, worksheetXml);
         var sparklines = ReadWorksheetSparklines(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
+        var dataValidationNativeMetadata = ReadDataValidationNativeMetadata(worksheetXml, worksheetNs);
         var ignoredErrors = ReadIgnoredErrors(worksheetXml, worksheetNs);
         var cellWatches = ReadCellWatches(worksheetXml, worksheetNs);
         var scenarios = ReadWorksheetScenarios(worksheetXml, worksheetNs);
@@ -3029,6 +3033,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             shapeParts,
             sparklines,
             advancedConditionalFormats,
+            dataValidationNativeMetadata,
             ignoredErrors,
             cellWatches,
             scenarios,
@@ -3439,6 +3444,123 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(element => element.Name != worksheetNs + "cfRule")
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
+
+    private static IReadOnlyList<DataValidationNativeMetadata> ReadDataValidationNativeMetadata(
+        XDocument worksheetXml,
+        XNamespace worksheetNs)
+    {
+        var dataValidations = worksheetXml.Root?.Element(worksheetNs + "dataValidations");
+        if (dataValidations is null)
+            return [];
+
+        var containerAttributes = ReadNativeDataValidationsContainerAttributes(dataValidations);
+        var containerChildXmls = ReadNativeDataValidationsContainerChildXmls(dataValidations, worksheetNs);
+        var tempSheet = SheetId.New();
+        var result = new List<DataValidationNativeMetadata>();
+
+        foreach (var validation in dataValidations.Elements(worksheetNs + "dataValidation"))
+        {
+            var sqref = validation.Attribute("sqref")?.Value;
+            if (string.IsNullOrWhiteSpace(sqref))
+                continue;
+
+            var firstRef = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(firstRef))
+                continue;
+
+            try
+            {
+                var appliesTo = firstRef.Contains(':', StringComparison.Ordinal)
+                    ? GridRange.Parse(firstRef, tempSheet)
+                    : new GridRange(CellAddress.Parse(firstRef, tempSheet), CellAddress.Parse(firstRef, tempSheet));
+                result.Add(new DataValidationNativeMetadata(
+                    appliesTo,
+                    ReadNativeDataValidationAttributes(validation),
+                    ReadNativeDataValidationChildXmls(validation, worksheetNs),
+                    containerAttributes,
+                    containerChildXmls));
+            }
+            catch
+            {
+                // Ignore native metadata for ranges Freexcel cannot parse.
+            }
+        }
+
+        return result;
+    }
+
+    private static Dictionary<string, string> ReadNativeDataValidationAttributes(XElement validation)
+    {
+        string[] modeledAttributes =
+        [
+            "type",
+            "errorStyle",
+            "operator",
+            "allowBlank",
+            "showDropDown",
+            "showInputMessage",
+            "showErrorMessage",
+            "errorTitle",
+            "error",
+            "promptTitle",
+            "prompt",
+            "sqref"
+        ];
+        return validation.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static List<string> ReadNativeDataValidationChildXmls(XElement validation, XNamespace worksheetNs)
+    {
+        XName[] modeledChildren = [worksheetNs + "formula1", worksheetNs + "formula2"];
+        return validation.Elements()
+            .Where(element => !modeledChildren.Contains(element.Name))
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
+    }
+
+    private static Dictionary<string, string> ReadNativeDataValidationsContainerAttributes(XElement dataValidations)
+    {
+        string[] modeledAttributes = ["count"];
+        return dataValidations.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static List<string> ReadNativeDataValidationsContainerChildXmls(XElement dataValidations, XNamespace worksheetNs) =>
+        dataValidations.Elements()
+            .Where(element => element.Name != worksheetNs + "dataValidation")
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
+
+    private static void ApplyNativeDataValidationMetadata(
+        Sheet sheet,
+        IReadOnlyList<DataValidationNativeMetadata> nativeMetadata)
+    {
+        if (nativeMetadata.Count == 0 || sheet.DataValidations.Count == 0)
+            return;
+
+        foreach (var validation in sheet.DataValidations)
+        {
+            var metadata = nativeMetadata.FirstOrDefault(item =>
+                item.AppliesTo.Start.Row == validation.AppliesTo.Start.Row &&
+                item.AppliesTo.Start.Col == validation.AppliesTo.Start.Col &&
+                item.AppliesTo.End.Row == validation.AppliesTo.End.Row &&
+                item.AppliesTo.End.Col == validation.AppliesTo.End.Col);
+            if (metadata is null)
+                continue;
+
+            if (metadata.NativeAttributes.Count > 0)
+                validation.NativeAttributes = metadata.NativeAttributes;
+            if (metadata.NativeChildXmls.Count > 0)
+                validation.NativeChildXmls = metadata.NativeChildXmls;
+            if (metadata.NativeContainerAttributes.Count > 0)
+                validation.NativeContainerAttributes = metadata.NativeContainerAttributes;
+            if (metadata.NativeContainerChildXmls.Count > 0)
+                validation.NativeContainerChildXmls = metadata.NativeContainerChildXmls;
+        }
+    }
 
     private static bool TryMapLongTailConditionalFormatRule(string? type, out CfRuleType ruleType)
     {
@@ -4729,6 +4851,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             packageStream.Position = 0;
             SaveAllowEditRanges(packageStream, workbook);
+        }
+
+        if (workbook.Sheets.Any(sheet => sheet.DataValidations.Any(HasNativeDataValidationMetadata)))
+        {
+            packageStream.Position = 0;
+            SaveDataValidationNativeMetadata(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.ConditionalFormats.Any(IsAdvancedConditionalFormat)))
@@ -9385,6 +9513,156 @@ public sealed class XlsxFileAdapter : IFileAdapter
             : 1;
     }
 
+    private static bool HasNativeDataValidationMetadata(DataValidation validation) =>
+        (validation.NativeAttributes?.Count ?? 0) > 0 ||
+        (validation.NativeChildXmls?.Count ?? 0) > 0 ||
+        (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
+        (validation.NativeContainerChildXmls?.Count ?? 0) > 0;
+
+    private static void SaveDataValidationNativeMetadata(Stream xlsxStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return;
+
+        var workbookXml = LoadXml(workbookEntry);
+        var relsXml = LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relTargets = relsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
+            .ToDictionary(
+                e => e.Attribute("Id")!.Value,
+                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(name) ||
+                string.IsNullOrWhiteSpace(relId) ||
+                !sheetsByName.TryGetValue(name, out var sheet) ||
+                !relTargets.TryGetValue(relId, out var worksheetPath) ||
+                !sheet.DataValidations.Any(HasNativeDataValidationMetadata))
+            {
+                continue;
+            }
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            var dataValidations = root.Element(workbookNs + "dataValidations");
+            if (dataValidations is null)
+                continue;
+
+            var changed = false;
+            var containerSource = sheet.DataValidations.FirstOrDefault(validation =>
+                (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
+                (validation.NativeContainerChildXmls?.Count ?? 0) > 0);
+            if (containerSource is not null)
+                changed |= ApplyDataValidationsContainerNativeMetadata(dataValidations, containerSource, workbookNs);
+
+            var validationsByRange = dataValidations
+                .Elements(workbookNs + "dataValidation")
+                .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
+                .ToDictionary(element => element.Attribute("sqref")!.Value, element => element, StringComparer.Ordinal);
+
+            foreach (var validation in sheet.DataValidations.Where(HasNativeDataValidationMetadata))
+            {
+                if (validationsByRange.TryGetValue(validation.AppliesTo.ToString(), out var validationElement))
+                    changed |= ApplyDataValidationNativeMetadata(validationElement, validation, workbookNs);
+            }
+
+            if (changed)
+                ReplacePackageXml(archive, worksheetPath, worksheetXml);
+        }
+    }
+
+    private static bool ApplyDataValidationsContainerNativeMetadata(
+        XElement dataValidations,
+        DataValidation source,
+        XNamespace worksheetNs)
+    {
+        var changed = false;
+        foreach (var (name, value) in source.NativeContainerAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && dataValidations.Attribute(name) is null)
+            {
+                dataValidations.SetAttributeValue(name, value);
+                changed = true;
+            }
+        }
+
+        foreach (var nativeChildXml in (source.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "dataValidation")
+                {
+                    dataValidations.Add(nativeChild);
+                    changed = true;
+                }
+            }
+            catch
+            {
+                // Ignore malformed native data-validation container payloads from older saves.
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool ApplyDataValidationNativeMetadata(
+        XElement validationElement,
+        DataValidation source,
+        XNamespace worksheetNs)
+    {
+        var changed = false;
+        foreach (var (name, value) in source.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && validationElement.Attribute(name) is null)
+            {
+                validationElement.SetAttributeValue(name, value);
+                changed = true;
+            }
+        }
+
+        foreach (var nativeChildXml in (source.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == worksheetNs)
+                {
+                    validationElement.Add(nativeChild);
+                    changed = true;
+                }
+            }
+            catch
+            {
+                // Ignore malformed native data-validation payloads from older saves.
+            }
+        }
+
+        return changed;
+    }
+
     private static void SaveAdvancedConditionalFormats(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -13809,4 +14087,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<string>? NativeStyleInfoChildXmls,
         IReadOnlyList<StructuredTableColumnModel> Columns,
         IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
+
+    private sealed record DataValidationNativeMetadata(
+        GridRange AppliesTo,
+        IReadOnlyDictionary<string, string> NativeAttributes,
+        IReadOnlyList<string> NativeChildXmls,
+        IReadOnlyDictionary<string, string> NativeContainerAttributes,
+        IReadOnlyList<string> NativeContainerChildXmls);
 }
