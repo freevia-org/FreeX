@@ -186,6 +186,7 @@ public partial class MainWindow : Window
         NumberFormatBox.ItemsSource = NumberFormatOptions.Select(option => option.Label).ToArray();
         NumberFormatBox.SelectedIndex = 0;
 
+        PopulateFormatTableGalleryMenu();
         ApplyOptionsToView();
         NormalizeRibbonSurface(forceCompact: true);
         CreateNewWorkbook();
@@ -4401,9 +4402,99 @@ public partial class MainWindow : Window
 
     private void FormatTableBtn_Click(object sender, RoutedEventArgs e)
     {
+        PopulateFormatTableGalleryMenu();
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
+
+    private void PopulateFormatTableGalleryMenu()
+    {
+        if (FormatTableGalleryMenu is null || FormatTableGalleryMenu.Items.Count > 0)
+            return;
+
+        var options = TableStyleGalleryPlanner.GetOptions();
+        string? currentFamily = null;
+        for (var index = 0; index < options.Count; index++)
+        {
+            var option = options[index];
+            var family = option.Label.Split(' ', 2)[0];
+            if (!string.Equals(currentFamily, family, StringComparison.Ordinal))
+            {
+                if (FormatTableGalleryMenu.Items.Count > 0)
+                    FormatTableGalleryMenu.Items.Add(new Separator());
+                FormatTableGalleryMenu.Items.Add(CreateFormatTableGallerySectionHeader(family));
+                currentFamily = family;
+            }
+
+            var menuItem = new MenuItem
+            {
+                Header = CreateFormatTableGalleryHeader(option),
+                Tag = index.ToString(CultureInfo.InvariantCulture),
+                MinWidth = 176
+            };
+            RibbonTooltip.SetKeyTip(menuItem, $"{family[0]}{option.Label[(family.Length + 1)..]}");
+            menuItem.Click += FormatTableGalleryMenuItem_Click;
+            FormatTableGalleryMenu.Items.Add(menuItem);
+        }
+    }
+
+    private static MenuItem CreateFormatTableGallerySectionHeader(string family) =>
+        new()
+        {
+            Header = new TextBlock
+            {
+                Text = family,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 11,
+                Foreground = Brushes.DimGray,
+                Margin = new Thickness(2, 4, 2, 2)
+            },
+            IsEnabled = false
+        };
+
+    private static StackPanel CreateFormatTableGalleryHeader(TableStyleGalleryOption option)
+    {
+        var banding = option.Banding;
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
+        panel.Children.Add(CreateFormatTableGallerySwatch(banding));
+        panel.Children.Add(new TextBlock
+        {
+            Text = option.Label,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        });
+        return panel;
+    }
+
+    private static Grid CreateFormatTableGallerySwatch(StructuredTableStyleBanding banding)
+    {
+        var swatch = new Grid
+        {
+            Width = 54,
+            Height = 22,
+            SnapsToDevicePixels = true
+        };
+        swatch.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
+        swatch.RowDefinitions.Add(new RowDefinition { Height = new GridLength(7) });
+        swatch.RowDefinitions.Add(new RowDefinition { Height = new GridLength(7) });
+
+        AddSwatchBand(swatch, banding.HeaderFill, 0);
+        AddSwatchBand(swatch, banding.OddRowFill, 1);
+        AddSwatchBand(swatch, banding.EvenRowFill, 2);
+        swatch.Children.Add(new Border { BorderBrush = Brushes.LightGray, BorderThickness = new Thickness(1) });
+        return swatch;
+    }
+
+    private static void AddSwatchBand(Grid swatch, CellColor color, int row)
+    {
+        var band = new Border { Background = ToBrush(color) };
+        Grid.SetRow(band, row);
+        swatch.Children.Add(band);
+    }
+
+    private static SolidColorBrush ToBrush(CellColor color) =>
+        new(Color.FromRgb(color.R, color.G, color.B));
+
     private void FormatTableGalleryMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var index = sender is MenuItem { Tag: string tag } && int.TryParse(tag, out var parsed)
