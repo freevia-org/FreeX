@@ -828,7 +828,53 @@ public static class NumberFormatter
         if (TryGetFractionalSecondPrecision(excelFormat, out int precision))
             dateTime = RoundToFractionalSecondPrecision(dateTime, precision);
 
-        return dateTime.ToString(ToNetDateFormat(excelFormat), dateTimeFormat);
+        var preparedFormat = ReplaceMonthInitialTokens(excelFormat, dateTime, dateTimeFormat);
+        return dateTime.ToString(ToNetDateFormat(preparedFormat), dateTimeFormat);
+    }
+
+    private static string ReplaceMonthInitialTokens(
+        string excelFormat,
+        DateTime dateTime,
+        DateTimeFormatInfo dateTimeFormat)
+    {
+        var result = new System.Text.StringBuilder();
+        string monthName = dateTimeFormat.MonthNames[dateTime.Month - 1];
+        if (string.IsNullOrEmpty(monthName))
+            monthName = dateTime.ToString("MMMM", dateTimeFormat);
+
+        string initial = monthName[..1].Replace("'", "''", StringComparison.Ordinal);
+        for (int i = 0; i < excelFormat.Length;)
+        {
+            if (excelFormat[i] == '"')
+            {
+                int end = excelFormat.IndexOf('"', i + 1);
+                if (end < 0) end = excelFormat.Length - 1;
+                result.Append(excelFormat[i..(end + 1)]);
+                i = end + 1;
+                continue;
+            }
+
+            if (excelFormat[i] == '\\' && i + 1 < excelFormat.Length)
+            {
+                result.Append(excelFormat, i, 2);
+                i += 2;
+                continue;
+            }
+
+            if (i + 5 <= excelFormat.Length &&
+                string.Compare(excelFormat, i, "mmmmm", 0, 5, StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                result.Append('\'');
+                result.Append(initial);
+                result.Append('\'');
+                i += 5;
+                continue;
+            }
+
+            result.Append(excelFormat[i++]);
+        }
+
+        return result.ToString();
     }
 
     private static bool TryGetFractionalSecondPrecision(string format, out int precision)
