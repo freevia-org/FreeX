@@ -28,8 +28,8 @@
                     <ComboBox x:Name="DlgHAlignBox" Height="24"/>
                     <TextBlock Text="Vertical alignment:" Margin="0,8,0,2"/>
                     <ComboBox x:Name="DlgVAlignBox" Height="24"/>
-                    <CheckBox x:Name="DlgWrapTextCheck" Content="Wrap text" Margin="0,8,0,0"/>
-                    <CheckBox x:Name="DlgShrinkToFitCheck" Content="Shrink to fit" Margin="0,6,0,0"/>
+                    <CheckBox x:Name="DlgWrapTextCheck" Content="_Wrap text" Margin="0,8,0,0"/>
+                    <CheckBox x:Name="DlgShrinkToFitCheck" Content="S_hrink to fit" Margin="0,6,0,0"/>
                     <TextBlock Text="Indent level (0-15):" Margin="0,8,0,2"/>
                     <TextBox x:Name="DlgIndentLevelBox" Height="24"/>
                     <TextBlock Text="Text rotation (-90 to 90, or 255):" Margin="0,8,0,2"/>
@@ -45,17 +45,17 @@
                     <TextBlock Text="Size:" Margin="0,8,0,2"/>
                     <ComboBox x:Name="DlgFontSizeBox" IsEditable="True" Height="24"/>
                     <WrapPanel Margin="0,8,0,0">
-                        <CheckBox x:Name="DlgBoldCheck"      Content="Bold"             Margin="0,0,12,6"/>
-                        <CheckBox x:Name="DlgItalicCheck"    Content="Italic"           Margin="0,0,12,6"/>
-                        <CheckBox x:Name="DlgUnderlineCheck" Content="Underline"        Margin="0,0,12,6"/>
-                        <CheckBox x:Name="DlgDoubleUnderlineCheck" Content="Double underline" Margin="0,0,12,6"/>
-                        <CheckBox x:Name="DlgStrikeCheck"    Content="Strikethrough"    Margin="0,0,12,6"/>
-                        <CheckBox x:Name="DlgSuperscriptCheck" Content="Superscript"     Margin="0,0,12,6"/>
-                        <CheckBox x:Name="DlgSubscriptCheck" Content="Subscript"/>
+                        <CheckBox x:Name="DlgBoldCheck"      Content="_Bold"             Margin="0,0,12,6"/>
+                        <CheckBox x:Name="DlgItalicCheck"    Content="_Italic"           Margin="0,0,12,6"/>
+                        <CheckBox x:Name="DlgUnderlineCheck" Content="_Underline"        Margin="0,0,12,6"/>
+                        <CheckBox x:Name="DlgDoubleUnderlineCheck" Content="_Double underline" Margin="0,0,12,6"/>
+                        <CheckBox x:Name="DlgStrikeCheck"    Content="_Strikethrough"    Margin="0,0,12,6"/>
+                        <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6"/>
+                        <CheckBox x:Name="DlgSubscriptCheck" Content="Su_bscript"/>
                     </WrapPanel>
                     <TextBlock Text="Font Color (R,G,B):" Margin="0,8,0,2"/>
                     <DockPanel>
-                        <Button x:Name="DlgFontColorPickerButton" DockPanel.Dock="Right" Content="..." Width="30" Margin="6,0,0,0" Click="DlgFontColorPickerButton_Click"/>
+                        <Button x:Name="DlgFontColorPickerButton" DockPanel.Dock="Right" Content="_Pick" Width="54" Margin="6,0,0,0" Click="DlgFontColorPickerButton_Click"/>
                         <TextBox x:Name="DlgFontColorBox" Height="24" Text="0,0,0"/>
                     </DockPanel>
                 </StackPanel>
@@ -66,10 +66,10 @@
                 <StackPanel Margin="8">
                     <TextBlock Text="Background Color (R,G,B, or empty for none):" Margin="0,4,0,2"/>
                     <DockPanel>
-                        <Button x:Name="DlgFillColorPickerButton" DockPanel.Dock="Right" Content="..." Width="30" Margin="6,0,0,0" Click="DlgFillColorPickerButton_Click"/>
+                        <Button x:Name="DlgFillColorPickerButton" DockPanel.Dock="Right" Content="_Pick" Width="54" Margin="6,0,0,0" Click="DlgFillColorPickerButton_Click"/>
                         <TextBox x:Name="DlgFillColorBox" Height="24"/>
                     </DockPanel>
-                    <CheckBox x:Name="DlgClearFillCheck" Content="Clear fill" Margin="0,8,0,0"/>
+                    <CheckBox x:Name="DlgClearFillCheck" Content="_Clear fill" Margin="0,8,0,0"/>
                 </StackPanel>
             </TabItem>
 
@@ -96,28 +96,28 @@
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Top:" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderTopStyleBox" Grid.Row="1" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,6">
-                            <Button x:Name="DlgBorderTopColorPickerButton" DockPanel.Dock="Right" Content="..." Width="30" Margin="6,0,0,0" Click="DlgBorderTopColorPickerButton_Click"/>
+                            <Button x:Name="DlgBorderTopColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderTopColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderTopColorBox" Height="24"/>
                         </DockPanel>
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Right:" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderRightStyleBox" Grid.Row="2" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,6">
-                            <Button x:Name="DlgBorderRightColorPickerButton" DockPanel.Dock="Right" Content="..." Width="30" Margin="6,0,0,0" Click="DlgBorderRightColorPickerButton_Click"/>
+                            <Button x:Name="DlgBorderRightColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderRightColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderRightColorBox" Height="24"/>
                         </DockPanel>
 
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Bottom:" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderBottomStyleBox" Grid.Row="3" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,6">
-                            <Button x:Name="DlgBorderBottomColorPickerButton" DockPanel.Dock="Right" Content="..." Width="30" Margin="6,0,0,0" Click="DlgBorderBottomColorPickerButton_Click"/>
+                            <Button x:Name="DlgBorderBottomColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderBottomColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderBottomColorBox" Height="24"/>
                         </DockPanel>
 
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Left:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ComboBox x:Name="DlgBorderLeftStyleBox" Grid.Row="4" Grid.Column="1" Height="24" Margin="0,0,8,0"/>
                         <DockPanel Grid.Row="4" Grid.Column="2">
-                            <Button x:Name="DlgBorderLeftColorPickerButton" DockPanel.Dock="Right" Content="..." Width="30" Margin="6,0,0,0" Click="DlgBorderLeftColorPickerButton_Click"/>
+                            <Button x:Name="DlgBorderLeftColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderLeftColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderLeftColorBox" Height="24"/>
                         </DockPanel>
                     </Grid>
@@ -127,7 +127,7 @@
             <!-- Protection -->
             <TabItem Header="_Protection">
                 <StackPanel Margin="8">
-                    <CheckBox x:Name="DlgLockedCheck" Content="Locked" Margin="0,4,0,0"/>
+                    <CheckBox x:Name="DlgLockedCheck" Content="_Locked" Margin="0,4,0,0"/>
                 </StackPanel>
             </TabItem>
         </TabControl>

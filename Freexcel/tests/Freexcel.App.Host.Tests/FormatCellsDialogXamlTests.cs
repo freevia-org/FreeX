@@ -35,6 +35,35 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_ExposesKeyboardAccessKeysForSupportedOptionControls()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var content in new[]
+        {
+            "_Wrap text",
+            "S_hrink to fit",
+            "_Bold",
+            "_Italic",
+            "_Underline",
+            "_Double underline",
+            "_Strikethrough",
+            "Super_script",
+            "Su_bscript",
+            "_Clear fill",
+            "_Locked"
+        })
+            xaml.Should().Contain($"Content=\"{content}\"");
+
+        foreach (var picker in new[]
+        {
+            "Content=\"_Pick\"",
+            "Content=\"P_ick\""
+        })
+            xaml.Should().Contain(picker);
+    }
+
+    [Fact]
     public void FormatCellsDialog_ContainsControlsForSupportedStyleFields()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
@@ -84,7 +113,7 @@ public sealed class FormatCellsDialogXamlTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
 
         xaml.Should().Contain("x:Name=\"DlgShrinkToFitCheck\"");
-        xaml.Should().Contain("Content=\"Shrink to fit\"");
+        xaml.Should().Contain("Content=\"S_hrink to fit\"");
     }
 
     [Fact]
