@@ -52,6 +52,26 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToSpecialDialog_ExposesKeyboardAccessKeysForChoicesAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToSpecialDialog.cs"));
+
+        foreach (var expected in new[]
+        {
+            "new(GoToSpecialKind.Blanks, \"_Blanks\")",
+            "new(GoToSpecialKind.Constants, \"_Constants\")",
+            "new(GoToSpecialKind.Formulas, \"_Formulas\")",
+            "new(GoToSpecialKind.Comments, \"Co_mments\")",
+            "new(GoToSpecialKind.DataValidation, \"_Data validation\")",
+            "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
+        })
+            source.Should().Contain(expected);
+
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+    }
+
+    [Fact]
     public void TryParseChoice_MapsDisplayTextThroughExistingParser()
     {
         GoToSpecialDialog.TryParseChoice("Data validation", out var kind).Should().BeTrue();

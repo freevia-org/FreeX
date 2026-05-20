@@ -117,6 +117,71 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
+    public void RemoveAllowEditRangeCommand_RemovesExistingRangeAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var first = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        var second = new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 5, 2));
+        sheet.AllowEditRanges.Add(first);
+        sheet.AllowEditRanges.Add(second);
+
+        var command = new RemoveAllowEditRangeCommand(sheet.Id, first);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.AllowEditRanges.Should().Equal(second);
+
+        command.Revert(ctx);
+
+        sheet.AllowEditRanges.Should().Equal(first, second);
+    }
+
+    [Fact]
+    public void RemoveAllowEditRangeCommand_ReportsMissingRangeWithoutChangingList()
+    {
+        var (_, sheet, ctx) = Setup();
+        var existing = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        var missing = new GridRange(
+            new CellAddress(sheet.Id, 4, 4),
+            new CellAddress(sheet.Id, 4, 4));
+        sheet.AllowEditRanges.Add(existing);
+
+        var outcome = new RemoveAllowEditRangeCommand(sheet.Id, missing).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("not found");
+        sheet.AllowEditRanges.Should().Equal(existing);
+    }
+
+    [Fact]
+    public void ClearAllowEditRangesCommand_ClearsAllRangesAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var first = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        var second = new GridRange(
+            new CellAddress(sheet.Id, 5, 1),
+            new CellAddress(sheet.Id, 5, 2));
+        sheet.AllowEditRanges.Add(first);
+        sheet.AllowEditRanges.Add(second);
+
+        var command = new ClearAllowEditRangesCommand(sheet.Id);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.AllowEditRanges.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.AllowEditRanges.Should().Equal(first, second);
+    }
+
+    [Fact]
     public void EditCellsCommand_AllowsLockedCellsInAllowedEditRangeWhenSheetIsProtected()
     {
         var (_, sheet, ctx) = Setup();
