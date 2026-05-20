@@ -29,6 +29,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var backstageSourcePath = Path.Combine(appHostDirectory, "MainWindow.Backstage.cs");
+
+        File.Exists(backstageSourcePath).Should().BeTrue();
+        var backstageSource = File.ReadAllText(backstageSourcePath);
+
+        mainSource.Should().NotContain("private void ShowStartScreen()");
+        mainSource.Should().NotContain("private void UpdateSsRecentList(");
+        mainSource.Should().NotContain("private async Task OpenFileAsync(");
+        mainSource.Should().NotContain("private async void OpenButton_Click(");
+        mainSource.Should().NotContain("private bool SaveWorkbookWithDialog()");
+
+        backstageSource.Should().Contain("private void ShowStartScreen()");
+        backstageSource.Should().Contain("private void UpdateSsRecentList(");
+        backstageSource.Should().Contain("private async Task OpenFileAsync(");
+        backstageSource.Should().Contain("private async void OpenButton_Click(");
+        backstageSource.Should().Contain("private bool SaveWorkbookWithDialog()");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
