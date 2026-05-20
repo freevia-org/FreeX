@@ -15,6 +15,7 @@ public sealed class StructuredTableModel
     public bool ShowRowStripes { get; init; }
     public bool ShowColumnStripes { get; init; }
     public string PackagePart { get; init; } = "";
+    public string? NativeSortStateXml { get; init; }
     public List<StructuredTableColumnModel> Columns { get; } = [];
     public List<StructuredTableFilterColumnModel> FilterColumns { get; } = [];
 }

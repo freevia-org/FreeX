@@ -1214,6 +1214,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             false,
             false,
             tablePath,
+            null,
             [],
             []);
         var root = tableXml.Root;
@@ -1242,6 +1243,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadBoolAttribute(style, "showRowStripes"),
             ReadBoolAttribute(style, "showColumnStripes"),
             tablePath,
+            root.Element(workbookNs + "sortState")?.ToString(System.Xml.Linq.SaveOptions.DisableFormatting),
             root.Element(workbookNs + "tableColumns")?
                 .Elements(workbookNs + "tableColumn")
                 .Select(column => new StructuredTableColumnModel(
@@ -1312,7 +1314,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ShowLastColumn = pending.ShowLastColumn,
             ShowRowStripes = pending.ShowRowStripes,
             ShowColumnStripes = pending.ShowColumnStripes,
-            PackagePart = pending.PackagePart
+            PackagePart = pending.PackagePart,
+            NativeSortStateXml = pending.NativeSortStateXml
         };
         table.Columns.AddRange(pending.Columns);
         table.FilterColumns.AddRange(pending.FilterColumns);
@@ -8932,6 +8935,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("totalsRowShown", table.TotalsRowShown ? "1" : "0"));
         if (table.HasAutoFilter)
             root.Add(ToStructuredTableAutoFilterXml(table, workbookNs));
+        if (!string.IsNullOrWhiteSpace(table.NativeSortStateXml))
+        {
+            try
+            {
+                var sortState = XElement.Parse(table.NativeSortStateXml);
+                if (sortState.Name == workbookNs + "sortState")
+                    root.Add(sortState);
+            }
+            catch
+            {
+                // Ignore malformed native table sort payloads from older saves.
+            }
+        }
         root.Add(new XElement(
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
@@ -13202,6 +13218,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         bool ShowRowStripes,
         bool ShowColumnStripes,
         string PackagePart,
+        string? NativeSortStateXml,
         IReadOnlyList<StructuredTableColumnModel> Columns,
         IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
 }
