@@ -15,7 +15,7 @@ internal static class DialogButtonRowFactory
         };
         var ok = new Button
         {
-            Content = "OK",
+            Content = "_OK",
             Width = buttonWidth,
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
@@ -24,7 +24,7 @@ internal static class DialogButtonRowFactory
         row.Children.Add(ok);
         row.Children.Add(new Button
         {
-            Content = "Cancel",
+            Content = "_Cancel",
             Width = buttonWidth,
             IsCancel = true
         });
