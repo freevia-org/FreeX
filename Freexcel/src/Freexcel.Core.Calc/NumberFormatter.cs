@@ -646,13 +646,24 @@ public static class NumberFormatter
         var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
         return stripped.Contains("?/?", StringComparison.Ordinal) ||
                stripped.Contains("?/??", StringComparison.Ordinal) ||
-               stripped.Contains("??/??", StringComparison.Ordinal);
+               stripped.Contains("??/??", StringComparison.Ordinal) ||
+               Regex.IsMatch(stripped, @"\?+/\d+");
     }
 
     private static string FormatSimpleFraction(double value, string format)
     {
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
         var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
+        int? fixedDenominator = null;
+        var fixedDenominatorMatch = Regex.Match(suffix, @"^/(\d+)");
+        if (fixedDenominatorMatch.Success &&
+            int.TryParse(fixedDenominatorMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDenominator) &&
+            parsedDenominator > 0)
+        {
+            fixedDenominator = parsedDenominator;
+            suffix = suffix[fixedDenominatorMatch.Length..];
+        }
+
         var denominatorPattern = Regex.Match(stripped, @"/(\?+)");
         int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
 
@@ -660,7 +671,9 @@ public static class NumberFormatter
         int whole = stripped.Contains('#') || stripped.Contains('0') ? (int)Math.Floor(absValue) : 0;
         double fractional = absValue - whole;
 
-        var (numerator, denominator) = ApproximateFraction(fractional, maxDenominator);
+        var (numerator, denominator) = fixedDenominator is { } denominatorValue
+            ? ((int)Math.Round(fractional * denominatorValue), denominatorValue)
+            : ApproximateFraction(fractional, maxDenominator);
         if (numerator == denominator)
         {
             whole++;
