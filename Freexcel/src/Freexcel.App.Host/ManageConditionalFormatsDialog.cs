@@ -83,7 +83,7 @@ public sealed class ManageConditionalFormatsDialog : Window
 
         topBar.Children.Add(new Label
         {
-            Content = "Show formatting rules for:",
+            Content = "Show formatting _rules for:",
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0, 0, 6, 0)
         });
@@ -106,9 +106,9 @@ public sealed class ManageConditionalFormatsDialog : Window
         };
         DockPanel.SetDock(bottomRow, Dock.Bottom);
 
-        var okBtn     = new Button { Content = "OK",     Width = 72, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
-        var cancelBtn = new Button { Content = "Cancel", Width = 72, Margin = new Thickness(0, 0, 6, 0), IsCancel = true };
-        var applyBtn  = new Button { Content = "Apply",  Width = 72 };
+        var okBtn     = new Button { Content = "_OK",     Width = 72, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+        var cancelBtn = new Button { Content = "_Cancel", Width = 72, Margin = new Thickness(0, 0, 6, 0), IsCancel = true };
+        var applyBtn  = new Button { Content = "_Apply",  Width = 72 };
         okBtn.Click    += OkBtn_Click;
         applyBtn.Click += ApplyBtn_Click;
         bottomRow.Children.Add(okBtn);
@@ -125,9 +125,9 @@ public sealed class ManageConditionalFormatsDialog : Window
         DockPanel.SetDock(toolBar, Dock.Bottom);
 
         _newRuleTypeBox = new ComboBox { Width = 135, Margin = new Thickness(0, 0, 6, 0), ItemsSource = NewRuleTypeChoices, SelectedItem = NewRuleTypeChoices[0] };
-        var newBtn   = new Button { Content = "New Rule",    Width = 90, Margin = new Thickness(0, 0, 6, 0) };
-        _editBtn     = new Button { Content = "Edit Rule",   Width = 90, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
-        _deleteBtn   = new Button { Content = "Delete Rule", Width = 90, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
+        var newBtn   = new Button { Content = "_New Rule",    Width = 94, Margin = new Thickness(0, 0, 6, 0) };
+        _editBtn     = new Button { Content = "_Edit Rule",   Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        _deleteBtn   = new Button { Content = "_Delete Rule", Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
         _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
         _moveDownBtn = new Button { Content = "▼", Width = 32, IsEnabled = false };
 
