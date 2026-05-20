@@ -159,6 +159,7 @@ public sealed class ChartModel
     public string? PivotTableName { get; set; }
     public int? PivotCacheId { get; set; }
     public string? PivotFormatsXml { get; set; }
+    public bool ShowPivotChartFieldButtons { get; set; } = true;
     public bool Uses1904DateSystem { get; set; }
     public string? Language { get; set; }
     public int? ChartStyleId { get; set; }
