@@ -357,14 +357,14 @@ public static class NumberFormatter
         (format, value) = ApplyTrailingCommaScaling(format, value);
 
         // Percentage: multiply value by 100 before formatting
-        if (format.Contains('%'))
+        if (ContainsActivePercentToken(format))
         {
             double pctValue = value * 100;
             string pctFmt = format; // keep the % so .NET formats it as percentage
             // .NET percentage format (P) multiplies by 100 and adds %; but format string
             // containing literal '%' means we multiply ourselves and use 'F' style.
             // Build a numeric format without the % and append it manually.
-            string numFmt = format.Replace("%", "").Trim();
+            string numFmt = RemoveActivePercentTokens(format).Trim();
             try
             {
                 return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt,
@@ -413,6 +413,61 @@ public static class NumberFormatter
         catch { numStr = value.ToString(numberFormat); }
 
         return prefix + numStr + suffix;
+    }
+
+    private static bool ContainsActivePercentToken(string format)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c == '%')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string RemoveActivePercentTokens(string format)
+    {
+        var result = new System.Text.StringBuilder(format.Length);
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                result.Append(c);
+                continue;
+            }
+
+            if (c == '\\' && i + 1 < format.Length)
+            {
+                result.Append(c);
+                result.Append(format[++i]);
+                continue;
+            }
+
+            if (!inQuote && c == '%')
+                continue;
+
+            result.Append(c);
+        }
+
+        return result.ToString();
     }
 
     private static string PreserveLocaleCurrencyTokens(

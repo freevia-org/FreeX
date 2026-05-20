@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -36,6 +37,19 @@ public sealed class PivotWorkflowDialogTests
             dialog.Result.DestinationRangeText.Should().Be("Sales!F1");
             dialog.Result.OpenFieldList.Should().BeTrue();
         });
+    }
+
+    [Fact]
+    public void PivotTableDialog_ExposesReferencePickersForSourceAndExistingLocation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("CreateReferenceEditor(_sourceRangeBox");
+        source.Should().Contain("CreateReferenceEditor(_destinationRangeBox");
+        source.Should().Contain("Select PivotTable source range");
+        source.Should().Contain("Select PivotTable location");
+        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("UpdateDestinationState");
     }
 
     [Fact]
