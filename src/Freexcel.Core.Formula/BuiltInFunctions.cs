@@ -4378,7 +4378,10 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue rowError) return rowError;
         if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
 
-        if (!TryGetArraySliceCount(args[1], arr.RowCount, isTake: true, out int rowStart, out int rowCount))
+        int rowStart = 0;
+        int rowCount = arr.RowCount;
+        if (args[1] is not BlankValue &&
+            !TryGetArraySliceCount(args[1], arr.RowCount, isTake: true, out rowStart, out rowCount))
             return ErrorValue.Value;
 
         int colStart = 0;
@@ -4399,7 +4402,10 @@ public static class BuiltInFunctions
         if (args[1] is ErrorValue rowError) return rowError;
         if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
 
-        if (!TryGetArraySliceCount(args[1], arr.RowCount, isTake: false, out int rowStart, out int rowCount))
+        int rowStart = 0;
+        int rowCount = arr.RowCount;
+        if (args[1] is not BlankValue &&
+            !TryGetArraySliceCount(args[1], arr.RowCount, isTake: false, out rowStart, out rowCount))
             return ErrorValue.Value;
 
         int colStart = 0;
