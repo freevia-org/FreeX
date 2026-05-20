@@ -7733,8 +7733,12 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[0] is not RangeValue rv0) return ErrorValue.Value;
-        if (args[1] is not RangeValue rv1) return ErrorValue.Value;
+        var rv0 = args[0] is RangeValue range0
+            ? range0
+            : SingleCellArray(args[0]);
+        var rv1 = args[1] is RangeValue range1
+            ? range1
+            : SingleCellArray(args[1]);
         var actualFlat = rv0.Flatten().ToArray();
         var expectedFlat = rv1.Flatten().ToArray();
         if (actualFlat.Length != expectedFlat.Length) return ErrorValue.NA;
@@ -7755,7 +7759,7 @@ public static class BuiltInFunctions
         double df = rows == 1 || cols == 1
             ? n - 1
             : (double)(rows - 1) * (cols - 1);
-        if (df < 1) return ErrorValue.Num;
+        if (df < 1) return ErrorValue.NA;
         return NumberResult(1.0 - ChiSqCdf(chiSq, df));
     }
 
