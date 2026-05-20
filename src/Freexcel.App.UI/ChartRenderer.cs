@@ -99,10 +99,10 @@ public static class ChartRenderer
                 },
                 AreInsideLabelsAngled = Math.Abs(chart.DataLabelAngle) > 0.5,
                 InsideLabelFormat = chart.ShowDataLabels && chart.DataLabelPosition != ChartDataLabelPosition.OutsideEnd
-                    ? GetPieLabelFormat(chart, pieSeriesName)
+                    ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
                     : "",
                 OutsideLabelFormat = chart.ShowDataLabels && chart.DataLabelPosition == ChartDataLabelPosition.OutsideEnd
-                    ? GetPieLabelFormat(chart, pieSeriesName)
+                    ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
                     : ""
             };
             var pieFormat = GetSeriesFormat(chart, 0);
@@ -203,7 +203,7 @@ public static class ChartRenderer
                 var series = new RectangleBarSeries
                 {
                     Title = seriesName,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 4),
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
                 ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
@@ -218,7 +218,7 @@ public static class ChartRenderer
                         series.Items.Add(new RectangleBarItem(i - 0.35, Math.Min(0, v), i + 0.35, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -239,7 +239,7 @@ public static class ChartRenderer
                 var series = new BarSeries
                 {
                     Title = seriesName,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 0),
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 0),
                     LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
                 };
                 ApplyBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
@@ -254,7 +254,7 @@ public static class ChartRenderer
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), v, i, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v, i, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -298,7 +298,7 @@ public static class ChartRenderer
                 var series = new AreaSeries
                 {
                     Title = seriesName,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 1)
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1)
                 };
                 ApplyAreaFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
@@ -312,7 +312,7 @@ public static class ChartRenderer
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -332,7 +332,7 @@ public static class ChartRenderer
                 {
                     Title = seriesName,
                     MarkerType = MarkerType.Circle,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
                     LabelMargin = ToLabelMargin(chart.DataLabelPosition),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
@@ -352,7 +352,7 @@ public static class ChartRenderer
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, (int)(r - dataStartRow), GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelFormatter.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -525,7 +525,7 @@ public static class ChartRenderer
         var series = new LineSeries
         {
             Title = title,
-            LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+            LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
             LabelMargin = ToLabelMargin(chart.DataLabelPosition),
             YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
         };
@@ -600,7 +600,7 @@ public static class ChartRenderer
             var series = new RectangleBarSeries
             {
                 Title = seriesName,
-                LabelFormatString = GetNativeValueLabelFormat(chart, 4)
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
             ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
             ApplyNativeDataLabelStyle(series, chart, theme);
@@ -620,7 +620,7 @@ public static class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -694,7 +694,7 @@ public static class ChartRenderer
             var series = new RectangleBarSeries
             {
                 Title = seriesName,
-                LabelFormatString = GetNativeValueLabelFormat(chart, 4)
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
             ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
             ApplyNativeDataLabelStyle(series, chart, theme);
@@ -714,7 +714,7 @@ public static class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -766,7 +766,7 @@ public static class ChartRenderer
             {
                 Title = seriesName,
                 MarkerType = MarkerType.Circle,
-                LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
                 LabelMargin = ToLabelMargin(chart.DataLabelPosition)
             };
             ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
@@ -786,7 +786,7 @@ public static class ChartRenderer
                 if (seriesIndex == 0)
                     trendPoints.Add(new DataPoint(x, y));
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, GetCategory(categories, fallbackIndex), x, y, y);
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, ChartDataLabelFormatter.GetCategory(categories, fallbackIndex), x, y, y);
             }
 
             model.Series.Add(series);
@@ -837,7 +837,7 @@ public static class ChartRenderer
     }
 
     private static double GetStackedLabelValue(ChartModel chart, bool normalizeToPercent, double sourceValue, double displayValue) =>
-        normalizeToPercent && ShouldRenderPercentageLabels(chart)
+        normalizeToPercent && ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
             ? displayValue / 100
             : sourceValue;
 
@@ -1146,12 +1146,7 @@ public static class ChartRenderer
     }
 
     private static bool ShouldUseNativeValueLabels(ChartModel chart) =>
-        chart.ShowDataLabels
-            && !chart.ShowDataLabelCategoryName
-            && !chart.ShowDataLabelSeriesName
-            && !ShouldRenderPercentageLabels(chart)
-            && !IsPercentStackedChart(chart)
-            && !RequiresDataLabelAnnotationFormatting(chart);
+        ChartDataLabelFormatter.ShouldUseNativeValueLabels(chart);
 
     private static void ApplyNativeDataLabelStyle(PlotElement element, ChartModel chart, WorkbookTheme theme)
     {
@@ -1164,42 +1159,7 @@ public static class ChartRenderer
     }
 
     private static bool ShouldUseAnnotationLabels(ChartModel chart) =>
-        chart.ShowDataLabels
-            && (chart.ShowDataLabelCategoryName
-                || chart.ShowDataLabelSeriesName
-                || ShouldRenderPercentageLabels(chart)
-                || IsPercentStackedChart(chart)
-                || RequiresDataLabelAnnotationFormatting(chart));
-
-    private static bool ShouldRenderPercentageLabels(ChartModel chart) =>
-        chart.ShowDataLabelPercentage
-            && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type);
-
-    private static bool IsPercentStackedChart(ChartModel chart) =>
-        chart.Type is ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
-
-    private static bool RequiresDataLabelAnnotationFormatting(ChartModel chart) =>
-        chart.ShowDataLabelCallouts
-            || chart.DataLabelFillColor is not null
-            || chart.DataLabelFillThemeColor is not null
-            || chart.DataLabelBorderColor is not null
-            || chart.DataLabelBorderThemeColor is not null
-            || chart.DataLabelBorderThickness > 0
-            || Math.Abs(chart.DataLabelAngle) > 0.5;
-
-    private static string GetCategory(IReadOnlyList<string> categories, int index) =>
-        index >= 0 && index < categories.Count ? categories[index] : "";
-
-    private static string FormatDataLabel(ChartModel chart, string seriesName, string categoryName, double value)
-    {
-        var parts = new List<string>();
-        if (chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName))
-            parts.Add(seriesName);
-        if (chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName))
-            parts.Add(categoryName);
-        parts.Add(FormatLabelValue(chart, value));
-        return string.Join(GetDataLabelSeparatorText(chart.DataLabelSeparator), parts);
-    }
+        ChartDataLabelFormatter.ShouldUseAnnotationLabels(chart);
 
     private static void AddDataLabelAnnotation(
         PlotModel model,
@@ -1219,7 +1179,7 @@ public static class ChartRenderer
         var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
         model.Annotations.Add(new TextAnnotation
         {
-            Text = FormatDataLabel(chart, seriesName, categoryName, value),
+            Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, categoryName, value),
             TextPosition = new DataPoint(x, y),
             TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
             TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
@@ -1260,70 +1220,11 @@ public static class ChartRenderer
                 seriesName,
                 seriesIndex,
                 pointIndex,
-                GetCategory(categories, (int)Math.Round(point.X)),
+                ChartDataLabelFormatter.GetCategory(categories, (int)Math.Round(point.X)),
                 point.X,
                 point.Y,
                 point.Y);
         }
-    }
-
-    private static string GetPieLabelFormat(ChartModel chart, string seriesName)
-    {
-        var valuePart = chart.ShowDataLabelPercentage
-            ? "{2:0%}"
-            : GetPieValueFormat(chart.DataLabelNumberFormat);
-        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
-        if (chart.ShowDataLabelSeriesName && chart.ShowDataLabelCategoryName)
-            return $"{seriesName}{separator}{{1}}{separator}{valuePart}";
-        if (chart.ShowDataLabelSeriesName)
-            return $"{seriesName}{separator}{valuePart}";
-        if (chart.ShowDataLabelCategoryName)
-            return $"{{1}}{separator}{valuePart}";
-        return valuePart;
-    }
-
-    private static string GetDataLabelSeparatorText(ChartDataLabelSeparator separator) =>
-        separator switch
-        {
-            ChartDataLabelSeparator.Semicolon => "; ",
-            ChartDataLabelSeparator.NewLine => Environment.NewLine,
-            ChartDataLabelSeparator.Space => " ",
-            _ => ", "
-        };
-
-    private static string FormatLabelValue(ChartModel chart, double value) =>
-        ShouldRenderPercentageLabels(chart)
-            ? value.ToString("0%", System.Globalization.CultureInfo.InvariantCulture)
-            : chart.DataLabelNumberFormat switch
-        {
-            ChartDataLabelNumberFormat.Number => value.ToString("0.00"),
-            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Percent => value.ToString("0%", System.Globalization.CultureInfo.InvariantCulture),
-            _ => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
-        };
-
-    private static string GetPieValueFormat(ChartDataLabelNumberFormat format) =>
-        format switch
-        {
-            ChartDataLabelNumberFormat.Number => "{0:0.00}",
-            ChartDataLabelNumberFormat.Currency => "{0:$#,##0.00}",
-            ChartDataLabelNumberFormat.Percent => "{0:0%}",
-            _ => "{0}"
-        };
-
-    private static string? GetNativeValueLabelFormat(ChartModel chart, int valueIndex)
-    {
-        if (!ShouldUseNativeValueLabels(chart))
-            return null;
-
-        var format = chart.DataLabelNumberFormat switch
-        {
-            ChartDataLabelNumberFormat.Number => ":0.00",
-            ChartDataLabelNumberFormat.Currency => ":$#,##0.00",
-            ChartDataLabelNumberFormat.Percent => ":0%",
-            _ => ""
-        };
-        return $"{{{valueIndex}{format}}}";
     }
 
     private static bool UsesSecondaryAxis(ChartModel chart, int seriesIndex)
@@ -1606,5 +1507,6 @@ public static class ChartRenderer
             _ => overlay ? OxyPlot.Legends.LegendPosition.RightTop : OxyPlot.Legends.LegendPosition.RightMiddle
         };
 }
+
 
 
