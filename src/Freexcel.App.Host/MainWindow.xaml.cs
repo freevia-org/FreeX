@@ -8035,7 +8035,7 @@ public partial class MainWindow : Window
         UpdateViewport();
     }
 
-    private void InsertCommentBtn_Click(object sender, RoutedEventArgs e)    => ReviewNewCommentBtn_Click(sender, e);
+    private void InsertCommentBtn_Click(object sender, RoutedEventArgs e)    => ReviewNewThreadedCommentBtn_Click(sender, e);
     private void HeaderFooterBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
