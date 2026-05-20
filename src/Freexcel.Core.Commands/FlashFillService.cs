@@ -78,6 +78,9 @@ public static class FlashFillService
         if (TryFirstInitialLastEmailPattern(exampleSources, exampleOutputs) is { } initialLastEmailPattern)
             patterns.Insert(7, initialLastEmailPattern);
 
+        if (TryLastFirstInitialEmailPattern(exampleSources, exampleOutputs) is { } lastInitialEmailPattern)
+            patterns.Add(lastInitialEmailPattern);
+
         foreach (var pattern in patterns)
         {
             var allExamplesMatch = true;
@@ -384,6 +387,16 @@ public static class FlashFillService
             exampleSources,
             exampleOutputs,
             s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant());
+    }
+
+    private static Func<IReadOnlyList<string>, string>? TryLastFirstInitialEmailPattern(
+        IReadOnlyList<IReadOnlyList<string>> exampleSources,
+        IReadOnlyList<string> exampleOutputs)
+    {
+        return TrySharedDomainEmailPattern(
+            exampleSources,
+            exampleOutputs,
+            s => (s[1] + GetFirstInitial(s[0])).ToLowerInvariant());
     }
 
     private static Func<IReadOnlyList<string>, string>? TrySharedDomainEmailPattern(
