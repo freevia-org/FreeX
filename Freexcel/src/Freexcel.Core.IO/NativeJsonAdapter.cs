@@ -1356,7 +1356,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
             DoubleUnderline = dto.DoubleUnderline,
             IndentLevel = Math.Clamp(dto.IndentLevel, 0, 15),
             TextRotation = ValidTextRotationOrDefault(dto.TextRotation),
-            Locked = dto.Locked
+            Locked = dto.Locked,
+            NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
+            NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls
         };
     }
 
@@ -1389,7 +1391,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
             DoubleUnderline = style.DoubleUnderline,
             IndentLevel = style.IndentLevel,
             TextRotation = style.TextRotation,
-            Locked = style.Locked
+            Locked = style.Locked,
+            NativeDifferentialAttributes = style.NativeDifferentialAttributes,
+            NativeDifferentialChildXmls = style.NativeDifferentialChildXmls
         })!;
 
         return new CellStyleDto
@@ -1416,7 +1420,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
             DoubleUnderline = safeStyle.DoubleUnderline,
             IndentLevel = safeStyle.IndentLevel,
             TextRotation = safeStyle.TextRotation,
-            Locked = safeStyle.Locked
+            Locked = safeStyle.Locked,
+            NativeDifferentialAttributes = safeStyle.NativeDifferentialAttributes,
+            NativeDifferentialChildXmls = safeStyle.NativeDifferentialChildXmls
         };
     }
 
@@ -1941,6 +1947,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public int IndentLevel { get; set; }
         public int TextRotation { get; set; }
         public bool Locked { get; set; } = true;
+        public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
+        public IReadOnlyList<string>? NativeDifferentialChildXmls { get; set; }
     }
 
     private class CellBorderDto
