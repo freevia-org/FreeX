@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 
@@ -46,5 +47,20 @@ public sealed class SortDialogTests
         SortDialog.RemoveLevel([new SortDialogLevel(3, false)], 0)
             .Should()
             .Equal(new SortDialogLevel(0, true));
+    }
+
+    [Fact]
+    public void DialogCommands_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Add Level",
+            "_Remove Level",
+            "_OK",
+            "_Cancel"
+        })
+            source.Should().Contain($"Content = \"{content}\"");
     }
 }

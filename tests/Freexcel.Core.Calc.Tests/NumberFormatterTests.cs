@@ -225,6 +225,21 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("\\_0", 12, "_12")]
+    [InlineData("\\*0", 12, "*12")]
+    [InlineData("\\_m/d/yyyy", 45292, "_1/1/2024")]
+    [InlineData("\\*[h]:mm:ss", 1.5, "*36:00:00")]
+    public void CustomNumberSubset_PreservesEscapedSpacingAndFillDirectiveCharacters(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
     {

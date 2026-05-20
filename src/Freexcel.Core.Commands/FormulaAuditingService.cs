@@ -36,6 +36,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
+        new(FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas", "Flag formulas whose relative reference pattern differs from adjacent formulas."),
         new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
         new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
         new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
@@ -67,7 +68,7 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
         if (cell is null)
             return new CommandOutcome(false, "No cell exists at the selected issue.");
 
-        if (_ignored && !FormulaAuditingService.HasIgnorableFormulaIssue(ctx.Workbook, _sheetId, cell))
+        if (_ignored && !FormulaAuditingService.HasIgnorableFormulaIssue(ctx.Workbook, _sheetId, _address, cell))
             return new CommandOutcome(false, "The selected cell does not currently contain an issue.");
 
         _previousIgnored = cell.IgnoreFormulaError;
@@ -125,6 +126,7 @@ public static class FormulaAuditingService
     public const string FormulaRefersToBlankCellsErrorCode = "FormulaRefersToBlankCells";
     public const string NumberStoredAsTextErrorCode = "NumberStoredAsText";
     public const string TwoDigitYearTextDateErrorCode = "TwoDigitYearTextDate";
+    public const string InconsistentFormulaErrorCode = "InconsistentFormula";
 
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {
@@ -262,6 +264,9 @@ public static class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode))
             result.AddRange(FindFormulaRefersToBlankCellsIssues(workbook, sheetId));
 
+        if (!workbook.DisabledFormulaErrorCodes.Contains(InconsistentFormulaErrorCode))
+            result.AddRange(FindInconsistentFormulaIssues(workbook, sheetId));
+
         return result
             .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
             .ThenBy(issue => issue.Address.Row)
@@ -269,11 +274,12 @@ public static class FormulaAuditingService
             .ToList();
     }
 
-    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, Cell cell) =>
+    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell) =>
         cell.Value is ErrorValue ||
         (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
         (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
-        FormulaRefersToBlankCells(workbook, sheetId, cell);
+        FormulaRefersToBlankCells(workbook, sheetId, cell) ||
+        IsInconsistentFormula(workbook, sheetId, address);
 
     private static bool HasIgnorableLiteralIssue(Cell cell) =>
         cell.Value is ErrorValue ||
@@ -350,6 +356,106 @@ public static class FormulaAuditingService
             }
         }
     }
+
+    private static IEnumerable<FormulaErrorIssue> FindInconsistentFormulaIssues(Workbook workbook, SheetId? sheetId)
+    {
+        var flagged = new HashSet<CellAddress>();
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            var formulas = sheet.EnumerateCells()
+                .Where(item => item.Cell.HasFormula && !item.Cell.IgnoreFormulaError && !string.IsNullOrWhiteSpace(item.Cell.FormulaText))
+                .Select(item => new FormulaPattern(item.Address, item.Cell.FormulaText!, NormalizeFormulaPattern(item.Address, item.Cell.FormulaText!)))
+                .ToList();
+
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Row), flagged))
+                yield return issue;
+
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Col), flagged))
+                yield return issue;
+        }
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindInconsistentFormulaRuns(
+        Sheet sheet,
+        IEnumerable<IGrouping<uint, FormulaPattern>> groupedFormulas,
+        HashSet<CellAddress> flagged)
+    {
+        foreach (var group in groupedFormulas)
+        {
+            var formulas = group.OrderBy(item => item.Address.Row).ThenBy(item => item.Address.Col).ToList();
+            foreach (var run in SplitAdjacentFormulaRuns(formulas))
+            {
+                if (run.Count < 3)
+                    continue;
+
+                var patternGroups = run
+                    .GroupBy(item => item.Pattern, StringComparer.Ordinal)
+                    .OrderByDescending(item => item.Count())
+                    .ToList();
+
+                if (patternGroups.Count < 2 || patternGroups[0].Count() < 2)
+                    continue;
+
+                foreach (var outlier in patternGroups.Where(item => item.Count() == 1).SelectMany(item => item))
+                {
+                    if (!flagged.Add(outlier.Address))
+                        continue;
+
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        outlier.Address,
+                        outlier.Address.ToA1(),
+                        InconsistentFormulaErrorCode,
+                        "=" + outlier.FormulaText,
+                        "The formula is inconsistent with nearby formulas.");
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<List<FormulaPattern>> SplitAdjacentFormulaRuns(IReadOnlyList<FormulaPattern> formulas)
+    {
+        var run = new List<FormulaPattern>();
+        FormulaPattern? previous = null;
+        foreach (var formula in formulas)
+        {
+            if (previous is not null &&
+                Math.Abs((int)formula.Address.Row - (int)previous.Address.Row) +
+                Math.Abs((int)formula.Address.Col - (int)previous.Address.Col) != 1)
+            {
+                yield return run;
+                run = [];
+            }
+
+            run.Add(formula);
+            previous = formula;
+        }
+
+        if (run.Count > 0)
+            yield return run;
+    }
+
+    private static bool IsInconsistentFormula(Workbook workbook, SheetId sheetId, CellAddress address) =>
+        FindInconsistentFormulaIssues(workbook, sheetId)
+            .Any(issue => issue.Address == address);
+
+    private sealed record FormulaPattern(CellAddress Address, string FormulaText, string Pattern);
+
+    private static string NormalizeFormulaPattern(CellAddress address, string formulaText) =>
+        Regex.Replace(
+            formulaText,
+            @"(?<![A-Za-z0-9_])\$?([A-Za-z]{1,3})\$?([0-9]{1,7})(?![A-Za-z0-9_])",
+            match =>
+            {
+                var col = CellAddress.ColumnNameToNumber(match.Groups[1].Value);
+                var row = uint.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                return $"R[{(int)row - (int)address.Row}]C[{(int)col - (int)address.Col}]";
+            },
+            RegexOptions.CultureInvariant);
 
     private static bool FormulaRefersToBlankCells(Workbook workbook, SheetId sheetId, Cell cell)
     {
