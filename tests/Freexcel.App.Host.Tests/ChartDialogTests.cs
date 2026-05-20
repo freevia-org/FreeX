@@ -125,6 +125,68 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartAreaLegendDialogResult_BuildsLayoutOptions()
+    {
+        var result = ChartAreaLegendDialog.CreateResult(
+            chartAreaFillColor: new CellColor(250, 250, 250),
+            plotAreaFillColor: new CellColor(245, 250, 255),
+            plotAreaBorderColor: new CellColor(120, 120, 120),
+            plotAreaBorderThickness: 2.25,
+            showLegend: true,
+            legendPosition: ChartLegendPosition.Bottom,
+            legendOverlay: true,
+            legendTextColor: new CellColor(40, 40, 40),
+            legendFillColor: new CellColor(248, 248, 248),
+            legendBorderColor: new CellColor(180, 180, 180),
+            legendBorderThickness: 1.25,
+            legendFontSize: 11);
+
+        result.ToOptions().Should().Be(new ChartLayoutOptions(
+            ChartAreaFillColor: new CellColor(250, 250, 250),
+            PlotAreaFillColor: new CellColor(245, 250, 255),
+            PlotAreaBorderColor: new CellColor(120, 120, 120),
+            PlotAreaBorderThickness: 2.25,
+            LegendTextColor: new CellColor(40, 40, 40),
+            LegendFillColor: new CellColor(248, 248, 248),
+            LegendBorderColor: new CellColor(180, 180, 180),
+            LegendBorderThickness: 1.25,
+            LegendFontSize: 11,
+            LegendPosition: ChartLegendPosition.Bottom,
+            LegendOverlay: true,
+            ShowLegend: true));
+    }
+
+    [Fact]
+    public void ChartAreaLegendDialog_FromChart_UsesCurrentSettingsAndClampsNumbers()
+    {
+        var chart = new ChartModel
+        {
+            ChartAreaFillColor = new CellColor(1, 2, 3),
+            PlotAreaBorderThickness = 99,
+            ShowLegend = false,
+            LegendPosition = ChartLegendPosition.Top,
+            LegendBorderThickness = -4,
+            LegendFontSize = 100
+        };
+
+        ChartAreaLegendDialog.FromChart(chart)
+            .Should()
+            .Be(new ChartAreaLegendDialogResult(
+                new CellColor(1, 2, 3),
+                null,
+                null,
+                10,
+                false,
+                ChartLegendPosition.Top,
+                false,
+                null,
+                null,
+                null,
+                0,
+                72));
+    }
+
+    [Fact]
     public void ChartDataLabelsDialogResult_BuildsLayoutOptions()
     {
         var result = ChartDataLabelsDialog.CreateResult(
