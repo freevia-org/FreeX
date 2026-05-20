@@ -12366,6 +12366,36 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableFilterColumnNativeAttributes()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableFilterColumnAttributeTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeFilterColumnAttributes: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var filter = table.FilterColumns.Should().ContainSingle().Subject;
+        filter.ColumnId.Should().Be(0);
+        filter.NativeAttributes.Should().ContainKey("hiddenButton").WhoseValue.Should().Be("1");
+        filter.NativeAttributes.Should().ContainKey("showButton").WhoseValue.Should().Be("0");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("hiddenButton=\"1\"");
+        tableXml.Should().Contain("showButton=\"0\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeSortState()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableSortStateTest");
@@ -14100,7 +14130,8 @@ public class FileAdapterSmokeTests
         bool includeColumnExtension = false,
         bool includeColumnAttributes = false,
         bool includeStyleInfoExtension = false,
-        bool includeRootMetadata = false)
+        bool includeRootMetadata = false,
+        bool includeFilterColumnAttributes = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -14142,6 +14173,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeFilterColumnAttributes
+                            ? StructuredTableWithFilterColumnAttributesXml
                         : includeRootMetadata
                             ? StructuredTableWithRootMetadataXml
                         : includeStyleInfoExtension
@@ -15156,6 +15189,28 @@ public class FileAdapterSmokeTests
                 <ext uri="{FREEXCEL-TABLE-FILTER-EXT}"/>
               </extLst>
             </filterColumn>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithFilterColumnAttributesXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="0" hiddenButton="1" showButton="0"/>
           </autoFilter>
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
