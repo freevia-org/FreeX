@@ -286,7 +286,10 @@ public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
                 Bold: true);
         }
 
-        return new StyleDiff(FillColor: row % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill);
+        return new StyleDiff(
+            FillColor: row % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill,
+            FontColor: CellColor.Black,
+            Bold: false);
     }
 
     private void RevertAppliedCommands(ICommandContext ctx)
