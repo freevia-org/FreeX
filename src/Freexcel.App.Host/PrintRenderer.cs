@@ -20,6 +20,7 @@ public static class PrintRenderer
         Workbook workbook,
         SheetId sheetId,
         IViewportService viewportService,
+        GridRange? printRangeOverride = null,
         double pageWidthInches = 8.27,
         double pageHeightInches = 11.69)
     {
@@ -47,7 +48,11 @@ public static class PrintRenderer
 
         doc.DocumentPaginator.PageSize = new Size(pageW, pageH);
 
-        var usedRange = sheet.PrintArea ?? sheet.GetUsedRange();
+        var usedRange = printRangeOverride is { } range &&
+                        range.Start.Sheet == sheetId &&
+                        range.End.Sheet == sheetId
+            ? range
+            : sheet.PrintArea ?? sheet.GetUsedRange();
         if (usedRange == null) return doc;
 
         uint endPrintRow = usedRange.Value.End.Row;
