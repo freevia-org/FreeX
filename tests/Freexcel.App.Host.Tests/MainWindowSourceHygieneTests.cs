@@ -205,6 +205,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var quickAnalysisSourcePath = Path.Combine(appHostDirectory, "MainWindow.QuickAnalysis.cs");
+
+        File.Exists(quickAnalysisSourcePath).Should().BeTrue();
+        var quickAnalysisSource = File.ReadAllText(quickAnalysisSourcePath);
+
+        mainSource.Should().NotContain("private void ShowQuickAnalysisMenu(");
+        mainSource.Should().NotContain("private void QuickAnalysisMenuItem_Click(");
+        mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseEnter(");
+        mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseLeave(");
+
+        quickAnalysisSource.Should().Contain("private void ShowQuickAnalysisMenu(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_Click(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseEnter(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseLeave(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -556,7 +577,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "QuickAnalysisPlanner.cs"));
 
         source.Should().Contain("ToolTip = option.PreviewText");
@@ -566,7 +587,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
 
         source.Should().Contain("QuickAnalysisMenuItem_MouseEnter");
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
