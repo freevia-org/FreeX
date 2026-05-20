@@ -118,6 +118,23 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_WorksheetOleObjectMetadata_DetectsEmbeddedObjects()
+    {
+        using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <oleObjects>
+                <oleObject progId="Package" shapeId="1025" r:id="rIdOle1"/>
+              </oleObjects>
+            </worksheet>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.EmbeddedObjects);
+    }
+
+    [Fact]
     public void Inspect_SlicerAndTimelinePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage(
@@ -194,6 +211,57 @@ public class XlsxFeatureInspectorTests
         var report = XlsxFeatureInspector.Inspect(package);
 
         report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+    [Fact]
+    public void Inspect_WorksheetControlMetadata_DetectsFormControls()
+    {
+        using var package = CreatePackageWithContent(("xl/worksheets/sheet1.xml", """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <controls>
+                <control shapeId="1025" r:id="rIdControl1" name="Check Box 1"/>
+              </controls>
+            </worksheet>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+    [Fact]
+    public void Inspect_DrawingControlMetadata_DetectsFormControls()
+    {
+        using var package = CreatePackageWithContent(("xl/drawings/drawing1.xml", """
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <xdr:twoCellAnchor>
+                <xdr:control r:id="rIdControl1" name="Button 1" shapeId="1025"/>
+              </xdr:twoCellAnchor>
+            </xdr:wsDr>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
+    }
+
+    [Fact]
+    public void Inspect_VmlFormControlMetadata_DetectsFormControls()
+    {
+        using var package = CreatePackageWithContent(("xl/drawings/vmlDrawing1.vml", """
+            <xml xmlns:v="urn:schemas-microsoft-com:vml"
+                 xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <v:shape id="CheckBox1">
+                <x:ClientData ObjectType="Checkbox"/>
+              </v:shape>
+            </xml>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.FormControls);
     }
 
     [Fact]
