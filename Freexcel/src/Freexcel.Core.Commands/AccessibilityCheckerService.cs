@@ -9,7 +9,10 @@ public enum AccessibilityIssueKind
     GenericAltText,
     ChartMissingTitle,
     HyperlinkDisplayTextIsUrl,
-    DefaultWorksheetName
+    DefaultWorksheetName,
+    HiddenSheetWithContent,
+    HiddenRowWithContent,
+    HiddenColumnWithContent
 }
 
 public sealed record AccessibilityIssue(
@@ -57,6 +60,8 @@ public static class AccessibilityCheckerService
                     "Worksheet tab names should describe their contents."));
             }
 
+            AddHiddenContentIssues(issues, sheet);
+
             foreach (var range in sheet.MergedRegions)
             {
                 issues.Add(new AccessibilityIssue(
@@ -102,6 +107,52 @@ public static class AccessibilityCheckerService
         }
 
         return issues;
+    }
+
+    private static void AddHiddenContentIssues(List<AccessibilityIssue> issues, Sheet sheet)
+    {
+        var usedCells = sheet.GetUsedCells().Keys.ToList();
+        if (usedCells.Count == 0)
+            return;
+
+        if (sheet.IsHidden || sheet.IsVeryHidden)
+        {
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.HiddenSheetWithContent,
+                sheet.Id,
+                sheet.Name,
+                sheet.Name,
+                "Hidden sheets with content may not be available to assistive technologies."));
+        }
+
+        foreach (var row in usedCells
+                     .Select(address => address.Row)
+                     .Where(sheet.IsRowEffectivelyHidden)
+                     .Distinct()
+                     .Order())
+        {
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.HiddenRowWithContent,
+                sheet.Id,
+                sheet.Name,
+                $"{row}:{row}",
+                "Hidden rows with content may not be available to assistive technologies."));
+        }
+
+        foreach (var col in usedCells
+                     .Select(address => address.Col)
+                     .Where(sheet.IsColEffectivelyHidden)
+                     .Distinct()
+                     .Order())
+        {
+            var name = CellAddress.NumberToColumnName(col);
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.HiddenColumnWithContent,
+                sheet.Id,
+                sheet.Name,
+                $"{name}:{name}",
+                "Hidden columns with content may not be available to assistive technologies."));
+        }
     }
 
     private static AccessibilityIssue MissingAltText(Sheet sheet, CellAddress anchor, string objectType) => new(
