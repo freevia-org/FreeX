@@ -39,7 +39,11 @@ public sealed class PasteSpecialDialog : Window
     private readonly CheckBox _skipBlanks;
     private readonly CheckBox _transpose;
     private readonly CheckBox _keepColumnWidths;
-    private readonly ComboBox _operation;
+    private readonly RadioButton _opNone;
+    private readonly RadioButton _opAdd;
+    private readonly RadioButton _opSubtract;
+    private readonly RadioButton _opMultiply;
+    private readonly RadioButton _opDivide;
 
     public PasteSpecialDialogMode Mode => true switch
     {
@@ -66,7 +70,14 @@ public sealed class PasteSpecialDialog : Window
     public bool SkipBlanks     => _skipBlanks.IsChecked == true;
     public bool Transpose      => _transpose.IsChecked == true;
     public bool KeepColumnWidths => _keepColumnWidths.IsChecked == true;
-    public string Operation    => (_operation.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "None";
+    public string Operation => true switch
+    {
+        _ when _opAdd.IsChecked == true => "Add",
+        _ when _opSubtract.IsChecked == true => "Subtract",
+        _ when _opMultiply.IsChecked == true => "Multiply",
+        _ when _opDivide.IsChecked == true => "Divide",
+        _ => "None"
+    };
 
     public PasteSpecialDialog()
     {
@@ -94,10 +105,11 @@ public sealed class PasteSpecialDialog : Window
         _skipBlanks = new CheckBox { Content = "S_kip blanks", Margin = new Thickness(0, 0, 0, 8) };
         _transpose  = new CheckBox { Content = "Transpos_e", Margin = new Thickness(0, 4, 0, 8) };
         _keepColumnWidths = new CheckBox { Content = "Keep source column _widths", Margin = new Thickness(0, 0, 0, 8) };
-        _operation  = new ComboBox { Margin = new Thickness(0, 0, 0, 12), Width = 150, HorizontalAlignment = HorizontalAlignment.Left };
-        foreach (var op in new[] { "None", "Add", "Subtract", "Multiply", "Divide" })
-            _operation.Items.Add(new ComboBoxItem { Content = op });
-        _operation.SelectedIndex = 0;
+        _opNone = CreateOperationButton("_None", isChecked: true);
+        _opAdd = CreateOperationButton("_Add");
+        _opSubtract = CreateOperationButton("_Subtract");
+        _opMultiply = CreateOperationButton("_Multiply");
+        _opDivide = CreateOperationButton("_Divide");
 
         stack.Children.Add(_rbAll);
         stack.Children.Add(_rbValues);
@@ -116,8 +128,8 @@ public sealed class PasteSpecialDialog : Window
         stack.Children.Add(_skipBlanks);
         stack.Children.Add(_transpose);
         stack.Children.Add(_keepColumnWidths);
-        stack.Children.Add(new TextBlock { Text = "Operation", Margin = new Thickness(0, 0, 0, 3) });
-        stack.Children.Add(_operation);
+        stack.Children.Add(new TextBlock { Text = "Operation", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        stack.Children.Add(CreateOperationPanel());
 
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
@@ -128,5 +140,38 @@ public sealed class PasteSpecialDialog : Window
         stack.Children.Add(btnRow);
 
         Content = stack;
+    }
+
+    private static RadioButton CreateOperationButton(string content, bool isChecked = false) =>
+        new()
+        {
+            Content = content,
+            GroupName = "PasteSpecialOperation",
+            IsChecked = isChecked,
+            Margin = new Thickness(0, 0, 12, 6)
+        };
+
+    private Grid CreateOperationPanel()
+    {
+        var panel = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        panel.ColumnDefinitions.Add(new ColumnDefinition());
+        panel.ColumnDefinitions.Add(new ColumnDefinition());
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddOperation(panel, _opNone, 0, 0);
+        AddOperation(panel, _opAdd, 0, 1);
+        AddOperation(panel, _opSubtract, 1, 0);
+        AddOperation(panel, _opMultiply, 1, 1);
+        AddOperation(panel, _opDivide, 2, 0);
+        return panel;
+    }
+
+    private static void AddOperation(Grid panel, RadioButton button, int row, int column)
+    {
+        Grid.SetRow(button, row);
+        Grid.SetColumn(button, column);
+        panel.Children.Add(button);
     }
 }
