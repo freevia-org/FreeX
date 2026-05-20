@@ -4039,6 +4039,66 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsDataValidationNativeMetadata()
+    {
+        var workbook = new Workbook("DvNativeMetadataTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Apple"));
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry"
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var dataValidations = worksheetXml.Root!.Element(worksheetNs + "dataValidations")!;
+            dataValidations.SetAttributeValue("disablePrompts", "1");
+            dataValidations.SetAttributeValue("xWindow", "25");
+            var validation = dataValidations.Element(worksheetNs + "dataValidation")!;
+            validation.SetAttributeValue("imeMode", "noControl");
+            validation.Add(new XElement(
+                worksheetNs + "extLst",
+                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEXCEL-DV-NATIVE}"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        ms.Position = 0;
+        var loaded = adapter.Load(ms);
+        var loadedRule = loaded.GetSheetAt(0).DataValidations.Should().ContainSingle().Subject;
+        loadedRule.NativeAttributes.Should().Contain("imeMode", "noControl");
+        loadedRule.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("{FREEXCEL-DV-NATIVE}", StringComparison.Ordinal));
+        loadedRule.NativeContainerAttributes.Should().Contain("disablePrompts", "1");
+        loadedRule.NativeContainerAttributes.Should().Contain("xWindow", "25");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorksheetXml = LoadPackageXml(savedArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace savedWorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var savedDataValidations = savedWorksheetXml.Root!.Element(savedWorksheetNs + "dataValidations")!;
+        savedDataValidations.Attribute("disablePrompts")!.Value.Should().Be("1");
+        savedDataValidations.Attribute("xWindow")!.Value.Should().Be("25");
+        var savedValidation = savedDataValidations.Element(savedWorksheetNs + "dataValidation")!;
+        savedValidation.Attribute("imeMode")!.Value.Should().Be("noControl");
+        savedValidation.Element(savedWorksheetNs + "extLst")!
+            .Element(savedWorksheetNs + "ext")!
+            .Attribute("uri")!.Value.Should().Be("{FREEXCEL-DV-NATIVE}");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_SkipsInvalidDataValidationRules()
     {
         var workbook = new Workbook("DvInvalidSaveTest");
@@ -4113,7 +4173,11 @@ public class FileAdapterSmokeTests
             ErrorTitle = "Invalid time",
             ErrorMessage = "Enter a time during business hours.",
             PromptTitle = "Business hours",
-            PromptMessage = "Use 09:00 through 17:30."
+            PromptMessage = "Use 09:00 through 17:30.",
+            NativeAttributes = new Dictionary<string, string> { ["imeMode"] = "noControl" },
+            NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-DV-NATIVE}\" /></extLst>"],
+            NativeContainerAttributes = new Dictionary<string, string> { ["disablePrompts"] = "1", ["xWindow"] = "25" },
+            NativeContainerChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-DV-CONTAINER}\" /></extLst>"]
         };
         sheet.DataValidations.Add(dv);
 
@@ -4142,6 +4206,11 @@ public class FileAdapterSmokeTests
         rule.ErrorMessage.Should().Be("Enter a time during business hours.");
         rule.PromptTitle.Should().Be("Business hours");
         rule.PromptMessage.Should().Be("Use 09:00 through 17:30.");
+        rule.NativeAttributes.Should().Contain("imeMode", "noControl");
+        rule.NativeChildXmls.Should().ContainSingle(xml => xml.Contains("{FREEXCEL-DV-NATIVE}", StringComparison.Ordinal));
+        rule.NativeContainerAttributes.Should().Contain("disablePrompts", "1");
+        rule.NativeContainerAttributes.Should().Contain("xWindow", "25");
+        rule.NativeContainerChildXmls.Should().ContainSingle(xml => xml.Contains("{FREEXCEL-DV-CONTAINER}", StringComparison.Ordinal));
     }
 
     [Fact]
