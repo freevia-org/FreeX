@@ -438,6 +438,15 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
             YAxisLabelAngle = chart.YAxisLabelAngle,
             YAxisLineColor = chart.YAxisLineColor,
             YAxisLineThickness = chart.YAxisLineThickness,
+            DataTable = chart.DataTable is null
+                ? null
+                : new ChartDataTableModel
+                {
+                    ShowHorizontalBorder = chart.DataTable.ShowHorizontalBorder,
+                    ShowVerticalBorder = chart.DataTable.ShowVerticalBorder,
+                    ShowOutline = chart.DataTable.ShowOutline,
+                    ShowLegendKeys = chart.DataTable.ShowLegendKeys
+                },
             BarGapWidth = chart.BarGapWidth,
             BarOverlap = chart.BarOverlap,
             VaryColorsByPoint = chart.VaryColorsByPoint,

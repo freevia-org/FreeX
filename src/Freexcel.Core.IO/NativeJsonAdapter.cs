@@ -806,6 +806,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 YAxisLabelAngle = chartDto.YAxisLabelAngle,
                 YAxisLineColor = chartDto.YAxisLineColor,
                 YAxisLineThickness = chartDto.YAxisLineThickness,
+                DataTable = chartDto.DataTable,
                 BarGapWidth = chartDto.BarGapWidth,
                 BarOverlap = chartDto.BarOverlap,
                 VaryColorsByPoint = chartDto.VaryColorsByPoint,
@@ -929,6 +930,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         YAxisLabelAngle = chart.YAxisLabelAngle,
         YAxisLineColor = chart.YAxisLineColor,
         YAxisLineThickness = chart.YAxisLineThickness,
+        DataTable = chart.DataTable,
         BarGapWidth = chart.BarGapWidth,
         BarOverlap = chart.BarOverlap,
         VaryColorsByPoint = chart.VaryColorsByPoint,
@@ -2035,6 +2037,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public double YAxisLabelAngle { get; set; }
         public CellColor? YAxisLineColor { get; set; }
         public double YAxisLineThickness { get; set; } = 1;
+        public ChartDataTableModel? DataTable { get; set; }
         public int? BarGapWidth { get; set; }
         public int? BarOverlap { get; set; }
         public bool? VaryColorsByPoint { get; set; }
