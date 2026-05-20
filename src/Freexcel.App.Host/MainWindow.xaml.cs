@@ -8484,6 +8484,21 @@ public partial class MainWindow : Window
                 TrendlineThickness: chart.TrendlineThickness >= 3 ? 1.5 : chart.TrendlineThickness + 0.75));
     }
 
+    private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetFirstChartForDialog("Format Error Bars", "Insert or select a chart before changing error bars.", out var chart))
+            return;
+
+        var dialog = new ChartErrorBarsDialog(chart) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!ApplyChartLayoutDialogResult("Format Error Bars", chart, dialog.Result.ToOptions()))
+            return;
+
+        UpdateViewport();
+    }
+
     private void ToggleTrendlineInfo(string caption, Func<ChartModel, ChartLayoutOptions> optionsFactory)
     {
         if (!TryExecuteRepeatableChartLayout(
