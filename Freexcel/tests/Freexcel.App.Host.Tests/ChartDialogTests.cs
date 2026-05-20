@@ -155,6 +155,28 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartFormatDialogs_RouteColorFieldsThroughColorPickerButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("AddColorText");
+        source.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
+        foreach (var colorLabel in new[]
+        {
+            "Chart area fill color",
+            "Plot area fill color",
+            "Legend text color",
+            "Fill color",
+            "Line color",
+            "Major gridline color",
+            "Axis line color"
+        })
+        {
+            source.Should().Contain($"AddColorText(stack, \"{colorLabel}\"");
+        }
+    }
+
+    [Fact]
     public void ChartAreaLegendDialogResult_BuildsLayoutOptions()
     {
         var result = ChartAreaLegendDialog.CreateResult(
