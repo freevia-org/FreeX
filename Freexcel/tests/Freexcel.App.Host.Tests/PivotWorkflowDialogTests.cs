@@ -149,4 +149,107 @@ public sealed class PivotWorkflowDialogTests
                 true,
                 PivotReportLayout.Compact));
     }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_CreateResult_TrimsFieldAndClampsNumberRangeInterval()
+    {
+        var result = PivotFieldGroupingDialog.CreateResult(
+            "  Order Date  ",
+            sourceFieldIndex: -3,
+            PivotFieldGrouping.NumberRange,
+            "  10  ",
+            "  90  ",
+            "  -5  ",
+            ungroup: false);
+
+        result.Should().Be(new PivotFieldGroupingDialogResult(
+            "Order Date",
+            0,
+            PivotFieldGrouping.NumberRange,
+            10,
+            90,
+            1,
+            false));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_CreateResult_UngroupClearsGroupingSettings()
+    {
+        var result = PivotFieldGroupingDialog.CreateResult(
+            " Region ",
+            sourceFieldIndex: 2,
+            PivotFieldGrouping.Month,
+            "1",
+            "12",
+            "3",
+            ungroup: true);
+
+        result.Should().Be(new PivotFieldGroupingDialogResult(
+            "Region",
+            2,
+            PivotFieldGrouping.None,
+            null,
+            null,
+            null,
+            true));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_FromPivotField_UsesCurrentFieldSettings()
+    {
+        var field = new PivotFieldModel(
+            SourceFieldIndex: 1,
+            Grouping: PivotFieldGrouping.Month,
+            GroupStart: 44562,
+            GroupEnd: 44927,
+            GroupInterval: 2);
+
+        PivotFieldGroupingDialog.FromPivotField(["Region", "Order Date"], field)
+            .Should()
+            .Be(new PivotFieldGroupingDialogResult(
+                "Order Date",
+                1,
+                PivotFieldGrouping.Month,
+                44562,
+                44927,
+                2,
+                false));
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_FromPivotField_DefaultsToFirstFieldWhenCurrentSettingsAreMissing()
+    {
+        PivotFieldGroupingDialog.FromPivotField(["Region", "Order Date"], currentField: null)
+            .Should()
+            .Be(new PivotFieldGroupingDialogResult(
+                "Region",
+                0,
+                PivotFieldGrouping.None,
+                null,
+                null,
+                null,
+                false));
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_CreateResult_TrimsAndBuildsModel()
+    {
+        var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
+
+        result.Should().Be(new PivotCalculatedFieldDialogResult("Revenue", "Sales-Cost"));
+        result.ToModel().Should().Be(new PivotCalculatedFieldModel("Revenue", "Sales-Cost"));
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_CreateResult_TrimsClampsAndBuildsModel()
+    {
+        var result = PivotCalculatedItemDialog.CreateResult(
+            "  Region  ",
+            sourceFieldIndex: -8,
+            "  East + West  ",
+            "  East+West  ");
+
+        result.Should().Be(new PivotCalculatedItemDialogResult("Region", 0, "East + West", "East+West"));
+        result.ToModel().Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
+    }
 }
