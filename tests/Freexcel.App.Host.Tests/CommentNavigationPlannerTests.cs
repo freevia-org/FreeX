@@ -96,6 +96,25 @@ public sealed class CommentNavigationPlannerTests
     }
 
     [Fact]
+    public void FormatCommentList_ShowsNoteAndThreadWhenCellHasBoth()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var comments = new Dictionary<CellAddress, string>
+        {
+            [address] = "Local note"
+        };
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Threaded reply")
+        };
+
+        CommentNavigationPlanner.FormatCommentList(comments, threadedComments)
+            .Should()
+            .Be(string.Join(Environment.NewLine, "B2: Note: Local note", "B2: Threaded: Threaded reply"));
+    }
+
+    [Fact]
     public void GetDefaultCommentText_ReturnsExistingCommentForSelectedCell()
     {
         var sheetId = SheetId.New();
