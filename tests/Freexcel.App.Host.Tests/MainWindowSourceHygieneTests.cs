@@ -272,6 +272,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ReviewProtectionShareCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var reviewSourcePath = Path.Combine(appHostDirectory, "MainWindow.ReviewCommands.cs");
+
+        File.Exists(reviewSourcePath).Should().BeTrue();
+        var reviewSource = File.ReadAllText(reviewSourcePath);
+
+        mainSource.Should().NotContain("private void SpellCheckBtn_Click(");
+        mainSource.Should().NotContain("private void ReviewNewThreadedCommentBtn_Click(");
+        mainSource.Should().NotContain("private void ProtectSheetBtn_Click(");
+        mainSource.Should().NotContain("private async Task ShareWorkbookAsync(");
+        mainSource.Should().NotContain("private void HelpOnlineBtn_Click(");
+
+        reviewSource.Should().Contain("private void SpellCheckBtn_Click(");
+        reviewSource.Should().Contain("private void ReviewNewThreadedCommentBtn_Click(");
+        reviewSource.Should().Contain("private void ProtectSheetBtn_Click(");
+        reviewSource.Should().Contain("private async Task ShareWorkbookAsync(");
+        reviewSource.Should().Contain("private void HelpOnlineBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -594,7 +617,7 @@ public sealed class MainWindowSourceHygieneTests
     public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
     {
         var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
 
         keyboard.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click)");
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
@@ -614,7 +637,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ReviewCommentNavigation_IncludesThreadedComments()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
 
         source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
@@ -745,7 +768,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void SpellCheckWorkflow_RoutesDialogActionsThroughKnownCorrectionsPlan()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
 
         source.Should().Contain("SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId)");
         source.Should().Contain("SpellCheckDialogAction.ReplaceAll");
@@ -798,11 +821,12 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
         var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
         var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
 
         pageLayoutSource.Should().Contain("new PageBreakDialog");
         dataSource.Should().Contain("new GoalSeekStatusDialog");
-        source.Should().Contain("new WorkbookStatisticsDialog");
-        source.Should().Contain("new AccessibilityCheckerDialog");
+        reviewSource.Should().Contain("new WorkbookStatisticsDialog");
+        reviewSource.Should().Contain("new AccessibilityCheckerDialog");
     }
 
     [Fact]
