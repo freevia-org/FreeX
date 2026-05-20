@@ -47,7 +47,13 @@ public static class GroupedSheetRangePlanner
             TopBottomPercent = source.TopBottomPercent,
             TextRuleText = source.TextRuleText,
             DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue
+            StopIfTrue = source.StopIfTrue,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativePayloadAttributes = source.NativePayloadAttributes,
+            NativePayloadChildXmls = source.NativePayloadChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
         };
         clone.IconSetThresholds.AddRange(source.IconSetThresholds);
         return clone;
