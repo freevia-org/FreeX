@@ -52,6 +52,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabsController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var sheetTabsSourcePath = Path.Combine(appHostDirectory, "MainWindow.SheetTabs.cs");
+
+        File.Exists(sheetTabsSourcePath).Should().BeTrue();
+        var sheetTabsSource = File.ReadAllText(sheetTabsSourcePath);
+
+        mainSource.Should().NotContain("private void RefreshSheetTabs()");
+        mainSource.Should().NotContain("private void SheetTab_MouseLeftButtonDown(");
+        mainSource.Should().NotContain("private void UpdateSheetTabNavigation()");
+        mainSource.Should().NotContain("private void RenameSheetFromTab(");
+        mainSource.Should().NotContain("private void MoveSheetTab(");
+
+        sheetTabsSource.Should().Contain("private void RefreshSheetTabs()");
+        sheetTabsSource.Should().Contain("private void SheetTab_MouseLeftButtonDown(");
+        sheetTabsSource.Should().Contain("private void UpdateSheetTabNavigation()");
+        sheetTabsSource.Should().Contain("private void RenameSheetFromTab(");
+        sheetTabsSource.Should().Contain("private void MoveSheetTab(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
