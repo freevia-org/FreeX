@@ -749,7 +749,9 @@ public sealed class Sheet
                 DateOccurringPeriod  = cf.DateOccurringPeriod,
                 StopIfTrue           = cf.StopIfTrue,
                 NativeAttributes     = cf.NativeAttributes,
-                NativeChildXmls      = cf.NativeChildXmls
+                NativeChildXmls      = cf.NativeChildXmls,
+                NativeContainerAttributes = cf.NativeContainerAttributes,
+                NativeContainerChildXmls = cf.NativeContainerChildXmls
             };
             clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
             copy.ConditionalFormats.Add(clonedFormat);
