@@ -77,6 +77,25 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartStyleDialog_ExposesAutomaticAndCommonStyleOptions()
+    {
+        var options = ChartStyleDialog.GetStyleOptions();
+
+        options.Should().Contain(new ChartStyleOption(null, "Automatic"));
+        options.Select(option => option.StyleId).Should().Contain([2, 4, 10, 26, 42]);
+    }
+
+    [Fact]
+    public void ChartStyleDialog_ResultNormalizesCurrentAndSelectedStyle()
+    {
+        var chart = new ChartModel { ChartStyleId = 99 };
+
+        ChartStyleDialog.FromChart(chart).Should().Be(new ChartStyleDialogResult(48));
+        ChartStyleDialog.CreateResult(0).Should().Be(new ChartStyleDialogResult(1));
+        ChartStyleDialog.CreateResult(null).Should().Be(new ChartStyleDialogResult(null));
+    }
+
+    [Fact]
     public void MoveChartDialog_CreatesObjectAndNewSheetResults()
     {
         MoveChartDialog.CreateObjectResult("Sheet2").Should().Be(
