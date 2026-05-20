@@ -17,6 +17,7 @@ public sealed class SortCommand : IWorkbookCommand
     // Snapshot for undo: list of rows, each row is a list of (address, cell?) pairs
     private List<List<(CellAddress Address, Cell? Cell)>>? _snapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
+    private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
 
@@ -70,13 +71,14 @@ public sealed class SortCommand : IWorkbookCommand
         _snapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
         _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
         _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
-        var rows = new List<(Cell?[] Cells, string?[] Comments, bool HasRowHeight, double RowHeight, bool IsHidden, int OriginalIndex)>(rowCount);
+        var rows = new List<(Cell?[] Cells, string?[] Comments, ThreadedComment?[] ThreadedComments, bool HasRowHeight, double RowHeight, bool IsHidden, int OriginalIndex)>(rowCount);
 
         for (int ri = 0; ri < rowCount; ri++)
         {
             uint row = startRow + (uint)ri;
             var rowCells = new Cell?[colCount];
             var rowComments = new string?[colCount];
+            var rowThreadedComments = new ThreadedComment?[colCount];
             var snapRow  = new List<(CellAddress, Cell?)>(colCount);
             var hasRowHeight = sheet.RowHeights.TryGetValue(row, out var rowHeight);
             var isHidden = sheet.HiddenRows.Contains(row);
@@ -87,17 +89,21 @@ public sealed class SortCommand : IWorkbookCommand
                 var addr  = new CellAddress(_sheetId, row, col);
                 var cell  = sheet.GetCell(addr);
                 sheet.Comments.TryGetValue(addr, out rowComments[ci]);
+                sheet.ThreadedComments.TryGetValue(addr, out rowThreadedComments[ci]);
                 // Two independent clones are required: rowCells is sorted then written back;
                 // snapRow is the undo snapshot. They must be independent copies.
                 rowCells[ci] = cell?.Clone();
                 snapRow.Add((addr, cell?.Clone()));
             }
 
-            rows.Add((rowCells, rowComments, hasRowHeight, rowHeight, isHidden, ri));
+            rows.Add((rowCells, rowComments, rowThreadedComments, hasRowHeight, rowHeight, isHidden, ri));
             _snapshot.Add(snapRow);
         }
 
         _commentSnapshot = sheet.Comments
+            .Where(p => _range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+        _threadedCommentSnapshot = sheet.ThreadedComments
             .Where(p => _range.Contains(p.Key))
             .ToDictionary(p => p.Key, p => p.Value);
 
@@ -142,6 +148,11 @@ public sealed class SortCommand : IWorkbookCommand
                 if (comment is not null)
                     sheet.Comments[addr] = comment;
 
+                sheet.ThreadedComments.Remove(addr);
+                var threadedComment = rows[ri].ThreadedComments[ci];
+                if (threadedComment is not null)
+                    sheet.ThreadedComments[addr] = threadedComment;
+
                 affected.Add(addr);
             }
         }
@@ -166,12 +177,21 @@ public sealed class SortCommand : IWorkbookCommand
         }
 
         foreach (var addr in _range.AllCells())
+        {
             sheet.Comments.Remove(addr);
+            sheet.ThreadedComments.Remove(addr);
+        }
 
         if (_commentSnapshot is not null)
         {
             foreach (var (addr, comment) in _commentSnapshot)
                 sheet.Comments[addr] = comment;
+        }
+
+        if (_threadedCommentSnapshot is not null)
+        {
+            foreach (var (addr, comment) in _threadedCommentSnapshot)
+                sheet.ThreadedComments[addr] = comment;
         }
 
         InsertRowsCommand.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
