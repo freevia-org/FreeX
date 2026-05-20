@@ -38,6 +38,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
         new(FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas", "Flag formulas whose relative reference pattern differs from adjacent formulas."),
         new(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region", "Flag SUM formulas that omit adjacent cells in the region."),
+        new(FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas", "Flag formula cells that are not locked for worksheet protection."),
         new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
         new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
         new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
@@ -129,6 +130,7 @@ public static class FormulaAuditingService
     public const string TwoDigitYearTextDateErrorCode = "TwoDigitYearTextDate";
     public const string InconsistentFormulaErrorCode = "InconsistentFormula";
     public const string FormulaOmitsAdjacentCellsErrorCode = "FormulaOmitsAdjacentCells";
+    public const string UnlockedFormulaCellsErrorCode = "UnlockedFormulaCells";
 
     public static IReadOnlyList<CellAddress> GetDirectPrecedents(Workbook workbook, CellAddress formulaAddress)
     {
@@ -272,6 +274,9 @@ public static class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaOmitsAdjacentCellsErrorCode))
             result.AddRange(FindFormulaOmitsAdjacentCellsIssues(workbook, sheetId));
 
+        if (!workbook.DisabledFormulaErrorCodes.Contains(UnlockedFormulaCellsErrorCode))
+            result.AddRange(FindUnlockedFormulaCellIssues(workbook, sheetId));
+
         return result
             .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
             .ThenBy(issue => issue.Address.Row)
@@ -285,7 +290,8 @@ public static class FormulaAuditingService
         (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
         FormulaRefersToBlankCells(workbook, sheetId, cell) ||
         IsInconsistentFormula(workbook, sheetId, address) ||
-        FormulaOmitsAdjacentCells(workbook, sheetId, address, cell);
+        FormulaOmitsAdjacentCells(workbook, sheetId, address, cell) ||
+        IsUnlockedFormulaCell(workbook, cell);
 
     private static bool HasIgnorableLiteralIssue(Cell cell) =>
         cell.Value is ErrorValue ||
@@ -474,6 +480,33 @@ public static class FormulaAuditingService
             }
         }
     }
+
+    private static IEnumerable<FormulaErrorIssue> FindUnlockedFormulaCellIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || !IsUnlockedFormulaCell(workbook, cell))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    UnlockedFormulaCellsErrorCode,
+                    cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                    "The formula cell is unlocked and may be changed when the worksheet is protected.");
+            }
+        }
+    }
+
+    private static bool IsUnlockedFormulaCell(Workbook workbook, Cell cell) =>
+        cell.HasFormula && !workbook.GetStyle(cell.StyleId).Locked;
 
     private static bool FormulaOmitsAdjacentCells(Workbook workbook, SheetId sheetId, CellAddress formulaAddress, Cell cell)
     {
