@@ -3463,7 +3463,9 @@ public static class BuiltInFunctions
     private static ScalarValue PercentileExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
         if (!double.IsFinite(k)) return ErrorValue.Num;
@@ -3611,9 +3613,13 @@ public static class BuiltInFunctions
     private static ScalarValue Correl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv1) return ErrorValue.Value;
+        var rv1 = args[0] is RangeValue range1
+            ? range1
+            : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue rv2) return ErrorValue.Value;
+        var rv2 = args[1] is RangeValue range2
+            ? range2
+            : SingleCellArray(args[1]);
         var (xs, xErr) = CollectRangeNumbers(rv1);
         if (xErr is not null) return xErr;
         var (ys, yErr) = CollectRangeNumbers(rv2);
@@ -3639,9 +3645,13 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue knownY) return ErrorValue.Value;
+        var knownY = args[1] is RangeValue knownYRange
+            ? knownYRange
+            : SingleCellArray(args[1]);
         if (args[2] is ErrorValue e2) return e2;
-        if (args[2] is not RangeValue knownX) return ErrorValue.Value;
+        var knownX = args[2] is RangeValue knownXRange
+            ? knownXRange
+            : SingleCellArray(args[2]);
         double x    = ToNumber(args[0]);
         if (!double.IsFinite(x)) return ErrorValue.Num;
         var (ys, yErr) = CollectRangeNumbers(knownY);
