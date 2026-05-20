@@ -12109,6 +12109,37 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeCustomFilter()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableCustomFilterTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeCustomFilter: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var filter = table.FilterColumns.Should().ContainSingle().Subject;
+        filter.ColumnId.Should().Be(1);
+        filter.Values.Should().BeEmpty();
+        filter.NativeFilterXml.Should().Contain("customFilters");
+        filter.NativeFilterXml.Should().Contain("greaterThan");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("customFilters");
+        tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
@@ -13683,7 +13714,8 @@ public class FileAdapterSmokeTests
         MemoryStream packageStream,
         bool includeTotalsRow = false,
         bool includeFilterValues = false,
-        bool includeColumnFormulas = false)
+        bool includeColumnFormulas = false,
+        bool includeCustomFilter = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13725,6 +13757,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeCustomFilter
+                            ? StructuredTableWithCustomFilterXml
                         : includeColumnFormulas
                             ? StructuredTableWithColumnFormulasXml
                         : MinimalStructuredTableXml));
@@ -14674,6 +14708,32 @@ public class FileAdapterSmokeTests
               <calculatedColumnFormula>SUM(Table1[@[Q1]:[Q2]])</calculatedColumnFormula>
               <totalsRowFormula>SUBTOTAL(109,[Amount])</totalsRowFormula>
             </tableColumn>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithCustomFilterXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="1">
+              <customFilters>
+                <customFilter operator="greaterThan" val="10"/>
+              </customFilters>
+            </filterColumn>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"

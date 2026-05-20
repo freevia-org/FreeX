@@ -1275,6 +1275,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Select(column =>
             {
                 var filters = column.Element(workbookNs + "filters");
+                var nativeFilter = ReadStructuredTableNativeFilterXml(column, workbookNs);
                 return new StructuredTableFilterColumnModel(
                     ReadIntAttribute(column, "colId") ?? -1,
                     filters?
@@ -1283,10 +1284,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         .Where(value => !string.IsNullOrWhiteSpace(value))
                         .Select(value => value!)
                         .ToList() ?? [],
-                    ReadBoolAttribute(filters, "blank"));
+                    ReadBoolAttribute(filters, "blank"),
+                    nativeFilter);
             })
-            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank))
+            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || !string.IsNullOrWhiteSpace(column.NativeFilterXml)))
             .ToList();
+    }
+
+    private static string? ReadStructuredTableNativeFilterXml(XElement filterColumn, XNamespace workbookNs)
+    {
+        var nativeFilter = filterColumn.Elements()
+            .FirstOrDefault(element => element.Name != workbookNs + "filters");
+        return nativeFilter?.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
     }
 
     private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
@@ -8957,13 +8966,37 @@ public sealed class XlsxFileAdapter : IFileAdapter
         new(
             workbookNs + "autoFilter",
             new XAttribute("ref", table.Range.ToString()),
-            table.FilterColumns.Select(filterColumn => new XElement(
-                workbookNs + "filterColumn",
-                new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)),
-                new XElement(
-                    workbookNs + "filters",
-                    filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
-                    filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))))));
+            table.FilterColumns.Select(filterColumn => ToStructuredTableFilterColumnXml(filterColumn, workbookNs)));
+
+    private static XElement ToStructuredTableFilterColumnXml(StructuredTableFilterColumnModel filterColumn, XNamespace workbookNs)
+    {
+        var element = new XElement(
+            workbookNs + "filterColumn",
+            new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
+        if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
+        {
+            element.Add(new XElement(
+                workbookNs + "filters",
+                filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
+                filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filterColumn.NativeFilterXml))
+        {
+            try
+            {
+                var nativeFilter = XElement.Parse(filterColumn.NativeFilterXml);
+                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters")
+                    element.Add(nativeFilter);
+            }
+            catch
+            {
+                // Ignore malformed native filter payloads from older saves; value filters above remain valid.
+            }
+        }
+
+        return element;
+    }
 
     private static int ExtractTrailingNumber(string text)
     {
