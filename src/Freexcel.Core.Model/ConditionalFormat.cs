@@ -146,4 +146,10 @@ public sealed class ConditionalFormat
 
     /// <summary>Native cfRule child elements not modeled by Freexcel, retained for XLSX round-trip fidelity.</summary>
     public IReadOnlyList<string>? NativeChildXmls { get; set; }
+
+    /// <summary>Native conditionalFormatting attributes not modeled by Freexcel, retained for XLSX round-trip fidelity.</summary>
+    public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; set; }
+
+    /// <summary>Native conditionalFormatting child elements not modeled by Freexcel, retained for XLSX round-trip fidelity.</summary>
+    public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
 }

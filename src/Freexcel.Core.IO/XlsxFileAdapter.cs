@@ -3315,6 +3315,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs);
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
+                    ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
                 }
                 else if (string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
@@ -3323,6 +3324,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs);
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
+                    ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
                 }
                 else if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
@@ -3340,6 +3342,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     };
                     format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
+                    ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
                 }
                 else if (TryMapLongTailConditionalFormatRule(type, out var mappedType))
@@ -3361,6 +3364,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         FormatIfTrue = formatIfTrue
                     };
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
+                    ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
                 }
             }
@@ -3381,6 +3385,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var nativeChildren = ReadNativeConditionalFormatRuleChildXmls(rule, worksheetNs);
         if (nativeChildren.Count > 0)
             format.NativeChildXmls = nativeChildren;
+    }
+
+    private static void ApplyNativeConditionalFormattingContainerMetadata(
+        ConditionalFormat format,
+        XElement conditionalFormatting,
+        XNamespace worksheetNs)
+    {
+        var nativeAttributes = ReadNativeConditionalFormattingContainerAttributes(conditionalFormatting);
+        if (nativeAttributes.Count > 0)
+            format.NativeContainerAttributes = nativeAttributes;
+
+        var nativeChildren = ReadNativeConditionalFormattingContainerChildXmls(conditionalFormatting, worksheetNs);
+        if (nativeChildren.Count > 0)
+            format.NativeContainerChildXmls = nativeChildren;
     }
 
     private static Dictionary<string, string> ReadNativeConditionalFormatRuleAttributes(XElement rule)
@@ -3405,6 +3423,22 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
     }
+
+    private static Dictionary<string, string> ReadNativeConditionalFormattingContainerAttributes(XElement conditionalFormatting)
+    {
+        string[] modeledAttributes = ["sqref"];
+        return conditionalFormatting.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static List<string> ReadNativeConditionalFormattingContainerChildXmls(
+        XElement conditionalFormatting,
+        XNamespace worksheetNs) =>
+        conditionalFormatting.Elements()
+            .Where(element => element.Name != worksheetNs + "cfRule")
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
 
     private static bool TryMapLongTailConditionalFormatRule(string? type, out CfRuleType ruleType)
     {
@@ -3643,7 +3677,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             DateOccurringPeriod = source.DateOccurringPeriod,
             StopIfTrue = source.StopIfTrue,
             NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
         };
         format.IconSetThresholds.AddRange(source.IconSetThresholds);
         return format;
@@ -10278,9 +10314,41 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ConditionalFormat cf,
         XNamespace worksheetNs,
         IReadOnlyDictionary<Guid, int> differentialStyleIds) =>
-        new(worksheetNs + "conditionalFormatting",
-            new XAttribute("sqref", cf.AppliesTo.ToString()),
-            ToAdvancedCfRuleXml(cf, worksheetNs, differentialStyleIds));
+        AddAdvancedConditionalFormattingNativeMetadata(
+            new XElement(
+                worksheetNs + "conditionalFormatting",
+                new XAttribute("sqref", cf.AppliesTo.ToString()),
+                ToAdvancedCfRuleXml(cf, worksheetNs, differentialStyleIds)),
+            cf,
+            worksheetNs);
+
+    private static XElement AddAdvancedConditionalFormattingNativeMetadata(
+        XElement element,
+        ConditionalFormat cf,
+        XNamespace worksheetNs)
+    {
+        foreach (var (name, value) in cf.NativeContainerAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in (cf.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "cfRule")
+                    element.Add(nativeChild);
+            }
+            catch
+            {
+                // Ignore malformed native conditional-format container payloads from older saves.
+            }
+        }
+
+        return element;
+    }
 
     private static XElement ToAdvancedCfRuleXml(
         ConditionalFormat cf,
