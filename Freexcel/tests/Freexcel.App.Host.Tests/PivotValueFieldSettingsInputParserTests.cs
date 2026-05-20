@@ -54,6 +54,13 @@ public sealed class PivotValueFieldSettingsInputParserTests
     [InlineData("Number with thousands", 4)]
     [InlineData("Percentage", 10)]
     [InlineData("Date", 14)]
+    [InlineData("Currency", 7)]
+    [InlineData("Short Date", 14)]
+    [InlineData("Long Date", 15)]
+    [InlineData("Time", 21)]
+    [InlineData("Fraction", 12)]
+    [InlineData("Scientific", 11)]
+    [InlineData("Text", 49)]
     [InlineData("Accounting", 44)]
     public void ResolvePresetNumberFormatId_MapsExcelStylePresetLabels(string label, int? expected)
     {
@@ -66,6 +73,20 @@ public sealed class PivotValueFieldSettingsInputParserTests
         PivotValueFieldSettingsInputParser.NumberFormatPresets
             .Select(preset => preset.Label)
             .Should()
-            .Contain(["General", "Number", "Number with thousands", "Percentage", "Date", "Accounting"]);
+            .Contain([
+                "General",
+                "Number",
+                "Number with thousands",
+                "Currency",
+                "Accounting",
+                "Date",
+                "Short Date",
+                "Long Date",
+                "Time",
+                "Percentage",
+                "Fraction",
+                "Scientific",
+                "Text"
+            ]);
     }
 }

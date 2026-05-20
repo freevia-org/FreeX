@@ -439,6 +439,30 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void OutlineGroupingCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var outlineSourcePath = Path.Combine(appHostDirectory, "MainWindow.OutlineCommands.cs");
+
+        File.Exists(outlineSourcePath).Should().BeTrue();
+        var outlineSource = File.ReadAllText(outlineSourcePath);
+
+        mainSource.Should().NotContain("private void GroupRowsBtn_Click(");
+        mainSource.Should().NotContain("private void UngroupRowsBtn_Click(");
+        mainSource.Should().NotContain("private void CollapseGroupBtn_Click(");
+        mainSource.Should().NotContain("private void ExpandGroupBtn_Click(");
+        mainSource.Should().NotContain("private IWorkbookCommand CreateGroupCommand(");
+
+        outlineSource.Should().Contain("private void GroupRowsBtn_Click(");
+        outlineSource.Should().Contain("private void UngroupRowsBtn_Click(");
+        outlineSource.Should().Contain("private void CollapseGroupBtn_Click(");
+        outlineSource.Should().Contain("private void ExpandGroupBtn_Click(");
+        outlineSource.Should().Contain("private IWorkbookCommand CreateGroupCommand(");
+        outlineSource.Should().Contain("OutlineGroupingPlanner.GetNextOutlineLevel");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
