@@ -75,6 +75,31 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ViewWindowAndZoomController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var viewSourcePath = Path.Combine(appHostDirectory, "MainWindow.ViewCommands.cs");
+
+        File.Exists(viewSourcePath).Should().BeTrue();
+        var viewSource = File.ReadAllText(viewSourcePath);
+
+        mainSource.Should().NotContain("private void ViewGridlinesChk_Changed(");
+        mainSource.Should().NotContain("private void SetWorksheetViewMode(");
+        mainSource.Should().NotContain("private void FreezeAtSelectionMenuItem_Click(");
+        mainSource.Should().NotContain("private void ZoomInBtn_Click(");
+        mainSource.Should().NotContain("private void FormulaBarExpandBtn_Click(");
+        mainSource.Should().NotContain("private void RibbonScroll_PreviewMouseWheel(");
+
+        viewSource.Should().Contain("private void ViewGridlinesChk_Changed(");
+        viewSource.Should().Contain("private void SetWorksheetViewMode(");
+        viewSource.Should().Contain("private void FreezeAtSelectionMenuItem_Click(");
+        viewSource.Should().Contain("private void ZoomInBtn_Click(");
+        viewSource.Should().Contain("private void FormulaBarExpandBtn_Click(");
+        viewSource.Should().Contain("private void RibbonScroll_PreviewMouseWheel(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -137,7 +162,7 @@ public sealed class MainWindowSourceHygieneTests
     public void ArrangeAllMenu_ReflectsStoredWorkbookArrangement()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ViewCommands.cs"));
 
         xaml.Should().Contain("Opened=\"ArrangeAllContextMenu_Opened\"");
         xaml.Should().Contain("IsCheckable=\"True\"");
