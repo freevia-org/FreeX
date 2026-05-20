@@ -199,9 +199,16 @@ public sealed class ManageConditionalFormatsDialog : Window
         // Column 5 - Stop If True
         var stopIfTrueCol = new GridViewColumn { Header = "Stop If True", Width = 85 };
         var stopIfTrueTemplate = new DataTemplate();
-        var stopIfTrueFactory  = new FrameworkElementFactory(typeof(TextBlock));
-        stopIfTrueFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new StopIfTrueConverter() });
-        stopIfTrueFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        var stopIfTrueFactory  = new FrameworkElementFactory(typeof(CheckBox));
+        stopIfTrueFactory.SetValue(CheckBox.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        stopIfTrueFactory.SetValue(CheckBox.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        stopIfTrueFactory.SetBinding(
+            System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new Binding(nameof(ConditionalFormat.StopIfTrue))
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            });
         stopIfTrueTemplate.VisualTree = stopIfTrueFactory;
         stopIfTrueCol.CellTemplate = stopIfTrueTemplate;
         gridView.Columns.Add(stopIfTrueCol);
