@@ -72,8 +72,12 @@ public static partial class SpellCheckService
     public static IReadOnlyList<SpellingIssue> FindIssuesInCell(CellAddress address, string text)
     {
         var issues = new List<SpellingIssue>();
+        var ignoredSpans = FindIgnoredSpans(text);
         foreach (Match match in WordRegex().Matches(text))
         {
+            if (IsInIgnoredSpan(match.Index, ignoredSpans))
+                continue;
+
             if (KnownCorrections.TryGetValue(match.Value, out var suggestion))
                 issues.Add(new SpellingIssue(address, match.Value, suggestion, text));
         }
@@ -134,10 +138,14 @@ public static partial class SpellCheckService
     private static string ApplyKnownCorrections(string text, out int replacementCount)
     {
         var count = 0;
+        var ignoredSpans = FindIgnoredSpans(text);
         var corrected = WordRegex().Replace(
             text,
             match =>
             {
+                if (IsInIgnoredSpan(match.Index, ignoredSpans))
+                    return match.Value;
+
                 if (!KnownCorrections.TryGetValue(match.Value, out var suggestion))
                     return match.Value;
 
@@ -149,6 +157,15 @@ public static partial class SpellCheckService
         replacementCount = count;
         return corrected;
     }
+
+    private static IReadOnlyList<Range> FindIgnoredSpans(string text) =>
+        IgnoredAddressSpanRegex()
+            .Matches(text)
+            .Select(match => new Range(match.Index, match.Index + match.Length))
+            .ToList();
+
+    private static bool IsInIgnoredSpan(int index, IReadOnlyList<Range> ignoredSpans) =>
+        ignoredSpans.Any(span => index >= span.Start.Value && index < span.End.Value);
 
     private static IEnumerable<Sheet> EnumerateTargetSheets(Workbook workbook, SheetId? sheetId)
     {
@@ -175,4 +192,14 @@ public static partial class SpellCheckService
 
     [GeneratedRegex(@"\b[\p{L}']+\b")]
     private static partial Regex WordRegex();
+
+    [GeneratedRegex(@"(?ix)
+        (?:
+            \b(?:https?|ftp)://[^\s,;]+
+          | \bwww\.[^\s,;]+
+          | \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+          | \b[A-Z]:\\[^\s,;]+
+          | \bfile://[^\s,;]+
+        )")]
+    private static partial Regex IgnoredAddressSpanRegex();
 }
