@@ -173,6 +173,9 @@ public sealed class ChartModel
     public bool ShowDataInHiddenRowsAndColumns { get; set; }
     public ChartProtectionModel? Protection { get; set; }
     public ChartPrintSettingsModel? PrintSettings { get; set; }
+    public int? BarGapWidth { get; set; }
+    public int? BarOverlap { get; set; }
+    public bool? VaryColorsByPoint { get; set; }
     public bool FirstRowIsHeader { get; set; } = true;
     public bool FirstColIsCategories { get; set; } = true;
     public string? Title { get; set; }
