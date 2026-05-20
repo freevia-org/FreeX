@@ -141,6 +141,99 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
     }
 }
 
+public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
+{
+    public const uint InitialTargetRow = 3;
+    public const uint InitialTargetColumn = 1;
+
+    private readonly GridRange _sourceRange;
+    private readonly string _name;
+    private readonly IReadOnlyList<int> _rowFieldIndexes;
+    private readonly IReadOnlyList<int> _dataFieldIndexes;
+    private SheetId? _createdSheetId;
+    private AddPivotTableCommand? _innerCommand;
+
+    public string Label => "Insert PivotTable";
+    public SheetId? CreatedSheetId => _createdSheetId;
+
+    public AddPivotTableToNewWorksheetCommand(
+        GridRange sourceRange,
+        string name,
+        IReadOnlyList<int> rowFieldIndexes,
+        IReadOnlyList<int> dataFieldIndexes)
+    {
+        _sourceRange = sourceRange;
+        _name = name;
+        _rowFieldIndexes = rowFieldIndexes;
+        _dataFieldIndexes = dataFieldIndexes;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var sheet = ctx.Workbook.AddSheet(GetUniquePivotSheetName(ctx.Workbook));
+        _createdSheetId = sheet.Id;
+        var targetRange = CreateInitialTargetRange(sheet.Id, _sourceRange, _rowFieldIndexes.Count, _dataFieldIndexes.Count);
+        _innerCommand = new AddPivotTableCommand(
+            sheet.Id,
+            _sourceRange,
+            targetRange,
+            _name,
+            _rowFieldIndexes,
+            _dataFieldIndexes);
+
+        var outcome = _innerCommand.Apply(ctx);
+        if (outcome.Success)
+            return outcome;
+
+        ctx.Workbook.RemoveSheet(sheet.Id);
+        _createdSheetId = null;
+        _innerCommand = null;
+        return outcome;
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_createdSheetId is null)
+            return;
+
+        _innerCommand?.Revert(ctx);
+        ctx.Workbook.RemoveSheet(_createdSheetId.Value);
+        _createdSheetId = null;
+        _innerCommand = null;
+    }
+
+    private static GridRange CreateInitialTargetRange(SheetId sheetId, GridRange sourceRange, int rowFieldCount, int dataFieldCount)
+    {
+        var start = new CellAddress(sheetId, InitialTargetRow, InitialTargetColumn);
+        var outputColumns = Math.Max(1, rowFieldCount) + Math.Max(1, dataFieldCount);
+        var outputRows = Math.Max(3u, sourceRange.RowCount + 2);
+        var endRow = Math.Min(CellAddress.MaxRow, (uint)Math.Min(uint.MaxValue, (ulong)start.Row + outputRows - 1));
+        var endCol = Math.Min(CellAddress.MaxCol, (uint)Math.Min(uint.MaxValue, (ulong)start.Col + (uint)outputColumns - 1));
+        var end = new CellAddress(
+            sheetId,
+            endRow,
+            endCol);
+        return new GridRange(start, end);
+    }
+
+    private static string GetUniquePivotSheetName(Workbook workbook)
+    {
+        const string baseName = "PivotTable";
+        if (workbook.ValidateSheetName(baseName) is null)
+            return baseName;
+
+        for (var i = 2; ; i++)
+        {
+            var candidate = $"{baseName} {i}";
+            if (workbook.ValidateSheetName(candidate) is null)
+                return candidate;
+        }
+    }
+}
+
 public sealed class RefreshPivotTableCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;

@@ -449,6 +449,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InsertPivotTable_NewWorksheetDestination_UsesUndoableCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
+        source.Should().Contain("command.CreatedSheetId");
+        source.Should().NotContain("New chart-style PivotTable sheets are tracked for Wave 2");
+    }
+
+    [Fact]
     public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
