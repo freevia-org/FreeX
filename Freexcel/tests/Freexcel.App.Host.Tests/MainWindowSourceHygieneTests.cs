@@ -850,7 +850,7 @@ public sealed class MainWindowSourceHygieneTests
     public void HomeNumberFormatDropdown_ExposesExcelFormatFamiliesFromOneCatalog()
     {
         var source =
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Startup.cs")) +
             File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
 
         source.Should().Contain("NumberFormatOptions.Select(option => option.Label)");
@@ -1018,7 +1018,7 @@ public sealed class MainWindowSourceHygieneTests
     public void FormatPainterApplication_UsesTargetSelectionRangeWhenAvailable()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormatPainter.cs"));
-        var mainSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
 
         source.Should().Contain("private SheetId? _formatPainterSourceSheetId;");
         source.Should().Contain("private GridRange? _formatPainterSourceRange;");
@@ -1028,9 +1028,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
         source.Should().Contain("FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange)");
         source.Should().Contain("new CompositeWorkbookCommand(\"Format Painter\", targetSheetIds.Select(CreateCommand).ToList())");
-        mainSource.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
-        mainSource.Should().Contain("selectedRange.Contains(newAddr)");
-        mainSource.Should().Contain("TryApplyFormatPainter(selectedRange)");
+        selectionSource.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
+        selectionSource.Should().Contain("selectedRange.Contains(newAddr)");
+        selectionSource.Should().Contain("TryApplyFormatPainter(selectedRange)");
         source.Should().NotContain("var targetRange = new GridRange(addr, addr);");
     }
 
@@ -1057,7 +1057,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
@@ -1118,7 +1118,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuQuickAnalysis_ReusesCtrlQPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("case WorksheetContextMenuAction.QuickAnalysis:");
         source.Should().Contain("ShowQuickAnalysisMenu();");
@@ -1127,7 +1127,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenu_UsesAccessKeyHeaders()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("Header = command.AccessHeader");
     }
@@ -1147,7 +1147,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuNewComment_ReusesThreadedCommentWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("case WorksheetContextMenuAction.NewComment:");
         source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());");
@@ -1198,7 +1198,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
 
         source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
         source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
@@ -1224,7 +1224,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_UsesExcelStyleMenuPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
         var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
         source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)");
@@ -1441,5 +1441,38 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("PictureResetCropMenuItem_Click");
         source.Should().Contain("new SetPictureCropCommand(");
         source.Should().Contain("0, 0, 0, 0");
+    }
+
+    [Fact]
+    public void StartupController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var startupSourcePath = Path.Combine(appHostDirectory, "MainWindow.Startup.cs");
+
+        File.Exists(startupSourcePath).Should().BeTrue();
+        var startupSource = File.ReadAllText(startupSourcePath);
+
+        mainSource.Should().NotContain("private void MainWindow_Loaded(");
+        mainSource.Should().NotContain("NumberFormatOptions");
+
+        startupSource.Should().Contain("private void MainWindow_Loaded(");
+        startupSource.Should().Contain("NumberFormatOptions");
+        startupSource.Should().Contain("CreateNewWorkbook();");
+        startupSource.Should().Contain("NormalizeRibbonSurface(forceCompact: true);");
+    }
+
+    [Fact]
+    public void GridResizeSnapshots_LiveWithGridStatusController()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var gridStatusSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.GridStatus.cs"));
+
+        mainSource.Should().NotContain("private sealed record ColumnResizeSnapshot(");
+        mainSource.Should().NotContain("private sealed record RowResizeSnapshot(");
+
+        gridStatusSource.Should().Contain("private sealed record ColumnResizeSnapshot(");
+        gridStatusSource.Should().Contain("private sealed record RowResizeSnapshot(");
     }
 }
