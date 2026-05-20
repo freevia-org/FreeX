@@ -56,24 +56,24 @@
             <TextBlock Grid.Row="7" Grid.Column="0" Text="Right:" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="FooterRightBox" Grid.Row="7" Grid.Column="1"/>
 
-            <CheckBox x:Name="DifferentFirstPageBox" Grid.Row="8" Grid.Column="1" Content="Different first page" Margin="0,14,0,8"/>
+            <CheckBox x:Name="DifferentFirstPageBox" Grid.Row="8" Grid.Column="1" Content="_Different first page" Margin="0,14,0,8"/>
             <TextBlock Grid.Row="9" Grid.Column="0" Text="First header:" VerticalAlignment="Center" Margin="0,0,8,8"/>
             <TextBox x:Name="FirstHeaderBox" Grid.Row="9" Grid.Column="1" Margin="0,0,0,8"/>
             <TextBlock Grid.Row="10" Grid.Column="0" Text="First footer:" VerticalAlignment="Center" Margin="0,0,8,8"/>
             <TextBox x:Name="FirstFooterBox" Grid.Row="10" Grid.Column="1" Margin="0,0,0,8"/>
 
-            <CheckBox x:Name="DifferentOddEvenBox" Grid.Row="11" Grid.Column="1" Content="Different odd and even pages" Margin="0,8,0,8"/>
+            <CheckBox x:Name="DifferentOddEvenBox" Grid.Row="11" Grid.Column="1" Content="Different _odd and even pages" Margin="0,8,0,8"/>
             <TextBlock Grid.Row="12" Grid.Column="0" Text="Even header:" VerticalAlignment="Center" Margin="0,0,8,8"/>
             <TextBox x:Name="EvenHeaderBox" Grid.Row="12" Grid.Column="1" Margin="0,0,0,8"/>
             <TextBlock Grid.Row="13" Grid.Column="0" Text="Even footer:" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="EvenFooterBox" Grid.Row="13" Grid.Column="1"/>
-            <CheckBox x:Name="ScaleWithDocumentBox" Grid.Row="14" Grid.Column="1" Content="Scale with document" Margin="0,14,0,8"/>
-            <CheckBox x:Name="AlignWithMarginsBox" Grid.Row="15" Grid.Column="1" Content="Align with page margins"/>
+            <CheckBox x:Name="ScaleWithDocumentBox" Grid.Row="14" Grid.Column="1" Content="_Scale with document" Margin="0,14,0,8"/>
+            <CheckBox x:Name="AlignWithMarginsBox" Grid.Row="15" Grid.Column="1" Content="_Align with page margins"/>
         </Grid>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="Cancel" Width="72" IsCancel="True"/>
+            <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
+            <Button Content="_Cancel" Width="72" IsCancel="True"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -6686,6 +6686,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var sourceSheetData = sourceWorksheetXml.Root?.Element(workbookNs + "sheetData");
             var sourceSheetProtection = sourceWorksheetXml.Root?.Element(workbookNs + "sheetProtection");
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
+            var sourceHyperlinks = sourceWorksheetXml.Root?.Element(workbookNs + "hyperlinks");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
             if (sourceBlocks.Count == 0 &&
                 sourceSheetProperties is null &&
@@ -6697,6 +6698,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sourceSheetData is null &&
                 sourceSheetProtection is null &&
                 sourceSheetViews is null &&
+                sourceHyperlinks is null &&
                 sourceExtensionList is null)
             {
                 continue;
@@ -6739,6 +6741,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs))
                 changed = true;
             if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs))
+                changed = true;
+            if (MergeWorksheetHyperlinkMetadata(sourceHyperlinks, targetRoot, workbookNs, relNs))
                 changed = true;
             foreach (var sourceBlock in sourceBlocks)
             {
@@ -6869,6 +6873,53 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (changed)
                 ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    private static bool MergeWorksheetHyperlinkMetadata(
+        XElement? sourceHyperlinks,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        XNamespace relNs)
+    {
+        if (sourceHyperlinks is null)
+            return false;
+
+        var targetHyperlinks = targetRoot.Element(workbookNs + "hyperlinks");
+        if (targetHyperlinks is null)
+            return false;
+
+        var targetByReference = targetHyperlinks
+            .Elements(workbookNs + "hyperlink")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ref")?.Value))
+            .ToDictionary(
+                element => element.Attribute("ref")!.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var sourceHyperlink in sourceHyperlinks.Elements(workbookNs + "hyperlink"))
+        {
+            var reference = sourceHyperlink.Attribute("ref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference) ||
+                !targetByReference.TryGetValue(reference, out var targetHyperlink))
+            {
+                continue;
+            }
+
+            foreach (var attribute in sourceHyperlink.Attributes())
+            {
+                if (attribute.Name.LocalName == "ref" ||
+                    attribute.Name == relNs + "id" ||
+                    targetHyperlink.Attribute(attribute.Name) is not null)
+                {
+                    continue;
+                }
+
+                targetHyperlink.SetAttributeValue(attribute.Name, attribute.Value);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     private static bool MergeWorksheetColumnAttributes(XElement? sourceColumns, XElement targetRoot, XNamespace workbookNs)
