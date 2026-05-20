@@ -218,6 +218,45 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsInconsistentFormulaInRow()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromFormula("A2*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("B2*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), Cell.FromFormula("A2*2"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.InconsistentFormulaErrorCode).Subject;
+
+        issue.Cell.Should().Be("C3");
+        issue.FormulaText.Should().Be("=A2*2");
+        issue.Description.Should().Contain("inconsistent with nearby formulas");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_ReturnsInconsistentFormulaInColumn()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromFormula("A1*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("A2*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("A1*2"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.InconsistentFormulaErrorCode).Subject;
+
+        issue.Cell.Should().Be("B3");
+        issue.FormulaText.Should().Be("=A1*2");
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledFormulaRefersToBlankCellsRule()
     {
         var wb = new Workbook("test");
@@ -290,6 +329,22 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledInconsistentFormulaRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromFormula("A2*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("B2*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), Cell.FromFormula("A2*2"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.InconsistentFormulaErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void SetFormulaErrorIgnoredCommand_SetsStateAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -353,6 +408,31 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresInconsistentFormulaIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromFormula("A2*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("B2*2"));
+        sheet.SetCell(address, Cell.FromFormula("A2*2"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.InconsistentFormulaErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -382,6 +462,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Null.Code, "Formulas with invalid intersections"),
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
+                (FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas"),
                 (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
                 (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
