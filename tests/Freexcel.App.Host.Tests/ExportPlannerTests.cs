@@ -68,6 +68,32 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeSelectionAndOpenAfterPublish()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: true);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Selection; document properties are included; open after publishing.");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_CreateResult_NormalizesExcelOptions()
+    {
+        ExportOptionsDialog.CreateResult(
+                ExportContentScope.Selection,
+                includeDocumentProperties: true,
+                openAfterPublish: true)
+            .Should()
+            .Be(new ExportOptions(
+                ExportContentScope.Selection,
+                IncludeDocumentProperties: true,
+                OpenAfterPublish: true));
+    }
+
+    [Fact]
     public void DescribeRequest_ExplainsPdfFallbackAndSupportedOptions()
     {
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
@@ -187,5 +213,16 @@ public class ExportPlannerTests
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printExport.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
+    }
+
+    [Fact]
+    public void ExportWorkflow_UsesOptionsDialogSelectionRangeAndOpenAfterPublish()
+    {
+        var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
+
+        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null)");
+        printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result)");
+        printExport.Should().Contain("ResolveExportRange(request.Options)");
+        printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 }

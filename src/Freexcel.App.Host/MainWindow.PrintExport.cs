@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Windows;
 using Freexcel.Core.Model;
 
@@ -19,6 +20,10 @@ public partial class MainWindow
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
+        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null) { Owner = this };
+        if (optionsDialog.ShowDialog() != true)
+            return;
+
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
             Title      = "Export as PDF / XPS",
@@ -28,18 +33,19 @@ public partial class MainWindow
         };
         if (saveDlg.ShowDialog() != true) return;
 
-        var request = ExportPlanner.PlanExport(saveDlg.FileName);
-        if (request.Format == ExportFormat.Pdf)
-            ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request));
-        else
-            ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options));
+        var request = ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result);
+        var exported = request.Format == ExportFormat.Pdf
+            ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), ResolveExportRange(request.Options))
+            : ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), ResolveExportRange(request.Options));
+        if (exported && request.Options.OpenAfterPublish)
+            OpenExportedFile(request.ActualPath);
     }
 
-    private bool ExportAsPdf(string pdfPath, string optionSummary)
+    private bool ExportAsPdf(string pdfPath, string optionSummary, GridRange? printRangeOverride = null)
     {
         try
         {
-            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, printRangeOverride);
             PdfDocumentExporter.Save(doc, pdfPath);
 
             MessageBox.Show(
@@ -67,11 +73,11 @@ public partial class MainWindow
     /// showing a print dialog.
     /// </summary>
 
-    private bool ExportAsXps(string xpsPath, string? optionSummary = null, bool showSuccessMessage = true)
+    private bool ExportAsXps(string xpsPath, string? optionSummary = null, GridRange? printRangeOverride = null, bool showSuccessMessage = true)
     {
         try
         {
-            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, printRangeOverride);
 
             // Open the XPS package for write
             var pkg = System.IO.Packaging.Package.Open(
@@ -118,6 +124,30 @@ public partial class MainWindow
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return false;
+        }
+    }
+
+    private GridRange? ResolveExportRange(ExportOptions options) =>
+        options.Scope == ExportContentScope.Selection
+            ? SheetGrid.SelectedRange
+            : null;
+
+    private static void OpenExportedFile(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Export has already succeeded; opening the shell association is best effort.
         }
     }
 }
