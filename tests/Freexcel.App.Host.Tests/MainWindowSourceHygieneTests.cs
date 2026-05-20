@@ -649,6 +649,40 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void CommandExecutionController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var commandSourcePath = Path.Combine(appHostDirectory, "MainWindow.CommandExecution.cs");
+
+        File.Exists(commandSourcePath).Should().BeTrue();
+        var commandSource = File.ReadAllText(commandSourcePath);
+
+        mainSource.Should().NotContain("private static void ShowCommandError(");
+        mainSource.Should().NotContain("private bool TryExecuteCommand(");
+        mainSource.Should().NotContain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
+        mainSource.Should().NotContain("private bool TryExecuteEditCells(");
+        mainSource.Should().NotContain("private bool TryExecuteRepeatableGroupedSheetCommand(");
+        mainSource.Should().NotContain("private bool TryExecuteRepeatableCurrentRangeCommand(");
+        mainSource.Should().NotContain("private bool TryExecuteRepeatableChartLayout(");
+        mainSource.Should().NotContain("private void ExecuteUndo(");
+        mainSource.Should().NotContain("private void ExecuteRepeatLast(");
+        mainSource.Should().NotContain("private IWorkbookCommand CreateSingleCellEditCommand(");
+
+        commandSource.Should().Contain("private static void ShowCommandError(");
+        commandSource.Should().Contain("private bool TryExecuteCommand(");
+        commandSource.Should().Contain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
+        commandSource.Should().Contain("private bool TryExecuteEditCells(");
+        commandSource.Should().Contain("private bool TryExecuteRepeatableGroupedSheetCommand(");
+        commandSource.Should().Contain("private bool TryExecuteRepeatableCurrentRangeCommand(");
+        commandSource.Should().Contain("private bool TryExecuteRepeatableChartLayout(");
+        commandSource.Should().Contain("private void ExecuteUndo(");
+        commandSource.Should().Contain("private void ExecuteRepeatLast(");
+        commandSource.Should().Contain("private IWorkbookCommand CreateSingleCellEditCommand(");
+        commandSource.Should().Contain("ExecuteRepeatable");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
