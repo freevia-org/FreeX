@@ -16,6 +16,10 @@ public sealed class ConditionalFormatDialogTests
     [InlineData("Icon Set", typeof(IconSetRuleDialog))]
     [InlineData("Date Occurring", typeof(HighlightCellsRuleDialog))]
     [InlineData("Duplicate Values", typeof(HighlightCellsRuleDialog))]
+    [InlineData("Blanks", typeof(HighlightCellsRuleDialog))]
+    [InlineData("No Blanks", typeof(HighlightCellsRuleDialog))]
+    [InlineData("Errors", typeof(HighlightCellsRuleDialog))]
+    [InlineData("No Errors", typeof(HighlightCellsRuleDialog))]
     [InlineData("Formula", typeof(NewConditionalFormatRuleDialog))]
     public void Factory_CreatesRuleFamilySpecificDialogs(string ruleType, Type expectedDialogType)
     {
@@ -103,6 +107,27 @@ public sealed class ConditionalFormatDialogTests
 
             dialog.ResultRule.Should().NotBeNull();
             dialog.ResultRule!.RuleType.Should().Be(CfRuleType.UniqueValues);
+            dialog.ResultRule.FormatIfTrue.Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Theory]
+    [InlineData("Blanks", CfRuleType.Blanks)]
+    [InlineData("No Blanks", CfRuleType.NoBlanks)]
+    [InlineData("Errors", CfRuleType.Errors)]
+    [InlineData("No Errors", CfRuleType.NoErrors)]
+    public void BlankAndErrorRules_CreateExpectedConditionalFormat(string ruleType, CfRuleType expectedRuleType)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(ruleType, RangeFor(SheetId.New())));
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(expectedRuleType);
             dialog.ResultRule.FormatIfTrue.Should().NotBeNull();
 
             dialog.Close();
