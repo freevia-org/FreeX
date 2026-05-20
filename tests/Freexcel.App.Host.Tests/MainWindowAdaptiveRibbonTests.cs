@@ -181,6 +181,16 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Fact]
+    public void RibbonScrollViewers_DefaultToHiddenHorizontalScrollBarsInXaml()
+    {
+        var xaml = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        xaml.Should().NotContain(
+            "HorizontalScrollBarVisibility=\"Auto\"",
+            "ribbon tabs should not briefly show a horizontal scrollbar before runtime normalization collapses groups");
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
