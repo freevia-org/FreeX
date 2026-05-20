@@ -3252,6 +3252,15 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PERCENTILE(A1:A3,0.5)", sheet).Should().Be(new NumberValue(4));
     }
 
+    [Fact]
+    public void Percentile_And_Quartile_TreatScalarArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=PERCENTILE(5,0)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=PERCENTILE(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=QUARTILE(5,0)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=QUARTILE(5,4)", MakeSheet()).Should().Be(new NumberValue(5));
+    }
+
     [Fact] public void Percentile_RangeError_PropagatesError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(2)),(2,1,ErrorValue.NA),(3,1,new NumberValue(6)));

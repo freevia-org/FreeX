@@ -3437,7 +3437,9 @@ public static class BuiltInFunctions
     private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
         if (!double.IsFinite(k)) return ErrorValue.Num;
@@ -3475,7 +3477,9 @@ public static class BuiltInFunctions
     private static ScalarValue QuartileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e) return e;
         double rawQuart = ToNumber(args[1]);
         if (!double.IsFinite(rawQuart)) return ErrorValue.Num;
