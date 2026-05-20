@@ -96,6 +96,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_And_Hlookup_TreatScalarTablesAsSingleCellArrays()
+    {
+        _eval.Evaluate("=VLOOKUP(5,5,1,FALSE)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=HLOOKUP(5,5,1,FALSE)", MakeSheet()).Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Vlookup_NotFound_ReturnsNA()
     {
         var sheet = MakeSheet(

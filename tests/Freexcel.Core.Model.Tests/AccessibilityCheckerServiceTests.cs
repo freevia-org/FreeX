@@ -72,6 +72,38 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Theory]
+    [InlineData("Chart Title")]
+    [InlineData("chart title")]
+    [InlineData("Title")]
+    public void FindIssues_FlagsChartsWithGenericTitleText(string title)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = title
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = dataRange,
+            Title = "Sales by quarter"
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.GenericChartTitle).Subject;
+
+        issue.Location.Should().Be("A1:B4");
+        issue.Message.Should().Be("Chart title should describe the chart.");
+    }
+
+    [Theory]
     [InlineData("Picture 1")]
     [InlineData("Image")]
     [InlineData("Shape")]
