@@ -886,7 +886,7 @@ public partial class MainWindow
         if (button is Control control)
             control.Padding = new Thickness(1);
 
-        button.Content = CreateRibbonIconOnlyContent(commandName, 40);
+        button.Content = CreateRibbonIconOnlyContent(commandName, 24);
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
         button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
         return true;
@@ -1100,7 +1100,7 @@ public partial class MainWindow
             ? "Back to workbook"
             : GetStaticRibbonIconCommandName(owner, source.Kind.ToString());
         var fallbackIcon = new RibbonCommandIcon(source.Kind);
-        var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 64 : 40;
+        var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 32 : 24;
         var commandIcon = RibbonIconFactory.CreateCommandIcon(
             commandName,
             fallbackIcon,
@@ -1117,7 +1117,7 @@ public partial class MainWindow
     {
         var commandName = GetStaticRibbonIconCommandName(owner, source.Text);
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
-        var iconSize = tall ? 64 : 40;
+        var iconSize = tall ? 32 : 24;
         var commandIcon = RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, source.Foreground);
         commandIcon.Tag = "RibbonIcon";
         commandIcon.HorizontalAlignment = source.HorizontalAlignment;
@@ -1266,20 +1266,20 @@ public partial class MainWindow
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
         var iconSize = layoutKind switch
         {
-            RibbonCommandLayoutKind.Large => 64,
-            _ => 40
+            RibbonCommandLayoutKind.Large => 32,
+            _ => 24
         };
         var iconSlot = new Border
         {
             Width = layoutKind switch
             {
-                RibbonCommandLayoutKind.Large => 38,
+                RibbonCommandLayoutKind.Large => 34,
                 RibbonCommandLayoutKind.Medium => 24,
                 _ => 24
             },
             Height = layoutKind switch
             {
-                RibbonCommandLayoutKind.Large => 36,
+                RibbonCommandLayoutKind.Large => 34,
                 RibbonCommandLayoutKind.Medium => 24,
                 _ => 24
             },
