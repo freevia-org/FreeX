@@ -1976,7 +1976,9 @@ public partial class MainWindow : Window
                 currentGroup = option.Group;
             }
 
-            var item = new MenuItem { Header = option.Label, Tag = option.Command, ToolTip = option.PreviewText };
+            var item = new MenuItem { Header = option.Label, Tag = option, ToolTip = option.PreviewText };
+            item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
+            item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
             item.Click += QuickAnalysisMenuItem_Click;
             menu.Items.Add(item);
         }
@@ -1987,9 +1989,10 @@ public partial class MainWindow : Window
 
     private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisCommand command })
+        if (sender is not MenuItem { Tag: QuickAnalysisOption option })
             return;
 
+        var command = option.Command;
         switch (command)
         {
             case QuickAnalysisCommand.DataBar:
@@ -2083,6 +2086,21 @@ public partial class MainWindow : Window
                 SparklineWinLossBtn_Click(sender, e);
                 break;
         }
+    }
+
+    private void QuickAnalysisMenuItem_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: QuickAnalysisOption option } ||
+            SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+        StatusReadyText.Text = preview.StatusText;
+    }
+
+    private void QuickAnalysisMenuItem_MouseLeave(object sender, MouseEventArgs e)
+    {
+        StatusReadyText.Text = "Ready";
     }
 
     private void SelectFormulaAuditCells(bool selectDependents, bool includeTransitive)
