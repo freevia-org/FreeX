@@ -5886,34 +5886,21 @@ public partial class MainWindow : Window
             return;
 
         range = dialog.Result.Range;
-        if (!TryExecuteGroupedSheetCommand(
-                "Format as Table",
-                sheetId => new CreateStructuredTableCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId),
-                    dialog.Result.TableStyleName,
-                    dialog.Result.FirstRowHasHeaders)))
-            return;
-
         var (headerFill, oddFill, evenFill) = variant switch
         {
             1 => (new CellColor(31, 78, 121), new CellColor(222, 235, 247), new CellColor(255, 255, 255)),
             2 => (new CellColor(54, 54, 54),  new CellColor(68, 68, 68),    new CellColor(80, 80, 80)),
             _ => (new CellColor(31, 115, 70), new CellColor(226, 239, 218), new CellColor(255, 255, 255))
         };
-        for (uint r = range.Start.Row; r <= range.End.Row; r++)
-        {
-            var fill = r == range.Start.Row ? headerFill : (r % 2 == 0 ? evenFill : oddFill);
-            var fontColor = r == range.Start.Row ? CellColor.White : CellColor.Black;
-            var bold = r == range.Start.Row;
-            if (!TryExecuteApplyStyle(
-                    new GridRange(
-                        new CellAddress(_currentSheetId, r, range.Start.Col),
-                        new CellAddress(_currentSheetId, r, range.End.Col)),
-                    new StyleDiff(FillColor: fill, FontColor: fontColor, Bold: bold),
-                    "Format as Table"))
-                return;
-        }
+        if (!TryExecuteGroupedSheetCommand(
+                "Format as Table",
+                sheetId => new CreateStyledStructuredTableCommand(
+                    sheetId,
+                    GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId),
+                    dialog.Result.TableStyleName,
+                    dialog.Result.FirstRowHasHeaders,
+                    new StructuredTableStyleBanding(headerFill, oddFill, evenFill, CellColor.White))))
+            return;
         UpdateViewport();
     }
 
