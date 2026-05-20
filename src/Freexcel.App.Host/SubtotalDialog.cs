@@ -20,9 +20,9 @@ public sealed class SubtotalDialog : Window
     private readonly ComboBox _groupColumnBox = new() { DisplayMemberPath = nameof(SubtotalColumnChoice.Header), SelectedValuePath = nameof(SubtotalColumnChoice.Offset) };
     private readonly List<CheckBox> _subtotalColumnBoxes = [];
     private readonly TextBox _functionBox = new() { Text = "sum" };
-    private readonly CheckBox _replaceBox = new() { Content = "Replace current subtotals", IsChecked = true };
-    private readonly CheckBox _pageBreakBox = new() { Content = "Page break between groups" };
-    private readonly CheckBox _summaryBelowBox = new() { Content = "Summary below data", IsChecked = true };
+    private readonly CheckBox _replaceBox = new() { Content = "_Replace current subtotals", IsChecked = true };
+    private readonly CheckBox _pageBreakBox = new() { Content = "_Page break between groups" };
+    private readonly CheckBox _summaryBelowBox = new() { Content = "_Summary below data", IsChecked = true };
 
     public SubtotalDialogResult? Result { get; private set; }
 
@@ -38,11 +38,11 @@ public sealed class SubtotalDialog : Window
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock { Text = "At each change in:" });
+        root.Children.Add(new Label { Content = "_At each change in:", Target = _groupColumnBox, Padding = new Thickness(0) });
         _groupColumnBox.ItemsSource = columnChoices;
         _groupColumnBox.SelectedValue = columnChoices[0].Offset;
         root.Children.Add(_groupColumnBox);
-        root.Children.Add(new TextBlock { Text = "Add subtotal to:", Margin = new Thickness(0, 8, 0, 0) });
+        root.Children.Add(new Label { Content = "_Add subtotal to:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         foreach (var column in columnChoices)
         {
             var box = new CheckBox
@@ -55,7 +55,7 @@ public sealed class SubtotalDialog : Window
             _subtotalColumnBoxes.Add(box);
             root.Children.Add(box);
         }
-        root.Children.Add(new TextBlock { Text = "Use function:", Margin = new Thickness(0, 8, 0, 0) });
+        root.Children.Add(new Label { Content = "_Use function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(_functionBox);
         root.Children.Add(_replaceBox);
         root.Children.Add(_pageBreakBox);
