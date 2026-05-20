@@ -156,6 +156,33 @@ public class SortFilterTests
     }
 
     [Fact]
+    public void Sort_MovesThreadedCommentsWithCellsAndUndoRestores()
+    {
+        var (wb, sheet, ctx) = MakeContext();
+        var sid = sheet.Id;
+        var a1 = new CellAddress(sid, 1, 1);
+        var a2 = new CellAddress(sid, 2, 1);
+
+        sheet.SetCell(a1, new NumberValue(3));
+        sheet.SetCell(a2, new NumberValue(1));
+        sheet.ThreadedComments[a1] = new ThreadedComment("three", "Quinn");
+        sheet.ThreadedComments[a2] = new ThreadedComment("one", "Codex");
+
+        var range = new GridRange(a1, a2);
+        var cmd = new SortCommand(sid, range, sortByColOffset: 0, ascending: true);
+
+        cmd.Apply(ctx);
+
+        sheet.ThreadedComments[a1].Should().Be(new ThreadedComment("one", "Codex"));
+        sheet.ThreadedComments[a2].Should().Be(new ThreadedComment("three", "Quinn"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[a1].Should().Be(new ThreadedComment("three", "Quinn"));
+        sheet.ThreadedComments[a2].Should().Be(new ThreadedComment("one", "Codex"));
+    }
+
+    [Fact]
     public void Sort_MovesCustomRowHeightsWithRowsAndUndoRestores()
     {
         var (wb, sheet, ctx) = MakeContext();
