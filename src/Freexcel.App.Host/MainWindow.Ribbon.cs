@@ -562,13 +562,16 @@ public partial class MainWindow
 
             if (element is ButtonBase button)
             {
+                var isLargeButton = button.Content is StackPanel cs &&
+                    string.Equals(cs.Tag?.ToString(), "RibbonCommandContent:L", StringComparison.Ordinal);
+
                 if (button.Tag is string tag &&
                     RibbonCommandPresentationPlanner.TryParseCompactWidths(tag, out var fullWidth, out var compactWidth))
                 {
                     button.Width = level switch
                     {
                         RibbonCompactLevel.Full => fullWidth,
-                        RibbonCompactLevel.SmallWithLabels => fullWidth,
+                        RibbonCompactLevel.SmallWithLabels => isLargeButton ? double.NaN : fullWidth,
                         _ => compactWidth
                     };
                 }
@@ -595,6 +598,64 @@ public partial class MainWindow
         {
             if (stack.Orientation == Orientation.Horizontal)
                 stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+        }
+
+        if (button.Content is StackPanel largeStack &&
+            string.Equals(largeStack.Tag?.ToString(), "RibbonCommandContent:L", StringComparison.Ordinal))
+        {
+            ApplyLargeButtonCompactLayout(largeStack, button, level);
+        }
+    }
+
+    private static void ApplyLargeButtonCompactLayout(
+        StackPanel contentStack, ButtonBase button, RibbonCompactLevel level)
+    {
+        if (contentStack.Children.Count < 2 ||
+            contentStack.Children[0] is not Border iconSlot ||
+            contentStack.Children[1] is not TextBlock labelBlock)
+        {
+            return;
+        }
+
+        if (level == RibbonCompactLevel.Full)
+        {
+            contentStack.Orientation = Orientation.Vertical;
+            contentStack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            button.Height = 76;
+            iconSlot.Width = 34;
+            iconSlot.Height = 34;
+            iconSlot.Margin = new Thickness(0, 0, 0, 2);
+            if (iconSlot.Child is FrameworkElement iconChild)
+            {
+                iconChild.Width = 32;
+                iconChild.Height = 32;
+            }
+            labelBlock.TextWrapping = TextWrapping.Wrap;
+            labelBlock.MaxWidth = 96;
+            labelBlock.TextTrimming = TextTrimming.None;
+            labelBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            labelBlock.TextAlignment = TextAlignment.Center;
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+        }
+        else
+        {
+            contentStack.Orientation = Orientation.Horizontal;
+            contentStack.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            button.Height = 48;
+            iconSlot.Width = 24;
+            iconSlot.Height = 24;
+            iconSlot.Margin = new Thickness(0, 0, 5, 0);
+            if (iconSlot.Child is FrameworkElement iconChild)
+            {
+                iconChild.Width = 24;
+                iconChild.Height = 24;
+            }
+            labelBlock.TextWrapping = TextWrapping.NoWrap;
+            labelBlock.MaxWidth = 90;
+            labelBlock.TextTrimming = TextTrimming.CharacterEllipsis;
+            labelBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            labelBlock.TextAlignment = TextAlignment.Left;
+            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         }
     }
 
@@ -796,7 +857,7 @@ public partial class MainWindow
 
         foreach (var stack in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
         {
-            if (string.Equals(stack.Tag?.ToString(), "RibbonCommandContent", StringComparison.Ordinal))
+            if (stack.Tag?.ToString()?.StartsWith("RibbonCommandContent", StringComparison.Ordinal) is true)
                 continue;
 
             if (stack.Orientation != Orientation.Horizontal || stack.Children.Count < 2)
@@ -1266,25 +1327,12 @@ public partial class MainWindow
         var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
-        var iconSize = layoutKind switch
-        {
-            RibbonCommandLayoutKind.Large => 32,
-            _ => 22
-        };
+        var iconSize = layoutKind == RibbonCommandLayoutKind.Large ? 32 : 22;
+        var slotSize = layoutKind == RibbonCommandLayoutKind.Large ? 34 : 24;
         var iconSlot = new Border
         {
-            Width = layoutKind switch
-            {
-                RibbonCommandLayoutKind.Large => 38,
-                RibbonCommandLayoutKind.Medium => 24,
-                _ => 24
-            },
-            Height = layoutKind switch
-            {
-                RibbonCommandLayoutKind.Large => 36,
-                RibbonCommandLayoutKind.Medium => 24,
-                _ => 24
-            },
+            Width = slotSize,
+            Height = slotSize,
             CornerRadius = tall ? new CornerRadius(3) : new CornerRadius(2),
             Background = slotBackground,
             BorderBrush = slotBorder,
@@ -1311,11 +1359,17 @@ public partial class MainWindow
             LineHeight = tall ? 14 : double.NaN
         };
 
+        var contentTag = layoutKind == RibbonCommandLayoutKind.Large
+            ? "RibbonCommandContent:L"
+            : layoutKind == RibbonCommandLayoutKind.Medium
+                ? "RibbonCommandContent:M"
+                : "RibbonCommandContent:S";
+
         if (tall)
         {
             return new StackPanel
             {
-                Tag = "RibbonCommandContent",
+                Tag = contentTag,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
@@ -1328,7 +1382,7 @@ public partial class MainWindow
 
         return new StackPanel
         {
-            Tag = "RibbonCommandContent",
+            Tag = contentTag,
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
