@@ -69,6 +69,10 @@ public static class GroupedSheetRangePlanner
             ErrorTitle = source.ErrorTitle,
             ErrorMessage = source.ErrorMessage,
             PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage
+            PromptMessage = source.PromptMessage,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls,
+            NativeContainerAttributes = source.NativeContainerAttributes,
+            NativeContainerChildXmls = source.NativeContainerChildXmls
         };
 }

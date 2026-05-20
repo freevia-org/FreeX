@@ -1272,7 +1272,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 ErrorTitle = validationDto.ErrorTitle,
                 ErrorMessage = validationDto.ErrorMessage,
                 PromptTitle = validationDto.PromptTitle,
-                PromptMessage = validationDto.PromptMessage
+                PromptMessage = validationDto.PromptMessage,
+                NativeAttributes = validationDto.NativeAttributes,
+                NativeChildXmls = validationDto.NativeChildXmls,
+                NativeContainerAttributes = validationDto.NativeContainerAttributes,
+                NativeContainerChildXmls = validationDto.NativeContainerChildXmls
             };
         }
         catch (FormatException)
@@ -1296,7 +1300,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
         ErrorTitle = validation.ErrorTitle,
         ErrorMessage = validation.ErrorMessage,
         PromptTitle = validation.PromptTitle,
-        PromptMessage = validation.PromptMessage
+        PromptMessage = validation.PromptMessage,
+        NativeAttributes = validation.NativeAttributes is null ? null : new Dictionary<string, string>(validation.NativeAttributes),
+        NativeChildXmls = validation.NativeChildXmls is null ? null : [.. validation.NativeChildXmls],
+        NativeContainerAttributes = validation.NativeContainerAttributes is null ? null : new Dictionary<string, string>(validation.NativeContainerAttributes),
+        NativeContainerChildXmls = validation.NativeContainerChildXmls is null ? null : [.. validation.NativeContainerChildXmls]
     };
 
     private static bool IsSupportedDataValidation(DataValidation validation) =>
@@ -1869,6 +1877,10 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public string? ErrorMessage { get; set; }
         public string? PromptTitle { get; set; }
         public string? PromptMessage { get; set; }
+        public Dictionary<string, string>? NativeAttributes { get; set; }
+        public List<string>? NativeChildXmls { get; set; }
+        public Dictionary<string, string>? NativeContainerAttributes { get; set; }
+        public List<string>? NativeContainerChildXmls { get; set; }
     }
 
     private class ConditionalFormatDto
