@@ -18,6 +18,7 @@ public sealed class WorkbookStatisticsServiceTests
         sheet1.SetCell(a1, new NumberValue(42));
         sheet1.SetFormula(b1, "SUM(A1:A10)");
         sheet1.Comments[a1] = "Check total";
+        sheet1.ThreadedComments[b1] = new ThreadedComment("Discuss formula");
         sheet1.Charts.Add(new ChartModel
         {
             Type = ChartType.Column,
@@ -52,7 +53,7 @@ public sealed class WorkbookStatisticsServiceTests
         statistics.WorksheetCount.Should().Be(2);
         statistics.CellCount.Should().Be(2);
         statistics.FormulaCount.Should().Be(1);
-        statistics.CommentCount.Should().Be(1);
+        statistics.CommentCount.Should().Be(2);
         statistics.ChartCount.Should().Be(1);
         statistics.PictureCount.Should().Be(1);
         statistics.ShapeCount.Should().Be(2);

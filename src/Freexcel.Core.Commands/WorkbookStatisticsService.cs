@@ -27,7 +27,7 @@ public static class WorkbookStatisticsService
         {
             cellCount += sheet.CellCount;
             formulaCount += sheet.EnumerateCells().Count(cell => cell.Cell.HasFormula);
-            commentCount += sheet.Comments.Count;
+            commentCount += sheet.Comments.Count + sheet.ThreadedComments.Count;
             chartCount += sheet.Charts.Count;
             pictureCount += sheet.Pictures.Count;
             shapeCount += sheet.DrawingShapes.Count + sheet.TextBoxes.Count;
