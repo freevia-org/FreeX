@@ -48,6 +48,15 @@ public partial class WorkbookThemeDialog : Window
         FollowedHyperlinkColorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(theme.GetColor(WorkbookThemeColorSlot.FollowedHyperlink));
     }
 
+    private void OfficePresetButton_Click(object sender, RoutedEventArgs e) =>
+        LoadTheme(WorkbookTheme.Office);
+
+    private void ColorfulPresetButton_Click(object sender, RoutedEventArgs e) =>
+        LoadTheme(WorkbookThemeWorkflow.CreateColorfulTheme());
+
+    private void GrayscalePresetButton_Click(object sender, RoutedEventArgs e) =>
+        LoadTheme(WorkbookThemeWorkflow.CreateGrayscaleTheme());
+
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         try
