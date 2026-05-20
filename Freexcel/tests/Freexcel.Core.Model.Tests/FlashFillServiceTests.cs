@@ -152,6 +152,38 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_FirstLastEmail_LearnsConstantDomainFromExamples()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["ada.lovelace@contoso.com", "grace.hopper@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["alan.turing@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstLastEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            ["ada.lovelace@contoso.com", "grace.hopper@example.org"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void FillFromColumns_LastFirstInitialPeriod_CombinesSourceColumns()
     {
         var result = FlashFillService.FillFromColumns(
@@ -461,6 +493,26 @@ public sealed class FlashFillCommandTests
 
         outcome.Success.Should().BeTrue();
         sheet.GetCell(3, 3)!.Value.Should().Be(new TextValue("Alan Turing"));
+    }
+
+    [Fact]
+    public void FlashFillCommand_WithFirstLastEmailExamples_UsesInferredDomain()
+    {
+        var (wb, sheet, ctx) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Ada"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Lovelace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("ada.lovelace@contoso.com"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Grace"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Hopper"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new TextValue("grace.hopper@contoso.com"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Alan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Turing"));
+
+        var cmd = new FlashFillCommand(sheet.Id, fillColIndex: 3, sourceColIndex: 2, startRow: 1, endRow: 3);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(3, 3)!.Value.Should().Be(new TextValue("alan.turing@contoso.com"));
     }
 
     [Fact]
