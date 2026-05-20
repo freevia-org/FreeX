@@ -393,6 +393,31 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void HomeEditingCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.HomeEditing.cs");
+
+        File.Exists(editingSourcePath).Should().BeTrue();
+        var editingSource = File.ReadAllText(editingSourcePath);
+
+        mainSource.Should().NotContain("private void AutoSumPickerBtn_Click(");
+        mainSource.Should().NotContain("private void ExecuteFillCells(");
+        mainSource.Should().NotContain("private void TryFlashFill(");
+        mainSource.Should().NotContain("private void FindSelectPickerBtn_Click(");
+        mainSource.Should().NotContain("private void SelectGoToSpecialMatches(");
+        mainSource.Should().NotContain("private void ClearAllMenuItem_Click(");
+
+        editingSource.Should().Contain("private void AutoSumPickerBtn_Click(");
+        editingSource.Should().Contain("private void ExecuteFillCells(");
+        editingSource.Should().Contain("private void TryFlashFill(");
+        editingSource.Should().Contain("private void FindSelectPickerBtn_Click(");
+        editingSource.Should().Contain("private void SelectGoToSpecialMatches(");
+        editingSource.Should().Contain("private void ClearAllMenuItem_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
