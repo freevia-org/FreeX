@@ -118,6 +118,44 @@ public sealed class DeleteCommentCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Delete a cell threaded comment with undo support.</summary>
+public sealed class DeleteThreadedCommentCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private ThreadedComment? _previousComment;
+
+    public string Label => "Delete Threaded Comment";
+
+    public DeleteThreadedCommentCommand(SheetId sheetId, CellAddress address)
+    {
+        _sheetId = sheetId;
+        _address = address;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        if (!sheet.ThreadedComments.TryGetValue(_address, out _previousComment))
+            return new CommandOutcome(false, "No threaded comment exists at the selected cell.");
+
+        sheet.ThreadedComments.Remove(_address);
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousComment is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.ThreadedComments[_address] = _previousComment;
+    }
+}
+
 /// <summary>Clear all comments in a range with undo support.</summary>
 public sealed class ClearCommentsCommand : IWorkbookCommand
 {
