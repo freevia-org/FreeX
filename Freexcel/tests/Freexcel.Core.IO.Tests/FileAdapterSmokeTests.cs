@@ -9740,6 +9740,41 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetPageMarginsHeaderFooterAttributes()
+    {
+        var workbook = new Workbook("WorksheetPageMarginsNativeMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Page margins"));
+        sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetPageMarginsHeaderFooterAttributes(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var pageMargins = worksheetXml.Root!.Element(worksheetNs + "pageMargins");
+        pageMargins.Should().NotBeNull();
+        pageMargins!.Attribute("header").Should().NotBeNull();
+        pageMargins.Attribute("header")!.Value.Should().Be("0.35");
+        pageMargins.Attribute("footer").Should().NotBeNull();
+        pageMargins.Attribute("footer")!.Value.Should().Be("0.45");
+        pageMargins.Attribute("customAttr").Should().NotBeNull();
+        pageMargins.Attribute("customAttr")!.Value.Should().Be("page-margins-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectModeledPrintOptionsAttributes()
     {
         var workbook = new Workbook("WorksheetPrintOptionsAuthority");
@@ -14912,6 +14947,29 @@ public class FileAdapterSmokeTests
             pageSetup.SetAttributeValue("usePrinterDefaults", "1");
             pageSetup.SetAttributeValue("copies", "3");
             pageSetup.SetAttributeValue("customAttr", "page-setup-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetPageMarginsHeaderFooterAttributes(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var pageMargins = worksheetXml.Root!.Element(worksheetNs + "pageMargins");
+            if (pageMargins is null)
+            {
+                pageMargins = new XElement(worksheetNs + "pageMargins");
+                worksheetXml.Root!.Add(pageMargins);
+            }
+
+            pageMargins.SetAttributeValue("header", "0.35");
+            pageMargins.SetAttributeValue("footer", "0.45");
+            pageMargins.SetAttributeValue("customAttr", "page-margins-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
