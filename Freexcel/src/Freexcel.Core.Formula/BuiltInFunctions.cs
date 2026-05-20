@@ -1238,17 +1238,12 @@ public static class BuiltInFunctions
 
         if (matchMode == -1)
         {
-            int best = -1;
-            foreach (int i in indices)
-                if (CompareScalar(lookupFlat[i], lookupValue) <= 0)
-                    best = i;
+            int best = FindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: true);
             return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
         }
 
-        foreach (int i in indices)
-            if (CompareScalar(lookupFlat[i], lookupValue) >= 0)
-                return new NumberValue(i + 1);
-        return ErrorValue.NA;
+        int nextLarger = FindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: false);
+        return nextLarger >= 0 ? new NumberValue(nextLarger + 1) : ErrorValue.NA;
     }
 
     private static ScalarValue Sumif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -2424,21 +2419,45 @@ public static class BuiltInFunctions
         }
         else if (matchMode == -1)
         {
-            // Exact or next smaller
-            int best = -1;
-            foreach (int i in indices)
-                if (CompareScalar(lookupFlat[i], lookupValue) <= 0)
-                    best = i;
+            int best = FindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: true);
             return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
         }
         else
         {
-            // Exact or next larger: return first element >= lookupValue
-            foreach (int i in indices)
-                if (CompareScalar(lookupFlat[i], lookupValue) >= 0)
-                    return XlookupReturnAt(returnArr, i, lookupIsVertical);
-            return ifNotFound;
+            int best = FindApproximateMatchIndex(lookupFlat, lookupValue, indices, nextSmaller: false);
+            return best >= 0 ? XlookupReturnAt(returnArr, best, lookupIsVertical) : ifNotFound;
         }
+    }
+
+    private static int FindApproximateMatchIndex(
+        IReadOnlyList<ScalarValue> lookupFlat,
+        ScalarValue lookupValue,
+        IReadOnlyList<int> searchIndices,
+        bool nextSmaller)
+    {
+        foreach (int i in searchIndices)
+            if (ScalarEquals(lookupFlat[i], lookupValue))
+                return i;
+
+        int best = -1;
+        foreach (int i in searchIndices)
+        {
+            int candidateVsLookup = CompareScalar(lookupFlat[i], lookupValue);
+            if (nextSmaller)
+            {
+                if (candidateVsLookup > 0) continue;
+                if (best < 0 || CompareScalar(lookupFlat[i], lookupFlat[best]) > 0)
+                    best = i;
+            }
+            else
+            {
+                if (candidateVsLookup < 0) continue;
+                if (best < 0 || CompareScalar(lookupFlat[i], lookupFlat[best]) < 0)
+                    best = i;
+            }
+        }
+
+        return best;
     }
 
     private static ScalarValue XlookupReturnAt(RangeValue returnArr, int index, bool lookupIsVertical)
