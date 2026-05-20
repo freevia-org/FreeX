@@ -845,6 +845,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 ErrorBarDirection = chartDto.ErrorBarDirection,
                 ErrorBarValue = chartDto.ErrorBarValue,
                 ErrorBarEndCaps = chartDto.ErrorBarEndCaps,
+                ShowDropLines = chartDto.ShowDropLines,
+                ShowHighLowLines = chartDto.ShowHighLowLines,
+                ShowUpDownBars = chartDto.ShowUpDownBars,
                 ShowSecondaryAxis = chartDto.ShowSecondaryAxis,
                 SecondaryAxisSeriesIndexes = chartDto.SecondaryAxisSeriesIndexes ?? [],
                 ComboLineSeriesIndexes = chartDto.ComboLineSeriesIndexes ?? [],
@@ -974,6 +977,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
         ErrorBarDirection = chart.ErrorBarDirection,
         ErrorBarValue = chart.ErrorBarValue,
         ErrorBarEndCaps = chart.ErrorBarEndCaps,
+        ShowDropLines = chart.ShowDropLines,
+        ShowHighLowLines = chart.ShowHighLowLines,
+        ShowUpDownBars = chart.ShowUpDownBars,
         ShowSecondaryAxis = chart.ShowSecondaryAxis,
         SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
         ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
@@ -2086,6 +2092,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
         public double ErrorBarValue { get; set; } = 5;
         public bool ErrorBarEndCaps { get; set; } = true;
+        public bool ShowDropLines { get; set; }
+        public bool ShowHighLowLines { get; set; }
+        public bool ShowUpDownBars { get; set; }
         public bool ShowSecondaryAxis { get; set; }
         public List<int>? SecondaryAxisSeriesIndexes { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }
