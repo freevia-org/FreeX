@@ -498,6 +498,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ReviewCommentNavigation_IncludesThreadedComments()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().Contain("sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));

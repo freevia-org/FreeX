@@ -10,6 +10,16 @@ public static class CommentNavigationPlanner
             .ThenBy(address => address.Col)
             .ToList();
 
+    public static List<CellAddress> OrderedCommentAddresses(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
+        comments.Keys
+            .Concat(threadedComments.Keys)
+            .Distinct()
+            .OrderBy(address => address.Row)
+            .ThenBy(address => address.Col)
+            .ToList();
+
     public static CellAddress FindNext(IReadOnlyList<CellAddress> orderedComments, CellAddress current, bool previous)
     {
         if (orderedComments.Count == 0)
@@ -27,8 +37,23 @@ public static class CommentNavigationPlanner
         string.Join(Environment.NewLine,
             OrderedCommentAddresses(comments).Select(address => $"{address.ToA1()}: {comments[address]}"));
 
+    public static string FormatCommentList(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
+        string.Join(Environment.NewLine,
+            OrderedCommentAddresses(comments, threadedComments)
+                .Select(address => $"{address.ToA1()}: {GetCommentText(comments, threadedComments, address)}"));
+
     public static string GetDefaultCommentText(IReadOnlyDictionary<CellAddress, string> comments, CellAddress address) =>
         comments.TryGetValue(address, out var comment)
             ? comment
             : string.Empty;
+
+    private static string GetCommentText(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
+        CellAddress address) =>
+        comments.TryGetValue(address, out var comment)
+            ? comment
+            : threadedComments[address].Text;
 }
