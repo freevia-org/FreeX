@@ -420,6 +420,7 @@ public static class XlsxChartPartReader
 
         foreach (var plotChart in plotCharts)
         {
+            ApplyChartGuideLineMetadata(plotChart, result);
             var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, plotChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in plotChart.Elements(ChartNs + "ser"))
@@ -530,6 +531,7 @@ public static class XlsxChartPartReader
 
         foreach (var lineChart in lineCharts)
         {
+            ApplyChartGuideLineMetadata(lineChart, result);
             var lineUsesSecondaryAxis = UsesSecondaryValueAxis(plotArea, lineChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
@@ -688,6 +690,7 @@ public static class XlsxChartPartReader
 
         foreach (var lineChart in lineCharts)
         {
+            ApplyChartGuideLineMetadata(lineChart, result);
             var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, lineChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
@@ -900,6 +903,7 @@ public static class XlsxChartPartReader
 
         foreach (var lineChart in lineCharts)
         {
+            ApplyChartGuideLineMetadata(lineChart, result);
             var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, lineChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
@@ -1497,6 +1501,13 @@ public static class XlsxChartPartReader
 
         if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
+    }
+
+    private static void ApplyChartGuideLineMetadata(XElement plotChart, ChartModel chart)
+    {
+        chart.ShowDropLines |= plotChart.Element(ChartNs + "dropLines") is not null;
+        chart.ShowHighLowLines |= plotChart.Element(ChartNs + "hiLowLines") is not null;
+        chart.ShowUpDownBars |= plotChart.Element(ChartNs + "upDownBars") is not null;
     }
 
     private static void ApplyTrendlineShapeProperties(XElement? shapeProperties, ChartModel chart)
