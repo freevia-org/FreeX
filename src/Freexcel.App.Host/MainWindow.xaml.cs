@@ -6476,10 +6476,36 @@ public partial class MainWindow : Window
             return;
         }
 
+        var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
+        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
+        var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
         if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
         {
-            MessageBox.Show("New chart-style PivotTable sheets are tracked for Wave 2, but this build places PivotTables on worksheets.",
-                "Insert PivotTable", MessageBoxButton.OK, MessageBoxImage.Information);
+            var command = new AddPivotTableToNewWorksheetCommand(
+                dialogSourceRange,
+                PivotUiPlanner.GenerateUniquePivotTableName(sheet),
+                rowFieldIndexes: [rowFieldIndex],
+                dataFieldIndexes: [dataFieldIndex]);
+
+            if (!TryExecuteCommand(command, "Insert PivotTable"))
+                return;
+
+            if (command.CreatedSheetId is { } createdSheetId)
+            {
+                _currentSheetId = createdSheetId;
+                _groupedSheetIds.Clear();
+                _groupedSheetIds.Add(_currentSheetId);
+                SetActiveCell(new CellAddress(
+                    _currentSheetId,
+                    AddPivotTableToNewWorksheetCommand.InitialTargetRow,
+                    AddPivotTableToNewWorksheetCommand.InitialTargetColumn));
+            }
+
+            RefreshSheetTabs();
+            UpdateViewport();
+            RefreshStatusBar();
+            if (dialog.Result.OpenFieldList)
+                RefreshPivotFieldListPane();
             return;
         }
 
@@ -6490,9 +6516,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
-        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
-        var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
         var name = PivotUiPlanner.GenerateUniquePivotTableName(sheet);
 
         if (!TryExecuteCommand(
