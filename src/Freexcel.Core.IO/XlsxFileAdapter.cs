@@ -28,6 +28,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         "horizontalCentered",
         "verticalCentered"
     };
+    private static readonly HashSet<string> ModeledPageMarginsAttributes = new(StringComparer.Ordinal)
+    {
+        "left",
+        "right",
+        "top",
+        "bottom"
+    };
     private static readonly HashSet<string> ModeledPageSetupAttributes = new(StringComparer.Ordinal)
     {
         "paperSize",
@@ -6673,6 +6680,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var sourceSheetProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetPr");
             var sourceSheetFormatProperties = sourceWorksheetXml.Root?.Element(workbookNs + "sheetFormatPr");
             var sourcePrintOptions = sourceWorksheetXml.Root?.Element(workbookNs + "printOptions");
+            var sourcePageMargins = sourceWorksheetXml.Root?.Element(workbookNs + "pageMargins");
             var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
             var sourceColumns = sourceWorksheetXml.Root?.Element(workbookNs + "cols");
             var sourceSheetData = sourceWorksheetXml.Root?.Element(workbookNs + "sheetData");
@@ -6683,6 +6691,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 sourceSheetProperties is null &&
                 sourceSheetFormatProperties is null &&
                 sourcePrintOptions is null &&
+                sourcePageMargins is null &&
                 sourcePageSetup is null &&
                 sourceColumns is null &&
                 sourceSheetData is null &&
@@ -6708,6 +6717,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     targetRoot,
                     workbookNs + "printOptions",
                     ModeledPrintOptionsAttributes))
+                changed = true;
+            if (MergeWorksheetNativeOnlyElementAttributes(
+                    sourcePageMargins,
+                    targetRoot,
+                    workbookNs + "pageMargins",
+                    ModeledPageMarginsAttributes))
                 changed = true;
             if (MergeWorksheetNativeOnlyElementAttributes(
                     sourcePageSetup,
