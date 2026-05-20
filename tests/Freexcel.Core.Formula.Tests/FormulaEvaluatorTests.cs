@@ -874,6 +874,24 @@ public class CrossSheetReferenceTests
     }
 
     [Fact]
+    public void NamedRangeReference_ArrayExpressionUsesFullRange()
+    {
+        var workbook = new Workbook("Test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetCell(a3, new NumberValue(3));
+        workbook.DefineNamedRange("MyData", new GridRange(a1, a3));
+
+        var result = _evaluator.Evaluate("=SUM(MyData*2)", sheet, workbook);
+
+        result.Should().Be(new NumberValue(12));
+    }
+
+    [Fact]
     public void CrossSheetRef_UnknownSheet_ReturnsRefError()
     {
         var workbook = new Workbook("Test");

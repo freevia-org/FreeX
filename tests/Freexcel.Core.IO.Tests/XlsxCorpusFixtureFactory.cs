@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml.Linq;
 using Freexcel.Core.IO;
 using Freexcel.Core.Model;
 
@@ -48,6 +49,7 @@ internal static class XlsxCorpusFixtureFactory
         "generated-linked-data-types-001" => true,
         "generated-slicers-001" => true,
         "generated-timelines-001" => true,
+        "generated-external-links-001" => true,
         "generated-embedded-objects-001" => true,
         "generated-custom-xml-001" => true,
         _ => false
@@ -154,6 +156,46 @@ internal static class XlsxCorpusFixtureFactory
         "generated-timelines-001" => CreatePackage(
             ("xl/timelines/timeline1.xml", "<timeline/>"),
             ("xl/timelineCaches/timelineCache1.xml", "<timelineCacheDefinition/>")),
+        "generated-external-links-001" => CreatePackage(
+            ("xl/workbook.xml", """
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                  <externalReferences>
+                    <externalReference r:id="rIdExternalLink1"/>
+                  </externalReferences>
+                </workbook>
+                """),
+            ("xl/_rels/workbook.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+                                Target="worksheets/sheet1.xml"/>
+                  <Relationship Id="rIdExternalLink1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink"
+                                Target="externalLinks/externalLink1.xml"/>
+                </Relationships>
+                """),
+            ("xl/externalLinks/externalLink1.xml", """
+                <externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <externalBook r:id="rIdExternalBook1">
+                    <sheetNames>
+                      <sheetName val="ExternalSheet"/>
+                    </sheetNames>
+                  </externalBook>
+                </externalLink>
+                """),
+            ("xl/externalLinks/_rels/externalLink1.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdExternalBook1"
+                                Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath"
+                                Target="file:///C:/Freexcel/ExternalWorkbook.xlsx"
+                                TargetMode="External"/>
+                </Relationships>
+                """)),
         "generated-embedded-objects-001" => CreatePackage(("xl/embeddings/oleObject1.bin", "Freexcel generated OLE placeholder")),
         "generated-custom-xml-001" => CreatePackage(("customXml/item1.xml", "<freexcelGeneratedCustomXml/>")),
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No generated known-gap XLSX package fixture exists for this id.")
@@ -176,16 +218,89 @@ internal static class XlsxCorpusFixtureFactory
         {
             foreach (var sourceEntry in sourceArchive.Entries)
             {
+                if (ShouldMergeThroughFixup(id, sourceEntry.FullName))
+                    continue;
+
                 targetArchive.GetEntry(sourceEntry.FullName)?.Delete();
                 var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName);
                 using var sourceStream = sourceEntry.Open();
                 using var targetStream = targetEntry.Open();
                 sourceStream.CopyTo(targetStream);
             }
+
+            ApplyPackageFixups(id, targetArchive);
         }
 
         stream.Position = 0;
         return stream;
+    }
+
+    private static bool ShouldMergeThroughFixup(string id, string packagePart) =>
+        string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase) &&
+        (string.Equals(packagePart, "xl/workbook.xml", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(packagePart, "xl/_rels/workbook.xml.rels", StringComparison.OrdinalIgnoreCase));
+
+    private static void ApplyPackageFixups(string id, ZipArchive archive)
+    {
+        if (!string.Equals(id, "generated-external-links-001", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace officeRelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (contentTypesEntry is null || workbookEntry is null || workbookRelsEntry is null)
+            return;
+
+        XDocument contentTypes;
+        using (var stream = contentTypesEntry.Open())
+            contentTypes = XDocument.Load(stream);
+
+        if (contentTypes.Root?.Elements(contentTypeNs + "Override").Any(element =>
+                string.Equals(element.Attribute("PartName")?.Value, "/xl/externalLinks/externalLink1.xml", StringComparison.OrdinalIgnoreCase)) != true)
+        {
+            contentTypes.Root?.Add(new XElement(
+                contentTypeNs + "Override",
+                new XAttribute("PartName", "/xl/externalLinks/externalLink1.xml"),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml")));
+        }
+
+        contentTypesEntry.Delete();
+        var contentTypesReplacement = archive.CreateEntry("[Content_Types].xml");
+        using (var output = contentTypesReplacement.Open())
+            contentTypes.Save(output);
+
+        XDocument workbookXml;
+        using (var stream = workbookEntry.Open())
+            workbookXml = XDocument.Load(stream);
+        workbookXml.Root?.Element(workbookNs + "externalReferences")?.Remove();
+        workbookXml.Root?.Add(new XElement(
+            workbookNs + "externalReferences",
+            new XElement(workbookNs + "externalReference", new XAttribute(officeRelNs + "id", "rIdFreexcelExternalLink1"))));
+        workbookEntry.Delete();
+        var workbookReplacement = archive.CreateEntry("xl/workbook.xml");
+        using (var output = workbookReplacement.Open())
+            workbookXml.Save(output);
+
+        XDocument workbookRelsXml;
+        using (var stream = workbookRelsEntry.Open())
+            workbookRelsXml = XDocument.Load(stream);
+        workbookRelsXml.Root?.Elements(packageRelNs + "Relationship")
+            .Where(element => string.Equals(element.Attribute("Id")?.Value, "rIdFreexcelExternalLink1", StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        workbookRelsXml.Root?.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rIdFreexcelExternalLink1"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink"),
+            new XAttribute("Target", "externalLinks/externalLink1.xml")));
+        workbookRelsEntry.Delete();
+        var workbookRelsReplacement = archive.CreateEntry("xl/_rels/workbook.xml.rels");
+        using var relOutput = workbookRelsReplacement.Open();
+        workbookRelsXml.Save(relOutput);
     }
 
     private static Workbook CreateGridBasic()

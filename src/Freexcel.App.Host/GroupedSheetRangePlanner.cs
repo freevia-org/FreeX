@@ -9,8 +9,9 @@ public static class GroupedSheetRangePlanner
             new CellAddress(sheetId, range.Start.Row, range.Start.Col),
             new CellAddress(sheetId, range.End.Row, range.End.Col));
 
-    public static ConditionalFormat CloneConditionalFormatForSheet(ConditionalFormat source, SheetId sheetId) =>
-        new()
+    public static ConditionalFormat CloneConditionalFormatForSheet(ConditionalFormat source, SheetId sheetId)
+    {
+        var clone = new ConditionalFormat
         {
             AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
             Priority = source.Priority,
@@ -48,6 +49,9 @@ public static class GroupedSheetRangePlanner
             DateOccurringPeriod = source.DateOccurringPeriod,
             StopIfTrue = source.StopIfTrue
         };
+        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
+        return clone;
+    }
 
     public static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId) =>
         new()

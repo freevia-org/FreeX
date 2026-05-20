@@ -23,7 +23,9 @@ public sealed record StructuredTableColumnModel(
     int Id,
     string Name,
     string? TotalsRowLabel = null,
-    string? TotalsRowFunction = null);
+    string? TotalsRowFunction = null,
+    string? CalculatedColumnFormula = null,
+    string? TotalsRowFormula = null);
 
 public sealed record StructuredTableFilterColumnModel(
     int ColumnId,
