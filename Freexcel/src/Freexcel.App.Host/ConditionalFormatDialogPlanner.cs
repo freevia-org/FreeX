@@ -4,45 +4,50 @@ namespace Freexcel.App.Host;
 
 public static class ConditionalFormatDialogPlanner
 {
-    public static ConditionalFormat CloneRule(ConditionalFormat source) => new()
+    public static ConditionalFormat CloneRule(ConditionalFormat source)
     {
-        Id = source.Id,
-        AppliesTo = source.AppliesTo,
-        Priority = source.Priority,
-        RuleType = source.RuleType,
-        Operator = source.Operator,
-        Value1 = source.Value1,
-        Value2 = source.Value2,
-        FormatIfTrue = source.FormatIfTrue?.Clone(),
-        MinColor = source.MinColor,
-        MidColor = source.MidColor,
-        MaxColor = source.MaxColor,
-        UseThreeColorScale = source.UseThreeColorScale,
-        MinThresholdType = source.MinThresholdType,
-        MinThresholdValue = source.MinThresholdValue,
-        MidThresholdType = source.MidThresholdType,
-        MidThresholdValue = source.MidThresholdValue,
-        MaxThresholdType = source.MaxThresholdType,
-        MaxThresholdValue = source.MaxThresholdValue,
-        DataBarColor = source.DataBarColor,
-        DataBarMinThresholdType = source.DataBarMinThresholdType,
-        DataBarMinThresholdValue = source.DataBarMinThresholdValue,
-        DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-        DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
-        DataBarShowValue = source.DataBarShowValue,
-        DataBarMinLength = source.DataBarMinLength,
-        DataBarMaxLength = source.DataBarMaxLength,
-        AboveAverage = source.AboveAverage,
-        FormulaText = source.FormulaText,
-        IconSetStyle = source.IconSetStyle,
-        IconSetShowValue = source.IconSetShowValue,
-        IconSetReverse = source.IconSetReverse,
-        TopBottomRank = source.TopBottomRank,
-        TopBottomPercent = source.TopBottomPercent,
-        TextRuleText = source.TextRuleText,
-        DateOccurringPeriod = source.DateOccurringPeriod,
-        StopIfTrue = source.StopIfTrue
-    };
+        var clone = new ConditionalFormat
+        {
+            Id = source.Id,
+            AppliesTo = source.AppliesTo,
+            Priority = source.Priority,
+            RuleType = source.RuleType,
+            Operator = source.Operator,
+            Value1 = source.Value1,
+            Value2 = source.Value2,
+            FormatIfTrue = source.FormatIfTrue?.Clone(),
+            MinColor = source.MinColor,
+            MidColor = source.MidColor,
+            MaxColor = source.MaxColor,
+            UseThreeColorScale = source.UseThreeColorScale,
+            MinThresholdType = source.MinThresholdType,
+            MinThresholdValue = source.MinThresholdValue,
+            MidThresholdType = source.MidThresholdType,
+            MidThresholdValue = source.MidThresholdValue,
+            MaxThresholdType = source.MaxThresholdType,
+            MaxThresholdValue = source.MaxThresholdValue,
+            DataBarColor = source.DataBarColor,
+            DataBarMinThresholdType = source.DataBarMinThresholdType,
+            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
+            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
+            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
+            DataBarShowValue = source.DataBarShowValue,
+            DataBarMinLength = source.DataBarMinLength,
+            DataBarMaxLength = source.DataBarMaxLength,
+            AboveAverage = source.AboveAverage,
+            FormulaText = source.FormulaText,
+            IconSetStyle = source.IconSetStyle,
+            IconSetShowValue = source.IconSetShowValue,
+            IconSetReverse = source.IconSetReverse,
+            TopBottomRank = source.TopBottomRank,
+            TopBottomPercent = source.TopBottomPercent,
+            TextRuleText = source.TextRuleText,
+            DateOccurringPeriod = source.DateOccurringPeriod,
+            StopIfTrue = source.StopIfTrue
+        };
+        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
+        return clone;
+    }
 
     public static string RuleTypeLabel(ConditionalFormat cf) => cf.RuleType switch
     {

@@ -47,6 +47,8 @@ public enum CfThresholdType
     Formula
 }
 
+public sealed record CfThresholdModel(CfThresholdType Type, string? Value = null);
+
 /// <summary>Comparison operator used in CellValue rules.</summary>
 public enum CfOperator
 {
@@ -127,6 +129,7 @@ public sealed class ConditionalFormat
     public string? IconSetStyle { get; set; }
     public bool IconSetShowValue { get; set; } = true;
     public bool IconSetReverse { get; set; }
+    public List<CfThresholdModel> IconSetThresholds { get; } = [];
 
     public int TopBottomRank { get; set; } = 10;
     public bool TopBottomPercent { get; set; }
