@@ -5138,6 +5138,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void WraprowsAndWrapcols_TreatScalarArgumentAsOneItemVector()
+    {
+        var rows = _eval.Evaluate("=WRAPROWS(1,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        rows.RowCount.Should().Be(1);
+        rows.ColCount.Should().Be(2);
+        rows.Cells[0, 0].Should().Be(new NumberValue(1));
+        rows.Cells[0, 1].Should().Be(ErrorValue.NA);
+
+        var cols = _eval.Evaluate("=WRAPCOLS(\"x\",2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        cols.RowCount.Should().Be(2);
+        cols.ColCount.Should().Be(1);
+        cols.Cells[0, 0].Should().Be(new TextValue("x"));
+        cols.Cells[1, 0].Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Wraprows_InvalidWrapCount_ReturnsNumError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
