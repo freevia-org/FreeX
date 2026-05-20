@@ -59,6 +59,45 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("[>100]0.0;[<=100]0.00", 125, "125.0")]
+    [InlineData("[>100]0.0;[<=100]0.00", 25, "25.00")]
+    [InlineData("[<0]0.0;[=0]\"zero\";0.00", 0, "zero")]
+    public void CustomNumberSubset_UsesConditionalSections(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
+    [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0070C0")]
+    public void CustomNumberSubset_ReturnsColorFromConditionalSections(
+        string format,
+        double value,
+        string expectedText,
+        string expectedColor)
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(value), format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
+    [InlineData("0\\ kg", 12, "12 kg")]
+    [InlineData("\\#0", 12, "#12")]
+    [InlineData("0\\,", 12, "12,")]
+    [InlineData("0,,", 1234567, "1")]
+    [InlineData("0.0,", 12345, "12.3")]
+    public void CustomNumberSubset_HandlesEscapedLiteralsAndCommaScaling(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
     {
