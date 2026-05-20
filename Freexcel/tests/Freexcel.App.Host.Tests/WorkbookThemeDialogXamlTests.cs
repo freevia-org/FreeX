@@ -87,4 +87,37 @@ public sealed class WorkbookThemeDialogXamlTests
         source.Should().Contain("LoadTheme(WorkbookThemeWorkflow.CreateGrayscaleTheme())");
     }
 
+    [Fact]
+    public void Dialog_ExposesColorPickerButtonsForEveryThemeColorSlot()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WorkbookThemeDialog.xaml.cs"));
+
+        var expectedPickerNames = new[]
+        {
+            "Dark1ColorPickerButton",
+            "Light1ColorPickerButton",
+            "Dark2ColorPickerButton",
+            "Light2ColorPickerButton",
+            "Accent1ColorPickerButton",
+            "Accent2ColorPickerButton",
+            "Accent3ColorPickerButton",
+            "Accent4ColorPickerButton",
+            "Accent5ColorPickerButton",
+            "Accent6ColorPickerButton",
+            "HyperlinkColorPickerButton",
+            "FollowedHyperlinkColorPickerButton"
+        };
+
+        foreach (var expectedPickerName in expectedPickerNames)
+        {
+            xaml.Should().Contain($"x:Name=\"{expectedPickerName}\"");
+        }
+
+        xaml.Should().Contain("Click=\"ThemeColorPickerButton_Click\"");
+        source.Should().Contain("ThemeColorPickerButton_Click");
+        source.Should().Contain("new ColorPickerDialog");
+        source.Should().Contain("WorkbookThemeDialogColorCodec.FormatColor(dialog.SelectedColor.Value)");
+    }
+
 }
