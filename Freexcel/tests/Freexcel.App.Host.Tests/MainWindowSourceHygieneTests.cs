@@ -318,6 +318,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ClipboardCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var clipboardSourcePath = Path.Combine(appHostDirectory, "MainWindow.ClipboardCommands.cs");
+
+        File.Exists(clipboardSourcePath).Should().BeTrue();
+        var clipboardSource = File.ReadAllText(clipboardSourcePath);
+
+        mainSource.Should().NotContain("private record InternalClipboard(");
+        mainSource.Should().NotContain("private void ExecuteCopy(");
+        mainSource.Should().NotContain("private void ExecutePaste(");
+        mainSource.Should().NotContain("private void PasteSpecialBtn_Click(");
+        mainSource.Should().NotContain("private void ExecutePasteLink(");
+
+        clipboardSource.Should().Contain("private record InternalClipboard(");
+        clipboardSource.Should().Contain("private void ExecuteCopy(");
+        clipboardSource.Should().Contain("private void ExecutePaste(");
+        clipboardSource.Should().Contain("private void PasteSpecialBtn_Click(");
+        clipboardSource.Should().Contain("private void ExecutePasteLink(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
