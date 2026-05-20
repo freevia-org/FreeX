@@ -294,6 +294,26 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsUnlockedFormulaCells()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var unlockedStyleId = wb.RegisterStyle(new CellStyle { Locked = false });
+        var address = new CellAddress(sheet.Id, 3, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var cell = Cell.FromFormula("B2*2");
+        cell.StyleId = unlockedStyleId;
+        sheet.SetCell(address, cell);
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.UnlockedFormulaCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("B3");
+        issue.FormulaText.Should().Be("=B2*2");
+        issue.Description.Should().Contain("unlocked");
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledFormulaRefersToBlankCellsRule()
     {
         var wb = new Workbook("test");
@@ -391,6 +411,22 @@ public sealed class FormulaAuditingServiceTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
         sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("SUM(A1:A2)"));
         wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledUnlockedFormulaCellsRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var unlockedStyleId = wb.RegisterStyle(new CellStyle { Locked = false });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        var cell = Cell.FromFormula("A1+1");
+        cell.StyleId = unlockedStyleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), cell);
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.UnlockedFormulaCellsErrorCode);
 
         FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
             .Should().BeEmpty();
@@ -509,6 +545,31 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresUnlockedFormulaCellsIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var unlockedStyleId = wb.RegisterStyle(new CellStyle { Locked = false });
+        var address = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        var cell = Cell.FromFormula("A1+1");
+        cell.StyleId = unlockedStyleId;
+        sheet.SetCell(address, cell);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.UnlockedFormulaCellsErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -540,6 +601,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
                 (FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas"),
                 (FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region"),
+                (FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas"),
                 (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
                 (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
