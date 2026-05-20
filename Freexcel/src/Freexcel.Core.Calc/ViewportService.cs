@@ -579,6 +579,7 @@ public sealed class ViewportService : IViewportService
                 CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
                 CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
                 CfRuleType.EndsWith => MatchesTextRule(cf, value, TextRuleMatchKind.EndsWith),
+                CfRuleType.DateOccurring => MatchesDateOccurring(cf, value, DateTime.Today),
                 CfRuleType.Blanks => IsBlankValue(value),
                 CfRuleType.NoBlanks => !IsBlankValue(value),
                 CfRuleType.Errors => value is ErrorValue,
@@ -757,6 +758,42 @@ public sealed class ViewportService : IViewportService
         };
     }
 
+    private static bool MatchesDateOccurring(ConditionalFormat cf, ScalarValue value, DateTime today)
+    {
+        if (value is not DateTimeValue dateValue)
+            return false;
+
+        var date = dateValue.ToDateTime().Date;
+        today = today.Date;
+
+        return (cf.DateOccurringPeriod ?? "today") switch
+        {
+            "yesterday" => date == today.AddDays(-1),
+            "today" => date == today,
+            "tomorrow" => date == today.AddDays(1),
+            "last7Days" => date >= today.AddDays(-6) && date <= today,
+            "lastWeek" => IsWithinWeek(date, StartOfWeek(today).AddDays(-7)),
+            "thisWeek" => IsWithinWeek(date, StartOfWeek(today)),
+            "nextWeek" => IsWithinWeek(date, StartOfWeek(today).AddDays(7)),
+            "lastMonth" => MatchesMonth(date, today.AddMonths(-1)),
+            "thisMonth" => MatchesMonth(date, today),
+            "nextMonth" => MatchesMonth(date, today.AddMonths(1)),
+            _ => date == today
+        };
+    }
+
+    private static DateTime StartOfWeek(DateTime date)
+    {
+        var offset = (7 + (int)date.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        return date.AddDays(-offset).Date;
+    }
+
+    private static bool IsWithinWeek(DateTime date, DateTime weekStart) =>
+        date >= weekStart && date < weekStart.AddDays(7);
+
+    private static bool MatchesMonth(DateTime date, DateTime target) =>
+        date.Year == target.Year && date.Month == target.Month;
+
     // ── ColorScale ────────────────────────────────────────────────────────────
 
     private static CellStyle? ComputeColorScaleStyle(
@@ -844,6 +881,7 @@ public sealed class ViewportService : IViewportService
     {
         TextValue t => t.Value,
         NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue d => d.ToDateTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         ErrorValue e => e.Code,
         _ => ""
