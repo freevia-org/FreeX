@@ -769,6 +769,33 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void DataTabCommandTooltips_DoNotAdvertiseExcludedConnectors()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        static string DescriptionFor(
+            XDocument document,
+            XNamespace presentation,
+            XNamespace local,
+            string title) =>
+            document.Descendants(presentation + "Button")
+                .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == title)
+                .Attribute(local + "RibbonTooltip.Description")!
+                .Value;
+
+        var getData = DescriptionFor(document, presentation, local, "Get Data");
+        var refreshAll = DescriptionFor(document, presentation, local, "Refresh All");
+
+        getData.Should().Contain("local CSV file");
+        getData.Should().Contain("excluded");
+        refreshAll.Should().Contain("Recalculate formulas");
+        refreshAll.Should().Contain("External data connections");
+        refreshAll.Should().Contain("excluded");
+    }
+
+    [Fact]
     public void NonRibbonTooltipClickButtons_HaveAccessibleNames()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
