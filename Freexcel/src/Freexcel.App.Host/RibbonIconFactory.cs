@@ -27,10 +27,7 @@ public static class RibbonIconFactory
         double size,
         Brush glyphBrush)
     {
-        if (IsWhiteBrush(glyphBrush))
-            return CreateIcon(fallbackIcon, size, glyphBrush);
-
-        if (TryLoadCommandIcon(commandName, size) is { } source)
+        if (TryLoadCommandIcon(commandName, glyphBrush) is { } source)
         {
             var image = new Image
             {
@@ -314,7 +311,7 @@ public static class RibbonIconFactory
         };
     }
 
-    private static ImageSource? TryLoadCommandIcon(string commandName, double size)
+    private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush)
     {
         var slug = ToCommandIconSlug(commandName);
         if (slug.Length == 0)
@@ -322,7 +319,10 @@ public static class RibbonIconFactory
 
         foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
         {
-            var cacheKey = candidateSlug;
+            var monochromeBrush = IsWhiteBrush(glyphBrush) ? glyphBrush : null;
+            var cacheKey = monochromeBrush is null
+                ? candidateSlug
+                : candidateSlug + "|mono|" + BrushCacheKey(monochromeBrush);
             lock (CommandIconCacheGate)
             {
                 if (CommandIconCache.TryGetValue(cacheKey, out var cached))
@@ -352,6 +352,9 @@ public static class RibbonIconFactory
                 continue;
             }
 
+            if (monochromeBrush is not null)
+                RecolorDrawing(drawing, monochromeBrush);
+
             var vectorImage = new DrawingImage(drawing);
             vectorImage.Freeze();
 
@@ -361,6 +364,39 @@ public static class RibbonIconFactory
         }
 
         return null;
+    }
+
+    private static string BrushCacheKey(Brush brush) =>
+        brush is SolidColorBrush solid
+            ? solid.Color.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : brush.ToString() ?? "brush";
+
+    private static void RecolorDrawing(Drawing drawing, Brush brush)
+    {
+        switch (drawing)
+        {
+            case DrawingGroup group:
+                foreach (var child in group.Children)
+                    RecolorDrawing(child, brush);
+                break;
+            case GeometryDrawing geometry:
+                if (geometry.Brush is not null)
+                    geometry.Brush = brush;
+                if (geometry.Pen is not null)
+                    geometry.Pen = new Pen(brush, geometry.Pen.Thickness)
+                    {
+                        DashCap = geometry.Pen.DashCap,
+                        EndLineCap = geometry.Pen.EndLineCap,
+                        LineJoin = geometry.Pen.LineJoin,
+                        MiterLimit = geometry.Pen.MiterLimit,
+                        StartLineCap = geometry.Pen.StartLineCap,
+                        DashStyle = geometry.Pen.DashStyle
+                    };
+                break;
+            case GlyphRunDrawing glyph:
+                glyph.ForegroundBrush = brush;
+                break;
+        }
     }
 
     private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)

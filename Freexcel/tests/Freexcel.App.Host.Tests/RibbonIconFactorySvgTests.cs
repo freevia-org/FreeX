@@ -30,6 +30,25 @@ public sealed class RibbonIconFactorySvgTests
     }
 
     [Fact]
+    public void CreateCommandIcon_LoadsWhiteTitleBarArtworkAsVectorImage()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                "Save",
+                new RibbonCommandIcon(RibbonCommandIconKind.Save),
+                size: 13,
+                Brushes.White);
+
+            var image = icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
+            image.Source.Should().NotBeOfType<BitmapImage>();
+            image.Width.Should().Be(13);
+            image.Height.Should().Be(13);
+        });
+    }
+
+    [Fact]
     public void AppHostProject_CopiesSvgCommandIconsInsteadOfPreRenderedPngs()
     {
         var projectFile = WorkspaceFileLocator.Find(
