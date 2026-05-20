@@ -752,7 +752,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     StringComparer.OrdinalIgnoreCase)
                 ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            var pivotCaches = LoadPivotCaches(archive, workbookXml, workbookRels, workbookNs, relNs);
+            var pivotCaches = XlsxPivotCacheReader.Load(archive, workbookXml, workbookRels, workbookNs, relNs);
             var pivotCachesById = pivotCaches.ToDictionary(cache => cache.CacheId);
             var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
                 .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
@@ -764,113 +764,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             return PivotPackageMetadata.Empty;
         }
-    }
-
-    private static List<PivotCacheModel> LoadPivotCaches(
-        ZipArchive archive,
-        XDocument workbookXml,
-        IReadOnlyDictionary<string, string> workbookRels,
-        XNamespace workbookNs,
-        XNamespace relNs)
-    {
-        var result = new List<PivotCacheModel>();
-        foreach (var pivotCacheElement in workbookXml.Root?
-                     .Element(workbookNs + "pivotCaches")?
-                     .Elements(workbookNs + "pivotCache") ?? [])
-        {
-            var cacheId = ReadIntAttribute(pivotCacheElement, "cacheId") ?? 0;
-            var relId = pivotCacheElement.Attribute(relNs + "id")?.Value;
-            if (cacheId <= 0 || string.IsNullOrWhiteSpace(relId) || !workbookRels.TryGetValue(relId, out var cachePath))
-                continue;
-
-            var cacheEntry = archive.GetEntry(cachePath);
-            if (cacheEntry is null)
-                continue;
-
-            var cacheXml = LoadXml(cacheEntry);
-            var root = cacheXml.Root;
-            if (root is null)
-                continue;
-
-            var cacheSource = root.Element(workbookNs + "cacheSource");
-            var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
-            var cache = new PivotCacheModel
-            {
-                CacheId = cacheId,
-                SourceType = GetPivotCacheSourceType(cacheSource, worksheetSource),
-                SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
-                SourceReference = worksheetSource?.Attribute("ref")?.Value,
-                SourceTableName = worksheetSource?.Attribute("name")?.Value,
-                ConnectionId = cacheSource is null ? null : ReadIntAttribute(cacheSource, "connectionId"),
-                IsOlap = ReadBoolAttribute(root, "olap"),
-                PackagePart = cachePath,
-                RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
-                SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
-                EnableRefresh = ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
-                RefreshedVersion = ReadIntAttribute(root, "refreshedVersion"),
-                RefreshedBy = root.Attribute("refreshedBy")?.Value
-            };
-
-            foreach (var field in root
-                         .Element(workbookNs + "cacheFields")?
-                         .Elements(workbookNs + "cacheField") ?? [])
-            {
-                var sharedItems = field.Element(workbookNs + "sharedItems");
-                cache.Fields.Add(new PivotCacheFieldModel(
-                    field.Attribute("name")?.Value ?? "",
-                    ReadIntAttribute(field, "numFmtId"),
-                    sharedItems is null ? null : ReadIntAttribute(sharedItems, "count"),
-                    ReadBoolAttribute(sharedItems, "containsBlank"),
-                    ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsMixedTypes"),
-                    ReadBoolAttribute(sharedItems, "containsSemiMixedTypes"),
-                    ReadBoolAttribute(sharedItems, "containsNonDate"),
-                    ReadBoolAttribute(sharedItems, "containsInteger"),
-                    ReadBoolAttribute(sharedItems, "longText"),
-                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "minValue"),
-                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "maxValue"),
-                    sharedItems?.Attribute("minDate")?.Value,
-                    sharedItems?.Attribute("maxDate")?.Value,
-                    sharedItems is null ? null : ReadPivotCacheSharedItemValues(sharedItems, workbookNs)));
-            }
-
-            result.Add(cache);
-        }
-
-        return result;
-    }
-
-    private static IReadOnlyList<string> ReadPivotCacheSharedItemValues(XElement sharedItems, XNamespace workbookNs) =>
-        sharedItems
-            .Elements()
-            .Where(element => element.Name == workbookNs + "s" ||
-                              element.Name == workbookNs + "n" ||
-                              element.Name == workbookNs + "d" ||
-                              element.Name == workbookNs + "b" ||
-                              element.Name == workbookNs + "m")
-            .Select(element => element.Attribute("v")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!)
-            .ToList();
-
-    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? cacheSource, XElement? worksheetSource)
-    {
-        var sourceType = cacheSource?.Attribute("type")?.Value;
-        if (string.Equals(sourceType, "external", StringComparison.OrdinalIgnoreCase))
-            return PivotCacheSourceType.External;
-        if (string.Equals(sourceType, "consolidation", StringComparison.OrdinalIgnoreCase))
-            return PivotCacheSourceType.Consolidation;
-        if (string.Equals(sourceType, "scenario", StringComparison.OrdinalIgnoreCase))
-            return PivotCacheSourceType.Scenario;
-        if (worksheetSource is null)
-            return PivotCacheSourceType.Unknown;
-        if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("name")?.Value))
-            return PivotCacheSourceType.Table;
-        if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("ref")?.Value))
-            return PivotCacheSourceType.WorksheetRange;
-        return PivotCacheSourceType.Unknown;
     }
 
     private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
