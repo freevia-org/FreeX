@@ -11,7 +11,8 @@ internal enum ExportFormat
 internal enum ExportContentScope
 {
     ActiveSheet,
-    Selection
+    Selection,
+    EntireWorkbook
 }
 
 internal sealed record ExportOptions(
@@ -61,6 +62,7 @@ internal static class ExportPlanner
         {
             ExportContentScope.ActiveSheet => "Active sheet only",
             ExportContentScope.Selection => "Selection",
+            ExportContentScope.EntireWorkbook => "Entire workbook",
             _ => "Active sheet only"
         };
         var properties = options.IncludeDocumentProperties
@@ -75,11 +77,38 @@ internal static class ExportPlanner
             : $"{scope}; {properties}; {open}.";
     }
 
+    public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
+        DescribeOptionsForFormat(options, format);
+
     public static string DescribeRequest(ExportRequest request)
     {
-        var options = DescribeOptions(request.Options);
+        var options = DescribeOptionsForFormat(request.Options, request.Format);
         return request.UsesXpsFallback
             ? $"{PdfFallbackMessage}\n\nOptions: {options}"
             : $"Options: {options}";
+    }
+
+    private static string DescribeOptionsForFormat(ExportOptions options, ExportFormat format)
+    {
+        var scope = options.Scope switch
+        {
+            ExportContentScope.ActiveSheet => "Active sheet only",
+            ExportContentScope.Selection => "Selection",
+            ExportContentScope.EntireWorkbook => "Entire workbook",
+            _ => "Active sheet only"
+        };
+        var properties = (options.IncludeDocumentProperties, format) switch
+        {
+            (true, ExportFormat.Pdf) => "document properties are included",
+            (true, ExportFormat.Xps) => "document properties are not included in XPS output",
+            _ => "document properties are not included"
+        };
+        var open = options.OpenAfterPublish
+            ? "open after publishing"
+            : null;
+
+        return open is null
+            ? $"{scope}; {properties}."
+            : $"{scope}; {properties}; {open}.";
     }
 }

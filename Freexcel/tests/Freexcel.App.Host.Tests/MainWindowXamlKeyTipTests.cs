@@ -322,6 +322,24 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void InsertCommentCommand_ReusesThreadedCommentWorkflow()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        var insertCommentButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute("Click")?.Value == "InsertCommentBtn_Click");
+
+        insertCommentButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("New Comment");
+        insertCommentButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("threaded comment");
+        insertCommentButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("not implemented");
+        source.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e)    => ReviewNewThreadedCommentBtn_Click(sender, e);");
+    }
+
+    [Fact]
     public void SpellingTooltip_DisclosesKnownCorrectionsBaseline()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));

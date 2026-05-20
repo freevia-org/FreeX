@@ -261,6 +261,8 @@ public static class NumberFormatter
         if (string.IsNullOrEmpty(format) || format == "General")
             return FormatNumberGeneral(value);
 
+        format = PreserveLocaleCurrencyTokens(format);
+
         // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds
         // and must be handled before the generic bracket-stripping pass.
         var elapsedMatch = Regex.Match(format, @"\[([hH])\]|\[([mM])\]|\[([sS])\]");
@@ -317,32 +319,10 @@ public static class NumberFormatter
         // Extract prefix/suffix literal text (not part of numeric pattern)
         if (format != stripped)
         {
-            // Rebuild: replace each quoted segment with nothing for the format pattern,
-            // then reassemble with literal text around the number.
-            var parts = Regex.Split(format, "(\"[^\"]*\")");
-            var numPartSb = new System.Text.StringBuilder();
-            var prefixSb  = new System.Text.StringBuilder();
-            var suffixSb  = new System.Text.StringBuilder();
-            bool numStarted = false;
-            bool numEnded   = false;
+            (prefix, format, suffix) = ExtractNumericAffixes(format);
 
-            foreach (var p in parts)
-            {
-                if (p.StartsWith('"') && p.EndsWith('"'))
-                {
-                    var lit = p[1..^1];
-                    if (numStarted) { suffixSb.Append(lit); numEnded = true; }
-                    else prefixSb.Append(lit);
-                }
-                else if (!string.IsNullOrEmpty(p))
-                {
-                    if (!numEnded) numPartSb.Append(p);
-                    numStarted = true;
-                }
-            }
-            prefix = prefixSb.ToString();
-            suffix = suffixSb.ToString();
-            format = numPartSb.ToString();
+            if (format.All(c => c is '?' || char.IsWhiteSpace(c)))
+                return prefix + suffix;
 
             if (string.IsNullOrEmpty(format))
                 return prefix + suffix;
@@ -354,6 +334,64 @@ public static class NumberFormatter
         catch { numStr = value.ToString(CultureInfo.InvariantCulture); }
 
         return prefix + numStr + suffix;
+    }
+
+    private static string PreserveLocaleCurrencyTokens(string format)
+    {
+        var sb = new System.Text.StringBuilder(format.Length);
+        bool inQuote = false;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                sb.Append(c);
+                continue;
+            }
+
+            if (!inQuote &&
+                c == '[' &&
+                i + 2 < format.Length &&
+                format[i + 1] == '$')
+            {
+                int close = format.IndexOf(']', i + 2);
+                if (close > i)
+                {
+                    string token = format[(i + 2)..close];
+                    int localeSeparator = token.LastIndexOf('-');
+                    if (localeSeparator == 0)
+                    {
+                        i = close;
+                        continue;
+                    }
+
+                    string symbol = localeSeparator > 0 ? token[..localeSeparator] : token;
+                    if (!string.IsNullOrEmpty(symbol))
+                    {
+                        sb.Append('"');
+                        sb.Append(symbol.Replace("\"", "\"\"", StringComparison.Ordinal));
+                        sb.Append('"');
+                        if (close + 2 < format.Length &&
+                            format[close + 1] == '*' &&
+                            format[close + 2] == ' ')
+                        {
+                            sb.Append(' ');
+                            i = close + 2;
+                            continue;
+                        }
+
+                        i = close;
+                        continue;
+                    }
+                }
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
     }
 
     private static string RemoveSpacingAndFillDirectives(string format)
@@ -575,27 +613,32 @@ public static class NumberFormatter
 
     private static (string Prefix, string NumericFormat, string Suffix) ExtractNumericAffixes(string format)
     {
-        string unquoted = Regex.Replace(format, "\"([^\"]*)\"", "$1");
+        var unquotedBuilder = new System.Text.StringBuilder(format.Length);
         int start = -1;
         int end = -1;
+        bool inQuote = false;
 
-        for (int i = 0; i < unquoted.Length; i++)
+        for (int i = 0; i < format.Length; i++)
         {
-            if (IsNumericPlaceholder(unquoted[i]))
+            char c = format[i];
+            if (c == '"')
             {
-                start = i;
-                break;
+                inQuote = !inQuote;
+                continue;
+            }
+
+            int outputIndex = unquotedBuilder.Length;
+            unquotedBuilder.Append(c);
+
+            if (!inQuote && IsNumericPlaceholder(c))
+            {
+                if (start < 0)
+                    start = outputIndex;
+                end = outputIndex;
             }
         }
 
-        for (int i = unquoted.Length - 1; i >= 0; i--)
-        {
-            if (IsNumericPlaceholder(unquoted[i]))
-            {
-                end = i;
-                break;
-            }
-        }
+        string unquoted = unquotedBuilder.ToString();
 
         if (start < 0 || end < start)
             return (unquoted, "", "");

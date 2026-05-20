@@ -49,4 +49,26 @@ public sealed class PrintRendererPageSetupTests
             document.Pages.Should().HaveCount(1);
         });
     }
+
+    [Fact]
+    public void RenderWorkbook_CombinesVisibleWorksheetsAndSkipsHiddenSheets()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Workbook export");
+            var first = workbook.AddSheet("Sheet1");
+            var hidden = workbook.AddSheet("Hidden");
+            var second = workbook.AddSheet("Sheet2");
+            first.SetCell(new CellAddress(first.Id, 1, 1), new TextValue("One"));
+            hidden.SetCell(new CellAddress(hidden.Id, 1, 1), new TextValue("Hidden"));
+            second.SetCell(new CellAddress(second.Id, 1, 1), new TextValue("Two"));
+            hidden.IsHidden = true;
+
+            var document = PrintRenderer.RenderWorkbook(workbook, new ViewportService());
+            var paginator = PrintRenderer.CreateWorkbookPaginator(workbook, new ViewportService());
+
+            document.Pages.Should().HaveCount(2);
+            paginator.PageCount.Should().Be(2);
+        });
+    }
 }

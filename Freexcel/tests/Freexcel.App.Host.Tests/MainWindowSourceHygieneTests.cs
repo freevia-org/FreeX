@@ -182,6 +182,96 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PageLayoutCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var pageLayoutSourcePath = Path.Combine(appHostDirectory, "MainWindow.PageLayout.cs");
+
+        File.Exists(pageLayoutSourcePath).Should().BeTrue();
+        var pageLayoutSource = File.ReadAllText(pageLayoutSourcePath);
+
+        mainSource.Should().NotContain("private void PageLayoutDeferredBtn_Click(");
+        mainSource.Should().NotContain("private void ThemeBtn_Click(");
+        mainSource.Should().NotContain("private void PageMarginsBtn_Click(");
+        mainSource.Should().NotContain("private void PrintAreaBtn_Click(");
+        mainSource.Should().NotContain("private void PageSetupDialogBtn_Click(");
+
+        pageLayoutSource.Should().Contain("private void PageLayoutDeferredBtn_Click(");
+        pageLayoutSource.Should().Contain("private void ThemeBtn_Click(");
+        pageLayoutSource.Should().Contain("private void PageMarginsBtn_Click(");
+        pageLayoutSource.Should().Contain("private void PrintAreaBtn_Click(");
+        pageLayoutSource.Should().Contain("private void PageSetupDialogBtn_Click(");
+    }
+
+    [Fact]
+    public void QuickAnalysisController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var quickAnalysisSourcePath = Path.Combine(appHostDirectory, "MainWindow.QuickAnalysis.cs");
+
+        File.Exists(quickAnalysisSourcePath).Should().BeTrue();
+        var quickAnalysisSource = File.ReadAllText(quickAnalysisSourcePath);
+
+        mainSource.Should().NotContain("private void ShowQuickAnalysisMenu(");
+        mainSource.Should().NotContain("private void QuickAnalysisMenuItem_Click(");
+        mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseEnter(");
+        mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseLeave(");
+
+        quickAnalysisSource.Should().Contain("private void ShowQuickAnalysisMenu(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_Click(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseEnter(");
+        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseLeave(");
+    }
+
+    [Fact]
+    public void FormatPainterController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var formatPainterSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormatPainter.cs");
+
+        File.Exists(formatPainterSourcePath).Should().BeTrue();
+        var formatPainterSource = File.ReadAllText(formatPainterSourcePath);
+
+        mainSource.Should().NotContain("private void FormatPainterBtn_Click(");
+        mainSource.Should().NotContain("private void FormatPainterBtn_PreviewMouseLeftButtonDown(");
+        mainSource.Should().NotContain("private void CaptureFormatPainterSource(");
+        mainSource.Should().NotContain("private void CancelFormatPainter(");
+        mainSource.Should().NotContain("private bool TryApplyFormatPainter(");
+
+        formatPainterSource.Should().Contain("private void FormatPainterBtn_Click(");
+        formatPainterSource.Should().Contain("private void FormatPainterBtn_PreviewMouseLeftButtonDown(");
+        formatPainterSource.Should().Contain("private void CaptureFormatPainterSource(");
+        formatPainterSource.Should().Contain("private void CancelFormatPainter(");
+        formatPainterSource.Should().Contain("private bool TryApplyFormatPainter(");
+    }
+
+    [Fact]
+    public void DataCommandsController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var dataSourcePath = Path.Combine(appHostDirectory, "MainWindow.DataCommands.cs");
+
+        File.Exists(dataSourcePath).Should().BeTrue();
+        var dataSource = File.ReadAllText(dataSourcePath);
+
+        mainSource.Should().NotContain("private void GetDataBtn_Click(");
+        mainSource.Should().NotContain("private void TextToColumnsBtn_Click(");
+        mainSource.Should().NotContain("private void AdvancedFilterBtn_Click(");
+        mainSource.Should().NotContain("private void ScenariosBtn_Click(");
+        mainSource.Should().NotContain("private void DataTableBtn_Click(");
+
+        dataSource.Should().Contain("private void GetDataBtn_Click(");
+        dataSource.Should().Contain("private void TextToColumnsBtn_Click(");
+        dataSource.Should().Contain("private void AdvancedFilterBtn_Click(");
+        dataSource.Should().Contain("private void ScenariosBtn_Click(");
+        dataSource.Should().Contain("private void DataTableBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -379,7 +469,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void PersistentFormatPainter_UsesPreviewMouseDownSoButtonDoubleClickCannotBeOverwrittenByClick()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormatPainter.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("private bool _formatPainterPersistent;");
@@ -395,7 +485,8 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void FormatPainterApplication_UsesTargetSelectionRangeWhenAvailable()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormatPainter.cs"));
+        var mainSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("private SheetId? _formatPainterSourceSheetId;");
         source.Should().Contain("private GridRange? _formatPainterSourceRange;");
@@ -405,9 +496,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
         source.Should().Contain("FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange)");
         source.Should().Contain("new CompositeWorkbookCommand(\"Format Painter\", targetSheetIds.Select(CreateCommand).ToList())");
-        source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
-        source.Should().Contain("selectedRange.Contains(newAddr)");
-        source.Should().Contain("TryApplyFormatPainter(selectedRange)");
+        mainSource.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
+        mainSource.Should().Contain("selectedRange.Contains(newAddr)");
+        mainSource.Should().Contain("TryApplyFormatPainter(selectedRange)");
         source.Should().NotContain("var targetRange = new GridRange(addr, addr);");
     }
 
@@ -533,7 +624,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "QuickAnalysisPlanner.cs"));
 
         source.Should().Contain("ToolTip = option.PreviewText");
@@ -543,7 +634,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
 
         source.Should().Contain("QuickAnalysisMenuItem_MouseEnter");
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
@@ -692,8 +783,10 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
-        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), ResolveExportRange(request.Options))");
-        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), ResolveExportRange(request.Options))");
+        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        source.Should().Contain("var document = RenderExportDocument(options)");
+        source.Should().Contain("var paginator = RenderExportPaginator(options)");
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
         source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
@@ -703,9 +796,11 @@ public sealed class MainWindowSourceHygieneTests
     public void RemainingStatusWorkflows_OpenNamedDialogsInsteadOfMessageBoxes()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
-        source.Should().Contain("new PageBreakDialog");
-        source.Should().Contain("new GoalSeekStatusDialog");
+        pageLayoutSource.Should().Contain("new PageBreakDialog");
+        dataSource.Should().Contain("new GoalSeekStatusDialog");
         source.Should().Contain("new WorkbookStatisticsDialog");
         source.Should().Contain("new AccessibilityCheckerDialog");
     }

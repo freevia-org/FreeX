@@ -12,7 +12,7 @@ internal static class PdfDocumentExporter
 {
     private const double Dpi = 96.0;
 
-    public static void Save(FixedDocument document, string path)
+    public static void Save(FixedDocument document, string path, PdfDocumentProperties? properties = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -23,6 +23,7 @@ internal static class PdfDocumentExporter
 
         using var pdf = new PdfDocument();
         pdf.Info.Creator = "Freexcel";
+        ApplyProperties(pdf, properties);
 
         for (int i = 0; i < document.Pages.Count; i++)
         {
@@ -43,6 +44,21 @@ internal static class PdfDocumentExporter
         }
 
         pdf.Save(path);
+    }
+
+    private static void ApplyProperties(PdfDocument pdf, PdfDocumentProperties? properties)
+    {
+        if (properties is null)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(properties.Title))
+            pdf.Info.Title = properties.Title;
+        if (!string.IsNullOrWhiteSpace(properties.Author))
+            pdf.Info.Author = properties.Author;
+        if (!string.IsNullOrWhiteSpace(properties.Subject))
+            pdf.Info.Subject = properties.Subject;
+        if (!string.IsNullOrWhiteSpace(properties.Keywords))
+            pdf.Info.Keywords = properties.Keywords;
     }
 
     private static FixedPage GetFixedPage(PageContent pageContent)
