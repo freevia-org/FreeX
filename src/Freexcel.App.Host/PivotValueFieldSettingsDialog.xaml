@@ -69,7 +69,12 @@
                 </TabItem>
                 <TabItem Header="Number Format">
                     <StackPanel Margin="10">
-                        <TextBlock Text="Number format ID:" Margin="0,0,0,6"/>
+                        <TextBlock Text="Format preset:" Margin="0,0,0,6"/>
+                        <ComboBox x:Name="NumberFormatPresetBox"
+                                  Height="24"
+                                  AutomationProperties.Name="Number format preset"
+                                  SelectionChanged="NumberFormatPresetBox_SelectionChanged"/>
+                        <TextBlock Text="Number format ID:" Margin="0,10,0,6"/>
                         <TextBox x:Name="NumberFormatBox"
                                  Height="24"
                                  AutomationProperties.Name="Number format ID"/>

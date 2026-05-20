@@ -47,4 +47,25 @@ public sealed class PivotValueFieldSettingsInputParserTests
     {
         PivotValueFieldSettingsInputParser.ResolveNumberFormatIdForCode(inputId, inputCode).Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData("General", null)]
+    [InlineData("Number", 2)]
+    [InlineData("Number with thousands", 4)]
+    [InlineData("Percentage", 10)]
+    [InlineData("Date", 14)]
+    [InlineData("Accounting", 44)]
+    public void ResolvePresetNumberFormatId_MapsExcelStylePresetLabels(string label, int? expected)
+    {
+        PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(label).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NumberFormatPresets_ExposeExcelStyleLabels()
+    {
+        PivotValueFieldSettingsInputParser.NumberFormatPresets
+            .Select(preset => preset.Label)
+            .Should()
+            .Contain(["General", "Number", "Number with thousands", "Percentage", "Date", "Accounting"]);
+    }
 }

@@ -76,6 +76,8 @@ public partial class PivotValueFieldSettingsDialog : Window
                 : 0;
         BaseItemBox.Text = field.BaseItem ?? "";
 
+        NumberFormatPresetBox.ItemsSource = PivotValueFieldSettingsInputParser.NumberFormatPresets.Select(preset => preset.Label);
+        NumberFormatPresetBox.SelectedIndex = FindNumberFormatPresetIndex(field.NumberFormatId);
         NumberFormatBox.Text = field.NumberFormatId?.ToString(CultureInfo.InvariantCulture) ?? "";
         NumberFormatCodeBox.Text = field.NumberFormatCode ?? "";
     }
@@ -88,6 +90,7 @@ public partial class PivotValueFieldSettingsDialog : Window
             return;
         }
 
+        numberFormatId ??= PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(NumberFormatPresetBox.SelectedItem as string);
         var numberFormatCode = PivotValueFieldSettingsInputParser.ResolveOptionalNumberFormatCode(NumberFormatCodeBox.Text);
         numberFormatId = PivotValueFieldSettingsInputParser.ResolveNumberFormatIdForCode(numberFormatId, numberFormatCode);
 
@@ -112,5 +115,21 @@ public partial class PivotValueFieldSettingsDialog : Window
             BaseItem = baseItem
         };
         DialogResult = true;
+    }
+
+    private void NumberFormatPresetBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        var numberFormatId = PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatId(NumberFormatPresetBox.SelectedItem as string);
+        NumberFormatBox.Text = numberFormatId?.ToString(CultureInfo.InvariantCulture) ?? "";
+    }
+
+    private static int FindNumberFormatPresetIndex(int? numberFormatId)
+    {
+        var presets = PivotValueFieldSettingsInputParser.NumberFormatPresets;
+        var index = presets
+            .Select((preset, i) => (preset, i))
+            .FirstOrDefault(item => item.preset.NumberFormatId == numberFormatId)
+            .i;
+        return index < 0 ? 0 : index;
     }
 }
