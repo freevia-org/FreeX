@@ -4399,7 +4399,9 @@ public static class BuiltInFunctions
     private static ScalarValue Take(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue arrayRange
+            ? arrayRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue rowError) return rowError;
         if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
 
@@ -4423,7 +4425,9 @@ public static class BuiltInFunctions
     private static ScalarValue Drop(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue arrayRange
+            ? arrayRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue rowError) return rowError;
         if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
 

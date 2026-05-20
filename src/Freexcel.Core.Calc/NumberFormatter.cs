@@ -534,6 +534,13 @@ public static class NumberFormatter
                 continue;
             }
 
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                sb.Append(c);
+                sb.Append(format[++i]);
+                continue;
+            }
+
             if (!inQuote && c == '_')
             {
                 if (i + 1 < format.Length) i++;
