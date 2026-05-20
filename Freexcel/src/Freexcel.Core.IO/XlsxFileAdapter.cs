@@ -68,7 +68,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
         packageStream.Position = 0;
-        var workbookTheme = LoadWorkbookTheme(packageStream);
+        var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
         packageStream.Position = 0;
         var workbookProtection = LoadWorkbookProtection(packageStream);
         packageStream.Position = 0;
@@ -771,14 +771,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (!string.IsNullOrWhiteSpace(fontName))
                 style.FontName = fontName;
 
-            if (TryReadCellColor(font.Element(workbookNs + "color"), out var fontColor))
+            if (XlsxColorReader.TryReadCellColor(font.Element(workbookNs + "color"), out var fontColor))
                 style.FontColor = fontColor;
         }
 
         var patternFill = dxf
             .Element(workbookNs + "fill")?
             .Element(workbookNs + "patternFill");
-        if (TryReadCellColor(patternFill?.Element(workbookNs + "fgColor"), out var fillColor))
+        if (XlsxColorReader.TryReadCellColor(patternFill?.Element(workbookNs + "fgColor"), out var fillColor))
             style.FillColor = fillColor;
 
         var border = dxf.Element(workbookNs + "border");
@@ -871,7 +871,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return new CellBorder(
             style,
-            TryReadCellColor(edge.Element(workbookNs + "color"), out var color) ? color : CellColor.Black);
+            XlsxColorReader.TryReadCellColor(edge.Element(workbookNs + "color"), out var color) ? color : CellColor.Black);
     }
 
     private static Dictionary<int, string> LoadNumberFormatCatalog(Stream xlsxStream)
@@ -2477,55 +2477,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static WorkbookTheme LoadWorkbookTheme(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
-            if (themeEntry is null)
-                return WorkbookTheme.Office;
-
-            var themeXml = LoadXml(themeEntry);
-            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-
-            var theme = WorkbookTheme.Office
-                .WithName(themeXml.Root?.Attribute("name")?.Value ?? WorkbookTheme.Office.Name);
-
-            var themeElements = themeXml.Root?.Element(drawingNs + "themeElements");
-            if (themeElements is null)
-                return theme;
-
-            var fontScheme = themeElements.Element(drawingNs + "fontScheme");
-            if (fontScheme is not null)
-            {
-                theme = theme.WithFonts(
-                    ReadThemeTypeface(fontScheme.Element(drawingNs + "majorFont"), drawingNs) ?? theme.MajorFontName,
-                    ReadThemeTypeface(fontScheme.Element(drawingNs + "minorFont"), drawingNs) ?? theme.MinorFontName);
-            }
-
-            var effectsName = themeElements.Element(drawingNs + "fmtScheme")?.Attribute("name")?.Value;
-            if (!string.IsNullOrWhiteSpace(effectsName))
-                theme = theme.WithEffects(effectsName);
-
-            var colorScheme = themeElements.Element(drawingNs + "clrScheme");
-            if (colorScheme is null)
-                return theme;
-
-            foreach (var (slot, elementName) in ThemeColorElements)
-            {
-                if (ReadThemeColor(colorScheme.Element(drawingNs + elementName), drawingNs) is { } color)
-                    theme = theme.WithColor(slot, color);
-            }
-
-            return theme;
-        }
-        catch
-        {
-            return WorkbookTheme.Office;
-        }
-    }
-
     private static WorkbookProtectionState LoadWorkbookProtection(Stream xlsxStream)
     {
         try
@@ -2641,87 +2592,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return views;
-    }
-
-    private static readonly (WorkbookThemeColorSlot Slot, string ElementName)[] ThemeColorElements =
-    [
-        (WorkbookThemeColorSlot.Dark1, "dk1"),
-        (WorkbookThemeColorSlot.Light1, "lt1"),
-        (WorkbookThemeColorSlot.Dark2, "dk2"),
-        (WorkbookThemeColorSlot.Light2, "lt2"),
-        (WorkbookThemeColorSlot.Accent1, "accent1"),
-        (WorkbookThemeColorSlot.Accent2, "accent2"),
-        (WorkbookThemeColorSlot.Accent3, "accent3"),
-        (WorkbookThemeColorSlot.Accent4, "accent4"),
-        (WorkbookThemeColorSlot.Accent5, "accent5"),
-        (WorkbookThemeColorSlot.Accent6, "accent6"),
-        (WorkbookThemeColorSlot.Hyperlink, "hlink"),
-        (WorkbookThemeColorSlot.FollowedHyperlink, "folHlink")
-    ];
-
-    private static string? ReadThemeTypeface(XElement? fontElement, XNamespace drawingNs) =>
-        fontElement?
-            .Element(drawingNs + "latin")?
-            .Attribute("typeface")?
-            .Value;
-
-    private static CellColor? ReadThemeColor(XElement? colorElement, XNamespace drawingNs)
-    {
-        var srgb = colorElement?.Element(drawingNs + "srgbClr")?.Attribute("val")?.Value;
-        if (TryParseHexColor(srgb, out var color))
-            return color;
-
-        var systemFallback = colorElement?.Element(drawingNs + "sysClr")?.Attribute("lastClr")?.Value;
-        return TryParseHexColor(systemFallback, out color)
-            ? color
-            : null;
-    }
-
-    private static bool TryParseHexColor(string? text, out CellColor color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var normalized = text.Trim().TrimStart('#');
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], System.Globalization.NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(normalized[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(normalized[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
-        return true;
-    }
-
-    private static bool TryReadRgbColor(XElement? element, out RgbColor color)
-    {
-        color = default;
-        var rgb = element?.Attribute("rgb")?.Value;
-        if (string.IsNullOrWhiteSpace(rgb))
-            return false;
-        var normalized = rgb.Trim().TrimStart('#');
-        if (normalized.Length == 8)
-            normalized = normalized[2..];
-        if (!TryParseHexColor(normalized, out var cellColor))
-            return false;
-        color = RgbColor.FromCellColor(cellColor);
-        return true;
-    }
-
-    private static bool TryReadCellColor(XElement? element, out CellColor color)
-    {
-        color = default;
-        var rgb = element?.Attribute("rgb")?.Value;
-        if (string.IsNullOrWhiteSpace(rgb))
-            return false;
-
-        var normalized = rgb.Trim().TrimStart('#');
-        if (normalized.Length == 8)
-            normalized = normalized[2..];
-        return TryParseHexColor(normalized, out color);
     }
 
     private static CfThresholdType FromCfvoType(string? type) =>
@@ -3658,11 +3528,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             });
         }
 
-        if (TryReadRgbColor(colors.ElementAtOrDefault(0), out var minColor))
+        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(0), out var minColor))
             format.MinColor = minColor;
-        if (format.UseThreeColorScale && TryReadRgbColor(colors.ElementAtOrDefault(1), out var midColor))
+        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(1), out var midColor))
             format.MidColor = midColor;
-        if (TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), out var maxColor))
+        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), out var maxColor))
             format.MaxColor = maxColor;
 
         ApplyNativeConditionalFormatPayloadMetadata(format, colorScale, worksheetNs);
@@ -3695,7 +3565,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             format.DataBarMaxThresholdType = value.Type;
             format.DataBarMaxThresholdValue = value.Value;
         });
-        if (TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
+        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
             format.DataBarColor = color;
         ApplyNativeConditionalFormatPayloadMetadata(format, dataBar, worksheetNs);
         return format;
@@ -11245,7 +11115,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XElement(drawingNs + "themeElements",
                     new XElement(drawingNs + "clrScheme",
                         new XAttribute("name", $"{theme.Name} Colors"),
-                        ThemeColorElements.Select(color =>
+                        XlsxWorkbookThemeReader.ColorElements.Select(color =>
                             new XElement(drawingNs + color.ElementName,
                                 new XElement(drawingNs + "srgbClr",
                                     new XAttribute("val", FormatThemeColor(theme.GetColor(color.Slot))))))),
