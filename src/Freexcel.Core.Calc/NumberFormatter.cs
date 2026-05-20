@@ -1038,12 +1038,25 @@ public static class NumberFormatter
     private static string FormatElapsedTime(double value, string format, Match elapsedMatch)
     {
         // value is an OADate fraction; each unit = 1 day = 86400 seconds.
+        var fractionalMatch = Regex.Match(format, @"(?:s|\[[sS]\])\.(0+)");
+        int fractionalDotIndex = fractionalMatch.Success
+            ? fractionalMatch.Index + fractionalMatch.Value.IndexOf('.', StringComparison.Ordinal)
+            : -1;
+        int fractionalPrecision = fractionalMatch.Success ? fractionalMatch.Groups[1].Value.Length : 0;
+
         double totalSecondsD = Math.Abs(value) * 86400.0;
+        if (fractionalPrecision > 0)
+            totalSecondsD = Math.Round(totalSecondsD, fractionalPrecision, MidpointRounding.AwayFromZero);
+
         long totalSeconds = (long)totalSecondsD;
         long totalMinutes = totalSeconds / 60;
         long totalHours   = totalSeconds / 3600;
         int remMinutes = (int)(totalMinutes % 60);
         int remSeconds = (int)(totalSeconds % 60);
+        int fractionalSecondUnits = fractionalPrecision > 0
+            ? (int)Math.Round((totalSecondsD - totalSeconds) * Math.Pow(10, fractionalPrecision),
+                MidpointRounding.AwayFromZero)
+            : 0;
 
         // Which bracket is the "lead" elapsed unit?
         long leadValue;
@@ -1095,6 +1108,13 @@ public static class NumberFormatter
             {
                 sb.Append(remSeconds.ToString("D2"));
                 i += 2;
+            }
+            else if (i == fractionalDotIndex)
+            {
+                sb.Append('.');
+                sb.Append(fractionalSecondUnits.ToString("D" + fractionalPrecision.ToString(CultureInfo.InvariantCulture),
+                    CultureInfo.InvariantCulture));
+                i += fractionalPrecision + 1;
             }
             else if (format[i] == '\\' && i + 1 < format.Length)
             {

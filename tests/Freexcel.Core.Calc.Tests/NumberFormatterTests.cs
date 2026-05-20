@@ -255,6 +255,21 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[h]:mm:ss.000", "36:00:00.789")]
+    [InlineData("[m]:ss.00", "2160:00.79")]
+    [InlineData("[s].0", "129600.8")]
+    public void CustomNumberSubset_FormatsElapsedFractionalSecondTokens(
+        string format,
+        string expected)
+    {
+        var value = (TimeSpan.FromHours(36) + TimeSpan.FromMilliseconds(789)).TotalDays;
+
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("\\_0", 12, "_12")]
     [InlineData("\\*0", 12, "*12")]
     [InlineData("\\_m/d/yyyy", 45292, "_1/1/2024")]
