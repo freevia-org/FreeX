@@ -1201,7 +1201,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        var lookupArr = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         if (lookupArr.RowCount != 1 && lookupArr.ColCount != 1) return ErrorValue.Value;
@@ -2374,9 +2376,13 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        var lookupArr = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args[2] is ErrorValue e2) return e2;
-        if (args[2] is not RangeValue returnArr) return ErrorValue.Value;
+        var returnArr = args[2] is RangeValue returnRange
+            ? returnRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[2] } });
         var lookupIsVertical = lookupArr.ColCount == 1;
         var lookupIsHorizontal = lookupArr.RowCount == 1;
         if (!lookupIsVertical && !lookupIsHorizontal) return ErrorValue.Value;

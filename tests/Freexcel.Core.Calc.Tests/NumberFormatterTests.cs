@@ -227,6 +227,21 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("h:mm:ss.0", "12:34:56.8")]
+    [InlineData("h:mm:ss.00", "12:34:56.79")]
+    [InlineData("h:mm:ss.000", "12:34:56.789")]
+    public void CustomNumberSubset_FormatsFractionalSecondTokens(
+        string format,
+        string expected)
+    {
+        var value = new DateTime(2024, 1, 1, 12, 34, 56, 789).ToOADate();
+
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[h]:mm:ss_)", "36:00:00")]
     [InlineData("[h]:mm:ss*-", "36:00:00")]
     [InlineData("\\T [h]:mm:ss", "T 36:00:00")]
