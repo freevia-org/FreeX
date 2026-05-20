@@ -4080,16 +4080,19 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
+        var lookupVec = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
         if (args.Count == 2 && lookupVec.RowCount > 1 && lookupVec.ColCount > 1)
             return LookupArrayForm(args[0], lookupVec);
 
         var lookupFlat = lookupVec.Flatten();
-        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
-        var resultFlat = args.Count > 2 && args[2] is RangeValue rv
-            ? rv.Flatten()
+        var resultFlat = args.Count > 2
+            ? (args[2] is RangeValue rv
+                ? rv.Flatten()
+                : new[] { args[2] })
             : lookupFlat;
         var lookupVal = args[0];
         int matchIdx = -1;
