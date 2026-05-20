@@ -6598,6 +6598,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "phoneticPr",
             workbookNs + "sortState",
             workbookNs + "dataConsolidate",
+            workbookNs + "legacyDrawing",
             workbookNs + "legacyDrawingHF",
             workbookNs + "customProperties",
             workbookNs + "smartTags",
