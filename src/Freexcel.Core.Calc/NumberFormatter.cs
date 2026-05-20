@@ -241,6 +241,9 @@ public static class NumberFormatter
 
     private static bool TryMapColor(string token, out string? color)
     {
+        if (TryMapIndexedColor(token, out color))
+            return true;
+
         color = token.ToUpperInvariant() switch
         {
             "BLACK"   => "#000000",
@@ -253,6 +256,24 @@ public static class NumberFormatter
             "MAGENTA" => "#FF00FF",
             _         => null
         };
+        return color is not null;
+    }
+
+    private static bool TryMapIndexedColor(string token, out string? color)
+    {
+        color = token.ToUpperInvariant() switch
+        {
+            "COLOR1" => "#000000",
+            "COLOR2" => "#FFFFFF",
+            "COLOR3" => "#FF0000",
+            "COLOR4" => "#00B050",
+            "COLOR5" => "#0070C0",
+            "COLOR6" => "#FFFF00",
+            "COLOR7" => "#FF00FF",
+            "COLOR8" => "#00FFFF",
+            _ => null
+        };
+
         return color is not null;
     }
 

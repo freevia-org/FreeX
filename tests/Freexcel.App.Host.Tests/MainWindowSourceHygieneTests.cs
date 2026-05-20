@@ -793,6 +793,21 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void CtrlP_RoutesThroughBackstagePrintEntryPoint()
+    {
+        var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+
+        backstageSource.Should().Contain("private void OpenPrintBackstage()");
+        backstageSource.Should().Contain("SsPrintNavBtn.Focus();");
+        keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
+        keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
+        xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
+        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open the print preview and native print dialog for the rendered worksheet.\"");
+    }
+
+    [Fact]
     public void RemainingStatusWorkflows_OpenNamedDialogsInsteadOfMessageBoxes()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
