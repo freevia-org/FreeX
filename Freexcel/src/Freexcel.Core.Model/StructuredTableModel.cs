@@ -27,8 +27,36 @@ public sealed record StructuredTableColumnModel(
     string? CalculatedColumnFormula = null,
     string? TotalsRowFormula = null);
 
-public sealed record StructuredTableFilterColumnModel(
-    int ColumnId,
-    IReadOnlyList<string> Values,
-    bool IncludeBlank = false,
-    string? NativeFilterXml = null);
+public sealed record StructuredTableFilterColumnModel
+{
+    public int ColumnId { get; init; }
+    public IReadOnlyList<string> Values { get; init; }
+    public bool IncludeBlank { get; init; }
+    public IReadOnlyList<string> NativeFilterXmls { get; init; }
+    public string? NativeFilterXml => NativeFilterXmls.FirstOrDefault();
+
+    public StructuredTableFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank = false,
+        string? NativeFilterXml = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml])
+    {
+    }
+
+    public StructuredTableFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<string> NativeFilterXmls)
+    {
+        this.ColumnId = ColumnId;
+        this.Values = Values;
+        this.IncludeBlank = IncludeBlank;
+        this.NativeFilterXmls = NativeFilterXmls;
+    }
+}

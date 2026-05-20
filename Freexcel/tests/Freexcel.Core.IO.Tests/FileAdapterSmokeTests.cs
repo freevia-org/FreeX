@@ -12140,6 +12140,41 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeFilterExtensionSiblings()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableCustomFilterExtensionTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeCustomFilterWithExtension: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var filter = table.FilterColumns.Should().ContainSingle().Subject;
+        filter.ColumnId.Should().Be(1);
+        filter.Values.Should().BeEmpty();
+        filter.NativeFilterXmls.Should().HaveCount(2);
+        filter.NativeFilterXmls[0].Should().Contain("customFilters");
+        filter.NativeFilterXmls[1].Should().Contain("extLst");
+        filter.NativeFilterXmls[1].Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("customFilters");
+        tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
+        tableXml.Should().Contain("extLst");
+        tableXml.Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
@@ -13715,7 +13750,8 @@ public class FileAdapterSmokeTests
         bool includeTotalsRow = false,
         bool includeFilterValues = false,
         bool includeColumnFormulas = false,
-        bool includeCustomFilter = false)
+        bool includeCustomFilter = false,
+        bool includeCustomFilterWithExtension = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13757,6 +13793,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeCustomFilterWithExtension
+                            ? StructuredTableWithCustomFilterAndExtensionXml
                         : includeCustomFilter
                             ? StructuredTableWithCustomFilterXml
                         : includeColumnFormulas
@@ -14729,6 +14767,35 @@ public class FileAdapterSmokeTests
               <customFilters>
                 <customFilter operator="greaterThan" val="10"/>
               </customFilters>
+            </filterColumn>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithCustomFilterAndExtensionXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="1">
+              <customFilters>
+                <customFilter operator="greaterThan" val="10"/>
+              </customFilters>
+              <extLst>
+                <ext uri="{FREEXCEL-TABLE-FILTER-EXT}"/>
+              </extLst>
             </filterColumn>
           </autoFilter>
           <tableColumns count="2">
