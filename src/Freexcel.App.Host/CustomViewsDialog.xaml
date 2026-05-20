@@ -13,7 +13,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <GroupBox Grid.Row="0" Header="Views">
+        <GroupBox Grid.Row="0" Header="_Views">
             <ListView x:Name="ViewsList" SelectionChanged="ViewsList_SelectionChanged"
                       AutomationProperties.Name="Custom views"
                       AutomationProperties.HelpText="Shows saved workbook views that can be shown or deleted.">
@@ -27,10 +27,10 @@
         </GroupBox>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="ShowButton" Content="Show" Width="72" Margin="0,0,8,0" IsDefault="True" Click="ShowButton_Click"/>
-            <Button Content="Add..." Width="72" Margin="0,0,8,0" Click="AddButton_Click"/>
-            <Button x:Name="DeleteButton" Content="Delete" Width="72" Margin="0,0,8,0" Click="DeleteButton_Click"/>
-            <Button Content="Close" Width="72" IsCancel="True" Click="CloseButton_Click"/>
+            <Button x:Name="ShowButton" Content="_Show" Width="72" Margin="0,0,8,0" IsDefault="True" Click="ShowButton_Click"/>
+            <Button Content="_Add..." Width="72" Margin="0,0,8,0" Click="AddButton_Click"/>
+            <Button x:Name="DeleteButton" Content="_Delete" Width="72" Margin="0,0,8,0" Click="DeleteButton_Click"/>
+            <Button Content="_Close" Width="72" IsCancel="True" Click="CloseButton_Click"/>
         </StackPanel>
     </Grid>
 </Window>
