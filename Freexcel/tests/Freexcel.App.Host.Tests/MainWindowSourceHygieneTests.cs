@@ -610,12 +610,10 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("new CreateTableDialog");
         source.Should().Contain("new CreateStyledStructuredTableCommand(");
-        source.Should().Contain("new StructuredTableStyleBanding(");
+        source.Should().Contain("TableStyleGalleryPlanner.GetOption(variant)");
         source.Should().NotContain("new CreateStructuredTableCommand(");
         source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId)");
-        source.Should().Contain("\"TableStyleLight9\"");
-        source.Should().Contain("\"TableStyleMedium2\"");
-        source.Should().Contain("\"TableStyleDark1\"");
+        source.Should().Contain("tableStyle.Banding");
     }
 
     [Fact]
