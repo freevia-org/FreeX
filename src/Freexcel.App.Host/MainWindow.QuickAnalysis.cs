@@ -42,7 +42,13 @@ public partial class MainWindow
                 currentGroup = option.Group;
             }
 
-            var item = new MenuItem { Header = option.Label, Tag = option, ToolTip = option.PreviewText };
+            var item = new MenuItem
+            {
+                Header = option.Label,
+                Tag = option,
+                ToolTip = option.PreviewText,
+                Icon = QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)
+            };
             item.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
             item.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
             item.Click += QuickAnalysisMenuItem_Click;
