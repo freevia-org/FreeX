@@ -870,7 +870,9 @@ public static class NumberFormatter
     {
         // When AM/PM is present the hour token uses 12-hour lowercase (h/hh);
         // without AM/PM use 24-hour uppercase (H/HH).
-        bool hasAmPm = excelFmt.IndexOf("AM/PM", StringComparison.OrdinalIgnoreCase) >= 0;
+        bool hasAmPm =
+            excelFmt.IndexOf("AM/PM", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            excelFmt.IndexOf("A/P", StringComparison.OrdinalIgnoreCase) >= 0;
         string hourToken2 = hasAmPm ? "hh" : "HH";
         string hourToken1 = hasAmPm ? "h"  : "H";
 
@@ -904,6 +906,8 @@ public static class NumberFormatter
             if (TryConsumeFractionalSeconds(excelFmt, i, sb, out int ni) ||
                 TryConsume(excelFmt, i, "AM/PM", "tt", sb, out ni) ||
                 TryConsume(excelFmt, i, "am/pm", "tt", sb, out ni) ||
+                TryConsume(excelFmt, i, "A/P", "t", sb, out ni) ||
+                TryConsume(excelFmt, i, "a/p", "t", sb, out ni) ||
                 TryConsume(excelFmt, i, "yyyy", "yyyy", sb, out ni) ||
                 TryConsume(excelFmt, i, "yy",   "yy",   sb, out ni) ||
                 TryConsume(excelFmt, i, "mmmm", "MMMM", sb, out ni) ||
@@ -1011,6 +1015,24 @@ public static class NumberFormatter
             char c = format[i];
             if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
                 continue;
+            if (c == '"')
+            {
+                int open = format.LastIndexOf('"', i - 1);
+                if (open >= 0)
+                {
+                    i = open;
+                    continue;
+                }
+            }
+            if (c == ']')
+            {
+                int open = format.LastIndexOf('[', i - 1);
+                if (open >= 0)
+                {
+                    i = open;
+                    continue;
+                }
+            }
             return i;
         }
 
@@ -1024,6 +1046,24 @@ public static class NumberFormatter
             char c = format[i];
             if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
                 continue;
+            if (c == '"')
+            {
+                int close = format.IndexOf('"', i + 1);
+                if (close >= 0)
+                {
+                    i = close;
+                    continue;
+                }
+            }
+            if (c == '[')
+            {
+                int close = format.IndexOf(']', i + 1);
+                if (close >= 0)
+                {
+                    i = close;
+                    continue;
+                }
+            }
             return i;
         }
 
