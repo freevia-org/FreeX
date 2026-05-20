@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Center">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
+      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
+    </style>
+  </defs>
+  <rect width="54" height="54" fill="none"/>
+  <g><path stroke="#202124" stroke-width="2.2" stroke-linecap="round" d="M15.12 14.04h23.76M9.72 22.68h34.56M17.28 31.32h19.44M12.96 39.96h28.08"/>  </g>
+</svg>
+

@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Delete">
+  <defs>
+    <style>
+      .s{fill:none;stroke:#202124;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+      .t{font-family:Segoe UI,Arial,sans-serif;font-weight:700;fill:#111827}
+      .tm{font-family:Segoe UI,Arial,sans-serif;font-weight:600;fill:#111827}
+      .green{fill:#217346}.green2{fill:#66b57a}.blue{fill:#2b78d4}.yellow{fill:#f6d14a}.orange{fill:#f4a340}.red{fill:#d83b01}.purple{fill:#8b5cf6}.gray{fill:#667085}.paper{fill:#f8fafc}.none{fill:none}
+    </style>
+  </defs>
+  <rect width="54" height="54" fill="none"/>
+  <g><rect class="paper" stroke="#202124" stroke-width="1.8" x="9.72" y="12.96" width="27" height="25.92"/><path class="s" d="M18.72 12.96v25.92M27.72 12.96v25.92M9.72 21.6h27M9.72 30.24h27"/><circle class="red" cx="38.88" cy="13.5" r="6.48"/><path d="M36.18 10.8l5.4 5.4M41.58 10.8l-5.4 5.4" stroke="#fff" stroke-width="2.97" stroke-linecap="round"/>  </g>
+</svg>
+
