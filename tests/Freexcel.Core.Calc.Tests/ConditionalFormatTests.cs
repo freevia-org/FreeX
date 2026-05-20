@@ -125,6 +125,54 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSet_AttachesTrafficLightDisplayIconsByValueBand()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(50)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(90)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1"
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3TrafficLights1", 0, 3, true));
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3TrafficLights1", 1, 3, true));
+        GetCell(vp, 3, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3TrafficLights1", 2, 3, true));
+    }
+
+    [Fact]
+    public void IconSet_RespectsReverseAndIconsOnlyDisplay()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(90)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1",
+            IconSetReverse = true,
+            IconSetShowValue = false
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3TrafficLights1", 2, 3, false));
+        GetCell(vp, 1, 1).DisplayText.Should().BeEmpty();
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3TrafficLights1", 0, 3, false));
+        GetCell(vp, 2, 1).DisplayText.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Top10_HighlightsTopRankedValues()
     {
         var (wb, sheet) = MakeWorkbook();

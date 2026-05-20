@@ -3883,6 +3883,9 @@ public class FileAdapterSmokeTests
         source.Position = 0;
         var loaded = adapter.Load(source);
         var loadedRule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        loadedRule.NativeContainerAttributes.Should().ContainKey("customBlockAttr").WhoseValue.Should().Be("cf-container");
+        loadedRule.NativeContainerChildXmls.Should().ContainSingle()
+            .Which.Should().Contain("{FREEXCEL-CF-CONTAINER-EXT}");
         loadedRule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
         loadedRule.NativeChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEXCEL-CF-EXT}");
@@ -3893,8 +3896,10 @@ public class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetXml.Should().Contain("customBlockAttr=\"cf-container\"");
         worksheetXml.Should().Contain("customAttr=\"cf-native\"");
         worksheetXml.Should().Contain("extLst");
+        worksheetXml.Should().Contain("{FREEXCEL-CF-CONTAINER-EXT}");
         worksheetXml.Should().Contain("{FREEXCEL-CF-EXT}");
         worksheetXml.Should().Contain("colorScale");
     }
@@ -4262,6 +4267,8 @@ public class FileAdapterSmokeTests
             StopIfTrue = true,
             NativeAttributes = new Dictionary<string, string> { ["customAttr"] = "cf-native" },
             NativeChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-CF-EXT}\" /></extLst>"],
+            NativeContainerAttributes = new Dictionary<string, string> { ["customBlockAttr"] = "cf-container" },
+            NativeContainerChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-CF-CONTAINER-EXT}\" /></extLst>"],
             FormatIfTrue = new CellStyle
             {
                 Bold = true,
@@ -4286,6 +4293,8 @@ public class FileAdapterSmokeTests
         rule.Value1.Should().Be("5");
         rule.Priority.Should().Be(2);
         rule.StopIfTrue.Should().BeTrue();
+        rule.NativeContainerAttributes.Should().ContainKey("customBlockAttr").WhoseValue.Should().Be("cf-container");
+        rule.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-CF-CONTAINER-EXT}");
         rule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
         rule.NativeChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-CF-EXT}");
         rule.FormatIfTrue.Should().NotBeNull();
@@ -12724,8 +12733,14 @@ public class FileAdapterSmokeTests
         {
             XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            var rule = worksheetXml.Root!
+            var conditionalFormatting = worksheetXml.Root!
                 .Elements(worksheetNs + "conditionalFormatting")
+                .First(element => element.Elements(worksheetNs + "cfRule").Any(rule => rule.Attribute("type")?.Value == "colorScale"));
+            conditionalFormatting.SetAttributeValue("customBlockAttr", "cf-container");
+            conditionalFormatting.Add(new XElement(
+                worksheetNs + "extLst",
+                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEXCEL-CF-CONTAINER-EXT}"))));
+            var rule = conditionalFormatting
                 .Elements(worksheetNs + "cfRule")
                 .First(element => element.Attribute("type")?.Value == "colorScale");
             rule.SetAttributeValue("customAttr", "cf-native");
