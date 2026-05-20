@@ -34,18 +34,18 @@ public sealed class InsertFunctionDialog : Window
         searchPanel.ColumnDefinitions.Add(new ColumnDefinition());
         DockPanel.SetDock(searchPanel, Dock.Top);
 
-        searchPanel.Children.Add(new Label { Content = "Category:", VerticalContentAlignment = VerticalAlignment.Center });
         _categoryBox = new ComboBox { Margin = new Thickness(4, 0, 12, 0), VerticalContentAlignment = VerticalAlignment.Center };
+        searchPanel.Children.Add(new Label { Content = "_Category:", Target = _categoryBox, VerticalContentAlignment = VerticalAlignment.Center });
         _categoryBox.ItemsSource = new[] { AllCategory }.Concat(_catalog.Select(entry => entry.Category).Distinct().OrderBy(category => category)).ToArray();
         _categoryBox.SelectedItem = AllCategory;
         _categoryBox.SelectionChanged += (_, _) => RefreshList();
         Grid.SetColumn(_categoryBox, 1);
         searchPanel.Children.Add(_categoryBox);
 
-        var searchLabel = new Label { Content = "Search:", VerticalContentAlignment = VerticalAlignment.Center };
+        _searchBox = new TextBox { VerticalContentAlignment = VerticalAlignment.Center };
+        var searchLabel = new Label { Content = "_Search:", Target = _searchBox, VerticalContentAlignment = VerticalAlignment.Center };
         Grid.SetColumn(searchLabel, 2);
         searchPanel.Children.Add(searchLabel);
-        _searchBox = new TextBox { VerticalContentAlignment = VerticalAlignment.Center };
         Grid.SetColumn(_searchBox, 3);
         searchPanel.Children.Add(_searchBox);
         _searchBox.TextChanged += (_, _) => RefreshList();
@@ -64,8 +64,8 @@ public sealed class InsertFunctionDialog : Window
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         DockPanel.SetDock(btnRow, Dock.Bottom);
-        var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += Ok_Click;
         btnRow.Children.Add(ok);
         btnRow.Children.Add(cancel);

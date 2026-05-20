@@ -379,7 +379,7 @@ public static class NumberFormatter
             try
             {
                 var dt = DateTime.FromOADate(value);
-                return dt.ToString(ToNetDateFormat(format), dateTimeFormat);
+                return FormatDateTimeValue(dt, format, dateTimeFormat);
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
@@ -814,10 +814,44 @@ public static class NumberFormatter
         {
             var dt = DateTime.FromOADate(oaDate);
             if (IsDateTimeFormat(cleanFmt))
-                return dt.ToString(ToNetDateFormat(cleanFmt), dateTimeFormat);
+                return FormatDateTimeValue(dt, cleanFmt, dateTimeFormat);
             return dt.ToString(cleanFmt, dateTimeFormat);
         }
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
+    }
+
+    private static string FormatDateTimeValue(
+        DateTime dateTime,
+        string excelFormat,
+        DateTimeFormatInfo dateTimeFormat)
+    {
+        if (TryGetFractionalSecondPrecision(excelFormat, out int precision))
+            dateTime = RoundToFractionalSecondPrecision(dateTime, precision);
+
+        return dateTime.ToString(ToNetDateFormat(excelFormat), dateTimeFormat);
+    }
+
+    private static bool TryGetFractionalSecondPrecision(string format, out int precision)
+    {
+        var match = Regex.Match(format, @"(?<=[sS])\.(0+)");
+        if (match.Success)
+        {
+            precision = match.Groups[1].Value.Length;
+            return true;
+        }
+
+        precision = 0;
+        return false;
+    }
+
+    private static DateTime RoundToFractionalSecondPrecision(DateTime dateTime, int precision)
+    {
+        if (precision >= 7)
+            return dateTime;
+
+        long scale = (long)Math.Pow(10, 7 - precision);
+        long roundedTicks = ((dateTime.Ticks + (scale / 2)) / scale) * scale;
+        return new DateTime(roundedTicks, dateTime.Kind);
     }
 
     // Detect date/time format: has date/time tokens and no digit-only tokens
@@ -825,6 +859,7 @@ public static class NumberFormatter
     {
         // Strip quoted strings before checking
         var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
+        stripped = Regex.Replace(stripped, @"(?<=[sS])\.0+", "");
         bool hasDateToken = stripped.IndexOfAny(['y', 'Y', 'd', 'D', 'h', 'H', 's', 'S', 'm', 'M']) >= 0;
         bool hasNumberToken = stripped.IndexOfAny(['0', '#']) >= 0;
         return hasDateToken && !hasNumberToken;
@@ -866,14 +901,15 @@ public static class NumberFormatter
                 continue;
             }
             // Longest-match for each token group
-            if (TryConsume(excelFmt, i, "AM/PM", "tt", sb, out int ni) ||
+            if (TryConsumeFractionalSeconds(excelFmt, i, sb, out int ni) ||
+                TryConsume(excelFmt, i, "AM/PM", "tt", sb, out ni) ||
                 TryConsume(excelFmt, i, "am/pm", "tt", sb, out ni) ||
                 TryConsume(excelFmt, i, "yyyy", "yyyy", sb, out ni) ||
                 TryConsume(excelFmt, i, "yy",   "yy",   sb, out ni) ||
                 TryConsume(excelFmt, i, "mmmm", "MMMM", sb, out ni) ||
                 TryConsume(excelFmt, i, "mmm",  "MMM",  sb, out ni) ||
-                TryConsume(excelFmt, i, "mm",   "MM",   sb, out ni) ||
-                TryConsume(excelFmt, i, "m",    "M",    sb, out ni) ||
+                TryConsumeMonthOrMinute(excelFmt, i, "mm", sb, out ni) ||
+                TryConsumeMonthOrMinute(excelFmt, i, "m", sb, out ni) ||
                 TryConsume(excelFmt, i, "dddd", "dddd", sb, out ni) ||
                 TryConsume(excelFmt, i, "ddd",  "ddd",  sb, out ni) ||
                 TryConsume(excelFmt, i, "dd",   "dd",   sb, out ni) ||
@@ -894,6 +930,34 @@ public static class NumberFormatter
         return sb.ToString();
     }
 
+    private static bool TryConsumeFractionalSeconds(
+        string src,
+        int pos,
+        System.Text.StringBuilder sb,
+        out int newPos)
+    {
+        if (pos < 1 || src[pos] != '.' || !IsTimeToken(src[pos - 1]))
+        {
+            newPos = pos;
+            return false;
+        }
+
+        int end = pos + 1;
+        while (end < src.Length && src[end] == '0')
+            end++;
+
+        if (end == pos + 1)
+        {
+            newPos = pos;
+            return false;
+        }
+
+        sb.Append('.');
+        sb.Append('f', end - pos - 1);
+        newPos = end;
+        return true;
+    }
+
     private static bool TryConsume(string src, int pos, string token, string replacement,
         System.Text.StringBuilder sb, out int newPos)
     {
@@ -908,17 +972,91 @@ public static class NumberFormatter
         return false;
     }
 
+    private static bool TryConsumeMonthOrMinute(
+        string src,
+        int pos,
+        string token,
+        System.Text.StringBuilder sb,
+        out int newPos)
+    {
+        if (pos + token.Length > src.Length ||
+            string.Compare(src, pos, token, 0, token.Length, StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            newPos = pos;
+            return false;
+        }
+
+        bool isMinute = IsAdjacentToTimeToken(src, pos, token.Length);
+        sb.Append(isMinute
+            ? token.Length == 2 ? "mm" : "m"
+            : token.Length == 2 ? "MM" : "M");
+        newPos = pos + token.Length;
+        return true;
+    }
+
+    private static bool IsAdjacentToTimeToken(string format, int tokenStart, int tokenLength)
+    {
+        int before = PreviousFormatTokenIndex(format, tokenStart - 1);
+        if (before >= 0 && IsTimeToken(format[before]))
+            return true;
+
+        int after = NextFormatTokenIndex(format, tokenStart + tokenLength);
+        return after >= 0 && IsTimeToken(format[after]);
+    }
+
+    private static int PreviousFormatTokenIndex(string format, int index)
+    {
+        for (int i = index; i >= 0; i--)
+        {
+            char c = format[i];
+            if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
+                continue;
+            return i;
+        }
+
+        return -1;
+    }
+
+    private static int NextFormatTokenIndex(string format, int index)
+    {
+        for (int i = index; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
+                continue;
+            return i;
+        }
+
+        return -1;
+    }
+
+    private static bool IsTimeToken(char c)
+        => c is 'h' or 'H' or 's' or 'S';
+
     // ── Elapsed time format [h]:mm:ss, [m]:ss, [s] ───────────────────────────
 
     private static string FormatElapsedTime(double value, string format, Match elapsedMatch)
     {
         // value is an OADate fraction; each unit = 1 day = 86400 seconds.
+        var fractionalMatch = Regex.Match(format, @"(?:s|\[[sS]\])\.(0+)");
+        int fractionalDotIndex = fractionalMatch.Success
+            ? fractionalMatch.Index + fractionalMatch.Value.IndexOf('.', StringComparison.Ordinal)
+            : -1;
+        int fractionalPrecision = fractionalMatch.Success ? fractionalMatch.Groups[1].Value.Length : 0;
+
         double totalSecondsD = Math.Abs(value) * 86400.0;
+        if (fractionalPrecision > 0)
+            totalSecondsD = Math.Round(totalSecondsD, fractionalPrecision, MidpointRounding.AwayFromZero);
+
         long totalSeconds = (long)totalSecondsD;
         long totalMinutes = totalSeconds / 60;
         long totalHours   = totalSeconds / 3600;
         int remMinutes = (int)(totalMinutes % 60);
         int remSeconds = (int)(totalSeconds % 60);
+        int fractionalSecondUnits = fractionalPrecision > 0
+            ? (int)Math.Round((totalSecondsD - totalSeconds) * Math.Pow(10, fractionalPrecision),
+                MidpointRounding.AwayFromZero)
+            : 0;
 
         // Which bracket is the "lead" elapsed unit?
         long leadValue;
@@ -970,6 +1108,13 @@ public static class NumberFormatter
             {
                 sb.Append(remSeconds.ToString("D2"));
                 i += 2;
+            }
+            else if (i == fractionalDotIndex)
+            {
+                sb.Append('.');
+                sb.Append(fractionalSecondUnits.ToString("D" + fractionalPrecision.ToString(CultureInfo.InvariantCulture),
+                    CultureInfo.InvariantCulture));
+                i += fractionalPrecision + 1;
             }
             else if (format[i] == '\\' && i + 1 < format.Length)
             {

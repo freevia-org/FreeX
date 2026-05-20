@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Formula;
 
@@ -30,5 +31,18 @@ public sealed class InsertFunctionDialogTests
     public void CreateFormula_UsesSelectedFunctionName()
     {
         InsertFunctionDialog.CreateFormula(" xlookup ").Should().Be("XLOOKUP()");
+    }
+
+    [Fact]
+    public void DialogCommands_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("Content = \"_Category:\"");
+        source.Should().Contain("Target = _categoryBox");
+        source.Should().Contain("Content = \"_Search:\"");
+        source.Should().Contain("Target = _searchBox");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
     }
 }

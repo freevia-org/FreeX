@@ -1201,7 +1201,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        var lookupArr = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
         if (lookupArr.RowCount != 1 && lookupArr.ColCount != 1) return ErrorValue.Value;
@@ -2374,9 +2376,13 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue lookupArr) return ErrorValue.Value;
+        var lookupArr = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args[2] is ErrorValue e2) return e2;
-        if (args[2] is not RangeValue returnArr) return ErrorValue.Value;
+        var returnArr = args[2] is RangeValue returnRange
+            ? returnRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[2] } });
         var lookupIsVertical = lookupArr.ColCount == 1;
         var lookupIsHorizontal = lookupArr.RowCount == 1;
         if (!lookupIsVertical && !lookupIsHorizontal) return ErrorValue.Value;
@@ -4074,16 +4080,19 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue lookupVec) return ErrorValue.Value;
+        var lookupVec = args[1] is RangeValue lookupRange
+            ? lookupRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
         if (args.Count == 2 && lookupVec.RowCount > 1 && lookupVec.ColCount > 1)
             return LookupArrayForm(args[0], lookupVec);
 
         var lookupFlat = lookupVec.Flatten();
-        if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
-        var resultFlat = args.Count > 2 && args[2] is RangeValue rv
-            ? rv.Flatten()
+        var resultFlat = args.Count > 2
+            ? (args[2] is RangeValue rv
+                ? rv.Flatten()
+                : new[] { args[2] })
             : lookupFlat;
         var lookupVal = args[0];
         int matchIdx = -1;
@@ -4302,7 +4311,9 @@ public static class BuiltInFunctions
     private static ScalarValue SortBy(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue arrayRange
+            ? arrayRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
 
         var keys = new List<(RangeValue Range, int Order)>();
         bool? sortRows = null;
@@ -4310,7 +4321,9 @@ public static class BuiltInFunctions
         for (int i = 1; i < args.Count; i++)
         {
             if (args[i] is ErrorValue keyError) return keyError;
-            if (args[i] is not RangeValue byArray) return ErrorValue.Value;
+            var byArray = args[i] is RangeValue byArrayRange
+                ? byArrayRange
+                : new RangeValue(new ScalarValue[1, 1] { { args[i] } });
 
             if (!TryGetSortByOrientation(arr, byArray, out bool keySortsRows)) return ErrorValue.Value;
             if (sortRows.HasValue && sortRows.Value != keySortsRows) return ErrorValue.Value;
