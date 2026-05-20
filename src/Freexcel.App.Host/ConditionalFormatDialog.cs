@@ -32,14 +32,7 @@ public class ConditionalFormatDialog : Window
         ("Bold Green Text",   Color.FromRgb(0, 176, 80)),
     ];
 
-    private static readonly string[] IconSetStyles =
-    [
-        "3TrafficLights1",
-        "3Arrows",
-        "3Symbols",
-        "4TrafficLights",
-        "5Arrows"
-    ];
+    private static readonly IReadOnlyList<string> IconSetStyles = ConditionalFormatIconSetPlanner.Styles;
 
     /// <summary>Creates a new-rule dialog for the given rule type and range.</summary>
     public ConditionalFormatDialog(string ruleType, GridRange range)
@@ -219,6 +212,8 @@ public class ConditionalFormatDialog : Window
                 cf.IconSetStyle = _iconSetStyleBox.SelectedItem as string ?? IconSetStyles[0];
                 cf.IconSetShowValue = _iconSetShowValueBox.IsChecked == true;
                 cf.IconSetReverse = _iconSetReverseBox.IsChecked == true;
+                cf.IconSetThresholds.Clear();
+                cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
             }
 
             cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");

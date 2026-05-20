@@ -73,6 +73,52 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void IconSetRule_CreatesThresholdsForSelectedIconCount()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var range = RangeFor(SheetId.New());
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Icon Set", range));
+
+            GetControl<ComboBox>(dialog, "_iconSetStyleBox").SelectedItem = "5Quarters";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.IconSetStyle.Should().Be("5Quarters");
+            dialog.ResultRule.IconSetThresholds.Should().Equal(
+                new CfThresholdModel(CfThresholdType.Percent, "0"),
+                new CfThresholdModel(CfThresholdType.Percent, "20"),
+                new CfThresholdModel(CfThresholdType.Percent, "40"),
+                new CfThresholdModel(CfThresholdType.Percent, "60"),
+                new CfThresholdModel(CfThresholdType.Percent, "80"));
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void IconSetRule_OffersExcelIconSetGalleryStyles()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Icon Set", RangeFor(SheetId.New())));
+
+            var styles = GetControl<ComboBox>(dialog, "_iconSetStyleBox").Items.Cast<string>();
+
+            styles.Should().Contain([
+                "3ArrowsGray",
+                "3Flags",
+                "4RedToBlack",
+                "4Rating",
+                "5Boxes"
+            ]);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void ExistingIconSetRule_PrePopulatesIconSetFields()
     {
         StaTestRunner.Run(() =>
