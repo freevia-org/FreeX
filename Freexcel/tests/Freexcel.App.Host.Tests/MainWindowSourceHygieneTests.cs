@@ -182,6 +182,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PageLayoutCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var pageLayoutSourcePath = Path.Combine(appHostDirectory, "MainWindow.PageLayout.cs");
+
+        File.Exists(pageLayoutSourcePath).Should().BeTrue();
+        var pageLayoutSource = File.ReadAllText(pageLayoutSourcePath);
+
+        mainSource.Should().NotContain("private void PageLayoutDeferredBtn_Click(");
+        mainSource.Should().NotContain("private void ThemeBtn_Click(");
+        mainSource.Should().NotContain("private void PageMarginsBtn_Click(");
+        mainSource.Should().NotContain("private void PrintAreaBtn_Click(");
+        mainSource.Should().NotContain("private void PageSetupDialogBtn_Click(");
+
+        pageLayoutSource.Should().Contain("private void PageLayoutDeferredBtn_Click(");
+        pageLayoutSource.Should().Contain("private void ThemeBtn_Click(");
+        pageLayoutSource.Should().Contain("private void PageMarginsBtn_Click(");
+        pageLayoutSource.Should().Contain("private void PrintAreaBtn_Click(");
+        pageLayoutSource.Should().Contain("private void PageSetupDialogBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
