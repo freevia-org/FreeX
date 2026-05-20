@@ -769,6 +769,7 @@
                                             <ContextMenu>
                                                 <MenuItem Header="All Borders"          local:RibbonTooltip.KeyTip="A" Click="BorderAllMenuItem_Click"/>
                                                 <MenuItem Header="Outside Borders"      local:RibbonTooltip.KeyTip="O" Click="BorderOutsideMenuItem_Click"/>
+                                                <MenuItem Header="Inside Borders"       local:RibbonTooltip.KeyTip="I" Click="BorderInsideMenuItem_Click"/>
                                                 <MenuItem Header="No Border"            local:RibbonTooltip.KeyTip="N" Click="BorderNoneMenuItem_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Bottom Border"        local:RibbonTooltip.KeyTip="B" Click="BorderBottomMenuItem_Click"/>
