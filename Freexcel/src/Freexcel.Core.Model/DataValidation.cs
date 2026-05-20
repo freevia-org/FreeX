@@ -38,4 +38,8 @@ public sealed class DataValidation
     public string? ErrorMessage { get; set; }
     public string? PromptTitle { get; set; }
     public string? PromptMessage { get; set; }
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; set; }
+    public IReadOnlyList<string>? NativeChildXmls { get; set; }
+    public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; set; }
+    public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
 }
