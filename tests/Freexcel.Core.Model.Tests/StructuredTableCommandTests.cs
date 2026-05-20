@@ -202,6 +202,12 @@ public sealed class StructuredTableCommandTests
         var sheet = wb.AddSheet("Sheet1");
         SeedTable(sheet);
         var ctx = new SimpleCtx(wb);
+        var preexistingBodyStyleId = wb.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(192, 0, 0),
+            Bold = true
+        });
+        sheet.GetCell(new CellAddress(sheet.Id, 3, 1))!.StyleId = preexistingBodyStyleId;
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2));
         var command = new CreateStyledStructuredTableCommand(
             sheet.Id,
@@ -225,8 +231,10 @@ public sealed class StructuredTableCommandTests
         headerStyle.Bold.Should().BeTrue();
         wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 2, 1))!.StyleId)
             .FillColor.Should().Be(new CellColor(255, 255, 255));
-        wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 3, 1))!.StyleId)
-            .FillColor.Should().Be(new CellColor(222, 235, 247));
+        var bodyStyle = wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 3, 1))!.StyleId);
+        bodyStyle.FillColor.Should().Be(new CellColor(222, 235, 247));
+        bodyStyle.FontColor.Should().Be(CellColor.Black);
+        bodyStyle.Bold.Should().BeFalse();
 
         command.Revert(ctx);
 
@@ -234,7 +242,7 @@ public sealed class StructuredTableCommandTests
         wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 1, 1))!.StyleId)
             .Should().Be(wb.GetStyle(StyleId.Default));
         wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 3, 1))!.StyleId)
-            .Should().Be(wb.GetStyle(StyleId.Default));
+            .Should().Be(wb.GetStyle(preexistingBodyStyleId));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
