@@ -1890,24 +1890,15 @@ public class GridView : FrameworkElement
 
     private static void DrawLineSparkline(DrawingContext dc, IReadOnlyList<double> values, Rect rect, Pen pen)
     {
-        if (values.Count == 1)
+        var layout = SparklineLayoutPlanner.CalculateLineLayout(values, rect);
+        if (layout.SinglePoint is { } point)
         {
-            var point = new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
             dc.DrawEllipse(pen.Brush, null, point, 1.5, 1.5);
             return;
         }
 
-        var min = values.Min();
-        var max = values.Max();
-        var span = Math.Abs(max - min) < 0.0000001 ? 1 : max - min;
-        var points = values
-            .Select((value, index) => new Point(
-                rect.Left + rect.Width * index / (values.Count - 1),
-                rect.Bottom - ((value - min) / span * rect.Height)))
-            .ToList();
-
-        for (var i = 1; i < points.Count; i++)
-            dc.DrawLine(pen, points[i - 1], points[i]);
+        foreach (var segment in layout.Segments)
+            dc.DrawLine(pen, segment.Start, segment.End);
     }
 
     private static void DrawColumnSparkline(
@@ -1918,22 +1909,8 @@ public class GridView : FrameworkElement
         Brush positiveFill,
         Brush negativeFill)
     {
-        var maxAbs = values.Select(Math.Abs).DefaultIfEmpty(1).Max();
-        if (maxAbs < 0.0000001) maxAbs = 1;
-        var axis = rect.Top + rect.Height / 2;
-        var slot = rect.Width / values.Count;
-        var barWidth = Math.Max(1, slot * 0.65);
-
-        for (var i = 0; i < values.Count; i++)
-        {
-            var value = winLoss ? Math.Sign(values[i]) : values[i];
-            var height = winLoss
-                ? rect.Height / 2
-                : Math.Abs(value) / maxAbs * rect.Height / 2;
-            var x = rect.Left + i * slot + (slot - barWidth) / 2;
-            var y = value >= 0 ? axis - height : axis;
-            dc.DrawRectangle(value >= 0 ? positiveFill : negativeFill, null, new Rect(x, y, barWidth, Math.Max(1, height)));
-        }
+        foreach (var bar in SparklineLayoutPlanner.CalculateColumnLayout(values, rect, winLoss).Bars)
+            dc.DrawRectangle(bar.IsNegative ? negativeFill : positiveFill, null, bar.Rect);
     }
 
     private void RenderResizeLine(DrawingContext dc)
