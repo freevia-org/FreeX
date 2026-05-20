@@ -3346,6 +3346,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         FormatIfTrue = formatIfTrue
                     };
                     format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));
+                    ApplyNativeConditionalFormatPayloadMetadata(format, iconSet, worksheetNs);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     result.Add(format);
@@ -3444,6 +3445,53 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(element => element.Name != worksheetNs + "cfRule")
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
+
+    private static void ApplyNativeConditionalFormatPayloadMetadata(
+        ConditionalFormat format,
+        XElement payload,
+        XNamespace worksheetNs)
+    {
+        var nativeAttributes = ReadNativeConditionalFormatPayloadAttributes(format.RuleType, payload);
+        if (nativeAttributes.Count > 0)
+            format.NativePayloadAttributes = nativeAttributes;
+
+        var nativeChildren = ReadNativeConditionalFormatPayloadChildXmls(format.RuleType, payload, worksheetNs);
+        if (nativeChildren.Count > 0)
+            format.NativePayloadChildXmls = nativeChildren;
+    }
+
+    private static Dictionary<string, string> ReadNativeConditionalFormatPayloadAttributes(
+        CfRuleType ruleType,
+        XElement payload)
+    {
+        string[] modeledAttributes = ruleType switch
+        {
+            CfRuleType.DataBar => ["showValue", "minLength", "maxLength"],
+            CfRuleType.IconSet => ["iconSet", "showValue", "reverse"],
+            _ => []
+        };
+        return payload.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static List<string> ReadNativeConditionalFormatPayloadChildXmls(
+        CfRuleType ruleType,
+        XElement payload,
+        XNamespace worksheetNs)
+    {
+        XName[] modeledChildren = ruleType switch
+        {
+            CfRuleType.ColorScale => [worksheetNs + "cfvo", worksheetNs + "color"],
+            CfRuleType.DataBar => [worksheetNs + "cfvo", worksheetNs + "color"],
+            CfRuleType.IconSet => [worksheetNs + "cfvo"],
+            _ => []
+        };
+        return payload.Elements()
+            .Where(element => !modeledChildren.Contains(element.Name))
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
+    }
 
     private static IReadOnlyList<DataValidationNativeMetadata> ReadDataValidationNativeMetadata(
         XDocument worksheetXml,
@@ -3708,6 +3756,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), out var maxColor))
             format.MaxColor = maxColor;
 
+        ApplyNativeConditionalFormatPayloadMetadata(format, colorScale, worksheetNs);
         return format;
     }
 
@@ -3739,6 +3788,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         });
         if (TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
             format.DataBarColor = color;
+        ApplyNativeConditionalFormatPayloadMetadata(format, dataBar, worksheetNs);
         return format;
     }
 
@@ -3800,6 +3850,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             StopIfTrue = source.StopIfTrue,
             NativeAttributes = source.NativeAttributes,
             NativeChildXmls = source.NativeChildXmls,
+            NativePayloadAttributes = source.NativePayloadAttributes,
+            NativePayloadChildXmls = source.NativePayloadChildXmls,
             NativeContainerAttributes = source.NativeContainerAttributes,
             NativeContainerChildXmls = source.NativeContainerChildXmls
         };
@@ -10644,14 +10696,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
         switch (cf.RuleType)
         {
             case CfRuleType.ColorScale:
-                rule.Add(new XElement(
+                rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "colorScale",
                     ToCfvoXml(worksheetNs, cf.MinThresholdType, cf.MinThresholdValue),
                     cf.UseThreeColorScale ? ToCfvoXml(worksheetNs, cf.MidThresholdType, cf.MidThresholdValue) : null,
                     ToCfvoXml(worksheetNs, cf.MaxThresholdType, cf.MaxThresholdValue),
                     ToColorXml(worksheetNs, cf.MinColor),
                     cf.UseThreeColorScale ? ToColorXml(worksheetNs, cf.MidColor) : null,
-                    ToColorXml(worksheetNs, cf.MaxColor)));
+                    ToColorXml(worksheetNs, cf.MaxColor)), cf, worksheetNs));
                 break;
             case CfRuleType.DataBar:
                 var dataBar = new XElement(
@@ -10664,15 +10716,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     dataBar.SetAttributeValue("minLength", cf.DataBarMinLength.Value.ToString(CultureInfo.InvariantCulture));
                 if (cf.DataBarMaxLength.HasValue)
                     dataBar.SetAttributeValue("maxLength", cf.DataBarMaxLength.Value.ToString(CultureInfo.InvariantCulture));
-                rule.Add(dataBar);
+                rule.Add(AddConditionalFormatPayloadNativeMetadata(dataBar, cf, worksheetNs));
                 break;
             case CfRuleType.IconSet:
-                rule.Add(new XElement(
+                rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "iconSet",
                     new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle),
                     new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                     new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
-                    GetIconSetThresholds(cf).Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value))));
+                    GetIconSetThresholds(cf).Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value))), cf, worksheetNs));
                 break;
             case CfRuleType.AboveAverage:
                 rule.SetAttributeValue("aboveAverage", cf.AboveAverage ? "1" : "0");
@@ -10728,6 +10780,34 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return rule;
+    }
+
+    private static XElement AddConditionalFormatPayloadNativeMetadata(
+        XElement payload,
+        ConditionalFormat cf,
+        XNamespace worksheetNs)
+    {
+        foreach (var (name, value) in cf.NativePayloadAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && payload.Attribute(name) is null)
+                payload.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in (cf.NativePayloadChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == worksheetNs)
+                    payload.Add(nativeChild);
+            }
+            catch
+            {
+                // Ignore malformed native conditional-format payload metadata from older saves.
+            }
+        }
+
+        return payload;
     }
 
     private static IReadOnlyList<CfThresholdModel> GetIconSetThresholds(ConditionalFormat cf) =>
