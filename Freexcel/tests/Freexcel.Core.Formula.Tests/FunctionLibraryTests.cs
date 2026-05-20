@@ -4961,6 +4961,28 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void VstackAndHstack_TreatScalarArgumentsAsSingleCellArrays()
+    {
+        var vstack = _eval.Evaluate("=VSTACK(1,\"two\",TRUE)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        vstack.RowCount.Should().Be(3);
+        vstack.ColCount.Should().Be(1);
+        vstack.Cells[0, 0].Should().Be(new NumberValue(1));
+        vstack.Cells[1, 0].Should().Be(new TextValue("two"));
+        vstack.Cells[2, 0].Should().Be(new BoolValue(true));
+
+        var hstack = _eval.Evaluate("=HSTACK(1,\"two\",TRUE)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        hstack.RowCount.Should().Be(1);
+        hstack.ColCount.Should().Be(3);
+        hstack.Cells[0, 0].Should().Be(new NumberValue(1));
+        hstack.Cells[0, 1].Should().Be(new TextValue("two"));
+        hstack.Cells[0, 2].Should().Be(new BoolValue(true));
+    }
+
+    [Fact]
     public void Vstack_ErrorArgument_PropagatesError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
