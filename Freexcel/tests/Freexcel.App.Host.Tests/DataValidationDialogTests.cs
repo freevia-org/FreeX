@@ -21,6 +21,17 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_UsesExcelStyleSettingsInputAndErrorTabs()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+
+        xaml.Should().Contain("<TabControl");
+        xaml.Should().Contain("Header=\"_Settings\"");
+        xaml.Should().Contain("Header=\"_Input Message\"");
+        xaml.Should().Contain("Header=\"_Error Alert\"");
+    }
+
+    [Fact]
     public void DataValidationDialog_ExposesKeyboardAccessKeysForOptionsAndButtons()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
