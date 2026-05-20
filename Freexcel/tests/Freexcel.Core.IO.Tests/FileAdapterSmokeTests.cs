@@ -8313,6 +8313,34 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookWebPublishObjects()
+    {
+        var workbook = new Workbook("WorkbookWebPublishRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("web publish metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorkbookWebPublishObjects(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("webPublishObjects");
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("FreexcelWebPublish");
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("destinationFile=\"https://example.invalid/report.htm\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDefinedNames()
     {
         var workbook = new Workbook("DefinedNameRetentionTest");
@@ -13478,6 +13506,30 @@ public class FileAdapterSmokeTests
                         x15Ns + "futureMetadata",
                         new XAttribute(XNamespace.Xmlns + "x15", x15Ns),
                         new XAttribute("name", "FreexcelUnknownWorkbookExtension")))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorkbookWebPublishObjects(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "webPublishObjects",
+                new XAttribute("count", "1"),
+                new XElement(
+                    workbookNs + "webPublishObject",
+                    new XAttribute("id", "1"),
+                    new XAttribute("divId", "FreexcelWebPublish"),
+                    new XAttribute("sourceObject", "Data"),
+                    new XAttribute("destinationFile", "https://example.invalid/report.htm"),
+                    new XAttribute("title", "Report"),
+                    new XAttribute("autoRepublish", "0"))));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
