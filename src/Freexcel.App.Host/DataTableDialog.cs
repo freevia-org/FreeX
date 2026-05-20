@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -45,11 +46,11 @@ public sealed class DataTableDialog : Window
         root.Children.Add(new TextBlock { Text = "Type:" });
         root.Children.Add(_modeBox);
         root.Children.Add(new TextBlock { Text = "Formula cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(_formulaBox);
+        root.Children.Add(CreateReferenceEditor(_formulaBox, "Select formula cell"));
         root.Children.Add(new TextBlock { Text = "Row input cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(_rowInputBox);
+        root.Children.Add(CreateReferenceEditor(_rowInputBox, "Select row input cell"));
         root.Children.Add(new TextBlock { Text = "Column input cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(_columnInputBox);
+        root.Children.Add(CreateReferenceEditor(_columnInputBox, "Select column input cell"));
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
     }
@@ -117,6 +118,32 @@ public sealed class DataTableDialog : Window
 
         address = parsed;
         return true;
+    }
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel();
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
     }
 
     private void Accept()
