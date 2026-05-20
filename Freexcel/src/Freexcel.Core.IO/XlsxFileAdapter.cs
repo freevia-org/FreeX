@@ -1397,9 +1397,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         .Select(value => value!)
                         .ToList() ?? [],
                     ReadBoolAttribute(filters, "blank"),
-                    nativeFilters);
+                    nativeFilters,
+                    ReadNativeStructuredTableFilterColumnAttributes(column));
             })
-            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || column.NativeFilterXmls.Count > 0))
+            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || column.NativeFilterXmls.Count > 0 || column.NativeAttributes?.Count > 0))
             .ToList();
     }
 
@@ -1408,6 +1409,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(element => element.Name != workbookNs + "filters")
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
+
+    private static Dictionary<string, string>? ReadNativeStructuredTableFilterColumnAttributes(XElement filterColumn)
+    {
+        var attributes = filterColumn.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "colId")
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : attributes;
+    }
 
     private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
     {
@@ -9197,6 +9206,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var element = new XElement(
             workbookNs + "filterColumn",
             new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
+        foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
+
         if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
         {
             element.Add(new XElement(
