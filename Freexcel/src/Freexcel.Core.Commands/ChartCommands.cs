@@ -336,6 +336,58 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
     }
 }
 
+public sealed class SetChartStyleCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _chartId;
+    private readonly int? _chartStyleId;
+    private int? _previousChartStyleId;
+    private bool _applied;
+
+    public string Label => "Chart Style";
+
+    public SetChartStyleCommand(SheetId sheetId, Guid chartId, int? chartStyleId)
+    {
+        _sheetId = sheetId;
+        _chartId = chartId;
+        _chartStyleId = NormalizeStyleId(chartStyleId);
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        if (chart is null)
+            return new CommandOutcome(false, "Chart was not found.");
+
+        _previousChartStyleId = chart.ChartStyleId;
+        chart.ChartStyleId = _chartStyleId;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied)
+            return;
+
+        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        if (chart is null)
+            return;
+
+        chart.ChartStyleId = _previousChartStyleId;
+        _previousChartStyleId = null;
+        _applied = false;
+    }
+
+    private static int? NormalizeStyleId(int? chartStyleId)
+    {
+        if (chartStyleId is null)
+            return null;
+
+        return Math.Clamp(chartStyleId.Value, 1, 48);
+    }
+}
+
 public sealed class ChangeChartTypeCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
