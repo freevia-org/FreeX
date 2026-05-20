@@ -244,6 +244,21 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("0;0;0;_(@_)", "hello", "hello")]
+    [InlineData("0;0;0;@*-", "hello", "hello")]
+    [InlineData("0;0;0;\"SKU \"@", "A1", "SKU A1")]
+    [InlineData("0;0;0;\\@@", "A1", "@A1")]
+    public void CustomNumberSubset_CleansTextSectionSpacingFillAndEscapes(
+        string format,
+        string value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new TextValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void Format_BlankValue_ReturnsEmpty()
     {
