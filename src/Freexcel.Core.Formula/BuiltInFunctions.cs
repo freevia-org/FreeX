@@ -3820,7 +3820,9 @@ public static class BuiltInFunctions
     private static ScalarValue Irr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
+        var valRange = args[0] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[0]);
         double guess = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 0.1;
         if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
@@ -8389,7 +8391,9 @@ public static class BuiltInFunctions
     private static ScalarValue Mirr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
+        var valRange = args[0] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[0]);
         double financeRate  = ToNumber(args[1]);
         double reinvestRate = ToNumber(args[2]);
         if (!double.IsFinite(financeRate) || !double.IsFinite(reinvestRate)) return ErrorValue.Num;
@@ -8397,7 +8401,7 @@ public static class BuiltInFunctions
         if (err is not null) return err;
         var cf = values!;
         int n = cf.Count;
-        if (n < 2) return ErrorValue.Num;
+        if (n < 2) return ErrorValue.DivByZero;
         // NPV of negative flows at finance_rate
         double npvNeg = 0;
         for (int i = 0; i < n; i++)
@@ -8414,8 +8418,12 @@ public static class BuiltInFunctions
     private static ScalarValue Xirr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
-        if (args[1] is not RangeValue dateRange) return ErrorValue.Value;
+        var valRange = args[0] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[0]);
+        var dateRange = args[1] is RangeValue datesRange
+            ? datesRange
+            : SingleCellArray(args[1]);
         double guess = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0.1;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
@@ -8423,7 +8431,8 @@ public static class BuiltInFunctions
         if (de is not null) return de;
         var cf = vals!;
         var ds = datesRaw!;
-        if (cf.Count < 2 || cf.Count != ds.Count) return ErrorValue.Num;
+        if (cf.Count < 2) return ErrorValue.NA;
+        if (cf.Count != ds.Count) return ErrorValue.Num;
         var dates = ds.Select(SerialToDate).ToList();
         DateTime d0 = dates[0];
         // Newton-Raphson
