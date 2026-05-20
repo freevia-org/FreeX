@@ -16,10 +16,22 @@ public sealed class FormatCellsDialogXamlTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
 
-        foreach (var tab in new[] { "Number", "Alignment", "Font", "Fill", "Border", "Protection" })
+        foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
         {
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
         }
+    }
+
+    [Fact]
+    public void FormatCellsDialog_ExposesKeyboardAccessKeysForTabsAndButtons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
+            xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
+
+        xaml.Should().Contain("Content=\"_OK\"");
+        xaml.Should().Contain("Content=\"_Cancel\"");
     }
 
     [Fact]
