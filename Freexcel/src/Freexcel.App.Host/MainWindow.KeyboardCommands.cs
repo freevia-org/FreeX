@@ -51,7 +51,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenFormatCellsFont, (_, _) => OpenFormatCellsDialog(FormatCellsDialogTab.Font));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.WorkbookStatistics, WorkbookStatisticsBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewNote, ReviewNewCommentBtn_Click);
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SaveAs, (_, _) => SaveWorkbookWithDialog());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenContextMenu, (_, _) => OpenKeyboardContextMenu());

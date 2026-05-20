@@ -12045,6 +12045,26 @@ public partial class MainWindow : Window
         MessageBox.Show($"Comment added to {addr.ToA1()}.", "Comment", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    private void ReviewNewThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+        var addr = SheetGrid.SelectedRange.Value.Start;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var defaultText = sheet is null || !sheet.ThreadedComments.TryGetValue(addr, out var existing)
+            ? string.Empty
+            : existing.Text;
+        var dialog = new TextEntryDialog("Threaded Comment", $"Threaded comment for {addr.ToA1()}:", defaultText) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Threaded Comment",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new SetThreadedCommentCommand(_currentSheetId, currentRange.Start, dialog.Result.Text)))
+            return;
+
+        UpdateViewport();
+        MessageBox.Show($"Threaded comment added to {addr.ToA1()}.", "Threaded Comment", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     private void ReviewDeleteCommentBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;

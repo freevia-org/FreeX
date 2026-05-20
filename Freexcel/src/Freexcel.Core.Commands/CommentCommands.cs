@@ -41,6 +41,45 @@ public sealed class SetCommentCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Set or replace a cell threaded comment with undo support.</summary>
+public sealed class SetThreadedCommentCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private readonly ThreadedComment _comment;
+    private bool _hadPrevious;
+    private ThreadedComment? _previousComment;
+
+    public string Label => "Set Threaded Comment";
+
+    public SetThreadedCommentCommand(SheetId sheetId, CellAddress address, string text, string author = "Freexcel")
+    {
+        _sheetId = sheetId;
+        _address = address;
+        _comment = new ThreadedComment(text, author);
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        _hadPrevious = sheet.ThreadedComments.TryGetValue(_address, out _previousComment);
+        sheet.ThreadedComments[_address] = _comment;
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (_hadPrevious && _previousComment is not null)
+            sheet.ThreadedComments[_address] = _previousComment;
+        else
+            sheet.ThreadedComments.Remove(_address);
+    }
+}
+
 /// <summary>Delete a cell comment with undo support.</summary>
 public sealed class DeleteCommentCommand : IWorkbookCommand
 {

@@ -314,6 +314,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
+    {
+        var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        keyboard.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click)");
+        keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
+        source.Should().Contain("private void ReviewNewThreadedCommentBtn_Click");
+        source.Should().Contain("new SetThreadedCommentCommand(");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));

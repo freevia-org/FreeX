@@ -41,7 +41,7 @@ public static class GoToSpecialService
                 case GoToSpecialKind.Formulas when cell?.HasFormula == true:
                     result.Add(address);
                     break;
-                case GoToSpecialKind.Comments when sheet.Comments.ContainsKey(address):
+                case GoToSpecialKind.Comments when sheet.Comments.ContainsKey(address) || sheet.ThreadedComments.ContainsKey(address):
                     result.Add(address);
                     break;
                 case GoToSpecialKind.DataValidation when sheet.DataValidations.Any(rule => rule.AppliesTo.Contains(address)):
