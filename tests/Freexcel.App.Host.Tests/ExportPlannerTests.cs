@@ -80,15 +80,27 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeEntireWorkbook()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.EntireWorkbook,
+            IncludeDocumentProperties: false,
+            OpenAfterPublish: false);
+
+        ExportPlanner.DescribeOptions(options)
+            .Should().Be("Entire workbook; document properties are not included.");
+    }
+
+    [Fact]
     public void ExportOptionsDialog_CreateResult_NormalizesExcelOptions()
     {
         ExportOptionsDialog.CreateResult(
-                ExportContentScope.Selection,
+                ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
                 openAfterPublish: true)
             .Should()
             .Be(new ExportOptions(
-                ExportContentScope.Selection,
+                ExportContentScope.EntireWorkbook,
                 IncludeDocumentProperties: true,
                 OpenAfterPublish: true));
     }
@@ -222,7 +234,11 @@ public class ExportPlannerTests
 
         printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null)");
         printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result)");
-        printExport.Should().Contain("ResolveExportRange(request.Options)");
+        printExport.Should().Contain("RenderExportDocument(options)");
+        printExport.Should().Contain("RenderExportPaginator(options)");
+        printExport.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
+        printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), request.Options)");
+        printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 }
