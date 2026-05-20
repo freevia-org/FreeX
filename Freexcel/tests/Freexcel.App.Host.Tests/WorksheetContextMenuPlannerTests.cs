@@ -39,6 +39,7 @@ public sealed class WorksheetContextMenuPlannerTests
             "Unhide Columns",
             "Column Width...",
             "AutoFit Column Width",
+            "New Comment",
             "New Note",
             "Edit Note...",
             "Delete Note",
@@ -85,6 +86,8 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ClearAll);
         commands.Single(command => command.Header == "Clear Comments")
             .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
+        commands.Single(command => command.Header == "New Comment")
+            .Action.Should().Be(WorksheetContextMenuAction.NewComment);
         commands.Single(command => command.Header == "Edit Note...")
             .Action.Should().Be(WorksheetContextMenuAction.EditNote);
         commands.Single(command => command.Header == "Show Notes")

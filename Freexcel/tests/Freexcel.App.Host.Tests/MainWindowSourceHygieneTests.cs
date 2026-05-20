@@ -466,6 +466,15 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenuNewComment_ReusesThreadedCommentWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.NewComment:");
+        source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UsesPlannerPreviewMetadataForHoverTooltips()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
