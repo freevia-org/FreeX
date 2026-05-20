@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -27,10 +28,10 @@ public sealed class CellShiftDialogTests
         var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Insert);
 
         choices.Select(choice => choice.Label).Should().Equal(
-            "Shift cells right",
-            "Shift cells down",
-            "Entire row",
-            "Entire column");
+            "Shift cells _right",
+            "Shift cells _down",
+            "Entire _row",
+            "Entire _column");
     }
 
     [Fact]
@@ -39,9 +40,18 @@ public sealed class CellShiftDialogTests
         var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Delete);
 
         choices.Select(choice => choice.Label).Should().Equal(
-            "Shift cells left",
-            "Shift cells up",
-            "Entire row",
-            "Entire column");
+            "Shift cells _left",
+            "Shift cells _up",
+            "Entire _row",
+            "Entire _column");
+    }
+
+    [Fact]
+    public void DialogButtons_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CellShiftDialog.cs"));
+
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
     }
 }
