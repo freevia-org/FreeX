@@ -653,6 +653,35 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void ConditionalFormattingIconSets_ExposeGroupedPresetGalleryAndMoreRules()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));
+        XNamespace local = "clr-namespace:Freexcel.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var iconSetsMenu = document
+            .Descendants(presentation + "MenuItem")
+            .Single(item => item.Attribute("Header")?.Value == "Icon Sets");
+
+        iconSetsMenu.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("I");
+        iconSetsMenu.Elements(presentation + "MenuItem")
+            .Select(item => item.Attribute("Header")?.Value)
+            .Should()
+            .Contain(["Directional", "Shapes", "Indicators", "Ratings", "More Rules..."]);
+
+        iconSetsMenu.Descendants(presentation + "MenuItem")
+            .Where(item => item.Attribute("Tag") is not null)
+            .Select(item => item.Attribute("Tag")!.Value)
+            .Should()
+            .Contain(["3Arrows", "3TrafficLights1", "3Flags", "4Rating", "5Boxes"]);
+
+        source.Should().Contain("CfIconSetPresetMenuItem_Click");
+        source.Should().Contain("ApplyIconSetPreset");
+        source.Should().Contain("ConditionalFormatIconSetPlanner.CreateRule");
+    }
+
+    [Fact]
     public void BackstageCommandButtons_HaveAltKeyTips()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
