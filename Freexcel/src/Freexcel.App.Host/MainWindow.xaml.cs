@@ -2774,7 +2774,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            var item = new MenuItem { Header = command.Header };
+            var item = new MenuItem { Header = command.AccessHeader };
             item.Click += (_, _) => ExecuteWorksheetContextMenuAction(command.Action, actualAddr);
             menu.Items.Add(item);
         }
