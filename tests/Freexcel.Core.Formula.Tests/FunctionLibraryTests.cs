@@ -5331,6 +5331,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Unique_TreatsScalarArrayAsSingleCellArray()
+    {
+        var result = _eval.Evaluate("=UNIQUE(5)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(1);
+        result.Cells[0, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Unique_ExactlyOnce_ReturnsOnlySingletons()
     {
         var sheet = MakeSheet(

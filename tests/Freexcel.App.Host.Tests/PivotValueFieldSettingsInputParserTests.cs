@@ -89,4 +89,13 @@ public sealed class PivotValueFieldSettingsInputParserTests
                 "Text"
             ]);
     }
+
+    [Fact]
+    public void NumberFormatPresets_PreferShortDateAsCanonicalBuiltIn14Label()
+    {
+        var firstBuiltIn14 = PivotValueFieldSettingsInputParser.NumberFormatPresets
+            .First(preset => preset.NumberFormatId == 14);
+
+        firstBuiltIn14.Label.Should().Be("Short Date");
+    }
 }
