@@ -251,6 +251,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         StopIfTrue = formatDto.StopIfTrue,
                         NativeAttributes = formatDto.NativeAttributes,
                         NativeChildXmls = formatDto.NativeChildXmls,
+                        NativePayloadAttributes = formatDto.NativePayloadAttributes,
+                        NativePayloadChildXmls = formatDto.NativePayloadChildXmls,
                         NativeContainerAttributes = formatDto.NativeContainerAttributes,
                         NativeContainerChildXmls = formatDto.NativeContainerChildXmls
                     });
@@ -586,6 +588,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         StopIfTrue = format.StopIfTrue,
                         NativeAttributes = format.NativeAttributes,
                         NativeChildXmls = format.NativeChildXmls,
+                        NativePayloadAttributes = format.NativePayloadAttributes,
+                        NativePayloadChildXmls = format.NativePayloadChildXmls,
                         NativeContainerAttributes = format.NativeContainerAttributes,
                         NativeContainerChildXmls = format.NativeContainerChildXmls
                     }).ToList(),
@@ -1906,6 +1910,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool StopIfTrue { get; set; }
         public IReadOnlyDictionary<string, string>? NativeAttributes { get; set; }
         public IReadOnlyList<string>? NativeChildXmls { get; set; }
+        public IReadOnlyDictionary<string, string>? NativePayloadAttributes { get; set; }
+        public IReadOnlyList<string>? NativePayloadChildXmls { get; set; }
         public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; set; }
         public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
     }
