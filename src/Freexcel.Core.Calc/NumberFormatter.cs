@@ -357,18 +357,17 @@ public static class NumberFormatter
         (format, value) = ApplyTrailingCommaScaling(format, value);
 
         // Percentage: multiply value by 100 before formatting
-        if (ContainsActivePercentToken(format))
+        int activePercentCount = CountActivePercentTokens(format);
+        if (activePercentCount > 0)
         {
-            double pctValue = value * 100;
-            string pctFmt = format; // keep the % so .NET formats it as percentage
+            double pctValue = value * Math.Pow(100, activePercentCount);
             // .NET percentage format (P) multiplies by 100 and adds %; but format string
             // containing literal '%' means we multiply ourselves and use 'F' style.
-            // Build a numeric format without the % and append it manually.
-            string numFmt = RemoveActivePercentTokens(format).Trim();
+            // Replace active percent tokens with quoted literals so they stay in-place.
+            string numFmt = QuoteActivePercentTokens(format).Trim();
             try
             {
-                return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt,
-                    numberFormat) + "%";
+                return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt, numberFormat);
             }
             catch { return pctValue.ToString("0", numberFormat) + "%"; }
         }
@@ -415,8 +414,9 @@ public static class NumberFormatter
         return prefix + numStr + suffix;
     }
 
-    private static bool ContainsActivePercentToken(string format)
+    private static int CountActivePercentTokens(string format)
     {
+        int count = 0;
         bool inQuote = false;
         for (int i = 0; i < format.Length; i++)
         {
@@ -434,13 +434,13 @@ public static class NumberFormatter
             }
 
             if (!inQuote && c == '%')
-                return true;
+                count++;
         }
 
-        return false;
+        return count;
     }
 
-    private static string RemoveActivePercentTokens(string format)
+    private static string QuoteActivePercentTokens(string format)
     {
         var result = new System.Text.StringBuilder(format.Length);
         bool inQuote = false;
@@ -462,7 +462,10 @@ public static class NumberFormatter
             }
 
             if (!inQuote && c == '%')
+            {
+                result.Append("\"%\"");
                 continue;
+            }
 
             result.Append(c);
         }

@@ -21,4 +21,18 @@ public sealed class FormulaDialogAccessKeyTests
         })
             source.Should().Contain(expected);
     }
+
+    [Fact]
+    public void EvaluateFormulaDialog_ExposesKeyboardAccessKeysForActions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
+
+        foreach (var expected in new[]
+        {
+            "Content = \"_Previous\"",
+            "Content = \"_Evaluate\"",
+            "Content = \"_Close\""
+        })
+            source.Should().Contain(expected);
+    }
 }

@@ -32,6 +32,8 @@ public sealed class SelectionPaneDialog : Window
     private readonly ListBox _list = new();
     private readonly Button _moveUpButton = new() { Content = "Bring Forward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _moveDownButton = new() { Content = "Send Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _showAllButton = new() { Content = "Show All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _hideAllButton = new() { Content = "Hide All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
 
     public SelectionPaneDialogResult Result { get; private set; }
 
@@ -55,6 +57,8 @@ public sealed class SelectionPaneDialog : Window
 
         _moveUpButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveUp);
         _moveDownButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveDown);
+        _showAllButton.Click += (_, _) => SetAllVisibility(true);
+        _hideAllButton.Click += (_, _) => SetAllVisibility(false);
 
         var okButton = new Button { Content = "OK", Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         okButton.Click += (_, _) => AcceptVisibility();
@@ -64,12 +68,17 @@ public sealed class SelectionPaneDialog : Window
         moveRow.Children.Add(_moveUpButton);
         moveRow.Children.Add(_moveDownButton);
 
+        var visibilityRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        visibilityRow.Children.Add(_showAllButton);
+        visibilityRow.Children.Add(_hideAllButton);
+
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         buttonRow.Children.Add(okButton);
         buttonRow.Children.Add(cancelButton);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(_list);
+        stack.Children.Add(visibilityRow);
         stack.Children.Add(moveRow);
         stack.Children.Add(buttonRow);
         Content = stack;
@@ -147,6 +156,14 @@ public sealed class SelectionPaneDialog : Window
         CreateVisibilityChanges(
             _sourceItems,
             _list.Items.Cast<SelectionPaneDialogItem>().Select(item => (item.Source.Id, item.IsVisible)).ToList());
+
+    private void SetAllVisibility(bool isVisible)
+    {
+        foreach (var item in _list.Items.Cast<SelectionPaneDialogItem>())
+            item.IsVisible = isVisible;
+
+        _list.Items.Refresh();
+    }
 
     private void UpdateMoveButtons()
     {
