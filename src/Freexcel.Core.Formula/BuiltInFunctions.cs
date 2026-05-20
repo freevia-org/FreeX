@@ -4904,7 +4904,7 @@ public static class BuiltInFunctions
                 .Select(t => rowOfKey[t.idx])
                 .ToList();
 
-            if (selected.Count == 0) return ErrorValue.NA;
+            if (selected.Count == 0) return ErrorValue.Calc;
             var result = new ScalarValue[selected.Count, arr.ColCount];
             for (int ri = 0; ri < selected.Count; ri++)
                 for (int c = 0; c < arr.ColCount; c++)
@@ -4947,7 +4947,7 @@ public static class BuiltInFunctions
                 .Select(t => colOfKey[t.idx])
                 .ToList();
 
-            if (selected.Count == 0) return ErrorValue.NA;
+            if (selected.Count == 0) return ErrorValue.Calc;
             var result = new ScalarValue[arr.RowCount, selected.Count];
             for (int r = 0; r < arr.RowCount; r++)
                 for (int ci = 0; ci < selected.Count; ci++)

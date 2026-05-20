@@ -5229,6 +5229,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Unique_ExactlyOnceWithNoSingletons_ReturnsCalcError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (2, 1, new NumberValue(1)),
+            (3, 1, new NumberValue(2)), (4, 1, new NumberValue(2)));
+
+        _eval.Evaluate("=UNIQUE(A1:A4,FALSE,TRUE)", sheet)
+            .Should().Be(ErrorValue.Calc);
+    }
+
+    [Fact]
     public void Unique_MultiColumn_DeduplicatesRows()
     {
         var sheet = MakeSheet(
