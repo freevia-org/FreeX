@@ -62,6 +62,16 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDataSourceDialog_ExposesReferencePickerForSourceRange()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("CreateReferenceEditor(_sourceBox");
+        source.Should().Contain("Select PivotTable source range");
+        source.Should().Contain("ReferencePickerButton_Click");
+    }
+
+    [Fact]
     public void InsertSlicerDialog_CreateResult_CapturesFieldAndSlicerName()
     {
         InsertSlicerDialog.CreateResult("  Region  ", "  Region Slicer  ")

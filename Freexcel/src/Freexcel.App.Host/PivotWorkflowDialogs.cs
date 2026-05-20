@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -23,15 +24,50 @@ public sealed class PivotTableDataSourceDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _sourceBox.Text = Result.SourceRangeText;
-        Content = ObjectSizeDialog.CreateSingleInputContent("Table/Range:", _sourceBox, () =>
-        {
-            Result = CreateResult(_sourceBox.Text);
-            DialogResult = true;
-        });
+        Content = CreateContent();
     }
 
     public static PivotTableDataSourceDialogResult CreateResult(string sourceRangeText) =>
         new(sourceRangeText.Trim());
+
+    private StackPanel CreateContent()
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(new TextBlock { Text = "Table/Range:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(CreateReferenceEditor(_sourceBox, "Select PivotTable source range"));
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
+        {
+            Result = CreateResult(_sourceBox.Text);
+            DialogResult = true;
+        }));
+        return stack;
+    }
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
+    }
 }
 
 public sealed record InsertSlicerDialogResult(string FieldName, string SlicerName);
