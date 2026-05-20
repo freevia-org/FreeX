@@ -1255,6 +1255,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             null,
             null,
             null,
+            null,
+            null,
             [],
             []);
         var root = tableXml.Root;
@@ -1270,12 +1272,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return false;
 
         var style = root.Element(workbookNs + "tableStyleInfo");
+        var autoFilter = root.Element(workbookNs + "autoFilter");
         table = new PendingStructuredTableModel(
             id,
             name,
             displayName,
             rangeReference,
-            root.Element(workbookNs + "autoFilter") is not null,
+            autoFilter is not null,
             ReadBoolAttribute(root, "totalsRowShown"),
             style?.Attribute("name")?.Value,
             ReadBoolAttribute(style, "showFirstColumn"),
@@ -1286,6 +1289,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             root.Element(workbookNs + "sortState")?.ToString(System.Xml.Linq.SaveOptions.DisableFormatting),
             ReadNativeStructuredTableAttributes(root),
             ReadNativeStructuredTableChildXmls(root, workbookNs),
+            ReadNativeStructuredTableAutoFilterAttributes(autoFilter),
+            ReadNativeStructuredTableAutoFilterChildXmls(autoFilter, workbookNs),
             ReadNativeTableStyleInfoAttributes(style),
             ReadNativeTableStyleInfoChildXmls(style),
             root.Element(workbookNs + "tableColumns")?
@@ -1301,7 +1306,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ReadNativeTableColumnAttributes(column)))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? [],
-            ReadStructuredTableFilterColumns(root.Element(workbookNs + "autoFilter"), workbookNs));
+            ReadStructuredTableFilterColumns(autoFilter, workbookNs));
         return true;
     }
 
@@ -1375,6 +1380,29 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return children.Count == 0 ? null : children;
     }
 
+    private static Dictionary<string, string>? ReadNativeStructuredTableAutoFilterAttributes(XElement? autoFilter)
+    {
+        if (autoFilter is null)
+            return null;
+
+        var attributes = autoFilter.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "ref")
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : attributes;
+    }
+
+    private static List<string>? ReadNativeStructuredTableAutoFilterChildXmls(XElement? autoFilter, XNamespace workbookNs)
+    {
+        if (autoFilter is null)
+            return null;
+
+        var children = autoFilter.Elements()
+            .Where(element => element.Name != workbookNs + "filterColumn")
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
+        return children.Count == 0 ? null : children;
+    }
+
     private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
         XElement? autoFilter,
         XNamespace workbookNs)
@@ -1437,6 +1465,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             NativeSortStateXml = pending.NativeSortStateXml,
             NativeAttributes = pending.NativeAttributes,
             NativeChildXmls = pending.NativeChildXmls,
+            NativeAutoFilterAttributes = pending.NativeAutoFilterAttributes,
+            NativeAutoFilterChildXmls = pending.NativeAutoFilterChildXmls,
             NativeStyleInfoAttributes = pending.NativeStyleInfoAttributes,
             NativeStyleInfoChildXmls = pending.NativeStyleInfoChildXmls
         };
@@ -9196,10 +9226,40 @@ public sealed class XlsxFileAdapter : IFileAdapter
     }
 
     private static XElement ToStructuredTableAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
-        new(
+        AddStructuredTableAutoFilterNativeMetadata(new XElement(
             workbookNs + "autoFilter",
             new XAttribute("ref", table.Range.ToString()),
-            table.FilterColumns.Select(filterColumn => ToStructuredTableFilterColumnXml(filterColumn, workbookNs)));
+            table.FilterColumns.Select(filterColumn => ToStructuredTableFilterColumnXml(filterColumn, workbookNs))),
+            table,
+            workbookNs);
+
+    private static XElement AddStructuredTableAutoFilterNativeMetadata(
+        XElement element,
+        StructuredTableModel table,
+        XNamespace workbookNs)
+    {
+        foreach (var (name, value) in table.NativeAutoFilterAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in (table.NativeAutoFilterChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == workbookNs && nativeChild.Name.LocalName != "filterColumn")
+                    element.Add(nativeChild);
+            }
+            catch
+            {
+                // Ignore malformed native table AutoFilter payloads from older saves.
+            }
+        }
+
+        return element;
+    }
 
     private static XElement ToStructuredTableFilterColumnXml(StructuredTableFilterColumnModel filterColumn, XNamespace workbookNs)
     {
@@ -13611,6 +13671,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string? NativeSortStateXml,
         IReadOnlyDictionary<string, string>? NativeAttributes,
         IReadOnlyList<string>? NativeChildXmls,
+        IReadOnlyDictionary<string, string>? NativeAutoFilterAttributes,
+        IReadOnlyList<string>? NativeAutoFilterChildXmls,
         IReadOnlyDictionary<string, string>? NativeStyleInfoAttributes,
         IReadOnlyList<string>? NativeStyleInfoChildXmls,
         IReadOnlyList<StructuredTableColumnModel> Columns,

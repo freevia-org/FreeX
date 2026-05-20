@@ -698,6 +698,8 @@ public sealed class Sheet
                 NativeSortStateXml = table.NativeSortStateXml,
                 NativeAttributes = table.NativeAttributes,
                 NativeChildXmls = table.NativeChildXmls,
+                NativeAutoFilterAttributes = table.NativeAutoFilterAttributes,
+                NativeAutoFilterChildXmls = table.NativeAutoFilterChildXmls,
                 NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
                 NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
             };
