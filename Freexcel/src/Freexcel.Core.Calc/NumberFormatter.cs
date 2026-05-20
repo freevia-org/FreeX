@@ -973,13 +973,28 @@ public static class NumberFormatter
 
     private static string ApplyTextSection(string section, string text)
     {
-        // `@` is the text placeholder; surrounding quotes are literals
+        // `@` is the text placeholder; surrounding quotes and escaped characters are literals.
+        // Spacing/fill directives affect layout in Excel, not the displayed text payload.
         var result = new System.Text.StringBuilder();
         bool inQuote = false;
-        foreach (char c in section)
+        for (int i = 0; i < section.Length; i++)
         {
+            char c = section[i];
             if (c == '"') { inQuote = !inQuote; continue; }
             if (inQuote) { result.Append(c); continue; }
+
+            if (c == '\\' && i + 1 < section.Length)
+            {
+                result.Append(section[++i]);
+                continue;
+            }
+
+            if (c is '_' or '*' && i + 1 < section.Length)
+            {
+                i++;
+                continue;
+            }
+
             if (c == '@') result.Append(text);
             else result.Append(c);
         }
