@@ -5,10 +5,10 @@ namespace Freexcel.App.Host;
 
 public sealed class CreateNamesFromSelectionDialog : Window
 {
-    private readonly CheckBox _topRow = new() { Content = "Top row", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _leftColumn = new() { Content = "Left column", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _bottomRow = new() { Content = "Bottom row", Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _rightColumn = new() { Content = "Right column", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _topRow = new() { Content = "_Top row", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _leftColumn = new() { Content = "_Left column", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _bottomRow = new() { Content = "_Bottom row", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _rightColumn = new() { Content = "_Right column", Margin = new Thickness(0, 4, 0, 0) };
 
     public bool UseTopRow => _topRow.IsChecked == true;
     public bool UseLeftColumn => _leftColumn.IsChecked == true;
@@ -40,9 +40,9 @@ public sealed class CreateNamesFromSelectionDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 18, 0, 0)
         };
-        var ok = new Button { Content = "OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => DialogResult = true;
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 76 };
+        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         root.Children.Add(buttons);

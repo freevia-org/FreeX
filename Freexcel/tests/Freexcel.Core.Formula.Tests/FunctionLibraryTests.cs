@@ -254,6 +254,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Index_And_Match_TreatScalarArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=INDEX(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=MATCH(5,5,0)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Index_OutOfRange_ReturnsRef()
     {
         var sheet = MakeSheet(
