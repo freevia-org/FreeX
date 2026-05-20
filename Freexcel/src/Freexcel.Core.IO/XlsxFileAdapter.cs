@@ -6612,6 +6612,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "dataConsolidate",
             workbookNs + "legacyDrawing",
             workbookNs + "legacyDrawingHF",
+            workbookNs + "picture",
             workbookNs + "customProperties",
             workbookNs + "smartTags",
             workbookNs + "autoFilter",

@@ -8260,6 +8260,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesExternalWorksheetPictureReferenceAlongsideModelEdits()
+    {
+        var workbook = new Workbook("ExternalPictureRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddExternalWorksheetPictureReference(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("picture");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("rIdFreexcelExternalPicture");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var worksheetRelsText = worksheetRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetRelsText.Should().Contain("https://example.invalid/background.png");
+        worksheetRelsText.Should().Contain("TargetMode=\"External\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
@@ -13619,6 +13652,36 @@ public class FileAdapterSmokeTests
                   </v:shape>
                 </xml>
                 """);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddExternalWorksheetPictureReference(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelExternalPicture"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                new XAttribute("Target", "https://example.invalid/background.png"),
+                new XAttribute("TargetMode", "External")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "picture",
+                new XAttribute(relNs + "id", "rIdFreexcelExternalPicture")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
         packageStream.Position = 0;
