@@ -177,6 +177,52 @@ public class CommentCommandTests
         sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("Old", "Quinn"));
     }
 
+    [Fact]
+    public void DeleteThreadedCommentCommand_RemovesThreadedCommentAndUndoRestoresIt()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[addr] = new ThreadedComment("Keep me", "Quinn");
+
+        var cmd = new DeleteThreadedCommentCommand(sheet.Id, addr);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
+        sheet.ThreadedComments.Should().NotContainKey(addr);
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("Keep me", "Quinn"));
+    }
+
+    [Fact]
+    public void DeleteThreadedCommentCommand_MissingThreadedComment_Fails()
+    {
+        var (_, _, ctx) = Setup();
+        var addr = new CellAddress(ctx.Workbook.Sheets[0].Id, 1, 1);
+
+        var outcome = new DeleteThreadedCommentCommand(ctx.Workbook.Sheets[0].Id, addr).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("No threaded comment");
+    }
+
+    [Fact]
+    public void DeleteThreadedCommentCommand_RejectsProtectedSheet()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[addr] = new ThreadedComment("Keep", "Quinn");
+
+        var outcome = new DeleteThreadedCommentCommand(sheet.Id, addr).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("Keep", "Quinn"));
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
