@@ -33,7 +33,9 @@ public sealed class CommandInventoryDocumentTests
 
         inventory.SchemaVersion.Should().Be(1);
         inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "File/Backstage");
+        inventory.CommandSurfaceRows.Should().Contain(section => section.Name == "QAT");
         inventory.MenuToolbarRows.Should().Contain(section => section.Name == "File/Backstage");
+        inventory.MenuToolbarRows.Should().Contain(section => section.Name == "QAT");
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Home", "H"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Insert", "N"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Formulas", "M"));
@@ -61,6 +63,21 @@ public sealed class CommandInventoryDocumentTests
 
         ExtractGeneratedBlock(doc, "command-inventory:menu-toolbar:file-backstage").Should().Be(
             BuildCommandRows(section));
+    }
+
+    [Fact]
+    public void QuickAccessToolbarRows_AreGeneratedFromInventory()
+    {
+        var inventory = LoadInventory();
+        var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
+        var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "MENU_TOOLBAR_PARITY.md"));
+        var commandSurfaceSection = inventory.CommandSurfaceRows.Single(section => section.Name == "QAT");
+        var menuToolbarSection = inventory.MenuToolbarRows.Single(section => section.Name == "QAT");
+
+        ExtractGeneratedBlock(commandSurfaceDoc, "command-inventory:command-surface:qat").Should().Be(
+            BuildCommandRows(commandSurfaceSection));
+        ExtractGeneratedBlock(menuToolbarDoc, "command-inventory:menu-toolbar:qat").Should().Be(
+            BuildCommandRows(menuToolbarSection));
     }
 
     private static CommandInventory LoadInventory()
