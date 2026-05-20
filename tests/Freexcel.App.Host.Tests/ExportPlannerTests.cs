@@ -80,6 +80,18 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void ExportOptions_DescribeWithXpsFormatDoesNotClaimPdfDocumentProperties()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: true);
+
+        ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
+            .Should().Be("Selection; document properties are not included in XPS output; open after publishing.");
+    }
+
+    [Fact]
     public void ExportOptions_DescribeEntireWorkbook()
     {
         var options = new ExportOptions(
@@ -112,6 +124,20 @@ public class ExportPlannerTests
 
         ExportPlanner.DescribeRequest(request).Should().Be(
             "Options: Active sheet only; document properties are not included.");
+    }
+
+    [Fact]
+    public void DescribeRequest_ForXpsDoesNotClaimPdfDocumentPropertiesAreEmbedded()
+    {
+        var request = ExportPlanner.PlanExport(
+            @"C:\temp\report.xps",
+            new ExportOptions(
+                ExportContentScope.ActiveSheet,
+                IncludeDocumentProperties: true,
+                OpenAfterPublish: false));
+
+        ExportPlanner.DescribeRequest(request).Should().Be(
+            "Options: Active sheet only; document properties are not included in XPS output.");
     }
 
     [Theory]
@@ -156,6 +182,115 @@ public class ExportPlannerTests
                 File.Delete(path);
             }
         });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesRequestedDocumentProperties()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var properties = new PdfDocumentProperties(
+                Title: "Quarterly Review",
+                Author: "Finance Team",
+                Subject: "Workbook export",
+                Keywords: "Freexcel, spreadsheet");
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, properties);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().Be("Quarterly Review");
+                pdf.Info.Author.Should().Be("Finance Team");
+                pdf.Info.Subject.Should().Be("Workbook export");
+                pdf.Info.Keywords.Should().Be("Freexcel, spreadsheet");
+                pdf.Info.Creator.Should().Be("Freexcel");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WithoutRequestedPropertiesOnlyWritesProducerMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().BeEmpty();
+                pdf.Info.Author.Should().BeEmpty();
+                pdf.Info.Subject.Should().BeEmpty();
+                pdf.Info.Keywords.Should().BeEmpty();
+                pdf.Info.Creator.Should().Be("Freexcel");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_IgnoresBlankDocumentProperties()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+            var properties = new PdfDocumentProperties(
+                Title: " ",
+                Author: null,
+                Subject: "",
+                Keywords: "\t");
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path, properties);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.Info.Title.Should().BeEmpty();
+                pdf.Info.Author.Should().BeEmpty();
+                pdf.Info.Subject.Should().BeEmpty();
+                pdf.Info.Keywords.Should().BeEmpty();
+                pdf.Info.Creator.Should().Be("Freexcel");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentProperties_FromWorkbook_ReturnsNullUnlessOptionIsRequested()
+    {
+        var workbook = new Workbook("Budget Model");
+
+        PdfDocumentProperties.FromWorkbook(workbook, ExportOptions.ExcelLikeDefault)
+            .Should().BeNull();
+
+        PdfDocumentProperties.FromWorkbook(
+                workbook,
+                new ExportOptions(
+                    ExportContentScope.ActiveSheet,
+                    IncludeDocumentProperties: true,
+                    OpenAfterPublish: false))
+            .Should().Be(new PdfDocumentProperties(
+                Title: "Budget Model",
+                Author: "Freexcel",
+                Subject: "Freexcel workbook export",
+                Keywords: "Freexcel, spreadsheet"));
     }
 
     private static FixedDocument CreateOnePageDocument()
@@ -237,8 +372,10 @@ public class ExportPlannerTests
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("RenderExportPaginator(options)");
         printExport.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
-        printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), request.Options)");
+        printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ResolveExportRange(options)");
+        printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 }
