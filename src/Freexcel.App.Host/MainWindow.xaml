@@ -1460,6 +1460,10 @@
                                         local:RibbonTooltip.Title="Chart Styles"
                                         local:RibbonTooltip.KeyTip="CY"
                                         local:RibbonTooltip.Description="Choose a saved Excel chart style for the current chart."/>
+                                <Button Content="Format Chart" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormatChartAreaBtn_Click"
+                                        local:RibbonTooltip.Title="Format Chart Area"
+                                        local:RibbonTooltip.KeyTip="FZ"
+                                        local:RibbonTooltip.Description="Open chart area, plot area, and legend formatting options."/>
                                 <Button Content="Line"   Width="66" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartLineMenuItem_Click"
                                         local:RibbonTooltip.Title="Line Chart"
                                         local:RibbonTooltip.KeyTip="L"
