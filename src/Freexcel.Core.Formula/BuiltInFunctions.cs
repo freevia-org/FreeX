@@ -4628,8 +4628,9 @@ public static class BuiltInFunctions
                 return false;
             }
 
-            if (arg is not RangeValue arr) return false;
-            arrays.Add(arr);
+            arrays.Add(arg is RangeValue arr
+                ? arr
+                : new RangeValue(new[,] { { arg } }));
         }
 
         return arrays.Count > 0;
