@@ -493,6 +493,37 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PivotCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var pivotSourcePath = Path.Combine(appHostDirectory, "MainWindow.PivotCommands.cs");
+
+        File.Exists(pivotSourcePath).Should().BeTrue();
+        var pivotSource = File.ReadAllText(pivotSourcePath);
+
+        mainSource.Should().NotContain("private void PivotTableBtn_Click(");
+        mainSource.Should().NotContain("private void RefreshPivotTableBtn_Click(");
+        mainSource.Should().NotContain("private void PivotChartBtn_Click(");
+        mainSource.Should().NotContain("private void PivotInsertSlicerBtn_Click(");
+        mainSource.Should().NotContain("private void PivotFieldListBtn_Click(");
+        mainSource.Should().NotContain("private void MovePivotFieldToZone(");
+        mainSource.Should().NotContain("private void ApplyPivotFieldListLayout(");
+        mainSource.Should().NotContain("private enum PivotFieldDropZone");
+
+        pivotSource.Should().Contain("private void PivotTableBtn_Click(");
+        pivotSource.Should().Contain("private void RefreshPivotTableBtn_Click(");
+        pivotSource.Should().Contain("private void PivotChartBtn_Click(");
+        pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(");
+        pivotSource.Should().Contain("private void PivotFieldListBtn_Click(");
+        pivotSource.Should().Contain("private void MovePivotFieldToZone(");
+        pivotSource.Should().Contain("private void ApplyPivotFieldListLayout(");
+        pivotSource.Should().Contain("private enum PivotFieldDropZone");
+        pivotSource.Should().Contain("PivotUiPlanner");
+        pivotSource.Should().Contain("SlicerTimelinePlanner");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -788,7 +819,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void InsertPivotTable_NewWorksheetDestination_UsesUndoableCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
         source.Should().Contain("command.CreatedSheetId");
@@ -1088,7 +1119,7 @@ public sealed class MainWindowSourceHygieneTests
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
         xaml.Should().NotContain("Cycle grand totals");
@@ -1103,7 +1134,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ChartFormattingCommands_OpenExplicitFormatDialogs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
 
         source.Should().Contain("new ChartDataLabelsDialog(chart)");
         source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");
