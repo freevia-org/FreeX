@@ -979,6 +979,89 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableCalculatedItemsCommand_ReplacesGroupingAndCalculatedDefinitions()
+    {
+        var workbook = new Workbook("PivotCalculatedItemsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Units"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(2));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B3"), new NumberValue(20));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(3));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E3", "H8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Units", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotTableCalculatedItemsCommand(
+            sheet.Id,
+            "PivotTable1",
+            rowFields: [new PivotFieldModel(1, Grouping: PivotFieldGrouping.NumberRange, GroupStart: 0, GroupInterval: 10)],
+            columnFields: [],
+            pageFields: [],
+            calculatedFields: [new PivotCalculatedFieldModel("Revenue", "Amount*Units")],
+            calculatedItems: [new PivotCalculatedItemModel(1, "Small + Large", "10+20")]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.RowFields.Should().ContainSingle().Which.Should().Be(
+            new PivotFieldModel(1, Grouping: PivotFieldGrouping.NumberRange, GroupStart: 0, GroupInterval: 10));
+        pivot.CalculatedFields.Should().ContainSingle().Which.Should().Be(new PivotCalculatedFieldModel("Revenue", "Amount*Units"));
+        pivot.CalculatedItems.Should().ContainSingle().Which.Should().Be(new PivotCalculatedItemModel(1, "Small + Large", "10+20"));
+
+        command.Revert(ctx);
+
+        pivot.RowFields.Should().ContainSingle().Which.Should().Be(new PivotFieldModel(1));
+        pivot.CalculatedFields.Should().BeEmpty();
+        pivot.CalculatedItems.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ConfigurePivotTableCalculatedItemsCommand_RejectsInvalidCalculatedDefinitions()
+    {
+        var workbook = new Workbook("PivotCalculatedItemsCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F8")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new ConfigurePivotTableCalculatedItemsCommand(
+            sheet.Id,
+            "PivotTable1",
+            rowFields: [new PivotFieldModel(2)],
+            columnFields: [],
+            pageFields: [],
+            calculatedFields: [new PivotCalculatedFieldModel("", "Amount*2")],
+            calculatedItems: []);
+
+        command.Apply(ctx).Success.Should().BeFalse();
+
+        pivot.RowFields.Should().ContainSingle().Which.Should().Be(new PivotFieldModel(0));
+        pivot.CalculatedFields.Should().BeEmpty();
+    }
+
+    [Fact]
     public void SetTimelineRangeCommand_FiltersCrossSheetPivotTable()
     {
         var workbook = new Workbook("CrossSheetTimelineRangeCommandTest");
