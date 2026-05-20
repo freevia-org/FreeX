@@ -75,6 +75,20 @@ public sealed class RemoveDuplicatesDialog : Window
             .Select(index => new RemoveDuplicateColumnChoice((uint)index, $"Column {index + 1}", true))
             .ToList();
 
+    public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(Sheet sheet, GridRange range) =>
+        Enumerable
+            .Range(0, (int)range.ColCount)
+            .Select(index =>
+            {
+                var absoluteColumn = range.Start.Col + (uint)index;
+                var header = SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetCell(range.Start.Row, absoluteColumn)?.Value);
+                if (string.IsNullOrWhiteSpace(header))
+                    header = $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
+
+                return new RemoveDuplicateColumnChoice((uint)index, header, true);
+            })
+            .ToList();
+
     private void Accept()
     {
         Result = CreateResult(_boxes.Select(box => new RemoveDuplicateColumnChoice(

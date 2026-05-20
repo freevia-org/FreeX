@@ -86,7 +86,11 @@ public partial class MainWindow
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new RemoveDuplicatesDialog(RemoveDuplicatesDialog.BuildColumnChoices(range)) { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var columns = sheet is null
+            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
+            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range);
+        var dialog = new RemoveDuplicatesDialog(columns) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         RemoveDuplicateRowsCommand? command = null;
