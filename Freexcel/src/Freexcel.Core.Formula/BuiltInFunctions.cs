@@ -986,7 +986,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue table) return ErrorValue.Value;
+        var table = args[1] is RangeValue tableRange
+            ? tableRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args[2] is ErrorValue e2) return e2;
 
         var lookupValue = args[0];
@@ -1033,7 +1035,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue table) return ErrorValue.Value;
+        var table = args[1] is RangeValue tableRange
+            ? tableRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args[2] is ErrorValue e2) return e2;
 
         var lookupValue = args[0];
