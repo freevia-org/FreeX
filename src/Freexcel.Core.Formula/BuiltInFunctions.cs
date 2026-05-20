@@ -4788,8 +4788,14 @@ public static class BuiltInFunctions
             return false;
         }
 
-        if (args[0] is not RangeValue arr) return false;
-        if (!TryReadVector(arr, values)) return false;
+        if (args[0] is RangeValue arr)
+        {
+            if (!TryReadVector(arr, values)) return false;
+        }
+        else
+        {
+            values.Add(args[0]);
+        }
 
         if (args[1] is ErrorValue countError)
         {
