@@ -94,6 +94,23 @@ public class SpillEngineTests
     }
 
     [Fact]
+    public void Recalc_SequenceFormula_DoesNotTreatOwnPreviousSpillAsBlocked()
+    {
+        var (engine, wb) = MakeEngine();
+        var sheet = wb.Sheets.First();
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(anchor, "SEQUENCE(3)");
+        engine.RebuildFormulaDependencies(wb);
+
+        engine.Recalculate(wb, [anchor]);
+        engine.Recalculate(wb, [anchor]);
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Recalc_SequenceBlocked_SetsSpillError()
     {
         var (engine, wb) = MakeEngine();

@@ -7364,26 +7364,34 @@ public partial class MainWindow : Window
         }
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
-        PivotAvailableFieldsList.ItemsSource = headers
+        var displayedLayout = GetDisplayedPivotLayout(pivotTable);
+        var rowFields = displayedLayout?.RowFields ?? pivotTable.RowFields;
+        var columnFields = displayedLayout?.ColumnFields ?? pivotTable.ColumnFields;
+        var pageFields = displayedLayout?.PageFields ?? pivotTable.PageFields;
+        var dataFields = displayedLayout?.DataFields ?? pivotTable.DataFields;
+
+        _pivotFieldListAvailableItems = headers
             .Select((caption, index) => new PivotFieldListItem(
                 caption,
-                pivotTable.RowFields.Any(field => field.SourceFieldIndex == index) ||
-                pivotTable.ColumnFields.Any(field => field.SourceFieldIndex == index) ||
-                pivotTable.PageFields.Any(field => field.SourceFieldIndex == index) ||
-                pivotTable.DataFields.Any(field => field.SourceFieldIndex == index)))
+                rowFields.Any(field => field.SourceFieldIndex == index) ||
+                columnFields.Any(field => field.SourceFieldIndex == index) ||
+                pageFields.Any(field => field.SourceFieldIndex == index) ||
+                dataFields.Any(field => field.SourceFieldIndex == index)))
             .ToList();
-        PivotRowsList.ItemsSource = pivotTable.RowFields
+        ApplyPivotAvailableFieldFilter();
+        PivotRowsList.ItemsSource = rowFields
             .Select(field => PivotUiPlanner.FieldCaption(headers, field.SourceFieldIndex))
             .ToList();
-        PivotColumnsList.ItemsSource = pivotTable.ColumnFields
+        PivotColumnsList.ItemsSource = columnFields
             .Select(field => PivotUiPlanner.FieldCaption(headers, field.SourceFieldIndex))
             .ToList();
-        PivotFiltersList.ItemsSource = pivotTable.PageFields
+        PivotFiltersList.ItemsSource = pageFields
             .Select(field => PivotUiPlanner.FieldCaption(headers, field.SourceFieldIndex))
             .ToList();
-        PivotValuesList.ItemsSource = pivotTable.DataFields
+        PivotValuesList.ItemsSource = dataFields
             .Select(field => field.Name)
             .ToList();
+        PivotFieldListUpdateBtn.IsEnabled = _pendingPivotLayout is not null;
         PivotFieldListPane.Visibility = Visibility.Visible;
         SetPivotContextualTabsVisible(true);
     }
@@ -7775,6 +7783,173 @@ public partial class MainWindow : Window
 
         ApplyPivotOptions(pivotTable, dialog.Result);
     }
+
+    private void PivotGroupFieldBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
+        if (sourceIndex is null)
+            return;
+
+        var currentField = PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value);
+        var dialog = new PivotFieldGroupingDialog(headers, currentField) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyPivotGroupingResult(pivotTable, dialog.Result);
+    }
+
+    private void PivotUngroupFieldBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
+        if (sourceIndex is null)
+            return;
+
+        ApplyPivotGroupingResult(
+            pivotTable,
+            PivotFieldGroupingDialog.CreateResult(
+                PivotUiPlanner.FieldCaption(headers, sourceIndex.Value),
+                sourceIndex.Value,
+                PivotFieldGrouping.None,
+                groupStart: null,
+                groupEnd: null,
+                groupInterval: null,
+                ungroup: true));
+    }
+
+    private void PivotCalculatedFieldBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out _, out var pivotTable))
+            return;
+
+        var dialog = new PivotCalculatedFieldDialog { Owner = this };
+        if (dialog.ShowDialog() != true ||
+            string.IsNullOrWhiteSpace(dialog.Result.Name) ||
+            string.IsNullOrWhiteSpace(dialog.Result.Formula))
+        {
+            return;
+        }
+
+        var calculatedFields = pivotTable.CalculatedFields
+            .Where(field => !string.Equals(field.Name, dialog.Result.Name, StringComparison.CurrentCultureIgnoreCase))
+            .Append(dialog.Result.ToModel())
+            .ToList();
+
+        ApplyPivotAdvancedConfiguration(
+            pivotTable,
+            pivotTable.RowFields.ToList(),
+            pivotTable.ColumnFields.ToList(),
+            pivotTable.PageFields.ToList(),
+            calculatedFields,
+            pivotTable.CalculatedItems.ToList());
+    }
+
+    private void PivotCalculatedItemBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+            return;
+
+        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
+        var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable) ?? 0;
+        var dialog = new PivotCalculatedItemDialog(headers, sourceIndex) { Owner = this };
+        if (dialog.ShowDialog() != true ||
+            string.IsNullOrWhiteSpace(dialog.Result.Name) ||
+            string.IsNullOrWhiteSpace(dialog.Result.Formula))
+        {
+            return;
+        }
+
+        var calculatedItems = pivotTable.CalculatedItems
+            .Where(item =>
+                item.SourceFieldIndex != dialog.Result.SourceFieldIndex ||
+                !string.Equals(item.Name, dialog.Result.Name, StringComparison.CurrentCultureIgnoreCase))
+            .Append(dialog.Result.ToModel())
+            .ToList();
+
+        ApplyPivotAdvancedConfiguration(
+            pivotTable,
+            pivotTable.RowFields.ToList(),
+            pivotTable.ColumnFields.ToList(),
+            pivotTable.PageFields.ToList(),
+            pivotTable.CalculatedFields.ToList(),
+            calculatedItems);
+    }
+
+    private void ApplyPivotGroupingResult(PivotTableModel pivotTable, PivotFieldGroupingDialogResult result)
+    {
+        var groupedField = new PivotFieldModel(
+            result.SourceFieldIndex,
+            Grouping: result.Ungroup ? PivotFieldGrouping.None : result.Grouping,
+            GroupStart: result.Ungroup ? null : result.GroupStart,
+            GroupEnd: result.Ungroup ? null : result.GroupEnd,
+            GroupInterval: result.Ungroup ? null : result.GroupInterval);
+        var fieldAlreadyInLayout =
+            pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields)
+                .Any(field => field.SourceFieldIndex == groupedField.SourceFieldIndex);
+        var rowFields = fieldAlreadyInLayout
+            ? ReplacePivotField(pivotTable.RowFields, groupedField)
+            : pivotTable.RowFields.Append(groupedField).ToList();
+        var columnFields = ReplacePivotField(pivotTable.ColumnFields, groupedField);
+        var pageFields = ReplacePivotField(pivotTable.PageFields, groupedField);
+
+        ApplyPivotAdvancedConfiguration(
+            pivotTable,
+            rowFields,
+            columnFields,
+            pageFields,
+            pivotTable.CalculatedFields.ToList(),
+            pivotTable.CalculatedItems.ToList());
+    }
+
+    private void ApplyPivotAdvancedConfiguration(
+        PivotTableModel pivotTable,
+        IReadOnlyList<PivotFieldModel> rowFields,
+        IReadOnlyList<PivotFieldModel> columnFields,
+        IReadOnlyList<PivotFieldModel> pageFields,
+        IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
+        IReadOnlyList<PivotCalculatedItemModel> calculatedItems)
+    {
+        if (!TryExecuteCommand(
+                new ConfigurePivotTableCalculatedItemsCommand(
+                    _currentSheetId,
+                    pivotTable.Name,
+                    rowFields,
+                    columnFields,
+                    pageFields,
+                    calculatedFields,
+                    calculatedItems),
+                "PivotTable Calculations"))
+            return;
+
+        _pendingPivotLayout = null;
+        RefreshPivotFieldListPane();
+        UpdateViewport();
+    }
+
+    private int? ResolveSelectedPivotSourceField(IReadOnlyList<string> headers, PivotTableModel pivotTable)
+    {
+        var selected = GetSelectedPivotFieldListItem();
+        return PivotUiPlanner.FindFieldSourceIndex(headers, pivotTable, selected ?? "")
+               ?? pivotTable.RowFields.Concat(pivotTable.ColumnFields).Concat(pivotTable.PageFields)
+                   .FirstOrDefault()
+                   ?.SourceFieldIndex;
+    }
+
+    private static List<PivotFieldModel> ReplacePivotField(
+        IReadOnlyList<PivotFieldModel> fields,
+        PivotFieldModel replacement) =>
+        fields
+            .Select(field => field.SourceFieldIndex == replacement.SourceFieldIndex
+                ? replacement
+                : field)
+            .ToList();
 
     private void ApplyPivotOptions(PivotTableModel pivotTable, PivotTableOptionsDialogResult result) =>
         ApplyPivotOptions(
@@ -8188,7 +8363,8 @@ public partial class MainWindow : Window
         IReadOnlyList<PivotFieldModel> rowFields,
         IReadOnlyList<PivotFieldModel> columnFields,
         IReadOnlyList<PivotFieldModel> pageFields,
-        IReadOnlyList<PivotDataFieldModel> dataFields)
+        IReadOnlyList<PivotDataFieldModel> dataFields,
+        bool forceApply = false)
     {
         if (dataFields.Count == 0)
         {
@@ -8200,11 +8376,24 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!forceApply && PivotFieldListDeferLayoutCheckBox.IsChecked == true)
+        {
+            _pendingPivotLayout = new PendingPivotLayout(
+                pivotTable.Name,
+                rowFields.ToList(),
+                columnFields.ToList(),
+                pageFields.ToList(),
+                dataFields.ToList());
+            RefreshPivotFieldListPane();
+            return;
+        }
+
         if (!TryExecuteCommand(
                 new ConfigurePivotTableLayoutCommand(_currentSheetId, pivotTable.Name, rowFields, columnFields, pageFields, dataFields),
                 "PivotTable Fields"))
             return;
 
+        _pendingPivotLayout = null;
         UpdateViewport();
     }
 

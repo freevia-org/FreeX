@@ -83,10 +83,10 @@ public sealed class RecalcEngine
 
                 if (result is RangeValue rv)
                 {
+                    sheet.ClearSpillRange(addr);
                     if (sheet.IsSpillBlocked(addr, rv.RowCount, rv.ColCount))
                     {
                         cell.Value = ErrorValue.Spill;
-                        sheet.ClearSpillRange(addr);
                         errors.Add((addr, "#SPILL!"));
                     }
                     else
