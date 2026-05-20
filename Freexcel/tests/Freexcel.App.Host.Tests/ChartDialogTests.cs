@@ -81,8 +81,9 @@ public sealed class ChartDialogTests
     {
         var options = ChartStyleDialog.GetStyleOptions();
 
-        options.Should().Contain(new ChartStyleOption(null, "Automatic"));
-        options.Select(option => option.StyleId).Should().Contain([2, 4, 10, 26, 42]);
+        options.Should().HaveCount(49);
+        options[0].Should().Be(new ChartStyleOption(null, "Automatic"));
+        options.Skip(1).Select(option => option.StyleId).Should().Equal(Enumerable.Range(1, 48).Cast<int?>());
     }
 
     [Fact]
