@@ -142,6 +142,9 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Native dxf child elements not modeled by Freexcel, retained for conditional-format XLSX fidelity.</summary>
     public IReadOnlyList<string>? NativeDifferentialChildXmls { get; set; }
 
+    /// <summary>Original modeled dxf child XML used to merge nested native metadata into regenerated style XML.</summary>
+    public IReadOnlyDictionary<string, string>? NativeDifferentialElementXmls { get; set; }
+
     /// <summary>Returns a fresh default-valued instance.</summary>
     public static readonly CellStyle Default = new();
 
@@ -173,6 +176,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         Locked = Locked,
         NativeDifferentialAttributes = NativeDifferentialAttributes,
         NativeDifferentialChildXmls = NativeDifferentialChildXmls,
+        NativeDifferentialElementXmls = NativeDifferentialElementXmls,
     };
 
     /// <inheritdoc/>

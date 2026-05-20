@@ -4082,6 +4082,8 @@ public class FileAdapterSmokeTests
         loadedStyle!.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
         loadedStyle.NativeDifferentialChildXmls.Should().ContainSingle()
             .Which.Should().Contain("{FREEXCEL-DXF-NATIVE}");
+        loadedStyle.NativeDifferentialElementXmls.Should().ContainKey("font")
+            .WhoseValue.Should().Contain("customFontAttr=\"font-native\"");
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -4090,6 +4092,8 @@ public class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
         var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         stylesXml.Should().Contain("customAttr=\"dxf-native\"");
+        stylesXml.Should().Contain("customFontAttr=\"font-native\"");
+        stylesXml.Should().Contain("scheme val=\"minor\"");
         stylesXml.Should().Contain("{FREEXCEL-DXF-NATIVE}");
         stylesXml.Should().Contain("formatCode=\"0.00\"");
     }
@@ -4437,7 +4441,11 @@ public class FileAdapterSmokeTests
                 FillColor = new CellColor(255, 0, 0),
                 FontColor = new CellColor(255, 255, 255),
                 NativeDifferentialAttributes = new Dictionary<string, string> { ["customAttr"] = "dxf-native" },
-                NativeDifferentialChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-DXF-NATIVE}\" /></extLst>"]
+                NativeDifferentialChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEXCEL-DXF-NATIVE}\" /></extLst>"],
+                NativeDifferentialElementXmls = new Dictionary<string, string>
+                {
+                    ["font"] = "<font xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" customFontAttr=\"font-native\"><scheme val=\"minor\" /></font>"
+                }
             }
         };
         sheet.ConditionalFormats.Add(cf);
@@ -4469,6 +4477,7 @@ public class FileAdapterSmokeTests
         rule.FormatIfTrue.FontColor.Should().Be(new CellColor(255, 255, 255));
         rule.FormatIfTrue.NativeDifferentialAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("dxf-native");
         rule.FormatIfTrue.NativeDifferentialChildXmls.Should().ContainSingle().Which.Should().Contain("{FREEXCEL-DXF-NATIVE}");
+        rule.FormatIfTrue.NativeDifferentialElementXmls.Should().ContainKey("font").WhoseValue.Should().Contain("customFontAttr");
     }
 
     [Fact]
@@ -12952,6 +12961,9 @@ public class FileAdapterSmokeTests
                 .Elements(workbookNs + "dxf")
                 .Single();
             dxf.SetAttributeValue("customAttr", "dxf-native");
+            var font = dxf.Element(workbookNs + "font")!;
+            font.SetAttributeValue("customFontAttr", "font-native");
+            font.Add(new XElement(workbookNs + "scheme", new XAttribute("val", "minor")));
             dxf.Add(new XElement(
                 workbookNs + "extLst",
                 new XElement(workbookNs + "ext", new XAttribute("uri", "{FREEXCEL-DXF-NATIVE}"))));

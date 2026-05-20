@@ -1358,7 +1358,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             TextRotation = ValidTextRotationOrDefault(dto.TextRotation),
             Locked = dto.Locked,
             NativeDifferentialAttributes = dto.NativeDifferentialAttributes,
-            NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls
+            NativeDifferentialChildXmls = dto.NativeDifferentialChildXmls,
+            NativeDifferentialElementXmls = dto.NativeDifferentialElementXmls
         };
     }
 
@@ -1393,7 +1394,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             TextRotation = style.TextRotation,
             Locked = style.Locked,
             NativeDifferentialAttributes = style.NativeDifferentialAttributes,
-            NativeDifferentialChildXmls = style.NativeDifferentialChildXmls
+            NativeDifferentialChildXmls = style.NativeDifferentialChildXmls,
+            NativeDifferentialElementXmls = style.NativeDifferentialElementXmls
         })!;
 
         return new CellStyleDto
@@ -1422,7 +1424,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
             TextRotation = safeStyle.TextRotation,
             Locked = safeStyle.Locked,
             NativeDifferentialAttributes = safeStyle.NativeDifferentialAttributes,
-            NativeDifferentialChildXmls = safeStyle.NativeDifferentialChildXmls
+            NativeDifferentialChildXmls = safeStyle.NativeDifferentialChildXmls,
+            NativeDifferentialElementXmls = safeStyle.NativeDifferentialElementXmls
         };
     }
 
@@ -1949,6 +1952,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public bool Locked { get; set; } = true;
         public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
         public IReadOnlyList<string>? NativeDifferentialChildXmls { get; set; }
+        public IReadOnlyDictionary<string, string>? NativeDifferentialElementXmls { get; set; }
     }
 
     private class CellBorderDto
