@@ -747,7 +747,9 @@ public sealed class Sheet
                 TopBottomPercent     = cf.TopBottomPercent,
                 TextRuleText         = cf.TextRuleText,
                 DateOccurringPeriod  = cf.DateOccurringPeriod,
-                StopIfTrue           = cf.StopIfTrue
+                StopIfTrue           = cf.StopIfTrue,
+                NativeAttributes     = cf.NativeAttributes,
+                NativeChildXmls      = cf.NativeChildXmls
             };
             clonedFormat.IconSetThresholds.AddRange(cf.IconSetThresholds);
             copy.ConditionalFormats.Add(clonedFormat);

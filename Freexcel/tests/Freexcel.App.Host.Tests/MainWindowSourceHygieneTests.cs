@@ -370,6 +370,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void HomeCellsCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var cellsSourcePath = Path.Combine(appHostDirectory, "MainWindow.CellsCommands.cs");
+
+        File.Exists(cellsSourcePath).Should().BeTrue();
+        var cellsSource = File.ReadAllText(cellsSourcePath);
+
+        mainSource.Should().NotContain("private void InsertPickerBtn_Click(");
+        mainSource.Should().NotContain("private void InsertCellsMenuItem_Click(");
+        mainSource.Should().NotContain("private void FormatAutoRowMenuItem_Click(");
+        mainSource.Should().NotContain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
+        mainSource.Should().NotContain("private void FormatLockCellMenuItem_Click(");
+
+        cellsSource.Should().Contain("private void InsertPickerBtn_Click(");
+        cellsSource.Should().Contain("private void InsertCellsMenuItem_Click(");
+        cellsSource.Should().Contain("private void FormatAutoRowMenuItem_Click(");
+        cellsSource.Should().Contain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
+        cellsSource.Should().Contain("private void FormatLockCellMenuItem_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");

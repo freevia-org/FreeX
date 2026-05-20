@@ -3314,6 +3314,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 {
                     var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs);
                     format.FormatIfTrue = formatIfTrue;
+                    ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     result.Add(format);
                 }
                 else if (string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
@@ -3321,6 +3322,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 {
                     var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs);
                     format.FormatIfTrue = formatIfTrue;
+                    ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     result.Add(format);
                 }
                 else if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
@@ -3337,11 +3339,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         FormatIfTrue = formatIfTrue
                     };
                     format.IconSetThresholds.AddRange(ReadCfvoThresholds(iconSet, worksheetNs));
+                    ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     result.Add(format);
                 }
                 else if (TryMapLongTailConditionalFormatRule(type, out var mappedType))
                 {
-                    result.Add(new ConditionalFormat
+                    var format = new ConditionalFormat
                     {
                         AppliesTo = appliesTo,
                         Priority = priority,
@@ -3356,12 +3359,51 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value),
                         FormulaText = rule.Element(worksheetNs + "formula")?.Value,
                         FormatIfTrue = formatIfTrue
-                    });
+                    };
+                    ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
+                    result.Add(format);
                 }
             }
         }
 
         return result;
+    }
+
+    private static void ApplyNativeConditionalFormatRuleMetadata(
+        ConditionalFormat format,
+        XElement rule,
+        XNamespace worksheetNs)
+    {
+        var nativeAttributes = ReadNativeConditionalFormatRuleAttributes(rule);
+        if (nativeAttributes.Count > 0)
+            format.NativeAttributes = nativeAttributes;
+
+        var nativeChildren = ReadNativeConditionalFormatRuleChildXmls(rule, worksheetNs);
+        if (nativeChildren.Count > 0)
+            format.NativeChildXmls = nativeChildren;
+    }
+
+    private static Dictionary<string, string> ReadNativeConditionalFormatRuleAttributes(XElement rule)
+    {
+        string[] modeledAttributes = ["type", "priority", "dxfId", "stopIfTrue"];
+        return rule.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static List<string> ReadNativeConditionalFormatRuleChildXmls(XElement rule, XNamespace worksheetNs)
+    {
+        XName[] modeledChildren =
+        [
+            worksheetNs + "colorScale",
+            worksheetNs + "dataBar",
+            worksheetNs + "iconSet",
+            worksheetNs + "formula"
+        ];
+        return rule.Elements()
+            .Where(element => !modeledChildren.Contains(element.Name))
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
     }
 
     private static bool TryMapLongTailConditionalFormatRule(string? type, out CfRuleType ruleType)
@@ -3599,7 +3641,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             TopBottomPercent = source.TopBottomPercent,
             TextRuleText = source.TextRuleText,
             DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue
+            StopIfTrue = source.StopIfTrue,
+            NativeAttributes = source.NativeAttributes,
+            NativeChildXmls = source.NativeChildXmls
         };
         format.IconSetThresholds.AddRange(source.IconSetThresholds);
         return format;
@@ -10315,6 +10359,26 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (!string.IsNullOrWhiteSpace(cf.FormulaText))
                     rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
                 break;
+        }
+
+        foreach (var (name, value) in cf.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && rule.Attribute(name) is null)
+                rule.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in (cf.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == worksheetNs)
+                    rule.Add(nativeChild);
+            }
+            catch
+            {
+                // Ignore malformed native conditional-format payloads from older saves.
+            }
         }
 
         return rule;

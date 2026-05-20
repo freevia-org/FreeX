@@ -5035,6 +5035,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TorowAndTocol_TreatScalarArgumentAsSingleCellArray()
+    {
+        var row = _eval.Evaluate("=TOROW(\"x\")", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        row.RowCount.Should().Be(1);
+        row.ColCount.Should().Be(1);
+        row.Cells[0, 0].Should().Be(new TextValue("x"));
+
+        var col = _eval.Evaluate("=TOCOL(42)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        col.RowCount.Should().Be(1);
+        col.ColCount.Should().Be(1);
+        col.Cells[0, 0].Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void Torow_IgnoreBlanksAndErrors_RemovesBoth()
     {
         var sheet = MakeSheet(
