@@ -82,6 +82,26 @@ public class InsertDeleteColumnsTests
     }
 
     [Fact]
+    public void InsertColumn_ShiftsThreadedCommentsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var original = new CellAddress(sheet.Id, 2, 3);
+        var shifted = new CellAddress(sheet.Id, 2, 5);
+        sheet.ThreadedComments[original] = new ThreadedComment("Check this", "Quinn");
+
+        var cmd = new InsertColumnsCommand(sheet.Id, beforeCol: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ThreadedComments.Should().NotContainKey(original);
+        sheet.ThreadedComments[shifted].Should().Be(new ThreadedComment("Check this", "Quinn"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[original].Should().Be(new ThreadedComment("Check this", "Quinn"));
+        sheet.ThreadedComments.Should().NotContainKey(shifted);
+    }
+
+    [Fact]
     public void InsertColumn_ShiftsRuleRangesAndUndoRestores()
     {
         var (wb, sheet, ctx) = Setup();
@@ -265,6 +285,30 @@ public class InsertDeleteColumnsTests
         sheet.Comments[deleted].Should().Be("Remove with column");
         sheet.Comments[originalRight].Should().Be("Move left");
         sheet.Comments.Should().NotContainKey(shiftedRight);
+    }
+
+    [Fact]
+    public void DeleteColumn_ShiftsThreadedCommentsAndUndoRestores()
+    {
+        var (_, sheet, ctx) = Setup();
+        var deleted = new CellAddress(sheet.Id, 2, 3);
+        var originalRight = new CellAddress(sheet.Id, 2, 6);
+        var shiftedRight = new CellAddress(sheet.Id, 2, 4);
+        sheet.ThreadedComments[deleted] = new ThreadedComment("Remove with column", "Quinn");
+        sheet.ThreadedComments[originalRight] = new ThreadedComment("Move left", "Codex");
+
+        var cmd = new DeleteColumnsCommand(sheet.Id, startCol: 3, count: 2);
+        cmd.Apply(ctx);
+
+        sheet.ThreadedComments.Should().NotContainKey(deleted);
+        sheet.ThreadedComments.Should().NotContainKey(originalRight);
+        sheet.ThreadedComments[shiftedRight].Should().Be(new ThreadedComment("Move left", "Codex"));
+
+        cmd.Revert(ctx);
+
+        sheet.ThreadedComments[deleted].Should().Be(new ThreadedComment("Remove with column", "Quinn"));
+        sheet.ThreadedComments[originalRight].Should().Be(new ThreadedComment("Move left", "Codex"));
+        sheet.ThreadedComments.Should().NotContainKey(shiftedRight);
     }
 
     [Fact]
