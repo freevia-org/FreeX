@@ -5815,30 +5815,24 @@ public partial class MainWindow : Window
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
         { cm.PlacementTarget = btn; cm.IsOpen = true; }
     }
-    private void FormatTableLightMenuItem_Click(object sender, RoutedEventArgs e)  => ApplyTableFormat(0);
-    private void FormatTableMediumMenuItem_Click(object sender, RoutedEventArgs e) => ApplyTableFormat(1);
-    private void FormatTableDarkMenuItem_Click(object sender, RoutedEventArgs e)   => ApplyTableFormat(2);
+    private void FormatTableGalleryMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var index = sender is MenuItem { Tag: string tag } && int.TryParse(tag, out var parsed)
+            ? parsed
+            : 0;
+        ApplyTableFormat(index);
+    }
 
     private void ApplyTableFormat(int variant)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var tableStyleName = variant switch
-        {
-            1 => "TableStyleMedium2",
-            2 => "TableStyleDark1",
-            _ => "TableStyleLight9"
-        };
+        var tableStyle = TableStyleGalleryPlanner.GetOption(variant);
+        var tableStyleName = tableStyle.StyleName;
         var dialog = new CreateTableDialog(_currentSheetId, FormatRangeReference(range.Start, range.End), tableStyleName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
 
         range = dialog.Result.Range;
-        var (headerFill, oddFill, evenFill) = variant switch
-        {
-            1 => (new CellColor(31, 78, 121), new CellColor(222, 235, 247), new CellColor(255, 255, 255)),
-            2 => (new CellColor(54, 54, 54),  new CellColor(68, 68, 68),    new CellColor(80, 80, 80)),
-            _ => (new CellColor(31, 115, 70), new CellColor(226, 239, 218), new CellColor(255, 255, 255))
-        };
         if (!TryExecuteGroupedSheetCommand(
                 "Format as Table",
                 sheetId => new CreateStyledStructuredTableCommand(
@@ -5846,7 +5840,7 @@ public partial class MainWindow : Window
                     GroupedSheetRangePlanner.RemapRangeToSheet(dialog.Result.Range, sheetId),
                     dialog.Result.TableStyleName,
                     dialog.Result.FirstRowHasHeaders,
-                    new StructuredTableStyleBanding(headerFill, oddFill, evenFill, CellColor.White))))
+                    tableStyle.Banding)))
             return;
         UpdateViewport();
     }

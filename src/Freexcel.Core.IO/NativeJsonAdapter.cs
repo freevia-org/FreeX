@@ -840,6 +840,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 TrendlineThemeColor = ToThemeColorReference(chartDto.TrendlineThemeColor),
                 TrendlineThickness = chartDto.TrendlineThickness,
                 TrendlineDashStyle = chartDto.TrendlineDashStyle,
+                ShowErrorBars = chartDto.ShowErrorBars,
+                ErrorBarKind = chartDto.ErrorBarKind,
+                ErrorBarDirection = chartDto.ErrorBarDirection,
+                ErrorBarValue = chartDto.ErrorBarValue,
+                ErrorBarEndCaps = chartDto.ErrorBarEndCaps,
                 ShowSecondaryAxis = chartDto.ShowSecondaryAxis,
                 SecondaryAxisSeriesIndexes = chartDto.SecondaryAxisSeriesIndexes ?? [],
                 ComboLineSeriesIndexes = chartDto.ComboLineSeriesIndexes ?? [],
@@ -964,6 +969,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
         TrendlineThemeColor = FromThemeColorReference(chart.TrendlineThemeColor),
         TrendlineThickness = chart.TrendlineThickness,
         TrendlineDashStyle = chart.TrendlineDashStyle,
+        ShowErrorBars = chart.ShowErrorBars,
+        ErrorBarKind = chart.ErrorBarKind,
+        ErrorBarDirection = chart.ErrorBarDirection,
+        ErrorBarValue = chart.ErrorBarValue,
+        ErrorBarEndCaps = chart.ErrorBarEndCaps,
         ShowSecondaryAxis = chart.ShowSecondaryAxis,
         SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes.ToList(),
         ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
@@ -2071,6 +2081,11 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public ThemeColorReferenceDto? TrendlineThemeColor { get; set; }
         public double TrendlineThickness { get; set; } = 1.5;
         public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
+        public bool ShowErrorBars { get; set; }
+        public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
+        public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
+        public double ErrorBarValue { get; set; } = 5;
+        public bool ErrorBarEndCaps { get; set; } = true;
         public bool ShowSecondaryAxis { get; set; }
         public List<int>? SecondaryAxisSeriesIndexes { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }

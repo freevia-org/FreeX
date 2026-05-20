@@ -441,6 +441,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -522,6 +523,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -550,6 +552,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -635,6 +638,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -705,6 +709,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -888,6 +893,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -916,6 +922,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -986,6 +993,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, seriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -1048,6 +1056,7 @@ public static class XlsxChartPartReader
 
                 ApplyPointDataLabels(series, modelSeriesIndex, result);
                 ApplyTrendline(series, result);
+                ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -1472,6 +1481,24 @@ public static class XlsxChartPartReader
         ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
     }
 
+    private static void ApplyErrorBars(XElement series, ChartModel chart)
+    {
+        if (chart.ShowErrorBars)
+            return;
+
+        var errorBars = series.Element(ChartNs + "errBars");
+        if (errorBars is null)
+            return;
+
+        chart.ShowErrorBars = true;
+        chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
+        chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
+        chart.ErrorBarEndCaps = !IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
+
+        if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
+    }
+
     private static void ApplyTrendlineShapeProperties(XElement? shapeProperties, ChartModel chart)
     {
         var line = shapeProperties?.Element(DrawingNs + "ln");
@@ -1508,6 +1535,22 @@ public static class XlsxChartPartReader
             "movingAvg" => ChartTrendlineType.MovingAverage,
             "poly" => ChartTrendlineType.Polynomial,
             _ => ChartTrendlineType.Linear
+        };
+
+    private static ChartErrorBarKind FromXlsxErrorBarKind(string? value) =>
+        value switch
+        {
+            "percentage" => ChartErrorBarKind.Percentage,
+            "fixedVal" => ChartErrorBarKind.FixedValue,
+            _ => ChartErrorBarKind.StandardError
+        };
+
+    private static ChartErrorBarDirection FromXlsxErrorBarDirection(string? value) =>
+        value switch
+        {
+            "plus" => ChartErrorBarDirection.Plus,
+            "minus" => ChartErrorBarDirection.Minus,
+            _ => ChartErrorBarDirection.Both
         };
 
     private static ChartLineDashStyle FromXlsxPresetDash(string? value) =>
