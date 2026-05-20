@@ -105,6 +105,78 @@ public sealed class AllowEditRangeCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Remove an allowed edit range from a protected worksheet with undo support.</summary>
+public sealed class RemoveAllowEditRangeCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly GridRange _range;
+    private int _removedIndex = -1;
+
+    public string Label => "Remove Allow Edit Range";
+
+    public RemoveAllowEditRangeCommand(SheetId sheetId, GridRange range)
+    {
+        _sheetId = sheetId;
+        _range = range;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (_range.Start.Sheet != _sheetId || _range.End.Sheet != _sheetId)
+            return new CommandOutcome(false, "Allowed edit range must be on the target sheet.");
+
+        var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
+        _removedIndex = ranges.IndexOf(_range);
+        if (_removedIndex < 0)
+            return new CommandOutcome(false, "Allowed edit range was not found.");
+
+        ranges.RemoveAt(_removedIndex);
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_removedIndex < 0)
+            return;
+
+        var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
+        var index = Math.Min(_removedIndex, ranges.Count);
+        ranges.Insert(index, _range);
+    }
+}
+
+/// <summary>Clear all allowed edit ranges from a protected worksheet with undo support.</summary>
+public sealed class ClearAllowEditRangesCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private List<GridRange>? _previousRanges;
+
+    public string Label => "Clear Allow Edit Ranges";
+
+    public ClearAllowEditRangesCommand(SheetId sheetId)
+    {
+        _sheetId = sheetId;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
+        _previousRanges = [.. ranges];
+        ranges.Clear();
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousRanges is null)
+            return;
+
+        var ranges = ctx.GetSheet(_sheetId).AllowEditRanges;
+        ranges.Clear();
+        ranges.AddRange(_previousRanges);
+    }
+}
+
 /// <summary>Protect workbook structure with undo support.</summary>
 public sealed class ProtectWorkbookCommand : IWorkbookCommand
 {
