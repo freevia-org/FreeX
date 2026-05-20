@@ -10,15 +10,7 @@ namespace Freexcel.App.Host;
 public static class RibbonIconFactory
 {
     private const double Artboard = 24;
-    private const int UltraCommandIconPixels = 96;
-    private const int VeryLargeCommandIconPixels = 80;
-    private const int MegaCommandIconPixels = 72;
-    private const int SuperCommandIconPixels = 64;
-    private const int JumboCommandIconPixels = 56;
-    private const int ExtraLargeCommandIconPixels = 48;
-    private const int LargeCommandIconPixels = 40;
-    private const int MediumCommandIconPixels = 32;
-    private const int SmallCommandIconPixels = 24;
+    private static readonly int[] CommandIconPixelSizes = [96, 80, 72, 64, 60, 56, 54, 48, 42, 40, 36, 32, 30, 24];
     private static readonly object CommandIconCacheGate = new();
     private static readonly Dictionary<string, ImageSource> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> MissingCommandIcons = new(StringComparer.OrdinalIgnoreCase);
@@ -32,18 +24,17 @@ public static class RibbonIconFactory
         if (IsWhiteBrush(glyphBrush))
             return CreateIcon(fallbackIcon, size, glyphBrush);
 
-        if (TryLoadCommandIcon(commandName, size) is { } source)
+        if (TryLoadCommandIcon(commandName, GetNearestCommandIconPixelSize(size)) is { } source)
         {
             var image = new Image
             {
                 Source = source,
-                Stretch = Stretch.Uniform,
+                Stretch = Stretch.None,
                 SnapsToDevicePixels = true,
                 UseLayoutRounding = true
             };
-            SetDpiAwareIconSize(image, size);
-            image.Loaded += (_, _) => SetDpiAwareIconSize(image, size);
-            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+            AttachDpiAwareIconSource(image, commandName, size);
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
             RenderOptions.SetEdgeMode(image, EdgeMode.Aliased);
             return image;
         }
@@ -318,33 +309,63 @@ public static class RibbonIconFactory
         };
     }
 
-    private static void SetDpiAwareIconSize(FrameworkElement element, double physicalPixels)
+    private static void AttachDpiAwareIconSource(Image image, string commandName, double logicalSize)
     {
-        var dpi = VisualTreeHelper.GetDpi(element);
-        var dpiScaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1;
-        var dpiScaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
-        element.Width = physicalPixels / dpiScaleX;
-        element.Height = physicalPixels / dpiScaleY;
+        var currentPixelSize = 0;
+        var currentDpiScaleX = 0.0;
+        var currentDpiScaleY = 0.0;
+
+        void Update()
+        {
+            if (!image.IsLoaded)
+                return;
+
+            var dpi = VisualTreeHelper.GetDpi(image);
+            var dpiScaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1;
+            var dpiScaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : dpiScaleX;
+            var pixelSize = ResolveCommandIconPixelSizeForDpi(logicalSize, dpiScaleX);
+            if (pixelSize == currentPixelSize &&
+                Math.Abs(dpiScaleX - currentDpiScaleX) < 0.001 &&
+                Math.Abs(dpiScaleY - currentDpiScaleY) < 0.001)
+            {
+                return;
+            }
+
+            if (pixelSize != currentPixelSize &&
+                TryLoadCommandIcon(commandName, pixelSize) is { } source)
+            {
+                image.Source = source;
+                currentPixelSize = pixelSize;
+            }
+
+            image.Width = pixelSize / dpiScaleX;
+            image.Height = pixelSize / dpiScaleY;
+            currentDpiScaleX = dpiScaleX;
+            currentDpiScaleY = dpiScaleY;
+        }
+
+        image.Loaded += (_, _) => Update();
+        image.LayoutUpdated += (_, _) => Update();
     }
 
-    private static ImageSource? TryLoadCommandIcon(string commandName, double size)
+    internal static int ResolveCommandIconPixelSizeForDpi(double logicalSize, double dpiScale) =>
+        GetNearestCommandIconPixelSize(Math.Max(1, logicalSize) * Math.Max(1, dpiScale));
+
+    private static int GetNearestCommandIconPixelSize(double requestedPixels)
+    {
+        var requested = Math.Max(1, (int)Math.Round(requestedPixels));
+        foreach (var size in CommandIconPixelSizes.OrderBy(size => Math.Abs(size - requested)))
+            return size;
+
+        return 24;
+    }
+
+    private static ImageSource? TryLoadCommandIcon(string commandName, int pixelSize)
     {
         var slug = ToCommandIconSlug(commandName);
         if (slug.Length == 0)
             return null;
 
-        var pixelSize = size switch
-        {
-            >= 96 => UltraCommandIconPixels,
-            >= 80 => VeryLargeCommandIconPixels,
-            >= 72 => MegaCommandIconPixels,
-            >= 64 => SuperCommandIconPixels,
-            >= 56 => JumboCommandIconPixels,
-            >= 48 => ExtraLargeCommandIconPixels,
-            >= 40 => LargeCommandIconPixels,
-            >= 32 => MediumCommandIconPixels,
-            _ => SmallCommandIconPixels
-        };
         foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
         {
             var cacheKey = $"{pixelSize}/{candidateSlug}";
