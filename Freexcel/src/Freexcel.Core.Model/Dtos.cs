@@ -9,7 +9,14 @@ public sealed record DisplayCell(
     string? Formula,
     StyleId StyleId,
     CellError? Error,
-    CellStyle? Style = null);
+    CellStyle? Style = null,
+    ConditionalFormatIcon? ConditionalIcon = null);
+
+public sealed record ConditionalFormatIcon(
+    string Style,
+    int IconIndex,
+    int IconCount,
+    bool ShowValue);
 
 /// <summary>Represents a cell-level error for display purposes.</summary>
 public sealed record CellError(string Code, string? Message = null);
