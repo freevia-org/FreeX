@@ -51,6 +51,8 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("0%", 0.125, "13%")]
+    [InlineData("0% \"done\"", 0.125, "13% done")]
+    [InlineData("0%%", 0.125, "1250%%")]
     [InlineData("0\"%\"", 12, "12%")]
     [InlineData("0\\%", 12, "12%")]
     public void CustomNumberSubset_ScalesOnlyActivePercentTokens(string format, double value, string expected)
