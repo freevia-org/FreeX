@@ -114,9 +114,100 @@ public sealed class StructuredTableCommandTests
         sheet.StructuredTables.Should().ContainSingle().Which.Should().BeSameAs(existing);
     }
 
+    [Fact]
+    public void ApplyStructuredTableFiltersCommand_HidesRowsThatDoNotMatchTableFilterColumns()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTable(sheet);
+        var table = CreateSalesTable(sheet);
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(1, ["North"]));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(2, ["Open"], IncludeBlank: true));
+        sheet.StructuredTables.Add(table);
+        sheet.FilterHiddenRows.Add(20u);
+        var ctx = new SimpleCtx(wb);
+        var command = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().Contain([3u, 4u]);
+        sheet.FilterHiddenRows.Should().NotContain([1u, 2u, 5u]);
+        sheet.FilterHiddenRows.Should().Contain(20u);
+
+        command.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([20u]);
+    }
+
+    [Fact]
+    public void ApplyStructuredTableFiltersCommand_ClearsRowsInTableWhenNoFilterColumnsRemain()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTable(sheet);
+        var table = CreateSalesTable(sheet);
+        sheet.StructuredTables.Add(table);
+        sheet.FilterHiddenRows.UnionWith([2u, 3u, 20u]);
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().NotContain([2u, 3u]);
+        sheet.FilterHiddenRows.Should().Contain(20u);
+    }
+
+    [Fact]
+    public void ApplyStructuredTableFiltersCommand_RejectsUnknownFilterColumnWithoutChangingHiddenRows()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTable(sheet);
+        var table = CreateSalesTable(sheet);
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(99, ["North"]));
+        sheet.StructuredTables.Add(table);
+        sheet.FilterHiddenRows.UnionWith([2u, 20u]);
+        var ctx = new SimpleCtx(wb);
+
+        var outcome = new ApplyStructuredTableFiltersCommand(sheet.Id, table.Id).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u, 20u]);
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
         public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+    }
+
+    private static StructuredTableModel CreateSalesTable(Sheet sheet) =>
+        new()
+        {
+            Id = 7,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)),
+            HasAutoFilter = true,
+            Columns =
+            {
+                new StructuredTableColumnModel(1, "Region"),
+                new StructuredTableColumnModel(2, "Status")
+            }
+        };
+
+    private static void SeedTable(Sheet sheet)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("Open"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("Closed"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), BlankValue.Instance);
     }
 }
