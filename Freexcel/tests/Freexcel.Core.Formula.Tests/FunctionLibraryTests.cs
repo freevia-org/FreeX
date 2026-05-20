@@ -1970,6 +1970,14 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Large_Small_And_Rank_TreatScalarArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=LARGE(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=SMALL(5,1)", MakeSheet()).Should().Be(new NumberValue(5));
+        _eval.Evaluate("=RANK(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Large_SecondLargest()
     {
         var sheet = MakeSheet(
