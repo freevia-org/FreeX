@@ -60,6 +60,24 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialog_BuildsHeaderAwareColumnChoices()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 3), new TextValue("Sales"));
+
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 2),
+            new CellAddress(sheetId, 8, 4));
+
+        SubtotalDialog.BuildColumnChoices(sheet, range).Should().Equal(
+            new SubtotalColumnChoice(0, "Region", false),
+            new SubtotalColumnChoice(1, "Sales", true),
+            new SubtotalColumnChoice(2, "Column D", true));
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_ParsesRangesAndOptionalCopyToCellOnCurrentSheet()
     {
         var sheetId = SheetId.New();
