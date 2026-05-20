@@ -2354,6 +2354,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_And_Xmatch_TreatScalarLookupArraysAsSingleItemArrays()
+    {
+        _eval.Evaluate("=XMATCH(5,5)", MakeSheet()).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=XLOOKUP(5,5,\"found\")", MakeSheet()).Should().Be(new TextValue("found"));
+    }
+
+    [Fact]
     public void Xlookup_WildcardMatchMode_MatchesTextPattern()
     {
         var sheet = MakeSheet(
