@@ -1700,6 +1700,10 @@
                                         local:RibbonTooltip.Title="Trendline Width"
                                         local:RibbonTooltip.KeyTip="TW"
                                         local:RibbonTooltip.Description="Cycle the current chart trendline width."/>
+                                <Button Content="Error Bars" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartErrorBarsBtn_Click"
+                                        local:RibbonTooltip.Title="Error Bars"
+                                        local:RibbonTooltip.KeyTip="EB"
+                                        local:RibbonTooltip.Description="Open Excel-like error bar options for the current chart."/>
                                 <Button Content="2nd Axis" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartSecondaryAxisBtn_Click"
                                         local:RibbonTooltip.Title="Secondary Axis"
                                         local:RibbonTooltip.KeyTip="SA"
