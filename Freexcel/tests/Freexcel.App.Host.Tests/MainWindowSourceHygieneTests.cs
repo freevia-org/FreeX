@@ -556,6 +556,69 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InlineEditingController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Editing.cs");
+
+        File.Exists(editingSourcePath).Should().BeTrue();
+        var editingSource = File.ReadAllText(editingSourcePath);
+
+        mainSource.Should().NotContain("private void EnterEditMode(");
+        mainSource.Should().NotContain("private void ShowInlineEditor(");
+        mainSource.Should().NotContain("private void RefreshValidationDropdown(");
+        mainSource.Should().NotContain("private void OpenActiveDropdown(");
+        mainSource.Should().NotContain("private void InlineEditor_KeyDown(");
+        mainSource.Should().NotContain("private void FormulaBar_KeyDown(");
+        mainSource.Should().NotContain("private bool CommitEdit(");
+        mainSource.Should().NotContain("private bool TryCreateCellFromEntryText(");
+        mainSource.Should().NotContain("private bool CommitPreparedEdits(");
+
+        editingSource.Should().Contain("private void EnterEditMode(");
+        editingSource.Should().Contain("private void ShowInlineEditor(");
+        editingSource.Should().Contain("private void RefreshValidationDropdown(");
+        editingSource.Should().Contain("private void OpenActiveDropdown(");
+        editingSource.Should().Contain("private void InlineEditor_KeyDown(");
+        editingSource.Should().Contain("private void FormulaBar_KeyDown(");
+        editingSource.Should().Contain("private bool CommitEdit(");
+        editingSource.Should().Contain("private bool TryCreateCellFromEntryText(");
+        editingSource.Should().Contain("private bool CommitPreparedEdits(");
+        editingSource.Should().Contain("ExcelEditKeyPlanner");
+        editingSource.Should().Contain("CellEntryParser");
+    }
+
+    [Fact]
+    public void GridStatusAndResizeController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var gridSourcePath = Path.Combine(appHostDirectory, "MainWindow.GridStatus.cs");
+
+        File.Exists(gridSourcePath).Should().BeTrue();
+        var gridSource = File.ReadAllText(gridSourcePath);
+
+        mainSource.Should().NotContain("private void RefreshStatusBar(");
+        mainSource.Should().NotContain("private void OnColumnResizing(");
+        mainSource.Should().NotContain("private void OnColumnResized(");
+        mainSource.Should().NotContain("private void OnRowResizing(");
+        mainSource.Should().NotContain("private void OnRowResized(");
+        mainSource.Should().NotContain("private void OnPageMarginsChanged(");
+        mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
+        mainSource.Should().NotContain("private void RestoreRowResizeSnapshot(");
+
+        gridSource.Should().Contain("private void RefreshStatusBar(");
+        gridSource.Should().Contain("private void OnColumnResizing(");
+        gridSource.Should().Contain("private void OnColumnResized(");
+        gridSource.Should().Contain("private void OnRowResizing(");
+        gridSource.Should().Contain("private void OnRowResized(");
+        gridSource.Should().Contain("private void OnPageMarginsChanged(");
+        gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
+        gridSource.Should().Contain("private void RestoreRowResizeSnapshot(");
+        gridSource.Should().Contain("StatusBarCalculator");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -861,7 +924,9 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
 
         source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
         source.Should().Contain("OpenActiveDropdown();");
