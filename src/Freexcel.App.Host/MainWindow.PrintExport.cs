@@ -35,18 +35,19 @@ public partial class MainWindow
 
         var request = ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result);
         var exported = request.Format == ExportFormat.Pdf
-            ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), ResolveExportRange(request.Options))
-            : ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), ResolveExportRange(request.Options));
+            ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
+            : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
         if (exported && request.Options.OpenAfterPublish)
             OpenExportedFile(request.ActualPath);
     }
 
-    private bool ExportAsPdf(string pdfPath, string optionSummary, GridRange? printRangeOverride = null)
+    private bool ExportAsPdf(string pdfPath, string optionSummary, ExportOptions options)
     {
         try
         {
-            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, printRangeOverride);
-            PdfDocumentExporter.Save(doc, pdfPath);
+            var document = RenderExportDocument(options);
+            var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
+            PdfDocumentExporter.Save(document, pdfPath, properties);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
@@ -73,11 +74,15 @@ public partial class MainWindow
     /// showing a print dialog.
     /// </summary>
 
-    private bool ExportAsXps(string xpsPath, string? optionSummary = null, GridRange? printRangeOverride = null, bool showSuccessMessage = true)
+    private bool ExportAsXps(
+        string xpsPath,
+        string? optionSummary,
+        ExportOptions options,
+        bool showSuccessMessage = true)
     {
         try
         {
-            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, printRangeOverride);
+            var paginator = RenderExportPaginator(options);
 
             // Open the XPS package for write
             var pkg = System.IO.Packaging.Package.Open(
@@ -99,7 +104,7 @@ public partial class MainWindow
                 throw new InvalidOperationException("XpsDocumentWriter(XpsDocument) constructor not found in ReachFramework.");
 
             var writer = (System.Windows.Xps.XpsDocumentWriter)ctor.Invoke([xpsDoc]);
-            writer.Write(doc.DocumentPaginator);
+            writer.Write(paginator);
             // xpsDoc closed by 'using'
 
             if (showSuccessMessage)
@@ -131,6 +136,16 @@ public partial class MainWindow
         options.Scope == ExportContentScope.Selection
             ? SheetGrid.SelectedRange
             : null;
+
+    private System.Windows.Documents.FixedDocument RenderExportDocument(ExportOptions options) =>
+        options.Scope == ExportContentScope.EntireWorkbook
+            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService)
+            : PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ResolveExportRange(options));
+
+    private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options) =>
+        options.Scope == ExportContentScope.EntireWorkbook
+            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService)
+            : RenderExportDocument(options).DocumentPaginator;
 
     private static void OpenExportedFile(string path)
     {

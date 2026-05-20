@@ -7,6 +7,7 @@ internal sealed class ExportOptionsDialog : Window
 {
     private readonly RadioButton _activeSheetButton = new() { Content = "Active sheet", IsChecked = true };
     private readonly RadioButton _selectionButton = new() { Content = "Selection" };
+    private readonly RadioButton _entireWorkbookButton = new() { Content = "Entire workbook" };
     private readonly CheckBox _documentPropertiesBox = new() { Content = "Include document properties" };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "Open after publishing" };
 
@@ -28,6 +29,7 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(new TextBlock { Text = "Publish what", Margin = new Thickness(0, 0, 0, 6) });
         stack.Children.Add(_activeSheetButton);
         stack.Children.Add(_selectionButton);
+        stack.Children.Add(_entireWorkbookButton);
         stack.Children.Add(_documentPropertiesBox);
         stack.Children.Add(_openAfterPublishBox);
 
@@ -40,7 +42,11 @@ internal sealed class ExportOptionsDialog : Window
         ok.Click += (_, _) =>
         {
             Result = CreateResult(
-                _selectionButton.IsChecked == true ? ExportContentScope.Selection : ExportContentScope.ActiveSheet,
+                _entireWorkbookButton.IsChecked == true
+                    ? ExportContentScope.EntireWorkbook
+                    : _selectionButton.IsChecked == true
+                        ? ExportContentScope.Selection
+                        : ExportContentScope.ActiveSheet,
                 _documentPropertiesBox.IsChecked == true,
                 _openAfterPublishBox.IsChecked == true);
             DialogResult = true;

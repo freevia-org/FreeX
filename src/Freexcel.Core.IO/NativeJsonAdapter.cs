@@ -740,6 +740,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
             {
                 Type = chartDto.Type,
                 DataRange = GridRange.Parse(chartDto.DataRange, sheetId),
+                IsVisible = chartDto.IsVisible,
                 FirstRowIsHeader = chartDto.FirstRowIsHeader,
                 FirstColIsCategories = chartDto.FirstColIsCategories,
                 Title = chartDto.Title,
@@ -872,6 +873,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
     {
         Type = chart.Type,
         DataRange = chart.DataRange.ToString(),
+        IsVisible = chart.IsVisible,
         FirstRowIsHeader = chart.FirstRowIsHeader,
         FirstColIsCategories = chart.FirstColIsCategories,
         Title = chart.Title,
@@ -1987,6 +1989,7 @@ public sealed class NativeJsonAdapter : IFileAdapter
     {
         public ChartType Type { get; set; } = ChartType.Column;
         public string? DataRange { get; set; }
+        public bool IsVisible { get; set; } = true;
         public bool FirstRowIsHeader { get; set; } = true;
         public bool FirstColIsCategories { get; set; } = true;
         public string? Title { get; set; }

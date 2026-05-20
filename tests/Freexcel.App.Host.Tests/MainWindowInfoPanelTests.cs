@@ -28,7 +28,7 @@ public sealed class MainWindowInfoPanelTests
     [Fact]
     public void UpdateInfoView_RefreshesModelBackedStatisticsProtectionAndAccessibility()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
 
         source.Should().Contain("BackstageInfoPlanner.Build(_workbook, _currentFilePath)");
         source.Should().Contain("InfoStatisticsSummary.Text");

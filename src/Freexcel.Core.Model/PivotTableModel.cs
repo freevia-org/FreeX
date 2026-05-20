@@ -137,7 +137,22 @@ public sealed record PivotDataFieldModel(
     string? CalculatedFieldName = null,
     PivotShowValuesAs ShowValuesAs = PivotShowValuesAs.None,
     int? BaseFieldIndex = null,
-    string? BaseItem = null);
+    string? BaseItem = null,
+    string? NumberFormatCode = null)
+{
+    public PivotDataFieldModel(
+        int SourceFieldIndex,
+        string Name,
+        string SummaryFunction,
+        int? NumberFormatId,
+        string? CalculatedFieldName,
+        PivotShowValuesAs ShowValuesAs,
+        int? BaseFieldIndex,
+        string? BaseItem)
+        : this(SourceFieldIndex, Name, SummaryFunction, NumberFormatId, CalculatedFieldName, ShowValuesAs, BaseFieldIndex, BaseItem, null)
+    {
+    }
+}
 
 public enum PivotShowValuesAs
 {

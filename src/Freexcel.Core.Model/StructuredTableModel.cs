@@ -15,6 +15,7 @@ public sealed class StructuredTableModel
     public bool ShowRowStripes { get; init; }
     public bool ShowColumnStripes { get; init; }
     public string PackagePart { get; init; } = "";
+    public string? NativeSortStateXml { get; init; }
     public List<StructuredTableColumnModel> Columns { get; } = [];
     public List<StructuredTableFilterColumnModel> FilterColumns { get; } = [];
 }
@@ -25,10 +26,40 @@ public sealed record StructuredTableColumnModel(
     string? TotalsRowLabel = null,
     string? TotalsRowFunction = null,
     string? CalculatedColumnFormula = null,
-    string? TotalsRowFormula = null);
+    string? TotalsRowFormula = null,
+    IReadOnlyList<string>? NativeChildXmls = null,
+    IReadOnlyDictionary<string, string>? NativeAttributes = null);
 
-public sealed record StructuredTableFilterColumnModel(
-    int ColumnId,
-    IReadOnlyList<string> Values,
-    bool IncludeBlank = false,
-    string? NativeFilterXml = null);
+public sealed record StructuredTableFilterColumnModel
+{
+    public int ColumnId { get; init; }
+    public IReadOnlyList<string> Values { get; init; }
+    public bool IncludeBlank { get; init; }
+    public IReadOnlyList<string> NativeFilterXmls { get; init; }
+    public string? NativeFilterXml => NativeFilterXmls.FirstOrDefault();
+
+    public StructuredTableFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank = false,
+        string? NativeFilterXml = null)
+        : this(
+            ColumnId,
+            Values,
+            IncludeBlank,
+            string.IsNullOrWhiteSpace(NativeFilterXml) ? [] : [NativeFilterXml])
+    {
+    }
+
+    public StructuredTableFilterColumnModel(
+        int ColumnId,
+        IReadOnlyList<string> Values,
+        bool IncludeBlank,
+        IReadOnlyList<string> NativeFilterXmls)
+    {
+        this.ColumnId = ColumnId;
+        this.Values = Values;
+        this.IncludeBlank = IncludeBlank;
+        this.NativeFilterXmls = NativeFilterXmls;
+    }
+}

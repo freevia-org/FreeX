@@ -11218,6 +11218,197 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_SaveLoad_RoundTripsPivotCustomValueNumberFormatCatalog()
+    {
+        var workbook = new Workbook("AuthoredPivotCustomNumberFormatXlsxTest");
+        workbook.NumberFormatCatalog[165] = "#,##0.0 \"kg\"";
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2"
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1,
+            "Sum of Amount",
+            "sum",
+            NumberFormatId: 165,
+            NumberFormatCode: "#,##0.0 \"kg\""));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            stylesXml.ToString().Should().Contain("numFmtId=\"165\"");
+            stylesXml.ToString().Should().Contain("formatCode=\"#,##0.0 &quot;kg&quot;\"");
+            var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+            pivotXml.ToString().Should().Contain("numFmtId=\"165\"");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        loaded.NumberFormatCatalog.Should().Contain(165, "#,##0.0 \"kg\"");
+        var loadedField = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.DataFields
+            .Should().ContainSingle().Subject;
+        loadedField.NumberFormatId.Should().Be(165);
+        loadedField.NumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoad_RemapPivotCustomNumberFormatWhenCellStylesUseSameId()
+    {
+        var workbook = new Workbook("PivotCustomNumberFormatCollisionXlsxTest");
+        workbook.NumberFormatCatalog[164] = "#,##0.0 \"kg\"";
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var conflictingStyle = CellStyle.Default.Clone();
+        conflictingStyle.NumberFormat = "0.0000";
+        var styledCell = Cell.FromValue(new NumberValue(10));
+        styledCell.StyleId = workbook.RegisterStyle(conflictingStyle);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), styledCell);
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2"
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1,
+            "Sum of Amount",
+            "sum",
+            NumberFormatId: 164,
+            NumberFormatCode: "#,##0.0 \"kg\""));
+        sheet.PivotTables.Add(pivot);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesText = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString();
+            stylesText.Should().Contain("formatCode=\"0.0000\"");
+            stylesText.Should().Contain("formatCode=\"#,##0.0 &quot;kg&quot;\"");
+            var pivotText = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!).ToString();
+            pivotText.Should().NotContain("numFmtId=\"164\"");
+        }
+
+        saved.Position = 0;
+        var loaded = adapter.Load(saved);
+        var loadedField = loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.DataFields
+            .Should().ContainSingle().Subject;
+        loadedField.NumberFormatId.Should().NotBe(164);
+        loadedField.NumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+        loaded.NumberFormatCatalog[loadedField.NumberFormatId!.Value].Should().Be("#,##0.0 \"kg\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_SaveLoadedWorkbook_RemapPreservedPivotCustomNumberFormatWhenCellStylesUseSameId()
+    {
+        var source = new Workbook("LoadedPivotCustomNumberFormatCollisionXlsxTest");
+        source.NumberFormatCatalog[164] = "#,##0.0 \"kg\"";
+        var sourceSheet = source.AddSheet("Data");
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new TextValue("Category"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 2), new TextValue("Amount"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 1), new TextValue("A"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 2), new NumberValue(10));
+        source.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = "Data",
+            SourceReference = "A1:B2"
+        });
+        source.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Category"));
+        source.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sourceSheet.Id, 1, 1), new CellAddress(sourceSheet.Id, 2, 2)),
+            TargetRange = new GridRange(new CellAddress(sourceSheet.Id, 5, 1), new CellAddress(sourceSheet.Id, 7, 2))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(
+            1,
+            "Sum of Amount",
+            "sum",
+            NumberFormatId: 164,
+            NumberFormatCode: "#,##0.0 \"kg\""));
+        sourceSheet.PivotTables.Add(pivot);
+
+        var adapter = new XlsxFileAdapter();
+        var sourceBytes = new MemoryStream();
+        adapter.Save(source, sourceBytes);
+        sourceBytes.Position = 0;
+
+        var loaded = adapter.Load(sourceBytes);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var conflictingStyle = CellStyle.Default.Clone();
+        conflictingStyle.NumberFormat = "0.0000";
+        var styledCell = Cell.FromValue(new NumberValue(10));
+        styledCell.StyleId = loaded.RegisterStyle(conflictingStyle);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 2), styledCell);
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var stylesText = LoadPackageXml(archive.GetEntry("xl/styles.xml")!).ToString();
+            stylesText.Should().Contain("formatCode=\"0.0000\"");
+            stylesText.Should().Contain("formatCode=\"#,##0.0 &quot;kg&quot;\"");
+            var pivotText = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!).ToString();
+            pivotText.Should().NotContain("numFmtId=\"164\"");
+        }
+
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+        var reloadedField = reloaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.DataFields
+            .Should().ContainSingle().Subject;
+        reloadedField.NumberFormatId.Should().NotBe(164);
+        reloadedField.NumberFormatCode.Should().Be("#,##0.0 \"kg\"");
+        reloaded.NumberFormatCatalog[reloadedField.NumberFormatId!.Value].Should().Be("#,##0.0 \"kg\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_SaveLoad_RoundTripsPivotCacheRefreshFlags()
     {
         var workbook = new Workbook("PivotCacheFlagsRoundTrip");
@@ -12137,6 +12328,131 @@ public class FileAdapterSmokeTests
         var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
         tableXml.Should().Contain("customFilters");
         tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeFilterExtensionSiblings()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableCustomFilterExtensionTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeCustomFilterWithExtension: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var filter = table.FilterColumns.Should().ContainSingle().Subject;
+        filter.ColumnId.Should().Be(1);
+        filter.Values.Should().BeEmpty();
+        filter.NativeFilterXmls.Should().HaveCount(2);
+        filter.NativeFilterXmls[0].Should().Contain("customFilters");
+        filter.NativeFilterXmls[1].Should().Contain("extLst");
+        filter.NativeFilterXmls[1].Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("customFilters");
+        tableXml.Should().Contain("customFilter operator=\"greaterThan\" val=\"10\"");
+        tableXml.Should().Contain("extLst");
+        tableXml.Should().Contain("{FREEXCEL-TABLE-FILTER-EXT}");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableNativeSortState()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableSortStateTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeSortState: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.NativeSortStateXml.Should().Contain("sortState");
+        table.NativeSortStateXml.Should().Contain("descending=\"1\"");
+        table.NativeSortStateXml.Should().Contain("ref=\"B2:B3\"");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("sortState");
+        tableXml.Should().Contain("descending=\"1\"");
+        tableXml.Should().Contain("ref=\"B2:B3\"");
+        tableXml.IndexOf("autoFilter", StringComparison.Ordinal).Should().BeLessThan(tableXml.IndexOf("sortState", StringComparison.Ordinal));
+        tableXml.IndexOf("sortState", StringComparison.Ordinal).Should().BeLessThan(tableXml.IndexOf("tableColumns", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableColumnNativeChildren()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableColumnExtensionTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeColumnExtension: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var amountColumn = table.Columns.Should().Contain(column => column.Name == "Amount").Subject;
+        amountColumn.NativeChildXmls.Should().ContainSingle()
+            .Which.Should().Contain("{FREEXCEL-TABLE-COLUMN-EXT}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("extLst");
+        tableXml.Should().Contain("{FREEXCEL-TABLE-COLUMN-EXT}");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableColumnNativeAttributes()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableColumnAttributeTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeColumnAttributes: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var amountColumn = table.Columns.Should().Contain(column => column.Name == "Amount").Subject;
+        amountColumn.NativeAttributes.Should().ContainKey("uniqueName").WhoseValue.Should().Be("AmountNative");
+        amountColumn.NativeAttributes.Should().ContainKey("dataDxfId").WhoseValue.Should().Be("4");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("uniqueName=\"AmountNative\"");
+        tableXml.Should().Contain("dataDxfId=\"4\"");
     }
 
     [Fact]
@@ -13715,7 +14031,11 @@ public class FileAdapterSmokeTests
         bool includeTotalsRow = false,
         bool includeFilterValues = false,
         bool includeColumnFormulas = false,
-        bool includeCustomFilter = false)
+        bool includeCustomFilter = false,
+        bool includeCustomFilterWithExtension = false,
+        bool includeSortState = false,
+        bool includeColumnExtension = false,
+        bool includeColumnAttributes = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13757,6 +14077,14 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeColumnAttributes
+                            ? StructuredTableWithColumnAttributesXml
+                        : includeColumnExtension
+                            ? StructuredTableWithColumnExtensionXml
+                        : includeSortState
+                            ? StructuredTableWithSortStateXml
+                        : includeCustomFilterWithExtension
+                            ? StructuredTableWithCustomFilterAndExtensionXml
                         : includeCustomFilter
                             ? StructuredTableWithCustomFilterXml
                         : includeColumnFormulas
@@ -14734,6 +15062,102 @@ public class FileAdapterSmokeTests
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
             <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithCustomFilterAndExtensionXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="1">
+              <customFilters>
+                <customFilter operator="greaterThan" val="10"/>
+              </customFilters>
+              <extLst>
+                <ext uri="{FREEXCEL-TABLE-FILTER-EXT}"/>
+              </extLst>
+            </filterColumn>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithSortStateXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3"/>
+          <sortState ref="A1:B3">
+            <sortCondition descending="1" ref="B2:B3"/>
+          </sortState>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithColumnExtensionXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount">
+              <extLst>
+                <ext uri="{FREEXCEL-TABLE-COLUMN-EXT}"/>
+              </extLst>
+            </tableColumn>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithColumnAttributesXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount" uniqueName="AmountNative" dataDxfId="4"/>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"
