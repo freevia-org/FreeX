@@ -8116,6 +8116,42 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetWebPublishItemsAlongsideModelEdits()
+    {
+        var workbook = new Workbook("WebPublishItemsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetWebPublishItemsPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/webPublishItems.xml").Should().NotBeNull();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("webPublishItems");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("rIdFreexcelWebPublishItems");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../webPublishItems.xml");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("/xl/webPublishItems.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
@@ -13186,6 +13222,61 @@ public class FileAdapterSmokeTests
                     new XAttribute("applyPatternFormats", "0"),
                     new XAttribute("applyAlignmentFormats", "0"),
                     new XAttribute("applyWidthHeightFormats", "0"))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorksheetWebPublishItemsPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/webPublishItems.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.webPublishItems+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelWebPublishItems"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webPublishItems"),
+                new XAttribute("Target", "../webPublishItems.xml")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "webPublishItems",
+                new XAttribute("count", "1"),
+                new XElement(
+                    worksheetNs + "webPublishItem",
+                    new XAttribute(relNs + "id", "rIdFreexcelWebPublishItems"),
+                    new XAttribute("divId", "FreexcelWebPublishItems"),
+                    new XAttribute("sourceType", "sheet"),
+                    new XAttribute("sourceRef", "A1:B2"),
+                    new XAttribute("destinationFile", "https://example.invalid/sheet.htm"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            ReplacePackageXml(archive, "xl/webPublishItems.xml", new XDocument(
+                new XElement(
+                    worksheetNs + "webPublishItems",
+                    new XAttribute("count", "1"),
+                    new XElement(
+                        worksheetNs + "webPublishItem",
+                        new XAttribute("divId", "FreexcelWebPublishItems"),
+                        new XAttribute("sourceType", "sheet"),
+                        new XAttribute("destinationFile", "https://example.invalid/sheet.htm")))));
         }
 
         packageStream.Position = 0;
