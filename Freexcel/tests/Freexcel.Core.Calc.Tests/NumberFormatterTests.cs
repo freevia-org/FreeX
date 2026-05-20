@@ -255,6 +255,18 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("h \"hours\" m \"minutes\"", "12 hours 34 minutes")]
+    [InlineData("m \"month\" d", "1 month 1")]
+    public void CustomNumberSubset_DisambiguatesMinutesAcrossQuotedLiterals(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292.52425925926), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("[h]:mm:ss_)", "36:00:00")]
     [InlineData("[h]:mm:ss*-", "36:00:00")]
     [InlineData("\\T [h]:mm:ss", "T 36:00:00")]
