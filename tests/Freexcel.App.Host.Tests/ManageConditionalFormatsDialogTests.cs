@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Windows.Controls;
 using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Model;
@@ -99,6 +100,33 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void NewRuleChooser_OffersSupportedExcelRuleFamilies()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var dialog = new ManageConditionalFormatsDialog(sheet, null);
+
+            var chooser = GetControl<ComboBox>(dialog, "_newRuleTypeBox");
+
+            chooser.SelectedItem.Should().Be("Greater Than");
+            chooser.Items.Cast<string>().Should().Contain([
+                "Greater Than",
+                "Text Contains",
+                "Date Occurring",
+                "Duplicate Values",
+                "Top 10%",
+                "Data Bar",
+                "Color Scale",
+                "Icon Set",
+                "Formula"
+            ]);
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void CloneWithPriority_PreservesAdvancedConditionalFormatFields()
     {
         var source = new ConditionalFormat
@@ -158,6 +186,14 @@ public sealed class ManageConditionalFormatsDialogTests
             .GetMethod("CloneWithPriority", BindingFlags.Static | BindingFlags.NonPublic);
         method.Should().NotBeNull();
         return method!.Invoke(null, [source, priority]).Should().BeOfType<ConditionalFormat>().Subject;
+    }
+
+    private static T GetControl<T>(ManageConditionalFormatsDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(ManageConditionalFormatsDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 
     private static ConditionalFormat CreateRule(
