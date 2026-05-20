@@ -18,6 +18,8 @@ public sealed class StructuredTableModel
     public string? NativeSortStateXml { get; init; }
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
     public IReadOnlyList<string>? NativeChildXmls { get; init; }
+    public IReadOnlyDictionary<string, string>? NativeAutoFilterAttributes { get; init; }
+    public IReadOnlyList<string>? NativeAutoFilterChildXmls { get; init; }
     public IReadOnlyDictionary<string, string>? NativeStyleInfoAttributes { get; init; }
     public IReadOnlyList<string>? NativeStyleInfoChildXmls { get; init; }
     public List<StructuredTableColumnModel> Columns { get; } = [];
