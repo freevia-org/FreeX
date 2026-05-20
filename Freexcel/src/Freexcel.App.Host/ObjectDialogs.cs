@@ -223,20 +223,29 @@ public sealed record ShapeGradientDialogResult(CellColor StartColor, CellColor E
 public sealed class ShapeGradientDialog : Window
 {
     private readonly TextBox _gradientBox = new();
+    private readonly Button _startColorButton = new() { Content = "Start Color..." };
+    private readonly Button _endColorButton = new() { Content = "End Color..." };
+    private readonly TextBlock _startColorText = new();
+    private readonly TextBlock _endColorText = new();
+    private CellColor _startColor = new(31, 119, 180);
+    private CellColor _endColor = new(180, 210, 240);
 
     public ShapeGradientDialogResult Result { get; private set; }
 
     public ShapeGradientDialog()
     {
-        Result = new ShapeGradientDialogResult(new CellColor(31, 119, 180), new CellColor(180, 210, 240));
+        Result = new ShapeGradientDialogResult(_startColor, _endColor);
         Title = "Shape Gradient";
         Width = 420;
-        Height = 150;
+        Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _gradientBox.Text = "31,119,180; 180,210,240";
-        Content = ObjectSizeDialog.CreateSingleInputContent("Start color; end color:", _gradientBox, Accept);
+        _gradientBox.Text = FormatGradientText(_startColor, _endColor);
+        _startColorButton.Click += StartColorButton_Click;
+        _endColorButton.Click += EndColorButton_Click;
+        UpdateColorText();
+        Content = CreateContent();
     }
 
     public static bool TryCreateResult(string input, out ShapeGradientDialogResult result, out string? error)
@@ -255,11 +264,81 @@ public sealed class ShapeGradientDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_gradientBox.Text, out var result, out _))
-            return;
-        Result = result;
+        if (string.IsNullOrWhiteSpace(_gradientBox.Text))
+        {
+            Result = new ShapeGradientDialogResult(_startColor, _endColor);
+        }
+        else
+        {
+            if (!TryCreateResult(_gradientBox.Text, out var result, out _))
+                return;
+            Result = result;
+        }
+
         DialogResult = true;
     }
+
+    private StackPanel CreateContent()
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+
+        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        _startColorButton.Width = 120;
+        _startColorButton.Margin = new Thickness(0, 0, 8, 0);
+        _endColorButton.Width = 120;
+        buttonRow.Children.Add(_startColorButton);
+        buttonRow.Children.Add(_endColorButton);
+        stack.Children.Add(buttonRow);
+
+        _startColorText.Margin = new Thickness(0, 0, 0, 4);
+        _endColorText.Margin = new Thickness(0, 0, 0, 10);
+        stack.Children.Add(_startColorText);
+        stack.Children.Add(_endColorText);
+
+        stack.Children.Add(new TextBlock { Text = "RGB override:", Margin = new Thickness(0, 0, 0, 4) });
+        _gradientBox.Margin = new Thickness(0, 0, 0, 12);
+        stack.Children.Add(_gradientBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return stack;
+    }
+
+    private void StartColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ColorPickerDialog(_startColor) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.SelectedColor is not { } color)
+            return;
+
+        _startColor = color;
+        SyncGradientTextFromPickers();
+    }
+
+    private void EndColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ColorPickerDialog(_endColor) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.SelectedColor is not { } color)
+            return;
+
+        _endColor = color;
+        SyncGradientTextFromPickers();
+    }
+
+    private void SyncGradientTextFromPickers()
+    {
+        _gradientBox.Text = FormatGradientText(_startColor, _endColor);
+        UpdateColorText();
+    }
+
+    private void UpdateColorText()
+    {
+        _startColorText.Text = $"Start: {FormatColor(_startColor)}";
+        _endColorText.Text = $"End: {FormatColor(_endColor)}";
+    }
+
+    private static string FormatGradientText(CellColor startColor, CellColor endColor) =>
+        $"{FormatColor(startColor)}; {FormatColor(endColor)}";
+
+    private static string FormatColor(CellColor color) =>
+        $"{color.R},{color.G},{color.B}";
 }
 
 public sealed record TextEntryDialogResult(string Text);
