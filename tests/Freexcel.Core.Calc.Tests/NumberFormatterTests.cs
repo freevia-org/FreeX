@@ -173,6 +173,32 @@ public class NumberFormatterTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("[$-407]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-422]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-409]m/d/yyyy", "1/1/2024")]
+    [InlineData("[$-999]dd/mm/yyyy", "01/01/2024")]
+    public void CustomNumberSubset_UsesKnownLcidDateSeparatorsForDateValues(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[$-407]dd/mm/yyyy", "01.01.2024")]
+    [InlineData("[$-422]dd/mm/yyyy", "01.01.2024")]
+    public void CustomNumberSubset_UsesKnownLcidDateSeparatorsForDateSerials(
+        string format,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(45292), format);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void CustomNumberSubset_FormatsQuotedOnlyZeroSectionAsLiteral()
     {
