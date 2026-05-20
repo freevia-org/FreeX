@@ -50,6 +50,17 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("0%", 0.125, "13%")]
+    [InlineData("0\"%\"", 12, "12%")]
+    [InlineData("0\\%", 12, "12%")]
+    public void CustomNumberSubset_ScalesOnlyActivePercentTokens(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData("0.00;0.00", -1.25, "1.25")]
     [InlineData("0.00;-0.00", -1.25, "-1.25")]
     [InlineData("# ?/?;# ?/?", -0.125, "1/8")]
