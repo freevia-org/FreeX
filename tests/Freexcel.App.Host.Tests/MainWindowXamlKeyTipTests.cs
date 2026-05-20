@@ -285,7 +285,7 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void ReviewCommentCommands_DiscloseSimpleCellNotesRatherThanThreadedComments()
+    public void ReviewCommentCommands_ExposeThreadedCommentsAndSimpleNotesDistinctly()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:Freexcel.App.Host";
@@ -294,6 +294,7 @@ public sealed class MainWindowXamlKeyTipTests
         var commentButtons = document
             .Descendants(presentation + "Button")
             .Where(element => element.Attribute("Click")?.Value is
+                "ReviewNewThreadedCommentBtn_Click" or
                 "ReviewNewCommentBtn_Click" or
                 "ReviewDeleteCommentBtn_Click" or
                 "ReviewPrevCommentBtn_Click" or
@@ -309,18 +310,15 @@ public sealed class MainWindowXamlKeyTipTests
             })
             .ToList();
 
-        tooltipTexts.Should().HaveCount(6);
-        tooltipTexts.Should().OnlyContain(text =>
-            text.Title.Contains("Note", StringComparison.OrdinalIgnoreCase) ||
-            text.Description.Contains("note", StringComparison.OrdinalIgnoreCase));
+        tooltipTexts.Should().HaveCount(7);
         tooltipTexts
-            .Single(text => text.Title.Equals("New Note", StringComparison.OrdinalIgnoreCase))
-            .Description.Should()
-            .Contain("threaded comments are not implemented");
+            .Single(text => text.Title.Equals("New Comment", StringComparison.OrdinalIgnoreCase))
+            .Description.Should().Contain("threaded comment");
         tooltipTexts
-            .Single(text => text.Title.Equals("Edit Note", StringComparison.OrdinalIgnoreCase))
-            .Description.Should()
-            .Contain("threaded comments are not implemented");
+            .Where(text => text.Title.Contains("Note", StringComparison.OrdinalIgnoreCase))
+            .Should().OnlyContain(text => text.Description.Contains("note", StringComparison.OrdinalIgnoreCase));
+        tooltipTexts.Select(text => text.Description)
+            .Should().NotContain(description => description.Contains("threaded comments are not implemented", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

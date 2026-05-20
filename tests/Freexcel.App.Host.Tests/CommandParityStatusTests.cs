@@ -27,6 +27,7 @@ public sealed class CommandParityStatusTests
             ("AutoFit Row/Column", "Implemented"),
             ("Format Cells dialog (Ctrl+1)", "Implemented"),
             ("Flash Fill", "Partial"),
+            ("Threaded Comments", "Partial"),
             ("Share", "Partial"),
             ("Split Panes", "Implemented")
         ];
