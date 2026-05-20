@@ -1126,16 +1126,7 @@
                                         local:RibbonTooltip.KeyTip="T"
                                         local:RibbonTooltip.Description="Quickly format a range as a styled table.">
                                     <Button.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Light 1"  Tag="0" local:RibbonTooltip.KeyTip="A" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Light 9"  Tag="1" local:RibbonTooltip.KeyTip="B" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Light 11" Tag="2" local:RibbonTooltip.KeyTip="C" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Medium 2" Tag="3" local:RibbonTooltip.KeyTip="D" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Medium 4" Tag="4" local:RibbonTooltip.KeyTip="E" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Medium 7" Tag="5" local:RibbonTooltip.KeyTip="G" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Dark 1"   Tag="6" local:RibbonTooltip.KeyTip="H" Click="FormatTableGalleryMenuItem_Click"/>
-                                            <MenuItem Header="Dark 4"   Tag="7" local:RibbonTooltip.KeyTip="J" Click="FormatTableGalleryMenuItem_Click"/>
-                                        </ContextMenu>
+                                        <ContextMenu x:Name="FormatTableGalleryMenu"/>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Table" IconSize="20"
