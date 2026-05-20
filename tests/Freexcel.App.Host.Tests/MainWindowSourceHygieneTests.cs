@@ -753,6 +753,27 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ShellChromeController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var shellSourcePath = Path.Combine(appHostDirectory, "MainWindow.Shell.cs");
+
+        File.Exists(shellSourcePath).Should().BeTrue();
+        var shellSource = File.ReadAllText(shellSourcePath);
+
+        mainSource.Should().NotContain("private void UpdateMaximizedContentInset(");
+        mainSource.Should().NotContain("private static Thickness GetMaximizedSafeInset(");
+        mainSource.Should().NotContain("private void UndoQatBtn_Click(");
+        mainSource.Should().NotContain("private void RedoQatBtn_Click(");
+
+        shellSource.Should().Contain("private void UpdateMaximizedContentInset(");
+        shellSource.Should().Contain("private static Thickness GetMaximizedSafeInset(");
+        shellSource.Should().Contain("private void UndoQatBtn_Click(");
+        shellSource.Should().Contain("private void RedoQatBtn_Click(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
