@@ -119,6 +119,56 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_AppliesValueFieldNumberFormatToMaterializedValueCells()
+    {
+        var workbook = new Workbook("PivotValueNumberFormatTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6"),
+            StyleName = "PivotStyleMedium9",
+            ShowRowStripes = true
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", NumberFormatId: 4));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).NumberFormat.Should().Be("#,##0.00");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).NumberFormat.Should().Be("#,##0.00");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(221, 235, 247));
+    }
+
+    [Theory]
+    [InlineData(41, "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)")]
+    [InlineData(42, "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)")]
+    [InlineData(43, "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)")]
+    [InlineData(44, "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)")]
+    public void Refresh_MapsAccountingBuiltInValueFieldNumberFormats(int numberFormatId, string expectedFormat)
+    {
+        var workbook = new Workbook("PivotAccountingValueNumberFormatTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "G6")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum", NumberFormatId: numberFormatId));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).NumberFormat.Should().Be(expectedFormat);
+    }
+
+    [Fact]
     public void Refresh_AppliesNamedPivotStyleFamilyToSubtotalsAndGrandTotalsSeparately()
     {
         var workbook = new Workbook("PivotStyleFamilyRenderTest");
