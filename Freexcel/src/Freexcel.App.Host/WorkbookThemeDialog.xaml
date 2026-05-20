@@ -29,6 +29,24 @@
                            FontWeight="SemiBold"
                            Margin="0,0,0,14"/>
 
+                <StackPanel Orientation="Horizontal"
+                            Margin="0,0,0,14">
+                    <Button x:Name="OfficePresetButton"
+                            Content="Office"
+                            Width="92"
+                            Margin="0,0,8,0"
+                            Click="OfficePresetButton_Click"/>
+                    <Button x:Name="ColorfulPresetButton"
+                            Content="Freexcel Colorful"
+                            Width="126"
+                            Margin="0,0,8,0"
+                            Click="ColorfulPresetButton_Click"/>
+                    <Button x:Name="GrayscalePresetButton"
+                            Content="Grayscale"
+                            Width="92"
+                            Click="GrayscalePresetButton_Click"/>
+                </StackPanel>
+
                 <Grid Margin="0,0,0,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="130"/>
