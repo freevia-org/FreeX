@@ -4250,7 +4250,9 @@ public static class BuiltInFunctions
     private static ScalarValue Sort(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue arrayRange
+            ? arrayRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
