@@ -3727,6 +3727,11 @@ public partial class MainWindow : Window
             (range, address) => BorderShortcutService.GetOutlineBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
             "Outside Borders");
 
+    private void BorderInsideMenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyRangeBorderPreset(
+            (range, address) => BorderShortcutService.GetInsideBorderDiff(range, address, _borderPickerStyle, _borderPickerColor),
+            "Inside Borders");
+
     private void BorderNoneMenuItem_Click(object sender, RoutedEventArgs e)
     {
         ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());

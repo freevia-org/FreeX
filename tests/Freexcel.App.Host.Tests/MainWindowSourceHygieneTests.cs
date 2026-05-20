@@ -761,6 +761,7 @@ public sealed class MainWindowSourceHygieneTests
         foreach (var label in new[]
         {
             "Bottom Double Border",
+            "Inside Borders",
             "Thick Box Border",
             "Top and Bottom Border",
             "Top and Thick Bottom Border",
@@ -778,6 +779,7 @@ public sealed class MainWindowSourceHygieneTests
         foreach (var handler in new[]
         {
             "BorderBottomDoubleMenuItem_Click",
+            "BorderInsideMenuItem_Click",
             "BorderThickBoxMenuItem_Click",
             "BorderTopAndBottomMenuItem_Click",
             "BorderTopAndThickBottomMenuItem_Click",
@@ -799,6 +801,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("_borderPickerColor");
         source.Should().Contain("_borderPickerStyle");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
+        source.Should().Contain("BorderShortcutService.GetInsideBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
         source.Should().Contain("BorderShortcutService.GetOutlineBorderDiff");
     }
