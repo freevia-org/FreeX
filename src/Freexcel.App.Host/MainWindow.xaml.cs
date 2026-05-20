@@ -1,22 +1,12 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Media;
-using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
-using CellVAlign = Freexcel.Core.Model.VerticalAlignment;
 using Microsoft.Extensions.Logging;
 using Freexcel.Core.Model;
-using Freexcel.Core.Formula;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.IO;
-using System.IO.Packaging;
-using System.Windows.Threading;
 
 namespace Freexcel.App.Host;
 
