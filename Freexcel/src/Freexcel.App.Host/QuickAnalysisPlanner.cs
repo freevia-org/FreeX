@@ -58,6 +58,21 @@ public static class QuickAnalysisPlanner
 
     private static QuickAnalysisOption Sparkline(string label, QuickAnalysisCommand command, string previewText) =>
         new("Sparklines", label, command, QuickAnalysisPreviewKind.Sparkline, previewText);
+
+    public static QuickAnalysisHoverPreview BuildHoverPreview(GridRange selection, QuickAnalysisOption option)
+    {
+        var previewRange = option.PreviewKind is QuickAnalysisPreviewKind.Total or QuickAnalysisPreviewKind.Sparkline
+            ? new GridRange(
+                new CellAddress(selection.Start.Sheet, selection.Start.Row, selection.End.Col + 1),
+                new CellAddress(selection.Start.Sheet, selection.End.Row, selection.End.Col + 1))
+            : selection;
+
+        return new QuickAnalysisHoverPreview(
+            previewRange,
+            option.PreviewKind,
+            option.Label,
+            option.PreviewText);
+    }
 }
 
 public sealed record QuickAnalysisOption(
@@ -66,6 +81,12 @@ public sealed record QuickAnalysisOption(
     QuickAnalysisCommand Command,
     QuickAnalysisPreviewKind PreviewKind,
     string PreviewText);
+
+public sealed record QuickAnalysisHoverPreview(
+    GridRange Range,
+    QuickAnalysisPreviewKind PreviewKind,
+    string Label,
+    string StatusText);
 
 public enum QuickAnalysisPreviewKind
 {
