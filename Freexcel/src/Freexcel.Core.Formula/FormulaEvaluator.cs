@@ -1027,7 +1027,7 @@ public sealed class FormulaEvaluator
                 _                => null
             };
             if (name is null) return ErrorValue.Value;
-            bindings[name] = EvaluateNode(node.Arguments[i * 2 + 1], scoped);
+            bindings[name] = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
         }
 
         return EvaluateNode(node.Arguments[^1], scoped);
@@ -1056,7 +1056,7 @@ public sealed class FormulaEvaluator
         if (argNodes.Count != lambda.Parameters.Count) return ErrorValue.Value;
         var args = new ScalarValue[argNodes.Count];
         for (int i = 0; i < argNodes.Count; i++)
-            args[i] = EvaluateNode(argNodes[i], context);
+            args[i] = EvaluateArrayOperand(argNodes[i], context);
         return context.InvokeLambda(lambda, args);
     }
 

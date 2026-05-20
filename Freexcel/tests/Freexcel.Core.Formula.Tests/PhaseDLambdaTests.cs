@@ -53,6 +53,18 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
+    public void Let_RangeBindingCanBeUsedInArrayExpression()
+    {
+        Set(1, 1, new NumberValue(1));
+        Set(2, 1, new NumberValue(2));
+        Set(3, 1, new NumberValue(3));
+
+        var result = Eval("=LET(x, A1:A3, SUM(x*2))");
+
+        Assert.Equal(12.0, Num(result));
+    }
+
+    [Fact]
     public void Let_TooFewArgs_ReturnsValueError()
     {
         Assert.Equal(ErrorValue.Value, Eval("=LET(x, 5)"));
@@ -71,6 +83,18 @@ public class PhaseDLambdaTests
     {
         var result = Eval("=LET(double, LAMBDA(x, x*2), double(5))");
         Assert.Equal(10.0, Num(result));
+    }
+
+    [Fact]
+    public void Lambda_RangeArgumentCanBeUsedInArrayExpression()
+    {
+        Set(1, 1, new NumberValue(1));
+        Set(2, 1, new NumberValue(2));
+        Set(3, 1, new NumberValue(3));
+
+        var result = Eval("=LET(doubleSum, LAMBDA(x, SUM(x*2)), doubleSum(A1:A3))");
+
+        Assert.Equal(12.0, Num(result));
     }
 
     [Fact]
