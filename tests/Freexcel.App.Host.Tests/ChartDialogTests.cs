@@ -77,6 +77,18 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTitlesDialogResult_MapsTitleTextToLayoutOptions()
+    {
+        var result = ChartTitlesDialog.CreateResult(" Revenue ", " Quarter ", " Amount ");
+
+        result.Should().Be(new ChartTitlesDialogResult("Revenue", "Quarter", "Amount"));
+        result.ToOptions().Should().Be(new ChartLayoutOptions(
+            Title: "Revenue",
+            XAxisTitle: "Quarter",
+            YAxisTitle: "Amount"));
+    }
+
+    [Fact]
     public void ChartStyleDialog_ExposesAutomaticAndCommonStyleOptions()
     {
         var options = ChartStyleDialog.GetStyleOptions();
