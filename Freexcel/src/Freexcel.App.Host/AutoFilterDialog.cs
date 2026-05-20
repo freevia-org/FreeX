@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -20,7 +21,8 @@ public sealed record AutoFilterDialogResult(
     AutoFilterSortDirection SortDirection,
     IReadOnlyList<string> SelectedValues,
     string SearchText,
-    string CriteriaText);
+    string CriteriaText,
+    CellColor? ColorFilter = null);
 
 public sealed class AutoFilterDialog : Window
 {
@@ -36,6 +38,8 @@ public sealed class AutoFilterDialog : Window
     private readonly RadioButton _sortNone = new() { Content = "_No sort", IsChecked = true };
     private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
     private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
+    private readonly Button _filterByColorButton = new() { Content = "Filter by _Color", Visibility = Visibility.Collapsed };
+    private CellColor? _selectedColorFilter;
 
     public AutoFilterDialogResult Result { get; private set; }
 
@@ -56,6 +60,9 @@ public sealed class AutoFilterDialog : Window
             _criteriaSuggestionBox.ToolTip = "Filter criteria";
             _criteriaBox.ToolTip = $"Criteria suggestions: {string.Join(", ", suggestions)}";
         }
+
+        if (HasFilterByColorEntry(menuPlan))
+            _filterByColorButton.Visibility = Visibility.Visible;
     }
 
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)
@@ -77,6 +84,9 @@ public sealed class AutoFilterDialog : Window
         stack.Children.Add(_sortNone);
         stack.Children.Add(_sortAscending);
         stack.Children.Add(_sortDescending);
+        _filterByColorButton.Margin = new Thickness(0, 8, 0, 0);
+        _filterByColorButton.Click += FilterByColorButton_Click;
+        stack.Children.Add(_filterByColorButton);
 
         stack.Children.Add(new Label { Content = "_Search", Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
         _searchBox.Margin = new Thickness(0, 0, 0, 8);
@@ -121,12 +131,12 @@ public sealed class AutoFilterDialog : Window
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
         var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
-            Result = BuildResult(GetSortDirection(), _allItems, _searchBox.Text, _criteriaBox.Text);
+            Result = BuildResult(GetSortDirection(), _allItems, _searchBox.Text, _criteriaBox.Text, _selectedColorFilter);
             DialogResult = true;
         };
         var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
@@ -166,7 +176,8 @@ public sealed class AutoFilterDialog : Window
         AutoFilterSortDirection sortDirection,
         IEnumerable<AutoFilterDialogItem> items,
         string? searchText,
-        string? criteriaText)
+        string? criteriaText,
+        CellColor? colorFilter = null)
     {
         var selectedValues = items
             .Where(item => item.IsSelected)
@@ -180,7 +191,8 @@ public sealed class AutoFilterDialog : Window
             sortDirection,
             selectedValues,
             searchText?.Trim() ?? string.Empty,
-            normalizedCriteria);
+            normalizedCriteria,
+            colorFilter);
     }
 
     public static IReadOnlyList<string> GetCriteriaSuggestions(AutoFilterMenuPlan menuPlan) =>
@@ -189,6 +201,9 @@ public sealed class AutoFilterDialog : Window
             ?.CriteriaSuggestions
             .Where(suggestion => !string.IsNullOrWhiteSpace(suggestion))
             .ToList() ?? [];
+
+    public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
+        menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
 
     private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries
@@ -217,6 +232,21 @@ public sealed class AutoFilterDialog : Window
         return _sortDescending.IsChecked == true
             ? AutoFilterSortDirection.Descending
             : AutoFilterSortDirection.None;
+    }
+
+    private void FilterByColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)
+        {
+            Owner = this
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _selectedColorFilter = dialog.SelectedColor;
+        _filterByColorButton.ToolTip = _selectedColorFilter is { } color
+            ? $"Filter color {ColorInputParser.FormatHexColor(color)}"
+            : "No color filter";
     }
 
     private static DataTemplate CreateItemTemplate()
