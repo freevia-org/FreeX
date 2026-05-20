@@ -3358,6 +3358,44 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesHyperlinkNativeMetadata()
+    {
+        var workbook = new Workbook("HyperlinkNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(addr, new TextValue("Example"));
+        sheet.Hyperlinks[addr] = "https://example.com/docs";
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetHyperlinkNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var hyperlink = worksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")!
+            .Elements(worksheetNs + "hyperlink")
+            .Single(element => element.Attribute("ref")?.Value == "A1");
+        hyperlink.Attribute("tooltip").Should().NotBeNull();
+        hyperlink.Attribute("tooltip")!.Value.Should().Be("Open documentation");
+        hyperlink.Attribute("display").Should().NotBeNull();
+        hyperlink.Attribute("display")!.Value.Should().Be("Freexcel docs");
+        hyperlink.Attribute("customAttr").Should().NotBeNull();
+        hyperlink.Attribute("customAttr")!.Value.Should().Be("hyperlink-native");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_SheetProtection()
     {
         var workbook = new Workbook("ProtectionTest");
@@ -14970,6 +15008,26 @@ public class FileAdapterSmokeTests
             pageMargins.SetAttributeValue("header", "0.35");
             pageMargins.SetAttributeValue("footer", "0.45");
             pageMargins.SetAttributeValue("customAttr", "page-margins-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetHyperlinkNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var hyperlink = worksheetXml.Root!
+                .Element(worksheetNs + "hyperlinks")!
+                .Elements(worksheetNs + "hyperlink")
+                .Single(element => element.Attribute("ref")?.Value == "A1");
+            hyperlink.SetAttributeValue("tooltip", "Open documentation");
+            hyperlink.SetAttributeValue("display", "Freexcel docs");
+            hyperlink.SetAttributeValue("customAttr", "hyperlink-native");
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
