@@ -5029,6 +5029,15 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void TorowAndTocol_AllValuesIgnored_ReturnCalcError()
+    {
+        var sheet = MakeSheet((1, 1, ErrorValue.NA));
+
+        _eval.Evaluate("=TOROW(A1:B1,3)", sheet).Should().Be(ErrorValue.Calc);
+        _eval.Evaluate("=TOCOL(A1:B1,3)", sheet).Should().Be(ErrorValue.Calc);
+    }
+
+    [Fact]
     public void Tocol_InvalidIgnoreMode_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));

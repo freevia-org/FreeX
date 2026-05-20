@@ -4647,7 +4647,7 @@ public static class BuiltInFunctions
     private static ScalarValue ToRow(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryFlattenArray(args, out var values, out var error)) return error;
-        if (values.Count == 0) return ErrorValue.Value;
+        if (values.Count == 0) return ErrorValue.Calc;
         if (values.Count > 1_000_000) return ErrorValue.Value;
 
         var result = new ScalarValue[1, values.Count];
@@ -4659,7 +4659,7 @@ public static class BuiltInFunctions
     private static ScalarValue ToCol(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryFlattenArray(args, out var values, out var error)) return error;
-        if (values.Count == 0) return ErrorValue.Value;
+        if (values.Count == 0) return ErrorValue.Calc;
         if (values.Count > 1_000_000) return ErrorValue.Value;
 
         var result = new ScalarValue[values.Count, 1];
