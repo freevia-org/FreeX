@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -46,17 +47,17 @@ public sealed class PivotTableDialog : Window
 
         stack.Children.Add(new TextBlock { Text = "Table/Range", Margin = new Thickness(0, 0, 0, 4) });
         _sourceRangeBox.Text = Result.SourceRangeText;
-        _sourceRangeBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_sourceRangeBox);
+        stack.Children.Add(CreateReferenceEditor(_sourceRangeBox, "Select PivotTable source range", new Thickness(0, 0, 0, 12)));
 
         stack.Children.Add(new TextBlock { Text = "Choose where to place the PivotTable", Margin = new Thickness(0, 0, 0, 6) });
         _newWorksheetButton.Margin = new Thickness(0, 0, 0, 4);
+        _newWorksheetButton.Checked += (_, _) => UpdateDestinationState();
+        _existingWorksheetButton.Checked += (_, _) => UpdateDestinationState();
         stack.Children.Add(_newWorksheetButton);
         stack.Children.Add(_existingWorksheetButton);
 
         _destinationRangeBox.Text = Result.DestinationRangeText;
-        _destinationRangeBox.Margin = new Thickness(22, 4, 0, 12);
-        stack.Children.Add(_destinationRangeBox);
+        stack.Children.Add(CreateReferenceEditor(_destinationRangeBox, "Select PivotTable location", new Thickness(22, 4, 0, 12)));
 
         _openFieldListBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_openFieldListBox);
@@ -87,6 +88,7 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(btnRow);
 
         Content = stack;
+        UpdateDestinationState();
     }
 
     public static PivotTableDialogResult CreateResult(
@@ -127,5 +129,36 @@ public sealed class PivotTableDialog : Window
             throw new ArgumentException("Range text is required.", parameterName);
 
         return value.Trim();
+    }
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName, Thickness margin)
+    {
+        var panel = new DockPanel { Margin = margin };
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
+    }
+
+    private void UpdateDestinationState()
+    {
+        _destinationRangeBox.IsEnabled = _existingWorksheetButton.IsChecked == true;
     }
 }
