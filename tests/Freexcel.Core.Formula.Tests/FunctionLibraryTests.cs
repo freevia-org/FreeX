@@ -4908,6 +4908,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void ChooserowsAndChoosecols_TreatScalarArrayAsSingleCellArray()
+    {
+        var rows = _eval.Evaluate("=CHOOSEROWS(5,1)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        rows.RowCount.Should().Be(1);
+        rows.ColCount.Should().Be(1);
+        rows.Cells[0, 0].Should().Be(new NumberValue(5));
+
+        var cols = _eval.Evaluate("=CHOOSECOLS(\"x\",1)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        cols.RowCount.Should().Be(1);
+        cols.ColCount.Should().Be(1);
+        cols.Cells[0, 0].Should().Be(new TextValue("x"));
+    }
+
+    [Fact]
     public void Chooserows_ZeroIndex_ReturnsValueError()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));

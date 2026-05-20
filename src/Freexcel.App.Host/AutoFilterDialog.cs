@@ -24,6 +24,7 @@ public sealed record AutoFilterDialogResult(
 
 public sealed class AutoFilterDialog : Window
 {
+    private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
     private readonly TextBox _criteriaBox = new();
@@ -59,8 +60,9 @@ public sealed class AutoFilterDialog : Window
 
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)
     {
-        _items = new ObservableCollection<AutoFilterDialogItem>(items);
-        Result = BuildResult(AutoFilterSortDirection.None, _items, string.Empty, string.Empty);
+        _allItems = items.ToList();
+        _items = new ObservableCollection<AutoFilterDialogItem>(_allItems);
+        Result = BuildResult(AutoFilterSortDirection.None, _allItems, string.Empty, string.Empty);
 
         Title = "AutoFilter";
         Width = 360;
@@ -78,6 +80,7 @@ public sealed class AutoFilterDialog : Window
 
         _searchBox.Margin = new Thickness(0, 12, 0, 8);
         _searchBox.ToolTip = "Search";
+        _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
         stack.Children.Add(_searchBox);
 
         var list = new ListBox
@@ -95,9 +98,9 @@ public sealed class AutoFilterDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         };
         var selectAll = new Button { Content = "Select All", Width = 82, Margin = new Thickness(0, 0, 8, 0) };
-        selectAll.Click += (_, _) => ReplaceItems(SelectAll(_items));
+        selectAll.Click += (_, _) => ReplaceAllItems(SelectAll(_allItems));
         var clearAll = new Button { Content = "Clear All", Width = 82 };
-        clearAll.Click += (_, _) => ReplaceItems(ClearAll(_items));
+        clearAll.Click += (_, _) => ReplaceAllItems(ClearAll(_allItems));
         selectionRow.Children.Add(selectAll);
         selectionRow.Children.Add(clearAll);
         stack.Children.Add(selectionRow);
@@ -122,7 +125,7 @@ public sealed class AutoFilterDialog : Window
         var ok = new Button { Content = "OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
-            Result = BuildResult(GetSortDirection(), _items, _searchBox.Text, _criteriaBox.Text);
+            Result = BuildResult(GetSortDirection(), _allItems, _searchBox.Text, _criteriaBox.Text);
             DialogResult = true;
         };
         var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 76 };
@@ -196,6 +199,13 @@ public sealed class AutoFilterDialog : Window
         _items.Clear();
         foreach (var item in items)
             _items.Add(item);
+    }
+
+    private void ReplaceAllItems(IEnumerable<AutoFilterDialogItem> items)
+    {
+        _allItems.Clear();
+        _allItems.AddRange(items);
+        ReplaceItems(FilterItems(_allItems, _searchBox.Text));
     }
 
     private AutoFilterSortDirection GetSortDirection()
