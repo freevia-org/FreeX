@@ -5,7 +5,7 @@ namespace Freexcel.App.Host;
 internal enum ExportFormat
 {
     Xps,
-    PdfViaWindowsPrinter
+    Pdf
 }
 
 internal enum ExportContentScope
@@ -35,12 +35,12 @@ internal sealed record ExportRequest(
 internal static class ExportPlanner
 {
     public const string PdfFallbackMessage =
-        "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.";
+        "PDF export uses Freexcel's print renderer. XPS export remains available for Windows print-pipeline workflows.";
 
     public static ExportFormat InferExportFormat(string path) =>
         string.Equals(Path.GetExtension(path), ".xps", StringComparison.OrdinalIgnoreCase)
             ? ExportFormat.Xps
-            : ExportFormat.PdfViaWindowsPrinter;
+            : ExportFormat.Pdf;
 
     public static ExportRequest PlanExport(string path) =>
         PlanExport(path, ExportOptions.ExcelLikeDefault);
@@ -48,10 +48,7 @@ internal static class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var format = InferExportFormat(path);
-        var fallbackPath = format == ExportFormat.PdfViaWindowsPrinter
-            ? GetFallbackXpsPath(path)
-            : null;
-        return new ExportRequest(path, format, options, fallbackPath);
+        return new ExportRequest(path, format, options, null);
     }
 
     public static string GetFallbackXpsPath(string requestedPath) =>

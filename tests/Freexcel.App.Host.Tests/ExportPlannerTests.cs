@@ -1,6 +1,12 @@
 using System.IO;
+using System.Text;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Markup;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Model;
+using PdfSharp.Pdf.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -16,7 +22,7 @@ public class ExportPlannerTests
     {
         var expected = expectedFormat == "xps"
             ? ExportFormat.Xps
-            : ExportFormat.PdfViaWindowsPrinter;
+            : ExportFormat.Pdf;
 
         ExportPlanner.InferExportFormat(path).Should().Be(expected);
     }
@@ -28,11 +34,11 @@ public class ExportPlannerTests
 
         request.Should().Be(new ExportRequest(
             @"C:\temp\report.pdf",
-            ExportFormat.PdfViaWindowsPrinter,
+            ExportFormat.Pdf,
             ExportOptions.ExcelLikeDefault,
-            @"C:\temp\report.xps"));
-        request.UsesXpsFallback.Should().BeTrue();
-        request.ActualPath.Should().Be(@"C:\temp\report.xps");
+            null));
+        request.UsesXpsFallback.Should().BeFalse();
+        request.ActualPath.Should().Be(@"C:\temp\report.pdf");
     }
 
     [Fact]
@@ -67,7 +73,7 @@ public class ExportPlannerTests
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.\n\nOptions: Active sheet only; document properties are not included.");
+            "Options: Active sheet only; document properties are not included.");
     }
 
     [Theory]
@@ -83,7 +89,52 @@ public class ExportPlannerTests
     public void PdfFallbackMessage_ExplainsWindowsPrintPipelineAndXpsConversion()
     {
         ExportPlanner.PdfFallbackMessage.Should().Be(
-            "Direct PDF file export is limited by the Windows print pipeline. Exported XPS instead; use a PDF printer or convert the XPS file.");
+            "PDF export uses Freexcel's print renderer. XPS export remains available for Windows print-pipeline workflows.");
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesPdfFileFromFixedDocument()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateOnePageDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                var bytes = File.ReadAllBytes(path);
+                Encoding.ASCII.GetString(bytes[..Math.Min(bytes.Length, 8)]).Should().StartWith("%PDF-");
+                Encoding.ASCII.GetString(bytes).Should().Contain("%%EOF");
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                pdf.PageCount.Should().Be(1);
+                pdf.Pages[0].Width.Point.Should().BeApproximately(120, 0.01);
+                pdf.Pages[0].Height.Point.Should().BeApproximately(90, 0.01);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    private static FixedDocument CreateOnePageDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        page.Children.Add(new TextBlock { Text = "Freexcel PDF", Margin = new System.Windows.Thickness(12) });
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
     }
 
     [Fact]

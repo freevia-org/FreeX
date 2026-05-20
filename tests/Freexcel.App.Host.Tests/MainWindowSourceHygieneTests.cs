@@ -473,14 +473,14 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void ExportWorkflow_SurfacesPlannedOptionsAndFallbackPath()
+    public void ExportWorkflow_SurfacesPlannedPdfAndXpsPaths()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
-        source.Should().Contain("ExportViaPrintToPdf(request)");
+        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request))");
         source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
-        source.Should().Contain("request.ActualPath");
+        source.Should().NotContain("ExportPdfFallbackAsXps");
     }
 
     [Fact]

@@ -6404,31 +6404,35 @@ public partial class MainWindow : Window
         if (saveDlg.ShowDialog() != true) return;
 
         var request = ExportPlanner.PlanExport(saveDlg.FileName);
-        if (request.Format == ExportFormat.PdfViaWindowsPrinter)
-            ExportViaPrintToPdf(request);
+        if (request.Format == ExportFormat.Pdf)
+            ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request));
         else
             ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options));
     }
 
-    /// <summary>
-    /// Handles PDF requests through the deterministic XPS export path. WPF's managed
-    /// print APIs cannot set the target PDF file path for virtual PDF printers.
-    /// </summary>
-    private void ExportViaPrintToPdf(ExportRequest request)
+    private bool ExportAsPdf(string pdfPath, string optionSummary)
     {
-        ExportPdfFallbackAsXps(request);
-    }
+        try
+        {
+            var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
+            PdfDocumentExporter.Save(doc, pdfPath);
 
-    private void ExportPdfFallbackAsXps(ExportRequest request)
-    {
-        if (!ExportAsXps(request.ActualPath, showSuccessMessage: false))
-            return;
-
-        MessageBox.Show(
-            $"{ExportPlanner.DescribeRequest(request)}\n\nSaved XPS file:\n{request.ActualPath}",
-            "Export PDF",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            MessageBox.Show(
+                $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
+                "Export PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Failed to save PDF file:\n{ex.Message}",
+                "Export Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
     }
 
     /// <summary>
