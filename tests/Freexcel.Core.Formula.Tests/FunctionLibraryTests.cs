@@ -5205,6 +5205,20 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Expand_TreatsScalarArgumentAsSingleCellArray()
+    {
+        var result = _eval.Evaluate("=EXPAND(1,2,2)", MakeSheet());
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[0, 1].Should().Be(ErrorValue.NA);
+        rv.Cells[1, 0].Should().Be(ErrorValue.NA);
+        rv.Cells[1, 1].Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Expand_RowsOnly_KeepsOriginalColumnCount()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)), (1,2,new NumberValue(2)));

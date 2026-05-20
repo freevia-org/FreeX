@@ -4838,7 +4838,9 @@ public static class BuiltInFunctions
     private static ScalarValue Expand(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new[,] { { args[0] } });
         if (args[1] is ErrorValue rowError) return rowError;
         if (args.Count > 2 && args[2] is ErrorValue colError) return colError;
 
