@@ -1253,7 +1253,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     column.Attribute("totalsRowFunction")?.Value,
                     ReadTableColumnFormula(column, workbookNs, "calculatedColumnFormula"),
                     ReadTableColumnFormula(column, workbookNs, "totalsRowFormula"),
-                    ReadNativeTableColumnChildXmls(column, workbookNs)))
+                    ReadNativeTableColumnChildXmls(column, workbookNs),
+                    ReadNativeTableColumnAttributes(column)))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? [],
             ReadStructuredTableFilterColumns(root.Element(workbookNs + "autoFilter"), workbookNs));
@@ -1273,6 +1274,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 element.Name != workbookNs + "totalsRowFormula")
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
+
+    private static Dictionary<string, string> ReadNativeTableColumnAttributes(XElement column)
+    {
+        string[] modeledAttributes = ["id", "name", "totalsRowLabel", "totalsRowFunction"];
+        return column.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
 
     private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
         XElement? autoFilter,
@@ -8989,6 +8998,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             string.IsNullOrWhiteSpace(column.TotalsRowFormula)
                 ? null
                 : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
+
+        foreach (var (name, value) in column.NativeAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
 
         foreach (var nativeChildXml in (column.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {

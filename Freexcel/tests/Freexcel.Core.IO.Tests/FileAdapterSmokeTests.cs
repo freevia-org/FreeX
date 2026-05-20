@@ -12236,6 +12236,35 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableColumnNativeAttributes()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableColumnAttributeTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeColumnAttributes: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        var amountColumn = table.Columns.Should().Contain(column => column.Name == "Amount").Subject;
+        amountColumn.NativeAttributes.Should().ContainKey("uniqueName").WhoseValue.Should().Be("AmountNative");
+        amountColumn.NativeAttributes.Should().ContainKey("dataDxfId").WhoseValue.Should().Be("4");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("uniqueName=\"AmountNative\"");
+        tableXml.Should().Contain("dataDxfId=\"4\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
@@ -13814,7 +13843,8 @@ public class FileAdapterSmokeTests
         bool includeCustomFilter = false,
         bool includeCustomFilterWithExtension = false,
         bool includeSortState = false,
-        bool includeColumnExtension = false)
+        bool includeColumnExtension = false,
+        bool includeColumnAttributes = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13856,6 +13886,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeColumnAttributes
+                            ? StructuredTableWithColumnAttributesXml
                         : includeColumnExtension
                             ? StructuredTableWithColumnExtensionXml
                         : includeSortState
@@ -14915,6 +14947,26 @@ public class FileAdapterSmokeTests
                 <ext uri="{FREEXCEL-TABLE-COLUMN-EXT}"/>
               </extLst>
             </tableColumn>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithColumnAttributesXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount" uniqueName="AmountNative" dataDxfId="4"/>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"
