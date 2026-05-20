@@ -4683,8 +4683,6 @@ public static class BuiltInFunctions
             return false;
         }
 
-        if (args[0] is not RangeValue arr) return false;
-
         int ignore = 0;
         if (args.Count > 1 && args[1] is not BlankValue)
         {
@@ -4714,6 +4712,12 @@ public static class BuiltInFunctions
 
         bool ignoreBlanks = (ignore & 1) != 0;
         bool ignoreErrors = (ignore & 2) != 0;
+
+        if (args[0] is not RangeValue arr)
+        {
+            AddFlattenedValue(args[0], ignoreBlanks, ignoreErrors, values);
+            return true;
+        }
 
         if (scanByColumn)
         {
