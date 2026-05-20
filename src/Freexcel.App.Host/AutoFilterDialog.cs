@@ -27,6 +27,11 @@ public sealed class AutoFilterDialog : Window
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
     private readonly TextBox _criteriaBox = new();
+    private readonly ComboBox _criteriaSuggestionBox = new()
+    {
+        Visibility = Visibility.Collapsed,
+        IsTextSearchEnabled = true
+    };
     private readonly RadioButton _sortNone = new() { Content = "No sort", IsChecked = true };
     private readonly RadioButton _sortAscending = new() { Content = "Sort A to Z" };
     private readonly RadioButton _sortDescending = new() { Content = "Sort Z to A" };
@@ -42,8 +47,14 @@ public sealed class AutoFilterDialog : Window
         : this(CreateDialogItems(menuPlan))
     {
         Title = $"AutoFilter - {menuPlan.HeaderText}";
-        if (menuPlan.Entries.FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily) is { } filterEntry)
-            _criteriaBox.ToolTip = $"Criteria suggestions: {string.Join(", ", filterEntry.CriteriaSuggestions)}";
+        var suggestions = GetCriteriaSuggestions(menuPlan);
+        if (suggestions.Count > 0)
+        {
+            _criteriaSuggestionBox.ItemsSource = suggestions;
+            _criteriaSuggestionBox.Visibility = Visibility.Visible;
+            _criteriaSuggestionBox.ToolTip = "Filter criteria";
+            _criteriaBox.ToolTip = $"Criteria suggestions: {string.Join(", ", suggestions)}";
+        }
     }
 
     public AutoFilterDialog(IEnumerable<AutoFilterDialogItem> items)
@@ -92,6 +103,14 @@ public sealed class AutoFilterDialog : Window
         stack.Children.Add(selectionRow);
 
         stack.Children.Add(new TextBlock { Text = "Criteria text" });
+        _criteriaSuggestionBox.Margin = new Thickness(0, 4, 0, 4);
+        _criteriaSuggestionBox.SelectionChanged += (_, _) =>
+        {
+            if (_criteriaSuggestionBox.SelectedItem is string suggestion)
+                _criteriaBox.Text = suggestion;
+        };
+        stack.Children.Add(_criteriaSuggestionBox);
+
         _criteriaBox.Margin = new Thickness(0, 4, 0, 12);
         stack.Children.Add(_criteriaBox);
 
@@ -159,6 +178,13 @@ public sealed class AutoFilterDialog : Window
             searchText?.Trim() ?? string.Empty,
             normalizedCriteria);
     }
+
+    public static IReadOnlyList<string> GetCriteriaSuggestions(AutoFilterMenuPlan menuPlan) =>
+        menuPlan.Entries
+            .FirstOrDefault(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily)
+            ?.CriteriaSuggestions
+            .Where(suggestion => !string.IsNullOrWhiteSpace(suggestion))
+            .ToList() ?? [];
 
     private static IEnumerable<AutoFilterDialogItem> CreateDialogItems(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries
