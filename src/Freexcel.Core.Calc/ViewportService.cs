@@ -471,7 +471,12 @@ public sealed class ViewportService : IViewportService
 
     // ── Per-frame CF aggregate cache ──────────────────────────────────────────
 
-    private sealed record CfAggregateCache(double Average, double Min, double Max);
+    private sealed record CfAggregateCache(
+        double Average,
+        double Min,
+        double Max,
+        IReadOnlySet<CellAddress>? TopBottomMatches = null,
+        IReadOnlyDictionary<string, int>? ValueCounts = null);
 
     /// <summary>
     /// Scans every AboveAverage and ColorScale CF rule once and stores the
@@ -483,22 +488,62 @@ public sealed class ViewportService : IViewportService
         var result = new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance);
         foreach (var cf in sheet.ConditionalFormats)
         {
-            if (cf.RuleType is not (CfRuleType.AboveAverage or CfRuleType.ColorScale))
+            if (cf.RuleType is not (
+                CfRuleType.AboveAverage or
+                CfRuleType.ColorScale or
+                CfRuleType.Top10 or
+                CfRuleType.DuplicateValues or
+                CfRuleType.UniqueValues))
                 continue;
 
             double sum = 0, min = double.MaxValue, max = double.MinValue;
             int count = 0;
+            var rankedValues = new List<(CellAddress Address, double Value)>();
+            var valueCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (var a in cf.AppliesTo.AllCells())
             {
                 var v = sheet.GetValue(a);
-                if (!TryGetDouble(v, out double x)) continue;
-                sum += x;
-                if (x < min) min = x;
-                if (x > max) max = x;
-                count++;
+                if (cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues)
+                {
+                    var key = NormalizeCfDisplayValue(v);
+                    valueCounts[key] = valueCounts.GetValueOrDefault(key) + 1;
+                }
+
+                if (TryGetDouble(v, out double x))
+                {
+                    sum += x;
+                    if (x < min) min = x;
+                    if (x > max) max = x;
+                    count++;
+                    if (cf.RuleType == CfRuleType.Top10)
+                        rankedValues.Add((a, x));
+                }
             }
-            if (count > 0)
-                result[cf] = new CfAggregateCache(sum / count, min, max);
+
+            IReadOnlySet<CellAddress>? topBottomMatches = null;
+            if (cf.RuleType == CfRuleType.Top10 && rankedValues.Count > 0)
+            {
+                var take = Math.Clamp(
+                    cf.TopBottomPercent
+                        ? (int)Math.Ceiling(rankedValues.Count * Math.Max(1, cf.TopBottomRank) / 100d)
+                        : cf.TopBottomRank,
+                    1,
+                    rankedValues.Count);
+                var ordered = cf.AboveAverage
+                    ? rankedValues.OrderByDescending(item => item.Value)
+                    : rankedValues.OrderBy(item => item.Value);
+                topBottomMatches = ordered.Take(take)
+                    .Select(item => item.Address)
+                    .ToHashSet();
+            }
+
+            if (count > 0 || valueCounts.Count > 0 || topBottomMatches is not null)
+                result[cf] = new CfAggregateCache(
+                    count > 0 ? sum / count : 0,
+                    count > 0 ? min : 0,
+                    count > 0 ? max : 0,
+                    topBottomMatches,
+                    valueCounts.Count > 0 ? valueCounts : null);
         }
         return result;
     }
@@ -527,6 +572,17 @@ public sealed class ViewportService : IViewportService
                 CfRuleType.CellValue    => MatchesCellValue(cf, value),
                 CfRuleType.AboveAverage => MatchesAboveAverage(cf, addr, value, cfCache),
                 CfRuleType.Formula      => MatchesFormula(cf, sheet, addr, workbook),
+                CfRuleType.Top10        => MatchesTopBottom(cf, addr, cfCache),
+                CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfCache, duplicate: true),
+                CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfCache, duplicate: false),
+                CfRuleType.ContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.Contains),
+                CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
+                CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
+                CfRuleType.EndsWith => MatchesTextRule(cf, value, TextRuleMatchKind.EndsWith),
+                CfRuleType.Blanks => IsBlankValue(value),
+                CfRuleType.NoBlanks => !IsBlankValue(value),
+                CfRuleType.Errors => value is ErrorValue,
+                CfRuleType.NoErrors => value is not ErrorValue,
                 _                       => false
             };
 
@@ -663,6 +719,44 @@ public sealed class ViewportService : IViewportService
         return cf.AboveAverage ? cellVal > cache.Average : cellVal < cache.Average;
     }
 
+    private static bool MatchesTopBottom(
+        ConditionalFormat cf,
+        CellAddress addr,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache) =>
+        cfCache.TryGetValue(cf, out var cache) &&
+        cache.TopBottomMatches?.Contains(addr) == true;
+
+    private static bool MatchesDuplicateState(
+        ConditionalFormat cf,
+        ScalarValue value,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache,
+        bool duplicate)
+    {
+        if (!cfCache.TryGetValue(cf, out var cache) || cache.ValueCounts is null)
+            return false;
+
+        var occurrences = cache.ValueCounts.GetValueOrDefault(NormalizeCfDisplayValue(value));
+        return duplicate ? occurrences > 1 : occurrences == 1;
+    }
+
+    private enum TextRuleMatchKind { Contains, NotContains, BeginsWith, EndsWith }
+
+    private static bool MatchesTextRule(ConditionalFormat cf, ScalarValue value, TextRuleMatchKind kind)
+    {
+        if (string.IsNullOrEmpty(cf.TextRuleText))
+            return false;
+
+        var text = GetString(value);
+        return kind switch
+        {
+            TextRuleMatchKind.Contains => text.Contains(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
+            TextRuleMatchKind.NotContains => !text.Contains(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
+            TextRuleMatchKind.BeginsWith => text.StartsWith(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
+            TextRuleMatchKind.EndsWith => text.EndsWith(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+    }
+
     // ── ColorScale ────────────────────────────────────────────────────────────
 
     private static CellStyle? ComputeColorScaleStyle(
@@ -751,6 +845,13 @@ public sealed class ViewportService : IViewportService
         TextValue t => t.Value,
         NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
+        ErrorValue e => e.Code,
         _ => ""
     };
+
+    private static bool IsBlankValue(ScalarValue value) =>
+        value is BlankValue || value is TextValue { Value.Length: 0 };
+
+    private static string NormalizeCfDisplayValue(ScalarValue value) =>
+        GetString(value).Trim();
 }
