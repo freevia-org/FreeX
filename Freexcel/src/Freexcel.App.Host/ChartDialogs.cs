@@ -138,6 +138,72 @@ public sealed class ChangeChartTypeDialog : Window
     });
 }
 
+public sealed record ChartStyleDialogResult(int? ChartStyleId);
+
+public sealed class ChartStyleDialog : Window
+{
+    private readonly ComboBox _styleBox = new();
+
+    public ChartStyleDialogResult Result { get; private set; }
+
+    public ChartStyleDialog(ChartModel chart)
+    {
+        Result = FromChart(chart);
+        Title = "Chart Styles";
+        Width = 340;
+        Height = 180;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+
+        var options = GetStyleOptions();
+        _styleBox.ItemsSource = options;
+        _styleBox.DisplayMemberPath = nameof(ChartStyleOption.DisplayName);
+        _styleBox.SelectedItem = options.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? options[0];
+        _styleBox.Margin = new Thickness(0, 0, 0, 16);
+
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(new TextBlock { Text = "Style", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(_styleBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        Content = stack;
+    }
+
+    public static ChartStyleDialogResult FromChart(ChartModel chart) =>
+        new(NormalizeStyleId(chart.ChartStyleId));
+
+    public static ChartStyleDialogResult CreateResult(int? chartStyleId) =>
+        new(NormalizeStyleId(chartStyleId));
+
+    public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
+    [
+        new(null, "Automatic"),
+        new(2, "Style 2 - Clean"),
+        new(4, "Style 4 - Colorful"),
+        new(10, "Style 10 - Accent"),
+        new(26, "Style 26 - Strong"),
+        new(42, "Style 42 - Pivot")
+    ];
+
+    private void Accept()
+    {
+        Result = _styleBox.SelectedItem is ChartStyleOption option
+            ? CreateResult(option.StyleId)
+            : CreateResult(null);
+        DialogResult = true;
+    }
+
+    private static int? NormalizeStyleId(int? value)
+    {
+        if (value is null)
+            return null;
+
+        return Math.Clamp(value.Value, 1, 48);
+    }
+}
+
+public sealed record ChartStyleOption(int? StyleId, string DisplayName);
+
 public enum MoveChartTargetKind
 {
     ObjectInSheet,
