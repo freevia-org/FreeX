@@ -110,9 +110,8 @@ public static class NumberFormatter
         return value switch
         {
             NumberValue n   => FormatNumber(n.Value, sections),
-            DateTimeValue d => new FormatResult(FormatDateTime(d.Value, sections[0])),
-            TextValue t     => new FormatResult(sections.Length > 3 && !string.IsNullOrEmpty(sections[3])
-                                   ? ApplyTextSection(sections[3], t.Value) : t.Value),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections[0]),
+            TextValue t     => FormatTextWithColor(t.Value, sections),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
             BlankValue      => new FormatResult(""),
@@ -731,6 +730,12 @@ public static class NumberFormatter
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 
+    private static FormatResult FormatDateTimeWithColor(double oaDate, string section)
+    {
+        var parsed = ParseSection(section);
+        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
+    }
+
     private static string FormatDateTime(double oaDate, string format)
     {
         var (_, cleanFmt) = ExtractColor(format);
@@ -894,6 +899,15 @@ public static class NumberFormatter
     }
 
     // ── Text section ──────────────────────────────────────────────────────────
+
+    private static FormatResult FormatTextWithColor(string text, string[] sections)
+    {
+        if (sections.Length <= 3 || string.IsNullOrEmpty(sections[3]))
+            return new FormatResult(text);
+
+        var parsed = ParseSection(sections[3]);
+        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);
+    }
 
     private static string ApplyTextSection(string section, string text)
     {
