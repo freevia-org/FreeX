@@ -4763,6 +4763,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Take_And_Drop_TreatScalarArrayAsSingleCellArray()
+    {
+        var taken = _eval.Evaluate("=TAKE(5,1)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        taken.RowCount.Should().Be(1);
+        taken.ColCount.Should().Be(1);
+        taken.Cells[0, 0].Should().Be(new NumberValue(5));
+
+        var dropped = _eval.Evaluate("=DROP(5,0)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        dropped.RowCount.Should().Be(1);
+        dropped.ColCount.Should().Be(1);
+        dropped.Cells[0, 0].Should().Be(new NumberValue(5));
+    }
+
+    [Fact]
     public void Take_OmittedRows_TakesRequestedColumnsFromAllRows()
     {
         var sheet = MakeSheet(

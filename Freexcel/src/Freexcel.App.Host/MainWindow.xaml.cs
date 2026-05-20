@@ -2335,7 +2335,7 @@ public partial class MainWindow : Window
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new SortDialog { Owner = this };
+        var dialog = new SortDialog(columnChoices: SortDialog.BuildColumnChoices(range)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
