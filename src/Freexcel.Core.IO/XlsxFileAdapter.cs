@@ -6206,6 +6206,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
+        var sourceRevisionPointer = sourceWorkbookXml.Root?.Element(workbookNs + "revisionPtr");
         var sourceExtensionList = sourceWorkbookXml.Root?.Element(workbookNs + "extLst");
         var sourceFileVersion = sourceWorkbookXml.Root?.Element(workbookNs + "fileVersion");
         var sourceFileSharing = sourceWorkbookXml.Root?.Element(workbookNs + "fileSharing");
@@ -6221,7 +6222,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceCalculationProperties = sourceWorkbookXml.Root?.Element(workbookNs + "calcPr");
         var sourceWebPublishing = sourceWorkbookXml.Root?.Element(workbookNs + "webPublishing");
         var sourceWebPublishObjects = sourceWorkbookXml.Root?.Element(workbookNs + "webPublishObjects");
-        if (sourceExtensionList is null &&
+        if (sourceRevisionPointer is null &&
+            sourceExtensionList is null &&
             sourceFileVersion is null &&
             sourceFileSharing is null &&
             sourceFileRecoveryProperties is null &&
@@ -6246,6 +6248,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var changed = false;
+        if (MergeWorkbookChildBlock(sourceRevisionPointer, targetRoot, workbookNs + "revisionPtr"))
+            changed = true;
         if (MergeWorkbookChildBlock(sourceFileVersion, targetRoot, workbookNs + "fileVersion"))
             changed = true;
         if (MergeWorkbookChildBlock(sourceFileSharing, targetRoot, workbookNs + "fileSharing"))

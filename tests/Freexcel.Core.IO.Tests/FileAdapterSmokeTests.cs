@@ -8513,6 +8513,39 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookRevisionPointer()
+    {
+        var workbook = new Workbook("WorkbookRevisionPointerRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("revision pointer"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorkbookRevisionPointer(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/revisionHeaders/revisionHeader1.xml").Should().NotBeNull();
+        archive.GetEntry("xl/revisions/revisionLog1.xml").Should().NotBeNull();
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("revisionPtr");
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("documentId=\"FreexcelRevisionDoc\"");
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("revisionHeaders/revisionHeader1.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDefinedNames()
     {
         var workbook = new Workbook("DefinedNameRetentionTest");
@@ -13926,6 +13959,60 @@ public class FileAdapterSmokeTests
                 new XAttribute("targetScreenSize", "800x600"),
                 new XAttribute("dpi", "96")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorkbookRevisionPointer(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/revisionHeaders/revisionHeader1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionHeaders+xml");
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/revisions/revisionLog1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.revisionLog+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelRevisionHeaders"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/revisionHeaders"),
+                new XAttribute("Target", "revisionHeaders/revisionHeader1.xml")));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.AddFirst(new XElement(
+                workbookNs + "revisionPtr",
+                new XAttribute("revIDLastSave", "1"),
+                new XAttribute("documentId", "FreexcelRevisionDoc"),
+                new XAttribute("coauthVersionLast", "1"),
+                new XAttribute("coauthVersionMax", "1")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            ReplacePackageXml(archive, "xl/revisionHeaders/revisionHeader1.xml", new XDocument(
+                new XElement(
+                    workbookNs + "headers",
+                    new XElement(
+                        workbookNs + "header",
+                        new XAttribute("guid", "{00112233-4455-6677-8899-AABBCCDDEEFF}"),
+                        new XAttribute("dateTime", "2026-05-20T00:00:00Z"),
+                        new XAttribute("maxSheetId", "1")))));
+            ReplacePackageXml(archive, "xl/revisions/revisionLog1.xml", new XDocument(
+                new XElement(workbookNs + "revisions")));
         }
 
         packageStream.Position = 0;
