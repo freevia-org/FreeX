@@ -63,7 +63,9 @@ public static class AutoFilterDropdownPlanner
         "contains:",
         "notcontains:",
         "begins:",
-        "ends:"
+        "ends:",
+        "blank",
+        "nonblank"
     ];
 
     private static readonly string[] NumberFilterCriteria =
@@ -78,7 +80,9 @@ public static class AutoFilterDropdownPlanner
         "top:",
         "bottom:",
         "above average",
-        "below average"
+        "below average",
+        "blank",
+        "nonblank"
     ];
 
     private static readonly string[] DateFilterCriteria =
@@ -86,7 +90,9 @@ public static class AutoFilterDropdownPlanner
         "date=",
         "date>",
         "date<",
-        "datebetween:"
+        "datebetween:",
+        "blank",
+        "nonblank"
     ];
 
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
