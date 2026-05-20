@@ -459,6 +459,13 @@ public partial class MainWindow
     private void CfDataBarMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Data Bar");
     private void CfColorScaleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Color Scale");
     private void CfIconSetMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Icon Set");
+    private void CfIconSetPresetMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string style })
+            return;
+
+        ApplyIconSetPreset(style);
+    }
     private void CfNewRuleMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("New Rule");
     private void CfNewFormulaRuleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Formula");
     private void CfClearRulesMenuItem_Click(object sender, RoutedEventArgs e)
@@ -500,6 +507,23 @@ public partial class MainWindow
                 "Conditional Formatting",
                 sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(dlg.ResultRule, sheetId))))
             return;
+        UpdateViewport();
+    }
+
+    private void ApplyIconSetPreset(string style)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var rule = ConditionalFormatIconSetPlanner.CreateRule(style, range);
+        if (rule is null)
+            return;
+
+        if (!TryExecuteGroupedSheetCommand(
+                "Conditional Formatting",
+                sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(rule, sheetId))))
+            return;
+
         UpdateViewport();
     }
 
