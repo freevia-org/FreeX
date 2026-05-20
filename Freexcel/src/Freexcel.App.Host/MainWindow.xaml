@@ -3728,7 +3728,7 @@
                             Click="ExportPdfButton_Click"
                             local:RibbonTooltip.Title="Export PDF/XPS"
                             local:RibbonTooltip.KeyTip="E"
-                            local:RibbonTooltip.Description="Save an XPS file directly, or use a Windows PDF printer from Print to create a PDF."/>
+                            local:RibbonTooltip.Description="Save the active sheet as a PDF file or an XPS package."/>
                     <Button Content="Close" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsCloseBtn_Click"
