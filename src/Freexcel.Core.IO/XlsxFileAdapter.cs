@@ -10541,6 +10541,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         ShouldWriteChartAxes(chart.Type)
                             ? ToChartAxesXml(chart, chartNs, drawingNs)
                             : null,
+                        ToChartDataTableXml(chart, chartNs),
                         ToPlotAreaShapeProperties(chart, chartNs, drawingNs)),
                     ToLegendXml(chart, chartNs, drawingNs),
                     chart.ShowDataInHiddenRowsAndColumns ? new XElement(chartNs + "plotVisOnly", new XAttribute("val", "0")) : null,
@@ -10564,6 +10565,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             return null;
         }
+    }
+
+    private static XElement? ToChartDataTableXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.DataTable is not { } dataTable)
+            return null;
+
+        return new XElement(chartNs + "dTable",
+            ToChartBooleanValueXml(chartNs, "showHorzBorder", dataTable.ShowHorizontalBorder),
+            ToChartBooleanValueXml(chartNs, "showVertBorder", dataTable.ShowVerticalBorder),
+            ToChartBooleanValueXml(chartNs, "showOutline", dataTable.ShowOutline),
+            ToChartBooleanValueXml(chartNs, "showKeys", dataTable.ShowLegendKeys));
     }
 
     private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
