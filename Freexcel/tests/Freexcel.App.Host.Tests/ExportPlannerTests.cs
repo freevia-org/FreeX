@@ -431,7 +431,7 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
 
-        source.Should().Contain("Content = \"Print...\"");
+        source.Should().Contain("Content = \"_Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
         source.Should().Contain("PrintDocument(document.DocumentPaginator");
     }
