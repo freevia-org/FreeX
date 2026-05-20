@@ -8042,6 +8042,80 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDialogsheetReferenceAlongsideModelEdits()
+    {
+        var workbook = new Workbook("UnsupportedDialogSheetRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalDialogsheetPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/dialogSheets/sheet1.xml").Should().NotBeNull();
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("DialogSheet1");
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("dialogSheets/sheet1.xml");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("/xl/dialogSheets/sheet1.xml");
+
+        saved.Position = 0;
+        var roundTripped = adapter.Load(saved);
+        roundTripped.GetSheetAt(0).GetValue(1, 1).Should().Be(new TextValue("edited"));
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetQueryTableReferencesAlongsideModelEdits()
+    {
+        var workbook = new Workbook("QueryTableRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalQueryTablePackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/queryTables/queryTable1.xml").Should().NotBeNull();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("queryTableParts");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../queryTables/queryTable1.xml");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("/xl/queryTables/queryTable1.xml");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
@@ -12974,6 +13048,116 @@ public class FileAdapterSmokeTests
                         new XAttribute("bottom", "0.75"),
                         new XAttribute("header", "0.3"),
                         new XAttribute("footer", "0.3")))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalDialogsheetPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/dialogSheets/sheet1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelUnsupportedDialogsheet"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet"),
+                new XAttribute("Target", "dialogSheets/sheet1.xml")));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!
+                .Element(workbookNs + "sheets")!
+                .Add(new XElement(
+                    workbookNs + "sheet",
+                    new XAttribute("name", "DialogSheet1"),
+                    new XAttribute("sheetId", "100"),
+                    new XAttribute(relNs + "id", "rIdFreexcelUnsupportedDialogsheet")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            ReplacePackageXml(archive, "xl/dialogSheets/sheet1.xml", new XDocument(
+                new XElement(
+                    workbookNs + "dialogsheet",
+                    new XElement(workbookNs + "sheetPr"),
+                    new XElement(
+                        workbookNs + "sheetViews",
+                        new XElement(workbookNs + "sheetView", new XAttribute("workbookViewId", "0"))),
+                    new XElement(
+                        workbookNs + "pageMargins",
+                        new XAttribute("left", "0.7"),
+                        new XAttribute("right", "0.7"),
+                        new XAttribute("top", "0.75"),
+                        new XAttribute("bottom", "0.75"),
+                        new XAttribute("header", "0.3"),
+                        new XAttribute("footer", "0.3")))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalQueryTablePackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/queryTables/queryTable1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.queryTable+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelQueryTable"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable"),
+                new XAttribute("Target", "../queryTables/queryTable1.xml")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "queryTableParts",
+                new XAttribute("count", "1"),
+                new XElement(
+                    worksheetNs + "queryTablePart",
+                    new XAttribute(relNs + "id", "rIdFreexcelQueryTable"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            ReplacePackageXml(archive, "xl/queryTables/queryTable1.xml", new XDocument(
+                new XElement(
+                    worksheetNs + "queryTable",
+                    new XAttribute("name", "FreexcelQueryTable"),
+                    new XAttribute("connectionId", "1"),
+                    new XAttribute("autoFormatId", "16"),
+                    new XAttribute("applyNumberFormats", "0"),
+                    new XAttribute("applyBorderFormats", "0"),
+                    new XAttribute("applyFontFormats", "0"),
+                    new XAttribute("applyPatternFormats", "0"),
+                    new XAttribute("applyAlignmentFormats", "0"),
+                    new XAttribute("applyWidthHeightFormats", "0"))));
         }
 
         packageStream.Position = 0;
