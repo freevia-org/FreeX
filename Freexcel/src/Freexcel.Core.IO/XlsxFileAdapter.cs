@@ -1497,6 +1497,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var labelFilters = ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs)
             .Concat(ReadNativePivotLabelFilters(nativeFiltersElement, workbookNs))
             .ToList();
+        var sorts = ReadPivotSorts(root.Element(workbookNs + "pivotSorts"), workbookNs)
+            .Concat(ReadNativePivotFieldSorts(root.Element(workbookNs + "pivotFields"), workbookNs))
+            .ToList();
         var styleInfo = root.Element(workbookNs + "pivotTableStyleInfo");
         pivotTable = new PendingPivotTableModel(
             name,
@@ -1526,7 +1529,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
             valueFilters,
             labelFilters,
-            ReadPivotSorts(root.Element(workbookNs + "pivotSorts"), workbookNs));
+            sorts);
         return true;
     }
 
@@ -1862,6 +1865,35 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     : PivotSortDirection.Ascending,
                 ReadIntAttribute(sort, "dataField") ?? 0,
                 ReadIntAttribute(sort, "field") ?? 0))
+            .ToList();
+    }
+
+    private static List<PivotSortModel> ReadNativePivotFieldSorts(XElement? pivotFieldsElement, XNamespace workbookNs)
+    {
+        if (pivotFieldsElement is null)
+            return [];
+
+        return pivotFieldsElement
+            .Elements(workbookNs + "pivotField")
+            .Select((field, index) => (Field: field, Index: index))
+            .Select(item =>
+            {
+                var sortType = item.Field.Attribute("sortType")?.Value;
+                if (!string.Equals(sortType, "ascending", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(sortType, "descending", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                return new PivotSortModel(
+                    PivotSortTarget.Label,
+                    string.Equals(sortType, "descending", StringComparison.OrdinalIgnoreCase)
+                        ? PivotSortDirection.Descending
+                        : PivotSortDirection.Ascending,
+                    FieldIndex: item.Index);
+            })
+            .Where(sort => sort is not null)
+            .Select(sort => sort!)
             .ToList();
     }
 
