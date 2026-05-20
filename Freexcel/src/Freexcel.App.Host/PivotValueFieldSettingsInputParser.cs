@@ -13,9 +13,16 @@ public static class PivotValueFieldSettingsInputParser
         new("General", null),
         new("Number", 2),
         new("Number with thousands", 4),
-        new("Percentage", 10),
+        new("Currency", 7),
+        new("Accounting", 44),
         new("Date", 14),
-        new("Accounting", 44)
+        new("Short Date", 14),
+        new("Long Date", 15),
+        new("Time", 21),
+        new("Percentage", 10),
+        new("Fraction", 12),
+        new("Scientific", 11),
+        new("Text", 49)
     ];
 
     public static bool TryParseOptionalNumberFormatId(string input, out int? numberFormatId)
