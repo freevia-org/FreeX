@@ -11,7 +11,8 @@ internal enum ExportFormat
 internal enum ExportContentScope
 {
     ActiveSheet,
-    Selection
+    Selection,
+    EntireWorkbook
 }
 
 internal sealed record ExportOptions(
@@ -61,6 +62,7 @@ internal static class ExportPlanner
         {
             ExportContentScope.ActiveSheet => "Active sheet only",
             ExportContentScope.Selection => "Selection",
+            ExportContentScope.EntireWorkbook => "Entire workbook",
             _ => "Active sheet only"
         };
         var properties = options.IncludeDocumentProperties
