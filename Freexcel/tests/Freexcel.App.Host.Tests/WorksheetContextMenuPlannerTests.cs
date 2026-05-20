@@ -25,6 +25,12 @@ public sealed class WorksheetContextMenuPlannerTests
             "Reapply Filter",
             "Pick From Drop-down List...",
             "Quick Analysis",
+            "Define Name...",
+            "Create Table...",
+            "Format as Table...",
+            "Text to Columns...",
+            "Remove Duplicates...",
+            "Data Validation...",
             "Hide Rows",
             "Unhide Rows",
             "Row Height...",
@@ -55,6 +61,18 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.PickFromDropDown);
         commands.Single(command => command.Header == "Quick Analysis")
             .Action.Should().Be(WorksheetContextMenuAction.QuickAnalysis);
+        commands.Single(command => command.Header == "Define Name...")
+            .Action.Should().Be(WorksheetContextMenuAction.DefineName);
+        commands.Single(command => command.Header == "Create Table...")
+            .Action.Should().Be(WorksheetContextMenuAction.CreateTable);
+        commands.Single(command => command.Header == "Format as Table...")
+            .Action.Should().Be(WorksheetContextMenuAction.FormatAsTable);
+        commands.Single(command => command.Header == "Text to Columns...")
+            .Action.Should().Be(WorksheetContextMenuAction.TextToColumns);
+        commands.Single(command => command.Header == "Remove Duplicates...")
+            .Action.Should().Be(WorksheetContextMenuAction.RemoveDuplicates);
+        commands.Single(command => command.Header == "Data Validation...")
+            .Action.Should().Be(WorksheetContextMenuAction.DataValidation);
         commands.Single(command => command.Header == "Row Height...")
             .Action.Should().Be(WorksheetContextMenuAction.RowHeight);
         commands.Single(command => command.Header == "AutoFit Row Height")

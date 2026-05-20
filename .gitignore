@@ -5,6 +5,7 @@ WeatherDB/obj/
 
 # Freexcel generated artifacts
 Freexcel/artifacts/
+Freexcel/.worktrees/
 
 # User-specific files
 *.user

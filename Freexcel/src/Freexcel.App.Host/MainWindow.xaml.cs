@@ -5543,6 +5543,24 @@ public partial class MainWindow : Window
             case WorksheetContextMenuAction.QuickAnalysis:
                 ShowQuickAnalysisMenu();
                 break;
+            case WorksheetContextMenuAction.DefineName:
+                DefineNameBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.CreateTable:
+                TableBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.FormatAsTable:
+                FormatTableBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.TextToColumns:
+                TextToColumnsBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.RemoveDuplicates:
+                RemoveDuplicatesBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.DataValidation:
+                ValidationButton_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.HideRows:
                 ExecuteRowsHidden(hidden: true);
                 break;
