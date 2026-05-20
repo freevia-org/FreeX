@@ -12487,6 +12487,38 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableRootNativeMetadata()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableRootMetadataTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeRootMetadata: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.NativeAttributes.Should().ContainKey("published").WhoseValue.Should().Be("1");
+        table.NativeAttributes.Should().ContainKey("headerRowDxfId").WhoseValue.Should().Be("2");
+        table.NativeChildXmls.Should().ContainSingle()
+            .Which.Should().Contain("{FREEXCEL-TABLE-ROOT-EXT}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("published=\"1\"");
+        tableXml.Should().Contain("headerRowDxfId=\"2\"");
+        tableXml.Should().Contain("extLst");
+        tableXml.Should().Contain("{FREEXCEL-TABLE-ROOT-EXT}");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
@@ -14067,7 +14099,8 @@ public class FileAdapterSmokeTests
         bool includeSortState = false,
         bool includeColumnExtension = false,
         bool includeColumnAttributes = false,
-        bool includeStyleInfoExtension = false)
+        bool includeStyleInfoExtension = false,
+        bool includeRootMetadata = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -14109,6 +14142,8 @@ public class FileAdapterSmokeTests
                         : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeRootMetadata
+                            ? StructuredTableWithRootMetadataXml
                         : includeStyleInfoExtension
                             ? StructuredTableWithStyleInfoExtensionXml
                         : includeColumnAttributes
@@ -15223,6 +15258,31 @@ public class FileAdapterSmokeTests
               <ext uri="{FREEXCEL-TABLE-STYLE-EXT}"/>
             </extLst>
           </tableStyleInfo>
+        </table>
+        """;
+
+    private const string StructuredTableWithRootMetadataXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B3"
+               totalsRowShown="0"
+               published="1"
+               headerRowDxfId="2">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+          <extLst>
+            <ext uri="{FREEXCEL-TABLE-ROOT-EXT}"/>
+          </extLst>
         </table>
         """;
 
