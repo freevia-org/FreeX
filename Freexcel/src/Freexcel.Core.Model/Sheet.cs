@@ -750,6 +750,8 @@ public sealed class Sheet
                 StopIfTrue           = cf.StopIfTrue,
                 NativeAttributes     = cf.NativeAttributes,
                 NativeChildXmls      = cf.NativeChildXmls,
+                NativePayloadAttributes = cf.NativePayloadAttributes,
+                NativePayloadChildXmls = cf.NativePayloadChildXmls,
                 NativeContainerAttributes = cf.NativeContainerAttributes,
                 NativeContainerChildXmls = cf.NativeContainerChildXmls
             };
