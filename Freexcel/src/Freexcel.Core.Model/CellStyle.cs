@@ -136,6 +136,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Whether the cell is locked when worksheet protection is enabled.</summary>
     public bool Locked { get; set; } = true;
 
+    /// <summary>Native dxf attributes not modeled by Freexcel, retained for conditional-format XLSX fidelity.</summary>
+    public IReadOnlyDictionary<string, string>? NativeDifferentialAttributes { get; set; }
+
+    /// <summary>Native dxf child elements not modeled by Freexcel, retained for conditional-format XLSX fidelity.</summary>
+    public IReadOnlyList<string>? NativeDifferentialChildXmls { get; set; }
+
     /// <summary>Returns a fresh default-valued instance.</summary>
     public static readonly CellStyle Default = new();
 
@@ -165,6 +171,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         IndentLevel = IndentLevel,
         TextRotation = TextRotation,
         Locked = Locked,
+        NativeDifferentialAttributes = NativeDifferentialAttributes,
+        NativeDifferentialChildXmls = NativeDifferentialChildXmls,
     };
 
     /// <inheritdoc/>

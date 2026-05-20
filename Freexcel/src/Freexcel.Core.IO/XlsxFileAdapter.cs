@@ -787,7 +787,37 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (!string.IsNullOrWhiteSpace(numberFormat))
             style.NumberFormat = numberFormat;
 
+        var nativeAttributes = ReadNativeDifferentialStyleAttributes(dxf);
+        if (nativeAttributes.Count > 0)
+            style.NativeDifferentialAttributes = nativeAttributes;
+
+        var nativeChildXmls = ReadNativeDifferentialStyleChildXmls(dxf, workbookNs);
+        if (nativeChildXmls.Count > 0)
+            style.NativeDifferentialChildXmls = nativeChildXmls;
+
         return style;
+    }
+
+    private static Dictionary<string, string> ReadNativeDifferentialStyleAttributes(XElement dxf) =>
+        dxf.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0)
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+
+    private static List<string> ReadNativeDifferentialStyleChildXmls(XElement dxf, XNamespace workbookNs)
+    {
+        XName[] modeledChildren =
+        [
+            workbookNs + "font",
+            workbookNs + "numFmt",
+            workbookNs + "fill",
+            workbookNs + "alignment",
+            workbookNs + "border",
+            workbookNs + "protection"
+        ];
+        return dxf.Elements()
+            .Where(element => !modeledChildren.Contains(element.Name))
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
     }
 
     private static CellBorder ReadDifferentialBorder(XElement? edge, XNamespace workbookNs)
@@ -9819,7 +9849,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static XElement ToDifferentialStyleXml(CellStyle style, XNamespace workbookNs, int numberFormatId)
     {
         var def = CellStyle.Default;
-        return new XElement(
+        var dxf = new XElement(
             workbookNs + "dxf",
             style.NumberFormat != def.NumberFormat
                 ? new XElement(
@@ -9862,6 +9892,31 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ToDifferentialBorderXml("top", style.BorderTop, workbookNs),
                     ToDifferentialBorderXml("bottom", style.BorderBottom, workbookNs))
                 : null);
+
+        foreach (var (name, value) in style.NativeDifferentialAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && dxf.Attribute(name) is null)
+                dxf.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in (style.NativeDifferentialChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == workbookNs &&
+                    nativeChild.Name.LocalName is not "font" and not "numFmt" and not "fill" and not "alignment" and not "border" and not "protection")
+                {
+                    dxf.Add(nativeChild);
+                }
+            }
+            catch
+            {
+                // Ignore malformed native differential-style payloads from older saves.
+            }
+        }
+
+        return dxf;
     }
 
     private static IReadOnlyDictionary<int, int> SaveNumberFormatCatalog(Stream xlsxStream, Workbook workbook)
