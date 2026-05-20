@@ -2459,6 +2459,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xmatch_ApproximateMode_PrefersExactMatchBeforeFallback()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(4)), (3, 1, new NumberValue(5)),
+            (4, 1, new NumberValue(6)));
+
+        _eval.Evaluate("=XMATCH(5,A1:A4,-1)", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=XMATCH(5,A1:A4,1,-1)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void Xmatch_InvalidModes_ReturnValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("A")));
@@ -2509,6 +2520,18 @@ public class FunctionLibraryTests
         rv.ColCount.Should().Be(2);
         rv.Cells[0, 0].Should().Be(new NumberValue(2));
         rv.Cells[0, 1].Should().Be(new TextValue("two"));
+    }
+
+    [Fact]
+    public void Xlookup_ApproximateMode_PrefersExactMatchBeforeFallback()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(5)), (2, 1, new NumberValue(4)), (3, 1, new NumberValue(5)), (4, 1, new NumberValue(6)),
+            (1, 2, new TextValue("first exact")), (2, 2, new TextValue("smaller")),
+            (3, 2, new TextValue("last exact")), (4, 2, new TextValue("larger")));
+
+        _eval.Evaluate("=XLOOKUP(5,A1:A4,B1:B4,\"\",-1)", sheet).Should().Be(new TextValue("first exact"));
+        _eval.Evaluate("=XLOOKUP(5,A1:A4,B1:B4,\"\",1,-1)", sheet).Should().Be(new TextValue("last exact"));
     }
 
     [Fact]
