@@ -112,6 +112,21 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45292, "1/1/2024", "#FF0000")]
+    [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45294, "1/3/2024", "#0070C0")]
+    public void CustomNumberSubset_SelectsConditionalDateTimeSections(
+        string format,
+        double numericValue,
+        string expectedText,
+        string expectedColor)
+    {
+        var result = NumberFormatter.FormatWithColor(new DateTimeValue(numericValue), format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
     [InlineData("0\\ kg", 12, "12 kg")]
     [InlineData("\\#0", 12, "#12")]
     [InlineData("0\\,", 12, "12,")]
