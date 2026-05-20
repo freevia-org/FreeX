@@ -582,7 +582,7 @@
             <!-- ── HOME ──────────────────────────────────────────────── -->
             <TabItem Header="Home" local:RibbonTooltip.KeyTip="H">
                 <Border Background="{StaticResource FreexcelRibbonSurfaceBrush}" Padding="6,4,6,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel x:Name="HomeRibbonPanel" Orientation="Horizontal" MinHeight="88">
@@ -1399,7 +1399,7 @@
             <!-- ── INSERT ────────────────────────────────────────────── -->
             <TabItem Header="Insert" local:RibbonTooltip.KeyTip="N">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -1902,7 +1902,7 @@
             <!-- ── DRAW ──────────────────────────────────────────────── -->
             <TabItem Header="Draw" local:RibbonTooltip.KeyTip="J">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -2000,7 +2000,7 @@
             <!-- ── PAGE LAYOUT ───────────────────────────────────────── -->
             <TabItem Header="Page Layout" local:RibbonTooltip.KeyTip="P">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -2185,7 +2185,7 @@
             <!-- ── FORMULAS ──────────────────────────────────────────── -->
             <TabItem Header="Formulas" local:RibbonTooltip.KeyTip="M">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -2369,7 +2369,7 @@
             <!-- ── DATA ──────────────────────────────────────────────── -->
             <TabItem Header="Data" local:RibbonTooltip.KeyTip="A">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -2560,7 +2560,7 @@
             <!-- ── REVIEW ────────────────────────────────────────────── -->
             <TabItem Header="Review" local:RibbonTooltip.KeyTip="R">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -2679,7 +2679,7 @@
             <!-- ── VIEW ──────────────────────────────────────────────── -->
             <TabItem Header="View" local:RibbonTooltip.KeyTip="W">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -2852,7 +2852,7 @@
             <!-- ── HELP ──────────────────────────────────────────────── -->
             <TabItem x:Name="PivotTableAnalyzeTab" Header="PivotTable Analyze" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                         <StackPanel Orientation="Horizontal">
@@ -2928,7 +2928,7 @@
 
             <TabItem x:Name="PivotTableDesignTab" Header="Design" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JD">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                         <StackPanel Orientation="Horizontal">
@@ -2992,7 +2992,7 @@
 
             <TabItem Header="Help" local:RibbonTooltip.KeyTip="Y">
                 <Border Background="White" Padding="4,3,4,0">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal">
@@ -3720,7 +3720,7 @@
                             local:RibbonTooltip.KeyTip="S"/>
                     <Button Content="Save As" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
-                            Click="SaveButton_Click"
+                            Click="SaveAsButton_Click"
                             local:RibbonTooltip.Title="Save As"
                             local:RibbonTooltip.KeyTip="A"/>
                     <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
