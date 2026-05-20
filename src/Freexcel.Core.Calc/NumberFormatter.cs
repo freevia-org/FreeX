@@ -340,7 +340,7 @@ public static class NumberFormatter
         if (string.IsNullOrEmpty(format) || format == "General")
             return FormatNumberGeneral(value);
 
-        format = PreserveLocaleCurrencyTokens(format, out var numberFormat);
+        format = PreserveLocaleCurrencyTokens(format, out var numberFormat, out var dateTimeFormat);
 
         // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds
         // and must be handled before the generic bracket-stripping pass.
@@ -379,7 +379,7 @@ public static class NumberFormatter
             try
             {
                 var dt = DateTime.FromOADate(value);
-                return dt.ToString(ToNetDateFormat(format), CultureInfo.InvariantCulture);
+                return dt.ToString(ToNetDateFormat(format), dateTimeFormat);
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
@@ -415,9 +415,13 @@ public static class NumberFormatter
         return prefix + numStr + suffix;
     }
 
-    private static string PreserveLocaleCurrencyTokens(string format, out NumberFormatInfo numberFormat)
+    private static string PreserveLocaleCurrencyTokens(
+        string format,
+        out NumberFormatInfo numberFormat,
+        out DateTimeFormatInfo dateTimeFormat)
     {
         numberFormat = CultureInfo.InvariantCulture.NumberFormat;
+        dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
         var sb = new System.Text.StringBuilder(format.Length);
         bool inQuote = false;
 
@@ -443,9 +447,10 @@ public static class NumberFormatter
                     int localeSeparator = token.LastIndexOf('-');
                     var localeToken = localeSeparator >= 0 ? token[(localeSeparator + 1)..] : null;
                     if (localeToken is not null &&
-                        TryCreateLocaleNumberFormat(localeToken, out var localeNumberFormat))
+                        TryCreateLocaleFormats(localeToken, out var localeNumberFormat, out var localeDateTimeFormat))
                     {
                         numberFormat = localeNumberFormat;
+                        dateTimeFormat = localeDateTimeFormat;
                     }
 
                     if (localeSeparator == 0)
@@ -481,19 +486,23 @@ public static class NumberFormatter
         return sb.ToString();
     }
 
-    private static bool TryCreateLocaleNumberFormat(string localeToken, out NumberFormatInfo numberFormat)
+    private static bool TryCreateLocaleFormats(
+        string localeToken,
+        out NumberFormatInfo numberFormat,
+        out DateTimeFormatInfo dateTimeFormat)
     {
         numberFormat = CultureInfo.InvariantCulture.NumberFormat;
+        dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
         var normalized = localeToken.Trim().TrimStart('0').ToUpperInvariant();
         if (normalized.Length == 0)
             normalized = "0";
 
-        (string DecimalSeparator, string GroupSeparator)? separators = normalized switch
+        (string DecimalSeparator, string GroupSeparator, string DateSeparator)? separators = normalized switch
         {
-            "409" => (".", ","),
-            "407" => (",", "."),
-            "40C" => (",", " "),
-            "422" => (",", " "),
+            "409" => (".", ",", "/"),
+            "407" => (",", ".", "."),
+            "40C" => (",", " ", "/"),
+            "422" => (",", " ", "."),
             _ => null
         };
 
@@ -505,6 +514,8 @@ public static class NumberFormatter
         numberFormat.NumberGroupSeparator = separators.Value.GroupSeparator;
         numberFormat.PercentDecimalSeparator = separators.Value.DecimalSeparator;
         numberFormat.PercentGroupSeparator = separators.Value.GroupSeparator;
+        dateTimeFormat = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
+        dateTimeFormat.DateSeparator = separators.Value.DateSeparator;
         return true;
     }
 
@@ -789,13 +800,14 @@ public static class NumberFormatter
     private static string FormatDateTime(double oaDate, string format)
     {
         var (_, cleanFmt) = ExtractColor(format);
+        cleanFmt = PreserveLocaleCurrencyTokens(cleanFmt, out _, out var dateTimeFormat);
         cleanFmt = Regex.Replace(cleanFmt, @"\[[^\]]*\]", "");
         try
         {
             var dt = DateTime.FromOADate(oaDate);
             if (IsDateTimeFormat(cleanFmt))
-                return dt.ToString(ToNetDateFormat(cleanFmt), CultureInfo.InvariantCulture);
-            return dt.ToString(cleanFmt, CultureInfo.InvariantCulture);
+                return dt.ToString(ToNetDateFormat(cleanFmt), dateTimeFormat);
+            return dt.ToString(cleanFmt, dateTimeFormat);
         }
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
     }
