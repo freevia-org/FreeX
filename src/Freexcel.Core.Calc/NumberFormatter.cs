@@ -1015,6 +1015,24 @@ public static class NumberFormatter
             char c = format[i];
             if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
                 continue;
+            if (c == '"')
+            {
+                int open = format.LastIndexOf('"', i - 1);
+                if (open >= 0)
+                {
+                    i = open;
+                    continue;
+                }
+            }
+            if (c == ']')
+            {
+                int open = format.LastIndexOf('[', i - 1);
+                if (open >= 0)
+                {
+                    i = open;
+                    continue;
+                }
+            }
             return i;
         }
 
@@ -1028,6 +1046,24 @@ public static class NumberFormatter
             char c = format[i];
             if (char.IsWhiteSpace(c) || c is ':' or '/' or '-' or ',')
                 continue;
+            if (c == '"')
+            {
+                int close = format.IndexOf('"', i + 1);
+                if (close >= 0)
+                {
+                    i = close;
+                    continue;
+                }
+            }
+            if (c == '[')
+            {
+                int close = format.IndexOf(']', i + 1);
+                if (close >= 0)
+                {
+                    i = close;
+                    continue;
+                }
+            }
             return i;
         }
 
