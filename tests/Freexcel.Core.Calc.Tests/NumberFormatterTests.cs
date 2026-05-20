@@ -93,6 +93,25 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[Color9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
+    [InlineData("0;0;0;[Red]@", 0, "hello", "#FF0000")]
+    public void CustomNumberSubset_ReturnsColorFromDateAndTextSections(
+        string format,
+        double numericValue,
+        string expectedText,
+        string expectedColor)
+    {
+        ScalarValue value = format.Contains('@', StringComparison.Ordinal)
+            ? new TextValue(expectedText)
+            : new DateTimeValue(numericValue);
+
+        var result = NumberFormatter.FormatWithColor(value, format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
     [InlineData("0\\ kg", 12, "12 kg")]
     [InlineData("\\#0", 12, "#12")]
     [InlineData("0\\,", 12, "12,")]
