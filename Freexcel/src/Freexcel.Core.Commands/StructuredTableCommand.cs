@@ -184,8 +184,8 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
     {
         foreach (var filterColumn in table.FilterColumns)
         {
-            var tableColumnIndex = table.Columns.FindIndex(column => column.Id == filterColumn.ColumnId);
-            if (tableColumnIndex < 0)
+            var tableColumnIndex = filterColumn.ColumnId;
+            if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
                 continue;
 
             yield return new TableFilterState(
