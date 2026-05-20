@@ -26,7 +26,7 @@ public sealed class PrintPreviewDialog : Window
         };
         var printButton = new Button
         {
-            Content = "Print...",
+            Content = "_Print...",
             Padding = new Thickness(12, 4, 12, 4)
         };
         printButton.Click += (_, _) => ShowNativePrintDialog(document);
