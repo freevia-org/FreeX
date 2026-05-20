@@ -420,6 +420,9 @@ public partial class MainWindow
         SaveWorkbookWithDialog();
     }
 
+    private void SaveAsButton_Click(object sender, RoutedEventArgs e) =>
+        SaveWorkbookWithDialog();
+
     private bool SaveWorkbookWithDialog()
     {
         var filter = string.Join("|", _fileAdapters.Select(a => $"{a.FormatName}|*{a.Extension}"));
