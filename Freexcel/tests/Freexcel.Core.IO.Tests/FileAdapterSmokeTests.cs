@@ -7419,6 +7419,48 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesLineChartGuideMetadata()
+    {
+        var workbook = new Workbook("ChartLineGuidesPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Target"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(22));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(28));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)),
+            ShowDropLines = true,
+            ShowHighLowLines = true,
+            ShowUpDownBars = true
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var lineChart = chartXml.Descendants(chartNs + "lineChart").Single();
+
+        lineChart.Element(chartNs + "dropLines").Should().NotBeNull();
+        lineChart.Element(chartNs + "hiLowLines").Should().NotBeNull();
+        lineChart.Element(chartNs + "upDownBars").Should().NotBeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_DropsUnsupportedComboSeriesMarkersPackagePart()
     {
         var workbook = new Workbook("ChartUnsupportedComboMarkerPackageSave");
