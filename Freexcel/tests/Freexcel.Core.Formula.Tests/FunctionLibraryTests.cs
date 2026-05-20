@@ -4713,6 +4713,40 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Take_OmittedRows_TakesRequestedColumnsFromAllRows()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)),
+            (2,1,new NumberValue(4)), (2,2,new NumberValue(5)), (2,3,new NumberValue(6)),
+            (3,1,new NumberValue(7)), (3,2,new NumberValue(8)), (3,3,new NumberValue(9)));
+
+        var result = _eval.Evaluate("=TAKE(A1:C3,,2)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(3);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[2, 1].Should().Be(new NumberValue(8));
+    }
+
+    [Fact]
+    public void Drop_OmittedRows_DropsRequestedColumnsFromAllRows()
+    {
+        var sheet = MakeSheet(
+            (1,1,new NumberValue(1)), (1,2,new NumberValue(2)), (1,3,new NumberValue(3)),
+            (2,1,new NumberValue(4)), (2,2,new NumberValue(5)), (2,3,new NumberValue(6)),
+            (3,1,new NumberValue(7)), (3,2,new NumberValue(8)), (3,3,new NumberValue(9)));
+
+        var result = _eval.Evaluate("=DROP(A1:C3,,1)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(3);
+        rv.ColCount.Should().Be(2);
+        rv.Cells[0, 0].Should().Be(new NumberValue(2));
+        rv.Cells[2, 1].Should().Be(new NumberValue(9));
+    }
+
+    [Fact]
     public void Take_NegativeRowsAndColumns_ReturnsBottomRightSlice()
     {
         var sheet = MakeSheet(
