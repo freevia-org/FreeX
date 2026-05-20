@@ -493,6 +493,44 @@ public sealed class XlsxChartPartReaderTests
     }
 
     [Fact]
+    public void TryReadSupportedChart_ReadsChartDataTableMetadata()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var chartXml = XDocument.Parse("""
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+              <c:chart>
+                <c:plotArea>
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:ser>
+                      <c:cat><c:strRef><c:f>Sheet1!$A$2:$A$4</c:f></c:strRef></c:cat>
+                      <c:val><c:numRef><c:f>Sheet1!$B$2:$B$4</c:f></c:numRef></c:val>
+                    </c:ser>
+                  </c:barChart>
+                  <c:dTable>
+                    <c:showHorzBorder val="1"/>
+                    <c:showVertBorder val="0"/>
+                    <c:showOutline val="1"/>
+                    <c:showKeys val="1"/>
+                  </c:dTable>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """);
+
+        XlsxChartPartReader.TryReadSupportedChart(chartXml, sheetId, out var chart)
+            .Should().BeTrue();
+
+        chart.DataTable.Should().BeEquivalentTo(new ChartDataTableModel
+        {
+            ShowHorizontalBorder = true,
+            ShowVerticalBorder = false,
+            ShowOutline = true,
+            ShowLegendKeys = true
+        });
+    }
+
+    [Fact]
     public void TryReadSupportedChart_ReadsConcreteSeriesFill()
     {
         var sheetId = new SheetId(Guid.NewGuid());
