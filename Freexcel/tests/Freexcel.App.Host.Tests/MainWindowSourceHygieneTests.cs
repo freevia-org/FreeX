@@ -125,6 +125,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PrintAndExportController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var printSourcePath = Path.Combine(appHostDirectory, "MainWindow.PrintExport.cs");
+
+        File.Exists(printSourcePath).Should().BeTrue();
+        var printSource = File.ReadAllText(printSourcePath);
+
+        mainSource.Should().NotContain("private void PrintButton_Click(");
+        mainSource.Should().NotContain("private void ExportPdfButton_Click(");
+        mainSource.Should().NotContain("private void ExportViaPrintToPdf(");
+        mainSource.Should().NotContain("private void ExportPdfFallbackAsXps(");
+        mainSource.Should().NotContain("private bool ExportAsXps(");
+
+        printSource.Should().Contain("private void PrintButton_Click(");
+        printSource.Should().Contain("private void ExportPdfButton_Click(");
+        printSource.Should().Contain("private void ExportViaPrintToPdf(");
+        printSource.Should().Contain("private void ExportPdfFallbackAsXps(");
+        printSource.Should().Contain("private bool ExportAsXps(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -594,7 +617,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ExportWorkflow_SurfacesPlannedOptionsAndFallbackPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("ExportViaPrintToPdf(request)");
         source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
