@@ -2854,6 +2854,14 @@
                                             local:RibbonTooltip.Title="Show Details"
                                             local:RibbonTooltip.KeyTip="D"
                                             local:RibbonTooltip.Description="Create a detail sheet for the selected PivotTable value cell."/>
+                                    <Button Content="Group Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGroupFieldBtn_Click"
+                                            local:RibbonTooltip.Title="Group Field"
+                                            local:RibbonTooltip.KeyTip="GF"
+                                            local:RibbonTooltip.Description="Open grouping options for the selected PivotTable field."/>
+                                    <Button Content="Ungroup" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotUngroupFieldBtn_Click"
+                                            local:RibbonTooltip.Title="Ungroup"
+                                            local:RibbonTooltip.KeyTip="UG"
+                                            local:RibbonTooltip.Description="Remove grouping from the selected PivotTable field."/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
@@ -2881,6 +2889,14 @@
                                             local:RibbonTooltip.Title="Change Data Source"
                                             local:RibbonTooltip.KeyTip="S"
                                             local:RibbonTooltip.Description="Change the source range for the selected PivotTable."/>
+                                    <Button Content="Calc Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedFieldBtn_Click"
+                                            local:RibbonTooltip.Title="Calculated Field"
+                                            local:RibbonTooltip.KeyTip="CF"
+                                            local:RibbonTooltip.Description="Create or replace a calculated field in the selected PivotTable."/>
+                                    <Button Content="Calc Item" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedItemBtn_Click"
+                                            local:RibbonTooltip.Title="Calculated Item"
+                                            local:RibbonTooltip.KeyTip="CI"
+                                            local:RibbonTooltip.Description="Create or replace a calculated item in the selected PivotTable."/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
@@ -3080,6 +3096,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <DockPanel Grid.Row="0" LastChildFill="True">
@@ -3100,8 +3117,15 @@
                                Text="Choose fields to add to report:"
                                FontSize="12"
                                Margin="0,12,0,4"/>
-                    <ListBox x:Name="PivotAvailableFieldsList"
+                    <TextBox x:Name="PivotFieldListSearchBox"
                              Grid.Row="2"
+                             Height="24"
+                             Margin="0,0,0,6"
+                             VerticalContentAlignment="Center"
+                             TextChanged="PivotFieldListSearchBox_TextChanged"
+                             AutomationProperties.Name="Search PivotTable Fields"/>
+                    <ListBox x:Name="PivotAvailableFieldsList"
+                             Grid.Row="3"
                              MinHeight="120"
                              SelectionMode="Single"
                              AllowDrop="True"
@@ -3133,15 +3157,32 @@
                         </ListBox.ContextMenu>
                     </ListBox>
 
-                    <UniformGrid Grid.Row="3" Columns="5" Margin="0,8,0,8">
-                        <Button Content="Rows" Click="PivotFieldToRowsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Rows"/>
-                        <Button Content="Columns" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Columns"/>
-                        <Button Content="Values" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Values"/>
-                        <Button Content="Filters" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Filters"/>
-                        <Button Content="Remove" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Remove selected PivotTable field"/>
-                    </UniformGrid>
+                    <StackPanel Grid.Row="4" Margin="0,8,0,8">
+                        <UniformGrid Columns="5">
+                            <Button Content="Rows" Click="PivotFieldToRowsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Rows"/>
+                            <Button Content="Columns" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Columns"/>
+                            <Button Content="Values" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Values"/>
+                            <Button Content="Filters" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Filters"/>
+                            <Button Content="Remove" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Remove selected PivotTable field"/>
+                        </UniformGrid>
+                        <DockPanel Margin="0,6,0,0" LastChildFill="False">
+                            <CheckBox x:Name="PivotFieldListDeferLayoutCheckBox"
+                                      Content="Defer Layout Update"
+                                      VerticalAlignment="Center"
+                                      DockPanel.Dock="Left"
+                                      Click="PivotFieldListDeferLayoutCheckBox_Click"
+                                      AutomationProperties.Name="Defer PivotTable Layout Update"/>
+                            <Button x:Name="PivotFieldListUpdateBtn"
+                                    Content="Update"
+                                    MinWidth="72"
+                                    MinHeight="24"
+                                    DockPanel.Dock="Right"
+                                    Click="PivotFieldListUpdateBtn_Click"
+                                    AutomationProperties.Name="Update PivotTable Layout"/>
+                        </DockPanel>
+                    </StackPanel>
 
-                    <Grid Grid.Row="4">
+                    <Grid Grid.Row="5">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>

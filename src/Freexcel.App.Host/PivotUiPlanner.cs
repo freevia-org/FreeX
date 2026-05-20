@@ -4,6 +4,11 @@ namespace Freexcel.App.Host;
 
 public sealed record PivotFieldListItem(string Caption, bool IsChecked);
 
+public sealed record PendingPivotLayoutUpdate(
+    bool IsDeferred,
+    string? AvailableFieldsSearchText,
+    IReadOnlyList<PivotFieldListItem> Fields);
+
 public static class PivotUiPlanner
 {
     public static string FieldCaption(IReadOnlyList<string> headers, int sourceFieldIndex) =>
@@ -281,6 +286,19 @@ public static class PivotUiPlanner
             PivotFieldListItem field when !string.IsNullOrWhiteSpace(field.Caption) => field.Caption,
             _ => null
         };
+
+    public static IReadOnlyList<PivotFieldListItem> FilterPivotFieldListItems(
+        IEnumerable<PivotFieldListItem> fields,
+        string? searchText)
+    {
+        var needle = searchText?.Trim();
+        if (string.IsNullOrEmpty(needle))
+            return fields.ToList();
+
+        return fields
+            .Where(field => field.Caption.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
 
     public static void InsertOrAppend<T>(List<T> items, T item, int index)
     {
