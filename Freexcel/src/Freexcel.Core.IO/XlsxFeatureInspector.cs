@@ -182,6 +182,18 @@ public static class XlsxFeatureInspector
             yield break;
         }
 
+        if (normalized.StartsWith("xl/drawings/", StringComparison.Ordinal) &&
+            (normalized.EndsWith(".xml", StringComparison.Ordinal) ||
+             normalized.EndsWith(".vml", StringComparison.Ordinal)))
+        {
+            if (DrawingHasFormControls(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
+            if (DrawingHasEmbeddedObjects(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.EmbeddedObjects);
+
+            yield break;
+        }
+
         if (normalized.StartsWith("xl/slicers/", StringComparison.Ordinal) ||
             normalized.StartsWith("xl/slicercaches/", StringComparison.Ordinal))
         {
@@ -213,6 +225,11 @@ public static class XlsxFeatureInspector
         if (normalized.StartsWith("xl/worksheets/", StringComparison.Ordinal) &&
             normalized.EndsWith(".xml", StringComparison.Ordinal))
         {
+            if (WorksheetHasFormControls(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.FormControls);
+            if (WorksheetHasEmbeddedObjects(entry))
+                yield return Feature(XlsxUnsupportedFeatureKind.EmbeddedObjects);
+
             yield break;
         }
 
@@ -252,6 +269,54 @@ public static class XlsxFeatureInspector
             return false;
         }
     }
+
+    private static bool WorksheetHasFormControls(ZipArchiveEntry entry) =>
+        XmlHasDescendant(entry, element =>
+            string.Equals(element.Name.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(element.Name.LocalName, "controls", StringComparison.OrdinalIgnoreCase));
+
+    private static bool WorksheetHasEmbeddedObjects(ZipArchiveEntry entry) =>
+        XmlHasDescendant(entry, element =>
+            string.Equals(element.Name.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(element.Name.LocalName, "oleObjects", StringComparison.OrdinalIgnoreCase));
+
+    private static bool DrawingHasFormControls(ZipArchiveEntry entry) =>
+        XmlHasDescendant(entry, element =>
+            string.Equals(element.Name.LocalName, "control", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(element.Name.LocalName, "ClientData", StringComparison.OrdinalIgnoreCase) &&
+            IsFormControlObjectType(element.Attribute("ObjectType")?.Value));
+
+    private static bool DrawingHasEmbeddedObjects(ZipArchiveEntry entry) =>
+        XmlHasDescendant(entry, element =>
+            string.Equals(element.Name.LocalName, "oleObj", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(element.Name.LocalName, "oleObject", StringComparison.OrdinalIgnoreCase));
+
+    private static bool XmlHasDescendant(ZipArchiveEntry entry, Func<XElement, bool> predicate)
+    {
+        try
+        {
+            using var stream = entry.Open();
+            var xml = XDocument.Load(stream);
+            return xml.Descendants().Any(predicate);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsFormControlObjectType(string? objectType) =>
+        objectType is not null &&
+        (objectType.Equals("Button", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("CheckBox", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("Drop", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("GBox", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("Label", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("List", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("Option", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("Radio", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("Scroll", StringComparison.OrdinalIgnoreCase) ||
+         objectType.Equals("Spin", StringComparison.OrdinalIgnoreCase));
 
     private static bool CustomPropertiesHaveSensitivityLabels(ZipArchiveEntry entry)
     {
