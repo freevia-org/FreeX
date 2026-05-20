@@ -149,6 +149,65 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddPivotTableToNewWorksheetCommand_CreatesPivotSheetAndUndoRemovesIt()
+    {
+        var workbook = new Workbook("NewWorksheetPivotCommandTest");
+        var sourceSheet = workbook.AddSheet("Data");
+        workbook.AddSheet("PivotTable");
+        SeedData(sourceSheet);
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new AddPivotTableToNewWorksheetCommand(
+            Range(sourceSheet, "A1", "B3"),
+            "PivotTable1",
+            rowFieldIndexes: [0],
+            dataFieldIndexes: [1]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        command.CreatedSheetId.Should().NotBeNull();
+        var pivotSheet = workbook.GetSheet(command.CreatedSheetId!.Value);
+        pivotSheet.Should().NotBeNull();
+        pivotSheet!.Name.Should().Be("PivotTable 2");
+        var pivot = pivotSheet.PivotTables.Should().ContainSingle().Subject;
+        pivot.Name.Should().Be("PivotTable1");
+        pivot.SourceRange.Should().Be(Range(sourceSheet, "A1", "B3"));
+        pivot.TargetRange.Start.ToA1().Should().Be("A3");
+        pivotSheet.GetCell(Addr(pivotSheet, "A3"))!.Value.Should().Be(new TextValue("Category"));
+        pivotSheet.GetCell(Addr(pivotSheet, "A4"))!.Value.Should().Be(new TextValue("A"));
+        pivotSheet.GetCell(Addr(pivotSheet, "B4"))!.Value.Should().Be(new NumberValue(10));
+
+        var createdSheetId = command.CreatedSheetId.Value;
+        command.Revert(ctx);
+
+        workbook.GetSheet(createdSheetId).Should().BeNull();
+        workbook.PivotCaches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddPivotTableToNewWorksheetCommand_RejectsWhenWorkbookStructureProtected()
+    {
+        var workbook = new Workbook("ProtectedNewWorksheetPivotCommandTest");
+        var sourceSheet = workbook.AddSheet("Data");
+        SeedData(sourceSheet);
+        workbook.IsStructureProtected = true;
+        var ctx = new SimpleCtx(workbook);
+
+        var command = new AddPivotTableToNewWorksheetCommand(
+            Range(sourceSheet, "A1", "B3"),
+            "PivotTable1",
+            rowFieldIndexes: [0],
+            dataFieldIndexes: [1]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        workbook.Sheets.Should().ContainSingle().Which.Should().BeSameAs(sourceSheet);
+        workbook.PivotCaches.Should().BeEmpty();
+        command.CreatedSheetId.Should().BeNull();
+    }
+
+    [Fact]
     public void AddPivotTableCommand_RejectsFieldIndexesOutsideSourceColumns()
     {
         var workbook = new Workbook("PivotCommandTest");
