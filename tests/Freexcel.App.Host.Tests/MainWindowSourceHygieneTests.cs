@@ -683,6 +683,36 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void DataFilterCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var dataFilterSourcePath = Path.Combine(appHostDirectory, "MainWindow.DataFilterCommands.cs");
+
+        File.Exists(dataFilterSourcePath).Should().BeTrue();
+        var dataFilterSource = File.ReadAllText(dataFilterSourcePath);
+
+        mainSource.Should().NotContain("private void SortAscButton_Click(");
+        mainSource.Should().NotContain("private void SortCustomButton_Click(");
+        mainSource.Should().NotContain("private void FilterButton_Click(");
+        mainSource.Should().NotContain("private bool ApplyAutoFilterDialogResult(");
+        mainSource.Should().NotContain("private void CfRuleButton_Click(");
+        mainSource.Should().NotContain("private void ValidationButton_Click(");
+        mainSource.Should().NotContain("private void ClearFilterButton_Click(");
+        mainSource.Should().NotContain("private void NamedRangesButton_Click(");
+
+        dataFilterSource.Should().Contain("private void SortAscButton_Click(");
+        dataFilterSource.Should().Contain("private void SortCustomButton_Click(");
+        dataFilterSource.Should().Contain("private void FilterButton_Click(");
+        dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
+        dataFilterSource.Should().Contain("private void CfRuleButton_Click(");
+        dataFilterSource.Should().Contain("private void ValidationButton_Click(");
+        dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
+        dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
+        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -1091,13 +1121,15 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var editingSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Editing.cs"));
+        var dataFilterSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.DataFilterCommands.cs"));
 
-        source.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
-        source.Should().Contain("private bool ApplyAutoFilterDialogResult(");
-        source.Should().Contain("FilterInputParser.TryParseTopBottom");
-        source.Should().Contain("FilterInputParser.TryParseCriterion");
-        source.Should().Contain("FilterInputParser.TryParseAverage");
+        editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
+        dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
+        dataFilterSource.Should().Contain("FilterInputParser.TryParseTopBottom");
+        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        dataFilterSource.Should().Contain("FilterInputParser.TryParseAverage");
     }
 
     [Fact]
