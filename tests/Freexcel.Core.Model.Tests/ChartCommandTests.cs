@@ -1352,6 +1352,71 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void SetChartLayoutCommand_UpdatesErrorBarsAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            chart.Id,
+            new ChartLayoutOptions(
+                ShowErrorBars: true,
+                ErrorBarKind: ChartErrorBarKind.Percentage,
+                ErrorBarDirection: ChartErrorBarDirection.Plus,
+                ErrorBarValue: 12.5,
+                ErrorBarEndCaps: false));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.ShowErrorBars.Should().BeTrue();
+        chart.ErrorBarKind.Should().Be(ChartErrorBarKind.Percentage);
+        chart.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Plus);
+        chart.ErrorBarValue.Should().Be(12.5);
+        chart.ErrorBarEndCaps.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        chart.ShowErrorBars.Should().BeFalse();
+        chart.ErrorBarKind.Should().Be(ChartErrorBarKind.StandardError);
+        chart.ErrorBarDirection.Should().Be(ChartErrorBarDirection.Both);
+        chart.ErrorBarValue.Should().Be(5);
+        chart.ErrorBarEndCaps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetChartLayoutCommand_ClampsErrorBarValueAndDefaultsInvalidEnums()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2));
+        new AddChartCommand(sheet.Id, range, ChartType.Line, "Sales").Apply(ctx);
+
+        var command = new SetChartLayoutCommand(
+            sheet.Id,
+            sheet.Charts[0].Id,
+            new ChartLayoutOptions(
+                ErrorBarKind: (ChartErrorBarKind)999,
+                ErrorBarDirection: (ChartErrorBarDirection)999,
+                ErrorBarValue: double.NaN));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.Charts[0].ErrorBarKind.Should().Be(ChartErrorBarKind.StandardError);
+        sheet.Charts[0].ErrorBarDirection.Should().Be(ChartErrorBarDirection.Both);
+        sheet.Charts[0].ErrorBarValue.Should().Be(0);
+    }
+
+    [Fact]
     public void SetChartLayoutCommand_SanitizesSecondaryAxisSeriesIndexes()
     {
         var wb = new Workbook("test");

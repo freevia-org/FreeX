@@ -44,6 +44,10 @@ public enum ChartAxisTickStyle { None, Inside, Outside, Cross }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
+public enum ChartErrorBarKind { StandardError, Percentage, FixedValue }
+
+public enum ChartErrorBarDirection { Both, Plus, Minus }
+
 public enum ChartBlankDisplayMode { Gap, Span, Zero }
 
 public sealed class ChartProtectionModel
@@ -282,6 +286,11 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? TrendlineThemeColor { get; set; }
     public double TrendlineThickness { get; set; } = 1.5;
     public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
+    public bool ShowErrorBars { get; set; }
+    public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
+    public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
+    public double ErrorBarValue { get; set; } = 5;
+    public bool ErrorBarEndCaps { get; set; } = true;
     public bool ShowSecondaryAxis { get; set; }
     public List<int> SecondaryAxisSeriesIndexes { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
