@@ -1,5 +1,4 @@
 using Freexcel.Core.Model;
-using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 
@@ -104,7 +103,7 @@ internal static class XlsxStructuredTableMetadataReader
             return false;
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var id = ReadIntAttribute(root, "id") ?? 0;
+        var id = XlsxXmlAttributeReader.ReadIntAttribute(root, "id") ?? 0;
         var name = root.Attribute("name")?.Value ?? "";
         var displayName = root.Attribute("displayName")?.Value ?? name;
         var rangeReference = root.Attribute("ref")?.Value ?? "";
@@ -119,12 +118,12 @@ internal static class XlsxStructuredTableMetadataReader
             displayName,
             rangeReference,
             autoFilter is not null,
-            ReadBoolAttribute(root, "totalsRowShown"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "totalsRowShown"),
             style?.Attribute("name")?.Value,
-            ReadBoolAttribute(style, "showFirstColumn"),
-            ReadBoolAttribute(style, "showLastColumn"),
-            ReadBoolAttribute(style, "showRowStripes"),
-            ReadBoolAttribute(style, "showColumnStripes"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(style, "showFirstColumn"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(style, "showLastColumn"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(style, "showRowStripes"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(style, "showColumnStripes"),
             tablePath,
             root.Element(workbookNs + "sortState")?.ToString(SaveOptions.DisableFormatting),
             ReadNativeTableAttributes(root),
@@ -136,7 +135,7 @@ internal static class XlsxStructuredTableMetadataReader
             root.Element(workbookNs + "tableColumns")?
                 .Elements(workbookNs + "tableColumn")
                 .Select(column => new StructuredTableColumnModel(
-                    ReadIntAttribute(column, "id") ?? 0,
+                    XlsxXmlAttributeReader.ReadIntAttribute(column, "id") ?? 0,
                     column.Attribute("name")?.Value ?? "",
                     column.Attribute("totalsRowLabel")?.Value,
                     column.Attribute("totalsRowFunction")?.Value,
@@ -194,20 +193,6 @@ internal static class XlsxStructuredTableMetadataReader
                 yield return (name, worksheetPath);
             }
         }
-    }
-
-    private static int? ReadIntAttribute(XElement element, string name) =>
-        int.TryParse(element.Attribute(name)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
-
-    private static bool ReadBoolAttribute(XElement? element, string name, bool defaultValue = false)
-    {
-        var value = element?.Attribute(name)?.Value;
-        if (value is null)
-            return defaultValue;
-
-        return value == "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ReadTableColumnFormula(XElement column, XNamespace workbookNs, string elementName)
@@ -317,14 +302,14 @@ internal static class XlsxStructuredTableMetadataReader
                 var filters = column.Element(workbookNs + "filters");
                 var nativeFilters = ReadNativeFilterXmls(column, workbookNs);
                 return new StructuredTableFilterColumnModel(
-                    ReadIntAttribute(column, "colId") ?? -1,
+                    XlsxXmlAttributeReader.ReadIntAttribute(column, "colId") ?? -1,
                     filters?
                         .Elements(workbookNs + "filter")
                         .Select(filter => filter.Attribute("val")?.Value)
                         .Where(value => !string.IsNullOrWhiteSpace(value))
                         .Select(value => value!)
                         .ToList() ?? [],
-                    ReadBoolAttribute(filters, "blank"),
+                    XlsxXmlAttributeReader.ReadBoolAttribute(filters, "blank"),
                     nativeFilters,
                     ReadNativeFilterColumnAttributes(column));
             })
@@ -400,3 +385,4 @@ internal sealed record PendingStructuredTableModel(
         [],
         []);
 }
+

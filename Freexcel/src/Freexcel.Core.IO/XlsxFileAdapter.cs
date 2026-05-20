@@ -1570,22 +1570,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
     }
 
     private static int? ReadIntAttribute(XElement element, string attributeName) =>
-        int.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
+        XlsxXmlAttributeReader.ReadIntAttribute(element, attributeName);
 
     private static double? ReadDoubleAttribute(XElement element, string attributeName) =>
-        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
+        XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
 
-    private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false)
-    {
-        var value = element?.Attribute(attributeName)?.Value;
-        if (value is null)
-            return defaultValue;
-        return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
+        XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);
 
     private static MemoryStream CreateClosedXmlLoadPackage(MemoryStream sourcePackage)
     {
