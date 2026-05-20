@@ -1104,6 +1104,7 @@ public static class XlsxChartPartReader
         ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
         var plotArea = chartElement?.Element(ChartNs + "plotArea");
         chart.PlotAreaLayout = ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
+        chart.DataTable = ReadChartDataTable(plotArea?.Element(ChartNs + "dTable"));
         ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
         ApplyAxisTitles(plotArea, chart);
         ApplyDataLabels(plotArea, chart);
@@ -1129,6 +1130,20 @@ public static class XlsxChartPartReader
         };
         chart.LegendOverlay = IsTrue(legend.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
         ApplyLegendFormatting(legend, chart);
+    }
+
+    private static ChartDataTableModel? ReadChartDataTable(XElement? dataTable)
+    {
+        if (dataTable is null)
+            return null;
+
+        return new ChartDataTableModel
+        {
+            ShowHorizontalBorder = ReadOptionalBool(dataTable.Element(ChartNs + "showHorzBorder")?.Attribute("val")?.Value),
+            ShowVerticalBorder = ReadOptionalBool(dataTable.Element(ChartNs + "showVertBorder")?.Attribute("val")?.Value),
+            ShowOutline = ReadOptionalBool(dataTable.Element(ChartNs + "showOutline")?.Attribute("val")?.Value),
+            ShowLegendKeys = ReadOptionalBool(dataTable.Element(ChartNs + "showKeys")?.Attribute("val")?.Value)
+        };
     }
 
     private static void ApplyLegendFormatting(XElement legend, ChartModel chart)

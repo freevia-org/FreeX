@@ -108,6 +108,14 @@ public sealed class ChartPageSetupModel
     public bool? Draft { get; set; }
 }
 
+public sealed class ChartDataTableModel
+{
+    public bool? ShowHorizontalBorder { get; set; }
+    public bool? ShowVerticalBorder { get; set; }
+    public bool? ShowOutline { get; set; }
+    public bool? ShowLegendKeys { get; set; }
+}
+
 public sealed record ChartSeriesFormat(
     int SeriesIndex,
     CellColor? FillColor = null,
@@ -174,6 +182,7 @@ public sealed class ChartModel
     public bool ShowDataInHiddenRowsAndColumns { get; set; }
     public ChartProtectionModel? Protection { get; set; }
     public ChartPrintSettingsModel? PrintSettings { get; set; }
+    public ChartDataTableModel? DataTable { get; set; }
     public int? BarGapWidth { get; set; }
     public int? BarOverlap { get; set; }
     public bool? VaryColorsByPoint { get; set; }
