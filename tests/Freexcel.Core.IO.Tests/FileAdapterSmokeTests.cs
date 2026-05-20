@@ -3819,10 +3819,26 @@ public class FileAdapterSmokeTests
             IconSetShowValue = false,
             IconSetReverse = true
         });
+        sheet.ConditionalFormats.Single().IconSetThresholds.AddRange(
+        [
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)")
+        ]);
 
         var ms = new MemoryStream();
         var adapter = new XlsxFileAdapter();
         adapter.Save(workbook, ms);
+        ms.Position = 0;
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var xml = worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            xml.Should().Contain("type=\"num\" val=\"0\"");
+            xml.Should().Contain("type=\"percentile\" val=\"50\"");
+            xml.Should().Contain("type=\"formula\" val=\"AVERAGE($A$1:$A$5)\"");
+        }
+
         ms.Position = 0;
         var loaded = adapter.Load(ms);
 
@@ -3831,6 +3847,10 @@ public class FileAdapterSmokeTests
         iconSet.IconSetStyle.Should().Be("3TrafficLights1");
         iconSet.IconSetShowValue.Should().BeFalse();
         iconSet.IconSetReverse.Should().BeTrue();
+        iconSet.IconSetThresholds.Should().Equal(
+            new CfThresholdModel(CfThresholdType.Number, "0"),
+            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Formula, "AVERAGE($A$1:$A$5)"));
     }
 
     [Fact]
@@ -11752,6 +11772,34 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsStructuredTableColumnFormulas()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableFormulaTest");
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeColumnFormulas: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var table = loaded.GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        table.Columns[1].CalculatedColumnFormula.Should().Be("SUM(Table1[@[Q1]:[Q2]])");
+        table.Columns[1].TotalsRowFormula.Should().Be("SUBTOTAL(109,[Amount])");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        tableXml.Should().Contain("<calculatedColumnFormula>SUM(Table1[@[Q1]:[Q2]])</calculatedColumnFormula>");
+        tableXml.Should().Contain("<totalsRowFormula>SUBTOTAL(109,[Amount])</totalsRowFormula>");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsStructuredTableAutoFilterValues()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableFilterTest");
@@ -11782,6 +11830,50 @@ public class FileAdapterSmokeTests
         tableXml.Should().Contain("blank=\"1\"");
         tableXml.Should().Contain("val=\"A\"");
         tableXml.Should().Contain("val=\"B\"");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_MaterializesStructuredTableAutoFilterValuesIntoHiddenRows()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableFilterVisibilityTest");
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("C"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeFilterValues: true);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        loadedSheet.StructuredTables.Should().ContainSingle();
+        loadedSheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+        loadedSheet.HiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_StructuredTableAutoFilterDoesNotHideTotalsRow()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableTotalsFilterVisibilityTest");
+        var sheet = workbook.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("C"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Grand Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalStructuredTablePackage(source, includeTotalsRow: true, includeFilterValues: true);
+
+        source.Position = 0;
+        var loadedSheet = adapter.Load(source).GetSheetAt(0);
+
+        loadedSheet.FilterHiddenRows.Should().Contain(3u);
+        loadedSheet.FilterHiddenRows.Should().NotContain(4u);
     }
 
     private static Workbook CreateStructuredTableWorkbook(string name)
@@ -13314,7 +13406,8 @@ public class FileAdapterSmokeTests
     private static void AddMinimalStructuredTablePackage(
         MemoryStream packageStream,
         bool includeTotalsRow = false,
-        bool includeFilterValues = false)
+        bool includeFilterValues = false,
+        bool includeColumnFormulas = false)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -13351,9 +13444,13 @@ public class FileAdapterSmokeTests
                 archive,
                 "xl/tables/table1.xml",
                 XDocument.Parse(includeTotalsRow
-                    ? StructuredTableWithTotalsRowXml
+                    ? includeFilterValues
+                        ? StructuredTableWithTotalsRowAndFilterValuesXml
+                        : StructuredTableWithTotalsRowXml
                     : includeFilterValues
                         ? StructuredTableWithFilterValuesXml
+                        : includeColumnFormulas
+                            ? StructuredTableWithColumnFormulasXml
                         : MinimalStructuredTableXml));
         }
 
@@ -14278,6 +14375,56 @@ public class FileAdapterSmokeTests
           <tableColumns count="2">
             <tableColumn id="1" name="Category"/>
             <tableColumn id="2" name="Amount"/>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithColumnFormulasXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B4"
+               totalsRowShown="1">
+          <autoFilter ref="A1:B3"/>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category"/>
+            <tableColumn id="2" name="Amount">
+              <calculatedColumnFormula>SUM(Table1[@[Q1]:[Q2]])</calculatedColumnFormula>
+              <totalsRowFormula>SUBTOTAL(109,[Amount])</totalsRowFormula>
+            </tableColumn>
+          </tableColumns>
+          <tableStyleInfo name="TableStyleMedium2"
+                          showFirstColumn="0"
+                          showLastColumn="0"
+                          showRowStripes="1"
+                          showColumnStripes="0"/>
+        </table>
+        """;
+
+    private const string StructuredTableWithTotalsRowAndFilterValuesXml = """
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+               id="1"
+               name="Table1"
+               displayName="Table1"
+               ref="A1:B4"
+               totalsRowShown="1">
+          <autoFilter ref="A1:B3">
+            <filterColumn colId="0">
+              <filters>
+                <filter val="A"/>
+                <filter val="B"/>
+              </filters>
+            </filterColumn>
+          </autoFilter>
+          <tableColumns count="2">
+            <tableColumn id="1" name="Category" totalsRowLabel="Total"/>
+            <tableColumn id="2" name="Amount" totalsRowFunction="sum"/>
           </tableColumns>
           <tableStyleInfo name="TableStyleMedium2"
                           showFirstColumn="0"

@@ -6384,7 +6384,11 @@ public partial class MainWindow : Window
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
-        var dialog = new PrintPreviewDialog(_workbook.Name, doc) { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var settings = sheet is null
+            ? new PrintSettingsPlan(["Print active sheet"])
+            : PrintSettingsPlanner.Build(sheet);
+        var dialog = new PrintPreviewDialog(_workbook.Name, doc, settings) { Owner = this };
         dialog.ShowDialog();
     }
 

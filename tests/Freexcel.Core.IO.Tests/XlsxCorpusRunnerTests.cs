@@ -121,10 +121,11 @@ public class XlsxCorpusRunnerTests
         var rows = ReadManifestRows()
             .Where(row => row.SourceType == "generated")
             .Where(row => row.ExpectedStatus == "supported-metadata-pass")
-            .Where(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id))
             .ToArray();
 
         rows.Should().NotBeEmpty("metadata-pass rows cover supported native package features that should retain without warnings");
+        rows.Should().HaveCount(5, "the generated metadata-pass manifest currently declares five deterministic package-retention rows");
+        rows.Should().OnlyContain(row => XlsxCorpusFixtureFactory.CanCreateKnownGapRetentionPackage(row.Id));
 
         var adapter = new XlsxFileAdapter();
         foreach (var row in rows)
@@ -224,6 +225,7 @@ public class XlsxCorpusRunnerTests
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
         return archive.Entries
             .Select(entry => entry.FullName.Replace('\\', '/'))
+            .Where(IsFidelityCriticalPart)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
