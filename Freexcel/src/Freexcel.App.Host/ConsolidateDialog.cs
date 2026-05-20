@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -9,7 +10,8 @@ public sealed record ConsolidateDialogResult(IReadOnlyList<GridRange> SourceRang
 public sealed class ConsolidateDialog : Window
 {
     private readonly SheetId _sheetId;
-    private readonly TextBox _sourcesBox = new();
+    private readonly TextBox _referenceBox = new();
+    private readonly ListBox _referencesList = new() { Height = 72 };
     private readonly TextBox _destinationBox = new();
 
     public ConsolidateDialogResult? Result { get; private set; }
@@ -19,21 +21,48 @@ public sealed class ConsolidateDialog : Window
         _sheetId = sheetId;
         Title = "Consolidate";
         Width = 380;
-        Height = 210;
+        Height = 330;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        _sourcesBox.Text = defaultSource;
+        _referenceBox.Text = defaultSource;
+        foreach (var sourceRange in SplitSourceRangeText(defaultSource))
+            _referencesList.Items.Add(sourceRange);
+
         _destinationBox.Text = defaultDestination;
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock { Text = "Source ranges (semicolon separated):" });
-        root.Children.Add(_sourcesBox);
+        root.Children.Add(new TextBlock { Text = "Reference:" });
+        root.Children.Add(CreateReferenceEditor(_referenceBox, "Select reference range"));
+        var referenceButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 6, 0, 8)
+        };
+        var addReferenceButton = new Button { Content = "Add", Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        addReferenceButton.Click += AddReferenceButton_Click;
+        var deleteReferenceButton = new Button { Content = "Delete", Width = 76 };
+        deleteReferenceButton.Click += DeleteReferenceButton_Click;
+        referenceButtons.Children.Add(addReferenceButton);
+        referenceButtons.Children.Add(deleteReferenceButton);
+        root.Children.Add(referenceButtons);
+        root.Children.Add(new TextBlock { Text = "All references:" });
+        root.Children.Add(_referencesList);
         root.Children.Add(new TextBlock { Text = "Destination cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(_destinationBox);
+        root.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
     }
+
+    public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
+        sourceRangesText
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
+
+    public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
+        string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
 
     public static ConsolidateDialogResult CreateResult(IEnumerable<GridRange> sourceRanges, CellAddress destinationCell)
     {
@@ -89,9 +118,52 @@ public sealed class ConsolidateDialog : Window
         return true;
     }
 
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel();
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
+    }
+
+    private void AddReferenceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var reference = _referenceBox.Text.Trim();
+        if (reference.Length == 0)
+            return;
+
+        _referencesList.Items.Add(reference);
+        _referenceBox.Clear();
+    }
+
+    private void DeleteReferenceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_referencesList.SelectedItem is { } selected)
+            _referencesList.Items.Remove(selected);
+    }
+
     private void Accept()
     {
-        if (!TryParse(_sheetId, _sourcesBox.Text, _destinationBox.Text, out var result, out var error))
+        var sourceRangesText = JoinSourceRanges(_referencesList.Items.Cast<string>());
+        if (!TryParse(_sheetId, sourceRangesText, _destinationBox.Text, out var result, out var error))
         {
             MessageBox.Show(this, error ?? "Enter valid consolidation ranges.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;

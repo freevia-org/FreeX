@@ -243,6 +243,26 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_JoinsAllReferencesListForExistingParser()
+    {
+        ConsolidateDialog.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
+        ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_ExposesExcelStyleAllReferencesWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("_referenceBox");
+        source.Should().Contain("_referencesList");
+        source.Should().Contain("All references:");
+        source.Should().Contain("AddReferenceButton_Click");
+        source.Should().Contain("DeleteReferenceButton_Click");
+        source.Should().Contain("CreateReferenceEditor(_referenceBox");
+    }
+
+    [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
     {
         var sheetId = SheetId.New();
