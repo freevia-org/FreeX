@@ -727,6 +727,32 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void InsertCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var insertSourcePath = Path.Combine(appHostDirectory, "MainWindow.InsertCommands.cs");
+
+        File.Exists(insertSourcePath).Should().BeTrue();
+        var insertSource = File.ReadAllText(insertSourcePath);
+
+        mainSource.Should().NotContain("private void InsertCurrentDateOrTime(");
+        mainSource.Should().NotContain("private void TableBtn_Click(");
+        mainSource.Should().NotContain("private void InsertSparkline(");
+        mainSource.Should().NotContain("private void InsertLinkBtn_Click(");
+        mainSource.Should().NotContain("private void HeaderFooterBtn_Click(");
+        mainSource.Should().NotContain("private void SymbolPickerBtn_Click(");
+
+        insertSource.Should().Contain("private void InsertCurrentDateOrTime(");
+        insertSource.Should().Contain("private void TableBtn_Click(");
+        insertSource.Should().Contain("private void InsertSparkline(");
+        insertSource.Should().Contain("private void InsertLinkBtn_Click(");
+        insertSource.Should().Contain("private void HeaderFooterBtn_Click(");
+        insertSource.Should().Contain("private void SymbolPickerBtn_Click(");
+        insertSource.Should().Contain("SparklineInputParser");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
