@@ -75,7 +75,7 @@ public static class XlsxChartPartReader
 
     private static void ApplyChartStyleMetadata(XDocument chartXml, ChartModel chart)
     {
-        chart.Uses1904DateSystem = IsTrue(chartXml.Root?
+        chart.Uses1904DateSystem = XlsxChartScalarReader.IsTrue(chartXml.Root?
             .Element(ChartNs + "date1904")?
             .Attribute("val")?
             .Value);
@@ -97,7 +97,7 @@ public static class XlsxChartPartReader
         chart.Protection = ReadProtection(chartXml.Root?.Element(ChartNs + "protection"));
         chart.PrintSettings = ReadPrintSettings(chartXml.Root?.Element(ChartNs + "printSettings"));
 
-        chart.RoundedCorners = IsTrue(chartXml.Root?
+        chart.RoundedCorners = XlsxChartScalarReader.IsTrue(chartXml.Root?
             .Element(ChartNs + "roundedCorners")?
             .Attribute("val")?
             .Value);
@@ -132,7 +132,7 @@ public static class XlsxChartPartReader
             return null;
 
         var relationshipId = externalData.Attribute(OfficeRelNs + "id")?.Value;
-        var autoUpdate = ReadOptionalBool(externalData
+        var autoUpdate = XlsxChartScalarReader.ReadOptionalBool(externalData
             .Element(ChartNs + "autoUpdate")?
             .Attribute("val")?
             .Value);
@@ -159,10 +159,10 @@ public static class XlsxChartPartReader
             YMode = manualLayout.Element(ChartNs + "yMode")?.Attribute("val")?.Value,
             WidthMode = manualLayout.Element(ChartNs + "wMode")?.Attribute("val")?.Value,
             HeightMode = manualLayout.Element(ChartNs + "hMode")?.Attribute("val")?.Value,
-            X = ReadOptionalDouble(manualLayout.Element(ChartNs + "x")?.Attribute("val")?.Value),
-            Y = ReadOptionalDouble(manualLayout.Element(ChartNs + "y")?.Attribute("val")?.Value),
-            Width = ReadOptionalDouble(manualLayout.Element(ChartNs + "w")?.Attribute("val")?.Value),
-            Height = ReadOptionalDouble(manualLayout.Element(ChartNs + "h")?.Attribute("val")?.Value)
+            X = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "x")?.Attribute("val")?.Value),
+            Y = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "y")?.Attribute("val")?.Value),
+            Width = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "w")?.Attribute("val")?.Value),
+            Height = XlsxChartScalarReader.ReadOptionalDouble(manualLayout.Element(ChartNs + "h")?.Attribute("val")?.Value)
         };
 
         return string.IsNullOrWhiteSpace(result.LayoutTarget) &&
@@ -185,11 +185,11 @@ public static class XlsxChartPartReader
 
         return new ChartProtectionModel
         {
-            ChartObject = ReadOptionalBool(protection.Attribute("chartObject")?.Value),
-            Data = ReadOptionalBool(protection.Attribute("data")?.Value),
-            Formatting = ReadOptionalBool(protection.Attribute("formatting")?.Value),
-            Selection = ReadOptionalBool(protection.Attribute("selection")?.Value),
-            UserInterface = ReadOptionalBool(protection.Attribute("userInterface")?.Value)
+            ChartObject = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("chartObject")?.Value),
+            Data = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("data")?.Value),
+            Formatting = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("formatting")?.Value),
+            Selection = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("selection")?.Value),
+            UserInterface = XlsxChartScalarReader.ReadOptionalBool(protection.Attribute("userInterface")?.Value)
         };
     }
 
@@ -204,52 +204,28 @@ public static class XlsxChartPartReader
         {
             PageMargins = pageMargins is null ? null : new ChartPageMarginsModel
             {
-                Left = ReadOptionalDouble(pageMargins.Attribute("l")?.Value),
-                Right = ReadOptionalDouble(pageMargins.Attribute("r")?.Value),
-                Top = ReadOptionalDouble(pageMargins.Attribute("t")?.Value),
-                Bottom = ReadOptionalDouble(pageMargins.Attribute("b")?.Value),
-                Header = ReadOptionalDouble(pageMargins.Attribute("header")?.Value),
-                Footer = ReadOptionalDouble(pageMargins.Attribute("footer")?.Value)
+                Left = XlsxChartScalarReader.ReadOptionalDouble(pageMargins.Attribute("l")?.Value),
+                Right = XlsxChartScalarReader.ReadOptionalDouble(pageMargins.Attribute("r")?.Value),
+                Top = XlsxChartScalarReader.ReadOptionalDouble(pageMargins.Attribute("t")?.Value),
+                Bottom = XlsxChartScalarReader.ReadOptionalDouble(pageMargins.Attribute("b")?.Value),
+                Header = XlsxChartScalarReader.ReadOptionalDouble(pageMargins.Attribute("header")?.Value),
+                Footer = XlsxChartScalarReader.ReadOptionalDouble(pageMargins.Attribute("footer")?.Value)
             },
             PageSetup = pageSetup is null ? null : new ChartPageSetupModel
             {
                 PaperSize = pageSetup.Attribute("paperSize")?.Value,
                 Orientation = pageSetup.Attribute("orientation")?.Value,
-                Copies = ReadOptionalInt(pageSetup.Attribute("copies")?.Value),
-                BlackAndWhite = ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
-                Draft = ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
+                Copies = XlsxChartScalarReader.ReadOptionalInt(pageSetup.Attribute("copies")?.Value),
+                BlackAndWhite = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("blackAndWhite")?.Value),
+                Draft = XlsxChartScalarReader.ReadOptionalBool(pageSetup.Attribute("draft")?.Value)
             }
         };
-    }
-
-    private static double? ReadOptionalDouble(string? value)
-    {
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
-            return result;
-
-        return null;
-    }
-
-    private static int? ReadOptionalInt(string? value)
-    {
-        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
-            return result;
-
-        return null;
-    }
-
-    private static bool? ReadOptionalBool(string? value)
-    {
-        if (value is null)
-            return null;
-
-        return IsTrue(value);
     }
 
     private static void ApplyChartBehaviorMetadata(XDocument chartXml, ChartModel chart)
     {
         var chartElement = chartXml.Root?.Element(ChartNs + "chart");
-        chart.AutoTitleDeleted = IsTrue(chartElement?
+        chart.AutoTitleDeleted = XlsxChartScalarReader.IsTrue(chartElement?
             .Element(ChartNs + "autoTitleDeleted")?
             .Attribute("val")?
             .Value);
@@ -264,7 +240,7 @@ public static class XlsxChartPartReader
                 _ => ChartBlankDisplayMode.Gap
             };
 
-        chart.ShowDataLabelsOverMaximum = IsTrue(chartElement?
+        chart.ShowDataLabelsOverMaximum = XlsxChartScalarReader.IsTrue(chartElement?
             .Element(ChartNs + "showDLblsOverMax")?
             .Attribute("val")?
             .Value);
@@ -667,9 +643,9 @@ public static class XlsxChartPartReader
 
     private static void ApplyBarChartMetadata(XElement barChart, ChartModel chart)
     {
-        chart.BarGapWidth = ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value);
-        chart.BarOverlap = ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value);
-        chart.VaryColorsByPoint = ReadOptionalBool(barChart.Element(ChartNs + "varyColors")?.Attribute("val")?.Value);
+        chart.BarGapWidth = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value);
+        chart.BarOverlap = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value);
+        chart.VaryColorsByPoint = XlsxChartScalarReader.ReadOptionalBool(barChart.Element(ChartNs + "varyColors")?.Attribute("val")?.Value);
     }
 
     private static bool TryReadLineChart(
@@ -1141,7 +1117,7 @@ public static class XlsxChartPartReader
             "r" => ChartLegendPosition.Right,
             _ => ChartLegendPosition.Right
         };
-        chart.LegendOverlay = IsTrue(legend.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
+        chart.LegendOverlay = XlsxChartScalarReader.IsTrue(legend.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
         ApplyLegendFormatting(legend, chart);
     }
 
@@ -1152,10 +1128,10 @@ public static class XlsxChartPartReader
 
         return new ChartDataTableModel
         {
-            ShowHorizontalBorder = ReadOptionalBool(dataTable.Element(ChartNs + "showHorzBorder")?.Attribute("val")?.Value),
-            ShowVerticalBorder = ReadOptionalBool(dataTable.Element(ChartNs + "showVertBorder")?.Attribute("val")?.Value),
-            ShowOutline = ReadOptionalBool(dataTable.Element(ChartNs + "showOutline")?.Attribute("val")?.Value),
-            ShowLegendKeys = ReadOptionalBool(dataTable.Element(ChartNs + "showKeys")?.Attribute("val")?.Value)
+            ShowHorizontalBorder = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showHorzBorder")?.Attribute("val")?.Value),
+            ShowVerticalBorder = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showVertBorder")?.Attribute("val")?.Value),
+            ShowOutline = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showOutline")?.Attribute("val")?.Value),
+            ShowLegendKeys = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showKeys")?.Attribute("val")?.Value)
         };
     }
 
@@ -1268,11 +1244,11 @@ public static class XlsxChartPartReader
         chart.ShowDataLabels = true;
         chart.DataLabelPosition = FromXlsxDataLabelPosition(dataLabels.Element(ChartNs + "dLblPos")?.Attribute("val")?.Value);
         chart.DataLabelNumberFormat = FromXlsxNumberFormatCode(dataLabels.Element(ChartNs + "numFmt")?.Attribute("formatCode")?.Value);
-        chart.ShowDataLabelCategoryName = IsTrue(dataLabels.Element(ChartNs + "showCatName")?.Attribute("val")?.Value);
-        chart.ShowDataLabelSeriesName = IsTrue(dataLabels.Element(ChartNs + "showSerName")?.Attribute("val")?.Value);
+        chart.ShowDataLabelCategoryName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showCatName")?.Attribute("val")?.Value);
+        chart.ShowDataLabelSeriesName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showSerName")?.Attribute("val")?.Value);
         chart.ShowDataLabelPercentage = ChartTypeSupport.SupportsPercentageDataLabels(chart.Type)
-            && IsTrue(dataLabels.Element(ChartNs + "showPercent")?.Attribute("val")?.Value);
-        chart.ShowDataLabelCallouts = IsTrue(dataLabels.Element(ChartNs + "showLeaderLines")?.Attribute("val")?.Value);
+            && XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showPercent")?.Attribute("val")?.Value);
+        chart.ShowDataLabelCallouts = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLeaderLines")?.Attribute("val")?.Value);
         var separator = dataLabels.Element(ChartNs + "separator");
         chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separator?.Attribute("val")?.Value ?? separator?.Value);
         ApplyDataLabelShapeProperties(dataLabels.Element(ChartNs + "spPr"), chart);
@@ -1480,8 +1456,8 @@ public static class XlsxChartPartReader
         if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, out var order))
             chart.TrendlineOrder = Math.Clamp(order, 2, 6);
 
-        chart.ShowTrendlineEquation = IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
-        chart.ShowTrendlineRSquared = IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
+        chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
+        chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
         ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
     }
 
@@ -1497,7 +1473,7 @@ public static class XlsxChartPartReader
         chart.ShowErrorBars = true;
         chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
         chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
-        chart.ErrorBarEndCaps = !IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
+        chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
 
         if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
             chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
@@ -1807,9 +1783,7 @@ public static class XlsxChartPartReader
     private readonly record struct AxisLineProperties(CellColor? Color, double? Thickness);
 
     private static double? ReadDouble(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric)
-            ? numeric
-            : null;
+        XlsxChartScalarReader.ReadOptionalDouble(value);
 
     private static ChartDataLabelNumberFormat FromXlsxNumberFormatCode(string? formatCode) =>
         formatCode switch
@@ -1883,10 +1857,6 @@ public static class XlsxChartPartReader
             chart.PlotAreaBorderThemeColor = null;
         }
     }
-
-    private static bool IsTrue(string? value) =>
-        string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     private static void SanitizeLoadedChart(ChartModel chart)
     {
@@ -2249,3 +2219,4 @@ public static class XlsxChartPartReader
             new CellAddress(sheetId, maxRow, maxCol));
     }
 }
+
