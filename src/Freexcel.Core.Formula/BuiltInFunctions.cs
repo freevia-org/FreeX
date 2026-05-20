@@ -5328,7 +5328,9 @@ public static class BuiltInFunctions
         if (!double.IsFinite(x) || !double.IsFinite(n) || !double.IsFinite(m))
             return ErrorValue.Num;
 
-        if (args[3] is not RangeValue coeffs) return ErrorValue.Value;
+        var coeffs = args[3] is RangeValue coeffRange
+            ? coeffRange
+            : SingleCellArray(args[3]);
 
         double sum = 0;
         int i = 0;
@@ -5352,7 +5354,15 @@ public static class BuiltInFunctions
         matrix = null!;
         error = null;
         if (value is ErrorValue err) { error = err; return false; }
-        if (value is not RangeValue rv) { error = ErrorValue.Value; return false; }
+        RangeValue rv;
+        if (value is RangeValue range)
+        {
+            rv = range;
+        }
+        else
+        {
+            rv = SingleCellArray(value);
+        }
         int rows = rv.RowCount;
         int cols = rv.ColCount;
         var m = new double[rows, cols];
@@ -8441,8 +8451,12 @@ public static class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         double rate = ToNumber(args[0]);
-        if (args[1] is not RangeValue valRange) return ErrorValue.Value;
-        if (args[2] is not RangeValue dateRange) return ErrorValue.Value;
+        var valRange = args[1] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[1]);
+        var dateRange = args[2] is RangeValue datesRange
+            ? datesRange
+            : SingleCellArray(args[2]);
         if (!double.IsFinite(rate) || rate <= -1) return ErrorValue.Num;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
@@ -8490,7 +8504,9 @@ public static class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         double principal = ToNumber(args[0]);
-        if (args[1] is not RangeValue schedRange) return ErrorValue.Value;
+        var schedRange = args[1] is RangeValue scheduleRange
+            ? scheduleRange
+            : SingleCellArray(args[1]);
         if (!double.IsFinite(principal)) return ErrorValue.Num;
         var (rates, re) = CollectRangeNumbers(schedRange);
         if (re is not null) return re;
