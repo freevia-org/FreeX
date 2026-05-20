@@ -8546,6 +8546,33 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookOleSize()
+    {
+        var workbook = new Workbook("WorkbookOleSizeRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("ole size"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorkbookOleSize(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("oleSize");
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("ref=\"A1:D12\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDefinedNames()
     {
         var workbook = new Workbook("DefinedNameRetentionTest");
@@ -14013,6 +14040,22 @@ public class FileAdapterSmokeTests
                         new XAttribute("maxSheetId", "1")))));
             ReplacePackageXml(archive, "xl/revisions/revisionLog1.xml", new XDocument(
                 new XElement(workbookNs + "revisions")));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorkbookOleSize(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "oleSize",
+                new XAttribute("ref", "A1:D12")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
         packageStream.Position = 0;
