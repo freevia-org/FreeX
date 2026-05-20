@@ -20,7 +20,7 @@
         </Grid.RowDefinitions>
 
         <!-- Existing named ranges list -->
-        <GroupBox Grid.Row="0" Header="Defined Names">
+        <GroupBox Grid.Row="0" Header="_Defined Names">
             <ListView x:Name="NamesList" SelectionChanged="NamesList_SelectionChanged">
                 <ListView.View>
                     <GridView>
@@ -39,7 +39,7 @@
                 <ColumnDefinition Width="70"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Name:" VerticalAlignment="Center"/>
+            <Label Content="_Name:" Target="{Binding ElementName=NameBox}" VerticalAlignment="Center"/>
             <TextBox x:Name="NameBox" Grid.Column="1"/>
         </Grid>
 
@@ -48,16 +48,16 @@
                 <ColumnDefinition Width="70"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Range:" VerticalAlignment="Center"/>
+            <Label Content="_Range:" Target="{Binding ElementName=RangeBox}" VerticalAlignment="Center"/>
             <TextBox x:Name="RangeBox" Grid.Column="1"
                      ToolTip="Enter range in format: Sheet1!A1:B10"/>
         </Grid>
 
         <!-- Action buttons -->
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Define" Width="64" Margin="0,0,8,0" Click="DefineButton_Click"/>
-            <Button Content="Delete" Width="64" Margin="0,0,8,0" Click="DeleteButton_Click"/>
-            <Button Content="Close" Width="64" IsCancel="True" Click="CloseButton_Click"/>
+            <Button Content="_Define" Width="64" Margin="0,0,8,0" Click="DefineButton_Click"/>
+            <Button Content="_Delete" Width="64" Margin="0,0,8,0" Click="DeleteButton_Click"/>
+            <Button Content="_Close" Width="64" IsCancel="True" Click="CloseButton_Click"/>
         </StackPanel>
     </Grid>
 </Window>
