@@ -6220,6 +6220,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sourceWorkbookProperties = sourceWorkbookXml.Root?.Element(workbookNs + "workbookPr");
         var sourceWorkbookProtection = sourceWorkbookXml.Root?.Element(workbookNs + "workbookProtection");
         var sourceCalculationProperties = sourceWorkbookXml.Root?.Element(workbookNs + "calcPr");
+        var sourceOleSize = sourceWorkbookXml.Root?.Element(workbookNs + "oleSize");
         var sourceWebPublishing = sourceWorkbookXml.Root?.Element(workbookNs + "webPublishing");
         var sourceWebPublishObjects = sourceWorkbookXml.Root?.Element(workbookNs + "webPublishObjects");
         if (sourceRevisionPointer is null &&
@@ -6236,6 +6237,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sourceWorkbookProperties is null &&
             sourceWorkbookProtection is null &&
             sourceCalculationProperties is null &&
+            sourceOleSize is null &&
             sourceWebPublishing is null &&
             sourceWebPublishObjects is null)
         {
@@ -6273,6 +6275,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (MergeWorkbookCustomViews(sourceCustomWorkbookViews, targetRoot, workbookNs, GetModeledCustomViewIds(workbook)))
             changed = true;
         if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
+            changed = true;
+        if (MergeWorkbookChildBlock(sourceOleSize, targetRoot, workbookNs + "oleSize"))
             changed = true;
         if (MergeWorkbookChildBlock(sourceWebPublishing, targetRoot, workbookNs + "webPublishing"))
             changed = true;
