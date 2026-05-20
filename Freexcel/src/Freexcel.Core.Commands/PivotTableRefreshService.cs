@@ -31,13 +31,13 @@ public static class PivotTableRefreshService
             .Where(row => MatchesFieldSelections(row, columnFields))
             .ToList();
         if (pivotTable.RowFields.Count == 0 && columnFields.Count == 0)
-            WriteValuesOnlyPivot(targetSheet, pivotTable, headers, rows);
+            WriteValuesOnlyPivot(workbook, targetSheet, pivotTable, headers, rows);
         else if (pivotTable.RowFields.Count == 0)
-            WriteColumnOnlyPivot(targetSheet, pivotTable, headers, rows, columnFields);
+            WriteColumnOnlyPivot(workbook, targetSheet, pivotTable, headers, rows, columnFields);
         else if (columnFields.Count > 0)
-            WriteMatrixPivot(targetSheet, pivotTable, headers, rows, columnFields);
+            WriteMatrixPivot(workbook, targetSheet, pivotTable, headers, rows, columnFields);
         else
-            WriteRowPivot(targetSheet, pivotTable, headers, rows);
+            WriteRowPivot(workbook, targetSheet, pivotTable, headers, rows);
 
         ApplyPivotTableStyle(workbook, targetSheet, pivotTable);
     }
@@ -230,29 +230,43 @@ public static class PivotTableRefreshService
             if (row <= headerEndRow)
             {
                 if (ShouldApplyPivotHeaderStyle(pivotTable, col))
-                    cell.StyleId = headerStyle;
+                    ApplyPivotVisualStyle(workbook, cell, headerStyle);
                 continue;
             }
 
             if (grandTotalRows.Contains(row))
             {
-                cell.StyleId = grandTotalStyle;
+                ApplyPivotVisualStyle(workbook, cell, grandTotalStyle);
                 continue;
             }
 
             if (subtotalRows.Contains(row))
             {
-                cell.StyleId = subtotalStyle;
+                ApplyPivotVisualStyle(workbook, cell, subtotalStyle);
                 continue;
             }
 
             var bodyRowIndex = row - headerEndRow - 1;
             var bodyColIndex = col - materialized.Start.Col;
             if (pivotTable.ShowRowStripes && bodyRowIndex % 2 == 0)
-                cell.StyleId = stripeStyle;
+                ApplyPivotVisualStyle(workbook, cell, stripeStyle);
             if (pivotTable.ShowColumnStripes && bodyColIndex % 2 == 1)
-                cell.StyleId = stripeStyle;
+                ApplyPivotVisualStyle(workbook, cell, stripeStyle);
         }
+    }
+
+    private static void ApplyPivotVisualStyle(Workbook workbook, Cell cell, StyleId visualStyleId)
+    {
+        var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
+        if (numberFormat == CellStyle.Default.NumberFormat)
+        {
+            cell.StyleId = visualStyleId;
+            return;
+        }
+
+        var style = workbook.GetStyle(visualStyleId);
+        style.NumberFormat = numberFormat;
+        cell.StyleId = workbook.RegisterStyle(style);
     }
 
     private static bool ShouldApplyPivotHeaderStyle(PivotTableModel pivotTable, uint col)
@@ -412,6 +426,7 @@ public static class PivotTableRefreshService
     }
 
     private static void WriteRowPivot(
+        Workbook workbook,
         Sheet sheet,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -456,7 +471,7 @@ public static class PivotTableRefreshService
                 {
                     if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom)
                     {
-                        WriteSubtotalRow(sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKey, subtotalRows, retainedRows, outputRow);
+                        WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKey, subtotalRows, retainedRows, outputRow);
                         outputRow++;
                     }
                     subtotalRows.Clear();
@@ -468,7 +483,7 @@ public static class PivotTableRefreshService
                     if (pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Top &&
                         topSubtotalRows.TryGetValue(subtotalKey, out var rowsForSubtotal))
                     {
-                        WriteSubtotalRow(sheet, pivotTable, headers, start, rowFieldOutputColumns, subtotalKey, rowsForSubtotal, retainedRows, outputRow);
+                        WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, subtotalKey, rowsForSubtotal, retainedRows, outputRow);
                         outputRow++;
                     }
                 }
@@ -495,14 +510,17 @@ public static class PivotTableRefreshService
                 }
             }
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
-                sheet.SetCell(
+                SetPivotValueCell(
+                    workbook,
+                    sheet,
                     new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldOutputColumns + (uint)index),
-                    new NumberValue(DisplayAggregate(
+                    DisplayAggregate(
                         group,
                         new PivotDisplayContext(retainedRows, group.ToList(), retainedRows),
                         pivotTable.DataFields[index],
                         pivotTable,
-                        headers)));
+                        headers),
+                    pivotTable.DataFields[index]);
             previousRowKey = group.Key;
             outputRow++;
             if (pivotTable.BlankLineAfterItems &&
@@ -522,9 +540,12 @@ public static class PivotTableRefreshService
                 for (var index = 0; index < pivotTable.DataFields.Count; index++)
                 {
                     var calculatedValue = EvaluateCalculatedItem(calculatedItem.Formula, groups, pivotTable.DataFields[index], pivotTable, headers);
-                    sheet.SetCell(
+                    SetPivotValueCell(
+                        workbook,
+                        sheet,
                         new CellAddress(sheet.Id, outputRow, start.Col + 1 + (uint)index),
-                        new NumberValue(calculatedValue));
+                        calculatedValue,
+                        pivotTable.DataFields[index]);
                     calculatedItemTotals[index] += calculatedValue;
                 }
 
@@ -536,7 +557,7 @@ public static class PivotTableRefreshService
             pivotTable.SubtotalPlacement == PivotSubtotalPlacement.Bottom &&
             currentSubtotalKey is not null)
         {
-            WriteSubtotalRow(sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKey, subtotalRows, retainedRows, outputRow);
+            WriteSubtotalRow(workbook, sheet, pivotTable, headers, start, rowFieldOutputColumns, currentSubtotalKey, subtotalRows, retainedRows, outputRow);
             outputRow++;
         }
 
@@ -544,18 +565,22 @@ public static class PivotTableRefreshService
         {
             sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue("Grand Total"));
             for (var index = 0; index < pivotTable.DataFields.Count; index++)
-                sheet.SetCell(
+                SetPivotValueCell(
+                    workbook,
+                    sheet,
                     new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldOutputColumns + (uint)index),
-                    new NumberValue(DisplayAggregate(
+                    DisplayAggregate(
                         retainedRows,
                         new PivotDisplayContext(retainedRows, retainedRows, retainedRows),
                         pivotTable.DataFields[index],
                         pivotTable,
-                        headers) + calculatedItemTotals[index]));
+                        headers) + calculatedItemTotals[index],
+                    pivotTable.DataFields[index]);
         }
     }
 
     private static void WriteValuesOnlyPivot(
+        Workbook workbook,
         Sheet sheet,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -565,18 +590,22 @@ public static class PivotTableRefreshService
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
         {
             sheet.SetCell(new CellAddress(sheet.Id, start.Row, start.Col + (uint)index), new TextValue(pivotTable.DataFields[index].Name));
-            sheet.SetCell(
+            SetPivotValueCell(
+                workbook,
+                sheet,
                 new CellAddress(sheet.Id, start.Row + 1, start.Col + (uint)index),
-                new NumberValue(DisplayAggregate(
+                DisplayAggregate(
                     rows,
                     new PivotDisplayContext(rows, rows, rows),
                     pivotTable.DataFields[index],
                     pivotTable,
-                    headers)));
+                    headers),
+                pivotTable.DataFields[index]);
         }
     }
 
     private static void WriteColumnOnlyPivot(
+        Workbook workbook,
         Sheet sheet,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -624,12 +653,13 @@ public static class PivotTableRefreshService
             var columnRows = rows.Where(row => ColumnKeyMatches(row, columnFields, columnKey)).ToList();
             foreach (var dataField in pivotTable.DataFields)
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(DisplayAggregate(
+                SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                     columnRows,
                     new PivotDisplayContext(visibleRows, visibleRows, columnRows),
                     dataField,
                     pivotTable,
-                    headers)));
+                    headers),
+                    dataField);
                 outputColumn++;
             }
         }
@@ -638,12 +668,13 @@ public static class PivotTableRefreshService
         {
             foreach (var dataField in pivotTable.DataFields)
             {
-                sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(DisplayAggregate(
+                SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                     visibleRows,
                     new PivotDisplayContext(visibleRows, visibleRows, visibleRows),
                     dataField,
                     pivotTable,
-                    headers)));
+                    headers),
+                    dataField);
                 outputColumn++;
             }
         }
@@ -671,6 +702,7 @@ public static class PivotTableRefreshService
     }
 
     private static void WriteSubtotalRow(
+        Workbook workbook,
         Sheet sheet,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -683,17 +715,21 @@ public static class PivotTableRefreshService
     {
         sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{subtotalKey.Values[0]} Total"));
         for (var index = 0; index < pivotTable.DataFields.Count; index++)
-            sheet.SetCell(
+            SetPivotValueCell(
+                workbook,
+                sheet,
                 new CellAddress(sheet.Id, outputRow, start.Col + (uint)rowFieldCount + (uint)index),
-                new NumberValue(DisplayAggregate(
+                DisplayAggregate(
                     subtotalRows,
                     new PivotDisplayContext(grandTotalRows, subtotalRows, grandTotalRows),
                     pivotTable.DataFields[index],
                     pivotTable,
-                    headers)));
+                    headers),
+                pivotTable.DataFields[index]);
     }
 
     private static void WriteMatrixPivot(
+        Workbook workbook,
         Sheet sheet,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
@@ -778,12 +814,13 @@ public static class PivotTableRefreshService
                     .ToList();
                 foreach (var dataField in pivotTable.DataFields)
                 {
-                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(DisplayAggregate(
+                    SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         columnRows,
                         new PivotDisplayContext(visibleRows, visibleRowGroupRows, columnTotalRows),
                         dataField,
                         pivotTable,
-                        headers)));
+                        headers),
+                        dataField);
                     outputColumn++;
                 }
             }
@@ -791,12 +828,13 @@ public static class PivotTableRefreshService
             {
                 foreach (var dataField in pivotTable.DataFields)
                 {
-                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(DisplayAggregate(
+                    SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         visibleRowGroupRows,
                         new PivotDisplayContext(visibleRows, visibleRowGroupRows, visibleRows),
                         dataField,
                         pivotTable,
-                        headers)));
+                        headers),
+                        dataField);
                     outputColumn++;
                 }
             }
@@ -814,12 +852,13 @@ public static class PivotTableRefreshService
                     .ToList();
                 foreach (var dataField in pivotTable.DataFields)
                 {
-                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(DisplayAggregate(
+                    SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         columnRows,
                         new PivotDisplayContext(visibleRows, visibleRows, columnRows),
                         dataField,
                         pivotTable,
-                        headers)));
+                        headers),
+                        dataField);
                     outputColumn++;
                 }
             }
@@ -827,16 +866,81 @@ public static class PivotTableRefreshService
             {
                 foreach (var dataField in pivotTable.DataFields)
                 {
-                    sheet.SetCell(new CellAddress(sheet.Id, outputRow, outputColumn), new NumberValue(DisplayAggregate(
+                    SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
                         visibleRows,
                         new PivotDisplayContext(visibleRows, visibleRows, visibleRows),
                         dataField,
                         pivotTable,
-                        headers)));
+                        headers),
+                        dataField);
                     outputColumn++;
                 }
             }
         }
+    }
+
+    private static void SetPivotValueCell(
+        Workbook workbook,
+        Sheet sheet,
+        CellAddress address,
+        double value,
+        PivotDataFieldModel dataField)
+    {
+        var cell = Cell.FromValue(new NumberValue(value));
+        if (TryResolveBuiltInNumberFormat(dataField.NumberFormatId, out var formatCode) &&
+            formatCode != CellStyle.Default.NumberFormat)
+        {
+            var style = CellStyle.Default.Clone();
+            style.NumberFormat = formatCode;
+            cell.StyleId = workbook.RegisterStyle(style);
+        }
+
+        sheet.SetCell(address, cell);
+    }
+
+    private static bool TryResolveBuiltInNumberFormat(int? numberFormatId, out string formatCode)
+    {
+        formatCode = numberFormatId switch
+        {
+            null or 0 => "General",
+            1 => "0",
+            2 => "0.00",
+            3 => "#,##0",
+            4 => "#,##0.00",
+            5 => "$#,##0;($#,##0)",
+            6 => "$#,##0;[Red]($#,##0)",
+            7 => "$#,##0.00;($#,##0.00)",
+            8 => "$#,##0.00;[Red]($#,##0.00)",
+            9 => "0%",
+            10 => "0.00%",
+            11 => "0.00E+00",
+            12 => "# ?/?",
+            13 => "# ??/??",
+            14 => "m/d/yyyy",
+            15 => "d-mmm-yy",
+            16 => "d-mmm",
+            17 => "mmm-yy",
+            18 => "h:mm AM/PM",
+            19 => "h:mm:ss AM/PM",
+            20 => "h:mm",
+            21 => "h:mm:ss",
+            22 => "m/d/yyyy h:mm",
+            37 => "#,##0;(#,##0)",
+            38 => "#,##0;[Red](#,##0)",
+            39 => "#,##0.00;(#,##0.00)",
+            40 => "#,##0.00;[Red](#,##0.00)",
+            41 => "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)",
+            42 => "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)",
+            43 => "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)",
+            44 => "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)",
+            45 => "mm:ss",
+            46 => "[h]:mm:ss",
+            47 => "mm:ss.0",
+            48 => "##0.0E+0",
+            49 => "@",
+            _ => ""
+        };
+        return formatCode.Length > 0;
     }
 
     private static void WriteColumnHeader(
