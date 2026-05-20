@@ -33,9 +33,9 @@ public sealed class AutoFilterDialog : Window
         Visibility = Visibility.Collapsed,
         IsTextSearchEnabled = true
     };
-    private readonly RadioButton _sortNone = new() { Content = "No sort", IsChecked = true };
-    private readonly RadioButton _sortAscending = new() { Content = "Sort A to Z" };
-    private readonly RadioButton _sortDescending = new() { Content = "Sort Z to A" };
+    private readonly RadioButton _sortNone = new() { Content = "_No sort", IsChecked = true };
+    private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
+    private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
 
     public AutoFilterDialogResult Result { get; private set; }
 
@@ -78,7 +78,8 @@ public sealed class AutoFilterDialog : Window
         stack.Children.Add(_sortAscending);
         stack.Children.Add(_sortDescending);
 
-        _searchBox.Margin = new Thickness(0, 12, 0, 8);
+        stack.Children.Add(new Label { Content = "_Search", Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
+        _searchBox.Margin = new Thickness(0, 0, 0, 8);
         _searchBox.ToolTip = "Search";
         _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
         stack.Children.Add(_searchBox);
@@ -97,15 +98,15 @@ public sealed class AutoFilterDialog : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 0, 0, 12)
         };
-        var selectAll = new Button { Content = "Select All", Width = 82, Margin = new Thickness(0, 0, 8, 0) };
+        var selectAll = new Button { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
         selectAll.Click += (_, _) => ReplaceAllItems(SelectAll(_allItems));
-        var clearAll = new Button { Content = "Clear All", Width = 82 };
+        var clearAll = new Button { Content = "_Clear All", Width = 88 };
         clearAll.Click += (_, _) => ReplaceAllItems(ClearAll(_allItems));
         selectionRow.Children.Add(selectAll);
         selectionRow.Children.Add(clearAll);
         stack.Children.Add(selectionRow);
 
-        stack.Children.Add(new TextBlock { Text = "Criteria text" });
+        stack.Children.Add(new Label { Content = "_Criteria text", Target = _criteriaBox, Padding = new Thickness(0) });
         _criteriaSuggestionBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaSuggestionBox.SelectionChanged += (_, _) =>
         {
@@ -122,13 +123,13 @@ public sealed class AutoFilterDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var ok = new Button { Content = "OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
             Result = BuildResult(GetSortDirection(), _allItems, _searchBox.Text, _criteriaBox.Text);
             DialogResult = true;
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 76 };
+        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         stack.Children.Add(buttons);
