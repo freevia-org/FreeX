@@ -8,8 +8,8 @@
         ResizeMode="NoResize">
     <DockPanel Margin="14">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="OK" Width="74" Margin="0,0,8,0" IsDefault="True" Click="OkButton_Click"/>
-            <Button Content="Cancel" Width="74" IsCancel="True"/>
+            <Button Content="_OK" Width="74" Margin="0,0,8,0" IsDefault="True" Click="OkButton_Click"/>
+            <Button Content="_Cancel" Width="74" IsCancel="True"/>
         </StackPanel>
         <Grid>
             <Grid.ColumnDefinitions>
@@ -21,11 +21,11 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="Condition:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <Label Grid.Row="0" Grid.Column="0" Content="_Condition:" Target="{Binding ElementName=ValueFilterKindBox}" VerticalAlignment="Center" Margin="0,0,8,8"/>
             <ComboBox x:Name="ValueFilterKindBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Value:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <Label Grid.Row="1" Grid.Column="0" Content="_Value:" Target="{Binding ElementName=ValueFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="ValueFilterValueBox" Grid.Row="1" Grid.Column="1"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="And:" VerticalAlignment="Center" Margin="0,8,8,0"/>
+            <Label Grid.Row="2" Grid.Column="0" Content="_And:" Target="{Binding ElementName=ValueFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
             <TextBox x:Name="ValueFilterValue2Box" Grid.Row="2" Grid.Column="1" Margin="0,8,0,0"/>
         </Grid>
     </DockPanel>
