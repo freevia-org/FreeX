@@ -212,3 +212,88 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
 
     private sealed record TableFilterState(uint Column, HashSet<string> AllowedValues, bool IncludeBlank);
 }
+
+public sealed record StructuredTableStyleBanding(
+    CellColor HeaderFill,
+    CellColor OddRowFill,
+    CellColor EvenRowFill,
+    CellColor HeaderFontColor);
+
+public sealed class CreateStyledStructuredTableCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly GridRange _range;
+    private readonly string? _styleName;
+    private readonly bool _firstRowHasHeaders;
+    private readonly StructuredTableStyleBanding _banding;
+    private readonly List<IWorkbookCommand> _appliedStyleCommands = [];
+    private CreateStructuredTableCommand? _createTableCommand;
+
+    public string Label => "Format as Table";
+
+    public CreateStyledStructuredTableCommand(
+        SheetId sheetId,
+        GridRange range,
+        string? styleName,
+        bool firstRowHasHeaders,
+        StructuredTableStyleBanding banding)
+    {
+        _sheetId = sheetId;
+        _range = range;
+        _styleName = styleName;
+        _firstRowHasHeaders = firstRowHasHeaders;
+        _banding = banding;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        _appliedStyleCommands.Clear();
+        _createTableCommand = new CreateStructuredTableCommand(_sheetId, _range, _styleName, _firstRowHasHeaders);
+        var createOutcome = _createTableCommand.Apply(ctx);
+        if (!createOutcome.Success)
+            return createOutcome;
+
+        for (var row = _range.Start.Row; row <= _range.End.Row; row++)
+        {
+            var styleCommand = new ApplyStyleCommand(
+                _sheetId,
+                new GridRange(
+                    new CellAddress(_sheetId, row, _range.Start.Col),
+                    new CellAddress(_sheetId, row, _range.End.Col)),
+                CreateRowStyleDiff(row));
+            var styleOutcome = styleCommand.Apply(ctx);
+            if (!styleOutcome.Success)
+            {
+                RevertAppliedCommands(ctx);
+                return styleOutcome;
+            }
+
+            _appliedStyleCommands.Add(styleCommand);
+        }
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx) => RevertAppliedCommands(ctx);
+
+    private StyleDiff CreateRowStyleDiff(uint row)
+    {
+        if (row == _range.Start.Row)
+        {
+            return new StyleDiff(
+                FillColor: _banding.HeaderFill,
+                FontColor: _banding.HeaderFontColor,
+                Bold: true);
+        }
+
+        return new StyleDiff(FillColor: row % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill);
+    }
+
+    private void RevertAppliedCommands(ICommandContext ctx)
+    {
+        for (var index = _appliedStyleCommands.Count - 1; index >= 0; index--)
+            _appliedStyleCommands[index].Revert(ctx);
+        _appliedStyleCommands.Clear();
+        _createTableCommand?.Revert(ctx);
+    }
+}
