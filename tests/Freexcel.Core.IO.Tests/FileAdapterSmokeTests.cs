@@ -10087,6 +10087,50 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetRowAndCellExtensionLists()
+    {
+        var workbook = new Workbook("WorksheetSheetDataExtensionMetadata");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Extension metadata"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddWorksheetRowAndCellExtensionLists(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 3, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace freexcelNs = "urn:freexcel:test";
+        var row = worksheetXml.Root!
+            .Element(worksheetNs + "sheetData")!
+            .Elements(worksheetNs + "row")
+            .Single(element => element.Attribute("r")?.Value == "2");
+        row.Element(worksheetNs + "extLst").Should().NotBeNull();
+        row.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexcelNs + "rowExt")!
+            .Attribute("value")!.Value.Should().Be("row-extension");
+
+        var cell = row.Elements(worksheetNs + "c")
+            .Single(element => element.Attribute("r")?.Value == "A2");
+        cell.Element(worksheetNs + "extLst").Should().NotBeNull();
+        cell.Element(worksheetNs + "extLst")!
+            .Element(worksheetNs + "ext")!
+            .Element(freexcelNs + "cellExt")!
+            .Attribute("value")!.Value.Should().Be("cell-extension");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetColumnNativeAttributes()
     {
         var workbook = new Workbook("WorksheetColumnNativeMetadata");
@@ -15133,6 +15177,39 @@ public class FileAdapterSmokeTests
             cell.SetAttributeValue("vm", "1");
             cell.SetAttributeValue("ph", "1");
             cell.SetAttributeValue("customAttr", "cell-native");
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddWorksheetRowAndCellExtensionLists(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace freexcelNs = "urn:freexcel:test";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var row = worksheetXml.Root!
+                .Element(worksheetNs + "sheetData")!
+                .Elements(worksheetNs + "row")
+                .Single(element => element.Attribute("r")?.Value == "2");
+            row.Add(new XElement(
+                worksheetNs + "extLst",
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FREEXCEL-ROW-EXT}"),
+                    new XElement(freexcelNs + "rowExt", new XAttribute("value", "row-extension")))));
+
+            var cell = row.Elements(worksheetNs + "c")
+                .Single(element => element.Attribute("r")?.Value == "A2");
+            cell.Add(new XElement(
+                worksheetNs + "extLst",
+                new XElement(
+                    worksheetNs + "ext",
+                    new XAttribute("uri", "{FREEXCEL-CELL-EXT}"),
+                    new XElement(freexcelNs + "cellExt", new XAttribute("value", "cell-extension")))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 
