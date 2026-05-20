@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
@@ -177,6 +178,117 @@ public static class PrintRenderer
         }
 
         return doc;
+    }
+
+    public static FixedDocument RenderWorkbook(Workbook workbook, IViewportService viewportService)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(viewportService);
+
+        var result = new FixedDocument();
+        foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden))
+        {
+            var sheetDocument = RenderWorksheet(workbook, sheet.Id, viewportService);
+            if (result.Pages.Count == 0)
+                result.DocumentPaginator.PageSize = sheetDocument.DocumentPaginator.PageSize;
+
+            foreach (var page in sheetDocument.Pages.ToList())
+                result.Pages.Add(ClonePageAsBitmap(sheetDocument, page));
+        }
+
+        return result;
+    }
+
+    public static DocumentPaginator CreateWorkbookPaginator(Workbook workbook, IViewportService viewportService)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(viewportService);
+
+        var paginators = workbook.Sheets
+            .Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
+            .Select(sheet => RenderWorksheet(workbook, sheet.Id, viewportService).DocumentPaginator)
+            .Where(paginator => paginator.PageCount > 0)
+            .ToList();
+        return new WorkbookDocumentPaginator(paginators);
+    }
+
+    private static PageContent ClonePageAsBitmap(FixedDocument document, PageContent pageContent)
+    {
+        pageContent.GetPageRoot(forceReload: false);
+        var sourcePage = pageContent.Child ??
+            throw new InvalidOperationException("FixedDocument page content did not contain a FixedPage.");
+        var width = sourcePage.Width > 0 && !double.IsNaN(sourcePage.Width)
+            ? sourcePage.Width
+            : document.DocumentPaginator.PageSize.Width;
+        var height = sourcePage.Height > 0 && !double.IsNaN(sourcePage.Height)
+            ? sourcePage.Height
+            : document.DocumentPaginator.PageSize.Height;
+        var size = new Size(width, height);
+        sourcePage.Measure(size);
+        sourcePage.Arrange(new Rect(size));
+        sourcePage.UpdateLayout();
+
+        var bitmap = new RenderTargetBitmap(
+            Math.Max(1, (int)Math.Ceiling(width)),
+            Math.Max(1, (int)Math.Ceiling(height)),
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        bitmap.Render(sourcePage);
+        bitmap.Freeze();
+
+        var fixedPage = new FixedPage { Width = width, Height = height };
+        fixedPage.Children.Add(new Image
+        {
+            Source = bitmap,
+            Width = width,
+            Height = height
+        });
+
+        var clone = new PageContent();
+        ((IAddChild)clone).AddChild(fixedPage);
+        return clone;
+    }
+
+    private sealed class WorkbookDocumentPaginator : DocumentPaginator
+    {
+        private readonly IReadOnlyList<DocumentPaginator> _paginators;
+        private Size _pageSize;
+
+        public WorkbookDocumentPaginator(IReadOnlyList<DocumentPaginator> paginators)
+        {
+            _paginators = paginators;
+            _pageSize = paginators.FirstOrDefault()?.PageSize ?? new Size(8.27 * 96.0, 11.69 * 96.0);
+        }
+
+        public override bool IsPageCountValid => _paginators.All(paginator => paginator.IsPageCountValid);
+
+        public override int PageCount => _paginators.Sum(paginator => paginator.PageCount);
+
+        public override Size PageSize
+        {
+            get => _pageSize;
+            set => _pageSize = value;
+        }
+
+        public override IDocumentPaginatorSource? Source => null;
+
+        public override DocumentPage GetPage(int pageNumber)
+        {
+            if (pageNumber < 0)
+                throw new ArgumentOutOfRangeException(nameof(pageNumber));
+
+            var offset = pageNumber;
+            foreach (var paginator in _paginators)
+            {
+                if (offset < paginator.PageCount)
+                    return paginator.GetPage(offset);
+
+                offset -= paginator.PageCount;
+            }
+
+            throw new ArgumentOutOfRangeException(nameof(pageNumber));
+        }
     }
 
     private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer) ResolveHeaderFooterForPage(
