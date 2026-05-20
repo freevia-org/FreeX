@@ -1883,9 +1883,9 @@
                                         local:RibbonTooltip.KeyTip="K"
                                         local:RibbonTooltip.Description="Insert a hyperlink to a web page, file, or location in the workbook."/>
                                 <Button Content="Comment"   Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
-                                        local:RibbonTooltip.Title="New Note"
+                                        local:RibbonTooltip.Title="New Comment"
                                         local:RibbonTooltip.KeyTip="NC"
-                                        local:RibbonTooltip.Description="Add a simple cell note to the selected cell; threaded comments are not implemented."/>
+                                        local:RibbonTooltip.Description="Add or edit a threaded comment on the selected cell."/>
                                 <Button Content="Symbol"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert Symbol"
                                         local:RibbonTooltip.KeyTip="SY"
