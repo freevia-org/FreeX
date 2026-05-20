@@ -7003,6 +7003,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 targetRow.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
             }
+
+            if (MergeExtensionList(sourceRow.Element(workbookNs + "extLst"), targetRow, workbookNs))
+                changed = true;
         }
 
         return changed;
@@ -7042,6 +7045,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 targetCell.SetAttributeValue(attribute.Name, attribute.Value);
                 changed = true;
             }
+
+            if (MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
+                changed = true;
         }
 
         return changed;
