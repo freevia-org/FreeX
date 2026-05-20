@@ -41,15 +41,20 @@ public sealed class ViewportService : IViewportService
                     var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfCache);
                     if (cfStyle != null)
                         style = MergeStyles(style, cfStyle);
+                    var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfCache);
+                    var displayText = cfIcon?.ShowValue == false
+                        ? ""
+                        : GetDisplayText(sheet, cell, style);
 
                     cells.Add(new DisplayCell(
                         rowMetric.Row, colMetric.Col,
                         cell.Value,
-                        GetDisplayText(sheet, cell, style),
+                        displayText,
                         request.IncludeFormulas ? cell.FormulaText : null,
                         cell.StyleId,
                         null,
-                        style
+                        style,
+                        cfIcon
                     ));
                 }
                 else
@@ -62,6 +67,7 @@ public sealed class ViewportService : IViewportService
                         var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfCache);
                         if (cfStyle != null)
                             style = MergeStyles(style, cfStyle);
+                        var cfIcon = EvaluateConditionalIcon(sheet, addr, BlankValue.Instance, cfCache);
 
                         cells.Add(new DisplayCell(
                             rowMetric.Row, colMetric.Col,
@@ -70,7 +76,8 @@ public sealed class ViewportService : IViewportService
                             null,
                             styleOnlyId.Value,
                             null,
-                            style
+                            style,
+                            cfIcon
                         ));
                     }
                 }
@@ -423,6 +430,7 @@ public sealed class ViewportService : IViewportService
             var cfStyle = EvaluateConditionalFormats(sheet, addr, BlankValue.Instance, workbook, cfCache);
             if (cfStyle != null)
                 style = MergeStyles(style, cfStyle);
+            var cfIcon = EvaluateConditionalIcon(sheet, addr, BlankValue.Instance, cfCache);
 
             cells.Add(new DisplayCell(
                 row,
@@ -432,7 +440,8 @@ public sealed class ViewportService : IViewportService
                 null,
                 styleOnlyId.Value,
                 null,
-                style));
+                style,
+                cfIcon));
             return;
         }
 
@@ -442,16 +451,21 @@ public sealed class ViewportService : IViewportService
         var cfStyle = EvaluateConditionalFormats(sheet, addr, cell.Value, workbook, cfCache);
         if (cfStyle != null)
             style = MergeStyles(style, cfStyle);
+        var cfIcon = EvaluateConditionalIcon(sheet, addr, cell.Value, cfCache);
+        var displayText = cfIcon?.ShowValue == false
+            ? ""
+            : GetDisplayText(sheet, cell, style);
 
         cells.Add(new DisplayCell(
             row,
             col,
             cell.Value,
-            GetDisplayText(sheet, cell, style),
+            displayText,
             includeFormulas ? cell.FormulaText : null,
             cell.StyleId,
             null,
-            style));
+            style,
+            cfIcon));
         }
     }
 
@@ -491,6 +505,7 @@ public sealed class ViewportService : IViewportService
             if (cf.RuleType is not (
                 CfRuleType.AboveAverage or
                 CfRuleType.ColorScale or
+                CfRuleType.IconSet or
                 CfRuleType.Top10 or
                 CfRuleType.DuplicateValues or
                 CfRuleType.UniqueValues))
@@ -596,6 +611,44 @@ public sealed class ViewportService : IViewportService
 
         return null;
     }
+
+    private static ConditionalFormatIcon? EvaluateConditionalIcon(
+        Sheet sheet,
+        CellAddress addr,
+        ScalarValue value,
+        Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
+    {
+        var rule = sheet.ConditionalFormats
+            .Where(cf => cf.RuleType == CfRuleType.IconSet && cf.AppliesTo.Contains(addr))
+            .OrderBy(cf => cf.Priority)
+            .FirstOrDefault();
+        if (rule is null || !TryGetDouble(value, out var cellValue) || !cfCache.TryGetValue(rule, out var cache))
+            return null;
+
+        var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
+        var iconCount = GetIconSetCount(style);
+        var iconIndex = ResolveIconSetIndex(cellValue, cache.Min, cache.Max, iconCount);
+        if (rule.IconSetReverse)
+            iconIndex = iconCount - 1 - iconIndex;
+
+        return new ConditionalFormatIcon(style, iconIndex, iconCount, rule.IconSetShowValue);
+    }
+
+    private static int ResolveIconSetIndex(double value, double min, double max, int iconCount)
+    {
+        if (!double.IsFinite(value) || !double.IsFinite(min) || !double.IsFinite(max))
+            return 0;
+        if (max <= min)
+            return iconCount - 1;
+
+        var t = Math.Clamp((value - min) / (max - min), 0d, 1d);
+        return Math.Clamp((int)Math.Floor(t * iconCount), 0, iconCount - 1);
+    }
+
+    private static int GetIconSetCount(string style) =>
+        style.Length > 0 && char.IsDigit(style[0])
+            ? Math.Clamp(style[0] - '0', 3, 5)
+            : 3;
 
     // ── Formula CF evaluation ─────────────────────────────────────────────────
 
