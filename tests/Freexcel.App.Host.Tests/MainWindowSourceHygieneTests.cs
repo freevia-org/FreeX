@@ -755,6 +755,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_RendersPlannerVisualPreviewIcons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "QuickAnalysisPlanner.cs"));
+
+        planner.Should().Contain("QuickAnalysisPreviewVisual");
+        source.Should().Contain("QuickAnalysisPreviewIconFactory.Create(option.PreviewVisual)");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));

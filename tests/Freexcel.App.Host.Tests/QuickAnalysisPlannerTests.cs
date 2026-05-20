@@ -94,6 +94,25 @@ public sealed class QuickAnalysisPlannerTests
     }
 
     [Fact]
+    public void BuildOptions_AttachesVisualPreviewDescriptorToEachOption()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 4));
+
+        var options = QuickAnalysisPlanner.BuildOptions(selection);
+
+        options.Should().OnlyContain(option => option.PreviewVisual.Kind != QuickAnalysisPreviewVisualKind.None);
+        options.Single(option => option.Command == QuickAnalysisCommand.DataBar)
+            .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
+        options.Single(option => option.Command == QuickAnalysisCommand.ColumnChart)
+            .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.ColumnChart);
+        options.Single(option => option.Command == QuickAnalysisCommand.Sum)
+            .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.TotalFormula);
+        options.Single(option => option.Command == QuickAnalysisCommand.LineSparkline)
+            .PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.LineSparkline);
+    }
+
+    [Fact]
     public void BuildHoverPreview_UsesSelectionForFormattingChartsAndTables()
     {
         var sheetId = SheetId.New();
