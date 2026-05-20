@@ -6,6 +6,29 @@ namespace Freexcel.App.Host.Tests;
 public sealed class MainWindowSourceHygieneTests
 {
     [Fact]
+    public void ViewportAndScrollbarController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var viewportSourcePath = Path.Combine(appHostDirectory, "MainWindow.Viewport.cs");
+
+        File.Exists(viewportSourcePath).Should().BeTrue();
+        var viewportSource = File.ReadAllText(viewportSourcePath);
+
+        mainSource.Should().NotContain("private void UpdateViewport()");
+        mainSource.Should().NotContain("private ViewportModel CreateViewport(");
+        mainSource.Should().NotContain("private void EnsureCellVisible(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseWheel(");
+        mainSource.Should().NotContain("private void Scroll_ValueChanged(");
+
+        viewportSource.Should().Contain("private void UpdateViewport()");
+        viewportSource.Should().Contain("private ViewportModel CreateViewport(");
+        viewportSource.Should().Contain("private void EnsureCellVisible(");
+        viewportSource.Should().Contain("private void SheetGrid_MouseWheel(");
+        viewportSource.Should().Contain("private void Scroll_ValueChanged(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
