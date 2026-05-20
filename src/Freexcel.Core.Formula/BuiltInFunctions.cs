@@ -4882,7 +4882,7 @@ public static class BuiltInFunctions
                 for (int c = 0; c < arr.ColCount; c++)
                 {
                     if (c > 0) keySb.Append('\0');
-                    keySb.Append(ToText(arr.Cells[r, c]));
+                    AppendUniqueKey(keySb, arr.Cells[r, c]);
                 }
                 var key = keySb.ToString();
                 if (keyIndex.TryGetValue(key, out int idx))
@@ -4925,7 +4925,7 @@ public static class BuiltInFunctions
                 for (int r = 0; r < arr.RowCount; r++)
                 {
                     if (r > 0) colKeySb.Append('\0');
-                    colKeySb.Append(ToText(arr.Cells[r, c]));
+                    AppendUniqueKey(colKeySb, arr.Cells[r, c]);
                 }
                 var key = colKeySb.ToString();
                 if (keyIndex.TryGetValue(key, out int idx))
@@ -4957,6 +4957,34 @@ public static class BuiltInFunctions
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    private static void AppendUniqueKey(System.Text.StringBuilder sb, ScalarValue value)
+    {
+        switch (value)
+        {
+            case BlankValue:
+                sb.Append("blank");
+                break;
+            case NumberValue n:
+                sb.Append("number:").Append(n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                break;
+            case DateTimeValue dt:
+                sb.Append("number:").Append(dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                break;
+            case TextValue t:
+                sb.Append("text:").Append(t.Value.ToUpperInvariant());
+                break;
+            case BoolValue b:
+                sb.Append("bool:").Append(b.Value ? '1' : '0');
+                break;
+            case ErrorValue e:
+                sb.Append("error:").Append(e.Code);
+                break;
+            default:
+                sb.Append("other:").Append(ToText(value));
+                break;
+        }
+    }
+
     // SUBTOTAL
     // ═══════════════════════════════════════════════════════════════════
 
