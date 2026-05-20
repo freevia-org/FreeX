@@ -1958,7 +1958,7 @@
                         <!-- ▌Arrange ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <UniformGrid Grid.Row="0" Rows="2" Columns="2" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <UniformGrid Grid.Row="0" Rows="2" Columns="3" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Bring Forward" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
                                         local:RibbonTooltip.Title="Bring Forward"
                                         local:RibbonTooltip.KeyTip="BF"
@@ -1975,6 +1975,10 @@
                                         local:RibbonTooltip.Title="Rotate Object"
                                         local:RibbonTooltip.KeyTip="RO"
                                         local:RibbonTooltip.Description="Rotate the selected or most recent drawing object."/>
+                                <Button Content="Selection Pane" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
+                                        local:RibbonTooltip.Title="Selection Pane"
+                                        local:RibbonTooltip.KeyTip="SP"
+                                        local:RibbonTooltip.Description="List sheet objects and control visibility or stacking order."/>
                             </UniformGrid>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Arrange" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

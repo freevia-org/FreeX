@@ -296,6 +296,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 Width           = textBox.Width,
                 Height          = textBox.Height,
                 RotationDegrees = textBox.RotationDegrees,
+                IsVisible       = textBox.IsVisible,
                 FillColor       = textBox.FillColor,
                 OutlineColor    = textBox.OutlineColor,
                 AltText         = textBox.AltText
@@ -308,6 +309,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 Width           = shape.Width,
                 Height          = shape.Height,
                 RotationDegrees = shape.RotationDegrees,
+                IsVisible       = shape.IsVisible,
                 FillColor       = shape.FillColor,
                 OutlineColor    = shape.OutlineColor,
                 AltText         = shape.AltText
@@ -325,6 +327,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
                 Width             = picture.Width,
                 Height            = picture.Height,
                 RotationDegrees   = picture.RotationDegrees,
+                IsVisible         = picture.IsVisible,
                 AltText           = picture.AltText
             };
             foreach (var cell in picture.Cells)
@@ -372,6 +375,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand
         {
             Type = chart.Type,
             DataRange = RemapRange(chart.DataRange, copyId),
+            IsVisible = chart.IsVisible,
             FirstRowIsHeader = chart.FirstRowIsHeader,
             FirstColIsCategories = chart.FirstColIsCategories,
             Title = chart.Title,

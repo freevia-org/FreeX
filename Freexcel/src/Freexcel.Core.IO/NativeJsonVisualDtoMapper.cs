@@ -15,6 +15,7 @@ internal static class NativeJsonVisualDtoMapper
         Width = PositiveFiniteOrDefault(picture.Width, 240),
         Height = PositiveFiniteOrDefault(picture.Height, 140),
         RotationDegrees = NormalizeRotation(picture.RotationDegrees),
+        IsVisible = picture.IsVisible,
         CropLeft = SanitizeCropEdge(picture.CropLeft),
         CropTop = SanitizeCropEdge(picture.CropTop),
         CropRight = SanitizeCropEdge(picture.CropRight),
@@ -46,6 +47,7 @@ internal static class NativeJsonVisualDtoMapper
                 Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
                 Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
                 RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
+                IsVisible = pictureDto.IsVisible,
                 CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
                 CropTop = SanitizeCropEdge(pictureDto.CropTop),
                 CropRight = SanitizeCropEdge(pictureDto.CropRight),
@@ -72,6 +74,7 @@ internal static class NativeJsonVisualDtoMapper
         Width = PositiveFiniteOrDefault(textBox.Width, 180),
         Height = PositiveFiniteOrDefault(textBox.Height, 80),
         RotationDegrees = NormalizeRotation(textBox.RotationDegrees),
+        IsVisible = textBox.IsVisible,
         FillColor = textBox.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
         FillThemeColor = FromThemeColorReference(textBox.FillThemeColor),
@@ -93,6 +96,7 @@ internal static class NativeJsonVisualDtoMapper
                 Width = PositiveFiniteOrDefault(textBoxDto.Width, 180),
                 Height = PositiveFiniteOrDefault(textBoxDto.Height, 80),
                 RotationDegrees = NormalizeRotation(textBoxDto.RotationDegrees),
+                IsVisible = textBoxDto.IsVisible,
                 FillColor = textBoxDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 FillThemeColor = ToThemeColorReference(textBoxDto.FillThemeColor),
@@ -113,6 +117,7 @@ internal static class NativeJsonVisualDtoMapper
         Width = PositiveFiniteOrDefault(shape.Width, 120),
         Height = PositiveFiniteOrDefault(shape.Height, 70),
         RotationDegrees = NormalizeRotation(shape.RotationDegrees),
+        IsVisible = shape.IsVisible,
         FillColor = shape.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = shape.OutlineColor is { } outline ? FormatColor(outline) : null,
         GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
@@ -136,6 +141,7 @@ internal static class NativeJsonVisualDtoMapper
                 Width = PositiveFiniteOrDefault(shapeDto.Width, 120),
                 Height = PositiveFiniteOrDefault(shapeDto.Height, 70),
                 RotationDegrees = NormalizeRotation(shapeDto.RotationDegrees),
+                IsVisible = shapeDto.IsVisible,
                 FillColor = shapeDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = shapeDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
@@ -204,6 +210,7 @@ internal class PictureDto
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
     public double RotationDegrees { get; set; }
+    public bool IsVisible { get; set; } = true;
     public double CropLeft { get; set; }
     public double CropTop { get; set; }
     public double CropRight { get; set; }
@@ -226,6 +233,7 @@ internal class TextBoxDto
     public double Width { get; set; } = 180;
     public double Height { get; set; } = 80;
     public double RotationDegrees { get; set; }
+    public bool IsVisible { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
@@ -240,6 +248,7 @@ internal class DrawingShapeDto
     public double Width { get; set; } = 120;
     public double Height { get; set; } = 70;
     public double RotationDegrees { get; set; }
+    public bool IsVisible { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
     public string? GradientFillEndColor { get; set; }
