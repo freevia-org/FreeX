@@ -42,6 +42,19 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PlanExport_AppendsPdfExtensionForExtensionlessPdfRequests()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report");
+
+        request.Should().Be(new ExportRequest(
+            @"C:\temp\report.pdf",
+            ExportFormat.Pdf,
+            ExportOptions.ExcelLikeDefault,
+            null));
+        request.ActualPath.Should().Be(@"C:\temp\report.pdf");
+    }
+
+    [Fact]
     public void PlanExport_XpsRequestKeepsRequestedPathAndDoesNotUseFallback()
     {
         var request = ExportPlanner.PlanExport(@"C:\temp\report.xps");
