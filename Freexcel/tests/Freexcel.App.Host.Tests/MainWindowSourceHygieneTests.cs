@@ -226,6 +226,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void FormatPainterController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var formatPainterSourcePath = Path.Combine(appHostDirectory, "MainWindow.FormatPainter.cs");
+
+        File.Exists(formatPainterSourcePath).Should().BeTrue();
+        var formatPainterSource = File.ReadAllText(formatPainterSourcePath);
+
+        mainSource.Should().NotContain("private void FormatPainterBtn_Click(");
+        mainSource.Should().NotContain("private void FormatPainterBtn_PreviewMouseLeftButtonDown(");
+        mainSource.Should().NotContain("private void CaptureFormatPainterSource(");
+        mainSource.Should().NotContain("private void CancelFormatPainter(");
+        mainSource.Should().NotContain("private bool TryApplyFormatPainter(");
+
+        formatPainterSource.Should().Contain("private void FormatPainterBtn_Click(");
+        formatPainterSource.Should().Contain("private void FormatPainterBtn_PreviewMouseLeftButtonDown(");
+        formatPainterSource.Should().Contain("private void CaptureFormatPainterSource(");
+        formatPainterSource.Should().Contain("private void CancelFormatPainter(");
+        formatPainterSource.Should().Contain("private bool TryApplyFormatPainter(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -423,7 +446,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void PersistentFormatPainter_UsesPreviewMouseDownSoButtonDoubleClickCannotBeOverwrittenByClick()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormatPainter.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("private bool _formatPainterPersistent;");
@@ -439,7 +462,8 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void FormatPainterApplication_UsesTargetSelectionRangeWhenAvailable()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormatPainter.cs"));
+        var mainSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("private SheetId? _formatPainterSourceSheetId;");
         source.Should().Contain("private GridRange? _formatPainterSourceRange;");
@@ -449,9 +473,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
         source.Should().Contain("FormatPainterCommandFactory.Create(_workbook, sourceSheet, sourceRange, targetRange)");
         source.Should().Contain("new CompositeWorkbookCommand(\"Format Painter\", targetSheetIds.Select(CreateCommand).ToList())");
-        source.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
-        source.Should().Contain("selectedRange.Contains(newAddr)");
-        source.Should().Contain("TryApplyFormatPainter(selectedRange)");
+        mainSource.Should().Contain("SheetGrid.SelectedRange is { } selectedRange");
+        mainSource.Should().Contain("selectedRange.Contains(newAddr)");
+        mainSource.Should().Contain("TryApplyFormatPainter(selectedRange)");
         source.Should().NotContain("var targetRange = new GridRange(addr, addr);");
     }
 
