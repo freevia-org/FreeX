@@ -250,6 +250,46 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartErrorBarsDialogResult_BuildsLayoutOptions()
+    {
+        var result = ChartErrorBarsDialog.CreateResult(
+            showErrorBars: true,
+            kind: ChartErrorBarKind.FixedValue,
+            direction: ChartErrorBarDirection.Minus,
+            value: 7.5,
+            endCaps: false);
+
+        result.ToOptions().Should().Be(new ChartLayoutOptions(
+            ShowErrorBars: true,
+            ErrorBarKind: ChartErrorBarKind.FixedValue,
+            ErrorBarDirection: ChartErrorBarDirection.Minus,
+            ErrorBarValue: 7.5,
+            ErrorBarEndCaps: false));
+    }
+
+    [Fact]
+    public void ChartErrorBarsDialog_FromChart_UsesCurrentSettingsAndClampsValue()
+    {
+        var chart = new ChartModel
+        {
+            ShowErrorBars = true,
+            ErrorBarKind = ChartErrorBarKind.Percentage,
+            ErrorBarDirection = ChartErrorBarDirection.Plus,
+            ErrorBarValue = 5000,
+            ErrorBarEndCaps = false
+        };
+
+        ChartErrorBarsDialog.FromChart(chart)
+            .Should()
+            .Be(new ChartErrorBarsDialogResult(
+                true,
+                ChartErrorBarKind.Percentage,
+                ChartErrorBarDirection.Plus,
+                1000,
+                false));
+    }
+
+    [Fact]
     public void ChartAxisFormatDialogResult_BuildsAxisSpecificLayoutOptions()
     {
         var yAxis = ChartAxisFormatDialog.CreateResult(
