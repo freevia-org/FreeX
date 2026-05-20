@@ -157,6 +157,23 @@ internal static class ExportPlanner
         return true;
     }
 
+    public static bool TryValidatePageRange(ExportPageRange? range, int pageCount, out string? error)
+    {
+        error = null;
+
+        if (pageCount <= 0)
+        {
+            error = "There are no exportable pages.";
+            return false;
+        }
+
+        if (range is null || range.FromPage <= pageCount)
+            return true;
+
+        error = $"Page range starts after the last exportable page ({pageCount}).";
+        return false;
+    }
+
     private static string JoinOptionParts(params string?[] parts) =>
         string.Join("; ", parts.Where(part => !string.IsNullOrWhiteSpace(part))) + ".";
 }
