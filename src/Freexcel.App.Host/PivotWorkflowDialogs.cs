@@ -175,6 +175,67 @@ public sealed class PivotChartTypeDialog : Window
     public static PivotChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
 }
 
+public sealed record PivotChartOptionsDialogResult(int? ChartStyleId, bool ShowFieldButtons);
+
+public sealed class PivotChartOptionsDialog : Window
+{
+    private readonly TextBox _styleBox = new();
+    private readonly CheckBox _showFieldButtonsBox = new() { Content = "Show field buttons on chart" };
+
+    public PivotChartOptionsDialogResult Result { get; private set; }
+
+    public PivotChartOptionsDialog(ChartModel chart)
+    {
+        Result = FromChart(chart);
+        Title = "PivotChart Options";
+        Width = 360;
+        Height = 190;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+
+        _styleBox.Text = Result.ChartStyleId?.ToString() ?? "";
+        _styleBox.Margin = new Thickness(0, 0, 0, 12);
+        _showFieldButtonsBox.IsChecked = Result.ShowFieldButtons;
+        _showFieldButtonsBox.Margin = new Thickness(0, 0, 0, 16);
+
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(new TextBlock { Text = "Chart style ID", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(_styleBox);
+        stack.Children.Add(_showFieldButtonsBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        Content = stack;
+    }
+
+    public static PivotChartOptionsDialogResult FromChart(ChartModel chart) =>
+        new(NormalizeStyleId(chart.ChartStyleId), chart.ShowPivotChartFieldButtons);
+
+    public static PivotChartOptionsDialogResult CreateResult(string? chartStyleIdText, bool showFieldButtons) =>
+        new(ParseStyleId(chartStyleIdText), showFieldButtons);
+
+    private void Accept()
+    {
+        Result = CreateResult(_styleBox.Text, _showFieldButtonsBox.IsChecked == true);
+        DialogResult = true;
+    }
+
+    private static int? ParseStyleId(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return int.TryParse(text.Trim(), out var value) ? NormalizeStyleId(value) : null;
+    }
+
+    private static int? NormalizeStyleId(int? value)
+    {
+        if (value is null)
+            return null;
+
+        return Math.Clamp(value.Value, 1, 48);
+    }
+}
+
 public sealed record PivotFieldGroupingDialogResult(
     string SourceFieldName,
     int SourceFieldIndex,

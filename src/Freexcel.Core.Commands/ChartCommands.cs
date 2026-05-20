@@ -274,6 +274,68 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
     }
 }
 
+public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly Guid _chartId;
+    private readonly int? _chartStyleId;
+    private readonly bool _showFieldButtons;
+    private int? _previousChartStyleId;
+    private bool? _previousShowFieldButtons;
+
+    public string Label => "PivotChart Options";
+
+    public ConfigurePivotChartOptionsCommand(
+        SheetId sheetId,
+        Guid chartId,
+        int? chartStyleId,
+        bool showFieldButtons)
+    {
+        _sheetId = sheetId;
+        _chartId = chartId;
+        _chartStyleId = NormalizeStyleId(chartStyleId);
+        _showFieldButtons = showFieldButtons;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        if (chart is null)
+            return new CommandOutcome(false, "PivotChart was not found.");
+        if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
+            return new CommandOutcome(false, "Selected chart is not a PivotChart.");
+
+        _previousChartStyleId = chart.ChartStyleId;
+        _previousShowFieldButtons = chart.ShowPivotChartFieldButtons;
+        chart.ChartStyleId = _chartStyleId;
+        chart.ShowPivotChartFieldButtons = _showFieldButtons;
+        return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_previousShowFieldButtons is null)
+            return;
+
+        var chart = ctx.GetSheet(_sheetId).Charts.FirstOrDefault(item => item.Id == _chartId);
+        if (chart is null)
+            return;
+
+        chart.ChartStyleId = _previousChartStyleId;
+        chart.ShowPivotChartFieldButtons = _previousShowFieldButtons.Value;
+        _previousChartStyleId = null;
+        _previousShowFieldButtons = null;
+    }
+
+    private static int? NormalizeStyleId(int? chartStyleId)
+    {
+        if (chartStyleId is null)
+            return null;
+
+        return Math.Clamp(chartStyleId.Value, 1, 48);
+    }
+}
+
 public sealed class ChangeChartTypeCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
