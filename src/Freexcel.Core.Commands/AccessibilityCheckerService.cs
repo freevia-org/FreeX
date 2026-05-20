@@ -8,6 +8,7 @@ public enum AccessibilityIssueKind
     MissingAltText,
     GenericAltText,
     ChartMissingTitle,
+    GenericChartTitle,
     HyperlinkDisplayTextIsUrl,
     DefaultWorksheetName,
     HiddenSheetWithContent,
@@ -95,14 +96,28 @@ public static class AccessibilityCheckerService
                     "Hyperlink display text should describe the destination."));
             }
 
-            foreach (var chart in sheet.Charts.Where(c => string.IsNullOrWhiteSpace(c.Title)))
+            foreach (var chart in sheet.Charts)
             {
-                issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.ChartMissingTitle,
-                    sheet.Id,
-                    sheet.Name,
-                    FormatRange(chart.DataRange),
-                    "Chart is missing a title."));
+                if (string.IsNullOrWhiteSpace(chart.Title))
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityIssueKind.ChartMissingTitle,
+                        sheet.Id,
+                        sheet.Name,
+                        FormatRange(chart.DataRange),
+                        "Chart is missing a title."));
+                    continue;
+                }
+
+                if (IsGenericChartTitle(chart.Title))
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityIssueKind.GenericChartTitle,
+                        sheet.Id,
+                        sheet.Name,
+                        FormatRange(chart.DataRange),
+                        "Chart title should describe the chart."));
+                }
             }
         }
 
@@ -214,6 +229,13 @@ public static class AccessibilityCheckerService
     private static bool IsDefaultWorksheetName(string name) =>
         name.StartsWith("Sheet", StringComparison.OrdinalIgnoreCase) &&
         int.TryParse(name["Sheet".Length..], out _);
+
+    private static bool IsGenericChartTitle(string title)
+    {
+        var text = title.Trim();
+        return string.Equals(text, "Chart Title", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "Title", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string FormatRange(GridRange range) =>
         range.Start == range.End
