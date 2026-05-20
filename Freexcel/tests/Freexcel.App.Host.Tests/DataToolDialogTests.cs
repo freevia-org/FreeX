@@ -381,6 +381,20 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void DataTableDialog_ExposesReferencePickersForCellInputs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("CreateReferenceEditor(_formulaBox");
+        source.Should().Contain("CreateReferenceEditor(_rowInputBox");
+        source.Should().Contain("CreateReferenceEditor(_columnInputBox");
+        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("Select formula cell");
+        source.Should().Contain("Select row input cell");
+        source.Should().Contain("Select column input cell");
+    }
+
+    [Fact]
     public void CreateTableDialog_ParsesRangeHeadersAndStyle()
     {
         var sheetId = SheetId.New();
