@@ -4530,6 +4530,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void DynamicArrayBinaryExpression_BroadcastsRowAndColumnVectors()
+    {
+        _eval.Evaluate("=SUM(SEQUENCE(3,1)+SEQUENCE(1,3))", MakeSheet()).Should().Be(new NumberValue(36));
+    }
+
+    [Fact]
     public void Sum_FlattensFilterDynamicArrayResult()
     {
         var sheet = MakeSheet(
