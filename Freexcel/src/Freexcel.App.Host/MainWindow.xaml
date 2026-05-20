@@ -3171,6 +3171,9 @@
                                       VerticalAlignment="Center"
                                       DockPanel.Dock="Left"
                                       Click="PivotFieldListDeferLayoutCheckBox_Click"
+                                      local:RibbonTooltip.Title="Defer Layout Update"
+                                      local:RibbonTooltip.Description="Queue PivotTable field layout changes until you choose Update."
+                                      local:RibbonTooltip.KeyTip="DU"
                                       AutomationProperties.Name="Defer PivotTable Layout Update"/>
                             <Button x:Name="PivotFieldListUpdateBtn"
                                     Content="Update"

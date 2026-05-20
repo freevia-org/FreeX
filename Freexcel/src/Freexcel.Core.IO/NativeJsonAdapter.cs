@@ -806,6 +806,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                 YAxisLabelAngle = chartDto.YAxisLabelAngle,
                 YAxisLineColor = chartDto.YAxisLineColor,
                 YAxisLineThickness = chartDto.YAxisLineThickness,
+                BarGapWidth = chartDto.BarGapWidth,
+                BarOverlap = chartDto.BarOverlap,
+                VaryColorsByPoint = chartDto.VaryColorsByPoint,
                 LegendPosition = chartDto.LegendPosition,
                 LegendOverlay = chartDto.LegendOverlay,
                 ShowLegend = chartDto.ShowLegend,
@@ -926,6 +929,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
         YAxisLabelAngle = chart.YAxisLabelAngle,
         YAxisLineColor = chart.YAxisLineColor,
         YAxisLineThickness = chart.YAxisLineThickness,
+        BarGapWidth = chart.BarGapWidth,
+        BarOverlap = chart.BarOverlap,
+        VaryColorsByPoint = chart.VaryColorsByPoint,
         LegendPosition = chart.LegendPosition,
         LegendOverlay = chart.LegendOverlay,
         ShowLegend = chart.ShowLegend,
@@ -2029,6 +2035,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public double YAxisLabelAngle { get; set; }
         public CellColor? YAxisLineColor { get; set; }
         public double YAxisLineThickness { get; set; } = 1;
+        public int? BarGapWidth { get; set; }
+        public int? BarOverlap { get; set; }
+        public bool? VaryColorsByPoint { get; set; }
         public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
         public bool LegendOverlay { get; set; }
         public bool ShowLegend { get; set; } = true;

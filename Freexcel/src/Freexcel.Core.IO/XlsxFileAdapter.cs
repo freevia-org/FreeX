@@ -10533,11 +10533,26 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
                 new XElement(chartNs + "holeSize",
                     new XAttribute("val", Math.Clamp((int)Math.Round(chart.DoughnutHoleSize * 100), 10, 90)))),
-            _ => new XElement(chartNs + "barChart",
+            _ => WithBarChartSpacing(new XElement(chartNs + "barChart",
                 new XElement(chartNs + "barDir", new XAttribute("val", ToXlsxBarDirection(chart.Type))),
                 new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxBarGrouping(chart.Type))),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries))
+                ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs)
         };
+
+    private static XElement WithBarChartSpacing(XElement barChart, ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.BarOverlap is { } overlap)
+            barChart.Add(new XElement(chartNs + "overlap", new XAttribute("val", Math.Clamp(overlap, -100, 100))));
+        if (chart.BarGapWidth is { } gapWidth)
+            barChart.Add(new XElement(chartNs + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500))));
+        return barChart;
+    }
+
+    private static XElement? ToChartBooleanValueXml(XNamespace chartNs, string elementName, bool? value) =>
+        value.HasValue
+            ? new XElement(chartNs + elementName, new XAttribute("val", value.Value ? "1" : "0"))
+            : null;
 
     private static XElement CreateLinePlotChart(
         ChartModel chart,
