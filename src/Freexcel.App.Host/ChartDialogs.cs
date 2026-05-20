@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -311,12 +312,18 @@ public sealed class MoveChartDialog : Window
     }
 }
 
-public sealed record SelectDataSourceDialogResult(string SourceRangeText, bool FirstColumnIsCategories);
+public sealed record SelectDataSourceDialogResult(
+    string SourceRangeText,
+    bool FirstColumnIsCategories,
+    bool SwitchRowColumn = false);
 
 public sealed class SelectDataSourceDialog : Window
 {
     private readonly TextBox _rangeBox = new();
     private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains category labels" };
+    private readonly CheckBox _switchRowColumnBox = new() { Content = "Switch Row/Column" };
+    private readonly ListBox _seriesList = new() { Height = 72 };
+    private readonly ListBox _axisLabelsList = new() { Height = 72 };
 
     public SelectDataSourceDialogResult Result { get; private set; }
 
@@ -324,8 +331,8 @@ public sealed class SelectDataSourceDialog : Window
     {
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
         Title = "Select Data Source";
-        Width = 420;
-        Height = 190;
+        Width = 520;
+        Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -333,20 +340,84 @@ public sealed class SelectDataSourceDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = "Chart data range", Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
-        stack.Children.Add(_rangeBox);
+        stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
+        _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
+        stack.Children.Add(_switchRowColumnBox);
+        stack.Children.Add(CreateSourceListPanel("Legend Entries (Series)", _seriesList));
+        stack.Children.Add(CreateSourceListPanel("Horizontal (Category) Axis Labels", _axisLabelsList));
         _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
         _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 16);
         stack.Children.Add(_firstColumnCategoriesBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
-            Result = CreateResult(_rangeBox.Text, _firstColumnCategoriesBox.IsChecked == true);
+            Result = CreateResult(
+                _rangeBox.Text,
+                _firstColumnCategoriesBox.IsChecked == true,
+                _switchRowColumnBox.IsChecked == true);
             DialogResult = true;
         }));
         Content = stack;
     }
 
-    public static SelectDataSourceDialogResult CreateResult(string sourceRangeText, bool firstColumnIsCategories) =>
-        new(sourceRangeText.Trim(), firstColumnIsCategories);
+    public static SelectDataSourceDialogResult CreateResult(
+        string sourceRangeText,
+        bool firstColumnIsCategories,
+        bool switchRowColumn = false) =>
+        new(sourceRangeText.Trim(), firstColumnIsCategories, switchRowColumn);
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel();
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
+    }
+
+    private static Grid CreateSourceListPanel(string title, ListBox list)
+    {
+        var panel = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        panel.Children.Add(new TextBlock { Text = title, Margin = new Thickness(0, 0, 0, 4) });
+        Grid.SetRow(list, 1);
+        panel.Children.Add(list);
+
+        var buttons = AddEditRemoveButtons();
+        Grid.SetColumn(buttons, 1);
+        Grid.SetRowSpan(buttons, 2);
+        panel.Children.Add(buttons);
+        return panel;
+    }
+
+    private static StackPanel AddEditRemoveButtons()
+    {
+        var stack = new StackPanel { Margin = new Thickness(8, 20, 0, 0) };
+        stack.Children.Add(new Button { Content = "Add", Width = 74, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Button { Content = "Edit", Width = 74, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Button { Content = "Remove", Width = 74 });
+        return stack;
+    }
 }
 
 public sealed record ChartAreaLegendDialogResult(
