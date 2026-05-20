@@ -603,6 +603,29 @@
                                         local:RibbonTooltip.Title="Paste"
                                         local:RibbonTooltip.KeyTip="V"
                                         local:RibbonTooltip.Description="Paste the contents of the Clipboard (Ctrl+V).">
+                                    <Button.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Paste" InputGestureText="P"
+                                                      local:RibbonTooltip.KeyTip="P"
+                                                      Click="PasteMenuItem_Click"/>
+                                            <MenuItem Header="Values" InputGestureText="V"
+                                                      local:RibbonTooltip.KeyTip="V"
+                                                      Click="PasteValuesMenuItem_Click"/>
+                                            <MenuItem Header="Formulas" InputGestureText="F"
+                                                      local:RibbonTooltip.KeyTip="F"
+                                                      Click="PasteFormulasMenuItem_Click"/>
+                                            <MenuItem Header="Formatting" InputGestureText="R"
+                                                      local:RibbonTooltip.KeyTip="R"
+                                                      Click="PasteFormattingMenuItem_Click"/>
+                                            <MenuItem Header="Transpose" InputGestureText="T"
+                                                      local:RibbonTooltip.KeyTip="T"
+                                                      Click="PasteTransposeMenuItem_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Paste Special..." InputGestureText="S"
+                                                      local:RibbonTooltip.KeyTip="S"
+                                                      Click="PasteSpecialBtn_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
                                     <StackPanel>
                                         <local:RibbonIcon Kind="Paste" IconSize="22"
                                                           HorizontalAlignment="Center"/>
