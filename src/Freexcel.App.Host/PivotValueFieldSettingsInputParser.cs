@@ -4,6 +4,8 @@ namespace Freexcel.App.Host;
 
 public static class PivotValueFieldSettingsInputParser
 {
+    public const int DefaultCustomNumberFormatId = 164;
+
     public static bool TryParseOptionalNumberFormatId(string input, out int? numberFormatId)
     {
         numberFormatId = null;
@@ -16,5 +18,21 @@ public static class PivotValueFieldSettingsInputParser
 
         numberFormatId = parsed;
         return true;
+    }
+
+    public static string? ResolveOptionalNumberFormatCode(string input)
+    {
+        var trimmed = input.Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
+
+    public static int? ResolveNumberFormatIdForCode(int? numberFormatId, string? numberFormatCode)
+    {
+        if (string.IsNullOrWhiteSpace(numberFormatCode))
+            return numberFormatId;
+
+        return numberFormatId is >= DefaultCustomNumberFormatId
+            ? numberFormatId
+            : DefaultCustomNumberFormatId;
     }
 }

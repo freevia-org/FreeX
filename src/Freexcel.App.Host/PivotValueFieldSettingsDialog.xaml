@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Value Field Settings"
         Width="430"
-        Height="430"
+        Height="470"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <DockPanel Margin="14">
@@ -73,6 +73,10 @@
                         <TextBox x:Name="NumberFormatBox"
                                  Height="24"
                                  AutomationProperties.Name="Number format ID"/>
+                        <TextBlock Text="Custom format code:" Margin="0,10,0,6"/>
+                        <TextBox x:Name="NumberFormatCodeBox"
+                                 Height="24"
+                                 AutomationProperties.Name="Custom format code"/>
                     </StackPanel>
                 </TabItem>
             </TabControl>

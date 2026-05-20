@@ -1415,6 +1415,7 @@ public sealed class MainWindowXamlKeyTipTests
         dialogSource.Should().Contain("Rank Smallest to Largest");
         dialogSource.Should().Contain("BaseFieldBox");
         dialogSource.Should().Contain("BaseItemBox");
+        dialogSource.Should().Contain("NumberFormatCode");
 
         dialogXaml
             .Descendants(presentation + "TabItem")
@@ -1432,7 +1433,8 @@ public sealed class MainWindowXamlKeyTipTests
                 "ShowValuesAsBox",
                 "BaseFieldBox",
                 "BaseItemBox",
-                "NumberFormatBox"
+                "NumberFormatBox",
+                "NumberFormatCodeBox"
             ]);
     }
 
