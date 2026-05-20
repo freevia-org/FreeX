@@ -381,12 +381,26 @@ public sealed class MainWindowSourceHygieneTests
 
         mainSource.Should().NotContain("private void InsertPickerBtn_Click(");
         mainSource.Should().NotContain("private void InsertCellsMenuItem_Click(");
+        mainSource.Should().NotContain("private void InsertRowBtn_Click(");
+        mainSource.Should().NotContain("private void DeleteSelectedRows(");
+        mainSource.Should().NotContain("private void ExecuteKeyboardInsert(");
+        mainSource.Should().NotContain("private bool ExecuteKeyboardDeleteCellsWithPrompt(");
+        mainSource.Should().NotContain("private void ExecuteRowsHidden(");
+        mainSource.Should().NotContain("private void OpenFormatCellsDialog(");
+        mainSource.Should().NotContain("private void OnAutofillRequested(");
         mainSource.Should().NotContain("private void FormatAutoRowMenuItem_Click(");
         mainSource.Should().NotContain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
         mainSource.Should().NotContain("private void FormatLockCellMenuItem_Click(");
 
         cellsSource.Should().Contain("private void InsertPickerBtn_Click(");
         cellsSource.Should().Contain("private void InsertCellsMenuItem_Click(");
+        cellsSource.Should().Contain("private void InsertRowBtn_Click(");
+        cellsSource.Should().Contain("private void DeleteSelectedRows(");
+        cellsSource.Should().Contain("private void ExecuteKeyboardInsert(");
+        cellsSource.Should().Contain("private bool ExecuteKeyboardDeleteCellsWithPrompt(");
+        cellsSource.Should().Contain("private void ExecuteRowsHidden(");
+        cellsSource.Should().Contain("private void OpenFormatCellsDialog(");
+        cellsSource.Should().Contain("private void OnAutofillRequested(");
         cellsSource.Should().Contain("private void FormatAutoRowMenuItem_Click(");
         cellsSource.Should().Contain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
         cellsSource.Should().Contain("private void FormatLockCellMenuItem_Click(");
