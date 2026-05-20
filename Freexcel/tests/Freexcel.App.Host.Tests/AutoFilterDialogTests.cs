@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace Freexcel.App.Host.Tests;
@@ -81,5 +82,15 @@ public sealed class AutoFilterDialogTests
         AutoFilterDialog.GetCriteriaSuggestions(menuPlan)
             .Should()
             .Equal("contains:", "blank");
+    }
+
+    [Fact]
+    public void DialogSearch_NarrowsChecklistWithoutDroppingHiddenSelections()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("_searchBox.TextChanged");
+        source.Should().Contain("FilterItems(_allItems, _searchBox.Text)");
+        source.Should().Contain("BuildResult(GetSortDirection(), _allItems");
     }
 }

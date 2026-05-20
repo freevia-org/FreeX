@@ -653,7 +653,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFitMenuHandlers_UsePlannerAndPerTargetExplicitSizes()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.CellsCommands.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFitPlanner.cs"));
 
         source.Should().Contain("AutoFitPlanner.PlanRowHeights");

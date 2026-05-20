@@ -173,6 +173,59 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSet_ResolvesFourAndFiveIconBandsFromExplicitThresholds()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var fourBandValues = new[] { 0, 50, 85, 100 };
+        var fiveBandValues = new[] { 10, 50, 88, 93, 100 };
+        for (uint row = 1; row <= 4; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(fourBandValues[row - 1])));
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), Cell.FromValue(new NumberValue(fiveBandValues[row - 1])));
+
+        var fourBandRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "4Arrows"
+        };
+        fourBandRule.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Percent, "10"),
+            new CfThresholdModel(CfThresholdType.Percent, "80"),
+            new CfThresholdModel(CfThresholdType.Percent, "90")
+        ]);
+        sheet.ConditionalFormats.Add(fourBandRule);
+
+        var fiveBandRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 2), new CellAddress(sheet.Id, 5, 2)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows"
+        };
+        fiveBandRule.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Number, "15"),
+            new CfThresholdModel(CfThresholdType.Number, "85"),
+            new CfThresholdModel(CfThresholdType.Number, "90"),
+            new CfThresholdModel(CfThresholdType.Number, "95")
+        ]);
+        sheet.ConditionalFormats.Add(fiveBandRule);
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("4Arrows", 0, 4, true));
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("4Arrows", 1, 4, true));
+        GetCell(vp, 3, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("4Arrows", 2, 4, true));
+        GetCell(vp, 4, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("4Arrows", 3, 4, true));
+        GetCell(vp, 1, 2).ConditionalIcon.Should().Be(new ConditionalFormatIcon("5Arrows", 0, 5, true));
+        GetCell(vp, 2, 2).ConditionalIcon.Should().Be(new ConditionalFormatIcon("5Arrows", 1, 5, true));
+        GetCell(vp, 3, 2).ConditionalIcon.Should().Be(new ConditionalFormatIcon("5Arrows", 2, 5, true));
+        GetCell(vp, 4, 2).ConditionalIcon.Should().Be(new ConditionalFormatIcon("5Arrows", 3, 5, true));
+        GetCell(vp, 5, 2).ConditionalIcon.Should().Be(new ConditionalFormatIcon("5Arrows", 4, 5, true));
+    }
+
+    [Fact]
     public void Top10_HighlightsTopRankedValues()
     {
         var (wb, sheet) = MakeWorkbook();

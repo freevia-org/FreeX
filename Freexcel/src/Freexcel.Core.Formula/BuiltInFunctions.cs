@@ -4509,7 +4509,9 @@ public static class BuiltInFunctions
     private static ScalarValue ChooseRows(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new[,] { { args[0] } });
         if (!TryResolveChoiceIndexes(args, arr.RowCount, out var rowIndexes, out var error)) return error;
 
         var result = new ScalarValue[rowIndexes.Count, arr.ColCount];
@@ -4522,7 +4524,9 @@ public static class BuiltInFunctions
     private static ScalarValue ChooseCols(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue arrayError) return arrayError;
-        if (args[0] is not RangeValue arr) return ErrorValue.Value;
+        var arr = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new[,] { { args[0] } });
         if (!TryResolveChoiceIndexes(args, arr.ColCount, out var colIndexes, out var error)) return error;
 
         var result = new ScalarValue[arr.RowCount, colIndexes.Count];
