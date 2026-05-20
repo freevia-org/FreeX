@@ -3566,7 +3566,9 @@ public static class BuiltInFunctions
     private static ScalarValue PercentrankInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e) return e;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         double x = ToNumber(args[1]);
@@ -3588,7 +3590,7 @@ public static class BuiltInFunctions
         double pctRank;
         if (equal > 0)
         {
-            pctRank = n == 1 ? 0.0 : (double)below / (n - 1);
+            pctRank = n == 1 ? 1.0 : (double)below / (n - 1);
         }
         else
         {

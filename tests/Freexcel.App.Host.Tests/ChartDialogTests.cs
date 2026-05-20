@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -135,6 +136,22 @@ public sealed class ChartDialogTests
 
         result.SourceRangeText.Should().Be("A1:D12");
         result.FirstColumnIsCategories.Should().BeTrue();
+        result.SwitchRowColumn.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_ExposesExcelStylePickerSeriesAndAxisControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("CreateReferenceEditor(_rangeBox");
+        source.Should().Contain("Select chart data range");
+        source.Should().Contain("_switchRowColumnBox");
+        source.Should().Contain("_seriesList");
+        source.Should().Contain("_axisLabelsList");
+        source.Should().Contain("Legend Entries (Series)");
+        source.Should().Contain("Horizontal (Category) Axis Labels");
+        source.Should().Contain("AddEditRemoveButtons");
     }
 
     [Fact]
