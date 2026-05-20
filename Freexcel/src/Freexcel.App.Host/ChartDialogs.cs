@@ -138,6 +138,62 @@ public sealed class ChangeChartTypeDialog : Window
     });
 }
 
+public sealed record ChartTitlesDialogResult(string ChartTitle, string XAxisTitle, string YAxisTitle)
+{
+    public ChartLayoutOptions ToOptions() => new(
+        Title: ChartTitle,
+        XAxisTitle: XAxisTitle,
+        YAxisTitle: YAxisTitle);
+}
+
+public sealed class ChartTitlesDialog : Window
+{
+    private readonly TextBox _chartTitleBox = new();
+    private readonly TextBox _xAxisTitleBox = new();
+    private readonly TextBox _yAxisTitleBox = new();
+
+    public ChartTitlesDialogResult Result { get; private set; }
+
+    public ChartTitlesDialog(string? chartTitle, string? xAxisTitle, string? yAxisTitle)
+    {
+        Result = CreateResult(chartTitle, xAxisTitle, yAxisTitle);
+        Title = "Chart Titles";
+        Width = 380;
+        Height = 240;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+
+        _chartTitleBox.Text = chartTitle ?? "";
+        _xAxisTitleBox.Text = xAxisTitle ?? "";
+        _yAxisTitleBox.Text = yAxisTitle ?? "";
+
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        AddInput(stack, "Chart title", _chartTitleBox);
+        AddInput(stack, "Horizontal axis title", _xAxisTitleBox);
+        AddInput(stack, "Vertical axis title", _yAxisTitleBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
+        {
+            Result = CreateResult(_chartTitleBox.Text, _xAxisTitleBox.Text, _yAxisTitleBox.Text);
+            DialogResult = true;
+        }));
+        Content = stack;
+    }
+
+    public static ChartTitlesDialogResult CreateResult(string? chartTitle, string? xAxisTitle, string? yAxisTitle) =>
+        new(
+            (chartTitle ?? "").Trim(),
+            (xAxisTitle ?? "").Trim(),
+            (yAxisTitle ?? "").Trim());
+
+    private static void AddInput(Panel stack, string label, TextBox box)
+    {
+        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        box.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(box);
+    }
+}
+
 public sealed record ChartStyleDialogResult(int? ChartStyleId);
 
 public sealed class ChartStyleDialog : Window

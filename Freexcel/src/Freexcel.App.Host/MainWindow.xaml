@@ -1668,6 +1668,10 @@
                                         local:RibbonTooltip.Title="Chart Area Fill"
                                         local:RibbonTooltip.KeyTip="CF"
                                         local:RibbonTooltip.Description="Cycle the current chart area fill color."/>
+                                <Button Content="Titles..." Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitlesBtn_Click"
+                                        local:RibbonTooltip.Title="Chart Titles"
+                                        local:RibbonTooltip.KeyTip="TI"
+                                        local:RibbonTooltip.Description="Edit chart title and axis-title text."/>
                                 <Button Content="Title Color" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTitleColorBtn_Click"
                                         local:RibbonTooltip.Title="Chart Title Color"
                                         local:RibbonTooltip.KeyTip="TC"
