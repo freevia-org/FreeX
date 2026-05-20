@@ -76,6 +76,10 @@ public class NumberFormatterTests
     [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
     [InlineData("[Color3][<0]0.00;[Color5]0.00", 2.5, "2.50", "#0070C0")]
     [InlineData("[Color6]0.00", 2.5, "2.50", "#FFFF00")]
+    [InlineData("[Color9]0.00", 2.5, "2.50", "#800000")]
+    [InlineData("[Color16]0.00", 2.5, "2.50", "#808080")]
+    [InlineData("[Color46]0.00", 2.5, "2.50", "#FF6600")]
+    [InlineData("[Color56]0.00", 2.5, "2.50", "#333333")]
     public void CustomNumberSubset_ReturnsColorFromConditionalSections(
         string format,
         double value,
@@ -83,6 +87,40 @@ public class NumberFormatterTests
         string expectedColor)
     {
         var result = NumberFormatter.FormatWithColor(new NumberValue(value), format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
+    [InlineData("[Color9]m/d/yyyy", 45292, "1/1/2024", "#800000")]
+    [InlineData("0;0;0;[Red]@", 0, "hello", "#FF0000")]
+    public void CustomNumberSubset_ReturnsColorFromDateAndTextSections(
+        string format,
+        double numericValue,
+        string expectedText,
+        string expectedColor)
+    {
+        ScalarValue value = format.Contains('@', StringComparison.Ordinal)
+            ? new TextValue(expectedText)
+            : new DateTimeValue(numericValue);
+
+        var result = NumberFormatter.FormatWithColor(value, format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
+    [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45292, "1/1/2024", "#FF0000")]
+    [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45294, "1/3/2024", "#0070C0")]
+    public void CustomNumberSubset_SelectsConditionalDateTimeSections(
+        string format,
+        double numericValue,
+        string expectedText,
+        string expectedColor)
+    {
+        var result = NumberFormatter.FormatWithColor(new DateTimeValue(numericValue), format);
 
         Assert.Equal(expectedText, result.Text);
         Assert.Equal(expectedColor, result.ColorHex);

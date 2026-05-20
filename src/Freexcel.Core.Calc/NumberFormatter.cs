@@ -6,6 +6,67 @@ namespace Freexcel.Core.Calc;
 
 public static class NumberFormatter
 {
+    private static readonly string[] IndexedFormatColors =
+    [
+        "",
+        "#000000",
+        "#FFFFFF",
+        "#FF0000",
+        "#00B050",
+        "#0070C0",
+        "#FFFF00",
+        "#FF00FF",
+        "#00FFFF",
+        "#800000",
+        "#008000",
+        "#000080",
+        "#808000",
+        "#800080",
+        "#008080",
+        "#C0C0C0",
+        "#808080",
+        "#9999FF",
+        "#993366",
+        "#FFFFCC",
+        "#CCFFFF",
+        "#660066",
+        "#FF8080",
+        "#0066CC",
+        "#CCCCFF",
+        "#000080",
+        "#FF00FF",
+        "#FFFF00",
+        "#00FFFF",
+        "#800080",
+        "#800000",
+        "#008080",
+        "#0000FF",
+        "#00CCFF",
+        "#CCFFFF",
+        "#CCFFCC",
+        "#FFFF99",
+        "#99CCFF",
+        "#FF99CC",
+        "#CC99FF",
+        "#FFCC99",
+        "#3366FF",
+        "#33CCCC",
+        "#99CC00",
+        "#FFCC00",
+        "#FF9900",
+        "#FF6600",
+        "#666699",
+        "#969696",
+        "#003366",
+        "#339966",
+        "#003300",
+        "#333300",
+        "#993300",
+        "#333399",
+        "#333333",
+        "#333333"
+    ];
+
     // Returned alongside display text so the grid can apply conditional colors.
     public sealed record FormatResult(string Text, string? ColorHex = null);
 
@@ -49,9 +110,8 @@ public static class NumberFormatter
         return value switch
         {
             NumberValue n   => FormatNumber(n.Value, sections),
-            DateTimeValue d => new FormatResult(FormatDateTime(d.Value, sections[0])),
-            TextValue t     => new FormatResult(sections.Length > 3 && !string.IsNullOrEmpty(sections[3])
-                                   ? ApplyTextSection(sections[3], t.Value) : t.Value),
+            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections),
+            TextValue t     => FormatTextWithColor(t.Value, sections),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
             BlankValue      => new FormatResult(""),
@@ -261,20 +321,18 @@ public static class NumberFormatter
 
     private static bool TryMapIndexedColor(string token, out string? color)
     {
-        color = token.ToUpperInvariant() switch
+        color = null;
+        var match = Regex.Match(token, @"^Color(\d+)$", RegexOptions.IgnoreCase);
+        if (!match.Success ||
+            !int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
+            index <= 0 ||
+            index >= IndexedFormatColors.Length)
         {
-            "COLOR1" => "#000000",
-            "COLOR2" => "#FFFFFF",
-            "COLOR3" => "#FF0000",
-            "COLOR4" => "#00B050",
-            "COLOR5" => "#0070C0",
-            "COLOR6" => "#FFFF00",
-            "COLOR7" => "#FF00FF",
-            "COLOR8" => "#00FFFF",
-            _ => null
-        };
+            return false;
+        }
 
-        return color is not null;
+        color = IndexedFormatColors[index];
+        return true;
     }
 
     private static string ApplyNumericFormat(double value, string format)
@@ -672,6 +730,27 @@ public static class NumberFormatter
 
     // ── Date/time formatting ──────────────────────────────────────────────────
 
+    private static FormatResult FormatDateTimeWithColor(double oaDate, string[] sections)
+    {
+        var parsed = SelectDateTimeSection(oaDate, sections);
+        return new FormatResult(FormatDateTime(oaDate, parsed.Format), parsed.ColorHex);
+    }
+
+    private static ParsedSection SelectDateTimeSection(double value, string[] sections)
+    {
+        var parsedSections = sections.Select(ParseSection).ToArray();
+        if (!parsedSections.Any(section => section.Condition is not null))
+            return parsedSections[0];
+
+        var selectedIndex = Array.FindIndex(parsedSections, section =>
+            section.Condition is not null && section.Condition.Matches(value));
+        if (selectedIndex >= 0)
+            return parsedSections[selectedIndex];
+
+        selectedIndex = Array.FindIndex(parsedSections, section => section.Condition is null);
+        return selectedIndex >= 0 ? parsedSections[selectedIndex] : parsedSections[0];
+    }
+
     private static string FormatDateTime(double oaDate, string format)
     {
         var (_, cleanFmt) = ExtractColor(format);
@@ -835,6 +914,15 @@ public static class NumberFormatter
     }
 
     // ── Text section ──────────────────────────────────────────────────────────
+
+    private static FormatResult FormatTextWithColor(string text, string[] sections)
+    {
+        if (sections.Length <= 3 || string.IsNullOrEmpty(sections[3]))
+            return new FormatResult(text);
+
+        var parsed = ParseSection(sections[3]);
+        return new FormatResult(ApplyTextSection(parsed.Format, text), parsed.ColorHex);
+    }
 
     private static string ApplyTextSection(string section, string text)
     {

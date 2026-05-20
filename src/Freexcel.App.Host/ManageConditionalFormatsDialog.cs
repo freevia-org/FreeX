@@ -421,6 +421,13 @@ public sealed class ManageConditionalFormatsDialog : Window
         CfRuleType.DataBar     => cf.DataBarShowValue ? "Data Bar" : "Data Bar (bar only)",
         CfRuleType.ColorScale  => cf.UseThreeColorScale ? "3-Color Scale" : "2-Color Scale",
         CfRuleType.IconSet     => BuildIconSetDescription(cf),
+        CfRuleType.ContainsText => $"Text contains \"{cf.TextRuleText}\"",
+        CfRuleType.NotContainsText => $"Text does not contain \"{cf.TextRuleText}\"",
+        CfRuleType.BeginsWith  => $"Text begins with \"{cf.TextRuleText}\"",
+        CfRuleType.EndsWith    => $"Text ends with \"{cf.TextRuleText}\"",
+        CfRuleType.DateOccurring => $"Date occurring: {DatePeriodLabel(cf.DateOccurringPeriod)}",
+        CfRuleType.DuplicateValues => "Duplicate Values",
+        CfRuleType.UniqueValues => "Unique Values",
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
         CfRuleType.Top10       => $"{(cf.AboveAverage ? "Top" : "Bottom")} {cf.TopBottomRank}{(cf.TopBottomPercent ? "%" : "")}",
         CfRuleType.CellValue   => BuildCellValueDescription(cf),
@@ -437,6 +444,21 @@ public sealed class ManageConditionalFormatsDialog : Window
             ? $"Icon Set: {style}"
             : $"Icon Set: {style} ({string.Join(", ", flags)})";
     }
+
+    private static string DatePeriodLabel(string? value) => value switch
+    {
+        "yesterday" => "Yesterday",
+        "today" => "Today",
+        "tomorrow" => "Tomorrow",
+        "last7Days" => "Last 7 Days",
+        "lastWeek" => "Last Week",
+        "thisWeek" => "This Week",
+        "nextWeek" => "Next Week",
+        "lastMonth" => "Last Month",
+        "thisMonth" => "This Month",
+        "nextMonth" => "Next Month",
+        _ => "Today"
+    };
 
     private static string BuildCellValueDescription(ConditionalFormat cf)
     {

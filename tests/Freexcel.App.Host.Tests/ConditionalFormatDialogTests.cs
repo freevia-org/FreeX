@@ -14,6 +14,8 @@ public sealed class ConditionalFormatDialogTests
     [InlineData("Data Bar", typeof(DataBarRuleDialog))]
     [InlineData("Color Scale", typeof(ColorScaleRuleDialog))]
     [InlineData("Icon Set", typeof(IconSetRuleDialog))]
+    [InlineData("Date Occurring", typeof(HighlightCellsRuleDialog))]
+    [InlineData("Duplicate Values", typeof(HighlightCellsRuleDialog))]
     [InlineData("Formula", typeof(NewConditionalFormatRuleDialog))]
     public void Factory_CreatesRuleFamilySpecificDialogs(string ruleType, Type expectedDialogType)
     {
@@ -44,6 +46,102 @@ public sealed class ConditionalFormatDialogTests
             dialog.ResultRule.TopBottomPercent.Should().Be(topBottomPercent);
 
             dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void TextContainsRule_CreatesContainsTextConditionalFormat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Text Contains", RangeFor(SheetId.New())));
+
+            GetControl<TextBox>(dialog, "_value1Box").Text = "urgent";
+            GetControl<ComboBox>(dialog, "_colorBox").SelectedItem = "Yellow Fill";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.ContainsText);
+            dialog.ResultRule.TextRuleText.Should().Be("urgent");
+            dialog.ResultRule.FormatIfTrue.Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DateOccurringRule_CreatesTimePeriodConditionalFormat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Date Occurring", RangeFor(SheetId.New())));
+
+            GetControl<ComboBox>(dialog, "_dateOccurringPeriodBox").SelectedItem = "Next Month";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.DateOccurring);
+            dialog.ResultRule.DateOccurringPeriod.Should().Be("nextMonth");
+            dialog.ResultRule.FormatIfTrue.Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void DuplicateValuesRule_CreatesDuplicateOrUniqueConditionalFormat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Duplicate Values", RangeFor(SheetId.New())));
+
+            GetControl<ComboBox>(dialog, "_duplicateValuesKindBox").SelectedItem = "Unique";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.UniqueValues);
+            dialog.ResultRule.FormatIfTrue.Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingLongTailHighlightRules_PrePopulateDialogFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var textRule = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.ContainsText,
+                TextRuleText = "review"
+            };
+            var textDialog = ShowDialogForTest(new ConditionalFormatDialog(textRule));
+            GetControl<TextBox>(textDialog, "_value1Box").Text.Should().Be("review");
+            textDialog.Close();
+
+            var dateRule = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DateOccurring,
+                DateOccurringPeriod = "last7Days"
+            };
+            var dateDialog = ShowDialogForTest(new ConditionalFormatDialog(dateRule));
+            GetControl<ComboBox>(dateDialog, "_dateOccurringPeriodBox").SelectedItem.Should().Be("Last 7 Days");
+            dateDialog.Close();
+
+            var uniqueRule = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.UniqueValues
+            };
+            var uniqueDialog = ShowDialogForTest(new ConditionalFormatDialog(uniqueRule));
+            GetControl<ComboBox>(uniqueDialog, "_duplicateValuesKindBox").SelectedItem.Should().Be("Unique");
+            uniqueDialog.Close();
         });
     }
 
