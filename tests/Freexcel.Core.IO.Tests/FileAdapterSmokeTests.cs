@@ -11242,8 +11242,10 @@ public class FileAdapterSmokeTests
         var fields = loaded.PivotCaches.Should().ContainSingle().Subject.Fields;
         fields[0].SharedItemCount.Should().Be(2);
         fields[0].ContainsString.Should().BeTrue();
+        fields[0].SharedItems.Should().Equal("A", "B");
         fields[1].SharedItemCount.Should().Be(2);
         fields[1].ContainsNumber.Should().BeTrue();
+        fields[1].SharedItems.Should().Equal("10", "20");
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -11253,6 +11255,8 @@ public class FileAdapterSmokeTests
         var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!).ToString();
         cacheXml.Should().Contain("<s v=\"A\"");
         cacheXml.Should().Contain("<s v=\"B\"");
+        cacheXml.Should().Contain("<n v=\"10\"");
+        cacheXml.Should().Contain("<n v=\"20\"");
         cacheXml.Should().Contain("containsNumber=\"1\"");
         cacheXml.Should().Contain("count=\"2\"");
     }
@@ -11276,15 +11280,18 @@ public class FileAdapterSmokeTests
         mixed.ContainsMixedTypes.Should().BeTrue();
         mixed.ContainsSemiMixedTypes.Should().BeTrue();
         mixed.ContainsLongText.Should().BeTrue();
+        mixed.SharedItems.Should().Equal("Short", "Long text sample");
         var numeric = fields[1];
         numeric.ContainsInteger.Should().BeTrue();
         numeric.ContainsNonDate.Should().BeTrue();
         numeric.MinValue.Should().Be(10);
         numeric.MaxValue.Should().Be(20);
+        numeric.SharedItems.Should().Equal("10", "20");
         var date = fields[2];
         date.ContainsDate.Should().BeTrue();
         date.MinDate.Should().Be("2026-01-01T00:00:00");
         date.MaxDate.Should().Be("2026-03-31T00:00:00");
+        date.SharedItems.Should().Equal("2026-01-01T00:00:00", "2026-03-31T00:00:00");
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -11301,6 +11308,9 @@ public class FileAdapterSmokeTests
         cacheXml.Should().Contain("maxValue=\"20\"");
         cacheXml.Should().Contain("minDate=\"2026-01-01T00:00:00\"");
         cacheXml.Should().Contain("maxDate=\"2026-03-31T00:00:00\"");
+        cacheXml.Should().Contain("<s v=\"Short\"");
+        cacheXml.Should().Contain("<n v=\"20\"");
+        cacheXml.Should().Contain("<d v=\"2026-03-31T00:00:00\"");
     }
 
     [Fact]

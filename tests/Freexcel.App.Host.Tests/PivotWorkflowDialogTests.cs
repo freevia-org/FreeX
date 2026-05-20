@@ -252,4 +252,30 @@ public sealed class PivotWorkflowDialogTests
         result.Should().Be(new PivotCalculatedItemDialogResult("Region", 0, "East + West", "East+West"));
         result.ToModel().Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
     }
+
+    [Fact]
+    public void PivotChartOptionsDialog_CreateResult_ParsesAndClampsStyle()
+    {
+        PivotChartOptionsDialog.CreateResult(" 99 ", showFieldButtons: false)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(48, false));
+
+        PivotChartOptionsDialog.CreateResult("not-a-style", showFieldButtons: true)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(null, true));
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_FromChart_UsesCurrentSettings()
+    {
+        var chart = new ChartModel
+        {
+            ChartStyleId = 12,
+            ShowPivotChartFieldButtons = false
+        };
+
+        PivotChartOptionsDialog.FromChart(chart)
+            .Should()
+            .Be(new PivotChartOptionsDialogResult(12, false));
+    }
 }
