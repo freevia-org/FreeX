@@ -11374,6 +11374,25 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_ImportsNativePivotFieldSorts()
+    {
+        var workbook = new Workbook("PivotNativeSortTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, pivotTableDefinitionXml: PivotTableDefinitionWithNativeSortXml);
+
+        var loaded = adapter.Load(source);
+
+        loaded.GetSheetAt(0).PivotTables.Should().ContainSingle().Subject.Sorts
+            .Should().ContainSingle()
+            .Which.Should().Be(new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Descending, FieldIndex: 0));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesNativePivotCacheRecordsRelationship()
     {
         var workbook = new Workbook("PivotCacheRecordsRetentionTest");
@@ -14653,6 +14672,31 @@ public class FileAdapterSmokeTests
             <filter fld="0" type="captionContains" stringValue1="A"/>
             <filter fld="0" iMeasureFld="0" type="valueGreaterThan" stringValue1="15"/>
           </filters>
+        </pivotTableDefinition>
+        """;
+
+    private const string PivotTableDefinitionWithNativeSortXml = """
+        <pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                              name="PivotTable1"
+                              cacheId="1"
+                              dataOnRows="0"
+                              applyNumberFormats="0"
+                              applyBorderFormats="0"
+                              applyFontFormats="0"
+                              applyPatternFormats="0"
+                              applyAlignmentFormats="0"
+                              applyWidthHeightFormats="1">
+          <location ref="D3:E5" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>
+          <pivotFields count="2">
+            <pivotField axis="axisRow" showAll="0" sortType="descending"/>
+            <pivotField dataField="1" showAll="0"/>
+          </pivotFields>
+          <rowFields count="1">
+            <field x="0"/>
+          </rowFields>
+          <dataFields count="1">
+            <dataField name="Sum of Amount" fld="1" subtotal="sum" numFmtId="0"/>
+          </dataFields>
         </pivotTableDefinition>
         """;
 
