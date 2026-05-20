@@ -36,7 +36,7 @@ public partial class MainWindow
         var request = ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result);
         var exported = request.Format == ExportFormat.Pdf
             ? ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)
-            : ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), request.Options);
+            : ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options);
         if (exported && request.Options.OpenAfterPublish)
             OpenExportedFile(request.ActualPath);
     }
@@ -46,7 +46,8 @@ public partial class MainWindow
         try
         {
             var document = RenderExportDocument(options);
-            PdfDocumentExporter.Save(document, pdfPath);
+            var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
+            PdfDocumentExporter.Save(document, pdfPath, properties);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
