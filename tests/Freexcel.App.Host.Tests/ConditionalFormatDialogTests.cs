@@ -73,6 +73,74 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void DataBarRule_CreatesDataBarOptionsWithoutFormatIfTrue()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var range = RangeFor(SheetId.New());
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Data Bar", range));
+
+            GetControl<ComboBox>(dialog, "_dataBarMinTypeBox").SelectedItem = CfThresholdType.Percentile;
+            GetControl<TextBox>(dialog, "_dataBarMinValueBox").Text = "10";
+            GetControl<ComboBox>(dialog, "_dataBarMaxTypeBox").SelectedItem = CfThresholdType.Number;
+            GetControl<TextBox>(dialog, "_dataBarMaxValueBox").Text = "99";
+            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked = false;
+            GetControl<TextBox>(dialog, "_dataBarMinLengthBox").Text = "5";
+            GetControl<TextBox>(dialog, "_dataBarMaxLengthBox").Text = "95";
+            GetControl<ComboBox>(dialog, "_colorBox").SelectedItem = "Green Fill";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.DataBar);
+            dialog.ResultRule.DataBarColor.Should().Be(new RgbColor(198, 239, 206));
+            dialog.ResultRule.DataBarMinThresholdType.Should().Be(CfThresholdType.Percentile);
+            dialog.ResultRule.DataBarMinThresholdValue.Should().Be("10");
+            dialog.ResultRule.DataBarMaxThresholdType.Should().Be(CfThresholdType.Number);
+            dialog.ResultRule.DataBarMaxThresholdValue.Should().Be("99");
+            dialog.ResultRule.DataBarShowValue.Should().BeFalse();
+            dialog.ResultRule.DataBarMinLength.Should().Be(5);
+            dialog.ResultRule.DataBarMaxLength.Should().Be(95);
+            dialog.ResultRule.FormatIfTrue.Should().BeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void ExistingDataBarRule_PrePopulatesDataBarFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.DataBar,
+                DataBarColor = new RgbColor(198, 239, 206),
+                DataBarMinThresholdType = CfThresholdType.Percentile,
+                DataBarMinThresholdValue = "15",
+                DataBarMaxThresholdType = CfThresholdType.Percent,
+                DataBarMaxThresholdValue = "90",
+                DataBarShowValue = false,
+                DataBarMinLength = 7,
+                DataBarMaxLength = 88
+            };
+
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            GetControl<ComboBox>(dialog, "_dataBarMinTypeBox").SelectedItem.Should().Be(CfThresholdType.Percentile);
+            GetControl<TextBox>(dialog, "_dataBarMinValueBox").Text.Should().Be("15");
+            GetControl<ComboBox>(dialog, "_dataBarMaxTypeBox").SelectedItem.Should().Be(CfThresholdType.Percent);
+            GetControl<TextBox>(dialog, "_dataBarMaxValueBox").Text.Should().Be("90");
+            GetControl<CheckBox>(dialog, "_dataBarShowValueBox").IsChecked.Should().BeFalse();
+            GetControl<TextBox>(dialog, "_dataBarMinLengthBox").Text.Should().Be("7");
+            GetControl<TextBox>(dialog, "_dataBarMaxLengthBox").Text.Should().Be("88");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void IconSetRule_CreatesThresholdsForSelectedIconCount()
     {
         StaTestRunner.Run(() =>
