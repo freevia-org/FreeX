@@ -55,6 +55,19 @@ public static class BorderShortcutService
             BorderLeft: address.Col == range.Start.Col ? border : null);
     }
 
+    public static StyleDiff GetInsideBorderDiff(GridRange range, CellAddress address) =>
+        GetInsideBorderDiff(range, address, BorderStyle.Thin, CellColor.Black);
+
+    public static StyleDiff GetInsideBorderDiff(GridRange range, CellAddress address, BorderStyle style, CellColor color)
+    {
+        var border = CreateBorder(style, color);
+        return new StyleDiff(
+            BorderTop: address.Row > range.Start.Row ? border : null,
+            BorderRight: address.Col < range.End.Col ? border : null,
+            BorderBottom: address.Row < range.End.Row ? border : null,
+            BorderLeft: address.Col > range.Start.Col ? border : null);
+    }
+
     public static StyleDiff GetTopAndBottomBorderDiff(GridRange range, CellAddress address, BorderStyle bottomStyle) =>
         GetTopAndBottomBorderDiff(range, address, BorderStyle.Thin, bottomStyle, CellColor.Black);
 
