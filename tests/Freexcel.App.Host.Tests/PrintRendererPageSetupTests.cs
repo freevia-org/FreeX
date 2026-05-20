@@ -71,4 +71,22 @@ public sealed class PrintRendererPageSetupTests
             paginator.PageCount.Should().Be(2);
         });
     }
+
+    [Fact]
+    public void RenderWorksheet_PrintsThreadedCommentsAtEnd()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Threaded comment print");
+            var sheet = workbook.AddSheet("Sheet1");
+            var a1 = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(a1, new TextValue("Total"));
+            sheet.ThreadedComments[a1] = new ThreadedComment("Review total", "Quinn");
+            sheet.PrintComments = WorksheetPrintComments.AtEnd;
+
+            var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+
+            document.Pages.Should().HaveCount(2);
+        });
+    }
 }
