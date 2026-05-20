@@ -574,6 +574,54 @@ public sealed class ChartCommandTests
     }
 
     [Fact]
+    public void SetChartStyleCommand_UpdatesStyleAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            ChartStyleId = 4
+        };
+        sheet.Charts.Add(chart);
+
+        var command = new SetChartStyleCommand(sheet.Id, chart.Id, 99);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        chart.ChartStyleId.Should().Be(48);
+
+        command.Revert(ctx);
+        chart.ChartStyleId.Should().Be(4);
+    }
+
+    [Fact]
+    public void SetChartStyleCommand_AllowsClearingStyle()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            ChartStyleId = 10
+        };
+        sheet.Charts.Add(chart);
+
+        new SetChartStyleCommand(sheet.Id, chart.Id, null).Apply(ctx).Success.Should().BeTrue();
+
+        chart.ChartStyleId.Should().BeNull();
+    }
+
+    [Fact]
     public void ChangeChartSourceCommand_UpdatesNormalChartSourceAndUndoRestores()
     {
         var wb = new Workbook("test");
