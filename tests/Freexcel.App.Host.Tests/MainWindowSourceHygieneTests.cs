@@ -524,6 +524,38 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SelectionAndGridInteractionController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var selectionSourcePath = Path.Combine(appHostDirectory, "MainWindow.Selection.cs");
+
+        File.Exists(selectionSourcePath).Should().BeTrue();
+        var selectionSource = File.ReadAllText(selectionSourcePath);
+
+        mainSource.Should().NotContain("private void SelectRow(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseDown(");
+        mainSource.Should().NotContain("private void MainWindow_TextInput(");
+        mainSource.Should().NotContain("private void MainWindow_KeyDown(");
+        mainSource.Should().NotContain("private void SetActiveCell(");
+        mainSource.Should().NotContain("private void SelectCurrentRegionOrAll(");
+        mainSource.Should().NotContain("private void AddOrMoveAdditionalSelection(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseMove(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseUp(");
+
+        selectionSource.Should().Contain("private void SelectRow(");
+        selectionSource.Should().Contain("private void SheetGrid_MouseDown(");
+        selectionSource.Should().Contain("private void MainWindow_TextInput(");
+        selectionSource.Should().Contain("private void MainWindow_KeyDown(");
+        selectionSource.Should().Contain("private void SetActiveCell(");
+        selectionSource.Should().Contain("private void SelectCurrentRegionOrAll(");
+        selectionSource.Should().Contain("private void AddOrMoveAdditionalSelection(");
+        selectionSource.Should().Contain("private void SheetGrid_MouseMove(");
+        selectionSource.Should().Contain("private void SheetGrid_MouseUp(");
+        selectionSource.Should().Contain("ExcelWorksheetNavigationPlanner");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
