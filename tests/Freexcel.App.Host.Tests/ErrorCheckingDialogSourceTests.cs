@@ -19,9 +19,23 @@ public sealed class ErrorCheckingDialogSourceTests
     [Fact]
     public void ErrorCheckingEmptyResultMessageUsesIssueWording()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormulaCommands.cs"));
 
         source.Should().Contain("No issues found.");
         source.Should().NotContain("No errors found.");
+    }
+
+    [Fact]
+    public void ErrorCheckingDialog_ExposesOptionsCallbackButton()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
+        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormulaCommands.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+
+        dialogSource.Should().Contain("Action? openOptions");
+        dialogSource.Should().Contain("Content = \"Options...\"");
+        dialogSource.Should().Contain("_openOptions?.Invoke()");
+        formulaSource.Should().Contain("ShowOptionsDialog");
+        backstageSource.Should().Contain("private void ShowOptionsDialog()");
     }
 }
