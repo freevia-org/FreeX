@@ -46,6 +46,9 @@ public partial class MainWindow
         try
         {
             var document = RenderExportDocument(options);
+            if (!ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count, out var pageRangeError))
+                throw new InvalidOperationException(pageRangeError);
+
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
             PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange);
 
@@ -142,11 +145,17 @@ public partial class MainWindow
             ? PrintRenderer.RenderWorkbook(_workbook, _viewportService)
             : PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ResolveExportRange(options));
 
-    private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options) =>
-        ApplyExportPageRange(options,
-            options.Scope == ExportContentScope.EntireWorkbook
+    private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options)
+    {
+        var paginator = options.Scope == ExportContentScope.EntireWorkbook
             ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService)
-            : RenderExportDocument(options).DocumentPaginator);
+            : RenderExportDocument(options).DocumentPaginator;
+
+        if (!ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount, out var pageRangeError))
+            throw new InvalidOperationException(pageRangeError);
+
+        return ApplyExportPageRange(options, paginator);
+    }
 
     private static System.Windows.Documents.DocumentPaginator ApplyExportPageRange(
         ExportOptions options,
