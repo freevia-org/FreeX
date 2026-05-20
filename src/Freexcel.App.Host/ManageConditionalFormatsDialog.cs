@@ -402,6 +402,7 @@ public sealed class ManageConditionalFormatsDialog : Window
             DateOccurringPeriod = src.DateOccurringPeriod,
             StopIfTrue    = src.StopIfTrue,
         };
+        cf.IconSetThresholds.AddRange(src.IconSetThresholds);
         return cf;
     }
 

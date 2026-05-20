@@ -370,6 +370,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_UpdatesLiveHoverPreviewStatus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("QuickAnalysisMenuItem_MouseEnter");
+        source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
+        source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, option)");
+        source.Should().Contain("StatusReadyText.Text = preview.StatusText");
+        source.Should().Contain("StatusReadyText.Text = \"Ready\"");
+    }
+
+    [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));

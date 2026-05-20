@@ -92,4 +92,36 @@ public sealed class QuickAnalysisPlannerTests
         options.Single(option => option.Command == QuickAnalysisCommand.LineSparkline)
             .PreviewKind.Should().Be(QuickAnalysisPreviewKind.Sparkline);
     }
+
+    [Fact]
+    public void BuildHoverPreview_UsesSelectionForFormattingChartsAndTables()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 5));
+        var chart = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.ColumnChart);
+        var table = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.FormatAsTable);
+
+        QuickAnalysisPlanner.BuildHoverPreview(selection, chart).Should().Be(
+            new QuickAnalysisHoverPreview(selection, QuickAnalysisPreviewKind.Chart, "Column", "Preview a clustered column chart from the selected range."));
+        QuickAnalysisPlanner.BuildHoverPreview(selection, table).Should().Be(
+            new QuickAnalysisHoverPreview(selection, QuickAnalysisPreviewKind.Table, "Format as Table", "Preview formatting the selection as a table."));
+    }
+
+    [Fact]
+    public void BuildHoverPreview_PlacesTotalsAndSparklinesBesideSelection()
+    {
+        var sheetId = SheetId.New();
+        var selection = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 6, 5));
+        var sum = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.Sum);
+        var sparkline = QuickAnalysisPlanner.BuildOptions(selection)
+            .Single(option => option.Command == QuickAnalysisCommand.LineSparkline);
+
+        QuickAnalysisPlanner.BuildHoverPreview(selection, sum)!.Range.Should().Be(
+            new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+        QuickAnalysisPlanner.BuildHoverPreview(selection, sparkline)!.Range.Should().Be(
+            new GridRange(new CellAddress(sheetId, 2, 6), new CellAddress(sheetId, 6, 6)));
+    }
 }

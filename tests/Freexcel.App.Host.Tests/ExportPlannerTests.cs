@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -99,5 +100,41 @@ public class ExportPlannerTests
         source.Should().Contain("Content = \"Print...\"");
         source.Should().Contain("ShowNativePrintDialog");
         source.Should().Contain("PrintDocument(document.DocumentPaginator");
+    }
+
+    [Fact]
+    public void PrintSettingsPlanner_SummarizesExcelLikeActiveSheetSettings()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1")
+        {
+            PageOrientation = WorksheetPageOrientation.Landscape,
+            PaperSize = WorksheetPaperSize.Letter,
+            PrintGridlines = true,
+            PrintHeadings = true,
+            ScaleToFit = new WorksheetScaleToFit(85, 1, 2)
+        };
+
+        var plan = PrintSettingsPlanner.Build(sheet);
+
+        plan.Lines.Should().Equal(
+            "Print active sheet",
+            "Orientation: Landscape",
+            "Paper size: Letter",
+            "Scaling: 85%; fit 1 page wide by 2 tall",
+            "Gridlines: on",
+            "Headings: on");
+        plan.Summary.Should().Be("Print active sheet; Orientation: Landscape; Paper size: Letter; Scaling: 85%; fit 1 page wide by 2 tall; Gridlines: on; Headings: on");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+        var mainWindow = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("PrintSettingsPlan settings");
+        source.Should().Contain("settings.Summary");
+        mainWindow.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        mainWindow.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
     }
 }
