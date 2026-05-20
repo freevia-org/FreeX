@@ -5242,6 +5242,26 @@ public class FunctionLibraryTests
 
     // ── SUBTOTAL ─────────────────────────────────────────────────────────────
 
+    [Fact]
+    public void Unique_DistinguishesScalarTypesWhenDeduplicating()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new TextValue("1")),
+            (3, 1, new BoolValue(true)),
+            (4, 1, new TextValue("TRUE")),
+            (5, 1, new NumberValue(1)));
+
+        var result = _eval.Evaluate("=UNIQUE(A1:A5)", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(4);
+        rv.Cells[0, 0].Should().Be(new NumberValue(1));
+        rv.Cells[1, 0].Should().Be(new TextValue("1"));
+        rv.Cells[2, 0].Should().Be(new BoolValue(true));
+        rv.Cells[3, 0].Should().Be(new TextValue("TRUE"));
+    }
+
     [Fact] public void Unique_ByColError_PropagatesError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)));

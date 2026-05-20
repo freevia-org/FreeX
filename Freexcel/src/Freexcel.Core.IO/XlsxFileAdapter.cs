@@ -10796,7 +10796,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
             ChartType.Stock => new XElement(chartNs + "stockChart",
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
+                ToChartGuideLineXml(chart, chartNs)),
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
@@ -10838,7 +10839,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         new(chartNs + "lineChart",
-            BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true));
+            BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
+            ToChartGuideLineXml(chart, chartNs));
 
     private static XElement CreateScatterPlotChart(
         ChartModel chart,
@@ -10849,6 +10851,16 @@ public sealed class XlsxFileAdapter : IFileAdapter
         new(chartNs + "scatterChart",
             new XElement(chartNs + "scatterStyle", new XAttribute("val", "lineMarker")),
             BuildScatterChartSeries(chart, sheet, chartNs, drawingNs, includeSeries));
+
+    private static IEnumerable<XElement> ToChartGuideLineXml(ChartModel chart, XNamespace chartNs)
+    {
+        if (chart.ShowDropLines)
+            yield return new XElement(chartNs + "dropLines");
+        if (chart.ShowHighLowLines)
+            yield return new XElement(chartNs + "hiLowLines");
+        if (chart.ShowUpDownBars)
+            yield return new XElement(chartNs + "upDownBars");
+    }
 
     private static void AddPlotChartCommonElements(
         XElement plotChart,
