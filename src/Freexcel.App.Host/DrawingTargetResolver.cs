@@ -9,7 +9,10 @@ public static class DrawingTargetResolver
         if (sheet is null || sheet.Pictures.Count == 0)
             return null;
 
-        return GetSelectedOrLast(sheet.Pictures, selectedAnchor, picture => picture.Anchor);
+        return GetSelectedOrLast(
+            sheet.Pictures.Where(picture => picture.IsVisible).ToList(),
+            selectedAnchor,
+            picture => picture.Anchor);
     }
 
     public static DrawingShapeModel? GetTargetDrawingShape(Sheet? sheet, CellAddress? selectedAnchor)
@@ -17,7 +20,10 @@ public static class DrawingTargetResolver
         if (sheet is null || sheet.DrawingShapes.Count == 0)
             return null;
 
-        return GetSelectedOrLast(sheet.DrawingShapes, selectedAnchor, shape => shape.Anchor);
+        return GetSelectedOrLast(
+            sheet.DrawingShapes.Where(shape => shape.IsVisible).ToList(),
+            selectedAnchor,
+            shape => shape.Anchor);
     }
 
     public static DrawingObjectTarget? GetTargetDrawingObject(
@@ -48,7 +54,10 @@ public static class DrawingTargetResolver
         if (sheet.TextBoxes.Count == 0)
             return null;
 
-        return GetSelectedOrLast(sheet.TextBoxes, selectedAnchor, textBox => textBox.Anchor);
+        return GetSelectedOrLast(
+            sheet.TextBoxes.Where(textBox => textBox.IsVisible).ToList(),
+            selectedAnchor,
+            textBox => textBox.Anchor);
     }
 
     private static T? GetSelectedOrLast<T>(
@@ -57,6 +66,9 @@ public static class DrawingTargetResolver
         Func<T, CellAddress> getAnchor)
         where T : class
     {
+        if (items.Count == 0)
+            return null;
+
         if (selectedAnchor is { } selected)
         {
             var anchored = items.LastOrDefault(item =>

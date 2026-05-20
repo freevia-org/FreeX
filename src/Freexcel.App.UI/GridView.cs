@@ -1782,6 +1782,7 @@ public class GridView : FrameworkElement
         if (Charts == null || Viewport == null) return;
         foreach (var chart in Charts)
         {
+            if (!chart.IsVisible) continue;
             var img = ChartRenderer.Render(chart, Viewport, WorkbookTheme);
             if (img == null) continue;
             var rect = new Rect(
@@ -1797,6 +1798,7 @@ public class GridView : FrameworkElement
 
         foreach (var textBox in TextBoxes)
         {
+            if (!textBox.IsVisible) continue;
             var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == textBox.Anchor.Row);
             var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == textBox.Anchor.Col);
             if (row is null || col is null) continue;
@@ -1840,6 +1842,7 @@ public class GridView : FrameworkElement
 
         foreach (var shape in DrawingShapes)
         {
+            if (!shape.IsVisible) continue;
             var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == shape.Anchor.Row);
             var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == shape.Anchor.Col);
             if (row is null || col is null) continue;
@@ -1984,6 +1987,7 @@ public class GridView : FrameworkElement
         var fill = Brushes.White;
         foreach (var picture in Pictures)
         {
+            if (!picture.IsVisible) continue;
             var row = Viewport.RowMetrics.FirstOrDefault(r => r.Row == picture.Anchor.Row);
             var col = Viewport.ColMetrics.FirstOrDefault(c => c.Col == picture.Anchor.Col);
             if (row is null || col is null) continue;

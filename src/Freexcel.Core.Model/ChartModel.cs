@@ -166,6 +166,7 @@ public sealed class ChartModel
     public Guid Id { get; init; } = Guid.NewGuid();
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
+    public bool IsVisible { get; set; } = true;
     public bool IsPivotChart { get; set; }
     public string? PivotSourceSheetName { get; set; }
     public string? PivotTableName { get; set; }
