@@ -248,7 +248,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         TopBottomPercent = formatDto.TopBottomPercent,
                         TextRuleText = formatDto.TextRuleText,
                         DateOccurringPeriod = formatDto.DateOccurringPeriod,
-                        StopIfTrue = formatDto.StopIfTrue
+                        StopIfTrue = formatDto.StopIfTrue,
+                        NativeAttributes = formatDto.NativeAttributes,
+                        NativeChildXmls = formatDto.NativeChildXmls
                     });
                 }
                 catch (FormatException) { /* skip conditional formats with unparseable ranges */ }
@@ -579,7 +581,9 @@ public sealed class NativeJsonAdapter : IFileAdapter
                         TopBottomPercent = format.TopBottomPercent,
                         TextRuleText = format.TextRuleText,
                         DateOccurringPeriod = format.DateOccurringPeriod,
-                        StopIfTrue = format.StopIfTrue
+                        StopIfTrue = format.StopIfTrue,
+                        NativeAttributes = format.NativeAttributes,
+                        NativeChildXmls = format.NativeChildXmls
                     }).ToList(),
                 Cells = s.GetUsedCells().Select(pair => new CellDto
                 {
@@ -1884,6 +1888,8 @@ public sealed class NativeJsonAdapter : IFileAdapter
         public string? TextRuleText { get; set; }
         public string? DateOccurringPeriod { get; set; }
         public bool StopIfTrue { get; set; }
+        public IReadOnlyDictionary<string, string>? NativeAttributes { get; set; }
+        public IReadOnlyList<string>? NativeChildXmls { get; set; }
     }
 
     private class CellStyleDto
