@@ -55,31 +55,31 @@ public sealed class ErrorCheckingDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var goTo = new Button { Content = "Go To", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var goTo = new Button { Content = "_Go To", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         goTo.Click += (_, _) => NavigateSelected();
         buttons.Children.Add(goTo);
 
-        var previous = new Button { Content = "Previous", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var previous = new Button { Content = "_Previous", Width = 84, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         previous.Click += (_, _) => MoveSelection(-1);
         buttons.Children.Add(previous);
 
-        var next = new Button { Content = "Next", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var next = new Button { Content = "_Next", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         next.Click += (_, _) => MoveSelection(1);
         buttons.Children.Add(next);
 
-        var ignore = new Button { Content = "Ignore Error", Width = 92, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var ignore = new Button { Content = "_Ignore Error", Width = 104, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         ignore.Click += (_, _) => IgnoreSelected();
         buttons.Children.Add(ignore);
 
-        var trace = new Button { Content = "Trace Error", Width = 88, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var trace = new Button { Content = "_Trace Error", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         trace.Click += (_, _) => TraceSelected();
         buttons.Children.Add(trace);
 
-        var options = new Button { Content = "Options...", Width = 88, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var options = new Button { Content = "_Options...", Width = 92, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         options.Click += (_, _) => _openOptions?.Invoke();
         buttons.Children.Add(options);
 
-        var close = new Button { Content = "Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
