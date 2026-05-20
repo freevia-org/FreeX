@@ -147,4 +147,33 @@ public sealed class BorderShortcutServiceTests
         bottomRight.BorderLeft.Should().BeNull();
         bottomRight.BorderRight.Should().BeNull();
     }
+
+    [Fact]
+    public void GetInsideBorderDiff_AppliesOnlyInteriorEdges()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 4, 5));
+        var color = new CellColor(33, 115, 70);
+
+        var topLeft = BorderShortcutService.GetInsideBorderDiff(range, new CellAddress(sheetId, 2, 3), BorderStyle.Dashed, color);
+        var center = BorderShortcutService.GetInsideBorderDiff(range, new CellAddress(sheetId, 3, 4), BorderStyle.Dashed, color);
+        var bottomRight = BorderShortcutService.GetInsideBorderDiff(range, new CellAddress(sheetId, 4, 5), BorderStyle.Dashed, color);
+
+        topLeft.BorderTop.Should().BeNull();
+        topLeft.BorderLeft.Should().BeNull();
+        topLeft.BorderRight.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        topLeft.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+
+        center.BorderTop.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        center.BorderRight.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        center.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        center.BorderLeft.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+
+        bottomRight.BorderTop.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        bottomRight.BorderLeft.Should().Be(new CellBorder(BorderStyle.Dashed, color));
+        bottomRight.BorderRight.Should().BeNull();
+        bottomRight.BorderBottom.Should().BeNull();
+    }
 }
