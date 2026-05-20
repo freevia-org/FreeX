@@ -1489,7 +1489,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         pivotCachesById.TryGetValue(cacheId, out var pivotCache);
         var nativeFieldSelections = ReadNativePivotFieldSelections(root.Element(workbookNs + "pivotFields"), pivotCache, workbookNs);
+        var nativeFiltersElement = root.Element(workbookNs + "filters");
         var calculatedFields = ReadPivotCalculatedFields(root.Element(workbookNs + "calculatedFields"), workbookNs);
+        var valueFilters = ReadPivotValueFilters(root.Element(workbookNs + "valueFilters"), workbookNs)
+            .Concat(ReadNativePivotValueFilters(nativeFiltersElement, workbookNs))
+            .ToList();
+        var labelFilters = ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs)
+            .Concat(ReadNativePivotLabelFilters(nativeFiltersElement, workbookNs))
+            .ToList();
         var styleInfo = root.Element(workbookNs + "pivotTableStyleInfo");
         pivotTable = new PendingPivotTableModel(
             name,
@@ -1517,8 +1524,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields),
             calculatedFields,
             ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
-            ReadPivotValueFilters(root.Element(workbookNs + "valueFilters"), workbookNs),
-            ReadPivotLabelFilters(root.Element(workbookNs + "labelFilters"), workbookNs),
+            valueFilters,
+            labelFilters,
             ReadPivotSorts(root.Element(workbookNs + "pivotSorts"), workbookNs));
         return true;
     }
@@ -1737,6 +1744,106 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 filter.Attribute("value2")?.Value))
             .Where(filter => filter.SourceFieldIndex >= 0 && !string.IsNullOrEmpty(filter.Value))
             .ToList();
+    }
+
+    private static List<PivotValueFilterModel> ReadNativePivotValueFilters(XElement? filtersElement, XNamespace workbookNs)
+    {
+        if (filtersElement is null)
+            return [];
+
+        return filtersElement
+            .Elements(workbookNs + "filter")
+            .Select(filter =>
+            {
+                var kind = ReadNativePivotValueFilterKind(filter.Attribute("type")?.Value);
+                if (kind is null)
+                    return null;
+
+                return new PivotValueFilterModel(
+                    ReadIntAttribute(filter, "iMeasureFld") ?? ReadIntAttribute(filter, "dataField") ?? 0,
+                    kind.Value,
+                    ReadIntAttribute(filter, "count") ?? ReadIntAttribute(filter, "val") ?? (kind.Value is PivotValueFilterKind.Top or PivotValueFilterKind.Bottom ? 10 : 0),
+                    ReadNativePivotFilterDoubleValue(filter, "stringValue1", "value1", "val"),
+                    ReadNativePivotFilterDoubleValue(filter, "stringValue2", "value2"),
+                    ReadIntAttribute(filter, "fld") ?? ReadIntAttribute(filter, "field"));
+            })
+            .Where(filter => filter is not null)
+            .Select(filter => filter!)
+            .ToList();
+    }
+
+    private static List<PivotLabelFilterModel> ReadNativePivotLabelFilters(XElement? filtersElement, XNamespace workbookNs)
+    {
+        if (filtersElement is null)
+            return [];
+
+        return filtersElement
+            .Elements(workbookNs + "filter")
+            .Select(filter =>
+            {
+                var kind = ReadNativePivotLabelFilterKind(filter.Attribute("type")?.Value);
+                var value = ReadNativePivotFilterTextValue(filter, "stringValue1", "value1", "val");
+                if (kind is null || string.IsNullOrEmpty(value))
+                    return null;
+
+                return new PivotLabelFilterModel(
+                    ReadIntAttribute(filter, "fld") ?? ReadIntAttribute(filter, "field") ?? -1,
+                    kind.Value,
+                    value,
+                    ReadNativePivotFilterTextValue(filter, "stringValue2", "value2"));
+            })
+            .Where(filter => filter is not null && filter.SourceFieldIndex >= 0)
+            .Select(filter => filter!)
+            .ToList();
+    }
+
+    private static PivotValueFilterKind? ReadNativePivotValueFilterKind(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "count" or "topcount" or "top" => PivotValueFilterKind.Top,
+            "bottomcount" or "bottom" => PivotValueFilterKind.Bottom,
+            "valueequal" or "valueequals" => PivotValueFilterKind.Equals,
+            "valuenotequal" or "valuedoesnotequal" => PivotValueFilterKind.DoesNotEqual,
+            "valuegreaterthan" => PivotValueFilterKind.GreaterThan,
+            "valuegreaterthanorequal" => PivotValueFilterKind.GreaterThanOrEqual,
+            "valuelessthan" => PivotValueFilterKind.LessThan,
+            "valuelessthanorequal" => PivotValueFilterKind.LessThanOrEqual,
+            "valuebetween" => PivotValueFilterKind.Between,
+            "valuenotbetween" => PivotValueFilterKind.NotBetween,
+            _ => null
+        };
+
+    private static PivotLabelFilterKind? ReadNativePivotLabelFilterKind(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "captionequal" or "captionequals" => PivotLabelFilterKind.Equals,
+            "captionnotequal" or "captiondoesnotequal" => PivotLabelFilterKind.DoesNotEqual,
+            "captionbeginswith" => PivotLabelFilterKind.BeginsWith,
+            "captionendswith" => PivotLabelFilterKind.EndsWith,
+            "captioncontains" => PivotLabelFilterKind.Contains,
+            "captionnotcontains" or "captiondoesnotcontain" => PivotLabelFilterKind.DoesNotContain,
+            "captiongreaterthan" => PivotLabelFilterKind.GreaterThan,
+            "captiongreaterthanorequal" => PivotLabelFilterKind.GreaterThanOrEqual,
+            "captionlessthan" => PivotLabelFilterKind.LessThan,
+            "captionlessthanorequal" => PivotLabelFilterKind.LessThanOrEqual,
+            "captionbetween" => PivotLabelFilterKind.Between,
+            _ => null
+        };
+
+    private static string? ReadNativePivotFilterTextValue(XElement filter, params string[] attributeNames) =>
+        attributeNames
+            .Select(name => filter.Attribute(name)?.Value)
+            .FirstOrDefault(value => !string.IsNullOrEmpty(value));
+
+    private static double? ReadNativePivotFilterDoubleValue(XElement filter, params string[] attributeNames)
+    {
+        foreach (var attributeName in attributeNames)
+        {
+            if (double.TryParse(filter.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                return value;
+        }
+
+        return null;
     }
 
     private static List<PivotSortModel> ReadPivotSorts(XElement? sortsElement, XNamespace workbookNs)
