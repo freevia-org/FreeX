@@ -63,4 +63,27 @@ public sealed class GridViewTextDecorationTests
                 merge: null)
             .Should().BeFalse();
     }
+
+    [Fact]
+    public void CalculateConditionalIconCellLayout_ReservesGutterAndSupportsIconsOnly()
+    {
+        var cellRect = new Rect(10, 20, 80, 22);
+
+        var withValue = GridView.CalculateConditionalIconCellLayout(
+            cellRect,
+            new ConditionalFormatIcon("3TrafficLights1", 1, 3, ShowValue: true));
+
+        withValue.IconRect.Left.Should().BeGreaterThan(cellRect.Left);
+        withValue.IconRect.Right.Should().BeLessThan(cellRect.Right);
+        withValue.TextRect.Left.Should().BeGreaterThan(withValue.IconRect.Right);
+        withValue.ShouldDrawText.Should().BeTrue();
+
+        var iconsOnly = GridView.CalculateConditionalIconCellLayout(
+            cellRect,
+            new ConditionalFormatIcon("3TrafficLights1", 1, 3, ShowValue: false));
+
+        iconsOnly.IconRect.Left.Should().BeGreaterThan(cellRect.Left);
+        iconsOnly.TextRect.Should().Be(Rect.Empty);
+        iconsOnly.ShouldDrawText.Should().BeFalse();
+    }
 }
