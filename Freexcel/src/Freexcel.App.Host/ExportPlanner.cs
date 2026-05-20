@@ -10,7 +10,8 @@ internal enum ExportFormat
 
 internal enum ExportContentScope
 {
-    ActiveSheet
+    ActiveSheet,
+    Selection
 }
 
 internal sealed record ExportOptions(
@@ -59,6 +60,7 @@ internal static class ExportPlanner
         var scope = options.Scope switch
         {
             ExportContentScope.ActiveSheet => "Active sheet only",
+            ExportContentScope.Selection => "Selection",
             _ => "Active sheet only"
         };
         var properties = options.IncludeDocumentProperties

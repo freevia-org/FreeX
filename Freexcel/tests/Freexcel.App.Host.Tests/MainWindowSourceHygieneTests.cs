@@ -669,9 +669,10 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
-        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request))");
-        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options))");
+        source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), ResolveExportRange(request.Options))");
+        source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeOptions(request.Options), ResolveExportRange(request.Options))");
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
+        source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
     }
 
