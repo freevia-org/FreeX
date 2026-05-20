@@ -373,6 +373,10 @@ public class ConditionalFormatDialog : Window
                 "Text Contains" => CfRuleType.ContainsText,
                 "Date Occurring" => CfRuleType.DateOccurring,
                 "Duplicate Values" => DuplicateValuesRuleType(_duplicateValuesKindBox.SelectedItem as string),
+                "Blanks" => CfRuleType.Blanks,
+                "No Blanks" => CfRuleType.NoBlanks,
+                "Errors" => CfRuleType.Errors,
+                "No Errors" => CfRuleType.NoErrors,
                 "Above Average" or "Below Average" => CfRuleType.AboveAverage,
                 "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => CfRuleType.Top10,
                 _ => CfRuleType.CellValue
@@ -551,7 +555,8 @@ public static class ConditionalFormatDialogFactory
     public static ConditionalFormatDialog Create(string ruleType, GridRange range) =>
         ruleType switch
         {
-            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" or "Date Occurring" or "Duplicate Values" =>
+            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" or "Date Occurring" or "Duplicate Values" or
+            "Blanks" or "No Blanks" or "Errors" or "No Errors" =>
                 new HighlightCellsRuleDialog(ruleType, range),
             "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" or "Above Average" or "Below Average" =>
                 new TopBottomRuleDialog(ruleType, range),
