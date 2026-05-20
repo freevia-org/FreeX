@@ -11,7 +11,7 @@
 
         <TabControl x:Name="Tabs" Grid.Row="0">
             <!-- Number -->
-            <TabItem Header="Number">
+            <TabItem Header="_Number">
                 <StackPanel Margin="8">
                     <TextBlock Text="Format code:" Margin="0,4,0,2"/>
                     <ComboBox x:Name="NumberFormatCombo" IsEditable="True" Height="24"
@@ -22,7 +22,7 @@
             </TabItem>
 
             <!-- Alignment -->
-            <TabItem Header="Alignment">
+            <TabItem Header="_Alignment">
                 <StackPanel Margin="8">
                     <TextBlock Text="Horizontal alignment:" Margin="0,4,0,2"/>
                     <ComboBox x:Name="DlgHAlignBox" Height="24"/>
@@ -38,7 +38,7 @@
             </TabItem>
 
             <!-- Font -->
-            <TabItem Header="Font">
+            <TabItem Header="_Font">
                 <StackPanel Margin="8">
                     <TextBlock Text="Font:" Margin="0,4,0,2"/>
                     <ComboBox x:Name="DlgFontNameBox" Height="24"/>
@@ -62,7 +62,7 @@
             </TabItem>
 
             <!-- Fill -->
-            <TabItem Header="Fill">
+            <TabItem Header="F_ill">
                 <StackPanel Margin="8">
                     <TextBlock Text="Background Color (R,G,B, or empty for none):" Margin="0,4,0,2"/>
                     <DockPanel>
@@ -74,7 +74,7 @@
             </TabItem>
 
             <!-- Border -->
-            <TabItem Header="Border">
+            <TabItem Header="_Border">
                 <StackPanel Margin="8">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -125,7 +125,7 @@
             </TabItem>
 
             <!-- Protection -->
-            <TabItem Header="Protection">
+            <TabItem Header="_Protection">
                 <StackPanel Margin="8">
                     <CheckBox x:Name="DlgLockedCheck" Content="Locked" Margin="0,4,0,0"/>
                 </StackPanel>
@@ -133,8 +133,8 @@
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="OK"     Width="70" Height="26" Margin="4,0" IsDefault="True" Click="OkButton_Click"/>
-            <Button Content="Cancel" Width="70" Height="26" Margin="4,0" IsCancel="True"/>
+            <Button Content="_OK"     Width="70" Height="26" Margin="4,0" IsDefault="True" Click="OkButton_Click"/>
+            <Button Content="_Cancel" Width="70" Height="26" Margin="4,0" IsCancel="True"/>
         </StackPanel>
     </Grid>
 </Window>
