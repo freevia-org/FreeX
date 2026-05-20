@@ -6600,7 +6600,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             workbookNs + "autoFilter",
             workbookNs + "protectedRanges",
             workbookNs + "rowBreaks",
-            workbookNs + "colBreaks"
+            workbookNs + "colBreaks",
+            workbookNs + "queryTableParts"
         ];
 
         var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
@@ -7652,6 +7653,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 "controls",
                 "webPublishItems",
                 "tableParts",
+                "extLst"
+            ],
+            "queryTableParts" =>
+            [
                 "extLst"
             ],
             _ =>
