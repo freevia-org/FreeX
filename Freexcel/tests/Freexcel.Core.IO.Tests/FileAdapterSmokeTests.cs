@@ -8003,6 +8003,45 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartsheetReferenceAlongsideModelEdits()
+    {
+        var workbook = new Workbook("UnsupportedSheetTypeRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalChartsheetPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/chartsheets/sheet1.xml").Should().NotBeNull();
+
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("ChartSheet1");
+
+        var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
+        workbookRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("chartsheets/sheet1.xml");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("/xl/chartsheets/sheet1.xml");
+
+        saved.Position = 0;
+        var roundTripped = adapter.Load(saved);
+        roundTripped.GetSheetAt(0).GetValue(1, 1).Should().Be(new TextValue("edited"));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
@@ -12879,6 +12918,62 @@ public class FileAdapterSmokeTests
             var entry = archive.CreateEntry(entryName);
             using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
             writer.Write(content);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalChartsheetPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/chartsheets/sheet1.xml",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            workbookRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelUnsupportedChartsheet"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet"),
+                new XAttribute("Target", "chartsheets/sheet1.xml")));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!
+                .Element(workbookNs + "sheets")!
+                .Add(new XElement(
+                    workbookNs + "sheet",
+                    new XAttribute("name", "ChartSheet1"),
+                    new XAttribute("sheetId", "99"),
+                    new XAttribute(relNs + "id", "rIdFreexcelUnsupportedChartsheet")));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+
+            ReplacePackageXml(archive, "xl/chartsheets/sheet1.xml", new XDocument(
+                new XElement(
+                    workbookNs + "chartsheet",
+                    new XElement(workbookNs + "sheetPr"),
+                    new XElement(
+                        workbookNs + "sheetViews",
+                        new XElement(workbookNs + "sheetView", new XAttribute("workbookViewId", "0"))),
+                    new XElement(
+                        workbookNs + "pageMargins",
+                        new XAttribute("left", "0.7"),
+                        new XAttribute("right", "0.7"),
+                        new XAttribute("top", "0.75"),
+                        new XAttribute("bottom", "0.75"),
+                        new XAttribute("header", "0.3"),
+                        new XAttribute("footer", "0.3")))));
         }
 
         packageStream.Position = 0;
