@@ -3215,24 +3215,43 @@ public class GridView : FrameworkElement
     {
         if (icon.Style.Contains("TrafficLights", StringComparison.OrdinalIgnoreCase))
         {
-            var brush = icon.IconIndex switch
-            {
-                0 => MakeBrush(192, 0, 0),
-                1 => MakeBrush(255, 192, 0),
-                _ => MakeBrush(0, 176, 80)
-            };
+            var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(ResolveConditionalIconColor(icon))!;
             dc.DrawEllipse(brush, new Pen(MakeBrush(96, 96, 96), 0.75), Center(rect), rect.Width / 2, rect.Height / 2);
             return;
         }
 
-        var arrowBrush = icon.IconIndex switch
-        {
-            0 => MakeBrush(192, 0, 0),
-            1 => MakeBrush(255, 192, 0),
-            _ => MakeBrush(0, 176, 80)
-        };
+        var arrowBrush = (SolidColorBrush)new BrushConverter().ConvertFromString(ResolveConditionalIconColor(icon))!;
         var geometry = CreateArrowGeometry(rect, icon.IconIndex);
         dc.DrawGeometry(arrowBrush, new Pen(MakeBrush(96, 96, 96), 0.75), geometry);
+    }
+
+    public static string ResolveConditionalIconColor(ConditionalFormatIcon icon)
+    {
+        var index = Math.Clamp(icon.IconIndex, 0, Math.Max(0, icon.IconCount - 1));
+        return icon.IconCount switch
+        {
+            >= 5 => index switch
+            {
+                0 => "#C00000",
+                1 => "#ED7D31",
+                2 => "#FFC000",
+                3 => "#92D050",
+                _ => "#00B050"
+            },
+            4 => index switch
+            {
+                0 => "#C00000",
+                1 => "#FFC000",
+                2 => "#92D050",
+                _ => "#00B050"
+            },
+            _ => index switch
+            {
+                0 => "#C00000",
+                1 => "#FFC000",
+                _ => "#00B050"
+            }
+        };
     }
 
     private static Point Center(Rect rect) =>
