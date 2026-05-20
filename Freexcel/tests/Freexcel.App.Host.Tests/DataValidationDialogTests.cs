@@ -21,6 +21,26 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_ExposesKeyboardAccessKeysForOptionsAndButtons()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+
+        foreach (var content in new[]
+        {
+            "_Use Selection",
+            "Use _Selection",
+            "_In-cell dropdown",
+            "_Allow blank",
+            "Show _input message when cell is selected",
+            "Show error _alert after invalid data is entered",
+            "C_lear All",
+            "_OK",
+            "_Cancel"
+        })
+            xaml.Should().Contain($"Content=\"{content}\"");
+    }
+
+    [Fact]
     public void UseSelection2Button_PopulatesFormula2()
     {
         StaTestRunner.Run(() =>
