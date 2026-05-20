@@ -216,4 +216,55 @@ public sealed class AccessibilityCheckerServiceTests
         issue.Location.Should().Be("Sheet1");
         issue.Message.Should().Be("Worksheet tab names should describe their contents.");
     }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenSheetsThatContainContent()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Archived Data");
+        hiddenSheet.IsHidden = true;
+        hiddenSheet.SetCell(new CellAddress(hiddenSheet.Id, 2, 3), new TextValue("Confidential forecast"));
+
+        var visibleEmptySheet = workbook.AddSheet("Visible Summary");
+        var hiddenEmptySheet = workbook.AddSheet("Empty Archive");
+        hiddenEmptySheet.IsHidden = true;
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        var issue = issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HiddenSheetWithContent).Subject;
+        issue.SheetId.Should().Be(hiddenSheet.Id);
+        issue.SheetName.Should().Be("Archived Data");
+        issue.Location.Should().Be("Archived Data");
+        issue.Message.Should().Be("Hidden sheets with content may not be available to assistive technologies.");
+        issues.Should().NotContain(i => i.SheetId == visibleEmptySheet.Id);
+        issues.Should().NotContain(i => i.SheetId == hiddenEmptySheet.Id && i.Kind == AccessibilityIssueKind.HiddenSheetWithContent);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenRowsAndColumnsThatContainContent()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Q1 Revenue");
+        sheet.HiddenRows.Add(4);
+        sheet.GroupHiddenRows.Add(5);
+        sheet.HiddenCols.Add(3);
+        sheet.GroupHiddenCols.Add(6);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Hidden row note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new TextValue("Grouped row note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Hidden column note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 6), new TextValue("Grouped column note"));
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 8), new TextValue("Visible note"));
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .BeEquivalentTo(["4:4", "5:5"]);
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .BeEquivalentTo(["C:C", "F:F"]);
+        issues.Should().NotContain(i => i.Location == "H8");
+    }
 }
