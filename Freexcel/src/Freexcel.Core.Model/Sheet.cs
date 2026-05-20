@@ -695,7 +695,9 @@ public sealed class Sheet
                 ShowRowStripes = table.ShowRowStripes,
                 ShowColumnStripes = table.ShowColumnStripes,
                 PackagePart = table.PackagePart,
-                NativeSortStateXml = table.NativeSortStateXml
+                NativeSortStateXml = table.NativeSortStateXml,
+                NativeStyleInfoAttributes = table.NativeStyleInfoAttributes,
+                NativeStyleInfoChildXmls = table.NativeStyleInfoChildXmls
             };
             clonedTable.Columns.AddRange(table.Columns);
             clonedTable.FilterColumns.AddRange(table.FilterColumns);

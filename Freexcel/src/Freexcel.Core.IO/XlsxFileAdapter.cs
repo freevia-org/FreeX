@@ -1251,6 +1251,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             false,
             tablePath,
             null,
+            null,
+            null,
             [],
             []);
         var root = tableXml.Root;
@@ -1280,6 +1282,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ReadBoolAttribute(style, "showColumnStripes"),
             tablePath,
             root.Element(workbookNs + "sortState")?.ToString(System.Xml.Linq.SaveOptions.DisableFormatting),
+            ReadNativeTableStyleInfoAttributes(style),
+            ReadNativeTableStyleInfoChildXmls(style),
             root.Element(workbookNs + "tableColumns")?
                 .Elements(workbookNs + "tableColumn")
                 .Select(column => new StructuredTableColumnModel(
@@ -1317,6 +1321,29 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return column.Attributes()
             .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
             .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+    }
+
+    private static Dictionary<string, string>? ReadNativeTableStyleInfoAttributes(XElement? styleInfo)
+    {
+        if (styleInfo is null)
+            return null;
+
+        string[] modeledAttributes = ["name", "showFirstColumn", "showLastColumn", "showRowStripes", "showColumnStripes"];
+        var attributes = styleInfo.Attributes()
+            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
+            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes.Count == 0 ? null : attributes;
+    }
+
+    private static List<string>? ReadNativeTableStyleInfoChildXmls(XElement? styleInfo)
+    {
+        if (styleInfo is null)
+            return null;
+
+        var children = styleInfo.Elements()
+            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
+            .ToList();
+        return children.Count == 0 ? null : children;
     }
 
     private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
@@ -1369,7 +1396,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ShowRowStripes = pending.ShowRowStripes,
             ShowColumnStripes = pending.ShowColumnStripes,
             PackagePart = pending.PackagePart,
-            NativeSortStateXml = pending.NativeSortStateXml
+            NativeSortStateXml = pending.NativeSortStateXml,
+            NativeStyleInfoAttributes = pending.NativeStyleInfoAttributes,
+            NativeStyleInfoChildXmls = pending.NativeStyleInfoChildXmls
         };
         table.Columns.AddRange(pending.Columns);
         table.FilterColumns.AddRange(pending.FilterColumns);
@@ -9030,15 +9059,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
             columns.Select(column => ToStructuredTableColumnXml(column, workbookNs))));
         if (!string.IsNullOrWhiteSpace(table.StyleName))
-        {
-            root.Add(new XElement(
-                workbookNs + "tableStyleInfo",
-                new XAttribute("name", table.StyleName),
-                new XAttribute("showFirstColumn", table.ShowFirstColumn ? "1" : "0"),
-                new XAttribute("showLastColumn", table.ShowLastColumn ? "1" : "0"),
-                new XAttribute("showRowStripes", table.ShowRowStripes ? "1" : "0"),
-                new XAttribute("showColumnStripes", table.ShowColumnStripes ? "1" : "0")));
-        }
+            root.Add(ToStructuredTableStyleInfoXml(table, workbookNs));
 
         return new XDocument(root);
     }
@@ -9076,6 +9097,39 @@ public sealed class XlsxFileAdapter : IFileAdapter
             catch
             {
                 // Ignore malformed native table-column payloads from older saves.
+            }
+        }
+
+        return element;
+    }
+
+    private static XElement ToStructuredTableStyleInfoXml(StructuredTableModel table, XNamespace workbookNs)
+    {
+        var element = new XElement(
+            workbookNs + "tableStyleInfo",
+            new XAttribute("name", table.StyleName!),
+            new XAttribute("showFirstColumn", table.ShowFirstColumn ? "1" : "0"),
+            new XAttribute("showLastColumn", table.ShowLastColumn ? "1" : "0"),
+            new XAttribute("showRowStripes", table.ShowRowStripes ? "1" : "0"),
+            new XAttribute("showColumnStripes", table.ShowColumnStripes ? "1" : "0"));
+
+        foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
+                element.SetAttributeValue(name, value);
+        }
+
+        foreach (var nativeChildXml in (table.NativeStyleInfoChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        {
+            try
+            {
+                var nativeChild = XElement.Parse(nativeChildXml);
+                if (nativeChild.Name.Namespace == workbookNs)
+                    element.Add(nativeChild);
+            }
+            catch
+            {
+                // Ignore malformed native table-style payloads from older saves.
             }
         }
 
@@ -13490,6 +13544,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         bool ShowColumnStripes,
         string PackagePart,
         string? NativeSortStateXml,
+        IReadOnlyDictionary<string, string>? NativeStyleInfoAttributes,
+        IReadOnlyList<string>? NativeStyleInfoChildXmls,
         IReadOnlyList<StructuredTableColumnModel> Columns,
         IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
 }
