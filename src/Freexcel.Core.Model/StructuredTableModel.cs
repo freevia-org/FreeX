@@ -26,7 +26,8 @@ public sealed record StructuredTableColumnModel(
     string? TotalsRowLabel = null,
     string? TotalsRowFunction = null,
     string? CalculatedColumnFormula = null,
-    string? TotalsRowFormula = null);
+    string? TotalsRowFormula = null,
+    IReadOnlyList<string>? NativeChildXmls = null);
 
 public sealed record StructuredTableFilterColumnModel
 {
