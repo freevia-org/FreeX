@@ -20,6 +20,13 @@ public class ConditionalFormatDialog : Window
     private readonly ComboBox _iconSetStyleBox;
     private readonly CheckBox _iconSetShowValueBox;
     private readonly CheckBox _iconSetReverseBox;
+    private readonly ComboBox _dataBarMinTypeBox;
+    private readonly TextBox _dataBarMinValueBox;
+    private readonly ComboBox _dataBarMaxTypeBox;
+    private readonly TextBox _dataBarMaxValueBox;
+    private readonly CheckBox _dataBarShowValueBox;
+    private readonly TextBox _dataBarMinLengthBox;
+    private readonly TextBox _dataBarMaxLengthBox;
     private ConditionalFormat? _existingRule;
 
     private static readonly (string Label, Color Color)[] ColorOptions =
@@ -48,6 +55,7 @@ public class ConditionalFormatDialog : Window
 
         bool isFormula = ruleType is "Formula" or "Use a Formula";
         bool isIconSet = ruleType is "Icon Set";
+        bool isDataBar = ruleType is "Data Bar";
         bool isBetween = ruleType is "Between";
         bool needsValue = ruleType is "Greater Than" or "Less Than" or "Equal To"
                                    or "Between" or "Text Contains";
@@ -58,6 +66,13 @@ public class ConditionalFormatDialog : Window
         _iconSetStyleBox.SelectedIndex = 0;
         _iconSetShowValueBox = new CheckBox { Content = "Show value", Margin = new Thickness(0, 0, 0, 6), IsChecked = true };
         _iconSetReverseBox = new CheckBox { Content = "Reverse icon order", Margin = new Thickness(0, 0, 0, 12) };
+        _dataBarMinTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Min };
+        _dataBarMinValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
+        _dataBarMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarShowValueBox = new CheckBox { Content = "Show bar only when cleared", Margin = new Thickness(0, 0, 0, 8), IsChecked = true };
+        _dataBarMinLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
+        _dataBarMaxLengthBox = new TextBox { Margin = new Thickness(0, 4, 0, 12) };
 
         if (isFormula)
         {
@@ -66,6 +81,27 @@ public class ConditionalFormatDialog : Window
             _formulaBox = new TextBox { Margin = new Thickness(0, 4, 0, 8), Text = "=" };
             inner.Children.Add(_formulaBox);
             // placeholders needed by Ok_Click — never shown
+            _value1Box  = new TextBox();
+            _value2Box  = new TextBox();
+            _value2Label = new Label();
+        }
+        else if (isDataBar)
+        {
+            Height = 430;
+            inner.Children.Add(new Label { Content = "Minimum type:", Padding = new Thickness(0) });
+            inner.Children.Add(_dataBarMinTypeBox);
+            inner.Children.Add(new Label { Content = "Minimum value:", Padding = new Thickness(0) });
+            inner.Children.Add(_dataBarMinValueBox);
+            inner.Children.Add(new Label { Content = "Maximum type:", Padding = new Thickness(0) });
+            inner.Children.Add(_dataBarMaxTypeBox);
+            inner.Children.Add(new Label { Content = "Maximum value:", Padding = new Thickness(0) });
+            inner.Children.Add(_dataBarMaxValueBox);
+            inner.Children.Add(_dataBarShowValueBox);
+            inner.Children.Add(new Label { Content = "Minimum bar length (%):", Padding = new Thickness(0) });
+            inner.Children.Add(_dataBarMinLengthBox);
+            inner.Children.Add(new Label { Content = "Maximum bar length (%):", Padding = new Thickness(0) });
+            inner.Children.Add(_dataBarMaxLengthBox);
+
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
             _value2Label = new Label();
@@ -116,6 +152,7 @@ public class ConditionalFormatDialog : Window
 
         if (!isIconSet)
         {
+            colorLabel.Content = isDataBar ? "Bar color:" : "Format:";
             inner.Children.Add(colorLabel);
             inner.Children.Add(_colorBox);
         }
@@ -153,15 +190,41 @@ public class ConditionalFormatDialog : Window
                 _iconSetShowValueBox.IsChecked = existingRule.IconSetShowValue;
                 _iconSetReverseBox.IsChecked = existingRule.IconSetReverse;
             }
+            else if (existingRule.RuleType == CfRuleType.DataBar)
+            {
+                _dataBarMinTypeBox.SelectedItem = existingRule.DataBarMinThresholdType;
+                _dataBarMinValueBox.Text = existingRule.DataBarMinThresholdValue ?? "";
+                _dataBarMaxTypeBox.SelectedItem = existingRule.DataBarMaxThresholdType;
+                _dataBarMaxValueBox.Text = existingRule.DataBarMaxThresholdValue ?? "";
+                _dataBarShowValueBox.IsChecked = existingRule.DataBarShowValue;
+                _dataBarMinLengthBox.Text = existingRule.DataBarMinLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                _dataBarMaxLengthBox.Text = existingRule.DataBarMaxLength?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            }
         }
 
         // Pre-select the closest color option from FormatIfTrue.FillColor
-        if (existingRule.FormatIfTrue?.FillColor is { } fc)
+        if (existingRule.RuleType == CfRuleType.DataBar)
         {
-            var wc = Color.FromRgb(fc.R, fc.G, fc.B);
-            for (var i = 0; i < ColorOptions.Length; i++)
+            SelectColor(new CellColor(
+                existingRule.DataBarColor.R,
+                existingRule.DataBarColor.G,
+                existingRule.DataBarColor.B));
+        }
+        else if (existingRule.FormatIfTrue?.FillColor is { } fc)
+        {
+            SelectColor(fc);
+        }
+    }
+
+    private void SelectColor(CellColor color)
+    {
+        var wc = Color.FromRgb(color.R, color.G, color.B);
+        for (var i = 0; i < ColorOptions.Length; i++)
+        {
+            if (ColorOptions[i].Color == wc)
             {
-                if (ColorOptions[i].Color == wc) { _colorBox.SelectedIndex = i; break; }
+                _colorBox.SelectedIndex = i;
+                break;
             }
         }
     }
@@ -215,21 +278,50 @@ public class ConditionalFormatDialog : Window
                 cf.IconSetThresholds.Clear();
                 cf.IconSetThresholds.AddRange(ConditionalFormatIconSetPlanner.CreateThresholds(cf.IconSetStyle));
             }
+            else if (cf.RuleType == CfRuleType.DataBar)
+            {
+                cf.DataBarColor = new RgbColor(fillColor.R, fillColor.G, fillColor.B);
+                cf.DataBarMinThresholdType = SelectedThresholdType(_dataBarMinTypeBox, CfThresholdType.Min);
+                cf.DataBarMinThresholdValue = BlankToNull(_dataBarMinValueBox.Text);
+                cf.DataBarMaxThresholdType = SelectedThresholdType(_dataBarMaxTypeBox, CfThresholdType.Max);
+                cf.DataBarMaxThresholdValue = BlankToNull(_dataBarMaxValueBox.Text);
+                cf.DataBarShowValue = _dataBarShowValueBox.IsChecked == true;
+                cf.DataBarMinLength = ParseOptionalPercent(_dataBarMinLengthBox.Text);
+                cf.DataBarMaxLength = ParseOptionalPercent(_dataBarMaxLengthBox.Text);
+            }
 
             cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
             cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
         }
 
-        if (cf.RuleType != CfRuleType.IconSet)
+        if (cf.RuleType is not (CfRuleType.IconSet or CfRuleType.DataBar))
         {
             cf.FormatIfTrue = new CellStyle
             {
                 FillColor = new CellColor(fillColor.R, fillColor.G, fillColor.B)
             };
         }
+        else
+        {
+            cf.FormatIfTrue = null;
+        }
 
         ResultRule = cf;
         DialogResult = true;
+    }
+
+    private static CfThresholdType SelectedThresholdType(ComboBox comboBox, CfThresholdType fallback) =>
+        comboBox.SelectedItem is CfThresholdType selected ? selected : fallback;
+
+    private static string? BlankToNull(string text) =>
+        string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    private static int? ParseOptionalPercent(string text)
+    {
+        if (!int.TryParse(text.Trim(), out var value))
+            return null;
+
+        return Math.Clamp(value, 0, 100);
     }
 
 }
