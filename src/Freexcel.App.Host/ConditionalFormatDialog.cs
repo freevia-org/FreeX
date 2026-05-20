@@ -37,6 +37,8 @@ public class ConditionalFormatDialog : Window
     private readonly ComboBox _colorScaleMaxTypeBox;
     private readonly TextBox _colorScaleMaxValueBox;
     private readonly TextBox _colorScaleMaxColorBox;
+    private readonly ComboBox _dateOccurringPeriodBox;
+    private readonly ComboBox _duplicateValuesKindBox;
     private ConditionalFormat? _existingRule;
 
     private static readonly (string Label, Color Color)[] ColorOptions =
@@ -50,6 +52,20 @@ public class ConditionalFormatDialog : Window
     ];
 
     private static readonly IReadOnlyList<string> IconSetStyles = ConditionalFormatIconSetPlanner.Styles;
+
+    private static readonly (string Label, string Value)[] DateOccurringPeriods =
+    [
+        ("Yesterday", "yesterday"),
+        ("Today", "today"),
+        ("Tomorrow", "tomorrow"),
+        ("Last 7 Days", "last7Days"),
+        ("Last Week", "lastWeek"),
+        ("This Week", "thisWeek"),
+        ("Next Week", "nextWeek"),
+        ("Last Month", "lastMonth"),
+        ("This Month", "thisMonth"),
+        ("Next Month", "nextMonth")
+    ];
 
     /// <summary>Creates a new-rule dialog for the given rule type and range.</summary>
     public ConditionalFormatDialog(string ruleType, GridRange range)
@@ -67,6 +83,8 @@ public class ConditionalFormatDialog : Window
         bool isIconSet = ruleType is "Icon Set";
         bool isDataBar = ruleType is "Data Bar";
         bool isColorScale = ruleType is "Color Scale";
+        bool isDateOccurring = ruleType is "Date Occurring";
+        bool isDuplicateValues = ruleType is "Duplicate Values";
         bool isBetween = ruleType is "Between";
         bool needsValue = ruleType is "Greater Than" or "Less Than" or "Equal To"
                                    or "Between" or "Text Contains";
@@ -94,6 +112,13 @@ public class ConditionalFormatDialog : Window
         _colorScaleMaxTypeBox = new ComboBox { Margin = new Thickness(0, 4, 0, 8), ItemsSource = Enum.GetValues<CfThresholdType>(), SelectedItem = CfThresholdType.Max };
         _colorScaleMaxValueBox = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
         _colorScaleMaxColorBox = new TextBox { Margin = new Thickness(0, 4, 0, 12), Text = FormatRgb(new RgbColor(248, 105, 107)) };
+        _dateOccurringPeriodBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
+        foreach (var (label, _) in DateOccurringPeriods) _dateOccurringPeriodBox.Items.Add(label);
+        _dateOccurringPeriodBox.SelectedItem = "Today";
+        _duplicateValuesKindBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
+        _duplicateValuesKindBox.Items.Add("Duplicate");
+        _duplicateValuesKindBox.Items.Add("Unique");
+        _duplicateValuesKindBox.SelectedItem = "Duplicate";
 
         if (isFormula)
         {
@@ -161,6 +186,26 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(_iconSetStyleBox);
             inner.Children.Add(_iconSetShowValueBox);
             inner.Children.Add(_iconSetReverseBox);
+
+            _value1Box  = new TextBox();
+            _value2Box  = new TextBox();
+            _value2Label = new Label();
+        }
+        else if (isDateOccurring)
+        {
+            Height = 220;
+            inner.Children.Add(new Label { Content = "Date period:", Padding = new Thickness(0) });
+            inner.Children.Add(_dateOccurringPeriodBox);
+
+            _value1Box  = new TextBox();
+            _value2Box  = new TextBox();
+            _value2Label = new Label();
+        }
+        else if (isDuplicateValues)
+        {
+            Height = 220;
+            inner.Children.Add(new Label { Content = "Format cells that contain:", Padding = new Thickness(0) });
+            inner.Children.Add(_duplicateValuesKindBox);
 
             _value1Box  = new TextBox();
             _value2Box  = new TextBox();
@@ -261,6 +306,18 @@ public class ConditionalFormatDialog : Window
                 _colorScaleMaxValueBox.Text = existingRule.MaxThresholdValue ?? "";
                 _colorScaleMaxColorBox.Text = FormatRgb(existingRule.MaxColor);
             }
+            else if (existingRule.RuleType is CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith)
+            {
+                _value1Box.Text = existingRule.TextRuleText ?? "";
+            }
+            else if (existingRule.RuleType == CfRuleType.DateOccurring)
+            {
+                _dateOccurringPeriodBox.SelectedItem = DatePeriodLabel(existingRule.DateOccurringPeriod);
+            }
+            else if (existingRule.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues)
+            {
+                _duplicateValuesKindBox.SelectedItem = existingRule.RuleType == CfRuleType.UniqueValues ? "Unique" : "Duplicate";
+            }
         }
 
         // Pre-select the closest color option from FormatIfTrue.FillColor
@@ -313,6 +370,9 @@ public class ConditionalFormatDialog : Window
                 "Data Bar"    => CfRuleType.DataBar,
                 "Color Scale" => CfRuleType.ColorScale,
                 "Icon Set"    => CfRuleType.IconSet,
+                "Text Contains" => CfRuleType.ContainsText,
+                "Date Occurring" => CfRuleType.DateOccurring,
+                "Duplicate Values" => DuplicateValuesRuleType(_duplicateValuesKindBox.SelectedItem as string),
                 "Above Average" or "Below Average" => CfRuleType.AboveAverage,
                 "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => CfRuleType.Top10,
                 _ => CfRuleType.CellValue
@@ -363,6 +423,14 @@ public class ConditionalFormatDialog : Window
                 cf.MaxThresholdValue = BlankToNull(_colorScaleMaxValueBox.Text);
                 cf.MaxColor = ParseRgbOrFallback(_colorScaleMaxColorBox.Text, cf.MaxColor);
             }
+            else if (cf.RuleType is CfRuleType.ContainsText or CfRuleType.NotContainsText or CfRuleType.BeginsWith or CfRuleType.EndsWith)
+            {
+                cf.TextRuleText = _value1Box.Text.Trim();
+            }
+            else if (cf.RuleType == CfRuleType.DateOccurring)
+            {
+                cf.DateOccurringPeriod = DatePeriodValue(_dateOccurringPeriodBox.SelectedItem as string);
+            }
 
             cf.AboveAverage = _ruleType is not ("Below Average" or "Bottom 10 Items" or "Bottom 10%");
             cf.TopBottomPercent = _ruleType is "Top 10%" or "Bottom 10%";
@@ -406,6 +474,22 @@ public class ConditionalFormatDialog : Window
             ? new RgbColor(color.R, color.G, color.B)
             : fallback;
 
+    private static CfRuleType DuplicateValuesRuleType(string? label) =>
+        string.Equals(label, "Unique", StringComparison.OrdinalIgnoreCase)
+            ? CfRuleType.UniqueValues
+            : CfRuleType.DuplicateValues;
+
+    private static string DatePeriodValue(string? label) =>
+        DateOccurringPeriods.FirstOrDefault(period => period.Label == label) is var period
+            && period.Label is not null
+                ? period.Value
+                : "today";
+
+    private static string DatePeriodLabel(string? value) =>
+        DateOccurringPeriods.FirstOrDefault(period => period.Value == value) is var period
+            && period.Label is not null
+                ? period.Label
+                : "Today";
 }
 
 public sealed class HighlightCellsRuleDialog : ConditionalFormatDialog
@@ -467,7 +551,7 @@ public static class ConditionalFormatDialogFactory
     public static ConditionalFormatDialog Create(string ruleType, GridRange range) =>
         ruleType switch
         {
-            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" =>
+            "Greater Than" or "Less Than" or "Equal To" or "Between" or "Text Contains" or "Date Occurring" or "Duplicate Values" =>
                 new HighlightCellsRuleDialog(ruleType, range),
             "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" or "Above Average" or "Below Average" =>
                 new TopBottomRuleDialog(ruleType, range),

@@ -61,6 +61,23 @@ public sealed class ManageConditionalFormatsDialogTests
             .Should().Be("Icon Set: 3TrafficLights1 (reverse, icons only)");
     }
 
+    [Theory]
+    [InlineData(CfRuleType.ContainsText, "Text contains \"urgent\"")]
+    [InlineData(CfRuleType.DateOccurring, "Date occurring: Last 7 Days")]
+    [InlineData(CfRuleType.DuplicateValues, "Duplicate Values")]
+    [InlineData(CfRuleType.UniqueValues, "Unique Values")]
+    public void DescribeRule_LongTailHighlightRulesUseExcelLabels(CfRuleType ruleType, string expected)
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = ruleType,
+            TextRuleText = "urgent",
+            DateOccurringPeriod = "last7Days"
+        };
+
+        ManageConditionalFormatsDialog.DescribeRule(rule).Should().Be(expected);
+    }
+
     [Fact]
     public void PreviewBrush_IconSetUsesNeutralBrush()
     {
