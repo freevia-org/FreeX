@@ -2877,6 +2877,10 @@
                                             local:RibbonTooltip.Title="Change Chart Type"
                                             local:RibbonTooltip.KeyTip="CT"
                                             local:RibbonTooltip.Description="Change the bound PivotChart type while preserving its PivotTable connection."/>
+                                    <Button Content="Chart Options" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartOptionsBtn_Click"
+                                            local:RibbonTooltip.Title="PivotChart Options"
+                                            local:RibbonTooltip.KeyTip="CO"
+                                            local:RibbonTooltip.Description="Change PivotChart style and field button visibility."/>
                                     <Button Content="Insert Slicer" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
                                             local:RibbonTooltip.Title="Insert Slicer"
                                             local:RibbonTooltip.KeyTip="IS"

@@ -631,7 +631,7 @@ public static class ChartRenderer
 
     private static void AddPivotChartFieldButtons(PlotModel model, ChartModel chart)
     {
-        if (!chart.IsPivotChart)
+        if (!chart.IsPivotChart || !chart.ShowPivotChartFieldButtons)
             return;
 
         var captions = new[]
