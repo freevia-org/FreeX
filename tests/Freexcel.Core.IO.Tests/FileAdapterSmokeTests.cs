@@ -8485,6 +8485,34 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorkbookWebPublishingSettings()
+    {
+        var workbook = new Workbook("WorkbookWebPublishingSettingsRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("web publishing settings"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorkbookWebPublishingSettings(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("webPublishing");
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("css=\"1\"");
+        workbookXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("targetScreenSize=\"800x600\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedDefinedNames()
     {
         var workbook = new Workbook("DefinedNameRetentionTest");
@@ -13875,6 +13903,28 @@ public class FileAdapterSmokeTests
                     new XAttribute("destinationFile", "https://example.invalid/report.htm"),
                     new XAttribute("title", "Report"),
                     new XAttribute("autoRepublish", "0"))));
+            ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorkbookWebPublishingSettings(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+            workbookXml.Root!.Add(new XElement(
+                workbookNs + "webPublishing",
+                new XAttribute("css", "1"),
+                new XAttribute("thicket", "0"),
+                new XAttribute("longFileNames", "1"),
+                new XAttribute("vml", "1"),
+                new XAttribute("allowPng", "1"),
+                new XAttribute("targetScreenSize", "800x600"),
+                new XAttribute("dpi", "96")));
             ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
         }
 
