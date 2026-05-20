@@ -93,4 +93,20 @@ public sealed class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Header == "Show Notes")
             .Action.Should().Be(WorksheetContextMenuAction.ShowNotes);
     }
+
+    [Theory]
+    [InlineData("Cut", "Cu_t")]
+    [InlineData("Copy", "_Copy")]
+    [InlineData("Paste", "_Paste")]
+    [InlineData("Paste Special...", "Paste _Special...")]
+    [InlineData("Quick Analysis", "_Quick Analysis")]
+    [InlineData("Format Cells...", "_Format Cells...")]
+    [InlineData("Clear Contents", "Clear C_ontents")]
+    public void BuildCommands_ProvidesKeyboardAccessHeaders(string header, string expectedAccessHeader)
+    {
+        var command = WorksheetContextMenuPlanner.BuildCommands()
+            .Single(command => command.Header == header);
+
+        command.AccessHeader.Should().Be(expectedAccessHeader);
+    }
 }

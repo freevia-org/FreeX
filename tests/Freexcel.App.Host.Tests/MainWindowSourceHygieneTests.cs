@@ -714,6 +714,14 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenu_UsesAccessKeyHeaders()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("Header = command.AccessHeader");
+    }
+
+    [Fact]
     public void ThreadedCommentShortcut_UsesDistinctThreadedCommentWorkflow()
     {
         var keyboard = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
