@@ -40,7 +40,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFormulaBarExpansion, FormulaBarExpandBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFilter, FilterButton_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.QuickAnalysis, (_, _) => ShowQuickAnalysisMenu());
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.PasteValues, (_, _) => ExecutePaste(PasteMode.Values));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.GoTo, FindGoToMenuItem_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertEmbeddedChart, (_, _) => InsertEmbeddedChart());

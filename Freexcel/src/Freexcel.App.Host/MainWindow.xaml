@@ -3758,7 +3758,8 @@
                             Style="{StaticResource SsNavBtn}"
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"
-                            local:RibbonTooltip.KeyTip="P"/>
+                            local:RibbonTooltip.KeyTip="P"
+                            local:RibbonTooltip.Description="Open the print preview and native print dialog for the rendered worksheet."/>
                     <Button Content="Export" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="ExportPdfButton_Click"
