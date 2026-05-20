@@ -813,6 +813,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AutoFilterKeyboardDropdown_ExposesCriteriaSuggestionPicker()
+    {
+        var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        dialog.Should().Contain("_criteriaSuggestionBox");
+        dialog.Should().Contain("GetCriteriaSuggestions(menuPlan)");
+        dialog.Should().Contain("_criteriaSuggestionBox.SelectionChanged");
+    }
+
+    [Fact]
     public void BorderGallery_ExposesExpandedPresetsAndUsesReusablePlanners()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeFormatting.cs"));

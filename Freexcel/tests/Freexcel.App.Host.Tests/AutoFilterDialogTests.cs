@@ -65,4 +65,21 @@ public sealed class AutoFilterDialogTests
         result.SearchText.Should().Be("a");
         result.CriteriaText.Should().Be("contains: App");
     }
+
+    [Fact]
+    public void GetCriteriaSuggestions_ReturnsFilterFamilyCriteriaFromMenuPlan()
+    {
+        var menuPlan = new AutoFilterMenuPlan(
+            "Fruit",
+            AutoFilterMenuFilterKind.Text,
+            [
+                new AutoFilterMenuEntry("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
+                new AutoFilterMenuEntry("Text Filters", AutoFilterMenuEntryKind.FilterFamily, ["contains:", "blank"]),
+                new AutoFilterMenuEntry(new AutoFilterChecklistItem("Apple", "Apple"))
+            ]);
+
+        AutoFilterDialog.GetCriteriaSuggestions(menuPlan)
+            .Should()
+            .Equal("contains:", "blank");
+    }
 }
