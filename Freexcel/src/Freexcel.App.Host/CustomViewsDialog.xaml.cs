@@ -137,7 +137,7 @@ public sealed class CustomViewNameDialog : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var label = new TextBlock { Text = "Name:", Margin = new Thickness(0, 0, 0, 4) };
+        var label = new Label { Content = "_Name:", Target = _nameBox, Margin = new Thickness(0, 0, 0, 4) };
         _nameBox.Text = Result.ViewName;
         var buttons = new StackPanel
         {
@@ -145,8 +145,8 @@ public sealed class CustomViewNameDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0)
         };
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 72, IsCancel = true };
+        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 72, IsCancel = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
