@@ -59,7 +59,7 @@
         <TextBlock x:Name="Formula1Label" Grid.Row="2" Grid.Column="0" Text="Minimum:" VerticalAlignment="Center" Margin="0,0,8,8"/>
         <DockPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
             <Button x:Name="UseSelectionButton" DockPanel.Dock="Right"
-                    Content="Use Selection" Width="96" Margin="6,0,0,0"
+                    Content="_Use Selection" Width="104" Margin="6,0,0,0"
                     Click="UseSelectionButton_Click"/>
             <TextBox x:Name="Formula1Box"/>
         </DockPanel>
@@ -68,16 +68,16 @@
         <TextBlock x:Name="Formula2Label" Grid.Row="3" Grid.Column="0" Text="Maximum:" VerticalAlignment="Center" Margin="0,0,8,8"/>
         <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
             <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
-                    Content="Use Selection" Width="96" Margin="6,0,0,0"
+                    Content="Use _Selection" Width="104" Margin="6,0,0,0"
                     Click="UseSelection2Button_Click"/>
             <TextBox x:Name="Formula2Box"/>
         </DockPanel>
 
         <!-- In-cell dropdown (List only) -->
-        <CheckBox x:Name="ShowDropdownBox" Grid.Row="4" Grid.Column="1" Content="In-cell dropdown" IsChecked="True" Margin="0,0,0,8"/>
+        <CheckBox x:Name="ShowDropdownBox" Grid.Row="4" Grid.Column="1" Content="_In-cell dropdown" IsChecked="True" Margin="0,0,0,8"/>
 
         <!-- Allow Blank -->
-        <CheckBox x:Name="AllowBlankBox" Grid.Row="5" Grid.Column="1" Content="Allow blank" IsChecked="True" Margin="0,0,0,8"/>
+        <CheckBox x:Name="AllowBlankBox" Grid.Row="5" Grid.Column="1" Content="_Allow blank" IsChecked="True" Margin="0,0,0,8"/>
 
         <!-- Alert style -->
         <TextBlock Grid.Row="6" Grid.Column="0" Text="Alert style:" VerticalAlignment="Top" Margin="0,0,8,8"/>
@@ -87,8 +87,8 @@
             <ComboBoxItem Content="Information" Tag="Information"/>
         </ComboBox>
 
-        <CheckBox x:Name="ShowInputMessageBox" Grid.Row="7" Grid.Column="1" Content="Show input message when cell is selected" IsChecked="True" Margin="0,0,0,8"/>
-        <CheckBox x:Name="ShowErrorMessageBox" Grid.Row="8" Grid.Column="1" Content="Show error alert after invalid data is entered" IsChecked="True" Margin="0,0,0,8"/>
+        <CheckBox x:Name="ShowInputMessageBox" Grid.Row="7" Grid.Column="1" Content="Show _input message when cell is selected" IsChecked="True" Margin="0,0,0,8"/>
+        <CheckBox x:Name="ShowErrorMessageBox" Grid.Row="8" Grid.Column="1" Content="Show error _alert after invalid data is entered" IsChecked="True" Margin="0,0,0,8"/>
 
         <TextBlock Grid.Row="9" Grid.Column="0" Text="Input title:" VerticalAlignment="Center" Margin="0,0,8,8"/>
         <TextBox x:Name="PromptTitleBox" Grid.Row="9" Grid.Column="1" Margin="0,0,0,8"/>
@@ -106,9 +106,9 @@
         <!-- Buttons -->
         <StackPanel Grid.Row="13" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="Clear All" Width="72" Margin="0,0,16,0" Click="ClearAllButton_Click"/>
-            <Button Content="OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="Cancel" Width="72" IsCancel="True" Click="CancelButton_Click"/>
+            <Button Content="C_lear All" Width="78" Margin="0,0,16,0" Click="ClearAllButton_Click"/>
+            <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
+            <Button Content="_Cancel" Width="72" IsCancel="True" Click="CancelButton_Click"/>
         </StackPanel>
     </Grid>
 </Window>
