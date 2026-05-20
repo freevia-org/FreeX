@@ -310,6 +310,11 @@ public partial class MainWindow
 
     private void SsOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
+        ShowOptionsDialog();
+    }
+
+    private void ShowOptionsDialog()
+    {
         var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes);
         if (ShowOwnedDialog(dlg) == true)
         {

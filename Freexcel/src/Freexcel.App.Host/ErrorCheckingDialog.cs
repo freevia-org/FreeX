@@ -12,6 +12,7 @@ public sealed class ErrorCheckingDialog : Window
     private readonly Action<CellAddress> _navigateTo;
     private readonly Func<FormulaErrorIssue, bool> _ignoreError;
     private readonly Action<FormulaErrorIssue> _traceError;
+    private readonly Action? _openOptions;
     private readonly ObservableCollection<FormulaErrorIssue> _issues = [];
     private readonly ListView _listView;
     private readonly TextBlock _header;
@@ -20,11 +21,13 @@ public sealed class ErrorCheckingDialog : Window
         IReadOnlyList<FormulaErrorIssue> issues,
         Action<CellAddress> navigateTo,
         Func<FormulaErrorIssue, bool> ignoreError,
-        Action<FormulaErrorIssue> traceError)
+        Action<FormulaErrorIssue> traceError,
+        Action? openOptions = null)
     {
         _navigateTo = navigateTo;
         _ignoreError = ignoreError;
         _traceError = traceError;
+        _openOptions = openOptions;
 
         Title = "Error Checking";
         Width = 720;
@@ -71,6 +74,10 @@ public sealed class ErrorCheckingDialog : Window
         var trace = new Button { Content = "Trace Error", Width = 88, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         trace.Click += (_, _) => TraceSelected();
         buttons.Children.Add(trace);
+
+        var options = new Button { Content = "Options...", Width = 88, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        options.Click += (_, _) => _openOptions?.Invoke();
+        buttons.Children.Add(options);
 
         var close = new Button { Content = "Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
