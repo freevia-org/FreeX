@@ -36,11 +36,24 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("#,##0.0###", 1234.567, "1,234.567")]
     [InlineData("# ?/?", 0.125, "1/8")]
+    [InlineData("# ?/4", 0.5, "2/4")]
+    [InlineData("# ??/16", 0.3125, "5/16")]
     [InlineData("0.00E+00\" kg\"", 1200, "1.20E+03 kg")]
     [InlineData("0.00E+00", 1200, "1.20E+03")]
     [InlineData("0.00E-00", 1200, "1.20E03")]
     [InlineData("0*-", 12, "12")]
     public void CustomNumberSubset_FormatsVariableDecimalsFractionsAndScientific(string format, double value, string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("0%", 0.125, "13%")]
+    [InlineData("0\"%\"", 12, "12%")]
+    [InlineData("0\\%", 12, "12%")]
+    public void CustomNumberSubset_ScalesOnlyActivePercentTokens(string format, double value, string expected)
     {
         var result = NumberFormatter.Format(new NumberValue(value), format);
 
@@ -262,6 +275,19 @@ public class NumberFormatterTests
         string expected)
     {
         var result = NumberFormatter.Format(new DateTimeValue(45292.52425925926), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("mmmmm d, yyyy", 45292, "J 1, 2024")]
+    [InlineData("mmmmm d, yyyy", 45323, "F 1, 2024")]
+    public void CustomNumberSubset_FormatsFiveMonthTokensAsMonthInitial(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(value), format);
 
         Assert.Equal(expected, result);
     }

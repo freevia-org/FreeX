@@ -986,7 +986,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue table) return ErrorValue.Value;
+        var table = args[1] is RangeValue tableRange
+            ? tableRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args[2] is ErrorValue e2) return e2;
 
         var lookupValue = args[0];
@@ -1033,7 +1035,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue table) return ErrorValue.Value;
+        var table = args[1] is RangeValue tableRange
+            ? tableRange
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args[2] is ErrorValue e2) return e2;
 
         var lookupValue = args[0];
@@ -2185,7 +2189,9 @@ public static class BuiltInFunctions
     private static ScalarValue Large(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue range) return ErrorValue.Value;
+        var range = args[0] is RangeValue rangeArg
+            ? rangeArg
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e1) return e1;
         var kD = ToNumber(args[1]);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
@@ -2200,7 +2206,9 @@ public static class BuiltInFunctions
     private static ScalarValue Small(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue range) return ErrorValue.Value;
+        var range = args[0] is RangeValue rangeArg
+            ? rangeArg
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e1) return e1;
         var kD = ToNumber(args[1]);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
@@ -2216,7 +2224,9 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue range) return ErrorValue.Value;
+        var range = args[1] is RangeValue rangeArg
+            ? rangeArg
+            : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
         var number = ToNumber(args[0]);
         if (!double.IsFinite(number)) return ErrorValue.Num;
@@ -3433,7 +3443,9 @@ public static class BuiltInFunctions
     private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
         if (!double.IsFinite(k)) return ErrorValue.Num;
@@ -3471,7 +3483,9 @@ public static class BuiltInFunctions
     private static ScalarValue QuartileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         if (args[1] is ErrorValue e) return e;
         double rawQuart = ToNumber(args[1]);
         if (!double.IsFinite(rawQuart)) return ErrorValue.Num;

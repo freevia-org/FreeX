@@ -243,6 +243,26 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_JoinsAllReferencesListForExistingParser()
+    {
+        ConsolidateDialog.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
+        ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_ExposesExcelStyleAllReferencesWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConsolidateDialog.cs"));
+
+        source.Should().Contain("_referenceBox");
+        source.Should().Contain("_referencesList");
+        source.Should().Contain("All references:");
+        source.Should().Contain("AddReferenceButton_Click");
+        source.Should().Contain("DeleteReferenceButton_Click");
+        source.Should().Contain("CreateReferenceEditor(_referenceBox");
+    }
+
+    [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
     {
         var sheetId = SheetId.New();
@@ -358,6 +378,20 @@ public sealed class DataToolDialogTests
 
         parsed.Should().BeFalse();
         error.Should().Be("Enter a valid column input cell.");
+    }
+
+    [Fact]
+    public void DataTableDialog_ExposesReferencePickersForCellInputs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
+
+        source.Should().Contain("CreateReferenceEditor(_formulaBox");
+        source.Should().Contain("CreateReferenceEditor(_rowInputBox");
+        source.Should().Contain("CreateReferenceEditor(_columnInputBox");
+        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("Select formula cell");
+        source.Should().Contain("Select row input cell");
+        source.Should().Contain("Select column input cell");
     }
 
     [Fact]

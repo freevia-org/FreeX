@@ -357,14 +357,14 @@ public static class NumberFormatter
         (format, value) = ApplyTrailingCommaScaling(format, value);
 
         // Percentage: multiply value by 100 before formatting
-        if (format.Contains('%'))
+        if (ContainsActivePercentToken(format))
         {
             double pctValue = value * 100;
             string pctFmt = format; // keep the % so .NET formats it as percentage
             // .NET percentage format (P) multiplies by 100 and adds %; but format string
             // containing literal '%' means we multiply ourselves and use 'F' style.
             // Build a numeric format without the % and append it manually.
-            string numFmt = format.Replace("%", "").Trim();
+            string numFmt = RemoveActivePercentTokens(format).Trim();
             try
             {
                 return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt,
@@ -413,6 +413,61 @@ public static class NumberFormatter
         catch { numStr = value.ToString(numberFormat); }
 
         return prefix + numStr + suffix;
+    }
+
+    private static bool ContainsActivePercentToken(string format)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c == '%')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string RemoveActivePercentTokens(string format)
+    {
+        var result = new System.Text.StringBuilder(format.Length);
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                result.Append(c);
+                continue;
+            }
+
+            if (c == '\\' && i + 1 < format.Length)
+            {
+                result.Append(c);
+                result.Append(format[++i]);
+                continue;
+            }
+
+            if (!inQuote && c == '%')
+                continue;
+
+            result.Append(c);
+        }
+
+        return result.ToString();
     }
 
     private static string PreserveLocaleCurrencyTokens(
@@ -646,13 +701,24 @@ public static class NumberFormatter
         var stripped = Regex.Replace(format, "\"[^\"]*\"", "");
         return stripped.Contains("?/?", StringComparison.Ordinal) ||
                stripped.Contains("?/??", StringComparison.Ordinal) ||
-               stripped.Contains("??/??", StringComparison.Ordinal);
+               stripped.Contains("??/??", StringComparison.Ordinal) ||
+               Regex.IsMatch(stripped, @"\?+/\d+");
     }
 
     private static string FormatSimpleFraction(double value, string format)
     {
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
         var stripped = Regex.Replace(numericFormat, "\"[^\"]*\"", "");
+        int? fixedDenominator = null;
+        var fixedDenominatorMatch = Regex.Match(suffix, @"^/(\d+)");
+        if (fixedDenominatorMatch.Success &&
+            int.TryParse(fixedDenominatorMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDenominator) &&
+            parsedDenominator > 0)
+        {
+            fixedDenominator = parsedDenominator;
+            suffix = suffix[fixedDenominatorMatch.Length..];
+        }
+
         var denominatorPattern = Regex.Match(stripped, @"/(\?+)");
         int maxDenominator = denominatorPattern.Success && denominatorPattern.Groups[1].Value.Length >= 2 ? 99 : 9;
 
@@ -660,7 +726,9 @@ public static class NumberFormatter
         int whole = stripped.Contains('#') || stripped.Contains('0') ? (int)Math.Floor(absValue) : 0;
         double fractional = absValue - whole;
 
-        var (numerator, denominator) = ApproximateFraction(fractional, maxDenominator);
+        var (numerator, denominator) = fixedDenominator is { } denominatorValue
+            ? ((int)Math.Round(fractional * denominatorValue), denominatorValue)
+            : ApproximateFraction(fractional, maxDenominator);
         if (numerator == denominator)
         {
             whole++;
@@ -828,7 +896,53 @@ public static class NumberFormatter
         if (TryGetFractionalSecondPrecision(excelFormat, out int precision))
             dateTime = RoundToFractionalSecondPrecision(dateTime, precision);
 
-        return dateTime.ToString(ToNetDateFormat(excelFormat), dateTimeFormat);
+        var preparedFormat = ReplaceMonthInitialTokens(excelFormat, dateTime, dateTimeFormat);
+        return dateTime.ToString(ToNetDateFormat(preparedFormat), dateTimeFormat);
+    }
+
+    private static string ReplaceMonthInitialTokens(
+        string excelFormat,
+        DateTime dateTime,
+        DateTimeFormatInfo dateTimeFormat)
+    {
+        var result = new System.Text.StringBuilder();
+        string monthName = dateTimeFormat.MonthNames[dateTime.Month - 1];
+        if (string.IsNullOrEmpty(monthName))
+            monthName = dateTime.ToString("MMMM", dateTimeFormat);
+
+        string initial = monthName[..1].Replace("'", "''", StringComparison.Ordinal);
+        for (int i = 0; i < excelFormat.Length;)
+        {
+            if (excelFormat[i] == '"')
+            {
+                int end = excelFormat.IndexOf('"', i + 1);
+                if (end < 0) end = excelFormat.Length - 1;
+                result.Append(excelFormat[i..(end + 1)]);
+                i = end + 1;
+                continue;
+            }
+
+            if (excelFormat[i] == '\\' && i + 1 < excelFormat.Length)
+            {
+                result.Append(excelFormat, i, 2);
+                i += 2;
+                continue;
+            }
+
+            if (i + 5 <= excelFormat.Length &&
+                string.Compare(excelFormat, i, "mmmmm", 0, 5, StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                result.Append('\'');
+                result.Append(initial);
+                result.Append('\'');
+                i += 5;
+                continue;
+            }
+
+            result.Append(excelFormat[i++]);
+        }
+
+        return result.ToString();
     }
 
     private static bool TryGetFractionalSecondPrecision(string format, out int precision)
