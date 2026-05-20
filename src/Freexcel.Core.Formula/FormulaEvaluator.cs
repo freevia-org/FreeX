@@ -192,13 +192,17 @@ public sealed class FormulaEvaluator
 
         if (leftRange is RangeValue lr && rightRange is RangeValue rr)
         {
-            if (lr.RowCount != rr.RowCount || lr.ColCount != rr.ColCount)
+            if (!CanBroadcast(lr.RowCount, rr.RowCount) || !CanBroadcast(lr.ColCount, rr.ColCount))
                 return ErrorValue.Value;
 
-            var cells = new ScalarValue[lr.RowCount, lr.ColCount];
-            for (var row = 0; row < lr.RowCount; row++)
-                for (var col = 0; col < lr.ColCount; col++)
-                    cells[row, col] = scalarOp(lr.Cells[row, col], rr.Cells[row, col]);
+            var rowCount = Math.Max(lr.RowCount, rr.RowCount);
+            var colCount = Math.Max(lr.ColCount, rr.ColCount);
+            var cells = new ScalarValue[rowCount, colCount];
+            for (var row = 0; row < rowCount; row++)
+                for (var col = 0; col < colCount; col++)
+                    cells[row, col] = scalarOp(
+                        lr.Cells[lr.RowCount == 1 ? 0 : row, lr.ColCount == 1 ? 0 : col],
+                        rr.Cells[rr.RowCount == 1 ? 0 : row, rr.ColCount == 1 ? 0 : col]);
             return new RangeValue(cells, lr.StartRow, lr.StartCol) { SheetName = lr.SheetName };
         }
 
@@ -219,6 +223,8 @@ public sealed class FormulaEvaluator
 
         return new RangeValue(result, range.StartRow, range.StartCol) { SheetName = range.SheetName };
     }
+
+    private static bool CanBroadcast(int left, int right) => left == right || left == 1 || right == 1;
 
     private static ScalarValue CompareOp(ScalarValue left, ScalarValue right, int expected)
         => ElementwiseOp(left, right, (l, r) => CompareScalarOp(l, r, expected));
