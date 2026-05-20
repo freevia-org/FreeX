@@ -627,14 +627,31 @@ public sealed class ViewportService : IViewportService
 
         var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
         var iconCount = GetIconSetCount(style);
-        var iconIndex = ResolveIconSetIndex(cellValue, cache.Min, cache.Max, iconCount);
+        var iconIndex = ResolveIconSetIndex(rule, cellValue, cache.Min, cache.Max, iconCount);
         if (rule.IconSetReverse)
             iconIndex = iconCount - 1 - iconIndex;
 
         return new ConditionalFormatIcon(style, iconIndex, iconCount, rule.IconSetShowValue);
     }
 
-    private static int ResolveIconSetIndex(double value, double min, double max, int iconCount)
+    private static int ResolveIconSetIndex(ConditionalFormat rule, double value, double min, double max, int iconCount)
+    {
+        if (TryResolveIconSetThresholds(rule, min, max, iconCount, out var thresholds))
+        {
+            var index = 0;
+            foreach (var threshold in thresholds)
+            {
+                if (value >= threshold)
+                    index++;
+            }
+
+            return Math.Clamp(index, 0, iconCount - 1);
+        }
+
+        return ResolveInterpolatedIconSetIndex(value, min, max, iconCount);
+    }
+
+    private static int ResolveInterpolatedIconSetIndex(double value, double min, double max, int iconCount)
     {
         if (!double.IsFinite(value) || !double.IsFinite(min) || !double.IsFinite(max))
             return 0;
@@ -643,6 +660,41 @@ public sealed class ViewportService : IViewportService
 
         var t = Math.Clamp((value - min) / (max - min), 0d, 1d);
         return Math.Clamp((int)Math.Floor(t * iconCount), 0, iconCount - 1);
+    }
+
+    private static bool TryResolveIconSetThresholds(
+        ConditionalFormat rule,
+        double min,
+        double max,
+        int iconCount,
+        out double[] thresholds)
+    {
+        thresholds = [];
+        if (rule.IconSetThresholds.Count < iconCount - 1)
+            return false;
+
+        var resolved = new List<double>(iconCount - 1);
+        foreach (var threshold in rule.IconSetThresholds.Take(iconCount - 1))
+        {
+            switch (threshold.Type)
+            {
+                case CfThresholdType.Number:
+                    if (!TryParseDouble(threshold.Value, out var number))
+                        return false;
+                    resolved.Add(number);
+                    break;
+                case CfThresholdType.Percent:
+                    if (!TryParseDouble(threshold.Value, out var percent))
+                        return false;
+                    resolved.Add(min + (max - min) * (percent / 100d));
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        thresholds = resolved.ToArray();
+        return thresholds.Length == iconCount - 1;
     }
 
     private static int GetIconSetCount(string style) =>
