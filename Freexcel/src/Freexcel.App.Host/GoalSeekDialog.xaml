@@ -18,22 +18,22 @@
         </Grid.ColumnDefinitions>
 
         <!-- Row 0: Set cell -->
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Set cell:" VerticalAlignment="Center" Margin="0,4"/>
+        <Label Grid.Row="0" Grid.Column="0" Content="_Set cell:" Target="{Binding ElementName=SetCellBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="0" Grid.Column="1" x:Name="SetCellBox" Margin="0,4"/>
 
         <!-- Row 1: To value -->
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="To value:" VerticalAlignment="Center" Margin="0,4"/>
+        <Label Grid.Row="1" Grid.Column="0" Content="_To value:" Target="{Binding ElementName=ToValueBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="1" Grid.Column="1" x:Name="ToValueBox" Margin="0,4"/>
 
         <!-- Row 2: By changing cell -->
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="By changing cell:" VerticalAlignment="Center" Margin="0,4"/>
+        <Label Grid.Row="2" Grid.Column="0" Content="_By changing cell:" Target="{Binding ElementName=ChangingCellBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="2" Grid.Column="1" x:Name="ChangingCellBox" Margin="0,4"/>
 
         <!-- Row 4: Buttons -->
         <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="OK"     Width="75" IsDefault="True"  Click="OkBtn_Click"     Margin="0,0,6,0"/>
-            <Button Content="Cancel" Width="75" IsCancel="True"   Click="CancelBtn_Click"/>
+            <Button Content="_OK"     Width="75" IsDefault="True"  Click="OkBtn_Click"     Margin="0,0,6,0"/>
+            <Button Content="_Cancel" Width="75" IsCancel="True"   Click="CancelBtn_Click"/>
         </StackPanel>
     </Grid>
 </Window>
