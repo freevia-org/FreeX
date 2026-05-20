@@ -4383,6 +4383,22 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Filter_TreatsScalarArrayAndIncludeAsSingleCellArrays()
+    {
+        var included = _eval.Evaluate("=FILTER(5,TRUE)", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        included.RowCount.Should().Be(1);
+        included.ColCount.Should().Be(1);
+        included.Cells[0, 0].Should().Be(new NumberValue(5));
+
+        var empty = _eval.Evaluate("=FILTER(5,FALSE,\"empty\")", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        empty.RowCount.Should().Be(1);
+        empty.ColCount.Should().Be(1);
+        empty.Cells[0, 0].Should().Be(new TextValue("empty"));
+    }
+
+    [Fact]
     public void Filter_NoMatchesWithoutIfEmpty_ReturnsCalcError()
     {
         var sheet = MakeSheet(

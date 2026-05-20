@@ -1105,7 +1105,35 @@
                                             </MenuItem>
                                             <MenuItem Header="Data Bars..."               local:RibbonTooltip.KeyTip="D" Click="CfDataBarMenuItem_Click"/>
                                             <MenuItem Header="Color Scales..."            local:RibbonTooltip.KeyTip="C" Click="CfColorScaleMenuItem_Click"/>
-                                            <MenuItem Header="Icon Sets..."               local:RibbonTooltip.KeyTip="I" Click="CfIconSetMenuItem_Click"/>
+                                            <MenuItem Header="Icon Sets"                  local:RibbonTooltip.KeyTip="I">
+                                                <MenuItem Header="Directional" local:RibbonTooltip.KeyTip="ID" IsEnabled="False"/>
+                                                <MenuItem Header="3 Arrows"               local:RibbonTooltip.KeyTip="I3" Tag="3Arrows" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="3 Arrows (Gray)"        local:RibbonTooltip.KeyTip="IG" Tag="3ArrowsGray" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="4 Arrows"               local:RibbonTooltip.KeyTip="I4" Tag="4Arrows" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="4 Arrows (Gray)"        local:RibbonTooltip.KeyTip="IH" Tag="4ArrowsGray" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="5 Arrows"               local:RibbonTooltip.KeyTip="I5" Tag="5Arrows" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="5 Arrows (Gray)"        local:RibbonTooltip.KeyTip="IJ" Tag="5ArrowsGray" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Shapes" local:RibbonTooltip.KeyTip="IK" IsEnabled="False"/>
+                                                <MenuItem Header="3 Traffic Lights"       local:RibbonTooltip.KeyTip="IT" Tag="3TrafficLights1" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="3 Traffic Lights (Rimmed)" local:RibbonTooltip.KeyTip="IR" Tag="3TrafficLights2" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="3 Signs"                local:RibbonTooltip.KeyTip="IS" Tag="3Signs" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="3 Symbols"              local:RibbonTooltip.KeyTip="IY" Tag="3Symbols" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="3 Symbols (Uncircled)"  local:RibbonTooltip.KeyTip="IU" Tag="3Symbols2" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="3 Flags"                local:RibbonTooltip.KeyTip="IF" Tag="3Flags" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Indicators" local:RibbonTooltip.KeyTip="IO" IsEnabled="False"/>
+                                                <MenuItem Header="4 Traffic Lights"       local:RibbonTooltip.KeyTip="IL" Tag="4TrafficLights" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="4 Red To Black"         local:RibbonTooltip.KeyTip="IB" Tag="4RedToBlack" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Ratings" local:RibbonTooltip.KeyTip="IZ" IsEnabled="False"/>
+                                                <MenuItem Header="4 Ratings"              local:RibbonTooltip.KeyTip="I9" Tag="4Rating" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="5 Ratings"              local:RibbonTooltip.KeyTip="IA" Tag="5Rating" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="5 Quarters"             local:RibbonTooltip.KeyTip="IQ" Tag="5Quarters" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <MenuItem Header="5 Boxes"                local:RibbonTooltip.KeyTip="IX" Tag="5Boxes" Click="CfIconSetPresetMenuItem_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="More Rules..."          local:RibbonTooltip.KeyTip="IM" Click="CfIconSetMenuItem_Click"/>
+                                            </MenuItem>
                                             <Separator/>
                                             <MenuItem Header="New Rule..."                local:RibbonTooltip.KeyTip="N" Click="CfNewRuleMenuItem_Click"/>
                                             <MenuItem Header="New Formula Rule..."        local:RibbonTooltip.KeyTip="F" Click="CfNewFormulaRuleMenuItem_Click"/>

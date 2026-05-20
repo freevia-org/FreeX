@@ -795,6 +795,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (nativeChildXmls.Count > 0)
             style.NativeDifferentialChildXmls = nativeChildXmls;
 
+        var nativeElementXmls = ReadNativeDifferentialStyleElementXmls(dxf, workbookNs);
+        if (nativeElementXmls.Count > 0)
+            style.NativeDifferentialElementXmls = nativeElementXmls;
+
         return style;
     }
 
@@ -818,6 +822,26 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(element => !modeledChildren.Contains(element.Name))
             .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
             .ToList();
+    }
+
+    private static Dictionary<string, string> ReadNativeDifferentialStyleElementXmls(XElement dxf, XNamespace workbookNs)
+    {
+        XName[] modeledChildren =
+        [
+            workbookNs + "font",
+            workbookNs + "numFmt",
+            workbookNs + "fill",
+            workbookNs + "alignment",
+            workbookNs + "border",
+            workbookNs + "protection"
+        ];
+        return dxf.Elements()
+            .Where(element => modeledChildren.Contains(element.Name))
+            .GroupBy(element => element.Name.LocalName, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().ToString(System.Xml.Linq.SaveOptions.DisableFormatting),
+                StringComparer.Ordinal);
     }
 
     private static CellBorder ReadDifferentialBorder(XElement? edge, XNamespace workbookNs)
@@ -9893,6 +9917,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     ToDifferentialBorderXml("bottom", style.BorderBottom, workbookNs))
                 : null);
 
+        MergeDifferentialStyleElementNativeMetadata(dxf, style, workbookNs);
+
         foreach (var (name, value) in style.NativeDifferentialAttributes ?? new Dictionary<string, string>())
         {
             if (!string.IsNullOrWhiteSpace(name) && dxf.Attribute(name) is null)
@@ -9918,6 +9944,38 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         return dxf;
     }
+
+    private static void MergeDifferentialStyleElementNativeMetadata(
+        XElement dxf,
+        CellStyle style,
+        XNamespace workbookNs)
+    {
+        foreach (var (localName, sourceXml) in style.NativeDifferentialElementXmls ?? new Dictionary<string, string>())
+        {
+            if (string.IsNullOrWhiteSpace(localName) || string.IsNullOrWhiteSpace(sourceXml))
+                continue;
+
+            try
+            {
+                var sourceElement = XElement.Parse(sourceXml);
+                if (sourceElement.Name.Namespace != workbookNs || !IsModeledDifferentialStyleElement(sourceElement.Name.LocalName))
+                    continue;
+
+                var targetElement = dxf.Element(workbookNs + localName);
+                if (targetElement is null)
+                    dxf.Add(sourceElement);
+                else
+                    MergeElementNativeAttributesAndChildren(sourceElement, targetElement);
+            }
+            catch
+            {
+                // Ignore malformed nested dxf metadata from older saves.
+            }
+        }
+    }
+
+    private static bool IsModeledDifferentialStyleElement(string localName) =>
+        localName is "font" or "numFmt" or "fill" or "alignment" or "border" or "protection";
 
     private static IReadOnlyDictionary<int, int> SaveNumberFormatCatalog(Stream xlsxStream, Workbook workbook)
     {
