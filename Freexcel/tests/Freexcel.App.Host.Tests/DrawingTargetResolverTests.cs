@@ -30,6 +30,17 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void GetTargetPicture_SkipsHiddenPictures()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var visible = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        sheet.Pictures.Add(visible);
+        sheet.Pictures.Add(new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 2), IsVisible = false });
+
+        DrawingTargetResolver.GetTargetPicture(sheet, new CellAddress(sheet.Id, 2, 2)).Should().BeSameAs(visible);
+    }
+
+    [Fact]
     public void GetTargetDrawingShape_PrefersLastShapeAnchoredAtSelectedCell()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -40,6 +51,18 @@ public sealed class DrawingTargetResolverTests
         sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 4, 4) });
 
         DrawingTargetResolver.GetTargetDrawingShape(sheet, selected).Should().BeSameAs(expected);
+    }
+
+    [Fact]
+    public void GetTargetDrawingShape_SkipsHiddenShapes()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var selected = new CellAddress(sheet.Id, 3, 3);
+        var visible = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        sheet.DrawingShapes.Add(visible);
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Anchor = selected, IsVisible = false });
+
+        DrawingTargetResolver.GetTargetDrawingShape(sheet, selected).Should().BeSameAs(visible);
     }
 
     [Fact]

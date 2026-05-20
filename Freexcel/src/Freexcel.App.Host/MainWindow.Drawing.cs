@@ -167,6 +167,7 @@ public partial class MainWindow
     private void DrawTextBtn_Click(object sender, RoutedEventArgs e)    => InsertTextBox();
     private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingShape(forward: true);
     private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingShape(forward: false);
+    private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();
     private void ObjectSizeBtn_Click(object sender, RoutedEventArgs e) => ResizeSelectedDrawingObject();
     private void ObjectRotateBtn_Click(object sender, RoutedEventArgs e) => RotateSelectedDrawingObject();
     private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);
@@ -384,6 +385,68 @@ public partial class MainWindow
         SetActiveCell(shape.Anchor);
         EnsureCellVisible(shape.Anchor);
         UpdateViewport();
+    }
+
+    private void ShowSelectionPaneDialog()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return;
+
+        var items = SelectionPanePlanner.BuildItems(sheet);
+        if (items.Count == 0)
+        {
+            MessageBox.Show("No objects are available on this sheet.", "Selection Pane", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SelectionPaneDialog(items) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        switch (dialog.Result.Action)
+        {
+            case SelectionPaneDialogAction.MoveUp when dialog.Result.Target is { } target:
+                if (!ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges))
+                    return;
+                ApplySelectionPaneMove(target, forward: true);
+                break;
+            case SelectionPaneDialogAction.MoveDown when dialog.Result.Target is { } target:
+                if (!ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges))
+                    return;
+                ApplySelectionPaneMove(target, forward: false);
+                break;
+            default:
+                ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges);
+                break;
+        }
+    }
+
+    private void ApplySelectionPaneMove(SelectionPaneItem target, bool forward)
+    {
+        var title = forward ? "Bring Forward" : "Send Backward";
+        if (!TryExecuteCommand(
+                new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward),
+                title))
+            return;
+
+        UpdateViewport();
+    }
+
+    private bool ApplySelectionPaneVisibilityChanges(IReadOnlyList<SelectionPaneVisibilityChange> changes)
+    {
+        foreach (var change in changes)
+        {
+            if (!TryExecuteCommand(
+                    new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible),
+                    change.IsVisible ? "Show Object" : "Hide Object"))
+                return false;
+        }
+
+        if (changes.Count > 0)
+            UpdateViewport();
+
+        return true;
     }
 
     private DrawingShapeModel? GetTargetDrawingShape(SheetId sheetId)
