@@ -155,6 +155,26 @@ public class ExportPlannerTests
         }
     }
 
+    [Theory]
+    [InlineData(null, 3, true, null)]
+    [InlineData(1, 3, true, null)]
+    [InlineData(3, 3, true, null)]
+    [InlineData(4, 3, false, "Page range starts after the last exportable page (3).")]
+    [InlineData(1, 0, false, "There are no exportable pages.")]
+    public void TryValidatePageRange_ChecksRenderedPageCount(
+        int? fromPage,
+        int pageCount,
+        bool expectedSuccess,
+        string? expectedError)
+    {
+        var pageRange = fromPage is null ? null : new ExportPageRange(fromPage.Value, fromPage.Value);
+
+        var success = ExportPlanner.TryValidatePageRange(pageRange, pageCount, out var error);
+
+        success.Should().Be(expectedSuccess);
+        error.Should().Be(expectedError);
+    }
+
     [Fact]
     public void DescribeRequest_ExplainsPdfFallbackAndSupportedOptions()
     {
@@ -267,6 +287,29 @@ public class ExportPlannerTests
 
                 using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
                 pdf.PageCount.Should().Be(1);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_RejectsOutOfRangePageRangeWithoutCreatingFile()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateDocument(pageCount: 2);
+
+            try
+            {
+                var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(3, 3));
+
+                action.Should().Throw<InvalidOperationException>()
+                    .WithMessage("Page range starts after the last exportable page (2).");
+                File.Exists(path).Should().BeFalse();
             }
             finally
             {
@@ -443,6 +486,8 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
+        printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
