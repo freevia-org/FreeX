@@ -3854,6 +3854,52 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatNativeMetadata()
+    {
+        var workbook = new Workbook("CfNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row * 10));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.ColorScale,
+            Priority = 1,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "0",
+            MaxThresholdType = CfThresholdType.Number,
+            MaxThresholdValue = "50",
+            MinColor = new RgbColor(99, 190, 123),
+            MaxColor = new RgbColor(248, 105, 107)
+        });
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedConditionalFormatNativeMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedRule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        loadedRule.NativeAttributes.Should().ContainKey("customAttr").WhoseValue.Should().Be("cf-native");
+        loadedRule.NativeChildXmls.Should().ContainSingle()
+            .Which.Should().Contain("{FREEXCEL-CF-EXT}");
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!).ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        worksheetXml.Should().Contain("customAttr=\"cf-native\"");
+        worksheetXml.Should().Contain("extLst");
+        worksheetXml.Should().Contain("{FREEXCEL-CF-EXT}");
+        worksheetXml.Should().Contain("colorScale");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_ConditionalFormat_LongTailMetadata_Survives()
     {
         var workbook = new Workbook("LongTailCfXlsxTest");
@@ -12662,6 +12708,26 @@ public class FileAdapterSmokeTests
                     new XAttribute("type", "freexcelFutureRule"),
                     new XAttribute("priority", "1"),
                     new XElement(worksheetNs + "formula", "UNKNOWN_CF_SENTINEL"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddAdvancedConditionalFormatNativeMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var rule = worksheetXml.Root!
+                .Elements(worksheetNs + "conditionalFormatting")
+                .Elements(worksheetNs + "cfRule")
+                .First(element => element.Attribute("type")?.Value == "colorScale");
+            rule.SetAttributeValue("customAttr", "cf-native");
+            rule.Add(new XElement(
+                worksheetNs + "extLst",
+                new XElement(worksheetNs + "ext", new XAttribute("uri", "{FREEXCEL-CF-EXT}"))));
             ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
         }
 

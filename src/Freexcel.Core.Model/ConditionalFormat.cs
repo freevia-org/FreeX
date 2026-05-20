@@ -140,4 +140,10 @@ public sealed class ConditionalFormat
 
     /// <summary>When true, no lower-priority rules are evaluated for a cell that matches this rule.</summary>
     public bool StopIfTrue { get; set; }
+
+    /// <summary>Native cfRule attributes not modeled by Freexcel, retained for XLSX round-trip fidelity.</summary>
+    public IReadOnlyDictionary<string, string>? NativeAttributes { get; set; }
+
+    /// <summary>Native cfRule child elements not modeled by Freexcel, retained for XLSX round-trip fidelity.</summary>
+    public IReadOnlyList<string>? NativeChildXmls { get; set; }
 }
