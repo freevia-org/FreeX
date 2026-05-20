@@ -251,7 +251,8 @@ public partial class MainWindow
                 UpdateViewport();
                 RefreshStatusBar();
                 TracePrecedentsForCell(issue.Address, "Trace Error");
-            })
+            },
+            ShowOptionsDialog)
         {
             Owner = this
         };
