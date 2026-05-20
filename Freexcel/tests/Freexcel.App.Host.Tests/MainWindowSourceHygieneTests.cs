@@ -159,6 +159,29 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RibbonSurfaceController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var ribbonSourcePath = Path.Combine(appHostDirectory, "MainWindow.Ribbon.cs");
+
+        File.Exists(ribbonSourcePath).Should().BeTrue();
+        var ribbonSource = File.ReadAllText(ribbonSourcePath);
+
+        mainSource.Should().NotContain("private void UpdateRibbonCompactMode(");
+        mainSource.Should().NotContain("private void NormalizeRibbonSurface(");
+        mainSource.Should().NotContain("private void NormalizeExistingRibbonIconText(");
+        mainSource.Should().NotContain("private void ApplyToolbarDropdownWhiteBackgrounds(");
+        mainSource.Should().NotContain("private static FrameworkElement CreateRibbonCommandContent(");
+
+        ribbonSource.Should().Contain("private void UpdateRibbonCompactMode(");
+        ribbonSource.Should().Contain("private void NormalizeRibbonSurface(");
+        ribbonSource.Should().Contain("private void NormalizeExistingRibbonIconText(");
+        ribbonSource.Should().Contain("private void ApplyToolbarDropdownWhiteBackgrounds(");
+        ribbonSource.Should().Contain("private static FrameworkElement CreateRibbonCommandContent(");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -176,7 +199,7 @@ public sealed class MainWindowSourceHygieneTests
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
         var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
         var planner = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RibbonCommandPresentationPlanner.cs"));
 
         File.Exists(Path.Combine(appHostDirectory, "RibbonIconFactory.cs")).Should().BeTrue();
