@@ -30,4 +30,5 @@ public sealed record StructuredTableColumnModel(
 public sealed record StructuredTableFilterColumnModel(
     int ColumnId,
     IReadOnlyList<string> Values,
-    bool IncludeBlank = false);
+    bool IncludeBlank = false,
+    string? NativeFilterXml = null);
