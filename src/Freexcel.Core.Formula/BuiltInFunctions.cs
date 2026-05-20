@@ -9318,6 +9318,9 @@ public static class BuiltInFunctions
     // ── Phase D: Higher-order function implementations ───────────────────────
 
     // MAP(array1, [array2, ...], lambda(v1, [v2, ...])) → same-shape array
+    private static RangeValue SingleCellArray(ScalarValue value) =>
+        new(new[,] { { value } });
+
     private static ScalarValue MapFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count < 2) return ErrorValue.Value;
@@ -9326,8 +9329,8 @@ public static class BuiltInFunctions
         var arrays = new List<RangeValue>(args.Count - 1);
         for (int i = 0; i < args.Count - 1; i++)
         {
-            if (args[i] is not RangeValue rv) return ErrorValue.Value;
-            arrays.Add(rv);
+            if (args[i] is ErrorValue e) return e;
+            arrays.Add(args[i] is RangeValue rv ? rv : SingleCellArray(args[i]));
         }
 
         int rows = arrays[0].RowCount, cols = arrays[0].ColCount;
@@ -9350,7 +9353,8 @@ public static class BuiltInFunctions
     private static ScalarValue ReduceFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count != 3) return ErrorValue.Value;
-        if (args[1] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is ErrorValue e) return e;
+        var rv = args[1] is RangeValue range ? range : SingleCellArray(args[1]);
         if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
 
@@ -9365,7 +9369,8 @@ public static class BuiltInFunctions
     private static ScalarValue ScanFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count != 3) return ErrorValue.Value;
-        if (args[1] is not RangeValue rv) return ErrorValue.Value;
+        if (args[1] is ErrorValue e) return e;
+        var rv = args[1] is RangeValue range ? range : SingleCellArray(args[1]);
         if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
 
@@ -9385,7 +9390,8 @@ public static class BuiltInFunctions
     private static ScalarValue ByRowFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count != 2) return ErrorValue.Value;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[0] is ErrorValue e) return e;
+        var rv = args[0] is RangeValue range ? range : SingleCellArray(args[0]);
         if (args[1] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 1) return ErrorValue.Value;
 
@@ -9404,7 +9410,8 @@ public static class BuiltInFunctions
     private static ScalarValue ByColFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count != 2) return ErrorValue.Value;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        if (args[0] is ErrorValue e) return e;
+        var rv = args[0] is RangeValue range ? range : SingleCellArray(args[0]);
         if (args[1] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 1) return ErrorValue.Value;
 
