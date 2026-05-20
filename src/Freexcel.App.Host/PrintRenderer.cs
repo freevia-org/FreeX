@@ -101,7 +101,8 @@ public static class PrintRenderer
             }
         }
 
-        if (sheet.PrintComments == WorksheetPrintComments.AtEnd && sheet.Comments.Count > 0)
+        if (sheet.PrintComments == WorksheetPrintComments.AtEnd &&
+            (sheet.Comments.Count > 0 || sheet.ThreadedComments.Count > 0))
             AddCommentSummaryPage();
 
         void AddPrintPage(PrintPageRowPlan rowPlan, PrintPageColumnPlan columnPlan)
@@ -140,6 +141,7 @@ public static class PrintRenderer
                     sheet.PrintErrorValue,
                     sheet.PrintComments,
                     sheet.Comments,
+                    sheet.ThreadedComments,
                     printableW,
                     printableH,
                     pageNumber,
@@ -164,7 +166,8 @@ public static class PrintRenderer
                 pageH,
                 marginLeft,
                 marginTop,
-                sheet.Comments);
+                sheet.Comments,
+                sheet.ThreadedComments);
 
             var container = new VisualHost { Visual = visual };
             var fixedPage = new FixedPage { Width = pageW, Height = pageH };
@@ -326,6 +329,7 @@ public static class PrintRenderer
         WorksheetPrintErrorValue printErrorValue,
         WorksheetPrintComments printComments,
         IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
         double printableW,
         double printableH,
         int pageNumber,
@@ -414,6 +418,7 @@ public static class PrintRenderer
             DrawDisplayedComments(
                 dc,
                 comments,
+                threadedComments,
                 pageRows,
                 pageColumns,
                 gridLeft,
@@ -430,6 +435,7 @@ public static class PrintRenderer
     private static void DrawDisplayedComments(
         DrawingContext dc,
         IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
         double gridLeft,
@@ -439,7 +445,11 @@ public static class PrintRenderer
         double pageW,
         double pageH)
     {
-        var overlays = WorksheetPageLayout.GetDisplayedCommentOverlays(comments, pageRows, pageColumns);
+        var overlays = WorksheetPageLayout.GetDisplayedCommentOverlays(
+            comments,
+            threadedComments,
+            pageRows,
+            pageColumns);
         if (overlays.Count == 0)
             return;
 
@@ -559,7 +569,8 @@ public static class PrintRenderer
         double pageH,
         double marginLeft,
         double marginTop,
-        IReadOnlyDictionary<CellAddress, string> comments)
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments)
     {
         var visual = new DrawingVisual();
         using var dc = visual.RenderOpen();
@@ -569,7 +580,7 @@ public static class PrintRenderer
         DrawCommentText(dc, "Comments", new Point(marginLeft, marginTop), typeface, 14, FontWeights.SemiBold, pageW - marginLeft * 2);
 
         var y = marginTop + 34;
-        foreach (var (address, comment) in comments.OrderBy(pair => pair.Key.Row).ThenBy(pair => pair.Key.Col))
+        foreach (var (address, comment) in GetPrintableComments(comments, threadedComments))
         {
             if (y > pageH - marginTop - 24)
                 break;
@@ -580,6 +591,18 @@ public static class PrintRenderer
         }
 
         return visual;
+    }
+
+    private static IEnumerable<KeyValuePair<CellAddress, string>> GetPrintableComments(
+        IReadOnlyDictionary<CellAddress, string> comments,
+        IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments)
+    {
+        return comments
+            .Concat(threadedComments
+                .Where(pair => !comments.ContainsKey(pair.Key))
+                .Select(pair => new KeyValuePair<CellAddress, string>(pair.Key, pair.Value.Text)))
+            .OrderBy(pair => pair.Key.Row)
+            .ThenBy(pair => pair.Key.Col);
     }
 
     private static double DrawCommentText(
