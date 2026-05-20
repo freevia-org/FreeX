@@ -465,6 +465,19 @@ public partial class MainWindow
             chart => new ChartLayoutOptions(ChartTitleTextColor: ChartOptionCycler.NextSeriesColor(chart.ChartTitleTextColor)));
     }
 
+    private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        const string caption = "Chart Titles";
+        if (!TryGetFirstChartForDialog(caption, "Insert or select a chart before editing chart titles.", out var chart))
+            return;
+
+        var dialog = new ChartTitlesDialog(chart.Title, chart.XAxisTitle, chart.YAxisTitle) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+    }
+
     private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         ToggleChartAreaOption(

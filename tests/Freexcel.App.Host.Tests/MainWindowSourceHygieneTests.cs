@@ -493,6 +493,132 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void PivotCommands_LiveOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var pivotSourcePath = Path.Combine(appHostDirectory, "MainWindow.PivotCommands.cs");
+
+        File.Exists(pivotSourcePath).Should().BeTrue();
+        var pivotSource = File.ReadAllText(pivotSourcePath);
+
+        mainSource.Should().NotContain("private void PivotTableBtn_Click(");
+        mainSource.Should().NotContain("private void RefreshPivotTableBtn_Click(");
+        mainSource.Should().NotContain("private void PivotChartBtn_Click(");
+        mainSource.Should().NotContain("private void PivotInsertSlicerBtn_Click(");
+        mainSource.Should().NotContain("private void PivotFieldListBtn_Click(");
+        mainSource.Should().NotContain("private void MovePivotFieldToZone(");
+        mainSource.Should().NotContain("private void ApplyPivotFieldListLayout(");
+        mainSource.Should().NotContain("private enum PivotFieldDropZone");
+
+        pivotSource.Should().Contain("private void PivotTableBtn_Click(");
+        pivotSource.Should().Contain("private void RefreshPivotTableBtn_Click(");
+        pivotSource.Should().Contain("private void PivotChartBtn_Click(");
+        pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(");
+        pivotSource.Should().Contain("private void PivotFieldListBtn_Click(");
+        pivotSource.Should().Contain("private void MovePivotFieldToZone(");
+        pivotSource.Should().Contain("private void ApplyPivotFieldListLayout(");
+        pivotSource.Should().Contain("private enum PivotFieldDropZone");
+        pivotSource.Should().Contain("PivotUiPlanner");
+        pivotSource.Should().Contain("SlicerTimelinePlanner");
+    }
+
+    [Fact]
+    public void SelectionAndGridInteractionController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var selectionSourcePath = Path.Combine(appHostDirectory, "MainWindow.Selection.cs");
+
+        File.Exists(selectionSourcePath).Should().BeTrue();
+        var selectionSource = File.ReadAllText(selectionSourcePath);
+
+        mainSource.Should().NotContain("private void SelectRow(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseDown(");
+        mainSource.Should().NotContain("private void MainWindow_TextInput(");
+        mainSource.Should().NotContain("private void MainWindow_KeyDown(");
+        mainSource.Should().NotContain("private void SetActiveCell(");
+        mainSource.Should().NotContain("private void SelectCurrentRegionOrAll(");
+        mainSource.Should().NotContain("private void AddOrMoveAdditionalSelection(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseMove(");
+        mainSource.Should().NotContain("private void SheetGrid_MouseUp(");
+
+        selectionSource.Should().Contain("private void SelectRow(");
+        selectionSource.Should().Contain("private void SheetGrid_MouseDown(");
+        selectionSource.Should().Contain("private void MainWindow_TextInput(");
+        selectionSource.Should().Contain("private void MainWindow_KeyDown(");
+        selectionSource.Should().Contain("private void SetActiveCell(");
+        selectionSource.Should().Contain("private void SelectCurrentRegionOrAll(");
+        selectionSource.Should().Contain("private void AddOrMoveAdditionalSelection(");
+        selectionSource.Should().Contain("private void SheetGrid_MouseMove(");
+        selectionSource.Should().Contain("private void SheetGrid_MouseUp(");
+        selectionSource.Should().Contain("ExcelWorksheetNavigationPlanner");
+    }
+
+    [Fact]
+    public void InlineEditingController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var editingSourcePath = Path.Combine(appHostDirectory, "MainWindow.Editing.cs");
+
+        File.Exists(editingSourcePath).Should().BeTrue();
+        var editingSource = File.ReadAllText(editingSourcePath);
+
+        mainSource.Should().NotContain("private void EnterEditMode(");
+        mainSource.Should().NotContain("private void ShowInlineEditor(");
+        mainSource.Should().NotContain("private void RefreshValidationDropdown(");
+        mainSource.Should().NotContain("private void OpenActiveDropdown(");
+        mainSource.Should().NotContain("private void InlineEditor_KeyDown(");
+        mainSource.Should().NotContain("private void FormulaBar_KeyDown(");
+        mainSource.Should().NotContain("private bool CommitEdit(");
+        mainSource.Should().NotContain("private bool TryCreateCellFromEntryText(");
+        mainSource.Should().NotContain("private bool CommitPreparedEdits(");
+
+        editingSource.Should().Contain("private void EnterEditMode(");
+        editingSource.Should().Contain("private void ShowInlineEditor(");
+        editingSource.Should().Contain("private void RefreshValidationDropdown(");
+        editingSource.Should().Contain("private void OpenActiveDropdown(");
+        editingSource.Should().Contain("private void InlineEditor_KeyDown(");
+        editingSource.Should().Contain("private void FormulaBar_KeyDown(");
+        editingSource.Should().Contain("private bool CommitEdit(");
+        editingSource.Should().Contain("private bool TryCreateCellFromEntryText(");
+        editingSource.Should().Contain("private bool CommitPreparedEdits(");
+        editingSource.Should().Contain("ExcelEditKeyPlanner");
+        editingSource.Should().Contain("CellEntryParser");
+    }
+
+    [Fact]
+    public void GridStatusAndResizeController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var gridSourcePath = Path.Combine(appHostDirectory, "MainWindow.GridStatus.cs");
+
+        File.Exists(gridSourcePath).Should().BeTrue();
+        var gridSource = File.ReadAllText(gridSourcePath);
+
+        mainSource.Should().NotContain("private void RefreshStatusBar(");
+        mainSource.Should().NotContain("private void OnColumnResizing(");
+        mainSource.Should().NotContain("private void OnColumnResized(");
+        mainSource.Should().NotContain("private void OnRowResizing(");
+        mainSource.Should().NotContain("private void OnRowResized(");
+        mainSource.Should().NotContain("private void OnPageMarginsChanged(");
+        mainSource.Should().NotContain("private void CaptureColumnResizeSnapshot(");
+        mainSource.Should().NotContain("private void RestoreRowResizeSnapshot(");
+
+        gridSource.Should().Contain("private void RefreshStatusBar(");
+        gridSource.Should().Contain("private void OnColumnResizing(");
+        gridSource.Should().Contain("private void OnColumnResized(");
+        gridSource.Should().Contain("private void OnRowResizing(");
+        gridSource.Should().Contain("private void OnRowResized(");
+        gridSource.Should().Contain("private void OnPageMarginsChanged(");
+        gridSource.Should().Contain("private void CaptureColumnResizeSnapshot(");
+        gridSource.Should().Contain("private void RestoreRowResizeSnapshot(");
+        gridSource.Should().Contain("StatusBarCalculator");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
@@ -788,7 +914,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void InsertPivotTable_NewWorksheetDestination_UsesUndoableCommand()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("new AddPivotTableToNewWorksheetCommand(");
         source.Should().Contain("command.CreatedSheetId");
@@ -798,7 +924,9 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuPickFromDropDown_ReusesActiveDropdownPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
 
         source.Should().Contain("case WorksheetContextMenuAction.PickFromDropDown:");
         source.Should().Contain("OpenActiveDropdown();");
@@ -1088,7 +1216,7 @@ public sealed class MainWindowSourceHygieneTests
     public void PivotTableDesignCommands_OpenOptionsDialogInsteadOfCyclingLayoutState()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
         xaml.Should().NotContain("Cycle grand totals");
@@ -1103,7 +1231,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void ChartFormattingCommands_OpenExplicitFormatDialogs()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
 
         source.Should().Contain("new ChartDataLabelsDialog(chart)");
         source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");

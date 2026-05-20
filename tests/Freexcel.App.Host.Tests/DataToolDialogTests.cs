@@ -41,6 +41,24 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_BuildsHeaderAwareColumnChoices()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Sales"));
+
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 8, 3));
+
+        RemoveDuplicatesDialog.BuildColumnChoices(sheet, range).Should().Equal(
+            new RemoveDuplicateColumnChoice(0, "Region", true),
+            new RemoveDuplicateColumnChoice(1, "Sales", true),
+            new RemoveDuplicateColumnChoice(2, "Column C", true));
+    }
+
+    [Fact]
     public void SubtotalDialog_CreatesOptionsUsingSubtotalFunctionServiceNames()
     {
         var result = SubtotalDialog.CreateResult(
@@ -57,6 +75,24 @@ public sealed class DataToolDialogTests
         result.ReplaceCurrentSubtotals.Should().BeTrue();
         result.PageBreakBetweenGroups.Should().BeTrue();
         result.SummaryBelowData.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SubtotalDialog_BuildsHeaderAwareColumnChoices()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 3), new TextValue("Sales"));
+
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 2),
+            new CellAddress(sheetId, 8, 4));
+
+        SubtotalDialog.BuildColumnChoices(sheet, range).Should().Equal(
+            new SubtotalColumnChoice(0, "Region", false),
+            new SubtotalColumnChoice(1, "Sales", true),
+            new SubtotalColumnChoice(2, "Column D", true));
     }
 
     [Fact]
