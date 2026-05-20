@@ -43,9 +43,9 @@ public sealed class SortDialog : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 16)
         };
-        var add = new Button { Content = "Add Level", Width = 92, Margin = new Thickness(0, 0, 8, 0) };
+        var add = new Button { Content = "_Add Level", Width = 98, Margin = new Thickness(0, 0, 8, 0) };
         add.Click += (_, _) => _levels.Add(new SortDialogLevel(0, true));
-        var remove = new Button { Content = "Remove Level", Width = 108 };
+        var remove = new Button { Content = "_Remove Level", Width = 116 };
         remove.Click += (_, _) =>
         {
             var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
@@ -64,13 +64,13 @@ public sealed class SortDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var ok = new Button { Content = "OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
             ResultSortKeys = BuildSortKeys(_levels);
             DialogResult = true;
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, Width = 76 };
+        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         DockPanel.SetDock(buttons, Dock.Bottom);

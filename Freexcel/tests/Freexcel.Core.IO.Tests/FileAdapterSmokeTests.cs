@@ -8152,6 +8152,42 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetOleObjectsAlongsideModelEdits()
+    {
+        var workbook = new Workbook("OleObjectRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("kept"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalWorksheetOleObjectPackage(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 1, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        archive.GetEntry("xl/embeddings/oleObject1.bin").Should().NotBeNull();
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("oleObjects");
+        worksheetXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("rIdFreexcelOleObject");
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        worksheetRelsXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("../embeddings/oleObject1.bin");
+
+        var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+        contentTypesXml.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("/xl/embeddings/oleObject1.bin");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesUnsupportedChartDrawingReferencesAlongsideModelEdits()
     {
         var workbook = new Workbook("UnsupportedChartRetentionTest");
@@ -13277,6 +13313,53 @@ public class FileAdapterSmokeTests
                         new XAttribute("divId", "FreexcelWebPublishItems"),
                         new XAttribute("sourceType", "sheet"),
                         new XAttribute("destinationFile", "https://example.invalid/sheet.htm")))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddMinimalWorksheetOleObjectPackage(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            AddContentTypeOverride(
+                contentTypesXml,
+                contentTypeNs,
+                "/xl/embeddings/oleObject1.bin",
+                "application/vnd.openxmlformats-officedocument.oleObject");
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var worksheetRelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+            var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
+                ? LoadPackageXml(worksheetRelsEntry)
+                : new XDocument(new XElement(packageRelNs + "Relationships"));
+            worksheetRelsXml.Root!.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", "rIdFreexcelOleObject"),
+                new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject"),
+                new XAttribute("Target", "../embeddings/oleObject1.bin")));
+            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "oleObjects",
+                new XElement(
+                    worksheetNs + "oleObject",
+                    new XAttribute("progId", "Package"),
+                    new XAttribute("shapeId", "1025"),
+                    new XAttribute(relNs + "id", "rIdFreexcelOleObject"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+
+            archive.GetEntry("xl/embeddings/oleObject1.bin")?.Delete();
+            var oleEntry = archive.CreateEntry("xl/embeddings/oleObject1.bin");
+            using var writer = new StreamWriter(oleEntry.Open(), Encoding.UTF8);
+            writer.Write("Freexcel generated OLE placeholder");
         }
 
         packageStream.Position = 0;
