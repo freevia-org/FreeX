@@ -7297,6 +7297,44 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_WritesBarChartSpacingAndVaryColors()
+    {
+        var workbook = new Workbook("ChartBarSpacingPackageSave");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            VaryColorsByPoint = true,
+            BarOverlap = -20,
+            BarGapWidth = 75
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        var barChart = chartXml.Descendants(chartNs + "barChart").Single();
+
+        barChart.Element(chartNs + "varyColors")!.Attribute("val")!.Value.Should().Be("1");
+        barChart.Element(chartNs + "overlap")!.Attribute("val")!.Value.Should().Be("-20");
+        barChart.Element(chartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("75");
+    }
+
+    [Fact]
     public void XlsxAdapter_Save_DropsUnsupportedComboSeriesMarkersPackagePart()
     {
         var workbook = new Workbook("ChartUnsupportedComboMarkerPackageSave");

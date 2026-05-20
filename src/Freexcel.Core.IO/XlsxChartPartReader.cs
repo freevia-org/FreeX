@@ -491,6 +491,7 @@ public static class XlsxChartPartReader
             Title = ReadTitle(chartXml),
             UseComboLineForSecondarySeries = true
         };
+        ApplyBarChartMetadata(firstBarChart!, result);
 
         foreach (var barChart in barCharts)
         {
@@ -603,6 +604,7 @@ public static class XlsxChartPartReader
             Type = ReadBarChartType(firstBarChart!, barDirection),
             Title = ReadTitle(chartXml)
         };
+        ApplyBarChartMetadata(firstBarChart!, result);
 
         foreach (var barChart in barCharts)
         {
@@ -655,6 +657,13 @@ public static class XlsxChartPartReader
         SanitizeLoadedChart(result);
         chart = result;
         return true;
+    }
+
+    private static void ApplyBarChartMetadata(XElement barChart, ChartModel chart)
+    {
+        chart.BarGapWidth = ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value);
+        chart.BarOverlap = ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value);
+        chart.VaryColorsByPoint = ReadOptionalBool(barChart.Element(ChartNs + "varyColors")?.Attribute("val")?.Value);
     }
 
     private static bool TryReadLineChart(
