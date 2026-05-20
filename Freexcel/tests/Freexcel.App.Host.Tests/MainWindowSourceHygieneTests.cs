@@ -774,6 +774,34 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorkbookUiStateController_LivesOutsideMainWindowCodeBehind()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        var uiStateSourcePath = Path.Combine(appHostDirectory, "MainWindow.WorkbookUiState.cs");
+
+        File.Exists(uiStateSourcePath).Should().BeTrue();
+        var uiStateSource = File.ReadAllText(uiStateSourcePath);
+
+        mainSource.Should().NotContain("private void ApplyOptionsToView(");
+        mainSource.Should().NotContain("private void RecalculateWorkbook(");
+        mainSource.Should().NotContain("private string FormatCellReference(");
+        mainSource.Should().NotContain("private void RefreshToolbar(");
+        mainSource.Should().NotContain("private void ApplyStyleDiff(");
+        mainSource.Should().NotContain("private void NavigateToCell(");
+        mainSource.Should().NotContain("private void RefreshSheetProtectionUi(");
+
+        uiStateSource.Should().Contain("private void ApplyOptionsToView(");
+        uiStateSource.Should().Contain("private void RecalculateWorkbook(");
+        uiStateSource.Should().Contain("private string FormatCellReference(");
+        uiStateSource.Should().Contain("private void RefreshToolbar(");
+        uiStateSource.Should().Contain("private void ApplyStyleDiff(");
+        uiStateSource.Should().Contain("private void NavigateToCell(");
+        uiStateSource.Should().Contain("private void RefreshSheetProtectionUi(");
+        uiStateSource.Should().Contain("SpreadsheetDisplayFormatter");
+    }
+
+    [Fact]
     public void MainWindow_MergesVisualRefreshResourceDictionaries()
     {
         var mainWindowPath = WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml");
