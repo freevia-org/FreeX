@@ -68,7 +68,7 @@ public sealed class CellShiftDialog : Window
 
         buttons.Children.Add(new Button
         {
-            Content = "OK",
+            Content = "_OK",
             Width = 72,
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
@@ -77,7 +77,7 @@ public sealed class CellShiftDialog : Window
 
         buttons.Children.Add(new Button
         {
-            Content = "Cancel",
+            Content = "_Cancel",
             Width = 72,
             IsCancel = true
         });
@@ -88,16 +88,16 @@ public sealed class CellShiftDialog : Window
     public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>
         mode == CellShiftDialogMode.Insert
             ? [
-                new(CellShiftDialogChoice.ShiftCellsRight, "Shift cells right"),
-                new(CellShiftDialogChoice.ShiftCellsDown, "Shift cells down"),
-                new(CellShiftDialogChoice.EntireRow, "Entire row"),
-                new(CellShiftDialogChoice.EntireColumn, "Entire column")
+                new(CellShiftDialogChoice.ShiftCellsRight, "Shift cells _right"),
+                new(CellShiftDialogChoice.ShiftCellsDown, "Shift cells _down"),
+                new(CellShiftDialogChoice.EntireRow, "Entire _row"),
+                new(CellShiftDialogChoice.EntireColumn, "Entire _column")
             ]
             : [
-                new(CellShiftDialogChoice.ShiftCellsLeft, "Shift cells left"),
-                new(CellShiftDialogChoice.ShiftCellsUp, "Shift cells up"),
-                new(CellShiftDialogChoice.EntireRow, "Entire row"),
-                new(CellShiftDialogChoice.EntireColumn, "Entire column")
+                new(CellShiftDialogChoice.ShiftCellsLeft, "Shift cells _left"),
+                new(CellShiftDialogChoice.ShiftCellsUp, "Shift cells _up"),
+                new(CellShiftDialogChoice.EntireRow, "Entire _row"),
+                new(CellShiftDialogChoice.EntireColumn, "Entire _column")
             ];
 
     public static KeyboardInsertDeleteDialogChoice ToKeyboardChoice(CellShiftDialogMode mode, CellShiftDialogChoice choice) =>
