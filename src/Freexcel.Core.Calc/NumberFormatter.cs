@@ -9,6 +9,22 @@ public static class NumberFormatter
     // Returned alongside display text so the grid can apply conditional colors.
     public sealed record FormatResult(string Text, string? ColorHex = null);
 
+    private sealed record ParsedSection(string Format, string? ColorHex, FormatCondition? Condition);
+
+    private sealed record FormatCondition(string Operator, double Value)
+    {
+        public bool Matches(double value) => Operator switch
+        {
+            ">"  => value > Value,
+            ">=" => value >= Value,
+            "<"  => value < Value,
+            "<=" => value <= Value,
+            "="  => value == Value,
+            "<>" => value != Value,
+            _    => false
+        };
+    }
+
     public static string Format(ScalarValue value, string formatString)
         => FormatWithColor(value, formatString).Text;
 
@@ -117,40 +133,100 @@ public static class NumberFormatter
 
     private static FormatResult FormatNumber(double value, string[] sections)
     {
-        // Check if first section has conditions like [>0]
-        // For simplicity, skip condition codes and use position-based selection
-        string sectionFmt;
+        var parsedSections = sections.Select(ParseSection).ToArray();
+        bool hasConditions = parsedSections.Any(section => section.Condition is not null);
+
+        ParsedSection section;
         double displayValue = value;
 
-        if (value > 0 || sections.Length == 1)
+        if (hasConditions)
         {
-            sectionFmt = sections[0];
-        }
-        else if (value < 0)
-        {
-            if (sections.Length >= 2 && sections[1] != "")
+            int selectedIndex = Array.FindIndex(parsedSections, section =>
+                section.Condition is not null && section.Condition.Matches(value));
+            if (selectedIndex < 0)
             {
-                sectionFmt = sections[1];
-                // Excel formats negative sections with Abs(value); literals in the
-                // selected section decide whether a sign is visible.
-                displayValue = Math.Abs(value);
+                selectedIndex = Array.FindIndex(parsedSections, section => section.Condition is null);
+                if (selectedIndex < 0)
+                    selectedIndex = 0;
             }
-            else
-            {
-                sectionFmt = sections[0];
-            }
+
+            section = parsedSections[selectedIndex];
         }
-        else // value == 0
+        else
         {
-            if (sections.Length >= 3 && sections[2] != "")
-                sectionFmt = sections[2];
-            else
-                sectionFmt = sections[0];
+            (section, displayValue) = SelectPositionalSection(value, parsedSections);
         }
 
-        var (color, cleanFmt) = ExtractColor(sectionFmt);
-        string text = ApplyNumericFormat(displayValue, cleanFmt);
-        return new FormatResult(text, color);
+        string text = ApplyNumericFormat(displayValue, section.Format);
+        return new FormatResult(text, section.ColorHex);
+    }
+
+    private static (ParsedSection Section, double DisplayValue) SelectPositionalSection(
+        double value,
+        ParsedSection[] sections)
+    {
+        if (value > 0 || sections.Length == 1)
+            return (sections[0], value);
+
+        if (value < 0)
+        {
+            if (sections.Length >= 2 && sections[1].Format != "")
+                return (sections[1], Math.Abs(value));
+
+            return (sections[0], value);
+        }
+
+        if (sections.Length >= 3 && sections[2].Format != "")
+            return (sections[2], value);
+
+        return (sections[0], value);
+    }
+
+    private static ParsedSection ParseSection(string section)
+    {
+        string? color = null;
+        FormatCondition? condition = null;
+        int index = 0;
+
+        while (index < section.Length && section[index] == '[')
+        {
+            int close = section.IndexOf(']', index + 1);
+            if (close < 0)
+                break;
+
+            string token = section[(index + 1)..close];
+            if (TryMapColor(token, out var tokenColor))
+            {
+                color = tokenColor;
+                index = close + 1;
+                continue;
+            }
+
+            if (TryParseCondition(token, out var tokenCondition))
+            {
+                condition = tokenCondition;
+                index = close + 1;
+                continue;
+            }
+
+            break;
+        }
+
+        return new ParsedSection(section[index..], color, condition);
+    }
+
+    private static bool TryParseCondition(string token, out FormatCondition? condition)
+    {
+        var match = Regex.Match(token, @"^(>=|<=|<>|>|<|=)\s*(-?(?:\d+(?:\.\d*)?|\.\d+))$");
+        if (match.Success &&
+            double.TryParse(match.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            condition = new FormatCondition(match.Groups[1].Value, value);
+            return true;
+        }
+
+        condition = null;
+        return false;
     }
 
     // Extract optional [Color] or [ColorN] prefix; return (hexColor, remainingFormat)
@@ -159,7 +235,13 @@ public static class NumberFormatter
         var m = Regex.Match(section, @"^\[([A-Za-z]+|Color\d+)\]", RegexOptions.IgnoreCase);
         if (!m.Success) return (null, section);
 
-        string? hex = m.Groups[1].Value.ToUpperInvariant() switch
+        TryMapColor(m.Groups[1].Value, out var hex);
+        return (hex, section[m.Length..]);
+    }
+
+    private static bool TryMapColor(string token, out string? color)
+    {
+        color = token.ToUpperInvariant() switch
         {
             "BLACK"   => "#000000",
             "WHITE"   => "#FFFFFF",
@@ -171,7 +253,7 @@ public static class NumberFormatter
             "MAGENTA" => "#FF00FF",
             _         => null
         };
-        return (hex, section[m.Length..]);
+        return color is not null;
     }
 
     private static string ApplyNumericFormat(double value, string format)
@@ -191,6 +273,7 @@ public static class NumberFormatter
         format = Regex.Replace(format, @"\[[^\]]*\]", "");
         format = PreserveAccountingFillSpace(format);
         format = RemoveSpacingAndFillDirectives(format);
+        (format, value) = ApplyTrailingCommaScaling(format, value);
 
         // Percentage: multiply value by 100 before formatting
         if (format.Contains('%'))
@@ -338,6 +421,55 @@ public static class NumberFormatter
 
     private static bool IsCurrencySymbol(char c)
         => c is '$' or '\u00A3' or '\u20AC' or '\u00A5';
+
+    private static (string Format, double Value) ApplyTrailingCommaScaling(string format, double value)
+    {
+        var sb = new System.Text.StringBuilder(format);
+        bool inQuote = false;
+        int scaleCommas = 0;
+
+        for (int i = sb.Length - 1; i >= 0; i--)
+        {
+            char c = sb[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (inQuote)
+                continue;
+
+            if (char.IsWhiteSpace(c))
+                continue;
+
+            if (c == ',')
+            {
+                if (IsEscaped(sb, i))
+                    break;
+
+                scaleCommas++;
+                sb.Remove(i, 1);
+                continue;
+            }
+
+            break;
+        }
+
+        if (scaleCommas == 0)
+            return (format, value);
+
+        return (sb.ToString(), value / Math.Pow(1000, scaleCommas));
+    }
+
+    private static bool IsEscaped(System.Text.StringBuilder text, int index)
+    {
+        int slashCount = 0;
+        for (int i = index - 1; i >= 0 && text[i] == '\\'; i--)
+            slashCount++;
+
+        return slashCount % 2 == 1;
+    }
 
     private static bool IsSimpleFractionFormat(string format)
     {
