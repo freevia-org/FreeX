@@ -55,6 +55,9 @@ public static class ConditionalFormatDialogPlanner
         CfRuleType.DataBar => "Data Bar",
         CfRuleType.ColorScale => "Color Scale",
         CfRuleType.IconSet => "Icon Set",
+        CfRuleType.ContainsText => "Text Contains",
+        CfRuleType.DateOccurring => "Date Occurring",
+        CfRuleType.DuplicateValues or CfRuleType.UniqueValues => "Duplicate Values",
         CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
         CfRuleType.Top10 => cf.TopBottomPercent
             ? (cf.AboveAverage ? "Top 10%" : "Bottom 10%")
