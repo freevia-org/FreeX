@@ -109,11 +109,34 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void InsertSlicerDialog_ExposesExcelLikeFieldSelectionShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Choose fields");
+        source.Should().Contain("Slicers make it faster to filter a PivotTable");
+        source.Should().Contain("Field to connect");
+        source.Should().Contain("Slicer caption");
+        source.Should().Contain("DialogButtonRowFactory.Create");
+    }
+
+    [Fact]
     public void InsertTimelineDialog_CreateResult_CapturesDateFieldAndTimelineName()
     {
         InsertTimelineDialog.CreateResult("  Order Date  ", "  Order Date Timeline  ")
             .Should()
             .Be(new InsertTimelineDialogResult("Order Date", "Order Date Timeline"));
+    }
+
+    [Fact]
+    public void InsertTimelineDialog_ExposesExcelLikeDateFieldSelectionShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Choose date fields");
+        source.Should().Contain("Timelines filter PivotTables by date");
+        source.Should().Contain("Date field to connect");
+        source.Should().Contain("Timeline caption");
     }
 
     [Fact]
@@ -128,6 +151,17 @@ public sealed class PivotWorkflowDialogTests
                 .Should()
                 .Be(new PivotChartTypeDialogResult(ChartType.StackedColumn));
         });
+    }
+
+    [Fact]
+    public void PivotChartTypeDialog_ExposesPreviewAndRecommendedChartTypeCopy()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Recommended PivotCharts");
+        source.Should().Contain("All Charts");
+        source.Should().Contain("Chart preview");
+        source.Should().Contain("Pick a chart type for the selected PivotTable data");
     }
 
     [Fact]
@@ -225,6 +259,24 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialog_ExposesExcelLikeGroupsInsideTabs()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        foreach (var content in new[]
+        {
+            "Layout section",
+            "Format section",
+            "Grand totals",
+            "Field list and buttons",
+            "PivotTable Style Options",
+            "Data options",
+            "Preserve source sort and filter settings"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
     public void PivotFieldGroupingDialog_CreateResult_TrimsFieldAndClampsNumberRangeInterval()
     {
         var result = PivotFieldGroupingDialog.CreateResult(
@@ -306,12 +358,34 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotFieldGroupingDialog_ExposesExcelLikeGroupingSections()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Selection");
+        source.Should().Contain("Group by");
+        source.Should().Contain("Range");
+        source.Should().Contain("Select the PivotTable field and grouping interval");
+    }
+
+    [Fact]
     public void PivotCalculatedFieldDialog_CreateResult_TrimsAndBuildsModel()
     {
         var result = PivotCalculatedFieldDialog.CreateResult("  Revenue  ", "  Sales-Cost  ");
 
         result.Should().Be(new PivotCalculatedFieldDialogResult("Revenue", "Sales-Cost"));
         result.ToModel().Should().Be(new PivotCalculatedFieldModel("Revenue", "Sales-Cost"));
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_ExposesExcelLikeFormulaEditorShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Name and formula");
+        source.Should().Contain("Formula:");
+        source.Should().Contain("Use field names in formulas");
+        source.Should().Contain("Calculated fields are added to the Values area");
     }
 
     [Fact]
@@ -325,6 +399,17 @@ public sealed class PivotWorkflowDialogTests
 
         result.Should().Be(new PivotCalculatedItemDialogResult("Region", 0, "East + West", "East+West"));
         result.ToModel().Should().Be(new PivotCalculatedItemModel(0, "East + West", "East+West"));
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_ExposesExcelLikeFormulaEditorShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Field and item");
+        source.Should().Contain("Calculated items are evaluated within the selected field");
+        source.Should().Contain("Source field");
+        source.Should().Contain("Item formula");
     }
 
     [Fact]
@@ -351,5 +436,16 @@ public sealed class PivotWorkflowDialogTests
         PivotChartOptionsDialog.FromChart(chart)
             .Should()
             .Be(new PivotChartOptionsDialogResult(12, false));
+    }
+
+    [Fact]
+    public void PivotChartOptionsDialog_ExposesExcelLikeStyleAndFieldButtonGroups()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Chart style");
+        source.Should().Contain("Style IDs match the built-in Excel chart style gallery");
+        source.Should().Contain("Field buttons");
+        source.Should().Contain("Show field buttons on chart");
     }
 }
