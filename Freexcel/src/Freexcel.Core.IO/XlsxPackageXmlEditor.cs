@@ -13,6 +13,12 @@ internal static class XlsxPackageXmlEditor
         document.Save(stream);
     }
 
+    public static XDocument LoadXml(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
     public static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
     {
         var used = relsXml.Root?
@@ -79,9 +85,41 @@ internal static class XlsxPackageXmlEditor
         ReplaceXml(archive, contentTypesPath, xml);
     }
 
-    private static XDocument LoadXml(ZipArchiveEntry entry)
+    public static string EnsureRelationshipForPackagePart(
+        XDocument relsXml,
+        XNamespace packageRelNs,
+        string sourcePart,
+        string targetPart,
+        string relationshipType)
     {
-        using var stream = entry.Open();
-        return XDocument.Load(stream);
+        var root = relsXml.Root;
+        if (root is null)
+        {
+            root = new XElement(packageRelNs + "Relationships");
+            relsXml.Add(root);
+        }
+
+        foreach (var relationship in root.Elements(packageRelNs + "Relationship"))
+        {
+            var type = relationship.Attribute("Type")?.Value;
+            var target = relationship.Attribute("Target")?.Value;
+            if (!string.Equals(type, relationshipType, StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            var resolvedTarget = XlsxPackagePath.ResolveRelationshipTarget(sourcePart, target);
+            if (string.Equals(resolvedTarget, targetPart, StringComparison.OrdinalIgnoreCase))
+                return relationship.Attribute("Id")?.Value ?? "";
+        }
+
+        var id = NextRelationshipId(relsXml, packageRelNs);
+        root.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", id),
+            new XAttribute("Type", relationshipType),
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(sourcePart, targetPart))));
+        return id;
     }
 }
