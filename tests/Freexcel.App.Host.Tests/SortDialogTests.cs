@@ -169,7 +169,7 @@ public sealed class SortDialogTests
     [Fact]
     public void MainWindowCustomSort_UsesHeaderAwareChoicesAndExcludesHeaderRowWhenChecked()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataFilterCommands.cs"));
 
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)");
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false)");
