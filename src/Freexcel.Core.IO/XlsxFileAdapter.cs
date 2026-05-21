@@ -2628,7 +2628,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive, workbook);
-        PreserveStylesheetMetadata(sourceArchive, generatedArchive);
+        XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
         PreservePivotXmlReferences(sourceArchive, generatedArchive);
         PreserveStructuredTableXmlReferences(sourceArchive, generatedArchive);
         PreserveExternalLinkReferences(sourceArchive, generatedArchive);
@@ -2640,97 +2640,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         PreserveLegacyCommentParts(sourceArchive, generatedArchive, workbook);
         PreserveSharedStringRichTextAndPhonetics(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
-    }
-
-    private static void PreserveStylesheetMetadata(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-
-        var sourceStylesEntry = sourceArchive.GetEntry("xl/styles.xml");
-        var targetStylesEntry = targetArchive.GetEntry("xl/styles.xml");
-        if (sourceStylesEntry is null || targetStylesEntry is null)
-            return;
-
-        var sourceStylesXml = LoadXml(sourceStylesEntry);
-        var targetStylesXml = LoadXml(targetStylesEntry);
-        var targetRoot = targetStylesXml.Root;
-        if (targetRoot is null)
-            return;
-
-        var changed = false;
-        if (MergeStylesheetColors(sourceStylesXml.Root?.Element(workbookNs + "colors"), targetRoot, workbookNs))
-            changed = true;
-        if (MergeStylesheetTableStyles(sourceStylesXml.Root?.Element(workbookNs + "tableStyles"), targetRoot, workbookNs))
-            changed = true;
-        if (MergeExtensionList(sourceStylesXml.Root?.Element(workbookNs + "extLst"), targetRoot, workbookNs))
-            changed = true;
-
-        if (changed)
-            ReplacePackageXml(targetArchive, "xl/styles.xml", targetStylesXml);
-    }
-
-    private static bool MergeStylesheetColors(XElement? sourceColors, XElement targetRoot, XNamespace workbookNs)
-    {
-        if (sourceColors is null)
-            return false;
-
-        var targetColors = targetRoot.Element(workbookNs + "colors");
-        if (targetColors is null)
-        {
-            targetRoot.Add(new XElement(sourceColors));
-            return true;
-        }
-
-        return MergeElementNativeAttributesAndChildren(sourceColors, targetColors);
-    }
-
-    private static bool MergeStylesheetTableStyles(XElement? sourceTableStyles, XElement targetRoot, XNamespace workbookNs)
-    {
-        if (sourceTableStyles is null)
-            return false;
-
-        var targetTableStyles = targetRoot.Element(workbookNs + "tableStyles");
-        if (targetTableStyles is null)
-        {
-            targetRoot.Add(new XElement(sourceTableStyles));
-            return true;
-        }
-
-        var changed = false;
-        foreach (var attribute in sourceTableStyles.Attributes())
-        {
-            if (targetTableStyles.Attribute(attribute.Name)?.Value == attribute.Value)
-                continue;
-
-            targetTableStyles.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var targetStylesByName = targetTableStyles
-            .Elements(workbookNs + "tableStyle")
-            .Select(element => (Name: element.Attribute("name")?.Value, Element: element))
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Name))
-            .ToDictionary(pair => pair.Name!, pair => pair.Element, StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceStyle in sourceTableStyles.Elements(workbookNs + "tableStyle"))
-        {
-            var name = sourceStyle.Attribute("name")?.Value;
-            if (string.IsNullOrWhiteSpace(name) || !targetStylesByName.TryGetValue(name, out var targetStyle))
-            {
-                targetTableStyles.Add(new XElement(sourceStyle));
-                if (!string.IsNullOrWhiteSpace(name))
-                    targetStylesByName[name] = targetTableStyles.Elements(workbookNs + "tableStyle").Last();
-                changed = true;
-                continue;
-            }
-
-            if (MergeElementNativeAttributesAndChildren(sourceStyle, targetStyle))
-                changed = true;
-        }
-
-        targetTableStyles.SetAttributeValue(
-            "count",
-            targetTableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
-        return changed;
     }
 
     private static void PreservePivotXmlReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
@@ -3380,7 +3289,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             changed = true;
         if (MergeWorkbookChildBlock(sourceWebPublishObjects, targetRoot, workbookNs + "webPublishObjects"))
             changed = true;
-        if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+        if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
             changed = true;
 
         if (changed)
@@ -3621,7 +3530,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 : null;
             if (targetView is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
                     changed = true;
                 mergedTargetViewKeys.Add(sourceViewKey);
                 continue;
@@ -3958,7 +3867,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceExtensionList, targetRoot, workbookNs))
                 changed = true;
 
             if (changed)
@@ -4275,7 +4184,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeExtensionList(sourceRow.Element(workbookNs + "extLst"), targetRow, workbookNs))
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceRow.Element(workbookNs + "extLst"), targetRow, workbookNs))
                 changed = true;
         }
 
@@ -4317,7 +4226,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 changed = true;
             }
 
-            if (MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
+            if (XlsxNativeXmlMerger.MergeExtensionList(sourceCell.Element(workbookNs + "extLst"), targetCell, workbookNs))
                 changed = true;
         }
 
@@ -4773,7 +4682,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -4811,7 +4720,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -4871,7 +4780,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
                     if (targetChild is not null)
                     {
-                        if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                        if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                             changed = true;
                         continue;
                     }
@@ -4987,7 +4896,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
                 if (targetChild is not null)
                 {
-                    if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                         changed = true;
                     continue;
                 }
@@ -5003,7 +4912,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -5108,7 +5017,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
             if (targetChild is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                     changed = true;
                 continue;
             }
@@ -5139,7 +5048,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     .FirstOrDefault(child => ElementIdentityKey(child) == ElementIdentityKey(sourceChild));
                 if (targetChild is not null)
                 {
-                    if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                    if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
                         changed = true;
                     continue;
                 }
@@ -5462,7 +5371,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 : null;
             if (targetView is not null)
             {
-                if (MergeElementNativeAttributesAndChildren(sourceView, targetView))
+                if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceView, targetView))
                     changed = true;
                 continue;
             }
@@ -5470,40 +5379,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             targetSheetViews.Add(new XElement(sourceView));
             if (!string.IsNullOrWhiteSpace(viewId))
                 existingViewIds.Add(viewId);
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool MergeElementNativeAttributesAndChildren(XElement sourceElement, XElement targetElement)
-    {
-        var changed = false;
-        foreach (var attribute in sourceElement.Attributes())
-        {
-            if (targetElement.Attribute(attribute.Name) is not null)
-                continue;
-
-            targetElement.SetAttributeValue(attribute.Name, attribute.Value);
-            changed = true;
-        }
-
-        var existingChildrenByKey = targetElement
-            .Elements()
-            .GroupBy(ElementIdentityKey, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        foreach (var sourceChild in sourceElement.Elements())
-        {
-            var key = ElementIdentityKey(sourceChild);
-            if (existingChildrenByKey.TryGetValue(key, out var targetChild))
-            {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
-                    changed = true;
-                continue;
-            }
-
-            targetElement.Add(new XElement(sourceChild));
-            existingChildrenByKey[key] = targetElement.Elements().Last();
             changed = true;
         }
 
@@ -5715,46 +5590,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             targetSheetProperties.Add(new XElement(sourceChild));
             existingChildNames.Add(sourceChild.Name);
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool MergeExtensionList(XElement? sourceExtensionList, XElement targetRoot, XNamespace workbookNs)
-    {
-        if (sourceExtensionList is null)
-            return false;
-
-        var sourceExtensions = sourceExtensionList
-            .Elements(workbookNs + "ext")
-            .ToList();
-        if (sourceExtensions.Count == 0)
-            return false;
-
-        var targetExtensionList = targetRoot.Element(workbookNs + "extLst");
-        if (targetExtensionList is null)
-        {
-            targetRoot.Add(new XElement(sourceExtensionList));
-            return true;
-        }
-
-        var existingUris = targetExtensionList
-            .Elements(workbookNs + "ext")
-            .Select(extension => extension.Attribute("uri")?.Value)
-            .Where(uri => !string.IsNullOrWhiteSpace(uri))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var changed = false;
-        foreach (var sourceExtension in sourceExtensions)
-        {
-            var uri = sourceExtension.Attribute("uri")?.Value;
-            if (!string.IsNullOrWhiteSpace(uri) && existingUris.Contains(uri))
-                continue;
-
-            targetExtensionList.Add(new XElement(sourceExtension));
-            if (!string.IsNullOrWhiteSpace(uri))
-                existingUris.Add(uri);
             changed = true;
         }
 
@@ -6269,7 +6104,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 if (targetElement is null)
                     dxf.Add(sourceElement);
                 else
-                    MergeElementNativeAttributesAndChildren(sourceElement, targetElement);
+                    XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceElement, targetElement);
             }
             catch
             {
@@ -8750,3 +8585,4 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<PivotSortModel> Sorts);
 
 }
+
