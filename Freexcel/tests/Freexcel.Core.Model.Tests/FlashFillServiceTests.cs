@@ -279,6 +279,27 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["turinga@contoso.com"], o => o.WithStrictOrdering());
     }
 
+    [Theory]
+    [InlineData(".", "turing.a@contoso.com")]
+    [InlineData("_", "turing_a@contoso.com")]
+    [InlineData("-", "turing-a@contoso.com")]
+    public void FillFromColumns_LastFirstInitialSeparatedEmail_LearnsSeparatorAndConstantDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            [$"lovelace{separator}a@contoso.com", $"hopper{separator}g@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void FillFromColumns_FirstLastEmail_ReturnsNullWhenExampleDomainsDiffer()
     {
