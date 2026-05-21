@@ -61,7 +61,13 @@ public partial class MainWindow
                 throw new InvalidOperationException(pageRangeError);
 
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
-            PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange, options.Quality);
+            PdfDocumentExporter.Save(
+                document,
+                pdfPath,
+                properties,
+                options.PageRange,
+                options.Quality,
+                CreatePdfBookmarks(options));
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
@@ -161,6 +167,38 @@ public partial class MainWindow
                 _viewportService,
                 ResolveExportRange(options),
                 options.IgnorePrintAreas);
+
+    private IReadOnlyList<PdfBookmark>? CreatePdfBookmarks(ExportOptions options)
+    {
+        if (!options.CreateBookmarks)
+            return null;
+
+        var result = new List<PdfBookmark>();
+        var pageIndex = 0;
+        IEnumerable<Sheet> sheets = options.Scope == ExportContentScope.EntireWorkbook
+            ? _workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden)
+            : _workbook.GetSheet(_currentSheetId) is { } activeSheet
+                ? [activeSheet]
+                : [];
+
+        foreach (var sheet in sheets)
+        {
+            var range = options.Scope == ExportContentScope.Selection && sheet.Id == _currentSheetId
+                ? ResolveExportRange(options)
+                : null;
+            var document = PrintRenderer.RenderWorksheet(
+                _workbook,
+                sheet.Id,
+                _viewportService,
+                range,
+                options.IgnorePrintAreas);
+            if (document.Pages.Count > 0)
+                result.Add(new PdfBookmark(sheet.Name, pageIndex));
+            pageIndex += document.Pages.Count;
+        }
+
+        return result;
+    }
 
     private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options)
     {
