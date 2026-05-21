@@ -227,6 +227,8 @@ public partial class MainWindow
             {
                 _inlineEditor.Text = e.Text;
                 _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+                _formulaRangeEntryMode = e.Text == "=";
+                RefreshFormulaReferenceHighlights();
             }
         }
         e.Handled = true;
