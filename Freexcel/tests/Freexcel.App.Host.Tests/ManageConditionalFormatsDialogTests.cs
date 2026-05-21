@@ -173,7 +173,7 @@ public sealed class ManageConditionalFormatsDialogTests
             "_OK",
             "_Cancel",
             "_Apply",
-            "_New Rule",
+            "_New Rule...",
             "_Edit Rule",
             "_Delete Rule"
         })
@@ -211,34 +211,14 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
-    public void NewRuleChooser_OffersSupportedExcelRuleFamilies()
+    public void NewRuleCommand_OpensSingleExcelStyleRuleDialogEntryPoint()
     {
-        StaTestRunner.Run(() =>
-        {
-            var sheet = new Workbook("Book").AddSheet("Sheet1");
-            var dialog = new ManageConditionalFormatsDialog(sheet, null);
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
 
-            var chooser = GetControl<ComboBox>(dialog, "_newRuleTypeBox");
-
-            chooser.SelectedItem.Should().Be("Greater Than");
-            chooser.Items.Cast<string>().Should().Contain([
-                "Greater Than",
-                "Text Contains",
-                "Date Occurring",
-                "Duplicate Values",
-                "Blanks",
-                "No Blanks",
-                "Errors",
-                "No Errors",
-                "Top 10%",
-                "Data Bar",
-                "Color Scale",
-                "Icon Set",
-                "Formula"
-            ]);
-
-            dialog.Close();
-        });
+        source.Should().Contain("Content = \"_New Rule...\"");
+        source.Should().Contain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
+        source.Should().NotContain("_newRuleTypeBox");
+        source.Should().NotContain("toolBar.Children.Add(_newRuleTypeBox)");
     }
 
     [Fact]
