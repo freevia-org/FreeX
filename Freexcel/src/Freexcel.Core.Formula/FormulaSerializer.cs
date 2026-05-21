@@ -75,6 +75,13 @@ public static class FormulaSerializer
                 sb.Append(nr.Name);
                 break;
 
+            case StructuredReferenceNode sr:
+                sb.Append(sr.TableName);
+                sb.Append('[');
+                sb.Append(sr.ColumnName.Replace("]", "]]"));
+                sb.Append(']');
+                break;
+
             case FunctionCallNode f:
                 sb.Append(f.FunctionName);
                 sb.Append('(');

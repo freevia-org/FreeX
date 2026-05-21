@@ -253,6 +253,15 @@ public sealed class Parser
                     return fullRowRange;
 
                 var token = Advance();
+                if (Current.Type == TokenType.StructuredReferenceSelector)
+                {
+                    var selector = Advance();
+                    if (string.IsNullOrWhiteSpace(selector.Value))
+                        throw new FormulaParseException(
+                            $"Expected structured reference column name at position {selector.Position}");
+                    return new StructuredReferenceNode(token.Value, selector.Value.Trim());
+                }
+
                 return new NamedRangeNode(token.Value);
             }
 
