@@ -534,4 +534,21 @@ public sealed class ChartDialogTests
                 MarkerSize: 9));
         options.SeriesFormats.Should().ContainSingle(format => format.SeriesIndex == 0);
     }
+
+    [Fact]
+    public void ChartDialogs_LabelEditableHelperControlsWithTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        foreach (var expected in new[]
+        {
+            "new Label { Content = label, Target = box",
+            "new Label { Content = \"_Style\", Target = _styleBox",
+            "new Label { Content = label, Target = comboBox",
+            "new Label { Content = label, Target = textBox"
+        })
+            source.Should().Contain(expected);
+
+        source.Should().NotContain("stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) })");
+    }
 }
