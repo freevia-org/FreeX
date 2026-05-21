@@ -835,7 +835,7 @@ public sealed class MainWindowSourceHygieneTests
     public void FormatPainterApplication_UsesTargetSelectionRangeWhenAvailable()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormatPainter.cs"));
-        var mainSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var mainSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
 
         source.Should().Contain("private SheetId? _formatPainterSourceSheetId;");
         source.Should().Contain("private GridRange? _formatPainterSourceRange;");
@@ -874,7 +874,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AdvancedChartFamilies_ArePresentedAsDeferredInsteadOfAuthored()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ChartCommands.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
@@ -935,7 +935,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuQuickAnalysis_ReusesCtrlQPath()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("case WorksheetContextMenuAction.QuickAnalysis:");
         source.Should().Contain("ShowQuickAnalysisMenu();");
@@ -944,7 +944,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenu_UsesAccessKeyHeaders()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("Header = command.AccessHeader");
     }
@@ -964,7 +964,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void WorksheetContextMenuNewComment_ReusesThreadedCommentWorkflow()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
 
         source.Should().Contain("case WorksheetContextMenuAction.NewComment:");
         source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());");
@@ -1015,7 +1015,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
 
         source.Should().Contain("PositionAutoFilterDialogAtActiveCell(dialog, activeCell);");
         source.Should().Contain("private void PositionAutoFilterDialogAtActiveCell");
@@ -1027,7 +1027,9 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_ReusesFullFilterDialogResultRouting()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
         source.Should().Contain("private bool ApplyAutoFilterDialogResult(");
@@ -1039,7 +1041,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void AutoFilterKeyboardDropdown_UsesExcelStyleMenuPlanner()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
         var dialog = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
 
         source.Should().Contain("AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)");
