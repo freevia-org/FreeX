@@ -52,9 +52,14 @@ public sealed class PivotTableDialog : Window
         _selectTableRangeButton.Margin = new Thickness(0, 0, 0, 4);
         _externalSourceButton.Margin = new Thickness(0, 0, 0, 6);
         stack.Children.Add(_selectTableRangeButton);
-        stack.Children.Add(new TextBlock { Text = "Table/Range:", Margin = new Thickness(22, 0, 0, 4) });
         _sourceRangeBox.Text = Result.SourceRangeText;
-        stack.Children.Add(CreateReferenceEditor(_sourceRangeBox, "Select PivotTable source range", new Thickness(22, 0, 0, 8)));
+        AddLabeledReferenceEditor(
+            stack,
+            "Table/_Range:",
+            _sourceRangeBox,
+            "Select PivotTable source range",
+            labelMargin: new Thickness(22, 0, 0, 4),
+            editorMargin: new Thickness(22, 0, 0, 8));
         stack.Children.Add(_externalSourceButton);
 
         _dataModelBox.Margin = new Thickness(0, 0, 0, 12);
@@ -68,7 +73,13 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_existingWorksheetButton);
 
         _destinationRangeBox.Text = Result.DestinationRangeText;
-        stack.Children.Add(CreateReferenceEditor(_destinationRangeBox, "Select PivotTable location", new Thickness(22, 4, 0, 12)));
+        AddLabeledReferenceEditor(
+            stack,
+            "_Location:",
+            _destinationRangeBox,
+            "Select PivotTable location",
+            labelMargin: new Thickness(22, 4, 0, 4),
+            editorMargin: new Thickness(22, 0, 0, 12));
 
         _openFieldListBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_openFieldListBox);
@@ -148,6 +159,24 @@ public sealed class PivotTableDialog : Window
             throw new ArgumentException("Range text is required.", parameterName);
 
         return value.Trim();
+    }
+
+    private static void AddLabeledReferenceEditor(
+        Panel stack,
+        string label,
+        TextBox textBox,
+        string automationName,
+        Thickness labelMargin,
+        Thickness editorMargin)
+    {
+        stack.Children.Add(new Label
+        {
+            Content = label,
+            Target = textBox,
+            Padding = new Thickness(0),
+            Margin = labelMargin
+        });
+        stack.Children.Add(CreateReferenceEditor(textBox, automationName, editorMargin));
     }
 
     private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName, Thickness margin)
