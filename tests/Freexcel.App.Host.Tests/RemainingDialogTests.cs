@@ -372,9 +372,15 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("Content = \"_Previous Page\"");
         source.Should().Contain("Content = \"_Next Page\"");
+        source.Should().Contain("Content = \"_First Page\"");
+        source.Should().Contain("Content = \"_Last Page\"");
+        source.Should().Contain("NavigationCommands.FirstPage");
+        source.Should().Contain("NavigationCommands.LastPage");
         source.Should().Contain("Content = \"_Zoom:\"");
         source.Should().Contain("Content = \"_Margins\"");
         source.Should().Contain("Content = \"Page _Setup...\"");
         source.Should().Contain("Content = \"_Print...\"");
+        source.Should().Contain("Content = \"_Close Preview\"");
+        source.Should().Contain("closeButton.Click += (_, _) => Close();");
     }
 }
