@@ -1140,14 +1140,16 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void SpellCheckWorkflow_RoutesDialogActionsThroughKnownCorrectionsPlan()
+    public void SpellCheckWorkflow_RoutesDistinctDialogActionsToIntendedResults()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId)");
         source.Should().Contain("SpellCheckDialogAction.ReplaceAll");
+        source.Should().Contain("SpellCheckDialogAction.IgnoreAll");
         source.Should().Contain("SpellCheckDialogAction.Ignore");
-        source.Should().Contain("SpellCheckService.BuildCorrectionCellEdits(plan)");
+        source.Should().Contain("SpellCheckDialogAction.Add");
+        source.Should().Contain("BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement)");
+        source.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
         source.Should().NotContain("BuildSpellCheckEdits");
         source.Should().Contain("TryExecuteSpellCheckEdits");
         source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");

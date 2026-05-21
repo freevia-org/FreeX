@@ -664,7 +664,8 @@ public sealed class Sheet
                 ShowRowHeaders = pt.ShowRowHeaders,
                 ShowColumnHeaders = pt.ShowColumnHeaders,
                 ShowRowStripes = pt.ShowRowStripes,
-                ShowColumnStripes = pt.ShowColumnStripes
+                ShowColumnStripes = pt.ShowColumnStripes,
+                EmptyValueText = pt.EmptyValueText
             };
             clonedPt.RowFields.AddRange(pt.RowFields);
             clonedPt.ColumnFields.AddRange(pt.ColumnFields);

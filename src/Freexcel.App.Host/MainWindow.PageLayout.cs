@@ -339,27 +339,43 @@ public partial class MainWindow
 
         if (!TryExecuteGroupedSheetCommand(
                 "Page Setup",
-                sheetId => new SetPageSetupCommand(
-                    sheetId,
-                    dialog.Orientation,
-                    dialog.PaperSize,
-                    dialog.Margins,
-                    dialog.PrintGridlines,
-                    dialog.PrintHeadings,
-                    dialog.ScaleToFit,
-                    dialog.PrintTitleRows,
-                    dialog.PrintTitleColumns,
-                    dialog.CenterHorizontally,
-                    dialog.CenterVertically,
-                    dialog.PageOrder,
-                    dialog.FirstPageNumber,
-                    dialog.HeaderMargin,
-                    dialog.FooterMargin,
-                    dialog.PrintBlackAndWhite,
-                    dialog.PrintDraftQuality,
-                    dialog.PrintQualityDpi,
-                    dialog.PrintErrorValue,
-                    dialog.PrintComments)))
+                sheetId => new CompositeWorkbookCommand(
+                    "Page Setup",
+                    [
+                        new SetPageSetupCommand(
+                            sheetId,
+                            dialog.Orientation,
+                            dialog.PaperSize,
+                            dialog.Margins,
+                            dialog.PrintGridlines,
+                            dialog.PrintHeadings,
+                            dialog.ScaleToFit,
+                            dialog.PrintTitleRows,
+                            dialog.PrintTitleColumns,
+                            dialog.CenterHorizontally,
+                            dialog.CenterVertically,
+                            dialog.PageOrder,
+                            dialog.FirstPageNumber,
+                            dialog.HeaderMargin,
+                            dialog.FooterMargin,
+                            dialog.PrintBlackAndWhite,
+                            dialog.PrintDraftQuality,
+                            dialog.PrintQualityDpi,
+                            dialog.PrintErrorValue,
+                            dialog.PrintComments),
+                        new SetHeaderFooterCommand(
+                            sheetId,
+                            dialog.Header,
+                            dialog.Footer,
+                            dialog.FirstPageHeader,
+                            dialog.FirstPageFooter,
+                            dialog.EvenPageHeader,
+                            dialog.EvenPageFooter,
+                            dialog.DifferentFirstPage,
+                            dialog.DifferentOddEvenPages,
+                            dialog.ScaleHeaderFooterWithDocument,
+                            dialog.AlignHeaderFooterWithMargins)
+                    ])))
             return;
 
         UpdateViewport();
