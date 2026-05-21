@@ -23,20 +23,66 @@
                     IsCancel="True"/>
         </StackPanel>
 
-        <StackPanel>
-            <TextBlock Text="Theme Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
-            <UniformGrid x:Name="ThemeColorsPanel"
-                         Columns="10"
-                         Rows="6"
-                         Margin="0,0,0,12"/>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <TextBlock Text="Standard Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
-            <UniformGrid x:Name="StandardColorsPanel"
-                         Columns="10"
-                         Rows="1"
-                         Margin="0,0,0,12"/>
+            <TabControl Grid.Row="0">
+                <TabItem Header="_Standard">
+                    <StackPanel Margin="8">
+                        <TextBlock Text="Theme Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <UniformGrid x:Name="ThemeColorsPanel"
+                                     Columns="10"
+                                     Rows="6"
+                                     Margin="0,0,0,12"/>
 
-            <Grid Margin="0,0,0,12">
+                        <TextBlock Text="Standard Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <UniformGrid x:Name="StandardColorsPanel"
+                                     Columns="10"
+                                     Rows="1"
+                                     Margin="0,0,0,12"/>
+                    </StackPanel>
+                </TabItem>
+
+                <TabItem Header="_Custom">
+                    <Grid Margin="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.ColumnSpan="2"
+                               Content="Custom _color"
+                               Target="{Binding ElementName=CustomColorTextBox}"
+                               FontWeight="SemiBold"
+                               Padding="0"
+                               Margin="0,0,0,6"/>
+                        <Label Grid.Row="1" Grid.Column="0" Content="_Hex:" Target="{Binding ElementName=CustomColorTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox x:Name="CustomColorTextBox" Grid.Row="1" Grid.Column="1" TextChanged="CustomColorTextBox_TextChanged" Margin="0,0,0,6"/>
+                        <Label Grid.Row="2" Grid.Column="0" Content="_Red:" Target="{Binding ElementName=CustomRedTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox x:Name="CustomRedTextBox" Grid.Row="2" Grid.Column="1" TextChanged="CustomRgbTextBox_TextChanged" Margin="0,0,0,6"/>
+                        <Label Grid.Row="3" Grid.Column="0" Content="_Green:" Target="{Binding ElementName=CustomGreenTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox x:Name="CustomGreenTextBox" Grid.Row="3" Grid.Column="1" TextChanged="CustomRgbTextBox_TextChanged" Margin="0,0,0,6"/>
+                        <Label Grid.Row="4" Grid.Column="0" Content="_Blue:" Target="{Binding ElementName=CustomBlueTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox x:Name="CustomBlueTextBox" Grid.Row="4" Grid.Column="1" TextChanged="CustomRgbTextBox_TextChanged" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="#RRGGBB or RGB values from 0 to 255"
+                                   Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                                   FontSize="11"/>
+                    </Grid>
+                </TabItem>
+            </TabControl>
+
+            <Grid Grid.Row="1" Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
@@ -102,17 +148,6 @@
                     </Border>
                 </StackPanel>
             </Grid>
-
-            <Label Content="Custom _color"
-                   Target="{Binding ElementName=CustomColorTextBox}"
-                   FontWeight="SemiBold"
-                   Padding="0"
-                   Margin="0,0,0,6"/>
-            <TextBox x:Name="CustomColorTextBox" TextChanged="CustomColorTextBox_TextChanged"/>
-            <TextBlock Text="#RRGGBB or R, G, B"
-                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
-                       FontSize="11"
-                       Margin="0,4,0,0"/>
-        </StackPanel>
+        </Grid>
     </DockPanel>
 </Window>
