@@ -177,6 +177,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void StatusDialogs_UseSharedExcelStyleButtonRows()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_TryCreateResult_RequiresPositivePeriods()
     {
         ForecastSheetDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
