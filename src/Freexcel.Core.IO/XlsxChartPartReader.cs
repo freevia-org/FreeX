@@ -262,7 +262,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesLine(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -341,7 +341,7 @@ public static class XlsxChartPartReader
                         ranges.Add(range);
                 }
 
-                if (TryReadSeriesFill(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 if (barUsesSecondaryAxis && seriesIndex > 0)
@@ -374,7 +374,7 @@ public static class XlsxChartPartReader
                 if (lineUsesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesLine(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -460,7 +460,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesFill(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -532,7 +532,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesLine(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -599,7 +599,7 @@ public static class XlsxChartPartReader
             }
 
             var modelSeriesIndex = ReadSeriesIndex(series, seriesIndex);
-            if (TryReadSeriesFill(series, modelSeriesIndex, out var format))
+            if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, modelSeriesIndex, out var format))
                 result.SeriesFormats.Add(format);
 
             ApplyPieExplosion(series, result);
@@ -659,7 +659,7 @@ public static class XlsxChartPartReader
                     ranges.Add(range);
             }
 
-            if (TryReadSeriesFill(series, modelSeriesIndex, out var format))
+            if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, modelSeriesIndex, out var format))
                 result.SeriesFormats.Add(format);
 
             XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
@@ -716,7 +716,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesFill(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -746,7 +746,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesLine(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -817,7 +817,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && seriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
-                if (TryReadSeriesFill(series, seriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
@@ -880,7 +880,7 @@ public static class XlsxChartPartReader
                 if (usesSecondaryAxis && modelSeriesIndex > 0)
                     result.SecondaryAxisSeriesIndexes.Add(modelSeriesIndex);
 
-                if (TryReadSeriesLine(series, modelSeriesIndex, out var format))
+                if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, modelSeriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
@@ -1104,132 +1104,6 @@ public static class XlsxChartPartReader
 
     private static bool HasDescendant(XElement element, string localName) =>
         element.Descendants().Any(descendant => descendant.Name.LocalName == localName);
-
-    private static bool TryReadSeriesFill(XElement series, int seriesIndex, out ChartSeriesFormat format)
-    {
-        format = default!;
-        var shapeProperties = series.Element(ChartNs + "spPr");
-        var solidFill = shapeProperties?.Element(DrawingNs + "solidFill");
-
-        CellColor? fillColor = null;
-        WorkbookThemeColorReference? fillThemeColor = null;
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
-            fillThemeColor = themeColor;
-        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
-            fillColor = color;
-
-        var line = shapeProperties?.Element(DrawingNs + "ln");
-        var lineFill = line?.Element(DrawingNs + "solidFill");
-        CellColor? strokeColor = null;
-        WorkbookThemeColorReference? strokeThemeColor = null;
-        if (lineFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var lineThemeColor))
-            strokeThemeColor = lineThemeColor;
-        else if (lineFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var lineColor))
-            strokeColor = lineColor;
-
-        double? strokeThickness = null;
-        if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
-            strokeThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
-
-        ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
-            ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
-            : null;
-
-        if (fillColor is null &&
-            fillThemeColor is null &&
-            strokeColor is null &&
-            strokeThemeColor is null &&
-            strokeThickness is null &&
-            dashStyle is null)
-        {
-            return false;
-        }
-
-        format = new ChartSeriesFormat(
-            seriesIndex,
-            FillColor: fillColor,
-            StrokeColor: strokeColor,
-            StrokeThickness: strokeThickness,
-            DashStyle: dashStyle,
-            FillThemeColor: fillThemeColor,
-            StrokeThemeColor: strokeThemeColor);
-        return true;
-    }
-
-    private static bool TryReadSeriesLine(XElement series, int seriesIndex, out ChartSeriesFormat format)
-    {
-        format = default!;
-        var line = series
-            .Element(ChartNs + "spPr")?
-            .Element(DrawingNs + "ln");
-
-        CellColor? strokeColor = null;
-        WorkbookThemeColorReference? strokeThemeColor = null;
-        var solidFill = line?.Element(DrawingNs + "solidFill");
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
-            strokeThemeColor = themeColor;
-        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
-            strokeColor = color;
-
-        double? strokeThickness = null;
-        if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
-            strokeThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
-
-        ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
-            ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
-            : null;
-
-        var marker = series.Element(ChartNs + "marker");
-        var markerStyle = marker?.Element(ChartNs + "symbol") is { } symbolElement
-            ? FromXlsxMarkerStyle(symbolElement.Attribute("val")?.Value)
-            : (ChartMarkerStyle?)null;
-        double? markerSize = null;
-        if (int.TryParse(marker?.Element(ChartNs + "size")?.Attribute("val")?.Value, out var size))
-            markerSize = Math.Clamp(size, 1, 30);
-        CellColor? fillColor = null;
-        WorkbookThemeColorReference? fillThemeColor = null;
-        var markerFill = marker?
-            .Element(ChartNs + "spPr")?
-            .Element(DrawingNs + "solidFill");
-        if (markerFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(markerFill, DrawingNs, out var markerThemeColor))
-            fillThemeColor = markerThemeColor;
-        else if (markerFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(markerFill, DrawingNs, out var markerColor))
-            fillColor = markerColor;
-
-        if (strokeColor is null &&
-            strokeThemeColor is null &&
-            strokeThickness is null &&
-            dashStyle is null &&
-            fillColor is null &&
-            fillThemeColor is null &&
-            markerStyle is null &&
-            markerSize is null)
-        {
-            return false;
-        }
-
-        format = new ChartSeriesFormat(
-            seriesIndex,
-            FillColor: fillColor,
-            StrokeColor: strokeColor,
-            StrokeThickness: strokeThickness,
-            DashStyle: dashStyle,
-            MarkerStyle: markerStyle,
-            MarkerSize: markerSize,
-            FillThemeColor: fillThemeColor,
-            StrokeThemeColor: strokeThemeColor);
-        return true;
-    }
-
-    private static ChartMarkerStyle FromXlsxMarkerStyle(string? value) =>
-        value switch
-        {
-            "none" => ChartMarkerStyle.None,
-            "square" => ChartMarkerStyle.Square,
-            "diamond" => ChartMarkerStyle.Diamond,
-            "triangle" => ChartMarkerStyle.Triangle,
-            _ => ChartMarkerStyle.Circle
-        };
 
     private static bool TryParseFormulaRange(string formula, SheetId sheetId, out GridRange range)
     {
