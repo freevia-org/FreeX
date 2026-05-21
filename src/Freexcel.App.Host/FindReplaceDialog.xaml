@@ -62,7 +62,7 @@
             </TabItem>
         </TabControl>
 
-        <Expander x:Name="OptionsExpander" Grid.Row="1" Header="Options &gt;&gt;" IsExpanded="True" Margin="0,0,0,10">
+        <Expander x:Name="OptionsExpander" Grid.Row="1" Header="_Options &gt;&gt;" IsExpanded="True" Margin="0,0,0,10">
             <Grid Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="88"/>
