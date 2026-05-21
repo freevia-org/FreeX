@@ -193,6 +193,11 @@ function Body($slug, [int]$n) {
         '^page-layout$' { return Doc $n }
         '^freeze-panes$' { return (Grid $n) + "`n" + (L 8 3 8 17 $n 'r' 1.2) + "`n" + (L 3 8 17 8 $n 'r' 1.2) }
         '^hide-unhide$' { return Eye $n }
+        '^statistics$|^workbook-stats$|^workbook-statistics$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 10 $n)"" width=""$(S 2.5 $n)"" height=""$(S 6 $n)""/><rect class=""k"" x=""$(S 9 $n)"" y=""$(S 6 $n)"" width=""$(S 2.5 $n)"" height=""$(S 10 $n)""/><rect class=""g"" x=""$(S 13 $n)"" y=""$(S 3.5 $n)"" width=""$(S 2.5 $n)"" height=""$(S 12.5 $n)""/>" }
+        '^accessibility-checker$|^accessibility$' { return "  <path class=""y s"" d=""M$(S 10 $n) $(S 3 $n) L$(S 17 $n) $(S 16 $n) H$(S 3 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '!' 10 11 8 $n) }
+        '^alt-text$' { return (Rct 4 5 12 10 $n) + "`n" + (Txt 'alt' 10 10 5.2 $n) }
+        '^allow-edit-ranges$' { return (Grid $n) + "`n  <path class=""g"" d=""M$(S 7 $n) $(S 11 $n) L$(S 9 $n) $(S 13 $n) L$(S 14 $n) $(S 7 $n) L$(S 15.5 $n) $(S 8.5 $n) L$(S 9.2 $n) $(S 15.5 $n) L$(S 5.5 $n) $(S 12 $n) Z""/>" }
+        '^share$' { return "  <circle class=""b"" cx=""$(S 6 $n)"" cy=""$(S 7 $n)"" r=""$(S 2 $n)""/><circle class=""b"" cx=""$(S 14 $n)"" cy=""$(S 6 $n)"" r=""$(S 2 $n)""/><circle class=""b"" cx=""$(S 13 $n)"" cy=""$(S 14 $n)"" r=""$(S 2 $n)""/>`n" + (L 8 7 12 6 $n 'r' .9) + "`n" + (L 8 8 11.5 13 $n 'r' .9) }
         'chart|sparkline' { return Chart $slug $n }
         'pivot|table|grid|cell|row|column|border|format' { return Grid $n }
         'theme|color|font|margin|print|paper|page|scale|header|footer|break|background|effect|option' { if ($slug -match 'colors') { return "  <rect class=""b"" x=""$(S 4 $n)"" y=""$(S 4 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""o"" x=""$(S 8 $n)"" y=""$(S 4 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""g"" x=""$(S 12 $n)"" y=""$(S 4 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""y"" x=""$(S 4 $n)"" y=""$(S 8 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""rd"" x=""$(S 8 $n)"" y=""$(S 8 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""p"" x=""$(S 12 $n)"" y=""$(S 8 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/>" }; return Doc $n }

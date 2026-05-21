@@ -538,6 +538,9 @@ public static class RibbonIconFactory
             "lookup" => "lookup-reference",
             "formula-auditing" => "evaluate-formula",
             "calculation" => "calculate-now",
+            "workbook-stats" => "statistics",
+            "workbook-statistics" => "statistics",
+            "accessibility" => "accessibility-checker",
             _ => ""
         };
 
