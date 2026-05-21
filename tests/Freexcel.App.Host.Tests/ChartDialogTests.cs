@@ -48,6 +48,53 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartTypePickerPlanner_GroupsRenderableTypesIntoExcelCategories()
+    {
+        var categories = ChartTypePickerPlanner.GetCategories();
+
+        categories.Select(category => category.Name).Should().ContainInOrder(
+            "Column",
+            "Line",
+            "Pie",
+            "Bar",
+            "Area",
+            "X Y (Scatter)",
+            "Stock",
+            "Radar");
+        categories.Should().OnlyContain(category => category.Options.All(option => ChartTypeSupport.IsRenderable(option.Type)));
+        categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
+            ChartType.Column,
+            ChartType.StackedColumn,
+            ChartType.PercentStackedColumn);
+    }
+
+    [Fact]
+    public void ChartTypePickerPlanner_BuildsSubtypeGalleryChoicesWithPreviewText()
+    {
+        var choices = ChartTypePickerPlanner.GetGalleryChoices("Bar");
+
+        choices.Select(choice => choice.SubtypeName).Should().ContainInOrder(
+            "Clustered Bar",
+            "Stacked Bar",
+            "100% Stacked Bar");
+        choices.Should().OnlyContain(choice => choice.CategoryName == "Bar");
+        choices.Should().OnlyContain(choice => !string.IsNullOrWhiteSpace(choice.PreviewText));
+    }
+
+    [Fact]
+    public void ChartTypeDialogs_ExposeExcelInsertAndChangeSurfaces()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("Recommended Charts");
+        source.Should().Contain("All Charts");
+        source.Should().Contain("Chart categories");
+        source.Should().Contain("Chart subtype gallery");
+        source.Should().Contain("Preview");
+        source.Should().Contain("Choose a chart type");
+    }
+
+    [Fact]
     public void InsertChartDialog_BuildsResultForSelectedChartType()
     {
         var result = InsertChartDialog.CreateResult(ChartType.Line);
