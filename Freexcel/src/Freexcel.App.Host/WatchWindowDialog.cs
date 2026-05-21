@@ -43,15 +43,15 @@ public sealed class WatchWindowDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var refresh = new Button { Content = "Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var refresh = new Button { Content = "_Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
 
-        var delete = new Button { Content = "Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var delete = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         delete.Click += (_, _) => DeleteSelectedWatch();
         buttons.Children.Add(delete);
 
-        var close = new Button { Content = "Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
