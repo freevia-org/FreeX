@@ -1178,6 +1178,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void WorksheetContextMenuEditAndDeleteComment_UseThreadedCommentWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var reviewSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.EditComment:");
+        source.Should().Contain("case WorksheetContextMenuAction.DeleteComment:");
+        source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());");
+        reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
+        reviewSource.Should().Contain("new DeleteThreadedCommentCommand(");
+    }
+
+    [Fact]
     public void ReviewCommentNavigation_IncludesThreadedComments()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.ReviewCommands.cs"));
