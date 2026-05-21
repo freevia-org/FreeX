@@ -527,6 +527,18 @@ public class ExportPlannerTests
         source.Should().Contain("PrintDocument(document.DocumentPaginator");
     }
 
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData("", 1)]
+    [InlineData("0", 1)]
+    [InlineData("2", 2)]
+    [InlineData("1000", 999)]
+    [InlineData("not a number", 1)]
+    public void PrintPreviewDialog_NormalizeCopyCount_ClampsToExcelLikeCopiesRange(string? text, int expected)
+    {
+        PrintPreviewDialog.NormalizeCopyCount(text).Should().Be(expected);
+    }
+
     [Fact]
     public void PrintSettingsPlanner_SummarizesExcelLikeActiveSheetSettings()
     {
@@ -585,6 +597,22 @@ public class ExportPlannerTests
         source.Should().Contain("pageStatusText");
         source.Should().Contain("Page 1 of");
         source.Should().Contain("NavigationCommands.GoToPage");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesHonestPrinterCopiesAndStatusSurface()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"Pr_inter:\"");
+        source.Should().Contain("Content = \"_Copies:\"");
+        source.Should().Contain("printerBox");
+        source.Should().Contain("copiesBox");
+        source.Should().Contain("statusText");
+        source.Should().Contain("NormalizeCopyCount(copiesBox.Text)");
+        source.Should().Contain("dialog.PrintTicket.CopyCount = copies");
+        source.Should().Contain("AutomationProperties.SetHelpText");
+        source.Should().Contain("RefreshPrintStatus");
     }
 
     [Fact]
