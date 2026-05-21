@@ -72,6 +72,40 @@ function New-CoverageSummary {
     return ($lines -join "`n")
 }
 
+function New-CommandRows {
+    param($Section)
+
+    if ($Section.PSObject.Properties.Name -contains "groups" -and $Section.groups) {
+        $groupBlocks = @()
+        foreach ($group in $Section.groups) {
+            $groupBlocks += "### $($group.heading)`n`n$(New-CommandTable $Section.itemColumn $group.rows)"
+        }
+
+        return ($groupBlocks -join "`n`n")
+    }
+
+    return New-CommandTable $Section.itemColumn $Section.rows
+}
+
+function New-CommandTable {
+    param(
+        [string]$ItemColumn,
+        [array]$Rows
+    )
+
+    $itemColumn = if ($ItemColumn) { [string]$ItemColumn } else { "Command" }
+    $lines = @(
+        "| $itemColumn | Status | Notes |",
+        "|---|---|---|"
+    )
+
+    foreach ($row in $Rows) {
+        $lines += "| $($row.name) | $($row.status) | $($row.notes) |"
+    }
+
+    return ($lines -join "`n")
+}
+
 function Set-GeneratedBlock {
     param(
         [string]$Path,
@@ -99,3 +133,13 @@ if ($inventory.schemaVersion -ne 1) {
 
 Set-GeneratedBlock $CommandSurfacePath "command-inventory:coverage-summary" (New-CoverageSummary $inventory.commandSurfaceTabs $true)
 Set-GeneratedBlock $MenuToolbarPath "command-inventory:coverage-summary" (New-CoverageSummary $inventory.menuToolbarTabs $false)
+
+foreach ($section in $inventory.commandSurfaceRows) {
+    $markerName = ($section.name -replace '[^A-Za-z0-9]+', '-').Trim('-').ToLowerInvariant()
+    Set-GeneratedBlock $CommandSurfacePath "command-inventory:command-surface:$markerName" (New-CommandRows $section)
+}
+
+foreach ($section in $inventory.menuToolbarRows) {
+    $markerName = ($section.name -replace '[^A-Za-z0-9]+', '-').Trim('-').ToLowerInvariant()
+    Set-GeneratedBlock $MenuToolbarPath "command-inventory:menu-toolbar:$markerName" (New-CommandRows $section)
+}
