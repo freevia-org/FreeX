@@ -43,17 +43,63 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
                     <TextBlock Text="Current" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <Border x:Name="CurrentColorPreview"
-                            Height="34"
+                    <Border Height="54"
                             BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                            BorderThickness="1"/>
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="CurrentForegroundPreview"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       Background="White"
+                                       FontWeight="SemiBold"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Stretch"
+                                       Padding="4,16,4,0"/>
+                            <Border x:Name="CurrentBackgroundPreview"
+                                    Grid.Column="1">
+                                <TextBlock x:Name="CurrentBackgroundText"
+                                           Text="Fill"
+                                           FontWeight="SemiBold"
+                                           TextAlignment="Center"
+                                           VerticalAlignment="Stretch"
+                                           Padding="4,16,4,0"/>
+                            </Border>
+                        </Grid>
+                    </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="New" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <Border x:Name="NewColorPreview"
-                            Height="34"
+                    <Border Height="54"
                             BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                            BorderThickness="1"/>
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="NewForegroundPreview"
+                                       Grid.Column="0"
+                                       Text="Text"
+                                       Background="White"
+                                       FontWeight="SemiBold"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Stretch"
+                                       Padding="4,16,4,0"/>
+                            <Border x:Name="NewBackgroundPreview"
+                                    Grid.Column="1">
+                                <TextBlock x:Name="NewBackgroundText"
+                                           Text="Fill"
+                                           FontWeight="SemiBold"
+                                           TextAlignment="Center"
+                                           VerticalAlignment="Stretch"
+                                           Padding="4,16,4,0"/>
+                            </Border>
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </Grid>
 
