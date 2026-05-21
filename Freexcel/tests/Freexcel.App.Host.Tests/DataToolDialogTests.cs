@@ -23,6 +23,46 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsDialog_ExposesExcelWizardStepStateAndSourceModeChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        source.Should().Contain("_stepOneIndicator");
+        source.Should().Contain("_stepTwoIndicator");
+        source.Should().Contain("_stepThreeIndicator");
+        source.Should().Contain("Step 1 of 3");
+        source.Should().Contain("_delimitedButton");
+        source.Should().Contain("_fixedWidthButton");
+        source.Should().Contain("Delimited");
+        source.Should().Contain("Fixed width");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_ExposesExcelDelimiterQualifierPreviewAndDestinationAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "_Tab",
+            "_Semicolon",
+            "_Comma",
+            "S_pace",
+            "_Other:",
+            "Text _qualifier:",
+            "Data preview",
+            "_Destination:",
+            "CreateReferenceEditor(_destinationBox",
+            "ReferencePickerButton_Click"
+        })
+            source.Should().Contain(content);
+
+        source.Should().Contain("_previewGrid");
+        source.Should().Contain("_textQualifierBox");
+        source.Should().Contain("_destinationBox");
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_BuildsColumnOffsetSelectionAndBulkToggleStates()
     {
         var columns = RemoveDuplicatesDialog.SelectAll(4);
