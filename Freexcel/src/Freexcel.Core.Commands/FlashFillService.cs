@@ -408,20 +408,41 @@ public static class FlashFillService
         IReadOnlyList<IReadOnlyList<string>> exampleSources,
         IReadOnlyList<string> exampleOutputs)
     {
-        return TrySharedDomainEmailPattern(
-            exampleSources,
-            exampleOutputs,
-            s => (s[0] + "." + s[1]).ToLowerInvariant());
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainEmailPattern(
+                exampleSources,
+                exampleOutputs,
+                s => (s[0] + separator + s[1]).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        return null;
     }
 
     private static Func<IReadOnlyList<string>, string>? TryFirstInitialLastEmailPattern(
         IReadOnlyList<IReadOnlyList<string>> exampleSources,
         IReadOnlyList<string> exampleOutputs)
     {
-        return TrySharedDomainEmailPattern(
+        var compactPattern = TrySharedDomainEmailPattern(
             exampleSources,
             exampleOutputs,
             s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant());
+        if (compactPattern is not null)
+            return compactPattern;
+
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainEmailPattern(
+                exampleSources,
+                exampleOutputs,
+                s => (GetFirstInitial(s[0]) + separator + s[1]).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        return null;
     }
 
     private static Func<IReadOnlyList<string>, string>? TryLastFirstInitialEmailPattern(
