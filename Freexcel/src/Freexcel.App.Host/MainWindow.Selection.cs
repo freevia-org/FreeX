@@ -267,7 +267,7 @@ public partial class MainWindow
             var keyTipKey = GetEffectiveKey(e);
             if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipMode.IsActive)
             {
-                _pendingStandaloneAltKeyTip = true;
+                _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
@@ -281,12 +281,12 @@ public partial class MainWindow
 
             if (Keyboard.Modifiers == ModifierKeys.Alt && IsStandaloneAltKey(keyTipKey))
             {
-                _pendingStandaloneAltKeyTip = true;
+                _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
 
-            _pendingStandaloneAltKeyTip = false;
+            _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
 
             if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
             {
@@ -312,24 +312,6 @@ public partial class MainWindow
             if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(e.Key, Keyboard.Modifiers, _endMode, out var nextEndMode))
             {
                 SetEndMode(nextEndMode);
-                e.Handled = true;
-                return;
-            }
-
-            if (Keyboard.Modifiers == ModifierKeys.Alt &&
-                RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } keyTip &&
-                TryHandleTopLevelRibbonKeyTip(keyTip))
-            {
-                EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
-                e.Handled = true;
-                return;
-            }
-
-            if (Keyboard.Modifiers == ModifierKeys.Alt &&
-                RibbonKeyTipMode.ToKeyTipToken(keyTipKey) is { } qatKeyTip &&
-                TryInvokeTopLevelQatKeyTip(qatKeyTip))
-            {
-                ExitRibbonKeyTipMode();
                 e.Handled = true;
                 return;
             }
@@ -540,14 +522,10 @@ public partial class MainWindow
 
     private void MainWindow_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (!_pendingStandaloneAltKeyTip)
-            return;
-
         var keyTipKey = GetEffectiveKey(e);
-        if (!IsStandaloneAltKey(keyTipKey))
+        if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
             return;
 
-        _pendingStandaloneAltKeyTip = false;
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
@@ -752,7 +730,7 @@ public partial class MainWindow
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
-        _pendingStandaloneAltKeyTip = false;
+        _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
         if (_ribbonKeyTipMode.IsActive)
             ExitRibbonKeyTipMode();
     }
