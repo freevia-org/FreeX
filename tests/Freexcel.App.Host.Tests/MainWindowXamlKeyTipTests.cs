@@ -1489,7 +1489,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         dialogXaml
             .Descendants(presentation + "TabItem")
-            .Select(tab => tab.Attribute("Header")?.Value)
+            .Select(tab => tab.Attribute("Header")?.Value?.Replace("_", "", StringComparison.Ordinal))
             .Should()
             .Contain(["Summarize Values By", "Show Values As", "Number Format"]);
 
