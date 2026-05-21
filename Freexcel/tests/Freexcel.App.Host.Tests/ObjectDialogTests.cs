@@ -48,6 +48,35 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectDialogs_LabelSharedInputHelpersWithTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = label, Target = box");
+        source.Should().NotContain("new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) }");
+    }
+
+    [Fact]
+    public void HyperlinkDialog_LabelsTextRowsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("AddTextRow(grid, 0, \"Text to _display:\", _displayBox, displayText)");
+        source.Should().Contain("AddTextRow(grid, 1, \"_Address:\", _targetBox, target)");
+        source.Should().Contain("new Label");
+        source.Should().Contain("Content = label");
+        source.Should().Contain("Target = box");
+    }
+
+    [Fact]
+    public void ShapeGradientDialog_LabelsRgbOverrideWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"RGB _override:\", Target = _gradientBox");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();

@@ -144,9 +144,6 @@ public class ExportPlannerTests
             "Content = \"Selected _range\"",
             "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
-            "Content = \"_Ignore print areas\"",
-            "Content = \"_Create bookmarks using sheet names\"",
-            "Content = \"Save _only the active sheet\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Pages from\"",
             "Target = _fromPageBox",
@@ -156,6 +153,10 @@ public class ExportPlannerTests
             "Content = \"_Cancel\""
         })
             source.Should().Contain(expected);
+
+        source.Should().NotContain("_Ignore print areas");
+        source.Should().NotContain("_Create bookmarks using sheet names");
+        source.Should().NotContain("CSV _delimiter:");
     }
 
     [Theory]
@@ -527,9 +528,21 @@ public class ExportPlannerTests
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("PrintSettingsPlan settings");
+        source.Should().Contain("Action? showMargins = null");
+        source.Should().Contain("Action? showPageSetup = null");
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
-        printExport.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
+        printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
+        printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("marginsButton.Click += (_, _) => showMargins?.Invoke()");
+        source.Should().Contain("pageSetupButton.Click += (_, _) => showPageSetup?.Invoke()");
     }
 
     [Fact]

@@ -123,15 +123,19 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_CreateMessage_DescribesSolvedAndUnsolvedResults()
     {
-        GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4))
+        GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4), targetValue: 100)
             .Should()
             .Contain("Goal Seek found a solution")
-            .And.Contain("42.25");
+            .And.Contain("Target value: 100")
+            .And.Contain("Current formula result: 100")
+            .And.Contain("Changing cell value: 42.25");
 
-        GoalSeekStatusDialog.CreateMessage(new(false, 11, 98.5, 32))
+        GoalSeekStatusDialog.CreateMessage(new(false, 11, 98.5, 32), targetValue: 100)
             .Should()
             .Contain("could not find a solution")
-            .And.Contain("98.5");
+            .And.Contain("Target value: 100")
+            .And.Contain("Current formula result: 98.5")
+            .And.Contain("Changing cell value: 11");
     }
 
     [Fact]
@@ -144,12 +148,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void GoalSeekStatusDialog_ReceivesRequestedTargetValueFromWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new GoalSeekStatusDialog(result, targetValue)");
+    }
+
+    [Fact]
     public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
 
         source.Should().Contain("Target value:");
-        source.Should().Contain("Current value:");
+        source.Should().Contain("Current formula result:");
+        source.Should().Contain("Changing cell value:");
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
         source.Should().Contain("DialogButtonRowFactory.Create");
@@ -233,6 +246,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_LabelsEditableControlsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
+        source.Should().Contain("new Label { Content = \"_Location:\", Target = _locationBox");
+        source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
@@ -245,11 +268,27 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void UnhideSheetDialog_LabelsSheetPickerWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Sheet:\", Target = _sheetBox");
+    }
+
+    [Fact]
     public void SpellCheckDialog_CreateReplaceResult_CapturesReplacement()
     {
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")
             .Should()
             .Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+    }
+
+    [Fact]
+    public void SpellCheckDialog_LabelsReplacementBoxWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Change to:\", Target = _replacementBox");
     }
 
     [Fact]
@@ -265,18 +304,19 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void ExportOptionsDialog_ExposesWorkbookSheetRangePdfAndCsvChoices()
+    public void ExportOptionsDialog_ExposesOnlyHonoredPdfXpsChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
 
         source.Should().Contain("Content = \"_Workbook\"");
         source.Should().Contain("Content = \"Active _sheet(s)\"");
         source.Should().Contain("Content = \"Selected _range\"");
-        source.Should().Contain("PDF options");
-        source.Should().Contain("Content = \"_Ignore print areas\"");
-        source.Should().Contain("CSV options");
-        source.Should().Contain("Content = \"Save _only the active sheet\"");
-        source.Should().Contain("Content = \"CSV _delimiter:\"");
+        source.Should().Contain("PDF/XPS options");
+        source.Should().Contain("Content = \"_Include document properties\"");
+        source.Should().Contain("Content = \"_Open after publishing\"");
+        source.Should().NotContain("Content = \"_Ignore print areas\"");
+        source.Should().NotContain("CSV options");
+        source.Should().NotContain("Content = \"CSV _delimiter:\"");
     }
 
     [Fact]

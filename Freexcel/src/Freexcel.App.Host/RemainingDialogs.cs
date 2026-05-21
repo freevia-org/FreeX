@@ -508,12 +508,13 @@ public sealed class SparklineDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Data range", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
-        stack.Children.Add(new TextBlock { Text = "Location", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Location:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
+        stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>();
         _kindBox.SelectedItem = kind;
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
@@ -598,7 +599,7 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.IsEditable = true;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Sheet:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Sheet:", Target = _sheetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _sheetBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_sheetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
@@ -642,7 +643,7 @@ public sealed class SpellCheckDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = $"Not in dictionary: {word}", Margin = new Thickness(0, 0, 0, 8) });
-        stack.Children.Add(new TextBlock { Text = "Change to:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Change to:", Target = _replacementBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _replacementBox.Text = suggestion;
         _replacementBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_replacementBox);

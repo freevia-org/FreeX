@@ -133,7 +133,7 @@
                         <ColumnDefinition Width="180"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                        <TextBlock Text="Background Color:" Margin="0,4,0,2"/>
+                        <Label Content="_Background Color:" Target="{Binding ElementName=DlgFillColorBox}" Padding="0" Margin="0,4,0,2"/>
                         <DockPanel>
                             <Button x:Name="DlgFillColorPickerButton" DockPanel.Dock="Right" Content="_Pick" Width="54" Margin="6,0,0,0" Click="DlgFillColorPickerButton_Click"/>
                             <TextBox x:Name="DlgFillColorBox" Height="24" TextChanged="FillPreviewInput_Changed"/>
@@ -142,10 +142,10 @@
                                 BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                                 BorderThickness="1" Background="White"/>
 
-                        <TextBlock Text="Pattern Color:" Margin="0,12,0,2"/>
+                        <Label Content="Pattern _Color:" Target="{Binding ElementName=DlgFillPatternColorBox}" Padding="0" Margin="0,12,0,2"/>
                         <TextBox x:Name="DlgFillPatternColorBox" Height="24" TextChanged="FillPreviewInput_Changed"/>
 
-                        <TextBlock Text="Pattern Style:" Margin="0,8,0,2"/>
+                        <Label Content="Pattern _Style:" Target="{Binding ElementName=DlgFillPatternStyleBox}" Padding="0" Margin="0,8,0,2"/>
                         <ComboBox x:Name="DlgFillPatternStyleBox" Height="24" SelectionChanged="FillPreviewInput_Changed"/>
                         <CheckBox x:Name="DlgClearFillCheck" Content="_Clear fill" Margin="0,12,0,0" Checked="FillPreviewInput_Changed" Unchecked="FillPreviewInput_Changed"/>
                     </StackPanel>
@@ -182,9 +182,9 @@
 
                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,12,0">
                         <TextBlock Text="Line" FontWeight="SemiBold" Margin="0,4,0,4"/>
-                        <TextBlock Text="Style:" Margin="0,0,0,2"/>
+                        <Label Content="_Style:" Target="{Binding ElementName=DlgBorderLineStyleBox}" Padding="0" Margin="0,0,0,2"/>
                         <ComboBox x:Name="DlgBorderLineStyleBox" Height="24" SelectionChanged="BorderPreviewInput_Changed"/>
-                        <TextBlock Text="Color:" Margin="0,8,0,2"/>
+                        <Label Content="_Color:" Target="{Binding ElementName=DlgBorderLineColorBox}" Padding="0" Margin="0,8,0,2"/>
                         <DockPanel>
                             <Button x:Name="DlgBorderLineColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderLineColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderLineColorBox" Height="24" TextChanged="BorderPreviewInput_Changed"/>
@@ -233,32 +233,32 @@
                         <TextBlock Grid.Row="0" Grid.Column="1" Text="Style" Margin="0,0,8,4"/>
                         <TextBlock Grid.Row="0" Grid.Column="2" Text="Color (R,G,B)" Margin="0,0,0,4"/>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Top:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="1" Grid.Column="0" Content="_Top:" Target="{Binding ElementName=DlgBorderTopStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderTopStyleBox" Grid.Row="1" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,6">
                             <Button x:Name="DlgBorderTopColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderTopColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderTopColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderTopColorBox" Height="24" AutomationProperties.Name="Top border color (R,G,B)"/>
                         </DockPanel>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Right:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="2" Grid.Column="0" Content="_Right:" Target="{Binding ElementName=DlgBorderRightStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderRightStyleBox" Grid.Row="2" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,6">
                             <Button x:Name="DlgBorderRightColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderRightColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderRightColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderRightColorBox" Height="24" AutomationProperties.Name="Right border color (R,G,B)"/>
                         </DockPanel>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Bottom:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="3" Grid.Column="0" Content="_Bottom:" Target="{Binding ElementName=DlgBorderBottomStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderBottomStyleBox" Grid.Row="3" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,6">
                             <Button x:Name="DlgBorderBottomColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderBottomColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderBottomColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderBottomColorBox" Height="24" AutomationProperties.Name="Bottom border color (R,G,B)"/>
                         </DockPanel>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Left:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Label Grid.Row="4" Grid.Column="0" Content="_Left:" Target="{Binding ElementName=DlgBorderLeftStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ComboBox x:Name="DlgBorderLeftStyleBox" Grid.Row="4" Grid.Column="1" Height="24" Margin="0,0,8,0"/>
                         <DockPanel Grid.Row="4" Grid.Column="2">
                             <Button x:Name="DlgBorderLeftColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderLeftColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderLeftColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderLeftColorBox" Height="24" AutomationProperties.Name="Left border color (R,G,B)"/>
                         </DockPanel>
                     </Grid>
                     </Expander>
