@@ -90,8 +90,11 @@ public static class AutoFilterDropdownPlanner
     private static readonly string[] DateFilterCriteria =
     [
         "date=",
+        "date<>",
         "date>",
+        "date>=",
         "date<",
+        "date<=",
         "datebetween:",
         "blank",
         "nonblank"
