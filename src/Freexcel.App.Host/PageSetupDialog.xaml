@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Page Setup"
-        Width="460" Height="430"
+        Width="560" Height="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False">
@@ -16,16 +16,6 @@
             <TabItem Header="_Page">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -50,8 +40,34 @@
                         <ComboBoxItem Content="Legal (8.5 x 14)" Tag="Legal"/>
                     </ComboBox>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Scaling:" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <TextBox x:Name="ScaleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+                    <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="Scaling" Margin="0,2,0,8">
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="72"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="72"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="72"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="Adjust to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            <TextBox x:Name="ScalePercentBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="% normal size" VerticalAlignment="Center" Margin="0,0,0,8"/>
+
+                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="Fit to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox x:Name="FitPagesWideBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="page(s) wide by" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBox x:Name="FitPagesTallBox" Grid.Row="1" Grid.Column="3" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="tall" VerticalAlignment="Center"/>
+                        </Grid>
+                    </GroupBox>
+
                     <TextBlock Grid.Row="3" Grid.Column="0" Text="First page number:" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="FirstPageNumberBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
                     <TextBlock Grid.Row="4" Grid.Column="0" Text="Print quality:" VerticalAlignment="Center" Margin="0,0,8,8"/>
@@ -62,6 +78,9 @@
             <TabItem Header="_Margins">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -105,32 +124,38 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="150"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="32"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Rows to repeat:" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <TextBox x:Name="RowsRepeatBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Columns to repeat:" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <TextBox x:Name="ColumnsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
-                    <CheckBox x:Name="PrintGridlinesBox" Grid.Row="2" Grid.Column="1" Content="_Print gridlines" Margin="0,0,0,8"/>
-                    <CheckBox x:Name="PrintHeadingsBox" Grid.Row="3" Grid.Column="1" Content="Print row and column _headings" Margin="0,0,0,8"/>
-                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Page order:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="PageOrderBox" Grid.Row="4" Grid.Column="1">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Print area:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="PrintAreaBox" Grid.Row="0" Grid.Column="1" Margin="0,0,4,8"/>
+                    <Button x:Name="PrintAreaPickerButton" Grid.Row="0" Grid.Column="2" Content="..." Width="26" Margin="0,0,0,8" ToolTip="Select print area from the worksheet" IsEnabled="False"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Rows to repeat at top:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="RowsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,4,8"/>
+                    <Button x:Name="RowsRepeatPickerButton" Grid.Row="1" Grid.Column="2" Content="..." Width="26" Margin="0,0,0,8" ToolTip="Select rows to repeat from the worksheet" IsEnabled="False"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Columns to repeat at left:" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <TextBox x:Name="ColumnsRepeatBox" Grid.Row="2" Grid.Column="1" Margin="0,0,4,8"/>
+                    <Button x:Name="ColumnsRepeatPickerButton" Grid.Row="2" Grid.Column="2" Content="..." Width="26" Margin="0,0,0,8" ToolTip="Select columns to repeat from the worksheet" IsEnabled="False"/>
+                    <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="_Print gridlines" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="Print row and column _headings" Margin="0,0,0,8"/>
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Page order:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="PageOrderBox" Grid.Row="5" Grid.Column="1">
                         <ComboBoxItem Content="Down, then over" Tag="DownThenOver"/>
                         <ComboBoxItem Content="Over, then down" Tag="OverThenDown"/>
                     </ComboBox>
-                    <CheckBox x:Name="PrintBlackAndWhiteBox" Grid.Row="5" Grid.Column="1" Content="_Black and white" Margin="0,8,0,8"/>
-                    <CheckBox x:Name="PrintDraftQualityBox" Grid.Row="6" Grid.Column="1" Content="_Draft quality"/>
-                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Cell errors as:" VerticalAlignment="Center" Margin="0,8,8,0"/>
-                    <ComboBox x:Name="PrintErrorValueBox" Grid.Row="7" Grid.Column="1" Margin="0,8,0,0">
+                    <CheckBox x:Name="PrintBlackAndWhiteBox" Grid.Row="6" Grid.Column="1" Content="_Black and white" Margin="0,8,0,8"/>
+                    <CheckBox x:Name="PrintDraftQualityBox" Grid.Row="7" Grid.Column="1" Content="_Draft quality"/>
+                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Cell errors as:" VerticalAlignment="Center" Margin="0,8,8,0"/>
+                    <ComboBox x:Name="PrintErrorValueBox" Grid.Row="8" Grid.Column="1" Margin="0,8,0,0">
                         <ComboBoxItem Content="Displayed" Tag="Displayed"/>
                         <ComboBoxItem Content="Blank" Tag="Blank"/>
                         <ComboBoxItem Content="--" Tag="Dash"/>
                         <ComboBoxItem Content="#N/A" Tag="NotAvailable"/>
                     </ComboBox>
-                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Comments:" VerticalAlignment="Center" Margin="0,8,8,0"/>
-                    <ComboBox x:Name="PrintCommentsBox" Grid.Row="8" Grid.Column="1" Margin="0,8,0,0">
+                    <TextBlock Grid.Row="9" Grid.Column="0" Text="Comments:" VerticalAlignment="Center" Margin="0,8,8,0"/>
+                    <ComboBox x:Name="PrintCommentsBox" Grid.Row="9" Grid.Column="1" Margin="0,8,0,0">
                         <ComboBoxItem Content="None" Tag="None"/>
                         <ComboBoxItem Content="At end of sheet" Tag="AtEnd"/>
                         <ComboBoxItem Content="As displayed on sheet" Tag="AsDisplayed"/>
@@ -140,6 +165,9 @@
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Print Pre_view" Width="92" Margin="0,0,8,0" IsEnabled="False"/>
+            <Button Content="_Print..." Width="72" Margin="0,0,8,0" IsEnabled="False"/>
+            <Button Content="Options..." Width="72" Margin="0,0,16,0" IsEnabled="False"/>
             <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
             <Button Content="_Cancel" Width="72" IsCancel="True"/>
         </StackPanel>
