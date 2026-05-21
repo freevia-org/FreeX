@@ -2921,7 +2921,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Field List" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldListBtn_Click"
                                             local:RibbonTooltip.Title="Field List"
                                             local:RibbonTooltip.KeyTip="FL"
@@ -2948,7 +2948,7 @@
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
                                             local:RibbonTooltip.Title="PivotChart"
                                             local:RibbonTooltip.KeyTip="C"
@@ -2997,7 +2997,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Grand Totals" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGrandTotalsBtn_Click"
                                             local:RibbonTooltip.Title="Grand Totals"
                                             local:RibbonTooltip.KeyTip="G"
@@ -3063,7 +3063,7 @@
                         <!-- ▌Help ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Help Online"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
                                         local:RibbonTooltip.Title="Help Online"
                                         local:RibbonTooltip.KeyTip="HO"
