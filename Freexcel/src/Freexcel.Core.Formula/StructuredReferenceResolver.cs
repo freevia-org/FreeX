@@ -28,8 +28,14 @@ public static class StructuredReferenceResolver
                 if (!StructuredTableNameMatches(table, tableName))
                     continue;
 
+                if (TryParseCombinedColumnRangeSelector(selector, out var rangeSection, out var rangeStartColumn, out var rangeEndColumn))
+                    return ResolveSectionColumnRange(sheet, table, rangeSection, rangeStartColumn, rangeEndColumn);
+
                 if (TryParseCombinedSelector(selector, out var section, out var columnName))
                     return ResolveSectionColumn(sheet, table, section, columnName);
+
+                if (TryParseColumnRangeSelector(selector, out var startColumn, out var endColumn))
+                    return ResolveSectionColumnRange(sheet, table, "#DATA", startColumn, endColumn);
 
                 if (TryResolveTableSelector(sheet, table, selector) is { } selectedRange)
                     return selectedRange;
@@ -136,6 +142,59 @@ public static class StructuredReferenceResolver
         };
     }
 
+    private static GridRange? ResolveSectionColumnRange(
+        Sheet sheet,
+        StructuredTableModel table,
+        string section,
+        string startColumnName,
+        string endColumnName)
+    {
+        var startColumnIndex = FindColumnIndex(table, startColumnName);
+        var endColumnIndex = FindColumnIndex(table, endColumnName);
+        if (startColumnIndex < 0 || endColumnIndex < 0)
+            return null;
+
+        var leftColumnIndex = Math.Min(startColumnIndex, endColumnIndex);
+        var rightColumnIndex = Math.Max(startColumnIndex, endColumnIndex);
+        var startCol = table.Range.Start.Col + (uint)leftColumnIndex;
+        var endCol = table.Range.Start.Col + (uint)rightColumnIndex;
+
+        return section.Trim().ToUpperInvariant() switch
+        {
+            "#ALL" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, startCol),
+                new CellAddress(sheet.Id, table.Range.End.Row, endCol)),
+            "#HEADERS" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, startCol),
+                new CellAddress(sheet.Id, table.Range.Start.Row, endCol)),
+            "#DATA" => DataBodyRange(sheet, table, startCol, endCol),
+            "#TOTALS" when table.TotalsRowShown => new GridRange(
+                new CellAddress(sheet.Id, table.Range.End.Row, startCol),
+                new CellAddress(sheet.Id, table.Range.End.Row, endCol)),
+            _ => null
+        };
+    }
+
+    private static bool TryParseCombinedColumnRangeSelector(
+        string selector,
+        out string section,
+        out string startColumnName,
+        out string endColumnName)
+    {
+        section = "";
+        startColumnName = "";
+        endColumnName = "";
+
+        var parts = ParseCombinedSelectorParts(selector);
+        if (parts.Count != 2 || !parts[0].StartsWith('#'))
+            return false;
+        if (!TryParseColumnRangeSelector(parts[1], out startColumnName, out endColumnName))
+            return false;
+
+        section = parts[0];
+        return true;
+    }
+
     private static bool TryParseCombinedSelector(string selector, out string section, out string columnName)
     {
         section = "";
@@ -150,6 +209,23 @@ public static class StructuredReferenceResolver
         return !string.IsNullOrWhiteSpace(columnName);
     }
 
+    private static bool TryParseColumnRangeSelector(string selector, out string startColumnName, out string endColumnName)
+    {
+        startColumnName = "";
+        endColumnName = "";
+
+        var cleaned = selector
+            .Replace("[", "", StringComparison.Ordinal)
+            .Replace("]", "", StringComparison.Ordinal);
+        var parts = cleaned.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || parts[0].StartsWith('#') || parts[1].StartsWith('#'))
+            return false;
+
+        startColumnName = parts[0];
+        endColumnName = parts[1];
+        return !string.IsNullOrWhiteSpace(startColumnName) && !string.IsNullOrWhiteSpace(endColumnName);
+    }
+
     private static List<string> ParseCombinedSelectorParts(string selector)
     {
         var cleaned = selector
@@ -157,6 +233,10 @@ public static class StructuredReferenceResolver
             .Replace("]", "", StringComparison.Ordinal);
         return cleaned.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
     }
+
+    private static int FindColumnIndex(StructuredTableModel table, string columnName) =>
+        table.Columns.FindIndex(column =>
+            string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
 
     private static GridRange? DataBodyRange(Sheet sheet, StructuredTableModel table, uint startCol, uint endCol)
     {
