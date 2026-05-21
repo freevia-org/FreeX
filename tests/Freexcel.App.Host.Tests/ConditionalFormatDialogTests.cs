@@ -18,6 +18,25 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("isBetween ? \"_Minimum:\" : \"_Value:\"");
         source.Should().Contain("Content = \"Ma_ximum:\"");
         source.Should().Contain("isDataBar ? \"_Bar color:\" : \"_Format:\"");
+        source.Should().Contain("CreateAccessLabel(\"_Formula:\", _formulaBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum type:\", _dataBarMinTypeBox)");
+        source.Should().Contain("CreateAccessLabel(\"Minimum _value:\", _dataBarMinValueBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum type:\", _dataBarMaxTypeBox)");
+        source.Should().Contain("CreateAccessLabel(\"Maximum _value:\", _dataBarMaxValueBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum bar length (%):\", _dataBarMinLengthBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum bar length (%):\", _dataBarMaxLengthBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Minimum color (R,G,B):\", _colorScaleMinColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Midpoint type:\", _colorScaleMidTypeBox)");
+        source.Should().Contain("CreateAccessLabel(\"Midpoint _value:\", _colorScaleMidValueBox)");
+        source.Should().Contain("CreateAccessLabel(\"Midpoint _color (R,G,B):\", _colorScaleMidColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"Ma_ximum color (R,G,B):\", _colorScaleMaxColorBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Icon set:\", _iconSetStyleBox)");
+        source.Should().Contain("CreateAccessLabel(\"_Date period:\", _dateOccurringPeriodBox)");
+        source.Should().Contain("CreateAccessLabel(\"Format cells that _contain:\", _duplicateValuesKindBox)");
+        source.Should().Contain("Content = \"_Show value\"");
+        source.Should().Contain("Content = \"_Reverse icon order\"");
+        source.Should().Contain("Content = \"_Show bar only when cleared\"");
+        source.Should().Contain("Content = \"Use _three-color scale\"");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
     }
