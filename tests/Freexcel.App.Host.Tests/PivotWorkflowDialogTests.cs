@@ -61,10 +61,10 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("_selectTableRangeButton");
         source.Should().Contain("_externalSourceButton");
         source.Should().Contain("_dataModelBox");
-        source.Should().Contain("Use an external data source");
-        source.Should().Contain("Add this data to the Data Model");
-        source.Should().Contain("New worksheet");
-        source.Should().Contain("Existing worksheet");
+        source.Should().Contain("Use an _external data source");
+        source.Should().Contain("Add this data to the Data _Model");
+        source.Should().Contain("_New worksheet");
+        source.Should().Contain("_Existing worksheet");
     }
 
     [Fact]
