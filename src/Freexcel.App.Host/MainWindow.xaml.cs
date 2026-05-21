@@ -80,6 +80,7 @@ public partial class MainWindow : Window
     private CellAddress? _formulaRangeSelectionAnchor;
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
+    private bool _formulaRangeEntryMode;
     private readonly List<UIElement> _formulaReferenceGridOverlays = [];
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
@@ -142,7 +143,16 @@ public partial class MainWindow : Window
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
-        FormulaBar.TextChanged += (_, _) => RefreshFormulaReferenceHighlights();
+        FormulaBar.TextChanged += (_, _) =>
+        {
+            if (ReferenceEquals(System.Windows.Input.Keyboard.FocusedElement, FormulaBar) &&
+                FormulaBar.Text == "=")
+            {
+                _formulaRangeEntryMode = true;
+            }
+
+            RefreshFormulaReferenceHighlights();
+        };
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;

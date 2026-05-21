@@ -365,7 +365,8 @@ public sealed record ShapeGradientDialogResult(CellColor StartColor, CellColor E
 
 public sealed class ShapeGradientDialog : Window
 {
-    private readonly TextBox _gradientBox = new();
+    private readonly TextBox _startColorBox = new();
+    private readonly TextBox _endColorBox = new();
     private readonly Button _startColorButton = new() { Content = "_Start Color..." };
     private readonly Button _endColorButton = new() { Content = "_End Color..." };
     private readonly TextBlock _startColorText = new();
@@ -384,7 +385,8 @@ public sealed class ShapeGradientDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _gradientBox.Text = FormatGradientText(_startColor, _endColor);
+        _startColorBox.Text = FormatColor(_startColor);
+        _endColorBox.Text = FormatColor(_endColor);
         _startColorButton.Click += StartColorButton_Click;
         _endColorButton.Click += EndColorButton_Click;
         UpdateColorText();
@@ -407,17 +409,13 @@ public sealed class ShapeGradientDialog : Window
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_gradientBox.Text))
+        if (!DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor) ||
+            !DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
         {
-            Result = new ShapeGradientDialogResult(_startColor, _endColor);
-        }
-        else
-        {
-            if (!TryCreateResult(_gradientBox.Text, out var result, out _))
-                return;
-            Result = result;
+            return;
         }
 
+        Result = new ShapeGradientDialogResult(startColor, endColor);
         DialogResult = true;
     }
 
@@ -425,22 +423,28 @@ public sealed class ShapeGradientDialog : Window
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        _startColorButton.Width = 120;
-        _startColorButton.Margin = new Thickness(0, 0, 8, 0);
-        _endColorButton.Width = 120;
-        buttonRow.Children.Add(_startColorButton);
-        buttonRow.Children.Add(_endColorButton);
-        stack.Children.Add(buttonRow);
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(104) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        AddStopRow(grid, 0, "Stop 1 _color (RGB):", _startColorBox, "0%", _startColorButton);
+        AddStopRow(grid, 1, "Stop 2 c_olor (RGB):", _endColorBox, "100%", _endColorButton);
+        stack.Children.Add(new GroupBox
+        {
+            Header = "Gradient stops",
+            Content = grid,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
 
         _startColorText.Margin = new Thickness(0, 0, 0, 4);
-        _endColorText.Margin = new Thickness(0, 0, 0, 10);
+        _endColorText.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_startColorText);
         stack.Children.Add(_endColorText);
 
-        stack.Children.Add(new Label { Content = "RGB _override:", Target = _gradientBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        _gradientBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_gradientBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return stack;
     }
@@ -452,6 +456,7 @@ public sealed class ShapeGradientDialog : Window
             return;
 
         _startColor = color;
+        _startColorBox.Text = FormatColor(_startColor);
         SyncGradientTextFromPickers();
     }
 
@@ -462,12 +467,12 @@ public sealed class ShapeGradientDialog : Window
             return;
 
         _endColor = color;
+        _endColorBox.Text = FormatColor(_endColor);
         SyncGradientTextFromPickers();
     }
 
     private void SyncGradientTextFromPickers()
     {
-        _gradientBox.Text = FormatGradientText(_startColor, _endColor);
         UpdateColorText();
     }
 
@@ -477,11 +482,42 @@ public sealed class ShapeGradientDialog : Window
         _endColorText.Text = $"End: {FormatColor(_endColor)}";
     }
 
-    private static string FormatGradientText(CellColor startColor, CellColor endColor) =>
-        $"{FormatColor(startColor)}; {FormatColor(endColor)}";
-
     private static string FormatColor(CellColor color) =>
         $"{color.R},{color.G},{color.B}";
+
+    private static void AddStopRow(Grid grid, int row, string label, TextBox box, string position, Button colorButton)
+    {
+        grid.Children.Add(new Label
+        {
+            Content = label,
+            Target = box,
+            Padding = new Thickness(0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8)
+        });
+        Grid.SetRow(grid.Children[^1], row);
+        Grid.SetColumn(grid.Children[^1], 0);
+
+        box.Margin = new Thickness(0, 0, 8, 8);
+        grid.Children.Add(box);
+        Grid.SetRow(box, row);
+        Grid.SetColumn(box, 1);
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = position,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 8)
+        });
+        Grid.SetRow(grid.Children[^1], row);
+        Grid.SetColumn(grid.Children[^1], 2);
+
+        colorButton.Width = 96;
+        colorButton.Margin = new Thickness(0, 0, 0, 8);
+        grid.Children.Add(colorButton);
+        Grid.SetRow(colorButton, row);
+        Grid.SetColumn(colorButton, 3);
+    }
 }
 
 public sealed record TextEntryDialogResult(string Text);

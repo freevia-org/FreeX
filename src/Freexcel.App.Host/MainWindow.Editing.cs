@@ -55,6 +55,7 @@ public partial class MainWindow
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         var text = FormatFormulaBarText(cell, addr);
         _formulaEditCell = addr;
+        _formulaRangeEntryMode = false;
         ClearFormulaReferenceEntrySpan();
 
         if (_inlineEditor == null)
@@ -120,7 +121,8 @@ public partial class MainWindow
         EditOverlay.IsHitTestVisible = true;
         RefreshFormulaReferenceHighlights();
         _inlineEditor.Focus();
-        _inlineEditor.SelectAll();
+        _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
+        _inlineEditor.SelectionLength = 0;
     }
 
     private void HideInlineEditor(bool commit)
@@ -336,7 +338,8 @@ public partial class MainWindow
             current,
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
             allowFormulaBarNavigationKeys: false,
-            formulaRangeEntryActive: formulaRangeEntryActive);
+            formulaRangeEntryActive: formulaRangeEntryActive,
+            emptyInlineEditorActive: !formulaRangeEntryActive && string.IsNullOrEmpty(_inlineEditor?.Text));
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -422,6 +425,7 @@ public partial class MainWindow
     {
         _formulaEditCell = null;
         _formulaRangeSelectionAnchor = null;
+        _formulaRangeEntryMode = false;
         ClearFormulaReferenceEntrySpan();
         ClearFormulaReferenceHighlights();
     }
@@ -437,6 +441,14 @@ public partial class MainWindow
         if (editor is null || _formulaEditCell is null)
             return false;
 
+        return _formulaRangeEntryMode && editor.Text.StartsWith("=", StringComparison.Ordinal);
+    }
+
+    private bool IsFormulaReferenceHighlightActive(System.Windows.Controls.TextBox? editor)
+    {
+        if (editor is null || _formulaEditCell is null)
+            return false;
+
         return editor.Text.StartsWith("=", StringComparison.Ordinal);
     }
 
@@ -446,6 +458,14 @@ public partial class MainWindow
             return _inlineEditor;
 
         return IsFormulaRangeEntryActive(FormulaBar) ? FormulaBar : null;
+    }
+
+    private System.Windows.Controls.TextBox? GetFormulaReferenceHighlightEditor()
+    {
+        if (_inlineEditor?.IsVisible == true && IsFormulaReferenceHighlightActive(_inlineEditor))
+            return _inlineEditor;
+
+        return IsFormulaReferenceHighlightActive(FormulaBar) ? FormulaBar : null;
     }
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
@@ -508,7 +528,7 @@ public partial class MainWindow
 
     private void RefreshFormulaReferenceHighlights()
     {
-        var editor = GetFormulaRangeEntryEditor();
+        var editor = GetFormulaReferenceHighlightEditor();
         if (editor is null)
         {
             ClearFormulaReferenceHighlights();
