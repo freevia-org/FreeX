@@ -188,10 +188,19 @@ function Body($slug, [int]$n) {
         '^shape-gradient$|^gradient$' { return "  <defs><linearGradient id=""grad"" x1=""0"" x2=""1""><stop offset=""0"" stop-color=""#5b9bd5""/><stop offset=""1"" stop-color=""#ffffff""/></linearGradient></defs>`n  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""url(#grad)"" stroke=""#1f1f1f"" stroke-width=""$(S 1 $n)"" vector-effect=""non-scaling-stroke""/>" }
         '^crop$' { return "  <rect class=""f s"" x=""$(S 5 $n)"" y=""$(S 5 $n)"" width=""$(S 10 $n)"" height=""$(S 10 $n)"" stroke-width=""$(S .8 $n)""/>`n  <path class=""s"" d=""M$(S 6.5 $n) $(S 2.8 $n) V$(S 13.5 $n) H$(S 17.2 $n) M$(S 2.8 $n) $(S 6.5 $n) H$(S 13.5 $n) V$(S 17.2 $n)"" stroke-width=""$(S 1.2 $n)""/>" }
         '^object-effects$|^effects$' { return (Txt $sparkleGlyph 9 8.5 10 $n) + "`n" + (Txt $sparkleGlyph 14.5 14 5 $n) }
-        '^normal$|^custom-views$|^new-window$|^arrange-all$|^view-side-by-side$|^synchronous-scrolling$|^reset-window-position$|^switch-windows$' { return WindowIcon $n }
-        '^page-break-preview$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1) + "`n" + (L 3 10 17 10 $n 'b' 1) }
-        '^page-layout$' { return Doc $n }
-        '^freeze-panes$' { return (Grid $n) + "`n" + (L 8 3 8 17 $n 'r' 1.2) + "`n" + (L 3 8 17 8 $n 'r' 1.2) }
+        '^normal$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 3 $n)"" y=""$(S 3 $n)"" width=""$(S 14 $n)"" height=""$(S 3.5 $n)"" opacity="".6""/>" }
+        '^custom-views$' { return (WindowIcon $n) + "`n" + (Txt $starGlyph 14 6 4.5 $n) }
+        '^new-window$' { return WindowIcon $n }
+        '^arrange-all$' { return (Rct 4 4 6 6 $n) + "`n" + (Rct 10 4 6 6 $n) + "`n" + (Rct 4 10 6 6 $n) + "`n" + (Rct 10 10 6 6 $n) }
+        '^view-side-by-side$' { return (Rct 4 5 5.5 10 $n) + "`n" + (Rct 10.5 5 5.5 10 $n) }
+        '^synchronous-scrolling$' { return (Rct 4 5 5.5 10 $n) + "`n" + (Rct 10.5 5 5.5 10 $n) + "`n" + (Arrow 7 8 13 8 $n 'b' .8) + "`n" + (Arrow 13 12 7 12 $n 'b' .8) }
+        '^reset-window-position$' { return (WindowIcon $n) + "`n" + (Arrow 14 5 9 5 $n 'g' .8) + "`n" + (Arrow 6 15 11 15 $n 'g' .8) }
+        '^switch-windows$' { return (WindowIcon $n) + "`n" + (Arrow 6 16 14 16 $n 'b' .8) }
+        '^page-break-preview$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1) + "`n" + (L 3 10 17 10 $n 'b' 1) + "`n" + (L 6.5 3 6.5 17 $n 'r' .6) }
+        '^page-layout$' { return (Doc $n) + "`n" + (Rct 7 7 6 6 $n 's' .6) + "`n" + (L 9 7 9 13 $n 's' .5) + "`n" + (L 11 7 11 13 $n 's' .5) + "`n" + (L 7 9 13 9 $n 's' .5) + "`n" + (L 7 11 13 11 $n 's' .5) }
+        '^freeze-panes$' { return (Grid $n) + "`n" + (L 8 3 8 17 $n 'r' 1.2) + "`n" + (L 3 8 17 8 $n 'r' 1.2) + "`n  <rect class=""b"" x=""$(S 3 $n)"" y=""$(S 3 $n)"" width=""$(S 5 $n)"" height=""$(S 5 $n)"" opacity="".35""/>" }
+        '^split$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1.2) }
+        '^zoom-to-selection$' { return (Grid $n) + "`n  <rect x=""$(S 6 $n)"" y=""$(S 6 $n)"" width=""$(S 6 $n)"" height=""$(S 5 $n)"" fill=""none"" stroke=""#5b9bd5"" stroke-width=""$(S 1.2 $n)""/>`n  <circle class=""r"" cx=""$(S 13 $n)"" cy=""$(S 13 $n)"" r=""$(S 3 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (L 15 15 18 18 $n 'r' 1) }
         '^hide-unhide$' { return Eye $n }
         '^statistics$|^workbook-stats$|^workbook-statistics$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 10 $n)"" width=""$(S 2.5 $n)"" height=""$(S 6 $n)""/><rect class=""k"" x=""$(S 9 $n)"" y=""$(S 6 $n)"" width=""$(S 2.5 $n)"" height=""$(S 10 $n)""/><rect class=""g"" x=""$(S 13 $n)"" y=""$(S 3.5 $n)"" width=""$(S 2.5 $n)"" height=""$(S 12.5 $n)""/>" }
         '^accessibility-checker$|^accessibility$' { return "  <path class=""y s"" d=""M$(S 10 $n) $(S 3 $n) L$(S 17 $n) $(S 16 $n) H$(S 3 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '!' 10 11 8 $n) }
