@@ -1,6 +1,7 @@
 using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
+using System.Xml.Linq;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -48,6 +49,24 @@ public sealed class ColorPickerDialogTests
         xaml.Should().Contain("New");
         xaml.Should().Contain("ThemeColorsPanel");
         xaml.Should().Contain("StandardColorsPanel");
+    }
+
+    [Fact]
+    public void DialogXaml_ExposesKeyboardAccessKeysForCustomColorAndButtons()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var label = document
+            .Descendants(presentation + "Label")
+            .Single(element => element.Attribute("Content")?.Value == "Custom _color");
+
+        label.Attribute("Target")?.Value.Should().Be("{Binding ElementName=CustomColorTextBox}");
+
+        document.Descendants(presentation + "Button")
+            .Select(element => element.Attribute("Content")?.Value)
+            .Should()
+            .Contain(["_No Color", "_OK", "_Cancel"]);
     }
 
     [Theory]
