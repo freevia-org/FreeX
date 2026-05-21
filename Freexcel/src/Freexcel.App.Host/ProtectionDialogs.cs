@@ -54,14 +54,14 @@ public sealed class PasswordProtectionDialog : Window
             Margin = new Thickness(0, 12, 0, 0)
         };
         root.Children.Add(buttons);
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) =>
         {
             Password = _passwordBox.Password;
             DialogResult = true;
         };
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", Width = 72, IsCancel = true });
+        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
 
         Content = root;
     }
@@ -85,7 +85,7 @@ public sealed class AllowEditRangeDialog : Window
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock { Text = "Range:", Margin = new Thickness(0, 0, 0, 6) });
+        root.Children.Add(new Label { Content = "_Range:", Target = _rangeBox, Margin = new Thickness(0, 0, 0, 6) });
         _rangeBox.Text = defaultRange;
         root.Children.Add(_rangeBox);
 
@@ -96,10 +96,10 @@ public sealed class AllowEditRangeDialog : Window
             Margin = new Thickness(0, 12, 0, 0)
         };
         root.Children.Add(buttons);
-        var ok = new Button { Content = "OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "Cancel", Width = 72, IsCancel = true });
+        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
 
         Content = root;
     }
