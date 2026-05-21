@@ -85,6 +85,9 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("_commentBox");
         source.Should().Contain("_refersToBox");
         source.Should().Contain("_rangePickerButton");
+        source.Should().Contain("_rangePickerButton.Click");
+        source.Should().Contain("_refersToBox.SelectAll");
+        source.Should().NotContain("IsEnabled = false");
         source.Should().Contain("ScopeOptions");
     }
 }
