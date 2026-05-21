@@ -21,8 +21,8 @@ public sealed class TextToColumnsDialog : Window
     private readonly TextBlock _stepOneIndicator = CreateStepIndicator("Step 1 of 3", true);
     private readonly TextBlock _stepTwoIndicator = CreateStepIndicator("Step 2 of 3", false);
     private readonly TextBlock _stepThreeIndicator = CreateStepIndicator("Step 3 of 3", false);
-    private readonly RadioButton _delimitedButton = new() { Content = "Delimited", IsChecked = true, GroupName = "TextToColumnsSourceMode" };
-    private readonly RadioButton _fixedWidthButton = new() { Content = "Fixed width", GroupName = "TextToColumnsSourceMode" };
+    private readonly RadioButton _delimitedButton = new() { Content = "_Delimited", IsChecked = true, GroupName = "TextToColumnsSourceMode" };
+    private readonly RadioButton _fixedWidthButton = new() { Content = "_Fixed width", GroupName = "TextToColumnsSourceMode" };
     private readonly CheckBox _tabBox = new() { Content = "_Tab" };
     private readonly CheckBox _semicolonBox = new() { Content = "_Semicolon" };
     private readonly CheckBox _commaBox = new() { Content = "_Comma", IsChecked = true };
