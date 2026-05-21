@@ -123,15 +123,19 @@ public sealed class RemainingDialogTests
     [Fact]
     public void GoalSeekStatusDialog_CreateMessage_DescribesSolvedAndUnsolvedResults()
     {
-        GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4))
+        GoalSeekStatusDialog.CreateMessage(new(true, 42.25, 100, 4), targetValue: 100)
             .Should()
             .Contain("Goal Seek found a solution")
-            .And.Contain("42.25");
+            .And.Contain("Target value: 100")
+            .And.Contain("Current formula result: 100")
+            .And.Contain("Changing cell value: 42.25");
 
-        GoalSeekStatusDialog.CreateMessage(new(false, 11, 98.5, 32))
+        GoalSeekStatusDialog.CreateMessage(new(false, 11, 98.5, 32), targetValue: 100)
             .Should()
             .Contain("could not find a solution")
-            .And.Contain("98.5");
+            .And.Contain("Target value: 100")
+            .And.Contain("Current formula result: 98.5")
+            .And.Contain("Changing cell value: 11");
     }
 
     [Fact]
@@ -144,12 +148,21 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void GoalSeekStatusDialog_ReceivesRequestedTargetValueFromWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("new GoalSeekStatusDialog(result, targetValue)");
+    }
+
+    [Fact]
     public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
 
         source.Should().Contain("Target value:");
-        source.Should().Contain("Current value:");
+        source.Should().Contain("Current formula result:");
+        source.Should().Contain("Changing cell value:");
         source.Should().Contain("Content = \"_Keep Result\"");
         source.Should().Contain("Content = \"_Restore Original Values\"");
         source.Should().Contain("DialogButtonRowFactory.Create");

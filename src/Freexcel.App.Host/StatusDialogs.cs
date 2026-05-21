@@ -10,7 +10,7 @@ public sealed class GoalSeekStatusDialog : Window
 {
     public bool ApplyResult { get; private set; }
 
-    public GoalSeekStatusDialog(GoalSeekResult result)
+    public GoalSeekStatusDialog(GoalSeekResult result, double targetValue)
     {
         Title = "Goal Seek Status";
         Width = 380;
@@ -22,7 +22,7 @@ public sealed class GoalSeekStatusDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock
         {
-            Text = CreateMessage(result),
+            Text = CreateMessage(result, targetValue),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
@@ -75,13 +75,17 @@ public sealed class GoalSeekStatusDialog : Window
         Content = stack;
     }
 
-    public static string CreateMessage(GoalSeekResult result)
+    public static string CreateMessage(GoalSeekResult result) =>
+        CreateMessage(result, result.ActualResult);
+
+    public static string CreateMessage(GoalSeekResult result, double targetValue)
     {
-        var foundValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
-        var actualResult = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
+        var target = targetValue.ToString("G10", CultureInfo.InvariantCulture);
+        var currentFormulaResult = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
+        var changingCellValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
         return result.Converged
-            ? $"Goal Seek found a solution.\nCurrent value: {foundValue}\nTarget value: {actualResult}"
-            : $"Goal Seek could not find a solution.\nCurrent value: {foundValue}\nTarget value: {actualResult}";
+            ? $"Goal Seek found a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}"
+            : $"Goal Seek could not find a solution.\nTarget value: {target}\nCurrent formula result: {currentFormulaResult}\nChanging cell value: {changingCellValue}";
     }
 }
 
