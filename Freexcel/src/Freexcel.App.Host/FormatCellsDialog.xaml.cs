@@ -101,11 +101,8 @@ public partial class FormatCellsDialog : Window
         DlgFontSizeBox.ItemsSource  = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36" };
         DlgFontSizeBox.Text         = s.FontSize.ToString("0.#");
         DlgFontStyleList.ItemsSource = new[] { "Regular", "Italic", "Bold", "Bold Italic" };
-        DlgBoldCheck.IsChecked      = s.Bold;
-        DlgItalicCheck.IsChecked    = s.Italic;
         DlgFontStyleList.SelectedItem = FontStyleLabel(s.Bold, s.Italic);
         DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double" };
-        DlgUnderlineCheck.IsChecked = s.Underline;
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
         DlgUnderlineStyleBox.SelectedItem = s.DoubleUnderline ? "Double" : s.Underline ? "Single" : "None";
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
@@ -141,6 +138,7 @@ public partial class FormatCellsDialog : Window
         DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.Color);
 
         DlgLockedCheck.IsChecked = s.Locked;
+        DlgHiddenCheck.IsChecked = false;
 
         UpdateFontPreview();
         UpdateFillPreview();
@@ -182,8 +180,6 @@ public partial class FormatCellsDialog : Window
         if (DlgFontStyleList.SelectedItem is not string style)
             return;
 
-        DlgBoldCheck.IsChecked = style.Contains("Bold", StringComparison.OrdinalIgnoreCase);
-        DlgItalicCheck.IsChecked = style.Contains("Italic", StringComparison.OrdinalIgnoreCase);
         UpdateFontPreview();
     }
 
@@ -192,7 +188,6 @@ public partial class FormatCellsDialog : Window
         if (DlgUnderlineStyleBox.SelectedItem is not string underline)
             return;
 
-        DlgUnderlineCheck.IsChecked = underline == "Single";
         DlgDoubleUnderlineCheck.IsChecked = underline == "Double";
         UpdateFontPreview();
     }
@@ -267,9 +262,9 @@ public partial class FormatCellsDialog : Window
         CellBorder borderLeft = ParseBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, _current.BorderLeft);
 
         ResultDiff = new StyleDiff(
-            Bold:            DlgBoldCheck.IsChecked,
-            Italic:          DlgItalicCheck.IsChecked,
-            Underline:       DlgUnderlineCheck.IsChecked,
+            Bold:            IsSelectedFontBold(),
+            Italic:          IsSelectedFontItalic(),
+            Underline:       IsSingleUnderlineSelected(),
             Strikethrough:   DlgStrikeCheck.IsChecked,
             Superscript:     DlgSuperscriptCheck.IsChecked,
             Subscript:       DlgSubscriptCheck.IsChecked,
@@ -325,6 +320,21 @@ public partial class FormatCellsDialog : Window
 
     private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgBorderLineColorBox, allowNoColor: false);
+
+    private void DlgFillSwatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string colorText })
+        {
+            DlgFillColorBox.Text = colorText;
+            DlgClearFillCheck.IsChecked = string.IsNullOrEmpty(colorText);
+        }
+    }
+
+    private void DlgBorderLineColorSwatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string colorText })
+            DlgBorderLineColorBox.Text = colorText;
+    }
 
     private void DlgBorderTopColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgBorderTopColorBox, allowNoColor: false);
@@ -405,12 +415,12 @@ public partial class FormatCellsDialog : Window
 
         DlgFontSamplePreview.FontFamily = new FontFamily(DlgFontNameBox.Text);
         DlgFontSamplePreview.FontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text) ?? 11;
-        DlgFontSamplePreview.FontWeight = DlgBoldCheck.IsChecked == true ? FontWeights.Bold : FontWeights.Normal;
-        DlgFontSamplePreview.FontStyle = DlgItalicCheck.IsChecked == true ? FontStyles.Italic : FontStyles.Normal;
+        DlgFontSamplePreview.FontWeight = IsSelectedFontBold() ? FontWeights.Bold : FontWeights.Normal;
+        DlgFontSamplePreview.FontStyle = IsSelectedFontItalic() ? FontStyles.Italic : FontStyles.Normal;
         DlgFontSamplePreview.Foreground = BrushForColor(TryParseColor(DlgFontColorBox.Text), Brushes.Black);
 
         var decorations = new TextDecorationCollection();
-        if (DlgUnderlineCheck.IsChecked == true || DlgDoubleUnderlineCheck.IsChecked == true)
+        if (IsSingleUnderlineSelected() || DlgDoubleUnderlineCheck.IsChecked == true)
         {
             foreach (var decoration in TextDecorations.Underline)
                 decorations.Add(decoration);
@@ -452,6 +462,7 @@ public partial class FormatCellsDialog : Window
         DlgBorderPreviewArea.BorderBrush = BrushForColor(
             TryParseColor(DlgBorderLineColorBox.Text) ?? TryParseColor(DlgBorderBottomColorBox.Text),
             Brushes.Black);
+        DlgBorderLineColorPreview.Background = BrushForColor(TryParseColor(DlgBorderLineColorBox.Text), Brushes.Black);
     }
 
     private static CellColor? TryParseColor(string text)
@@ -484,6 +495,18 @@ public partial class FormatCellsDialog : Window
         (false, true) => "Italic",
         _ => "Regular"
     };
+
+    private bool IsSelectedFontBold()
+        => DlgFontStyleList.SelectedItem is string style
+            && style.Contains("Bold", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsSelectedFontItalic()
+        => DlgFontStyleList.SelectedItem is string style
+            && style.Contains("Italic", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsSingleUnderlineSelected()
+        => DlgUnderlineStyleBox.SelectedItem is string underline
+            && underline == "Single";
 
     private static string CategoryForFormatIndex(int index) => index switch
     {
