@@ -347,7 +347,7 @@ public sealed class SortOptionsDialog : Window
     {
         Title = "Sort Options";
         Width = 330;
-        Height = 210;
+        Height = 150;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -356,14 +356,6 @@ public sealed class SortOptionsDialog : Window
         var body = new StackPanel();
         DockPanel.SetDock(body, Dock.Top);
         root.Children.Add(body);
-
-        body.Children.Add(new CheckBox
-        {
-            Content = "Case _sensitive",
-            IsEnabled = false,
-            Margin = new Thickness(0, 0, 0, 10),
-            ToolTip = "Freexcel currently sorts cell values without case sensitivity."
-        });
 
         var orientation = new GroupBox
         {
@@ -374,24 +366,11 @@ public sealed class SortOptionsDialog : Window
             {
                 Children =
                 {
-                    new RadioButton { Content = "Sort top to _bottom", IsChecked = true },
-                    new RadioButton
-                    {
-                        Content = "Sort left to _right",
-                        IsEnabled = false,
-                        ToolTip = "Freexcel currently sorts selected rows from top to bottom."
-                    }
+                    new RadioButton { Content = "Sort top to _bottom", IsChecked = true }
                 }
             }
         };
         body.Children.Add(orientation);
-
-        body.Children.Add(new TextBlock
-        {
-            Text = "Unsupported Excel options are shown here but are not applied.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush
-        });
 
         root.Children.Add(DialogButtonRowFactory.Create(() => DialogResult = true, buttonWidth: 72));
         Content = root;
