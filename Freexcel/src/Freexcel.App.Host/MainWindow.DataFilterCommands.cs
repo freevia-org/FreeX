@@ -33,7 +33,12 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var dialog = new SortDialog(columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)) { Owner = this };
+        var dialog = new SortDialog(
+            columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true),
+            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false))
+        {
+            Owner = this
+        };
         if (dialog.ShowDialog() != true)
             return;
 

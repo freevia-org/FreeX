@@ -65,6 +65,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var altKeyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.AltKeyTips.cs"));
+
+        selectionSource.Should().NotContain("TryHandleTopLevelRibbonKeyTip(keyTip)");
+        selectionSource.Should().NotContain("TryInvokeTopLevelQatKeyTip(qatKeyTip)");
+        altKeyTipSource.Should().Contain("WM_SYSKEYDOWN");
+        altKeyTipSource.Should().Contain("StandaloneAltKeyTipTracker.IsAltVirtualKey");
+        altKeyTipSource.Should().Contain("_standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();");
+    }
+
+    [Fact]
     public void SheetTabsController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -831,7 +844,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
         source.Should().Contain("NormalizeExistingRibbonIconText();");
         source.Should().Contain("GetRibbonIconAccentBrushes");
-        source.Should().Contain("RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush)");
+        source.Should().Contain("RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush)");
         source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
         source.Should().NotContain("icon.Glyph");
         source.Should().Contain("RibbonCommandIconAccent.Chart");
@@ -1208,6 +1221,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ShowCfDialog(\"Equal To\")");
         source.Should().Contain("case QuickAnalysisCommand.TextContains:");
         source.Should().Contain("ShowCfDialog(\"Text Contains\")");
+        source.Should().Contain("case QuickAnalysisCommand.DateOccurring:");
+        source.Should().Contain("ShowCfDialog(\"Date Occurring\")");
         source.Should().Contain("case QuickAnalysisCommand.DuplicateValues:");
         source.Should().Contain("ShowCfDialog(\"Duplicate Values\")");
         source.Should().Contain("case QuickAnalysisCommand.Top10Percent:");
