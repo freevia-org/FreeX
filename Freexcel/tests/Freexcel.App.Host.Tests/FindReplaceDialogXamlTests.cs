@@ -68,7 +68,7 @@ public sealed class FindReplaceDialogXamlTests
 
         document.Descendants(presentation + "Expander")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "OptionsExpander")
-            .Attribute("Header")?.Value.Should().Be("Options >>");
+            .Attribute("Header")?.Value.Should().Be("_Options >>");
 
         AssertComboBoxContains(document, presentation, xaml, "WithinCombo", ["Sheet", "Workbook"]);
         AssertComboBoxContains(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);

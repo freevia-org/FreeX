@@ -16,6 +16,12 @@ internal enum ExportContentScope
     EntireWorkbook
 }
 
+internal enum ExportQuality
+{
+    Standard,
+    MinimumSize
+}
+
 internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
@@ -28,7 +34,8 @@ internal sealed record ExportOptions(
     ExportContentScope Scope,
     bool IncludeDocumentProperties,
     bool OpenAfterPublish,
-    ExportPageRange? PageRange = null)
+    ExportPageRange? PageRange = null,
+    ExportQuality Quality = ExportQuality.Standard)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -87,6 +94,7 @@ internal static class ExportPlanner
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
+        var quality = DescribeQuality(options.Quality);
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
@@ -94,7 +102,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, properties, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -120,6 +128,7 @@ internal static class ExportPlanner
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
+        var quality = DescribeQuality(options.Quality);
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
@@ -130,7 +139,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, properties, open);
     }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
@@ -185,4 +194,9 @@ internal static class ExportPlanner
 
     private static string JoinOptionParts(params string?[] parts) =>
         string.Join("; ", parts.Where(part => !string.IsNullOrWhiteSpace(part))) + ".";
+
+    private static string DescribeQuality(ExportQuality quality) =>
+        quality == ExportQuality.MinimumSize
+            ? "minimum size"
+            : "standard quality";
 }
