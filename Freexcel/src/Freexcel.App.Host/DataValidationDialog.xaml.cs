@@ -12,6 +12,7 @@ public partial class DataValidationDialog : Window
     /// <summary>Set to the resulting rule when the user clicks OK.</summary>
     public DataValidation? Result { get; private set; }
     public bool ClearRequested { get; private set; }
+    public bool ApplyToSameSettings { get; private set; }
     public string? SelectionSource { get; set; }
 
     public DataValidationDialog()
@@ -56,6 +57,9 @@ public partial class DataValidationDialog : Window
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;
         Formula1Box.Visibility   = isAny ? Visibility.Collapsed : Visibility.Visible;
+        SourcePickerButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         UseSelectionButton.Visibility = isList && !string.IsNullOrWhiteSpace(SelectionSource)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -125,6 +129,7 @@ public partial class DataValidationDialog : Window
             PromptMessage = PromptMessageBox.Text.Trim(),
             ErrorMessage = ErrorMessageBox.Text.Trim(),
         };
+        ApplyToSameSettings = SameSettingsBox.IsChecked == true;
 
         DialogResult = true;
         Close();
@@ -148,6 +153,15 @@ public partial class DataValidationDialog : Window
     {
         if (!string.IsNullOrWhiteSpace(SelectionSource))
             Formula1Box.Text = SelectionSource;
+    }
+
+    private void SourcePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(SelectionSource))
+            Formula1Box.Text = SelectionSource;
+
+        Formula1Box.Focus();
+        Formula1Box.SelectAll();
     }
 
     private void UseSelection2Button_Click(object sender, RoutedEventArgs e)
