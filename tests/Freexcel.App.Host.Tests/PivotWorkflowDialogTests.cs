@@ -499,6 +499,26 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotCalculatedFieldDialog_ExposesFieldsListAndInsertFieldControl()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("private readonly ListBox _fieldList");
+        source.Should().Contain("Available _fields");
+        source.Should().Contain("Insert _Field");
+        source.Should().Contain("InsertSelectedField");
+        source.Should().Contain("InsertFormulaReference");
+    }
+
+    [Fact]
+    public void PivotCalculatedFieldDialog_InsertFormulaReference_InsertsQuotedFieldAtCaret()
+    {
+        PivotCalculatedFieldDialog.InsertFormulaReference("Sales+Cost", "[Region Name]", 6, 0)
+            .Should()
+            .Be("Sales+[Region Name]Cost");
+    }
+
+    [Fact]
     public void PivotCalculatedItemDialog_CreateResult_TrimsClampsAndBuildsModel()
     {
         var result = PivotCalculatedItemDialog.CreateResult(
@@ -520,6 +540,28 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Calculated items are evaluated within the selected field");
         source.Should().Contain("Source _field");
         source.Should().Contain("Item _formula");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_ExposesFieldItemListsAndInsertionControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("private readonly ListBox _fieldList");
+        source.Should().Contain("private readonly ListBox _itemList");
+        source.Should().Contain("Available _items");
+        source.Should().Contain("Insert _Field");
+        source.Should().Contain("Insert _Item");
+        source.Should().Contain("RefreshItemList");
+        source.Should().Contain("InsertSelectedItem");
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_InsertFormulaReference_ReplacesSelectedFormulaText()
+    {
+        PivotCalculatedItemDialog.InsertFormulaReference("East+West", "North", 5, 4)
+            .Should()
+            .Be("East+North");
     }
 
     [Fact]
