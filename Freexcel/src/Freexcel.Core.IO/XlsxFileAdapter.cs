@@ -2535,7 +2535,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
         MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
         PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
-        PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
+        XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive, workbook);
         PreserveLegacyCommentParts(sourceArchive, generatedArchive, workbook);
         PreserveSharedStringRichTextAndPhonetics(sourceArchive, generatedArchive);
@@ -2632,98 +2632,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
 
             targetRoot.Add(new XElement(workbookNs + "drawing", new XAttribute(relNs + "id", targetRelId)));
-            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
-        }
-    }
-
-    private static void PreserveWorksheetPrinterSettingsReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
-            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
-        {
-            return;
-        }
-
-        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
-        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
-        var sourceWorkbookRels = LoadRelationshipTargets(
-            sourceArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var targetWorkbookRels = LoadRelationshipTargets(
-            targetArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-
-        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
-        {
-            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
-                continue;
-
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
-            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
-                continue;
-
-            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
-            var sourcePageSetup = sourceWorksheetXml.Root?.Element(workbookNs + "pageSetup");
-            var sourceRelId = sourcePageSetup?.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(sourceRelId))
-                continue;
-
-            var sourceWorksheetRels = LoadRelationshipTargets(
-                sourceArchive,
-                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
-                sourceWorksheetPath,
-                packageRelNs);
-            if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var printerSettingsPath) ||
-                !printerSettingsPath.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase) ||
-                targetArchive.GetEntry(printerSettingsPath) is null)
-            {
-                continue;
-            }
-
-            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-            var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
-                ? LoadXml(targetWorksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
-            var targetRelId = EnsureRelationshipForPackagePart(
-                targetWorksheetRelsXml,
-                packageRelNs,
-                targetWorksheetPath,
-                printerSettingsPath,
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings");
-            ReplacePackageXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
-
-            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
-            var targetRoot = targetWorksheetXml.Root;
-            if (targetRoot is null)
-                continue;
-
-            var targetPageSetup = targetRoot.Element(workbookNs + "pageSetup");
-            if (targetPageSetup is null)
-            {
-                targetPageSetup = new XElement(workbookNs + "pageSetup");
-                targetRoot.Add(targetPageSetup);
-            }
-
-            targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
-            targetPageSetup.SetAttributeValue(relNs + "id", targetRelId);
             ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
     }
