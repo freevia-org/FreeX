@@ -322,50 +322,60 @@ public static class RibbonIconFactory
         {
             var monochromeBrush = IsWhiteBrush(glyphBrush) ? glyphBrush : null;
             var sizeKey = size <= 22 ? "s" : "l";
-            var cacheKey = monochromeBrush is null
-                ? $"{candidateSlug}|{sizeKey}"
-                : $"{candidateSlug}|{sizeKey}|mono|{BrushCacheKey(monochromeBrush)}";
-            lock (CommandIconCacheGate)
+            foreach (var fileSlug in GetSizeSpecificSlugCandidates(candidateSlug, size, monochromeBrush is not null))
             {
-                if (CommandIconCache.TryGetValue(cacheKey, out var cached))
-                    return cached;
-                if (MissingCommandIcons.Contains(cacheKey))
+                var cacheKey = monochromeBrush is null
+                    ? $"{fileSlug}|{sizeKey}"
+                    : $"{fileSlug}|{sizeKey}|mono|{BrushCacheKey(monochromeBrush)}";
+                lock (CommandIconCacheGate)
+                {
+                    if (CommandIconCache.TryGetValue(cacheKey, out var cached))
+                        return cached;
+                    if (MissingCommandIcons.Contains(cacheKey))
+                        continue;
+                }
+
+                var filePath = System.IO.Path.Combine(
+                    AppContext.BaseDirectory,
+                    "Resources",
+                    "CommandIconsSvg",
+                    fileSlug + ".svg");
+                if (!File.Exists(filePath))
+                {
+                    lock (CommandIconCacheGate)
+                        MissingCommandIcons.Add(cacheKey);
                     continue;
-            }
+                }
 
-            var filePath = System.IO.Path.Combine(
-                AppContext.BaseDirectory,
-                "Resources",
-                "CommandIconsSvg",
-                candidateSlug + ".svg");
-            if (!File.Exists(filePath))
-            {
+                using var reader = new FileSvgReader(SvgDrawingSettings);
+                var drawing = reader.Read(filePath);
+                if (drawing is null)
+                {
+                    lock (CommandIconCacheGate)
+                        MissingCommandIcons.Add(cacheKey);
+                    continue;
+                }
+
+                if (monochromeBrush is not null)
+                    RecolorDrawing(drawing, monochromeBrush);
+
+                var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath, size));
+                vectorImage.Freeze();
+
                 lock (CommandIconCacheGate)
-                    MissingCommandIcons.Add(cacheKey);
-                continue;
+                    CommandIconCache[cacheKey] = vectorImage;
+                return vectorImage;
             }
-
-            using var reader = new FileSvgReader(SvgDrawingSettings);
-            var drawing = reader.Read(filePath);
-            if (drawing is null)
-            {
-                lock (CommandIconCacheGate)
-                    MissingCommandIcons.Add(cacheKey);
-                continue;
-            }
-
-            if (monochromeBrush is not null)
-                RecolorDrawing(drawing, monochromeBrush);
-
-            var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath, size));
-            vectorImage.Freeze();
-
-            lock (CommandIconCacheGate)
-                CommandIconCache[cacheKey] = vectorImage;
-            return vectorImage;
         }
 
         return null;
+    }
+
+    private static IEnumerable<string> GetSizeSpecificSlugCandidates(string slug, double size, bool monochrome)
+    {
+        if (!monochrome)
+            yield return size <= 22 ? slug + "-small" : slug + "-large";
+        yield return slug;
     }
 
     private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath, double targetSize)
