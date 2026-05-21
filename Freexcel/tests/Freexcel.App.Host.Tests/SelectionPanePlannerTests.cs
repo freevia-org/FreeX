@@ -110,4 +110,20 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
     }
+
+    [Fact]
+    public void SelectionPaneDialog_ExposesSearchFilterRenameAndEyeLikeVisibilityAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("_searchBox");
+        source.Should().Contain("_filterBox");
+        source.Should().Contain("_renameBox");
+        source.Should().Contain("_renameButton");
+        source.Should().Contain("_toggleVisibilityButton");
+        source.Should().Contain("ApplySearchAndFilter");
+        source.Should().Contain("RenameSelectedItem");
+        source.Should().Contain("ToggleSelectedVisibility");
+        source.Should().Contain("ToolTip = \"Toggle visibility\"");
+    }
 }
