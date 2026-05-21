@@ -36,7 +36,8 @@ internal sealed record ExportOptions(
     bool OpenAfterPublish,
     bool IgnorePrintAreas = false,
     ExportPageRange? PageRange = null,
-    ExportQuality Quality = ExportQuality.Standard)
+    ExportQuality Quality = ExportQuality.Standard,
+    bool CreateBookmarks = false)
 {
     public static ExportOptions ExcelLikeDefault { get; } =
         new(ExportContentScope.ActiveSheet, IncludeDocumentProperties: false, OpenAfterPublish: false);
@@ -107,11 +108,14 @@ internal static class ExportPlanner
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
+        var bookmarks = options.CreateBookmarks
+            ? "bookmarks use sheet names"
+            : null;
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, bookmarks, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -147,11 +151,14 @@ internal static class ExportPlanner
             (true, ExportFormat.Xps) => "document properties are included",
             _ => "document properties are not included"
         };
+        var bookmarks = options.CreateBookmarks && format == ExportFormat.Pdf
+            ? "bookmarks use sheet names"
+            : null;
         var open = options.OpenAfterPublish
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, bookmarks, open);
     }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
