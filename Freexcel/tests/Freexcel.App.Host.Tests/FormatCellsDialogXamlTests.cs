@@ -223,7 +223,7 @@ public sealed class FormatCellsDialogXamlTests
         {
             "Text=\"Presets\"",
             "Text=\"Line\"",
-            "Text=\"Color:\"",
+            "Content=\"_Color:\"",
             "Text=\"Border\""
         })
             xaml.Should().Contain(text);
@@ -245,15 +245,28 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderTab_LabelsLineControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var target in new[]
+        {
+            "Content=\"_Style:\" Target=\"{Binding ElementName=DlgBorderLineStyleBox}\"",
+            "Content=\"_Color:\" Target=\"{Binding ElementName=DlgBorderLineColorBox}\""
+        })
+            xaml.Should().Contain(target);
+    }
+
+    [Fact]
     public void FormatCellsDialog_FillTab_ExposesBackgroundPatternColorAndSamplePreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
 
         foreach (var text in new[]
         {
-            "Text=\"Background Color:\"",
-            "Text=\"Pattern Color:\"",
-            "Text=\"Pattern Style:\"",
+            "Content=\"_Background Color:\"",
+            "Content=\"Pattern _Color:\"",
+            "Content=\"Pattern _Style:\"",
             "Text=\"Sample\""
         })
             xaml.Should().Contain(text);
@@ -266,6 +279,20 @@ public sealed class FormatCellsDialogXamlTests
             "DlgFillSamplePreview"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FillTab_LabelsEditableControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var target in new[]
+        {
+            "Content=\"_Background Color:\" Target=\"{Binding ElementName=DlgFillColorBox}\"",
+            "Content=\"Pattern _Color:\" Target=\"{Binding ElementName=DlgFillPatternColorBox}\"",
+            "Content=\"Pattern _Style:\" Target=\"{Binding ElementName=DlgFillPatternStyleBox}\""
+        })
+            xaml.Should().Contain(target);
     }
 
     [Fact]
