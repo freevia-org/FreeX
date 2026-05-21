@@ -43,15 +43,13 @@ public sealed class FormatCellsDialogXamlTests
         {
             "_Wrap text",
             "S_hrink to fit",
-            "_Bold",
-            "_Italic",
-            "_Underline",
             "_Double underline",
             "_Strikethrough",
             "Super_script",
             "Su_bscript",
             "_Clear fill",
-            "_Locked"
+            "_Locked",
+            "_Hidden"
         })
             xaml.Should().Contain($"Content=\"{content}\"");
 
@@ -73,15 +71,15 @@ public sealed class FormatCellsDialogXamlTests
             "NumberFormatCombo",
             "DlgHAlignBox", "DlgVAlignBox", "DlgWrapTextCheck", "DlgShrinkToFitCheck",
             "DlgIndentLevelBox", "DlgTextRotationBox",
-            "DlgFontNameBox", "DlgFontSizeBox", "DlgBoldCheck", "DlgItalicCheck",
-            "DlgUnderlineCheck", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
+            "DlgFontNameBox", "DlgFontSizeBox", "DlgFontStyleList",
+            "DlgUnderlineStyleBox", "DlgDoubleUnderlineCheck", "DlgStrikeCheck", "DlgFontColorBox",
             "DlgSuperscriptCheck", "DlgSubscriptCheck",
-            "DlgFillColorBox", "DlgClearFillCheck",
+            "DlgFillColorBox", "DlgClearFillCheck", "DlgFillPalettePanel",
             "DlgBorderTopStyleBox", "DlgBorderTopColorBox",
             "DlgBorderRightStyleBox", "DlgBorderRightColorBox",
             "DlgBorderBottomStyleBox", "DlgBorderBottomColorBox",
             "DlgBorderLeftStyleBox", "DlgBorderLeftColorBox",
-            "DlgLockedCheck",
+            "DlgLockedCheck", "DlgHiddenCheck",
         })
         {
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
@@ -325,9 +323,29 @@ public sealed class FormatCellsDialogXamlTests
             "DlgFillBackgroundPreview",
             "DlgFillPatternColorBox",
             "DlgFillPatternStyleBox",
-            "DlgFillSamplePreview"
+            "DlgFillSamplePreview",
+            "DlgFillPalettePanel"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FillAndBorderTabs_ExposeExcelLikeColorSwatchesAndPreviews()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "Text=\"Background Color:\"",
+            "ToolTip=\"No Fill\"",
+            "ToolTip=\"Yellow\"",
+            "ToolTip=\"Green\"",
+            "x:Name=\"DlgBorderLineColorPreview\"",
+            "ToolTip=\"Black border\"",
+            "ToolTip=\"Red border\"",
+            "ToolTip=\"Blue border\""
+        })
+            xaml.Should().Contain(expected);
     }
 
     [Fact]
@@ -366,6 +384,31 @@ public sealed class FormatCellsDialogXamlTests
             "DlgFontSamplePreview"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_DoesNotDuplicateFontStyleAndUnderlineControlsAsEffects()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().NotContain("Content=\"_Bold\"");
+        xaml.Should().NotContain("Content=\"_Italic\"");
+        xaml.Should().NotContain("Content=\"_Underline\"");
+        xaml.Should().NotContain("x:Name=\"DlgBoldCheck\"");
+        xaml.Should().NotContain("x:Name=\"DlgItalicCheck\"");
+        xaml.Should().NotContain("x:Name=\"DlgUnderlineCheck\"");
+        xaml.Should().Contain("x:Name=\"DlgFontStyleList\"");
+        xaml.Should().Contain("x:Name=\"DlgUnderlineStyleBox\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_ProtectionTab_ExposesLockedHiddenAndExcelProtectionExplanation()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        xaml.Should().Contain("x:Name=\"DlgLockedCheck\" Content=\"_Locked\"");
+        xaml.Should().Contain("x:Name=\"DlgHiddenCheck\" Content=\"_Hidden\"");
+        xaml.Should().Contain("Locking cells or hiding formulas has no effect until you protect the worksheet.");
     }
 
     [Fact]
@@ -416,10 +459,8 @@ public sealed class FormatCellsDialogXamlTests
             {
                 GetControl<ComboBox>(dialog, "DlgFontNameBox").SelectedItem = "Verdana";
                 GetControl<ComboBox>(dialog, "DlgFontSizeBox").Text = "13.5";
-                GetControl<CheckBox>(dialog, "DlgBoldCheck").IsChecked = true;
-                GetControl<CheckBox>(dialog, "DlgItalicCheck").IsChecked = true;
-                GetControl<CheckBox>(dialog, "DlgUnderlineCheck").IsChecked = true;
-                GetControl<CheckBox>(dialog, "DlgDoubleUnderlineCheck").IsChecked = true;
+                GetControl<ListBox>(dialog, "DlgFontStyleList").SelectedItem = "Bold Italic";
+                GetControl<ComboBox>(dialog, "DlgUnderlineStyleBox").SelectedItem = "Double";
                 GetControl<CheckBox>(dialog, "DlgStrikeCheck").IsChecked = true;
                 GetControl<CheckBox>(dialog, "DlgSuperscriptCheck").IsChecked = true;
                 GetControl<CheckBox>(dialog, "DlgSubscriptCheck").IsChecked = false;
@@ -432,7 +473,7 @@ public sealed class FormatCellsDialogXamlTests
                 dialog.ResultDiff.FontSize.Should().Be(13.5);
                 dialog.ResultDiff.Bold.Should().BeTrue();
                 dialog.ResultDiff.Italic.Should().BeTrue();
-                dialog.ResultDiff.Underline.Should().BeTrue();
+                dialog.ResultDiff.Underline.Should().BeFalse();
                 dialog.ResultDiff.DoubleUnderline.Should().BeTrue();
                 dialog.ResultDiff.Strikethrough.Should().BeTrue();
                 dialog.ResultDiff.Superscript.Should().BeTrue();

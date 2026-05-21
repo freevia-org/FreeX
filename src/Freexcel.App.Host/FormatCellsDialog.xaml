@@ -105,9 +105,6 @@
                             <TextBlock Text="Effects"/>
                         </GroupBox.Header>
                         <WrapPanel Margin="8,6,8,4">
-                            <CheckBox x:Name="DlgBoldCheck"      Content="_Bold"             Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgItalicCheck"    Content="_Italic"           Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
-                            <CheckBox x:Name="DlgUnderlineCheck" Content="_Underline"        Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
                             <CheckBox x:Name="DlgDoubleUnderlineCheck" Content="_Double underline" Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
                             <CheckBox x:Name="DlgStrikeCheck"    Content="_Strikethrough"    Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
                             <CheckBox x:Name="DlgSuperscriptCheck" Content="Super_script"     Margin="0,0,12,6" Checked="FontPreviewInput_Changed" Unchecked="FontPreviewInput_Changed"/>
@@ -133,7 +130,22 @@
                         <ColumnDefinition Width="180"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                        <Label Content="_Background Color:" Target="{Binding ElementName=DlgFillColorBox}" Padding="0" Margin="0,4,0,2"/>
+                        <TextBlock Text="Background Color:" FontWeight="SemiBold" Margin="0,4,0,4"/>
+                        <UniformGrid x:Name="DlgFillPalettePanel" Columns="6" Rows="2" Margin="0,0,0,8">
+                            <Button Width="28" Height="22" ToolTip="No Fill" Tag="" Click="DlgFillSwatchButton_Click" Background="White" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="White" Tag="255,255,255" Click="DlgFillSwatchButton_Click" Background="White" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Yellow" Tag="255,255,0" Click="DlgFillSwatchButton_Click" Background="Yellow" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Green" Tag="146,208,80" Click="DlgFillSwatchButton_Click" Background="#92D050" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Blue" Tag="91,155,213" Click="DlgFillSwatchButton_Click" Background="#5B9BD5" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Red" Tag="255,0,0" Click="DlgFillSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Orange" Tag="237,125,49" Click="DlgFillSwatchButton_Click" Background="#ED7D31" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Purple" Tag="112,48,160" Click="DlgFillSwatchButton_Click" Background="#7030A0" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Light gray" Tag="217,217,217" Click="DlgFillSwatchButton_Click" Background="#D9D9D9" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Dark gray" Tag="89,89,89" Click="DlgFillSwatchButton_Click" Background="#595959" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="Black" Tag="0,0,0" Click="DlgFillSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
+                            <Button Width="28" Height="22" ToolTip="More Colors" Click="DlgFillColorPickerButton_Click" Content="..."/>
+                        </UniformGrid>
+                        <Label Content="_Background Color:" Target="{Binding ElementName=DlgFillColorBox}" Padding="0" Margin="0,0,0,2"/>
                         <DockPanel>
                             <Button x:Name="DlgFillColorPickerButton" DockPanel.Dock="Right" Content="_Pick" Width="54" Margin="6,0,0,0" Click="DlgFillColorPickerButton_Click"/>
                             <TextBox x:Name="DlgFillColorBox" Height="24" TextChanged="FillPreviewInput_Changed"/>
@@ -189,6 +201,16 @@
                             <Button x:Name="DlgBorderLineColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderLineColorPickerButton_Click"/>
                             <TextBox x:Name="DlgBorderLineColorBox" Height="24" TextChanged="BorderPreviewInput_Changed"/>
                         </DockPanel>
+                        <UniformGrid Columns="5" Rows="1" Margin="0,6,0,0">
+                            <Button Width="24" Height="20" ToolTip="Black border" Tag="0,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Black" BorderBrush="Gray"/>
+                            <Button Width="24" Height="20" ToolTip="Red border" Tag="255,0,0" Click="DlgBorderLineColorSwatchButton_Click" Background="Red" BorderBrush="Gray"/>
+                            <Button Width="24" Height="20" ToolTip="Blue border" Tag="0,112,192" Click="DlgBorderLineColorSwatchButton_Click" Background="#0070C0" BorderBrush="Gray"/>
+                            <Button Width="24" Height="20" ToolTip="Green border" Tag="0,176,80" Click="DlgBorderLineColorSwatchButton_Click" Background="#00B050" BorderBrush="Gray"/>
+                            <Button Width="24" Height="20" ToolTip="Gray border" Tag="128,128,128" Click="DlgBorderLineColorSwatchButton_Click" Background="Gray" BorderBrush="Gray"/>
+                        </UniformGrid>
+                        <Border x:Name="DlgBorderLineColorPreview" Height="20" Margin="0,6,0,0"
+                                BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                                BorderThickness="1" Background="Black"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="0" Grid.Column="2">
@@ -269,6 +291,11 @@
             <TabItem Header="_Protection">
                 <StackPanel Margin="8">
                     <CheckBox x:Name="DlgLockedCheck" Content="_Locked" Margin="0,4,0,0"/>
+                    <CheckBox x:Name="DlgHiddenCheck" Content="_Hidden" Margin="0,6,0,0"/>
+                    <TextBlock Text="Locking cells or hiding formulas has no effect until you protect the worksheet."
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                               Margin="0,12,0,0"/>
                 </StackPanel>
             </TabItem>
         </TabControl>
