@@ -533,21 +533,37 @@ public sealed class ChartCommandTests
             DataRange = range,
             IsPivotChart = true,
             PivotTableName = "PivotTable1",
-            ChartStyleId = 4
+            ChartStyleId = 4,
+            ShowPivotChartReportFilterButtons = true,
+            ShowPivotChartAxisFieldButtons = true,
+            ShowPivotChartValueFieldButtons = true
         };
         sheet.Charts.Add(chart);
 
-        var command = new ConfigurePivotChartOptionsCommand(sheet.Id, chart.Id, 99, showFieldButtons: false);
+        var command = new ConfigurePivotChartOptionsCommand(
+            sheet.Id,
+            chart.Id,
+            99,
+            showFieldButtons: false,
+            showReportFilterButtons: false,
+            showAxisFieldButtons: true,
+            showValueFieldButtons: false);
 
         command.Apply(ctx).Success.Should().BeTrue();
 
         chart.ChartStyleId.Should().Be(48);
         chart.ShowPivotChartFieldButtons.Should().BeFalse();
+        chart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeFalse();
 
         command.Revert(ctx);
 
         chart.ChartStyleId.Should().Be(4);
         chart.ShowPivotChartFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartReportFilterButtons.Should().BeTrue();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeTrue();
     }
 
     [Fact]
@@ -571,6 +587,37 @@ public sealed class ChartCommandTests
         outcome.Success.Should().BeFalse();
         chart.ChartStyleId.Should().BeNull();
         chart.ShowPivotChartFieldButtons.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ConfigurePivotChartOptionsCommand_PreservesIndividualButtonsWhenCallerOmitsThem()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = range,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartReportFilterButtons = false,
+            ShowPivotChartAxisFieldButtons = true,
+            ShowPivotChartValueFieldButtons = false
+        };
+        sheet.Charts.Add(chart);
+
+        var command = new ConfigurePivotChartOptionsCommand(sheet.Id, chart.Id, 12, showFieldButtons: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        chart.ShowPivotChartFieldButtons.Should().BeFalse();
+        chart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        chart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        chart.ShowPivotChartValueFieldButtons.Should().BeFalse();
     }
 
     [Fact]
