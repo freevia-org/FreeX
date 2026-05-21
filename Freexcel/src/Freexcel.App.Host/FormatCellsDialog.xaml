@@ -154,11 +154,6 @@
                                 BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                                 BorderThickness="1" Background="White"/>
 
-                        <Label Content="Pattern _Color:" Target="{Binding ElementName=DlgFillPatternColorBox}" Padding="0" Margin="0,12,0,2"/>
-                        <TextBox x:Name="DlgFillPatternColorBox" Height="24" TextChanged="FillPreviewInput_Changed"/>
-
-                        <Label Content="Pattern _Style:" Target="{Binding ElementName=DlgFillPatternStyleBox}" Padding="0" Margin="0,8,0,2"/>
-                        <ComboBox x:Name="DlgFillPatternStyleBox" Height="24" SelectionChanged="FillPreviewInput_Changed"/>
                         <CheckBox x:Name="DlgClearFillCheck" Content="_Clear fill" Margin="0,12,0,0" Checked="FillPreviewInput_Changed" Unchecked="FillPreviewInput_Changed"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1">

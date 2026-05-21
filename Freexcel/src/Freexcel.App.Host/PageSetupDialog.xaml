@@ -56,11 +56,11 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="_Adjust to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="_Adjust to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
                             <TextBox x:Name="ScalePercentBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="% normal size" VerticalAlignment="Center" Margin="0,0,0,8"/>
 
-                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="_Fit to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="_Fit to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
                             <TextBox x:Name="FitPagesWideBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="page(s) wide by" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBox x:Name="FitPagesTallBox" Grid.Row="1" Grid.Column="3" Margin="0,0,6,0"/>
