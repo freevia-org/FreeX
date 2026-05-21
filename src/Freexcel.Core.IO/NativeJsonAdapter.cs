@@ -7,7 +7,7 @@ namespace Freexcel.Core.IO;
 /// Native JSON adapter for Freexcel.
 /// Serializes the workbook to a simple, human-readable JSON format.
 /// </summary>
-public sealed class NativeJsonAdapter : IFileAdapter
+public sealed partial class NativeJsonAdapter : IFileAdapter
 {
     private const string NativeFileFormat = "Freexcel.NativeJsonWorkbook";
     private const int CurrentSchemaVersion = 1;
@@ -653,54 +653,6 @@ public sealed class NativeJsonAdapter : IFileAdapter
         dto.MaxCalculationIterations = workbook.MaxCalculationIterations;
         dto.MaxCalculationChange = workbook.MaxCalculationChange;
     }
-
-    private static (CellAddress Address, string Text)? TryLoadComment(CommentDto? commentDto, SheetId sheetId)
-    {
-        if (string.IsNullOrWhiteSpace(commentDto?.Address) || commentDto.Text is null)
-            return null;
-
-        try
-        {
-            var address = CellAddress.Parse(commentDto.Address, sheetId);
-            return address.Sheet == sheetId
-                ? (address, commentDto.Text)
-                : null;
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
-    private static (CellAddress Address, string Target)? TryLoadHyperlink(HyperlinkDto? hyperlinkDto, SheetId sheetId)
-    {
-        if (string.IsNullOrWhiteSpace(hyperlinkDto?.Address) || hyperlinkDto.Target is null)
-            return null;
-
-        try
-        {
-            var address = CellAddress.Parse(hyperlinkDto.Address, sheetId);
-            return address.Sheet == sheetId
-                ? (address, hyperlinkDto.Target)
-                : null;
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
-    private static CommentDto ToCommentDto(KeyValuePair<CellAddress, string> pair) => new()
-    {
-        Address = pair.Key.ToA1(),
-        Text = pair.Value
-    };
-
-    private static HyperlinkDto ToHyperlinkDto(KeyValuePair<CellAddress, string> pair) => new()
-    {
-        Address = pair.Key.ToA1(),
-        Target = pair.Value
-    };
 
     private static SparklineModel? TryLoadSparkline(SparklineDto? sparklineDto, SheetId sheetId)
     {
