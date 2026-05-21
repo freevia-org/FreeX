@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
@@ -12,7 +14,10 @@ public enum TextToColumnsDelimiterKind
     Custom
 }
 
-public sealed record TextToColumnsDialogResult(TextToColumnsDelimiterKind DelimiterKind, string Delimiter);
+public sealed record TextToColumnsDialogResult(TextToColumnsDelimiterKind DelimiterKind, string Delimiter)
+{
+    public string Delimiters => Delimiter;
+}
 
 public sealed class TextToColumnsDialog : Window
 {
@@ -23,11 +28,14 @@ public sealed class TextToColumnsDialog : Window
     private readonly CheckBox _otherBox = new() { Content = "_Other:" };
     private readonly TextBox _customBox = new() { Width = 48, Margin = new Thickness(6, 0, 0, 0) };
     private readonly ListView _previewGrid = new() { Height = 88 };
+    private readonly IReadOnlyList<string> _previewRows;
 
     public TextToColumnsDialogResult? Result { get; private set; }
 
-    public TextToColumnsDialog()
+    public TextToColumnsDialog(IEnumerable<string>? previewRows = null)
     {
+        _previewRows = NormalizePreviewRows(previewRows);
+
         Title = "Text to Columns";
         Width = 500;
         Height = 300;
@@ -35,23 +43,13 @@ public sealed class TextToColumnsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        _previewGrid.ItemsSource = new[]
-        {
-            new { Column1 = "East", Column2 = "42", Column3 = "Open" },
-            new { Column1 = "West", Column2 = "7", Column3 = "Closed" },
-            new { Column1 = "North", Column2 = "18", Column3 = "Ready" }
-        };
-        _previewGrid.View = new GridView
-        {
-            Columns =
-            {
-                new GridViewColumn { Header = "Column 1", DisplayMemberBinding = new System.Windows.Data.Binding("Column1"), Width = 130 },
-                new GridViewColumn { Header = "Column 2", DisplayMemberBinding = new System.Windows.Data.Binding("Column2"), Width = 100 },
-                new GridViewColumn { Header = "Column 3", DisplayMemberBinding = new System.Windows.Data.Binding("Column3"), Width = 130 }
-            }
-        };
-
         _otherBox.Checked += (_, _) => _customBox.Focus();
+        foreach (var box in new[] { _tabBox, _semicolonBox, _commaBox, _spaceBox, _otherBox })
+        {
+            box.Checked += (_, _) => RefreshPreview();
+            box.Unchecked += (_, _) => RefreshPreview();
+        }
+        _customBox.TextChanged += (_, _) => RefreshPreview();
 
         var root = new DockPanel { Margin = new Thickness(12) };
         var body = new StackPanel();
@@ -69,6 +67,7 @@ public sealed class TextToColumnsDialog : Window
 
         root.Children.Add(CreateButtonRow(Accept));
         Content = root;
+        RefreshPreview();
     }
 
     public static TextToColumnsDialogResult CreateResult(TextToColumnsDelimiterKind delimiterKind, string? customDelimiter = null)
@@ -86,6 +85,36 @@ public sealed class TextToColumnsDialog : Window
         };
 
         return new TextToColumnsDialogResult(delimiterKind, delimiter);
+    }
+
+    public static TextToColumnsDialogResult CreateResult(
+        IEnumerable<TextToColumnsDelimiterKind> delimiterKinds,
+        string? customDelimiter = null)
+    {
+        var kinds = delimiterKinds.Distinct().ToList();
+        if (kinds.Count == 0)
+            kinds.Add(TextToColumnsDelimiterKind.Comma);
+
+        var delimiters = string.Concat(kinds.Select(kind => CreateResult(kind, customDelimiter).Delimiter));
+        var primaryKind = kinds.Contains(TextToColumnsDelimiterKind.Custom)
+            ? TextToColumnsDelimiterKind.Custom
+            : kinds[0];
+        return new TextToColumnsDialogResult(primaryKind, delimiters);
+    }
+
+    public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
+    {
+        if (sheet is null)
+            return [];
+
+        var rows = new List<string>();
+        for (var row = range.Start.Row; row <= range.End.Row && rows.Count < maxRows; row++)
+        {
+            if (sheet.GetValue(row, range.Start.Col) is TextValue text && !string.IsNullOrWhiteSpace(text.Value))
+                rows.Add(text.Value);
+        }
+
+        return rows;
     }
 
     private GroupBox CreateDelimiterPanel()
@@ -110,25 +139,28 @@ public sealed class TextToColumnsDialog : Window
         };
     }
 
-    private TextToColumnsDelimiterKind SelectedDelimiterKind()
+    private IReadOnlyList<TextToColumnsDelimiterKind> SelectedDelimiterKinds()
     {
+        var kinds = new List<TextToColumnsDelimiterKind>();
         if (_otherBox.IsChecked == true)
-            return TextToColumnsDelimiterKind.Custom;
+            kinds.Add(TextToColumnsDelimiterKind.Custom);
         if (_tabBox.IsChecked == true)
-            return TextToColumnsDelimiterKind.Tab;
+            kinds.Add(TextToColumnsDelimiterKind.Tab);
         if (_semicolonBox.IsChecked == true)
-            return TextToColumnsDelimiterKind.Semicolon;
+            kinds.Add(TextToColumnsDelimiterKind.Semicolon);
         if (_spaceBox.IsChecked == true)
-            return TextToColumnsDelimiterKind.Space;
+            kinds.Add(TextToColumnsDelimiterKind.Space);
+        if (_commaBox.IsChecked == true)
+            kinds.Add(TextToColumnsDelimiterKind.Comma);
 
-        return TextToColumnsDelimiterKind.Comma;
+        return kinds.Count == 0 ? [TextToColumnsDelimiterKind.Comma] : kinds;
     }
 
     private void Accept()
     {
         try
         {
-            Result = CreateResult(SelectedDelimiterKind(), _customBox.Text);
+            Result = CreateResult(SelectedDelimiterKinds(), _customBox.Text);
             DialogResult = true;
         }
         catch (Exception ex)
@@ -139,4 +171,55 @@ public sealed class TextToColumnsDialog : Window
 
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
+
+    private static IReadOnlyList<string> NormalizePreviewRows(IEnumerable<string>? previewRows)
+    {
+        var rows = previewRows?
+            .Where(row => !string.IsNullOrWhiteSpace(row))
+            .Take(3)
+            .ToList() ?? [];
+
+        return rows.Count == 0
+            ? ["East,42,Open", "West,7,Closed", "North,18,Ready"]
+            : rows;
+    }
+
+    private void RefreshPreview()
+    {
+        TextToColumnsDialogResult result;
+        try
+        {
+            result = CreateResult(SelectedDelimiterKinds(), _customBox.Text);
+        }
+        catch
+        {
+            result = CreateResult(TextToColumnsDelimiterKind.Comma);
+        }
+
+        var rows = _previewRows
+            .Select(row => TextToColumnsPlanner.SplitText(row, result.Delimiters).ToArray())
+            .ToList();
+        var columnCount = Math.Max(1, rows.Count == 0 ? 1 : rows.Max(row => row.Length));
+        var view = new GridView();
+        for (var index = 0; index < columnCount; index++)
+        {
+            view.Columns.Add(new GridViewColumn
+            {
+                Header = $"Column {index + 1}",
+                DisplayMemberBinding = new Binding($"[{index}]"),
+                Width = index == 0 ? 140 : 100
+            });
+        }
+
+        _previewGrid.View = view;
+        _previewGrid.ItemsSource = rows.Select(row => PadRow(row, columnCount)).ToList();
+    }
+
+    private static string[] PadRow(IReadOnlyList<string> row, int columnCount)
+    {
+        var padded = new string[columnCount];
+        for (var index = 0; index < columnCount; index++)
+            padded[index] = index < row.Count ? row[index] : string.Empty;
+        return padded;
+    }
 }
