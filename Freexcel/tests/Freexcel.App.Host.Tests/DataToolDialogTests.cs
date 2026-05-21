@@ -438,11 +438,13 @@ public sealed class DataToolDialogTests
     public void DataTableDialog_ParsesOneAndTwoVariableInputs()
     {
         var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
 
         var oneVariableParsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.OneVariable,
-            formulaCellText: "B2",
+            range,
             rowInputCellText: "",
             columnInputCellText: "C1",
             out var oneVariable,
@@ -450,51 +452,56 @@ public sealed class DataToolDialogTests
 
         oneVariableParsed.Should().BeTrue(oneVariableError);
         oneVariable.Mode.Should().Be(DataTableMode.OneVariable);
-        oneVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 2));
+        oneVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 3));
         oneVariable.RowInputCell.Should().BeNull();
         oneVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
 
         var twoVariableParsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.TwoVariable,
-            formulaCellText: "B2",
+            range,
             rowInputCellText: "A1",
             columnInputCellText: "C1",
             out var twoVariable,
             out var twoVariableError);
 
         twoVariableParsed.Should().BeTrue(twoVariableError);
+        twoVariable.Mode.Should().Be(DataTableMode.TwoVariable);
+        twoVariable.FormulaCell.Should().Be(new CellAddress(sheetId, 2, 2));
         twoVariable.RowInputCell.Should().Be(new CellAddress(sheetId, 1, 1));
         twoVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
     }
 
     [Fact]
-    public void DataTableDialog_RejectsInvalidFormulaCell()
+    public void DataTableDialog_RejectsMissingInputCells()
     {
         var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
 
         var parsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.OneVariable,
-            formulaCellText: "not-a-cell",
+            range,
             rowInputCellText: "",
-            columnInputCellText: "C1",
+            columnInputCellText: "",
             out _,
             out var error);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid formula cell.");
+        error.Should().Be("Enter either a row input cell or a column input cell.");
     }
 
     [Fact]
     public void DataTableDialog_RejectsInvalidOptionalInputCell()
     {
         var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 8, 5));
 
         var parsed = DataTableDialog.TryParse(
             sheetId,
-            DataTableMode.OneVariable,
-            formulaCellText: "B2",
+            range,
             rowInputCellText: "",
             columnInputCellText: "not-a-cell",
             out _,
@@ -509,19 +516,17 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataTableDialog.cs"));
 
-        source.Should().Contain("AddReferenceRow(grid, 0, \"_Formula cell:\", _formulaBox");
-        source.Should().Contain("AddReferenceRow(grid, 1, \"_Row input cell:\", _rowInputBox");
-        source.Should().Contain("AddReferenceRow(grid, 2, \"_Column input cell:\", _columnInputBox");
+        source.Should().Contain("AddReferenceRow(grid, 0, \"_Row input cell:\", _rowInputBox");
+        source.Should().Contain("AddReferenceRow(grid, 1, \"_Column input cell:\", _columnInputBox");
+        source.Should().NotContain("_formulaBox");
+        source.Should().NotContain("_modeBox");
         source.Should().Contain("ReferencePickerButton_Click");
-        source.Should().Contain("Select formula cell");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
-        source.Should().Contain("new Label { Content = \"_Type:\", Target = _modeBox");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().Contain("Header = \"Inputs\"");
-        source.Should().Contain("One-variable data tables use either");
-        source.Should().Contain("Two-variable data tables require both");
+        source.Should().Contain("DataTableInputParser.GetDefaultFormulaCell");
     }
 
     [Fact]
