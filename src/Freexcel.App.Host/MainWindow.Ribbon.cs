@@ -703,8 +703,11 @@ public partial class MainWindow
         if (RibbonTabs is null)
             return;
 
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<Button>())
+        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
         {
+            if (button is CheckBox or RadioButton)
+                continue;
+
             if (button.Content is not string label || string.IsNullOrWhiteSpace(label))
                 continue;
 
@@ -1446,7 +1449,7 @@ public partial class MainWindow
 
     private static SolidColorBrush BrushFromRgb(byte r, byte g, byte b) => new(Color.FromRgb(r, g, b));
 
-    private static void ApplyRibbonCommandSize(Button button, RibbonCommandLayoutKind layoutKind)
+    private static void ApplyRibbonCommandSize(ButtonBase button, RibbonCommandLayoutKind layoutKind)
     {
         switch (layoutKind)
         {
