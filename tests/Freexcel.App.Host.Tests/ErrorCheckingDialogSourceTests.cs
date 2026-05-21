@@ -63,9 +63,9 @@ public sealed class ErrorCheckingDialogSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ErrorCheckingDialog.cs"));
 
         source.Should().Contain("Error help");
-        source.Should().Contain("Help on this error");
-        source.Should().Contain("Show Calculation Steps");
-        source.Should().Contain("Ignore Error");
-        source.Should().Contain("Edit in Formula Bar");
+        source.Should().Contain("Content = \"_Help on this error\"");
+        source.Should().Contain("Content = \"Show _Calculation Steps\"");
+        source.Should().Contain("Content = \"_Ignore Error\"");
+        source.Should().Contain("Content = \"_Edit in Formula Bar\"");
     }
 }
