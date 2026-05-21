@@ -70,46 +70,50 @@ public sealed class PasswordProtectionDialog : Window
         _requiresConfirmation = title.StartsWith("Protect ", StringComparison.OrdinalIgnoreCase);
         Title = title;
         Width = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ? 430 : 360;
-        Height = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ? 500 : 210;
+        Height = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ? 540 : 250;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new Label { Content = prompt, Target = _passwordBox, Margin = new Thickness(0, 0, 0, 4) });
-        root.Children.Add(_passwordBox);
+        root.Children.Add(new TextBlock
+        {
+            Text = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase)
+                ? "Protect worksheet and contents of locked cells"
+                : prompt,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var passwordGroup = new GroupBox { Header = "Password", Margin = new Thickness(0, 0, 0, 10) };
+        var passwordPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
+        passwordPanel.Children.Add(new Label { Content = prompt, Target = _passwordBox, Margin = new Thickness(0, 0, 0, 4) });
+        passwordPanel.Children.Add(_passwordBox);
         if (_requiresConfirmation)
         {
-            root.Children.Add(new Label { Content = "_Confirm password:", Target = _confirmationBox, Margin = new Thickness(0, 8, 0, 4) });
-            root.Children.Add(_confirmationBox);
+            passwordPanel.Children.Add(new Label { Content = "_Confirm password:", Target = _confirmationBox, Margin = new Thickness(0, 8, 0, 4) });
+            passwordPanel.Children.Add(_confirmationBox);
         }
+        passwordPanel.Children.Add(new TextBlock
+        {
+            Text = "Caution: lost or forgotten passwords cannot be recovered.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+        passwordGroup.Content = passwordPanel;
+        root.Children.Add(passwordGroup);
 
         if (title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase))
             AddSheetPermissionChecklist(root);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        root.Children.Add(buttons);
-        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        ok.Click += (_, _) => Accept();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = root;
     }
 
     private static void AddSheetPermissionChecklist(Panel root)
     {
-        root.Children.Add(new TextBlock
-        {
-            Text = "Allow all users of this worksheet to:",
-            Margin = new Thickness(0, 14, 0, 6)
-        });
-
         var checklist = new StackPanel();
         var scroll = new ScrollViewer
         {
@@ -117,7 +121,13 @@ public sealed class PasswordProtectionDialog : Window
             Height = 230,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
-        root.Children.Add(scroll);
+        var group = new GroupBox
+        {
+            Header = "Allow all users of this worksheet to:",
+            Content = scroll,
+            Margin = new Thickness(0, 0, 0, 0)
+        };
+        root.Children.Add(group);
 
         foreach (var permission in ProtectionDialogPlanner.GetDefaultSheetPermissions())
         {
@@ -154,28 +164,33 @@ public sealed class AllowEditRangeDialog : Window
     {
         _sheetId = sheetId;
         Title = "Allow Users to Edit Ranges";
-        Width = 360;
-        Height = 150;
+        Width = 430;
+        Height = 230;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new Label { Content = "_Range:", Target = _rangeBox, Margin = new Thickness(0, 0, 0, 6) });
-        _rangeBox.Text = defaultRange;
-        root.Children.Add(_rangeBox);
-
-        var buttons = new StackPanel
+        root.Children.Add(new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        root.Children.Add(buttons);
-        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        ok.Click += (_, _) => Accept();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
+            Text = "Specify a worksheet range that can be edited while the sheet is protected.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        var group = new GroupBox { Header = "Range", Margin = new Thickness(0, 0, 0, 10) };
+        var rangePanel = new DockPanel { Margin = new Thickness(8) };
+        rangePanel.Children.Add(new Label { Content = "_Range:", Target = _rangeBox, Margin = new Thickness(0, 0, 8, 0) });
+        _rangeBox.Text = defaultRange;
+        rangePanel.Children.Add(_rangeBox);
+        group.Content = rangePanel;
+        root.Children.Add(group);
+        root.Children.Add(new TextBlock
+        {
+            Text = "Use an A1-style range, for example A1:C10.",
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72));
 
         Content = root;
     }
