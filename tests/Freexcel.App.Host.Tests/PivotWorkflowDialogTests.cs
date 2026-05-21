@@ -101,6 +101,38 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotAuxiliaryDialogs_LabelEditableFieldsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        foreach (var content in new[]
+        {
+            "PivotDialogLayout.AddLabeledControl(",
+            "\"Table/_Range:\"",
+            "CreateReferenceEditor(_sourceBox",
+            "_sourceBox,",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Field to connect\", _fieldBox",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Slicer _caption\", _nameBox",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Date field to connect\", _fieldBox",
+            "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Timeline _caption\", _nameBox",
+            "PivotDialogLayout.AddLabeledControl(allChartsPanel, \"Chart _type\", _chartTypeBox",
+            "PivotDialogLayout.AddLabeledControl(stylePanel, \"Chart _style ID\", _styleBox",
+            "AddCombo(selectionPanel, \"_Field\", _fieldBox",
+            "AddCombo(groupingPanel, \"_Group by\", _groupingBox",
+            "AddTextBox(rangePanel, \"_Starting at\", _startBox",
+            "AddTextBox(rangePanel, \"_Ending at\", _endBox",
+            "AddTextBox(rangePanel, \"_By\", _intervalBox",
+            "AddTextBox(formulaPanel, \"_Name\", _nameBox",
+            "AddTextBox(formulaPanel, \"_Formula:\", _formulaBox",
+            "PivotDialogLayout.AddLabeledControl(itemPanel, \"Source _field\", _fieldBox",
+            "AddTextBox(itemPanel, \"Item _formula\", _formulaBox",
+            "public static void AddLabeledControl(Panel stack, string label, UIElement control",
+            "Target = target"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
     public void InsertSlicerDialog_CreateResult_CapturesFieldAndSlicerName()
     {
         InsertSlicerDialog.CreateResult("  Region  ", "  Region Slicer  ")
@@ -115,8 +147,8 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Choose fields");
         source.Should().Contain("Slicers make it faster to filter a PivotTable");
-        source.Should().Contain("Field to connect");
-        source.Should().Contain("Slicer caption");
+        source.Should().Contain("_Field to connect");
+        source.Should().Contain("Slicer _caption");
         source.Should().Contain("DialogButtonRowFactory.Create");
     }
 
@@ -135,8 +167,8 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Choose date fields");
         source.Should().Contain("Timelines filter PivotTables by date");
-        source.Should().Contain("Date field to connect");
-        source.Should().Contain("Timeline caption");
+        source.Should().Contain("_Date field to connect");
+        source.Should().Contain("Timeline _caption");
     }
 
     [Fact]
@@ -426,8 +458,8 @@ public sealed class PivotWorkflowDialogTests
 
         source.Should().Contain("Field and item");
         source.Should().Contain("Calculated items are evaluated within the selected field");
-        source.Should().Contain("Source field");
-        source.Should().Contain("Item formula");
+        source.Should().Contain("Source _field");
+        source.Should().Contain("Item _formula");
     }
 
     [Fact]
