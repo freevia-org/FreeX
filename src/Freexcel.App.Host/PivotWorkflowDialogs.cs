@@ -625,6 +625,10 @@ public sealed class PivotTableOptionsDialog : Window
     private readonly CheckBox _columnHeadersBox = new() { Content = "Column headers" };
     private readonly CheckBox _rowStripesBox = new() { Content = "Banded rows" };
     private readonly CheckBox _columnStripesBox = new() { Content = "Banded columns" };
+    private readonly TextBox _emptyCellsBox = new() { Width = 120 };
+    private readonly CheckBox _autofitColumnsBox = new() { Content = "Autofit column widths on update", IsChecked = true };
+    private readonly CheckBox _preserveFormattingBox = new() { Content = "Preserve cell formatting on update", IsChecked = true };
+    private readonly CheckBox _refreshOnOpenBox = new() { Content = "Refresh data when opening the file" };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
@@ -632,8 +636,8 @@ public sealed class PivotTableOptionsDialog : Window
     {
         Result = FromPivotTable(pivotTable);
         Title = "PivotTable Options";
-        Width = 430;
-        Height = 520;
+        Width = 520;
+        Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -683,28 +687,78 @@ public sealed class PivotTableOptionsDialog : Window
             showColumnStripes,
             reportLayout);
 
-    private StackPanel CreateContent()
+    private DockPanel CreateContent()
     {
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        AddSectionHeader(stack, "Layout");
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 12) };
+        DockPanel.SetDock(tabs, Dock.Top);
+
+        tabs.Items.Add(new TabItem { Header = "Layout & Format", Content = CreateLayoutAndFormatTab() });
+        tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
+        tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
+        tabs.Items.Add(new TabItem { Header = "Printing", Content = CreateSimpleTab("Print titles and print expand/collapse buttons are not yet available.") });
+        tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
+        tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateSimpleTab("Title and description metadata can be added in a future pass.") });
+
+        root.Children.Add(tabs);
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
+    }
+
+    private StackPanel CreateLayoutAndFormatTab()
+    {
+        var stack = CreateTabPanel();
+        AddCombo(stack, "Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
+        AddCheckBox(stack, _repeatItemLabelsBox);
+        AddCheckBox(stack, _blankLineBox);
+        stack.Children.Add(new TextBlock { Text = "For empty cells show:", Margin = new Thickness(0, 6, 0, 4) });
+        stack.Children.Add(_emptyCellsBox);
+        AddCheckBox(stack, _autofitColumnsBox);
+        AddCheckBox(stack, _preserveFormattingBox);
+        return stack;
+    }
+
+    private StackPanel CreateTotalsAndFiltersTab()
+    {
+        var stack = CreateTabPanel();
         AddCheckBox(stack, _rowGrandTotalsBox);
         AddCheckBox(stack, _columnGrandTotalsBox);
         AddCheckBox(stack, _subtotalsBox);
         AddCombo(stack, "Subtotal placement", _subtotalPlacementBox, Enum.GetValues<PivotSubtotalPlacement>());
-        AddCombo(stack, "Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
-        AddCheckBox(stack, _repeatItemLabelsBox);
-        AddCheckBox(stack, _blankLineBox);
+        return stack;
+    }
 
-        AddSectionHeader(stack, "Style");
+    private StackPanel CreateDisplayTab()
+    {
+        var stack = CreateTabPanel();
         AddCombo(stack, "PivotTable style", _styleBox, StyleNames);
         AddCheckBox(stack, _rowHeadersBox);
         AddCheckBox(stack, _columnHeadersBox);
         AddCheckBox(stack, _rowStripesBox);
         AddCheckBox(stack, _columnStripesBox);
-
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return stack;
     }
+
+    private StackPanel CreateDataTab()
+    {
+        var stack = CreateTabPanel();
+        AddCheckBox(stack, _refreshOnOpenBox);
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Retain items deleted from the data source: Automatic",
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+        return stack;
+    }
+
+    private static StackPanel CreateSimpleTab(string message)
+    {
+        var stack = CreateTabPanel();
+        stack.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        return stack;
+    }
+
+    private static StackPanel CreateTabPanel() => new() { Margin = new Thickness(10) };
 
     private static void AddSectionHeader(Panel stack, string text) =>
         stack.Children.Add(new TextBlock
