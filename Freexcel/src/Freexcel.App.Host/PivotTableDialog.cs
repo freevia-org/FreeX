@@ -21,8 +21,11 @@ public sealed class PivotTableDialog : Window
 {
     private readonly TextBox _sourceRangeBox = new();
     private readonly TextBox _destinationRangeBox = new();
+    private readonly RadioButton _selectTableRangeButton = new() { Content = "Select a _table or range", IsChecked = true };
+    private readonly RadioButton _externalSourceButton = new() { Content = "Use an external data source", IsEnabled = false };
     private readonly RadioButton _newWorksheetButton = new() { Content = "New worksheet" };
     private readonly RadioButton _existingWorksheetButton = new() { Content = "Existing worksheet", IsChecked = true };
+    private readonly CheckBox _dataModelBox = new() { Content = "Add this data to the Data Model", IsEnabled = false };
     private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable Fields pane", IsChecked = true };
 
     public PivotTableDialogResult Result { get; private set; }
@@ -38,18 +41,26 @@ public sealed class PivotTableDialog : Window
             openFieldList: true);
 
         Title = "Create PivotTable";
-        Width = 430;
-        Height = 320;
+        Width = 500;
+        Height = 390;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        stack.Children.Add(new TextBlock { Text = "Table/Range", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(CreateSectionHeader("Choose the data that you want to analyze"));
+        _selectTableRangeButton.Margin = new Thickness(0, 0, 0, 4);
+        _externalSourceButton.Margin = new Thickness(0, 0, 0, 6);
+        stack.Children.Add(_selectTableRangeButton);
+        stack.Children.Add(new TextBlock { Text = "Table/Range:", Margin = new Thickness(22, 0, 0, 4) });
         _sourceRangeBox.Text = Result.SourceRangeText;
-        stack.Children.Add(CreateReferenceEditor(_sourceRangeBox, "Select PivotTable source range", new Thickness(0, 0, 0, 12)));
+        stack.Children.Add(CreateReferenceEditor(_sourceRangeBox, "Select PivotTable source range", new Thickness(22, 0, 0, 8)));
+        stack.Children.Add(_externalSourceButton);
 
-        stack.Children.Add(new TextBlock { Text = "Choose where to place the PivotTable", Margin = new Thickness(0, 0, 0, 6) });
+        _dataModelBox.Margin = new Thickness(0, 0, 0, 12);
+        stack.Children.Add(_dataModelBox);
+
+        stack.Children.Add(CreateSectionHeader("Choose where you want the PivotTable report to be placed"));
         _newWorksheetButton.Margin = new Thickness(0, 0, 0, 4);
         _newWorksheetButton.Checked += (_, _) => UpdateDestinationState();
         _existingWorksheetButton.Checked += (_, _) => UpdateDestinationState();
@@ -64,7 +75,7 @@ public sealed class PivotTableDialog : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = "Freexcel creates worksheet-range PivotTables; data-model and external OLAP sources remain excluded.",
+            Text = "External sources and the workbook data model are shown for Excel parity but are not yet available.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
@@ -90,6 +101,14 @@ public sealed class PivotTableDialog : Window
         Content = stack;
         UpdateDestinationState();
     }
+
+    private static TextBlock CreateSectionHeader(string text) =>
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
 
     public static PivotTableDialogResult CreateResult(
         string sourceRangeText,
