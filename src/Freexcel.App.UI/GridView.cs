@@ -3,7 +3,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Globalization;
-using System.IO;
 using Freexcel.Core.Model;
 using CellHAlign  = Freexcel.Core.Model.HorizontalAlignment;
 using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
@@ -1806,52 +1805,10 @@ public class GridView : FrameworkElement
     }
 
     private static bool TryLoadWorksheetBackgroundImage(WorksheetBackgroundImage background, out ImageSource? image)
-    {
-        image = null;
-        if (background.ImageBytes.Length == 0)
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(background.ImageBytes);
-            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            image = bitmap;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WpfBitmapImageLoader.TryLoad(background.ImageBytes, out image);
 
     private static bool TryLoadPictureImage(PictureModel picture, out ImageSource? image)
-    {
-        image = null;
-        if (picture.ImageBytes is not { Length: > 0 })
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(picture.ImageBytes);
-            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            image = bitmap;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WpfBitmapImageLoader.TryLoad(picture.ImageBytes, out image);
 
     private void RenderSparklines(DrawingContext dc)
     {
