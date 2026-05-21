@@ -150,6 +150,14 @@ public partial class MainWindow
         var hitAddress = Freexcel.App.UI.GridView.HitTestViewportCell(viewport, _currentSheetId, pos);
         if (hitAddress is { } newAddr)
         {
+            if (TryApplyFormulaRangeSelection(newAddr, extendSelection: (Keyboard.Modifiers & ModifierKeys.Shift) != 0))
+            {
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             if (_inlineEditor?.IsVisible == true)
             {
                 FormulaBar.Text = _inlineEditor.Text;
@@ -553,6 +561,9 @@ public partial class MainWindow
 
     private void SetActiveCell(CellAddress addr)
     {
+        if (GetFormulaRangeEntryEditor() is null)
+            ClearFormulaRangeEntryState();
+
         // If the cell belongs to a merged region, select the whole region
         var sheet = _workbook.GetSheet(_currentSheetId);
         var merge = sheet?.GetMergeRegion(addr);
@@ -712,7 +723,9 @@ public partial class MainWindow
         if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed) return;
         if (_selectionAnchor is not { } anchor) return;
         var hitAddr = HitTestCell(e.GetPosition(SheetGrid));
-        if (hitAddr.HasValue)
+        if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
+            TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
+        else if (hitAddr.HasValue)
             ExtendSelection(anchor, hitAddr.Value);
     }
 
@@ -734,6 +747,7 @@ public partial class MainWindow
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
         SheetGrid.ReleaseMouseCapture();
+        GetFormulaRangeEntryEditor()?.Focus();
     }
 
     private void MainWindow_Deactivated(object? sender, EventArgs e)

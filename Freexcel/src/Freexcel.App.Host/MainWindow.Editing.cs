@@ -26,6 +26,7 @@ public partial class MainWindow
 
     private void EditActiveCellInFormulaBar()
     {
+        CaptureFormulaEditCell();
         if (SheetGrid.SelectedRange?.Start is { } address)
         {
             var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);
@@ -53,6 +54,8 @@ public partial class MainWindow
 
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr);
         var text = FormatFormulaBarText(cell, addr);
+        _formulaEditCell = addr;
+        ClearFormulaReferenceEntrySpan();
 
         if (_inlineEditor == null)
         {
@@ -279,27 +282,33 @@ public partial class MainWindow
         {
             HideInlineEditor(commit: false);
             // Restore original text in formula bar
-            var addr = SheetGrid.SelectedRange?.Start;
+            var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
             if (addr.HasValue)
             {
                 var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
             }
+            ClearFormulaRangeEntryState();
             CancelCopyAndTransientModes();
             FocusSheetGridIfNeeded();
             e.Handled = true;
             return;
         }
-        var current = SheetGrid.SelectedRange?.Start;
-        if (current is null)
+        var selectedRange = SheetGrid.SelectedRange;
+        if (selectedRange is null)
             return;
+        var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
+        var current = formulaRangeEntryActive
+            ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
+            : selectedRange.Value.Start;
 
         var intent = ExcelEditKeyPlanner.GetIntent(
             e.Key,
             Keyboard.Modifiers,
-            current.Value,
+            current,
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
-            allowFormulaBarNavigationKeys: false);
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: formulaRangeEntryActive);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -313,8 +322,21 @@ public partial class MainWindow
         {
             FormulaBar.Text = _inlineEditor!.Text;
             if (CommitEditAcrossSelection())
+            {
                 HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
+            }
             e.Handled = true;
+            return;
+        }
+
+        if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
+        {
+            if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)))
+            {
+                EnsureCellVisible(referenceTarget);
+                e.Handled = true;
+            }
             return;
         }
 
@@ -325,6 +347,7 @@ public partial class MainWindow
             if (CommitEdit())
             {
                 HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
                 SetActiveCell(next);
                 EnsureCellVisible(next);
             }
@@ -346,6 +369,9 @@ public partial class MainWindow
     {
         if (_inlineEditor?.IsVisible == true)
         {
+            if (IsFormulaRangeEntryActive(_inlineEditor))
+                return;
+
             FormulaBar.Text = _inlineEditor.Text;
             HideInlineEditor(commit: true);
             CommitEdit();
@@ -356,6 +382,92 @@ public partial class MainWindow
     {
         if (!ReferenceEquals(Keyboard.FocusedElement, SheetGrid))
             SheetGrid.Focus();
+    }
+
+    private void CaptureFormulaEditCell()
+    {
+        if (_formulaEditCell is null && SheetGrid.SelectedRange?.Start is { } activeCell)
+            _formulaEditCell = activeCell;
+    }
+
+    private void ClearFormulaRangeEntryState()
+    {
+        _formulaEditCell = null;
+        _formulaRangeSelectionAnchor = null;
+        ClearFormulaReferenceEntrySpan();
+    }
+
+    private void ClearFormulaReferenceEntrySpan()
+    {
+        _formulaReferenceStart = null;
+        _formulaReferenceLength = null;
+    }
+
+    private bool IsFormulaRangeEntryActive(System.Windows.Controls.TextBox? editor)
+    {
+        if (editor is null || _formulaEditCell is null)
+            return false;
+
+        return editor.Text.StartsWith("=", StringComparison.Ordinal);
+    }
+
+    private System.Windows.Controls.TextBox? GetFormulaRangeEntryEditor()
+    {
+        if (_inlineEditor?.IsVisible == true && IsFormulaRangeEntryActive(_inlineEditor))
+            return _inlineEditor;
+
+        return IsFormulaRangeEntryActive(FormulaBar) ? FormulaBar : null;
+    }
+
+    private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
+    {
+        var editor = GetFormulaRangeEntryEditor();
+        if (editor is null)
+            return false;
+
+        var formulaCell = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        if (formulaCell is null)
+            return false;
+
+        if (!extendSelection || _formulaRangeSelectionAnchor is null)
+            _formulaRangeSelectionAnchor = target;
+
+        var anchor = _formulaRangeSelectionAnchor.Value;
+        var range = new GridRange(
+            new CellAddress(_currentSheetId, Math.Min(anchor.Row, target.Row), Math.Min(anchor.Col, target.Col)),
+            new CellAddress(_currentSheetId, Math.Max(anchor.Row, target.Row), Math.Max(anchor.Col, target.Col)));
+
+        if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
+                editor.Text,
+                editor.CaretIndex,
+                editor.SelectionLength,
+                _formulaReferenceStart,
+                _formulaReferenceLength,
+                range,
+                formulaCell.Value,
+                _options.UseR1C1ReferenceStyle,
+                out var edit))
+        {
+            return false;
+        }
+
+        _selectionAnchor = anchor;
+        _selectionCursor = target;
+        SheetGrid.SelectedRanges = null;
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        RefreshStatusBar();
+
+        ApplyTextEdit(editor, edit.TextEdit);
+        if (!ReferenceEquals(editor, FormulaBar))
+            FormulaBar.Text = editor.Text;
+        else if (_inlineEditor?.IsVisible == true)
+            _inlineEditor.Text = editor.Text;
+
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
+        editor.Focus();
+        return true;
     }
 
     private void SetSelectionMode(ExcelSelectionMode mode)
@@ -401,25 +513,31 @@ public partial class MainWindow
         else if (e.Key == System.Windows.Input.Key.Escape)
         {
             // Restore the original cell value and return focus to grid
-            var addr = SheetGrid.SelectedRange?.Start;
+            var addr = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
             if (addr.HasValue)
             {
                 var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
             }
+            ClearFormulaRangeEntryState();
             ClearClipboardVisualState();
             SheetGrid.Focus();
             e.Handled = true;
         }
-        else if (SheetGrid.SelectedRange?.Start is { } current)
+        else if (SheetGrid.SelectedRange is { } selectedRange)
         {
+            var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
+            var current = formulaRangeEntryActive
+                ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
+                : selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
             var intent = ExcelEditKeyPlanner.GetIntent(
                 e.Key,
                 e.KeyboardDevice.Modifiers,
                 current,
                 pageSize,
-                allowFormulaBarNavigationKeys: true);
+                allowFormulaBarNavigationKeys: true,
+                formulaRangeEntryActive: formulaRangeEntryActive);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
@@ -428,13 +546,23 @@ public partial class MainWindow
             }
             else if (intent.Action == ExcelEditKeyAction.CommitSelection)
             {
-                CommitEditAcrossSelection();
+                if (CommitEditAcrossSelection())
+                    ClearFormulaRangeEntryState();
                 e.Handled = true;
+            }
+            else if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
+            {
+                if (TryApplyFormulaRangeSelection(referenceTarget, extendSelection: e.KeyboardDevice.Modifiers.HasFlag(ModifierKeys.Shift)))
+                {
+                    EnsureCellVisible(referenceTarget);
+                    e.Handled = true;
+                }
             }
             else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
             {
                 if (CommitEdit())
                 {
+                    ClearFormulaRangeEntryState();
                     SetActiveCell(target);
                     EnsureCellVisible(target);
                 }
@@ -463,19 +591,34 @@ public partial class MainWindow
 
     private bool CommitEdit()
     {
-        if (SheetGrid.SelectedRange == null) return false;
-        var addr = SheetGrid.SelectedRange.Value.Start;
+        if (SheetGrid.SelectedRange == null && _formulaEditCell is null) return false;
+        var addr = _formulaEditCell ?? SheetGrid.SelectedRange!.Value.Start;
         var text = FormulaBar.Text;
 
         if (!TryCreateCellFromEntryText(addr, text, out var newCell))
             return false;
 
-        return CommitPreparedEdits([(addr, newCell)], text, [addr], "Edit Cell");
+        var committed = CommitPreparedEdits([(addr, newCell)], text, [addr], "Edit Cell");
+        if (committed)
+            ClearFormulaRangeEntryState();
+        return committed;
     }
 
     private bool CommitEditAcrossSelection()
     {
         if (SheetGrid.SelectedRange is not { } range) return false;
+        if (_formulaEditCell is { } formulaCell)
+        {
+            var formulaText = FormulaBar.Text;
+            if (!TryCreateCellFromEntryText(formulaCell, formulaText, out var newCell))
+                return false;
+
+            var committed = CommitPreparedEdits([(formulaCell, newCell)], formulaText, [formulaCell], "Edit Cell");
+            if (committed)
+                ClearFormulaRangeEntryState();
+            return committed;
+        }
+
         var text = FormulaBar.Text;
         var edits = new List<(CellAddress Address, Cell NewCell)>();
         foreach (var address in range.AllCells())
