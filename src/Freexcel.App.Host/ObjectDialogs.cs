@@ -106,7 +106,7 @@ public sealed class ObjectSizeDialog : Window
 {
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
-    private readonly CheckBox _lockAspectRatioBox = new() { Content = "Lock aspect ratio", IsChecked = true };
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true };
 
     public ObjectSizeDialogResult Result { get; private set; }
 
