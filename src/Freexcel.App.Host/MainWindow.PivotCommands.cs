@@ -718,7 +718,9 @@ public partial class MainWindow
         bool showColumnHeaders,
         bool showRowStripes,
         bool showColumnStripes,
-        PivotReportLayout reportLayout)
+        PivotReportLayout reportLayout,
+        string? emptyValueText = null,
+        bool updateEmptyValueText = false)
     {
         if (!TryExecuteCommand(
                 new ConfigurePivotTableOptionsCommand(
@@ -735,7 +737,9 @@ public partial class MainWindow
                     showColumnHeaders,
                     showRowStripes,
                     showColumnStripes,
-                    reportLayout),
+                    reportLayout,
+                    emptyValueText,
+                    updateEmptyValueText),
                 "PivotTable Options"))
             return;
 
@@ -935,7 +939,9 @@ public partial class MainWindow
             result.ShowColumnHeaders,
             result.ShowRowStripes,
             result.ShowColumnStripes,
-            result.ReportLayout);
+            result.ReportLayout,
+            result.EmptyValueText,
+            updateEmptyValueText: true);
 
     private bool TryGetActivePivotTable(out Sheet sheet, out PivotTableModel pivotTable)
     {
