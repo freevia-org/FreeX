@@ -129,6 +129,43 @@ public sealed class AutoFilterDialogTests
             .Equal("contains:", "blank");
     }
 
+    [Theory]
+    [InlineData(AutoFilterMenuFilterKind.Text, "Contains", "contains:Blue")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "Greater Than", ">42")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "After", "date>2026-05-21")]
+    public void BuildCriteriaText_UsesTypedOperatorTemplates(
+        AutoFilterMenuFilterKind filterKind,
+        string optionLabel,
+        string expected)
+    {
+        var option = AutoFilterDialog.GetCriteriaOptions(filterKind)
+            .Single(item => item.Label == optionLabel);
+
+        var value = filterKind switch
+        {
+            AutoFilterMenuFilterKind.Text => "Blue",
+            AutoFilterMenuFilterKind.Number => "42",
+            _ => "2026-05-21"
+        };
+
+        AutoFilterDialog.BuildCriteriaText(option, value).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(AutoFilterMenuFilterKind.Text, "Blanks", "blank")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "Above Average", "above average")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "Between", "datebetween:")]
+    public void BuildCriteriaText_AllowsValueOptionalTypedCriteria(
+        AutoFilterMenuFilterKind filterKind,
+        string optionLabel,
+        string expected)
+    {
+        var option = AutoFilterDialog.GetCriteriaOptions(filterKind)
+            .Single(item => item.Label == optionLabel);
+
+        AutoFilterDialog.BuildCriteriaText(option, string.Empty).Should().Be(expected);
+    }
+
     [Fact]
     public void DialogSearch_NarrowsChecklistWithoutDroppingHiddenSelections()
     {
@@ -173,5 +210,16 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("Content = \"Filter by _Color\"");
         source.Should().Contain("new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)");
         source.Should().Contain("HasFilterByColorEntry");
+    }
+
+    [Fact]
+    public void DialogControls_UseTypedCriteriaControlsInsteadOfFocusOnlyFilterButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("_criteriaOperatorBox");
+        source.Should().Contain("_criteriaValueBox");
+        source.Should().Contain("BuildCriteriaText");
+        source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
     }
 }

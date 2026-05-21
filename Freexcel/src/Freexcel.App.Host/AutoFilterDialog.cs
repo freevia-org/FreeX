@@ -24,17 +24,21 @@ public sealed record AutoFilterDialogResult(
     string CriteriaText,
     CellColor? ColorFilter = null);
 
+public sealed record AutoFilterCriteriaOption(string Label, string CriteriaPrefix, bool RequiresValue = true);
+
 public sealed class AutoFilterDialog : Window
 {
     private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
     private readonly TextBox _criteriaBox = new();
-    private readonly ComboBox _criteriaSuggestionBox = new()
+    private readonly ComboBox _criteriaOperatorBox = new()
     {
         Visibility = Visibility.Collapsed,
-        IsTextSearchEnabled = true
+        IsTextSearchEnabled = true,
+        DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
     };
+    private readonly TextBox _criteriaValueBox = new() { Visibility = Visibility.Collapsed };
     private readonly RadioButton _sortNone = new() { Content = "_No sort", IsChecked = true };
     private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
     private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
@@ -58,13 +62,16 @@ public sealed class AutoFilterDialog : Window
         Title = $"AutoFilter - {menuPlan.HeaderText}";
         _clearFilterButton.Content = $"_Clear Filter From \"{menuPlan.HeaderText}\"";
         ShowFilterFamilyButton(menuPlan.FilterKind);
-        var suggestions = GetCriteriaSuggestions(menuPlan);
-        if (suggestions.Count > 0)
+        var criteriaOptions = GetCriteriaOptions(menuPlan.FilterKind);
+        if (criteriaOptions.Count > 0)
         {
-            _criteriaSuggestionBox.ItemsSource = suggestions;
-            _criteriaSuggestionBox.Visibility = Visibility.Visible;
-            _criteriaSuggestionBox.ToolTip = "Filter criteria";
-            _criteriaBox.ToolTip = $"Criteria suggestions: {string.Join(", ", suggestions)}";
+            _criteriaOperatorBox.ItemsSource = criteriaOptions;
+            _criteriaOperatorBox.Visibility = Visibility.Visible;
+            _criteriaOperatorBox.SelectedIndex = 0;
+            _criteriaOperatorBox.ToolTip = $"{GetFilterFamilyHeader(menuPlan.FilterKind)} operator";
+            _criteriaValueBox.Visibility = Visibility.Visible;
+            _criteriaValueBox.ToolTip = "Value for the selected typed filter";
+            _criteriaBox.ToolTip = "Parser-ready filter criterion generated from the operator and value.";
         }
 
         if (HasFilterByColorEntry(menuPlan))
@@ -79,7 +86,7 @@ public sealed class AutoFilterDialog : Window
 
         Title = "AutoFilter";
         Width = 360;
-        Height = 460;
+        Height = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -94,6 +101,7 @@ public sealed class AutoFilterDialog : Window
         {
             _selectedColorFilter = null;
             _criteriaBox.Clear();
+            _criteriaValueBox.Clear();
             _searchBox.Clear();
             _sortNone.IsChecked = true;
             ReplaceAllItems(SelectAll(_allItems));
@@ -105,7 +113,11 @@ public sealed class AutoFilterDialog : Window
         foreach (var filterButton in new[] { _textFiltersButton, _numberFiltersButton, _dateFiltersButton })
         {
             filterButton.Margin = new Thickness(0, 8, 0, 0);
-            filterButton.Click += (_, _) => _criteriaBox.Focus();
+            filterButton.Click += (_, _) =>
+            {
+                _criteriaOperatorBox.Focus();
+                UpdateCriteriaTextFromTypedControls();
+            };
             stack.Children.Add(filterButton);
         }
 
@@ -137,14 +149,17 @@ public sealed class AutoFilterDialog : Window
         selectionRow.Children.Add(clearAll);
         stack.Children.Add(selectionRow);
 
+        stack.Children.Add(new Label { Content = "Filter _operator", Target = _criteriaOperatorBox, Padding = new Thickness(0) });
+        _criteriaOperatorBox.Margin = new Thickness(0, 4, 0, 4);
+        _criteriaOperatorBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        stack.Children.Add(_criteriaOperatorBox);
+
+        stack.Children.Add(new Label { Content = "Filter _value", Target = _criteriaValueBox, Padding = new Thickness(0) });
+        _criteriaValueBox.Margin = new Thickness(0, 4, 0, 4);
+        _criteriaValueBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
+        stack.Children.Add(_criteriaValueBox);
+
         stack.Children.Add(new Label { Content = "_Criteria text", Target = _criteriaBox, Padding = new Thickness(0) });
-        _criteriaSuggestionBox.Margin = new Thickness(0, 4, 0, 4);
-        _criteriaSuggestionBox.SelectionChanged += (_, _) =>
-        {
-            if (_criteriaSuggestionBox.SelectedItem is string suggestion)
-                _criteriaBox.Text = suggestion;
-        };
-        stack.Children.Add(_criteriaSuggestionBox);
 
         _criteriaBox.Margin = new Thickness(0, 4, 0, 12);
         stack.Children.Add(_criteriaBox);
@@ -247,6 +262,60 @@ public sealed class AutoFilterDialog : Window
             .Where(suggestion => !string.IsNullOrWhiteSpace(suggestion))
             .ToList() ?? [];
 
+    public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions(AutoFilterMenuFilterKind filterKind) =>
+        filterKind switch
+        {
+            AutoFilterMenuFilterKind.Number =>
+            [
+                new("Equals", "="),
+                new("Does Not Equal", "<>"),
+                new("Greater Than", ">"),
+                new("Greater Than Or Equal To", ">="),
+                new("Less Than", "<"),
+                new("Less Than Or Equal To", "<="),
+                new("Between", "between:"),
+                new("Top 10", "top:"),
+                new("Bottom 10", "bottom:"),
+                new("Top 10 Percent", "toppercent:"),
+                new("Bottom 10 Percent", "bottompercent:"),
+                new("Above Average", "above average", RequiresValue: false),
+                new("Below Average", "below average", RequiresValue: false),
+                new("Blanks", "blank", RequiresValue: false),
+                new("Non-Blanks", "nonblank", RequiresValue: false)
+            ],
+            AutoFilterMenuFilterKind.Date =>
+            [
+                new("Equals", "date="),
+                new("Does Not Equal", "date<>"),
+                new("After", "date>"),
+                new("On Or After", "date>="),
+                new("Before", "date<"),
+                new("On Or Before", "date<="),
+                new("Between", "datebetween:"),
+                new("Blanks", "blank", RequiresValue: false),
+                new("Non-Blanks", "nonblank", RequiresValue: false)
+            ],
+            _ =>
+            [
+                new("Equals", "text="),
+                new("Does Not Equal", "text<>"),
+                new("Contains", "contains:"),
+                new("Does Not Contain", "notcontains:"),
+                new("Begins With", "begins:"),
+                new("Ends With", "ends:"),
+                new("Blanks", "blank", RequiresValue: false),
+                new("Non-Blanks", "nonblank", RequiresValue: false)
+            ]
+        };
+
+    public static string BuildCriteriaText(AutoFilterCriteriaOption option, string? value)
+    {
+        if (!option.RequiresValue)
+            return option.CriteriaPrefix;
+
+        return $"{option.CriteriaPrefix}{value?.Trim() ?? string.Empty}";
+    }
+
     public static bool HasFilterByColorEntry(AutoFilterMenuPlan menuPlan) =>
         menuPlan.Entries.Any(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
 
@@ -290,6 +359,15 @@ public sealed class AutoFilterDialog : Window
         return _sortDescending.IsChecked == true
             ? AutoFilterSortDirection.Descending
             : AutoFilterSortDirection.None;
+    }
+
+    private void UpdateCriteriaTextFromTypedControls()
+    {
+        if (_criteriaOperatorBox.SelectedItem is not AutoFilterCriteriaOption option)
+            return;
+
+        _criteriaBox.Text = BuildCriteriaText(option, _criteriaValueBox.Text);
+        _criteriaValueBox.IsEnabled = option.RequiresValue;
     }
 
     private void FilterByColorButton_Click(object sender, RoutedEventArgs e)
