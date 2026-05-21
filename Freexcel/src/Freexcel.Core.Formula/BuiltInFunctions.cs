@@ -5766,7 +5766,6 @@ public static class BuiltInFunctions
     /// <summary>Returns true if a single data row matches a single criteria row (AND across columns).</summary>
     private static bool DbRowMatchesCriteriaRow(RangeValue database, int dataRow, RangeValue criteria, int critRow)
     {
-        bool hasAnyCriterion = false;
         for (int cc = 0; cc < criteria.ColCount; cc++)
         {
             var critHeader = criteria.Cells[0, cc];
@@ -5776,7 +5775,6 @@ public static class BuiltInFunctions
             if (critCell is BlankValue) continue;
             if (critCell is TextValue tv && tv.Value.Length == 0) continue;
 
-            hasAnyCriterion = true;
             var headerText = ToText(critHeader);
             int dbCol = FindDbHeaderCol(database, headerText);
             if (dbCol < 0) return false;
@@ -5784,7 +5782,7 @@ public static class BuiltInFunctions
             var cellValue = database.Cells[dataRow, dbCol];
             if (!MatchesCriteria(cellValue, critCell)) return false;
         }
-        return hasAnyCriterion;
+        return true;
     }
 
     /// <summary>Extract values from the field column for all matching rows.</summary>
