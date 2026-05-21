@@ -482,6 +482,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _showColumnHeaders;
     private readonly bool _showRowStripes;
     private readonly bool _showColumnStripes;
+    private readonly string? _emptyValueText;
+    private readonly bool _updateEmptyValueText;
     private PivotOptionsSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
 
@@ -499,7 +501,9 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool showColumnHeaders = true,
         bool showRowStripes = false,
         bool showColumnStripes = false,
-        PivotReportLayout reportLayout = PivotReportLayout.Tabular)
+        PivotReportLayout reportLayout = PivotReportLayout.Tabular,
+        string? emptyValueText = null,
+        bool updateEmptyValueText = false)
     {
         _sheetId = sheetId;
         _pivotTableName = pivotTableName;
@@ -515,6 +519,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         _showColumnHeaders = showColumnHeaders;
         _showRowStripes = showRowStripes;
         _showColumnStripes = showColumnStripes;
+        _emptyValueText = NormalizeEmptyValueText(emptyValueText);
+        _updateEmptyValueText = updateEmptyValueText;
     }
 
     public string Label => "Configure PivotTable Options";
@@ -542,6 +548,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         pivotTable.ShowColumnHeaders = _showColumnHeaders;
         pivotTable.ShowRowStripes = _showRowStripes;
         pivotTable.ShowColumnStripes = _showColumnStripes;
+        if (_updateEmptyValueText)
+            pivotTable.EmptyValueText = _emptyValueText;
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
@@ -571,7 +579,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         bool ShowRowHeaders,
         bool ShowColumnHeaders,
         bool ShowRowStripes,
-        bool ShowColumnStripes)
+        bool ShowColumnStripes,
+        string? EmptyValueText)
     {
         public static PivotOptionsSnapshot Capture(PivotTableModel pivotTable) =>
             new(
@@ -586,7 +595,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
                 pivotTable.ShowRowHeaders,
                 pivotTable.ShowColumnHeaders,
                 pivotTable.ShowRowStripes,
-                pivotTable.ShowColumnStripes);
+                pivotTable.ShowColumnStripes,
+                pivotTable.EmptyValueText);
 
         public void Restore(PivotTableModel pivotTable)
         {
@@ -602,7 +612,16 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             pivotTable.ShowColumnHeaders = ShowColumnHeaders;
             pivotTable.ShowRowStripes = ShowRowStripes;
             pivotTable.ShowColumnStripes = ShowColumnStripes;
+            pivotTable.EmptyValueText = EmptyValueText;
         }
+    }
+
+    private static string? NormalizeEmptyValueText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return text.Trim();
     }
 }
 

@@ -232,7 +232,8 @@ public sealed class PivotWorkflowDialogTests
             showColumnHeaders: true,
             showRowStripes: true,
             showColumnStripes: false,
-            reportLayout: PivotReportLayout.Outline);
+            reportLayout: PivotReportLayout.Outline,
+            emptyValueText: "  N/A  ");
 
         result.Should().Be(new PivotTableOptionsDialogResult(
             true,
@@ -246,7 +247,8 @@ public sealed class PivotWorkflowDialogTests
             true,
             true,
             false,
-            PivotReportLayout.Outline));
+            PivotReportLayout.Outline,
+            "N/A"));
     }
 
     [Fact]
@@ -270,7 +272,8 @@ public sealed class PivotWorkflowDialogTests
             ShowRowHeaders = true,
             ShowColumnHeaders = false,
             ShowRowStripes = true,
-            ShowColumnStripes = true
+            ShowColumnStripes = true,
+            EmptyValueText = "-"
         };
 
         PivotTableOptionsDialog.FromPivotTable(pivotTable)
@@ -287,7 +290,8 @@ public sealed class PivotWorkflowDialogTests
                 false,
                 true,
                 true,
-                PivotReportLayout.Compact));
+                PivotReportLayout.Compact,
+                "-"));
     }
 
     [Fact]
