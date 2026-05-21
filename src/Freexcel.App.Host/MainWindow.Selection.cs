@@ -288,6 +288,13 @@ public partial class MainWindow
                 return;
             }
 
+            if (Keyboard.Modifiers == ModifierKeys.Alt && TryHandleDirectRibbonKeyTip(keyTipKey))
+            {
+                _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
+                e.Handled = true;
+                return;
+            }
+
             _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
 
             if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
