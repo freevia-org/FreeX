@@ -54,14 +54,6 @@ public sealed class GoToSpecialDialog : Window
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
 
-        content.Children.Add(new TextBlock
-        {
-            Text = "The selectable options match the Go To Special commands Freexcel can apply to the current selection.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = SystemColors.GrayTextBrush,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);

@@ -325,6 +325,12 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("name manager") ||
         name.Contains("watch window") ||
         name.Contains("calculation options") ||
+        name.Contains("calculate now") ||
+        name.Contains("calculate sheet") ||
+        name.Contains("trace precedent") ||
+        name.Contains("trace dependent") ||
+        name.Contains("error checking") ||
+        name.Contains("evaluate formula") ||
         name.Contains("get data") ||
         name.Contains("refresh all") ||
         name == "sort ascending" ||
