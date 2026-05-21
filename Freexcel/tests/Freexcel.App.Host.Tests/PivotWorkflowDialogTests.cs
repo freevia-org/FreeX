@@ -1,4 +1,6 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -296,6 +298,35 @@ public sealed class PivotWorkflowDialogTests
                 true,
                 PivotReportLayout.Compact,
                 "-"));
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_ExposesBroaderPivotStyleGalleryAndPreservesCurrentStyle()
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var pivotTable = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 4)),
+            TargetRange = new GridRange(new CellAddress(sheetId, 15, 1), new CellAddress(sheetId, 22, 4)),
+            StyleName = "PivotStyleMedium10"
+        };
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotTableOptionsDialog(pivotTable);
+            var styleBox = (ComboBox)typeof(PivotTableOptionsDialog)
+                .GetField("_styleBox", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            var styleNames = styleBox.Items.Cast<object>().Select(item => item.ToString()).ToList();
+
+            styleNames.Should().Contain(["PivotStyleLight16", "PivotStyleMedium10", "PivotStyleDark7"]);
+            styleNames.Should().HaveCountGreaterThan(12);
+            styleBox.SelectedItem.Should().Be("PivotStyleMedium10");
+
+            dialog.Close();
+        });
     }
 
     [Fact]

@@ -916,10 +916,9 @@ public sealed class PivotTableOptionsDialog : Window
 {
     private static readonly string[] StyleNames =
     [
-        "PivotStyleLight16",
-        "PivotStyleMedium2",
-        "PivotStyleMedium9",
-        "PivotStyleDark4"
+        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleLight{index}"),
+        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleMedium{index}"),
+        ..Enumerable.Range(1, 28).Select(index => $"PivotStyleDark{index}")
     ];
 
     private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show _row grand totals" };
@@ -1131,7 +1130,12 @@ public sealed class PivotTableOptionsDialog : Window
         _repeatItemLabelsBox.IsChecked = result.RepeatItemLabels;
         _blankLineBox.IsChecked = result.BlankLineAfterItems;
         _reportLayoutBox.SelectedItem = result.ReportLayout;
-        _styleBox.SelectedItem = StyleNames.Contains(result.StyleName) ? result.StyleName : StyleNames[0];
+        var styleNames = StyleNames.Contains(result.StyleName, StringComparer.OrdinalIgnoreCase)
+            ? StyleNames
+            : [..StyleNames, result.StyleName];
+        _styleBox.ItemsSource = styleNames;
+        _styleBox.SelectedItem = styleNames.FirstOrDefault(styleName =>
+            string.Equals(styleName, result.StyleName, StringComparison.OrdinalIgnoreCase)) ?? StyleNames[0];
         _rowHeadersBox.IsChecked = result.ShowRowHeaders;
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _rowStripesBox.IsChecked = result.ShowRowStripes;

@@ -222,6 +222,7 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Theory]
+    [InlineData("PivotStyleMedium2", 31, 78, 121, 232, 240, 248)]
     [InlineData("PivotStyleLight16", 217, 225, 242, 242, 248, 238)]
     [InlineData("PivotStyleMedium10", 237, 125, 49, 253, 239, 230)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
