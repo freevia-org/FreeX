@@ -1,9 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
-using System.Security.Cryptography;
 using System.Runtime.CompilerServices;
-using System.Reflection;
-using System.Text;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using Freexcel.Core.Model;
@@ -19,8 +16,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private const long MaxExpandedIgnoredErrorCells = 16384;
 
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
-    private static readonly FieldInfo? XlCellValueNumberField =
-        typeof(XLCellValue).GetField("_value", BindingFlags.Instance | BindingFlags.NonPublic);
     private static readonly HashSet<string> ModeledPrintOptionsAttributes = new(StringComparer.Ordinal)
     {
         "gridLines",
@@ -68,25 +63,25 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
         packageStream.Position = 0;
-        var workbookTheme = LoadWorkbookTheme(packageStream);
+        var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
         packageStream.Position = 0;
-        var workbookProtection = LoadWorkbookProtection(packageStream);
+        var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
         packageStream.Position = 0;
-        var calculationProperties = LoadWorkbookCalculationProperties(packageStream);
+        var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
         packageStream.Position = 0;
-        var numberFormatCatalog = LoadNumberFormatCatalog(packageStream);
+        var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
         packageStream.Position = 0;
         var pivotMetadata = LoadPivotMetadata(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
-        var slicerTimelineMetadata = LoadSlicerTimelineMetadata(packageStream);
+        var slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageStream);
         packageStream.Position = 0;
-        var externalLinkMetadata = LoadExternalLinkMetadata(packageStream);
+        var externalLinkMetadata = XlsxExternalLinkMetadataReader.Load(packageStream);
         packageStream.Position = 0;
-        var structuredTableMetadata = LoadStructuredTableMetadata(packageStream);
+        var structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageStream);
         packageStream.Position = 0;
         var pivotTableStyleMetadata = LoadPivotTableStyleMetadata(packageStream);
         packageStream.Position = 0;
-        var xlsxCustomViews = LoadWorkbookCustomViews(packageStream);
+        var xlsxCustomViews = XlsxWorkbookMetadataReader.LoadCustomViews(packageStream);
 
         packageStream.Position = 0;
         using var closedXmlPackageStream = CreateClosedXmlLoadPackage(packageStream);
@@ -140,19 +135,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 Cell cell;
                 if (xlCell.HasFormula)
                 {
-                    cell = Cell.FromFormula(NormalizeExcelFormulaText(xlCell.FormulaA1));
+                    cell = Cell.FromFormula(XlsxClosedXmlCellMapper.NormalizeFormulaText(xlCell.FormulaA1));
                     // Preserve the cached formula result so callers see the last-calculated value
                     // without needing to recalculate immediately.
-                    var cached = MapValue(xlCell);
+                    var cached = XlsxClosedXmlCellMapper.MapValue(xlCell);
                     if (cached is not BlankValue)
                         cell.Value = cached;
                 }
                 else
                 {
-                    cell = Cell.FromValue(MapValue(xlCell));
+                    cell = Cell.FromValue(XlsxClosedXmlCellMapper.MapValue(xlCell));
                 }
 
-                var style = MapStyle(xlCell.Style, workbook.Theme);
+                var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
                 if (!style.Equals(CellStyle.Default))
                     cell.StyleId = workbook.RegisterStyle(style);
 
@@ -243,7 +238,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 {
                     if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
                     {
-                        ApplyChartAnchor(chart, chartPart.Anchor, sheet);
+                    XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                         ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                         sheet.Charts.Add(chart);
                     }
@@ -265,7 +260,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         CropRight = picturePart.CropRight,
                         CropBottom = picturePart.CropBottom
                     };
-                    ApplyPictureAnchor(picture, picturePart.Anchor, sheet);
+                    XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
                     sheet.Pictures.Add(picture);
                 }
                 foreach (var textBoxPart in layout.TextBoxParts)
@@ -282,7 +277,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         FillColor = textBoxPart.FillColor,
                         OutlineColor = textBoxPart.OutlineColor
                     };
-                    ApplyTextBoxAnchor(textBox, textBoxPart.Anchor, sheet);
+                XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
                     sheet.TextBoxes.Add(textBox);
                 }
                 foreach (var shapePart in layout.ShapeParts)
@@ -301,7 +296,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         GradientFillEndColor = shapePart.GradientFillEndColor,
                         HasShadowEffect = shapePart.HasShadowEffect
                     };
-                    ApplyDrawingShapeAnchor(shape, shapePart.Anchor, sheet);
+                XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
                     sheet.DrawingShapes.Add(shape);
                 }
                 foreach (var sparkline in layout.Sparklines)
@@ -400,9 +395,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             {
                 foreach (var structuredTable in structuredTables)
                 {
-                    var table = ToStructuredTableModel(structuredTable, sheet.Id);
+                    var table = XlsxStructuredTableModelMapper.ToModel(structuredTable, sheet.Id);
                     sheet.StructuredTables.Add(table);
-                    MaterializeStructuredTableFilters(sheet, table);
+                    XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
                 }
             }
 
@@ -429,7 +424,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sheet.ActiveRow = layout?.ActiveRow;
             sheet.ActiveCol = layout?.ActiveCol;
 
-            try { LoadPrintArea(xlSheet, sheet); }
+            try { XlsxWorksheetPageSetupMapper.LoadPrintArea(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
 
             sheet.PageOrientation = xlSheet.PageSetup.PageOrientation == XLPageOrientation.Landscape
@@ -463,36 +458,36 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sheet.PrintQualityDpi = xlSheet.PageSetup.HorizontalDpi > 0
                 ? xlSheet.PageSetup.HorizontalDpi
                 : xlSheet.PageSetup.VerticalDpi > 0 ? xlSheet.PageSetup.VerticalDpi : null;
-            sheet.PrintErrorValue = FromXlsxPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
-            sheet.PrintComments = FromXlsxPrintComments(xlSheet.PageSetup.ShowComments);
+            sheet.PrintErrorValue = XlsxWorksheetPageSetupMapper.FromPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
+            sheet.PrintComments = XlsxWorksheetPageSetupMapper.FromPrintComments(xlSheet.PageSetup.ShowComments);
             sheet.DifferentFirstPageHeaderFooter = xlSheet.PageSetup.DifferentFirstPageOnHF;
             sheet.DifferentOddEvenHeaderFooter = xlSheet.PageSetup.DifferentOddEvenPagesOnHF;
             sheet.HeaderFooterScaleWithDocument = xlSheet.PageSetup.ScaleHFWithDocument;
             sheet.HeaderFooterAlignWithMargins = xlSheet.PageSetup.AlignHFWithMargins;
             sheet.PageHeader = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
             sheet.PageFooter = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
             sheet.FirstPageHeader = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.FirstPage)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.FirstPage)));
             sheet.FirstPageFooter = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.FirstPage)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.FirstPage)));
             sheet.EvenPageHeader = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.EvenPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.EvenPages)));
             sheet.EvenPageFooter = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.EvenPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.EvenPages)));
             if (xlSheet.PageSetup.FirstRowToRepeatAtTop > 0 && xlSheet.PageSetup.LastRowToRepeatAtTop > 0)
             {
                 sheet.PrintTitleRows = new WorksheetRepeatRange(
@@ -516,14 +511,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 : new WorksheetScaleToFit(xlSheet.PageSetup.Scale, null, null);
 
             // Load CellIs conditional format rules (best-effort; skip anything we can't map)
-            try { LoadConditionalFormats(xlSheet, sheet, workbook); }
+            try { XlsxConditionalFormatClosedXmlMapper.Load(xlSheet, sheet, workbook.Theme, XlsxClosedXmlCellMapper.MapStyle); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] CF load failed: {ex.Message}"); }
 
             // Load data validation rules (best-effort)
-            try { LoadDataValidations(xlSheet, sheet); }
+            try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] DV load failed: {ex.Message}"); }
             if (layout is not null)
-                ApplyNativeDataValidationMetadata(sheet, layout.DataValidationNativeMetadata);
+                XlsxDataValidationNativeMetadataMapper.Apply(sheet, layout.DataValidationNativeMetadata);
 
             // Load merged regions (best-effort)
             try { LoadMergedRegions(xlSheet, sheet); }
@@ -533,7 +528,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)
-        try { LoadNamedRanges(xlWorkbook, workbook); }
+        try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Named-range load failed: {ex.Message}"); }
 
         foreach (var customView in xlsxCustomViews)
@@ -606,58 +601,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<WorksheetCustomProperty> CustomProperties,
         string? CodeName);
 
-    private sealed record XlsxWorkbookCustomView(string Id, string Name);
-
-    private sealed record XlsxWorksheetCustomViewState(string Id, WorksheetCustomViewState State);
-
-    private sealed record IgnoredErrorLayout(
-        IReadOnlyList<CellAddress> ExpandedCells,
-        IReadOnlyList<GridRange> ExistingCellOnlyRanges);
-
-    private sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, XlsxDrawingAnchor? Anchor);
-
-    private sealed record XlsxPicturePackagePart(
-        byte[] ImageBytes,
-        string ContentType,
-        string? AltText,
-        XlsxDrawingAnchor? Anchor,
-        double CropLeft,
-        double CropTop,
-        double CropRight,
-        double CropBottom);
-
-    private sealed record XlsxTextBoxPackagePart(
-        string Text,
-        string? AltText,
-        XlsxDrawingAnchor? Anchor,
-        double RotationDegrees,
-        CellColor? FillColor,
-        CellColor? OutlineColor);
-
-    private sealed record XlsxShapePackagePart(
-        DrawingShapeKind Kind,
-        string? AltText,
-        XlsxDrawingAnchor? Anchor,
-        double RotationDegrees,
-        CellColor? FillColor,
-        CellColor? OutlineColor,
-        CellColor? GradientFillEndColor,
-        bool HasShadowEffect);
-
-    private sealed record XlsxDrawingAnchor(
-        uint FromRowZeroBased,
-        uint FromColumnZeroBased,
-        double FromRowOffset,
-        double FromColumnOffset,
-        double? AbsoluteLeft,
-        double? AbsoluteTop,
-        uint? ToRowZeroBased,
-        uint? ToColumnZeroBased,
-        double? ToRowOffset,
-        double? ToColumnOffset,
-        double? Width,
-        double? Height);
-
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
     {
         var result = new Dictionary<string, SheetXmlLayout>(StringComparer.OrdinalIgnoreCase);
@@ -677,16 +620,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-            var relTargets = relsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var relTargets = XlsxRelationshipReader.ReadTargets(
+                relsXml,
+                packageRelNs,
+                XlsxPackagePath.NormalizeWorkbookTarget);
 
-            var differentialStyles = ReadDifferentialStyles(archive, workbookNs);
+            var differentialStyles = XlsxDifferentialStyleReader.ReadAll(archive, workbookNs);
 
             foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
             {
@@ -719,190 +658,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
-    {
-        archive.GetEntry(entryName)?.Delete();
-        var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
-        using var stream = entry.Open();
-        document.Save(stream);
-    }
-
-    private static IReadOnlyList<CellStyle> ReadDifferentialStyles(ZipArchive archive, XNamespace workbookNs)
-    {
-        var stylesEntry = archive.GetEntry("xl/styles.xml");
-        if (stylesEntry is null)
-            return [];
-
-        try
-        {
-            var stylesXml = LoadXml(stylesEntry);
-            return stylesXml.Root?
-                .Element(workbookNs + "dxfs")?
-                .Elements(workbookNs + "dxf")
-                .Select(dxf => ReadDifferentialStyle(dxf, workbookNs))
-                .ToList()
-                ?? [];
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private static CellStyle ReadDifferentialStyle(XElement dxf, XNamespace workbookNs)
-    {
-        var style = new CellStyle();
-        var font = dxf.Element(workbookNs + "font");
-        if (font is not null)
-        {
-            style.Bold = font.Element(workbookNs + "b") is not null;
-            style.Italic = font.Element(workbookNs + "i") is not null;
-            style.Underline = font.Element(workbookNs + "u") is not null;
-            style.Strikethrough = font.Element(workbookNs + "strike") is not null;
-            var verticalAlignment = font.Element(workbookNs + "vertAlign")?.Attribute("val")?.Value;
-            style.Superscript = string.Equals(verticalAlignment, "superscript", StringComparison.OrdinalIgnoreCase);
-            style.Subscript = string.Equals(verticalAlignment, "subscript", StringComparison.OrdinalIgnoreCase);
-            if (double.TryParse(font.Element(workbookNs + "sz")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var size) &&
-                IsSupportedFontSize(size))
-            {
-                style.FontSize = size;
-            }
-
-            var fontName = font.Element(workbookNs + "name")?.Attribute("val")?.Value;
-            if (!string.IsNullOrWhiteSpace(fontName))
-                style.FontName = fontName;
-
-            if (TryReadCellColor(font.Element(workbookNs + "color"), out var fontColor))
-                style.FontColor = fontColor;
-        }
-
-        var patternFill = dxf
-            .Element(workbookNs + "fill")?
-            .Element(workbookNs + "patternFill");
-        if (TryReadCellColor(patternFill?.Element(workbookNs + "fgColor"), out var fillColor))
-            style.FillColor = fillColor;
-
-        var border = dxf.Element(workbookNs + "border");
-        if (border is not null)
-        {
-            style.BorderTop = ReadDifferentialBorder(border.Element(workbookNs + "top"), workbookNs);
-            style.BorderRight = ReadDifferentialBorder(border.Element(workbookNs + "right"), workbookNs);
-            style.BorderBottom = ReadDifferentialBorder(border.Element(workbookNs + "bottom"), workbookNs);
-            style.BorderLeft = ReadDifferentialBorder(border.Element(workbookNs + "left"), workbookNs);
-        }
-
-        var numberFormat = dxf.Element(workbookNs + "numFmt")?.Attribute("formatCode")?.Value;
-        if (!string.IsNullOrWhiteSpace(numberFormat))
-            style.NumberFormat = numberFormat;
-
-        var nativeAttributes = ReadNativeDifferentialStyleAttributes(dxf);
-        if (nativeAttributes.Count > 0)
-            style.NativeDifferentialAttributes = nativeAttributes;
-
-        var nativeChildXmls = ReadNativeDifferentialStyleChildXmls(dxf, workbookNs);
-        if (nativeChildXmls.Count > 0)
-            style.NativeDifferentialChildXmls = nativeChildXmls;
-
-        var nativeElementXmls = ReadNativeDifferentialStyleElementXmls(dxf, workbookNs);
-        if (nativeElementXmls.Count > 0)
-            style.NativeDifferentialElementXmls = nativeElementXmls;
-
-        return style;
-    }
-
-    private static Dictionary<string, string> ReadNativeDifferentialStyleAttributes(XElement dxf) =>
-        dxf.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0)
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-
-    private static List<string> ReadNativeDifferentialStyleChildXmls(XElement dxf, XNamespace workbookNs)
-    {
-        XName[] modeledChildren =
-        [
-            workbookNs + "font",
-            workbookNs + "numFmt",
-            workbookNs + "fill",
-            workbookNs + "alignment",
-            workbookNs + "border",
-            workbookNs + "protection"
-        ];
-        return dxf.Elements()
-            .Where(element => !modeledChildren.Contains(element.Name))
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-    }
-
-    private static Dictionary<string, string> ReadNativeDifferentialStyleElementXmls(XElement dxf, XNamespace workbookNs)
-    {
-        XName[] modeledChildren =
-        [
-            workbookNs + "font",
-            workbookNs + "numFmt",
-            workbookNs + "fill",
-            workbookNs + "alignment",
-            workbookNs + "border",
-            workbookNs + "protection"
-        ];
-        return dxf.Elements()
-            .Where(element => modeledChildren.Contains(element.Name))
-            .GroupBy(element => element.Name.LocalName, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.First().ToString(System.Xml.Linq.SaveOptions.DisableFormatting),
-                StringComparer.Ordinal);
-    }
-
-    private static CellBorder ReadDifferentialBorder(XElement? edge, XNamespace workbookNs)
-    {
-        if (edge is null)
-            return default;
-
-        var style = edge.Attribute("style")?.Value switch
-        {
-            "thin" => BorderStyle.Thin,
-            "medium" => BorderStyle.Medium,
-            "thick" => BorderStyle.Thick,
-            "dashed" => BorderStyle.Dashed,
-            "dotted" => BorderStyle.Dotted,
-            "double" => BorderStyle.Double,
-            _ => BorderStyle.None
-        };
-        if (style == BorderStyle.None)
-            return default;
-
-        return new CellBorder(
-            style,
-            TryReadCellColor(edge.Element(workbookNs + "color"), out var color) ? color : CellColor.Black);
-    }
-
-    private static Dictionary<int, string> LoadNumberFormatCatalog(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var stylesEntry = archive.GetEntry("xl/styles.xml");
-            if (stylesEntry is null)
-                return [];
-
-            var stylesXml = LoadXml(stylesEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var result = new Dictionary<int, string>();
-            foreach (var format in stylesXml.Root?
-                         .Element(workbookNs + "numFmts")?
-                         .Elements(workbookNs + "numFmt") ?? [])
-            {
-                var id = ReadIntAttribute(format, "numFmtId");
-                var code = format.Attribute("formatCode")?.Value;
-                if (id is >= 164 && !string.IsNullOrWhiteSpace(code))
-                    result[id.Value] = code;
-            }
-
-            return result;
-        }
-        catch
-        {
-            return [];
-        }
-    }
+        => XlsxPackageXmlEditor.ReplaceXml(archive, entryName, document);
 
     private static PivotPackageMetadata LoadPivotMetadata(
         Stream xlsxStream,
@@ -923,18 +679,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
             XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-            var workbookRels = workbookRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var workbookRels = XlsxRelationshipReader.ReadTargets(
+                workbookRelsXml,
+                packageRelNs,
+                target => XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target));
 
-            var pivotCaches = LoadPivotCaches(archive, workbookXml, workbookRels, workbookNs, relNs);
+            var pivotCaches = XlsxPivotCacheReader.Load(archive, workbookXml, workbookRels, workbookNs, relNs);
             var pivotCachesById = pivotCaches.ToDictionary(cache => cache.CacheId);
-            var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            var sheetsByPath = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
                 .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
             var pivotTablesBySheetName = LoadPivotTablesBySheetName(archive, sheetsByPath, pivotCachesById, numberFormatCatalog, workbookNs, relNs, packageRelNs);
 
@@ -943,684 +695,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         catch
         {
             return PivotPackageMetadata.Empty;
-        }
-    }
-
-    private static List<PivotCacheModel> LoadPivotCaches(
-        ZipArchive archive,
-        XDocument workbookXml,
-        IReadOnlyDictionary<string, string> workbookRels,
-        XNamespace workbookNs,
-        XNamespace relNs)
-    {
-        var result = new List<PivotCacheModel>();
-        foreach (var pivotCacheElement in workbookXml.Root?
-                     .Element(workbookNs + "pivotCaches")?
-                     .Elements(workbookNs + "pivotCache") ?? [])
-        {
-            var cacheId = ReadIntAttribute(pivotCacheElement, "cacheId") ?? 0;
-            var relId = pivotCacheElement.Attribute(relNs + "id")?.Value;
-            if (cacheId <= 0 || string.IsNullOrWhiteSpace(relId) || !workbookRels.TryGetValue(relId, out var cachePath))
-                continue;
-
-            var cacheEntry = archive.GetEntry(cachePath);
-            if (cacheEntry is null)
-                continue;
-
-            var cacheXml = LoadXml(cacheEntry);
-            var root = cacheXml.Root;
-            if (root is null)
-                continue;
-
-            var cacheSource = root.Element(workbookNs + "cacheSource");
-            var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
-            var cache = new PivotCacheModel
-            {
-                CacheId = cacheId,
-                SourceType = GetPivotCacheSourceType(cacheSource, worksheetSource),
-                SourceSheetName = worksheetSource?.Attribute("sheet")?.Value,
-                SourceReference = worksheetSource?.Attribute("ref")?.Value,
-                SourceTableName = worksheetSource?.Attribute("name")?.Value,
-                ConnectionId = cacheSource is null ? null : ReadIntAttribute(cacheSource, "connectionId"),
-                IsOlap = ReadBoolAttribute(root, "olap"),
-                PackagePart = cachePath,
-                RefreshOnLoad = ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
-                SaveData = ReadBoolAttribute(root, "saveData", defaultValue: true),
-                EnableRefresh = ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
-                RefreshedVersion = ReadIntAttribute(root, "refreshedVersion"),
-                RefreshedBy = root.Attribute("refreshedBy")?.Value
-            };
-
-            foreach (var field in root
-                         .Element(workbookNs + "cacheFields")?
-                         .Elements(workbookNs + "cacheField") ?? [])
-            {
-                var sharedItems = field.Element(workbookNs + "sharedItems");
-                cache.Fields.Add(new PivotCacheFieldModel(
-                    field.Attribute("name")?.Value ?? "",
-                    ReadIntAttribute(field, "numFmtId"),
-                    sharedItems is null ? null : ReadIntAttribute(sharedItems, "count"),
-                    ReadBoolAttribute(sharedItems, "containsBlank"),
-                    ReadBoolAttribute(sharedItems, "containsString") || (sharedItems?.Elements(workbookNs + "s").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsNumber") || (sharedItems?.Elements(workbookNs + "n").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsDate") || (sharedItems?.Elements(workbookNs + "d").Any() ?? false),
-                    ReadBoolAttribute(sharedItems, "containsMixedTypes"),
-                    ReadBoolAttribute(sharedItems, "containsSemiMixedTypes"),
-                    ReadBoolAttribute(sharedItems, "containsNonDate"),
-                    ReadBoolAttribute(sharedItems, "containsInteger"),
-                    ReadBoolAttribute(sharedItems, "longText"),
-                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "minValue"),
-                    sharedItems is null ? null : ReadDoubleAttribute(sharedItems, "maxValue"),
-                    sharedItems?.Attribute("minDate")?.Value,
-                    sharedItems?.Attribute("maxDate")?.Value,
-                    sharedItems is null ? null : ReadPivotCacheSharedItemValues(sharedItems, workbookNs)));
-            }
-
-            result.Add(cache);
-        }
-
-        return result;
-    }
-
-    private static IReadOnlyList<string> ReadPivotCacheSharedItemValues(XElement sharedItems, XNamespace workbookNs) =>
-        sharedItems
-            .Elements()
-            .Where(element => element.Name == workbookNs + "s" ||
-                              element.Name == workbookNs + "n" ||
-                              element.Name == workbookNs + "d" ||
-                              element.Name == workbookNs + "b" ||
-                              element.Name == workbookNs + "m")
-            .Select(element => element.Attribute("v")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!)
-            .ToList();
-
-    private static PivotCacheSourceType GetPivotCacheSourceType(XElement? cacheSource, XElement? worksheetSource)
-    {
-        var sourceType = cacheSource?.Attribute("type")?.Value;
-        if (string.Equals(sourceType, "external", StringComparison.OrdinalIgnoreCase))
-            return PivotCacheSourceType.External;
-        if (string.Equals(sourceType, "consolidation", StringComparison.OrdinalIgnoreCase))
-            return PivotCacheSourceType.Consolidation;
-        if (string.Equals(sourceType, "scenario", StringComparison.OrdinalIgnoreCase))
-            return PivotCacheSourceType.Scenario;
-        if (worksheetSource is null)
-            return PivotCacheSourceType.Unknown;
-        if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("name")?.Value))
-            return PivotCacheSourceType.Table;
-        if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("ref")?.Value))
-            return PivotCacheSourceType.WorksheetRange;
-        return PivotCacheSourceType.Unknown;
-    }
-
-    private static SlicerTimelinePackageMetadata LoadSlicerTimelineMetadata(Stream xlsxStream)
-    {
-        var slicers = new List<SlicerModel>();
-        var timelines = new List<TimelineModel>();
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var slicerCaches = archive.Entries
-                .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
-                .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
-                .Select(item => (item.Path, Cache: ReadSlicerCache(item.Xml)))
-                .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
-                .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var slicerEntry in archive.Entries.Where(entry =>
-                         entry.FullName.Replace('\\', '/').StartsWith("xl/slicers/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
-            {
-                var slicerXml = LoadXml(slicerEntry);
-                var root = slicerXml.Root;
-                var cacheName = root?.Attribute("cache")?.Value ?? "";
-                slicerCaches.TryGetValue(cacheName, out var cache);
-                slicers.Add(new SlicerModel
-                {
-                    Name = root?.Attribute("name")?.Value ?? "",
-                    Caption = root?.Attribute("caption")?.Value,
-                    CacheName = cacheName,
-                    SourcePivotTableName = cache?.PivotTableName,
-                    SourceFieldName = cache?.SourceFieldName,
-                    StyleName = root?.Attribute("style")?.Value,
-                    PackagePart = slicerEntry.FullName.Replace('\\', '/')
-                });
-                slicers[^1].SelectedItems.AddRange(cache?.SelectedItems ?? []);
-            }
-
-            var timelineCaches = archive.Entries
-                .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
-                .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
-                .Select(item => (item.Path, Cache: ReadTimelineCache(item.Xml)))
-                .Where(item => !string.IsNullOrWhiteSpace(item.Cache.Name))
-                .ToDictionary(item => item.Cache.Name, item => item.Cache, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var timelineEntry in archive.Entries.Where(entry =>
-                         entry.FullName.Replace('\\', '/').StartsWith("xl/timelines/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
-            {
-                var timelineXml = LoadXml(timelineEntry);
-                var root = timelineXml.Root;
-                var cacheName = root?.Attribute("cache")?.Value ?? "";
-                timelineCaches.TryGetValue(cacheName, out var cache);
-                timelines.Add(new TimelineModel
-                {
-                    Name = root?.Attribute("name")?.Value ?? "",
-                    Caption = root?.Attribute("caption")?.Value,
-                    CacheName = cacheName,
-                    SourcePivotTableName = cache?.PivotTableName,
-                    SourceFieldName = cache?.SourceFieldName,
-                    StyleName = root?.Attribute("style")?.Value,
-                    StartDate = cache?.StartDate,
-                    EndDate = cache?.EndDate,
-                    SelectedStartDate = cache?.SelectedStartDate,
-                    SelectedEndDate = cache?.SelectedEndDate,
-                    PackagePart = timelineEntry.FullName.Replace('\\', '/')
-                });
-            }
-        }
-        catch
-        {
-            // Slicer/timeline metadata should never block loading ordinary workbook content.
-        }
-
-        return new SlicerTimelinePackageMetadata(slicers, timelines);
-    }
-
-    private static SlicerCacheMetadata ReadSlicerCache(XDocument xml)
-    {
-        var root = xml.Root;
-        return new SlicerCacheMetadata(
-            root?.Attribute("name")?.Value ?? "",
-            root?.Attribute("sourceName")?.Value,
-            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
-            root?.Descendants()
-                .Where(e => string.Equals(e.Name.LocalName, "selectedItem", StringComparison.OrdinalIgnoreCase))
-                .Select(e => e.Attribute("value")?.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value!)
-                .ToList() ?? []);
-    }
-
-    private static TimelineCacheMetadata ReadTimelineCache(XDocument xml)
-    {
-        var root = xml.Root;
-        return new TimelineCacheMetadata(
-            root?.Attribute("name")?.Value ?? "",
-            root?.Attribute("sourceName")?.Value,
-            root?.Descendants().FirstOrDefault(e => string.Equals(e.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))?.Attribute("name")?.Value,
-            root?.Attribute("startDate")?.Value,
-            root?.Attribute("endDate")?.Value,
-            root?.Attribute("selectedStartDate")?.Value,
-            root?.Attribute("selectedEndDate")?.Value);
-    }
-
-    private static IReadOnlyList<ExternalLinkModel> LoadExternalLinkMetadata(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            if (workbookEntry is null)
-                return [];
-
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-            var workbookXml = LoadXml(workbookEntry);
-            var workbookRels = LoadRelationshipTargets(
-                archive,
-                "xl/_rels/workbook.xml.rels",
-                "xl/workbook.xml",
-                packageRelNs);
-            var result = new List<ExternalLinkModel>();
-            foreach (var externalReference in workbookXml.Root?
-                         .Element(workbookNs + "externalReferences")?
-                         .Elements(workbookNs + "externalReference") ?? [])
-            {
-                var relId = externalReference.Attribute(relNs + "id")?.Value;
-                if (string.IsNullOrWhiteSpace(relId) ||
-                    !workbookRels.TryGetValue(relId, out var externalLinkPath))
-                {
-                    continue;
-                }
-
-                var model = new ExternalLinkModel { PackagePart = externalLinkPath };
-                var externalLinkRelsEntry = archive.GetEntry(GetWorksheetRelsPath(externalLinkPath));
-                if (externalLinkRelsEntry is not null)
-                {
-                    var externalLinkRelsXml = LoadXml(externalLinkRelsEntry);
-                    var pathRelationship = externalLinkRelsXml.Root?
-                        .Elements(packageRelNs + "Relationship")
-                        .FirstOrDefault(relationship =>
-                            (relationship.Attribute("Type")?.Value ?? "").EndsWith("/externalLinkPath", StringComparison.OrdinalIgnoreCase));
-                    model.TargetUri = pathRelationship?.Attribute("Target")?.Value;
-                    model.TargetMode = pathRelationship?.Attribute("TargetMode")?.Value;
-                }
-
-                result.Add(model);
-            }
-
-            return result;
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private static StructuredTablePackageMetadata LoadStructuredTableMetadata(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-            if (workbookEntry is null || workbookRelsEntry is null)
-                return StructuredTablePackageMetadata.Empty;
-
-            var workbookXml = LoadXml(workbookEntry);
-            var workbookRelsXml = LoadXml(workbookRelsEntry);
-
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-            var workbookRels = workbookRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-                .ToDictionary(
-                    e => e.Attribute("Id")!.Value,
-                    e => ResolveRelationshipTarget("xl/workbook.xml", e.Attribute("Target")!.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-                .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
-            var tablesBySheetName = LoadStructuredTablesBySheetName(archive, sheetsByPath, workbookNs, relNs, packageRelNs);
-            return new StructuredTablePackageMetadata(tablesBySheetName);
-        }
-        catch
-        {
-            return StructuredTablePackageMetadata.Empty;
-        }
-    }
-
-    private static Dictionary<string, List<PendingStructuredTableModel>> LoadStructuredTablesBySheetName(
-        ZipArchive archive,
-        IReadOnlyDictionary<string, string> sheetsByPath,
-        XNamespace workbookNs,
-        XNamespace relNs,
-        XNamespace packageRelNs)
-    {
-        var result = new Dictionary<string, List<PendingStructuredTableModel>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (worksheetPath, sheetName) in sheetsByPath)
-        {
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var tableRelIds = worksheetXml.Root?
-                .Element(workbookNs + "tableParts")?
-                .Elements(workbookNs + "tablePart")
-                .Select(e => e.Attribute(relNs + "id")?.Value)
-                .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Select(id => id!)
-                .ToList() ?? [];
-            if (tableRelIds.Count == 0)
-                continue;
-
-            var worksheetRels = LoadRelationshipTargets(archive, GetWorksheetRelsPath(worksheetPath), worksheetPath, packageRelNs);
-            foreach (var tableRelId in tableRelIds)
-            {
-                if (!worksheetRels.TryGetValue(tableRelId, out var tablePath))
-                    continue;
-
-                var tableEntry = archive.GetEntry(tablePath);
-                if (tableEntry is null)
-                    continue;
-
-                var tableXml = LoadXml(tableEntry);
-                if (TryReadStructuredTable(tableXml, tablePath, out var table))
-                {
-                    if (!result.TryGetValue(sheetName, out var sheetTables))
-                    {
-                        sheetTables = [];
-                        result[sheetName] = sheetTables;
-                    }
-
-                    sheetTables.Add(table);
-                }
-            }
-        }
-
-        return result;
-    }
-
-    private static bool TryReadStructuredTable(XDocument tableXml, string tablePath, out PendingStructuredTableModel table)
-    {
-        table = new PendingStructuredTableModel(
-            0,
-            "",
-            "",
-            "",
-            false,
-            false,
-            null,
-            false,
-            false,
-            false,
-            false,
-            tablePath,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            [],
-            []);
-        var root = tableXml.Root;
-        if (root is null)
-            return false;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var id = ReadIntAttribute(root, "id") ?? 0;
-        var name = root.Attribute("name")?.Value ?? "";
-        var displayName = root.Attribute("displayName")?.Value ?? name;
-        var rangeReference = root.Attribute("ref")?.Value ?? "";
-        if (id <= 0 || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(rangeReference))
-            return false;
-
-        var style = root.Element(workbookNs + "tableStyleInfo");
-        var autoFilter = root.Element(workbookNs + "autoFilter");
-        table = new PendingStructuredTableModel(
-            id,
-            name,
-            displayName,
-            rangeReference,
-            autoFilter is not null,
-            ReadBoolAttribute(root, "totalsRowShown"),
-            style?.Attribute("name")?.Value,
-            ReadBoolAttribute(style, "showFirstColumn"),
-            ReadBoolAttribute(style, "showLastColumn"),
-            ReadBoolAttribute(style, "showRowStripes"),
-            ReadBoolAttribute(style, "showColumnStripes"),
-            tablePath,
-            root.Element(workbookNs + "sortState")?.ToString(System.Xml.Linq.SaveOptions.DisableFormatting),
-            ReadNativeStructuredTableAttributes(root),
-            ReadNativeStructuredTableChildXmls(root, workbookNs),
-            ReadNativeStructuredTableAutoFilterAttributes(autoFilter),
-            ReadNativeStructuredTableAutoFilterChildXmls(autoFilter, workbookNs),
-            ReadNativeTableStyleInfoAttributes(style),
-            ReadNativeTableStyleInfoChildXmls(style),
-            root.Element(workbookNs + "tableColumns")?
-                .Elements(workbookNs + "tableColumn")
-                .Select(column => new StructuredTableColumnModel(
-                    ReadIntAttribute(column, "id") ?? 0,
-                    column.Attribute("name")?.Value ?? "",
-                    column.Attribute("totalsRowLabel")?.Value,
-                    column.Attribute("totalsRowFunction")?.Value,
-                    ReadTableColumnFormula(column, workbookNs, "calculatedColumnFormula"),
-                    ReadTableColumnFormula(column, workbookNs, "totalsRowFormula"),
-                    ReadNativeTableColumnChildXmls(column, workbookNs),
-                    ReadNativeTableColumnAttributes(column)))
-                .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
-                .ToList() ?? [],
-            ReadStructuredTableFilterColumns(autoFilter, workbookNs));
-        return true;
-    }
-
-    private static string? ReadTableColumnFormula(XElement column, XNamespace workbookNs, string elementName)
-    {
-        var formula = column.Element(workbookNs + elementName)?.Value;
-        return string.IsNullOrWhiteSpace(formula) ? null : formula;
-    }
-
-    private static List<string> ReadNativeTableColumnChildXmls(XElement column, XNamespace workbookNs) =>
-        column.Elements()
-            .Where(element =>
-                element.Name != workbookNs + "calculatedColumnFormula" &&
-                element.Name != workbookNs + "totalsRowFormula")
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-
-    private static Dictionary<string, string> ReadNativeTableColumnAttributes(XElement column)
-    {
-        string[] modeledAttributes = ["id", "name", "totalsRowLabel", "totalsRowFunction"];
-        return column.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-    }
-
-    private static Dictionary<string, string>? ReadNativeTableStyleInfoAttributes(XElement? styleInfo)
-    {
-        if (styleInfo is null)
-            return null;
-
-        string[] modeledAttributes = ["name", "showFirstColumn", "showLastColumn", "showRowStripes", "showColumnStripes"];
-        var attributes = styleInfo.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static List<string>? ReadNativeTableStyleInfoChildXmls(XElement? styleInfo)
-    {
-        if (styleInfo is null)
-            return null;
-
-        var children = styleInfo.Elements()
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-        return children.Count == 0 ? null : children;
-    }
-
-    private static Dictionary<string, string>? ReadNativeStructuredTableAttributes(XElement table)
-    {
-        string[] modeledAttributes = ["id", "name", "displayName", "ref", "totalsRowShown"];
-        var attributes = table.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static List<string>? ReadNativeStructuredTableChildXmls(XElement table, XNamespace workbookNs)
-    {
-        XName[] modeledChildren =
-        [
-            workbookNs + "autoFilter",
-            workbookNs + "sortState",
-            workbookNs + "tableColumns",
-            workbookNs + "tableStyleInfo"
-        ];
-        var children = table.Elements()
-            .Where(element => !modeledChildren.Contains(element.Name))
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-        return children.Count == 0 ? null : children;
-    }
-
-    private static Dictionary<string, string>? ReadNativeStructuredTableAutoFilterAttributes(XElement? autoFilter)
-    {
-        if (autoFilter is null)
-            return null;
-
-        var attributes = autoFilter.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "ref")
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static List<string>? ReadNativeStructuredTableAutoFilterChildXmls(XElement? autoFilter, XNamespace workbookNs)
-    {
-        if (autoFilter is null)
-            return null;
-
-        var children = autoFilter.Elements()
-            .Where(element => element.Name != workbookNs + "filterColumn")
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-        return children.Count == 0 ? null : children;
-    }
-
-    private static List<StructuredTableFilterColumnModel> ReadStructuredTableFilterColumns(
-        XElement? autoFilter,
-        XNamespace workbookNs)
-    {
-        if (autoFilter is null)
-            return [];
-
-        return autoFilter
-            .Elements(workbookNs + "filterColumn")
-            .Select(column =>
-            {
-                var filters = column.Element(workbookNs + "filters");
-                var nativeFilters = ReadStructuredTableNativeFilterXmls(column, workbookNs);
-                return new StructuredTableFilterColumnModel(
-                    ReadIntAttribute(column, "colId") ?? -1,
-                    filters?
-                        .Elements(workbookNs + "filter")
-                        .Select(filter => filter.Attribute("val")?.Value)
-                        .Where(value => !string.IsNullOrWhiteSpace(value))
-                        .Select(value => value!)
-                        .ToList() ?? [],
-                    ReadBoolAttribute(filters, "blank"),
-                    nativeFilters,
-                    ReadNativeStructuredTableFilterColumnAttributes(column));
-            })
-            .Where(column => column.ColumnId >= 0 && (column.Values.Count > 0 || column.IncludeBlank || column.NativeFilterXmls.Count > 0 || column.NativeAttributes?.Count > 0))
-            .ToList();
-    }
-
-    private static List<string> ReadStructuredTableNativeFilterXmls(XElement filterColumn, XNamespace workbookNs) =>
-        filterColumn.Elements()
-            .Where(element => element.Name != workbookNs + "filters")
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-
-    private static Dictionary<string, string>? ReadNativeStructuredTableFilterColumnAttributes(XElement filterColumn)
-    {
-        var attributes = filterColumn.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && attribute.Name.LocalName != "colId")
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-        return attributes.Count == 0 ? null : attributes;
-    }
-
-    private static StructuredTableModel ToStructuredTableModel(PendingStructuredTableModel pending, SheetId sheetId)
-    {
-        var table = new StructuredTableModel
-        {
-            Id = pending.Id,
-            Name = pending.Name,
-            DisplayName = pending.DisplayName,
-            Range = GridRange.Parse(pending.RangeReference, sheetId),
-            HasAutoFilter = pending.HasAutoFilter,
-            TotalsRowShown = pending.TotalsRowShown,
-            StyleName = pending.StyleName,
-            ShowFirstColumn = pending.ShowFirstColumn,
-            ShowLastColumn = pending.ShowLastColumn,
-            ShowRowStripes = pending.ShowRowStripes,
-            ShowColumnStripes = pending.ShowColumnStripes,
-            PackagePart = pending.PackagePart,
-            NativeSortStateXml = pending.NativeSortStateXml,
-            NativeAttributes = pending.NativeAttributes,
-            NativeChildXmls = pending.NativeChildXmls,
-            NativeAutoFilterAttributes = pending.NativeAutoFilterAttributes,
-            NativeAutoFilterChildXmls = pending.NativeAutoFilterChildXmls,
-            NativeStyleInfoAttributes = pending.NativeStyleInfoAttributes,
-            NativeStyleInfoChildXmls = pending.NativeStyleInfoChildXmls
-        };
-        table.Columns.AddRange(pending.Columns);
-        table.FilterColumns.AddRange(pending.FilterColumns);
-        return table;
-    }
-
-    private static void MaterializeStructuredTableFilters(Sheet sheet, StructuredTableModel table)
-    {
-        if (table.FilterColumns.Count == 0)
-            return;
-
-        var filters = BuildStructuredTableFilters(table).ToList();
-        if (filters.Count != table.FilterColumns.Count)
-            return;
-
-        var lastDataRow = table.TotalsRowShown && table.Range.End.Row > table.Range.Start.Row
-            ? table.Range.End.Row - 1
-            : table.Range.End.Row;
-        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
-        {
-            if (!StructuredTableRowMatchesAllFilters(sheet, row, filters))
-                sheet.FilterHiddenRows.Add(row);
-        }
-    }
-
-    private static IEnumerable<StructuredTableFilterState> BuildStructuredTableFilters(StructuredTableModel table)
-    {
-        foreach (var filterColumn in table.FilterColumns)
-        {
-            var tableColumnIndex = filterColumn.ColumnId;
-            if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
-                continue;
-
-            yield return new StructuredTableFilterState(
-                table.Range.Start.Col + (uint)tableColumnIndex,
-                new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
-                filterColumn.IncludeBlank);
-        }
-    }
-
-    private static bool StructuredTableRowMatchesAllFilters(
-        Sheet sheet,
-        uint row,
-        IReadOnlyList<StructuredTableFilterState> filters)
-    {
-        foreach (var filter in filters)
-        {
-            var text = ToStructuredTableFilterText(sheet.GetValue(row, filter.Column));
-            if (text.Length == 0 && filter.IncludeBlank)
-                continue;
-            if (!filter.AllowedValues.Contains(text))
-                return false;
-        }
-
-        return true;
-    }
-
-    private static string ToStructuredTableFilterText(ScalarValue value) => value switch
-    {
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => string.Empty
-    };
-
-    private sealed record StructuredTableFilterState(
-        uint Column,
-        HashSet<string> AllowedValues,
-        bool IncludeBlank);
-
-    private static IEnumerable<(string SheetName, string WorksheetPath)> GetWorkbookSheetPaths(
-        XDocument workbookXml,
-        IReadOnlyDictionary<string, string> workbookRels,
-        XNamespace workbookNs,
-        XNamespace relNs)
-    {
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (!string.IsNullOrWhiteSpace(name) &&
-                !string.IsNullOrWhiteSpace(relId) &&
-                workbookRels.TryGetValue(relId, out var worksheetPath))
-            {
-                yield return (name, worksheetPath);
-            }
         }
     }
 
@@ -1650,7 +724,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             if (pivotRelIds.Count == 0)
                 continue;
 
-            var worksheetRels = LoadRelationshipTargets(archive, GetWorksheetRelsPath(worksheetPath), worksheetPath, packageRelNs);
+            var worksheetRels = XlsxRelationshipReader.LoadTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
             foreach (var pivotRelId in pivotRelIds)
             {
                 if (!worksheetRels.TryGetValue(pivotRelId, out var pivotPath))
@@ -1681,22 +755,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ZipArchive archive,
         string relsPath,
         string sourcePart,
-        XNamespace packageRelNs)
-    {
-        var relsEntry = archive.GetEntry(relsPath);
-        if (relsEntry is null)
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var relsXml = LoadXml(relsEntry);
-        return relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => ResolveRelationshipTarget(sourcePart, e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    }
+        XNamespace packageRelNs) =>
+        XlsxRelationshipReader.LoadTargets(archive, relsPath, sourcePart, packageRelNs);
 
     private static bool TryReadPivotTable(
         XDocument pivotXml,
@@ -2314,22 +1374,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
     }
 
     private static int? ReadIntAttribute(XElement element, string attributeName) =>
-        int.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
+        XlsxXmlAttributeReader.ReadIntAttribute(element, attributeName);
 
     private static double? ReadDoubleAttribute(XElement element, string attributeName) =>
-        double.TryParse(element.Attribute(attributeName)?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
+        XlsxXmlAttributeReader.ReadDoubleAttribute(element, attributeName);
 
-    private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false)
-    {
-        var value = element?.Attribute(attributeName)?.Value;
-        if (value is null)
-            return defaultValue;
-        return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
+        XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);
 
     private static MemoryStream CreateClosedXmlLoadPackage(MemoryStream sourcePackage)
     {
@@ -2477,253 +1528,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static WorkbookTheme LoadWorkbookTheme(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
-            if (themeEntry is null)
-                return WorkbookTheme.Office;
-
-            var themeXml = LoadXml(themeEntry);
-            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-
-            var theme = WorkbookTheme.Office
-                .WithName(themeXml.Root?.Attribute("name")?.Value ?? WorkbookTheme.Office.Name);
-
-            var themeElements = themeXml.Root?.Element(drawingNs + "themeElements");
-            if (themeElements is null)
-                return theme;
-
-            var fontScheme = themeElements.Element(drawingNs + "fontScheme");
-            if (fontScheme is not null)
-            {
-                theme = theme.WithFonts(
-                    ReadThemeTypeface(fontScheme.Element(drawingNs + "majorFont"), drawingNs) ?? theme.MajorFontName,
-                    ReadThemeTypeface(fontScheme.Element(drawingNs + "minorFont"), drawingNs) ?? theme.MinorFontName);
-            }
-
-            var effectsName = themeElements.Element(drawingNs + "fmtScheme")?.Attribute("name")?.Value;
-            if (!string.IsNullOrWhiteSpace(effectsName))
-                theme = theme.WithEffects(effectsName);
-
-            var colorScheme = themeElements.Element(drawingNs + "clrScheme");
-            if (colorScheme is null)
-                return theme;
-
-            foreach (var (slot, elementName) in ThemeColorElements)
-            {
-                if (ReadThemeColor(colorScheme.Element(drawingNs + elementName), drawingNs) is { } color)
-                    theme = theme.WithColor(slot, color);
-            }
-
-            return theme;
-        }
-        catch
-        {
-            return WorkbookTheme.Office;
-        }
-    }
-
-    private static WorkbookProtectionState LoadWorkbookProtection(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            if (workbookEntry is null)
-                return WorkbookProtectionState.None;
-
-            var workbookXml = LoadXml(workbookEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var protection = workbookXml.Root?.Element(workbookNs + "workbookProtection");
-            if (protection is null)
-                return WorkbookProtectionState.None;
-
-            var isStructureProtected =
-                IsTruthy(protection.Attribute("lockStructure")?.Value) ||
-                IsTruthy(protection.Attribute("lockWindows")?.Value);
-
-            if (!isStructureProtected)
-                return WorkbookProtectionState.None;
-
-            var passwordHash =
-                protection.Attribute("workbookPassword")?.Value ??
-                protection.Attribute("revisionsPassword")?.Value;
-
-            return new WorkbookProtectionState(true, passwordHash);
-        }
-        catch
-        {
-            return WorkbookProtectionState.None;
-        }
-    }
-
-    private sealed record WorkbookProtectionState(bool IsStructureProtected, string? PasswordHash)
-    {
-        public static WorkbookProtectionState None { get; } = new(false, null);
-    }
-
-    private static WorkbookCalculationProperties LoadWorkbookCalculationProperties(Stream xlsxStream)
-    {
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            if (workbookEntry is null)
-                return WorkbookCalculationProperties.Default;
-
-            var workbookXml = LoadXml(workbookEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            var calcPr = workbookXml.Root?.Element(workbookNs + "calcPr");
-            if (calcPr is null)
-                return WorkbookCalculationProperties.Default;
-
-            var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
-                ? WorkbookCalculationMode.Manual
-                : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
-                    ? WorkbookCalculationMode.Automatic
-                    : (WorkbookCalculationMode?)null;
-
-            return new WorkbookCalculationProperties(
-                mode,
-                ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
-                ReadBoolAttribute(calcPr, "forceFullCalc"),
-                ReadBoolAttribute(calcPr, "iterate"),
-                ReadIntAttribute(calcPr, "iterateCount"),
-                ReadDoubleAttribute(calcPr, "iterateDelta"));
-        }
-        catch
-        {
-            return WorkbookCalculationProperties.Default;
-        }
-    }
-
-    private sealed record WorkbookCalculationProperties(
-        WorkbookCalculationMode? Mode,
-        bool FullCalculationOnLoad,
-        bool ForceFullCalculation,
-        bool IterativeCalculation,
-        int? MaxIterations,
-        double? MaxChange)
-    {
-        public static WorkbookCalculationProperties Default { get; } = new(null, false, false, false, null, null);
-    }
-
-    private static IReadOnlyList<XlsxWorkbookCustomView> LoadWorkbookCustomViews(Stream xlsxStream)
-    {
-        var views = new List<XlsxWorkbookCustomView>();
-
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var workbookEntry = archive.GetEntry("xl/workbook.xml");
-            if (workbookEntry is null)
-                return views;
-
-            var workbookXml = LoadXml(workbookEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var view in workbookXml.Root?
-                         .Element(workbookNs + "customWorkbookViews")?
-                         .Elements(workbookNs + "customWorkbookView") ?? [])
-            {
-                var id = view.Attribute("guid")?.Value;
-                var name = view.Attribute("name")?.Value;
-                if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
-                    views.Add(new XlsxWorkbookCustomView(id, name));
-            }
-        }
-        catch
-        {
-            // Custom views are best-effort; ClosedXML still loads workbook content.
-        }
-
-        return views;
-    }
-
-    private static readonly (WorkbookThemeColorSlot Slot, string ElementName)[] ThemeColorElements =
-    [
-        (WorkbookThemeColorSlot.Dark1, "dk1"),
-        (WorkbookThemeColorSlot.Light1, "lt1"),
-        (WorkbookThemeColorSlot.Dark2, "dk2"),
-        (WorkbookThemeColorSlot.Light2, "lt2"),
-        (WorkbookThemeColorSlot.Accent1, "accent1"),
-        (WorkbookThemeColorSlot.Accent2, "accent2"),
-        (WorkbookThemeColorSlot.Accent3, "accent3"),
-        (WorkbookThemeColorSlot.Accent4, "accent4"),
-        (WorkbookThemeColorSlot.Accent5, "accent5"),
-        (WorkbookThemeColorSlot.Accent6, "accent6"),
-        (WorkbookThemeColorSlot.Hyperlink, "hlink"),
-        (WorkbookThemeColorSlot.FollowedHyperlink, "folHlink")
-    ];
-
-    private static string? ReadThemeTypeface(XElement? fontElement, XNamespace drawingNs) =>
-        fontElement?
-            .Element(drawingNs + "latin")?
-            .Attribute("typeface")?
-            .Value;
-
-    private static CellColor? ReadThemeColor(XElement? colorElement, XNamespace drawingNs)
-    {
-        var srgb = colorElement?.Element(drawingNs + "srgbClr")?.Attribute("val")?.Value;
-        if (TryParseHexColor(srgb, out var color))
-            return color;
-
-        var systemFallback = colorElement?.Element(drawingNs + "sysClr")?.Attribute("lastClr")?.Value;
-        return TryParseHexColor(systemFallback, out color)
-            ? color
-            : null;
-    }
-
-    private static bool TryParseHexColor(string? text, out CellColor color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var normalized = text.Trim().TrimStart('#');
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], System.Globalization.NumberStyles.HexNumber, null, out var r) ||
-            !byte.TryParse(normalized[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g) ||
-            !byte.TryParse(normalized[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
-        return true;
-    }
-
-    private static bool TryReadRgbColor(XElement? element, out RgbColor color)
-    {
-        color = default;
-        var rgb = element?.Attribute("rgb")?.Value;
-        if (string.IsNullOrWhiteSpace(rgb))
-            return false;
-        var normalized = rgb.Trim().TrimStart('#');
-        if (normalized.Length == 8)
-            normalized = normalized[2..];
-        if (!TryParseHexColor(normalized, out var cellColor))
-            return false;
-        color = RgbColor.FromCellColor(cellColor);
-        return true;
-    }
-
-    private static bool TryReadCellColor(XElement? element, out CellColor color)
-    {
-        color = default;
-        var rgb = element?.Attribute("rgb")?.Value;
-        if (string.IsNullOrWhiteSpace(rgb))
-            return false;
-
-        var normalized = rgb.Trim().TrimStart('#');
-        if (normalized.Length == 8)
-            normalized = normalized[2..];
-        return TryParseHexColor(normalized, out color);
-    }
-
     private static CfThresholdType FromCfvoType(string? type) =>
         type?.ToLowerInvariant() switch
         {
@@ -2746,226 +1550,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => "min"
         };
 
-    private static string NormalizeWorkbookTarget(string target)
-    {
-        target = target.Replace('\\', '/').TrimStart('/');
-        return target.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
-            ? target
-            : $"xl/{target}";
-    }
-
-    private static string GetWorksheetRelsPath(string worksheetPath)
-    {
-        var normalized = worksheetPath.Replace('\\', '/');
-        var slash = normalized.LastIndexOf('/');
-        if (slash < 0)
-            return $"_rels/{normalized}.rels";
-
-        return $"{normalized[..slash]}/_rels/{normalized[(slash + 1)..]}.rels";
-    }
-
-    private static string ResolveRelationshipTarget(string sourcePath, string target)
-    {
-        var normalizedTarget = target.Replace('\\', '/');
-        if (normalizedTarget.StartsWith('/'))
-            return normalizedTarget.TrimStart('/');
-        if (normalizedTarget.StartsWith("xl/", StringComparison.OrdinalIgnoreCase))
-            return normalizedTarget;
-
-        var sourceDirectory = sourcePath.Replace('\\', '/');
-        var slash = sourceDirectory.LastIndexOf('/');
-        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
-        return NormalizeZipPath($"{sourceDirectory}/{normalizedTarget}");
-    }
-
-    private static string GetRelativeTarget(string sourcePath, string targetPath)
-    {
-        var sourceDirectory = sourcePath.Replace('\\', '/');
-        var slash = sourceDirectory.LastIndexOf('/');
-        sourceDirectory = slash >= 0 ? sourceDirectory[..slash] : "";
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../media/{targetPath["xl/media/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../drawings/{targetPath["xl/drawings/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../tables/{targetPath["xl/tables/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../pivotCache/{targetPath["xl/pivotCache/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/slicers", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../slicerCaches/{targetPath["xl/slicerCaches/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/timelines", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/timelineCaches/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../timelineCaches/{targetPath["xl/timelineCaches/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/charts/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../charts/{targetPath["xl/charts/".Length..]}";
-        }
-
-        if (sourceDirectory.Equals("xl/drawings", StringComparison.OrdinalIgnoreCase) &&
-            targetPath.StartsWith("xl/media/", StringComparison.OrdinalIgnoreCase))
-        {
-            return $"../media/{targetPath["xl/media/".Length..]}";
-        }
-
-        return targetPath.StartsWith("xl/", StringComparison.OrdinalIgnoreCase)
-            ? targetPath["xl/".Length..]
-            : targetPath;
-    }
-
-    private static string NormalizeZipPath(string path)
-    {
-        var parts = new List<string>();
-        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (part == ".")
-                continue;
-            if (part == "..")
-            {
-                if (parts.Count > 0)
-                    parts.RemoveAt(parts.Count - 1);
-                continue;
-            }
-
-            parts.Add(part);
-        }
-
-        return string.Join('/', parts);
-    }
-
-    private static string GetContentTypeFromPath(string path)
-    {
-        var extension = Path.GetExtension(path).ToLowerInvariant();
-        return extension switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".bmp" => "image/bmp",
-            ".gif" => "image/gif",
-            _ => "image/png"
-        };
-    }
-
-    private static string GetExtensionFromContentType(string contentType) =>
-        contentType.ToLowerInvariant() switch
-        {
-            "image/jpeg" => ".jpg",
-            "image/bmp" => ".bmp",
-            "image/gif" => ".gif",
-            _ => ".png"
-        };
-
-    private static string GetWorksheetBackgroundMediaFileName(string? fileName, int backgroundIndex, string extension)
-    {
-        var candidate = Path.GetFileName(fileName ?? "");
-        if (string.IsNullOrWhiteSpace(candidate) ||
-            candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-        {
-            return $"freexcelBackground{backgroundIndex}{extension}";
-        }
-
-        return Path.HasExtension(candidate)
-            ? candidate
-            : $"{candidate}{extension}";
-    }
-
     private static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
-    {
-        var used = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Select(e => e.Attribute("Id")?.Value)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase)
-            ?? [];
-
-        for (var i = 1; ; i++)
-        {
-            var candidate = $"rId{i}";
-            if (!used.Contains(candidate))
-                return candidate;
-        }
-    }
+        => XlsxPackageXmlEditor.NextRelationshipId(relsXml, packageRelNs);
 
     private static void EnsureContentType(ZipArchive archive, string extension, string contentType)
-    {
-        const string contentTypesPath = "[Content_Types].xml";
-        var entry = archive.GetEntry(contentTypesPath);
-        if (entry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var xml = LoadXml(entry);
-        var hasDefault = xml.Root?
-            .Elements(contentTypeNs + "Default")
-            .Any(e => string.Equals(e.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase))
-            == true;
-        if (hasDefault)
-            return;
-
-        xml.Root?.Add(new XElement(
-            contentTypeNs + "Default",
-            new XAttribute("Extension", extension),
-            new XAttribute("ContentType", contentType)));
-
-        entry.Delete();
-        var updatedEntry = archive.CreateEntry(contentTypesPath);
-        using var stream = updatedEntry.Open();
-        xml.Save(stream);
-    }
+        => XlsxPackageXmlEditor.EnsureDefaultContentType(archive, extension, contentType);
 
     private static void EnsureSpecificContentType(ZipArchive archive, string partName, string contentType)
-    {
-        const string contentTypesPath = "[Content_Types].xml";
-        var entry = archive.GetEntry(contentTypesPath);
-        if (entry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var xml = LoadXml(entry);
-        var root = xml.Root;
-        if (root is null)
-            return;
-
-        var normalizedPartName = partName.StartsWith('/') ? partName : $"/{partName}";
-        root.Elements(contentTypeNs + "Override")
-            .Where(element => string.Equals(element.Attribute("PartName")?.Value, normalizedPartName, StringComparison.OrdinalIgnoreCase))
-            .Remove();
-        root.Add(new XElement(
-            contentTypeNs + "Override",
-            new XAttribute("PartName", normalizedPartName),
-            new XAttribute("ContentType", contentType)));
-
-        ReplacePackageXml(archive, contentTypesPath, xml);
-    }
+        => XlsxPackageXmlEditor.EnsureSpecificContentType(archive, partName, contentType);
 
     private static SheetXmlLayout ReadHiddenSheetLayout(
         ZipArchive archive,
@@ -3030,7 +1622,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var passwordHash =
             protection?.Attribute("password")?.Value ??
             protection?.Attribute("hashValue")?.Value;
-        var allowEditRanges = ReadAllowEditRanges(worksheetXml, worksheetNs);
+        var allowEditRanges = XlsxAllowEditRangeMapper.Read(worksheetXml, worksheetNs);
 
         var sheetView = worksheetXml.Root?
             .Element(worksheetNs + "sheetViews")?
@@ -3045,18 +1637,18 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 .Elements(worksheetNs + "selection")
                 .Select(selection => selection.Attribute("activeCell")?.Value)
                 .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
-        var background = ReadWorksheetBackground(archive, worksheetPath, worksheetXml);
-        var chartParts = ReadWorksheetChartParts(archive, worksheetPath, worksheetXml);
-        var pictureParts = ReadWorksheetPictureParts(archive, worksheetPath, worksheetXml);
-        var (textBoxParts, shapeParts) = ReadWorksheetShapeParts(archive, worksheetPath, worksheetXml);
-        var sparklines = ReadWorksheetSparklines(worksheetXml);
+        var background = XlsxWorksheetBackgroundReaderWriter.Read(archive, worksheetPath, worksheetXml);
+        var chartParts = XlsxWorksheetDrawingPartReader.ReadChartParts(archive, worksheetPath, worksheetXml);
+        var pictureParts = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, worksheetPath, worksheetXml);
+        var (textBoxParts, shapeParts) = XlsxWorksheetDrawingPartReader.ReadShapeParts(archive, worksheetPath, worksheetXml);
+        var sparklines = XlsxSparklineMapper.Read(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
-        var dataValidationNativeMetadata = ReadDataValidationNativeMetadata(worksheetXml, worksheetNs);
-        var ignoredErrors = ReadIgnoredErrors(worksheetXml, worksheetNs);
-        var cellWatches = ReadCellWatches(worksheetXml, worksheetNs);
-        var scenarios = ReadWorksheetScenarios(worksheetXml, worksheetNs);
-        var customViews = ReadWorksheetCustomViews(worksheetXml, worksheetNs);
-        var customProperties = ReadWorksheetCustomProperties(worksheetXml, worksheetNs);
+        var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
+        var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
+        var cellWatches = XlsxWorksheetDiagnosticsMapper.ReadCellWatches(worksheetXml, worksheetNs);
+        var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
+        var customViews = XlsxCustomViewMapper.ReadWorksheetViews(worksheetXml, worksheetNs);
+        var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -3074,8 +1666,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
-            ReadBoolAttribute(sheetCalcPr, "fullCalcOnLoad"),
-            ReadWorksheetPhoneticProperties(phoneticPr),
+            XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
+            XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
@@ -3103,194 +1695,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             codeName);
     }
 
-    private static IReadOnlyList<WorksheetCustomProperty> ReadWorksheetCustomProperties(
-        XDocument worksheetXml,
-        XNamespace worksheetNs)
-    {
-        var properties = new List<WorksheetCustomProperty>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var customProperty in worksheetXml.Root?
-                     .Element(worksheetNs + "customProperties")?
-                     .Elements(worksheetNs + "customPr") ?? [])
-        {
-            var name = customProperty.Attribute("name")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                !int.TryParse(customProperty.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ||
-                id <= 0 ||
-                !seen.Add(name))
-            {
-                continue;
-            }
-
-            properties.Add(new WorksheetCustomProperty(name, id));
-        }
-
-        return properties;
-    }
-
-    private static WorksheetPhoneticProperties? ReadWorksheetPhoneticProperties(XElement? phoneticPr)
-    {
-        if (phoneticPr is null)
-            return null;
-
-        var fontId = phoneticPr.Attribute("fontId")?.Value;
-        var type = phoneticPr.Attribute("type")?.Value;
-        var alignment = phoneticPr.Attribute("alignment")?.Value;
-        return string.IsNullOrWhiteSpace(fontId) && string.IsNullOrWhiteSpace(type) && string.IsNullOrWhiteSpace(alignment)
-            ? null
-            : new WorksheetPhoneticProperties(
-                string.IsNullOrWhiteSpace(fontId) ? null : fontId,
-                string.IsNullOrWhiteSpace(type) ? null : type,
-                string.IsNullOrWhiteSpace(alignment) ? null : alignment);
-    }
-
-    private static IReadOnlyList<XlsxWorksheetCustomViewState> ReadWorksheetCustomViews(
-        XDocument worksheetXml,
-        XNamespace worksheetNs)
-    {
-        var customViews = new List<XlsxWorksheetCustomViewState>();
-        foreach (var customSheetView in worksheetXml.Root?
-                     .Element(worksheetNs + "customSheetViews")?
-                     .Elements(worksheetNs + "customSheetView") ?? [])
-        {
-            var id = customSheetView.Attribute("guid")?.Value;
-            if (string.IsNullOrWhiteSpace(id))
-                continue;
-
-            var pane = customSheetView.Element(worksheetNs + "pane");
-            var paneState = pane?.Attribute("state")?.Value;
-            var rowSplit = ParsePaneSplit(pane?.Attribute("ySplit")?.Value);
-            var columnSplit = ParsePaneSplit(pane?.Attribute("xSplit")?.Value);
-            var frozenRows = paneState is "frozen" or "frozenSplit" ? rowSplit ?? 0 : 0;
-            var frozenCols = paneState is "frozen" or "frozenSplit" ? columnSplit ?? 0 : 0;
-            var splitRow = frozenRows == 0 && frozenCols == 0 ? rowSplit : null;
-            var splitColumn = frozenRows == 0 && frozenCols == 0 ? columnSplit : null;
-
-            customViews.Add(new XlsxWorksheetCustomViewState(
-                id,
-                new WorksheetCustomViewState(
-                    string.Empty,
-                    ParseWorksheetViewMode(customSheetView.Attribute("view")?.Value),
-                    frozenRows,
-                    frozenCols,
-                    splitRow,
-                    splitColumn,
-                    ShowGridlines: !IsFalse(customSheetView.Attribute("showGridLines")?.Value),
-                    ShowHeadings: !IsFalse(customSheetView.Attribute("showRowCol")?.Value),
-                    ShowRulers: !IsFalse(customSheetView.Attribute("showRuler")?.Value),
-                    ZoomPercent: ParseZoomPercent(customSheetView.Attribute("scale")?.Value),
-                    ShowFormulas: IsTruthy(customSheetView.Attribute("showFormulas")?.Value))));
-        }
-
-        return customViews;
-    }
-
-    private static IReadOnlyList<WorkbookScenario> ReadWorksheetScenarios(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var scenarios = new List<WorkbookScenario>();
-        var tempSheet = SheetId.New();
-        foreach (var scenario in worksheetXml.Root?
-                     .Element(worksheetNs + "scenarios")?
-                     .Elements(worksheetNs + "scenario") ?? [])
-        {
-            var name = scenario.Attribute("name")?.Value;
-            if (string.IsNullOrWhiteSpace(name))
-                continue;
-
-            var changes = new List<ScenarioCellValue>();
-            var supported = true;
-            foreach (var inputCell in scenario.Elements(worksheetNs + "inputCells"))
-            {
-                var reference = inputCell.Attribute("r")?.Value;
-                var rawValue = inputCell.Attribute("val")?.Value;
-                if (string.IsNullOrWhiteSpace(reference) ||
-                    rawValue is null ||
-                    !CellAddress.TryParse(reference, tempSheet, out var address))
-                {
-                    supported = false;
-                    break;
-                }
-
-                changes.Add(new ScenarioCellValue(address, ParseScenarioValue(rawValue)));
-            }
-
-            if (supported && changes.Count > 0)
-                scenarios.Add(new WorkbookScenario(name, changes));
-        }
-
-        return scenarios;
-    }
-
-    private static IgnoredErrorLayout ReadIgnoredErrors(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        string[] supportedFlags =
-        [
-            "numberStoredAsText",
-            "evalError",
-            "formula",
-            "formulaRange",
-            "unlockedFormula",
-            "emptyCellReference",
-            "listDataValidation",
-            "calculatedColumn",
-            "twoDigitTextYear"
-        ];
-
-        var cells = new List<CellAddress>();
-        var existingCellOnlyRanges = new List<GridRange>();
-        var tempSheet = SheetId.New();
-        foreach (var ignoredError in worksheetXml.Root?
-                     .Element(worksheetNs + "ignoredErrors")?
-                     .Elements(worksheetNs + "ignoredError") ?? [])
-        {
-            if (!supportedFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value)))
-                continue;
-
-            var sqref = ignoredError.Attribute("sqref")?.Value;
-            if (string.IsNullOrWhiteSpace(sqref))
-                continue;
-
-            foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (!TryParseSqrefToken(token, tempSheet, out var range))
-                    continue;
-
-                // Full-column/full-sheet sqref ranges are legal but can cover billions of cells.
-                // Keep small ranges materialized for existing behavior; apply oversized ranges to
-                // cells that ClosedXML already loaded instead of creating blank cells for the range.
-                if (range.CellCount > MaxExpandedIgnoredErrorCells)
-                    existingCellOnlyRanges.Add(range);
-                else
-                    cells.AddRange(range.AllCells());
-            }
-        }
-
-        return new IgnoredErrorLayout(cells, existingCellOnlyRanges);
-    }
-
-    private static IReadOnlyList<CellAddress> ReadCellWatches(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var watchedCells = new List<CellAddress>();
-        var seen = new HashSet<CellAddress>();
-        var tempSheet = SheetId.New();
-        foreach (var cellWatch in worksheetXml.Root?
-                     .Element(worksheetNs + "cellWatches")?
-                     .Elements(worksheetNs + "cellWatch") ?? [])
-        {
-            var reference = cellWatch.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) ||
-                !CellAddress.TryParse(reference, tempSheet, out var address) ||
-                !seen.Add(address))
-            {
-                continue;
-            }
-
-            watchedCells.Add(address);
-        }
-
-        return watchedCells;
-    }
-
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
     {
         range = default;
@@ -3313,31 +1717,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return false;
-    }
-
-    private static IReadOnlyList<GridRange> ReadAllowEditRanges(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var ranges = new List<GridRange>();
-        var tempSheet = SheetId.New();
-        foreach (var protectedRange in worksheetXml.Root?
-                     .Element(worksheetNs + "protectedRanges")?
-                     .Elements(worksheetNs + "protectedRange") ?? [])
-        {
-            var sqref = protectedRange.Attribute("sqref")?.Value;
-            if (string.IsNullOrWhiteSpace(sqref))
-                continue;
-
-            var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (tokens.Length != 1)
-                continue;
-
-            if (TryParseSqrefToken(tokens[0], tempSheet, out var range))
-            {
-                ranges.Add(range);
-            }
-        }
-
-        return ranges;
     }
 
     private static IReadOnlyList<ConditionalFormat> ReadAdvancedConditionalFormats(
@@ -3554,123 +1933,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .ToList();
     }
 
-    private static IReadOnlyList<DataValidationNativeMetadata> ReadDataValidationNativeMetadata(
-        XDocument worksheetXml,
-        XNamespace worksheetNs)
-    {
-        var dataValidations = worksheetXml.Root?.Element(worksheetNs + "dataValidations");
-        if (dataValidations is null)
-            return [];
-
-        var containerAttributes = ReadNativeDataValidationsContainerAttributes(dataValidations);
-        var containerChildXmls = ReadNativeDataValidationsContainerChildXmls(dataValidations, worksheetNs);
-        var tempSheet = SheetId.New();
-        var result = new List<DataValidationNativeMetadata>();
-
-        foreach (var validation in dataValidations.Elements(worksheetNs + "dataValidation"))
-        {
-            var sqref = validation.Attribute("sqref")?.Value;
-            if (string.IsNullOrWhiteSpace(sqref))
-                continue;
-
-            var firstRef = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(firstRef))
-                continue;
-
-            try
-            {
-                var appliesTo = firstRef.Contains(':', StringComparison.Ordinal)
-                    ? GridRange.Parse(firstRef, tempSheet)
-                    : new GridRange(CellAddress.Parse(firstRef, tempSheet), CellAddress.Parse(firstRef, tempSheet));
-                result.Add(new DataValidationNativeMetadata(
-                    appliesTo,
-                    ReadNativeDataValidationAttributes(validation),
-                    ReadNativeDataValidationChildXmls(validation, worksheetNs),
-                    containerAttributes,
-                    containerChildXmls));
-            }
-            catch
-            {
-                // Ignore native metadata for ranges Freexcel cannot parse.
-            }
-        }
-
-        return result;
-    }
-
-    private static Dictionary<string, string> ReadNativeDataValidationAttributes(XElement validation)
-    {
-        string[] modeledAttributes =
-        [
-            "type",
-            "errorStyle",
-            "operator",
-            "allowBlank",
-            "showDropDown",
-            "showInputMessage",
-            "showErrorMessage",
-            "errorTitle",
-            "error",
-            "promptTitle",
-            "prompt",
-            "sqref"
-        ];
-        return validation.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-    }
-
-    private static List<string> ReadNativeDataValidationChildXmls(XElement validation, XNamespace worksheetNs)
-    {
-        XName[] modeledChildren = [worksheetNs + "formula1", worksheetNs + "formula2"];
-        return validation.Elements()
-            .Where(element => !modeledChildren.Contains(element.Name))
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-    }
-
-    private static Dictionary<string, string> ReadNativeDataValidationsContainerAttributes(XElement dataValidations)
-    {
-        string[] modeledAttributes = ["count"];
-        return dataValidations.Attributes()
-            .Where(attribute => attribute.Name.NamespaceName.Length == 0 && !modeledAttributes.Contains(attribute.Name.LocalName))
-            .ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value, StringComparer.Ordinal);
-    }
-
-    private static List<string> ReadNativeDataValidationsContainerChildXmls(XElement dataValidations, XNamespace worksheetNs) =>
-        dataValidations.Elements()
-            .Where(element => element.Name != worksheetNs + "dataValidation")
-            .Select(element => element.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))
-            .ToList();
-
-    private static void ApplyNativeDataValidationMetadata(
-        Sheet sheet,
-        IReadOnlyList<DataValidationNativeMetadata> nativeMetadata)
-    {
-        if (nativeMetadata.Count == 0 || sheet.DataValidations.Count == 0)
-            return;
-
-        foreach (var validation in sheet.DataValidations)
-        {
-            var metadata = nativeMetadata.FirstOrDefault(item =>
-                item.AppliesTo.Start.Row == validation.AppliesTo.Start.Row &&
-                item.AppliesTo.Start.Col == validation.AppliesTo.Start.Col &&
-                item.AppliesTo.End.Row == validation.AppliesTo.End.Row &&
-                item.AppliesTo.End.Col == validation.AppliesTo.End.Col);
-            if (metadata is null)
-                continue;
-
-            if (metadata.NativeAttributes.Count > 0)
-                validation.NativeAttributes = metadata.NativeAttributes;
-            if (metadata.NativeChildXmls.Count > 0)
-                validation.NativeChildXmls = metadata.NativeChildXmls;
-            if (metadata.NativeContainerAttributes.Count > 0)
-                validation.NativeContainerAttributes = metadata.NativeContainerAttributes;
-            if (metadata.NativeContainerChildXmls.Count > 0)
-                validation.NativeContainerChildXmls = metadata.NativeContainerChildXmls;
-        }
-    }
-
     private static bool TryMapLongTailConditionalFormatRule(string? type, out CfRuleType ruleType)
     {
         ruleType = type switch
@@ -3720,53 +1982,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string.Equals(type, "containsErrors", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(type, "notContainsErrors", StringComparison.OrdinalIgnoreCase);
 
-    private static IReadOnlyList<SparklineModel> ReadWorksheetSparklines(XDocument worksheetXml)
-    {
-        var result = new List<SparklineModel>();
-        var tempSheet = SheetId.New();
-        foreach (var group in worksheetXml.Descendants().Where(element =>
-                     string.Equals(element.Name.LocalName, "sparklineGroup", StringComparison.OrdinalIgnoreCase)))
-        {
-            var kind = group.Attribute("type")?.Value switch
-            {
-                "column" => SparklineKind.Column,
-                "stacked" or "winLoss" => SparklineKind.WinLoss,
-                _ => SparklineKind.Line
-            };
-
-            foreach (var sparkline in group.Descendants().Where(element =>
-                         string.Equals(element.Name.LocalName, "sparkline", StringComparison.OrdinalIgnoreCase)))
-            {
-                var formula = sparkline.Elements().FirstOrDefault(element =>
-                    string.Equals(element.Name.LocalName, "f", StringComparison.OrdinalIgnoreCase))?.Value;
-                var location = sparkline.Elements().FirstOrDefault(element =>
-                    string.Equals(element.Name.LocalName, "sqref", StringComparison.OrdinalIgnoreCase))?.Value;
-                if (string.IsNullOrWhiteSpace(formula) || string.IsNullOrWhiteSpace(location))
-                    continue;
-
-                var bang = formula.LastIndexOf('!');
-                var rangeText = bang >= 0 ? formula[(bang + 1)..] : formula;
-                rangeText = rangeText.Replace("$", "", StringComparison.Ordinal);
-                location = location.Replace("$", "", StringComparison.Ordinal);
-                try
-                {
-                    result.Add(new SparklineModel
-                    {
-                        DataRange = GridRange.Parse(rangeText, tempSheet),
-                        Location = CellAddress.Parse(location, tempSheet),
-                        Kind = kind
-                    });
-                }
-                catch
-                {
-                    // Skip malformed sparkline references.
-                }
-            }
-        }
-
-        return result;
-    }
-
     private static ConditionalFormat ReadColorScaleConditionalFormat(
         XElement colorScale,
         GridRange appliesTo,
@@ -3810,11 +2025,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             });
         }
 
-        if (TryReadRgbColor(colors.ElementAtOrDefault(0), out var minColor))
+        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(0), out var minColor))
             format.MinColor = minColor;
-        if (format.UseThreeColorScale && TryReadRgbColor(colors.ElementAtOrDefault(1), out var midColor))
+        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(1), out var midColor))
             format.MidColor = midColor;
-        if (TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), out var maxColor))
+        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), out var maxColor))
             format.MaxColor = maxColor;
 
         ApplyNativeConditionalFormatPayloadMetadata(format, colorScale, worksheetNs);
@@ -3847,7 +2062,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             format.DataBarMaxThresholdType = value.Type;
             format.DataBarMaxThresholdValue = value.Value;
         });
-        if (TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
+        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
             format.DataBarColor = color;
         ApplyNativeConditionalFormatPayloadMetadata(format, dataBar, worksheetNs);
         return format;
@@ -3963,560 +2178,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => WorksheetViewMode.Normal
         };
 
-    private static WorksheetBackgroundImage? ReadWorksheetBackground(
-        ZipArchive archive,
-        string worksheetPath,
-        XDocument worksheetXml)
-    {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relId = worksheetXml.Root?
-            .Element(worksheetNs + "picture")?
-            .Attribute(relNs + "id")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(relId))
-            return null;
-
-        var relsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
-        if (relsEntry is null)
-            return null;
-
-        var relsXml = LoadXml(relsEntry);
-        var relationship = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, relId, StringComparison.Ordinal));
-        var target = relationship?.Attribute("Target")?.Value;
-        if (string.IsNullOrWhiteSpace(target))
-            return null;
-
-        var imagePath = ResolveRelationshipTarget(worksheetPath, target);
-        var imageEntry = archive.GetEntry(imagePath);
-        if (imageEntry is null)
-            return null;
-
-        using var imageStream = imageEntry.Open();
-        using var ms = new MemoryStream();
-        imageStream.CopyTo(ms);
-        return new WorksheetBackgroundImage(
-            ms.ToArray(),
-            GetContentTypeFromPath(imagePath),
-            Path.GetFileName(imagePath));
-    }
-
-    private static IReadOnlyList<XlsxChartPackagePart> ReadWorksheetChartParts(
-        ZipArchive archive,
-        string worksheetPath,
-        XDocument worksheetXml)
-    {
-        var charts = new List<XlsxChartPackagePart>();
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-
-        var drawingRelId = worksheetXml.Root?
-            .Element(worksheetNs + "drawing")?
-            .Attribute(relNs + "id")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingRelId))
-            return charts;
-
-        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
-        if (worksheetRelsEntry is null)
-            return charts;
-
-        var worksheetRelsXml = LoadXml(worksheetRelsEntry);
-        var drawingTarget = worksheetRelsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, drawingRelId, StringComparison.Ordinal))?
-            .Attribute("Target")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingTarget))
-            return charts;
-
-        var drawingPath = ResolveRelationshipTarget(worksheetPath, drawingTarget);
-        var drawingEntry = archive.GetEntry(drawingPath);
-        if (drawingEntry is null)
-            return charts;
-
-        var drawingXml = LoadXml(drawingEntry);
-        var chartElements = drawingXml
-            .Descendants(chartNs + "chart")
-            .ToList();
-        if (chartElements.Count == 0)
-            return charts;
-
-        var drawingRelsEntry = archive.GetEntry(GetWorksheetRelsPath(drawingPath));
-        if (drawingRelsEntry is null)
-            return charts;
-
-        var drawingRelsXml = LoadXml(drawingRelsEntry);
-        foreach (var chartElement in chartElements)
-        {
-            var chartRelId = chartElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(chartRelId))
-                continue;
-
-            var chartTarget = drawingRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, chartRelId, StringComparison.Ordinal))?
-                .Attribute("Target")?
-                .Value;
-            if (string.IsNullOrWhiteSpace(chartTarget))
-                continue;
-
-            var chartPath = ResolveRelationshipTarget(drawingPath, chartTarget);
-            var chartEntry = archive.GetEntry(chartPath);
-            if (chartEntry is null)
-                continue;
-            var chartRelationships = archive.GetEntry(GetWorksheetRelsPath(chartPath)) is { } chartRelsEntry
-                ? LoadXml(chartRelsEntry)
-                : null;
-
-            var anchor = chartElement
-                .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
-                .Select(TryReadTwoCellAnchor)
-                .FirstOrDefault(candidate => candidate is not null)
-                ?? chartElement
-                    .Ancestors(spreadsheetDrawingNs + "oneCellAnchor")
-                    .Select(TryReadOneCellAnchor)
-                    .FirstOrDefault(candidate => candidate is not null)
-                ?? chartElement
-                    .Ancestors(spreadsheetDrawingNs + "absoluteAnchor")
-                    .Select(TryReadAbsoluteAnchor)
-                    .FirstOrDefault(candidate => candidate is not null);
-
-            charts.Add(new XlsxChartPackagePart(LoadXml(chartEntry), chartRelationships, anchor));
-        }
-
-        return charts;
-    }
-
-    private static IReadOnlyList<XlsxPicturePackagePart> ReadWorksheetPictureParts(
-        ZipArchive archive,
-        string worksheetPath,
-        XDocument worksheetXml)
-    {
-        var pictures = new List<XlsxPicturePackagePart>();
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-
-        var drawingRelId = worksheetXml.Root?
-            .Element(worksheetNs + "drawing")?
-            .Attribute(relNs + "id")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingRelId))
-            return pictures;
-
-        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
-        if (worksheetRelsEntry is null)
-            return pictures;
-
-        var worksheetRelsXml = LoadXml(worksheetRelsEntry);
-        var drawingTarget = worksheetRelsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, drawingRelId, StringComparison.Ordinal))?
-            .Attribute("Target")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingTarget))
-            return pictures;
-
-        var drawingPath = ResolveRelationshipTarget(worksheetPath, drawingTarget);
-        var drawingEntry = archive.GetEntry(drawingPath);
-        if (drawingEntry is null)
-            return pictures;
-
-        var drawingRelsEntry = archive.GetEntry(GetWorksheetRelsPath(drawingPath));
-        if (drawingRelsEntry is null)
-            return pictures;
-
-        var drawingXml = LoadXml(drawingEntry);
-        var drawingRelsXml = LoadXml(drawingRelsEntry);
-        foreach (var pictureElement in drawingXml.Descendants(spreadsheetDrawingNs + "pic"))
-        {
-            var imageRelId = pictureElement
-                .Descendants(drawingNs + "blip")
-                .Select(element => element.Attribute(relNs + "embed")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            if (string.IsNullOrWhiteSpace(imageRelId))
-                continue;
-
-            var imageTarget = drawingRelsXml.Root?
-                .Elements(packageRelNs + "Relationship")
-                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, imageRelId, StringComparison.Ordinal))?
-                .Attribute("Target")?
-                .Value;
-            if (string.IsNullOrWhiteSpace(imageTarget))
-                continue;
-
-            var imagePath = ResolveRelationshipTarget(drawingPath, imageTarget);
-            var imageEntry = archive.GetEntry(imagePath);
-            if (imageEntry is null)
-                continue;
-
-            using var imageStream = imageEntry.Open();
-            using var ms = new MemoryStream();
-            imageStream.CopyTo(ms);
-
-            var anchor = pictureElement
-                .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
-                .Select(TryReadTwoCellAnchor)
-                .FirstOrDefault(candidate => candidate is not null)
-                ?? pictureElement
-                    .Ancestors(spreadsheetDrawingNs + "oneCellAnchor")
-                    .Select(TryReadOneCellAnchor)
-                    .FirstOrDefault(candidate => candidate is not null)
-                ?? pictureElement
-                    .Ancestors(spreadsheetDrawingNs + "absoluteAnchor")
-                    .Select(TryReadAbsoluteAnchor)
-                    .FirstOrDefault(candidate => candidate is not null);
-            var altText = pictureElement
-                .Descendants(spreadsheetDrawingNs + "cNvPr")
-                .Select(element => element.Attribute("descr")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            var sourceRectangle = pictureElement
-                .Element(spreadsheetDrawingNs + "blipFill")?
-                .Element(drawingNs + "srcRect");
-
-            pictures.Add(new XlsxPicturePackagePart(
-                ms.ToArray(),
-                GetContentTypeFromPath(imagePath),
-                altText,
-                anchor,
-                ReadSourceRectangleRatio(sourceRectangle, "l"),
-                ReadSourceRectangleRatio(sourceRectangle, "t"),
-                ReadSourceRectangleRatio(sourceRectangle, "r"),
-                ReadSourceRectangleRatio(sourceRectangle, "b")));
-        }
-
-        return pictures;
-    }
-
-    private static double ReadSourceRectangleRatio(XElement? sourceRectangle, string attributeName)
-    {
-        if (!double.TryParse(
-                sourceRectangle?.Attribute(attributeName)?.Value,
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out var value))
-        {
-            return 0;
-        }
-
-        return Math.Clamp(value / 100000d, 0, 1);
-    }
-
-    private static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadWorksheetShapeParts(
-        ZipArchive archive,
-        string worksheetPath,
-        XDocument worksheetXml)
-    {
-        var textBoxes = new List<XlsxTextBoxPackagePart>();
-        var shapes = new List<XlsxShapePackagePart>();
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-
-        var drawingXml = ReadWorksheetDrawingXml(archive, worksheetPath, worksheetXml);
-        if (drawingXml is null)
-            return (textBoxes, shapes);
-
-        foreach (var shapeElement in drawingXml.Descendants(spreadsheetDrawingNs + "sp"))
-        {
-            var anchor = shapeElement
-                .Ancestors(spreadsheetDrawingNs + "twoCellAnchor")
-                .Select(TryReadTwoCellAnchor)
-                .FirstOrDefault(candidate => candidate is not null)
-                ?? shapeElement
-                    .Ancestors(spreadsheetDrawingNs + "oneCellAnchor")
-                    .Select(TryReadOneCellAnchor)
-                    .FirstOrDefault(candidate => candidate is not null)
-                ?? shapeElement
-                    .Ancestors(spreadsheetDrawingNs + "absoluteAnchor")
-                    .Select(TryReadAbsoluteAnchor)
-                    .FirstOrDefault(candidate => candidate is not null);
-            var altText = shapeElement
-                .Descendants(spreadsheetDrawingNs + "cNvPr")
-                .Select(element => element.Attribute("descr")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-            var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
-            var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
-            var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
-            var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "solidFill"), drawingNs);
-            var outlineColor = ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill"), drawingNs);
-            var hasShadowEffect = spPr?
-                .Element(drawingNs + "effectLst")?
-                .Element(drawingNs + "outerShdw") is not null;
-            var text = string.Concat(shapeElement
-                .Element(spreadsheetDrawingNs + "txBody")?
-                .Descendants(drawingNs + "t")
-                .Select(t => t.Value) ?? []);
-
-            if (!string.IsNullOrEmpty(text))
-            {
-                textBoxes.Add(new XlsxTextBoxPackagePart(text, altText, anchor, rotation, fillColor, outlineColor));
-                continue;
-            }
-
-            var preset = spPr?
-                .Element(drawingNs + "prstGeom")?
-                .Attribute("prst")?
-                .Value;
-            if (ToDrawingShapeKind(preset) is { } kind)
-                shapes.Add(new XlsxShapePackagePart(
-                    kind,
-                    altText,
-                    anchor,
-                    rotation,
-                    fillColor,
-                    outlineColor,
-                    gradientFill.EndColor,
-                    hasShadowEffect));
-        }
-
-        return (textBoxes, shapes);
-    }
-
-    private static XDocument? ReadWorksheetDrawingXml(ZipArchive archive, string worksheetPath, XDocument worksheetXml)
-    {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var drawingRelId = worksheetXml.Root?
-            .Element(worksheetNs + "drawing")?
-            .Attribute(relNs + "id")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingRelId))
-            return null;
-
-        var worksheetRelsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
-        if (worksheetRelsEntry is null)
-            return null;
-
-        var worksheetRelsXml = LoadXml(worksheetRelsEntry);
-        var drawingTarget = worksheetRelsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, drawingRelId, StringComparison.Ordinal))?
-            .Attribute("Target")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(drawingTarget))
-            return null;
-
-        var drawingEntry = archive.GetEntry(ResolveRelationshipTarget(worksheetPath, drawingTarget));
-        return drawingEntry is null ? null : LoadXml(drawingEntry);
-    }
-
-    private static double ReadDrawingRotation(XElement? transform)
-    {
-        if (!double.TryParse(transform?.Attribute("rot")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var rotation))
-            return 0;
-        var degrees = rotation / 60000d;
-        degrees %= 360;
-        return degrees < 0 ? degrees + 360 : degrees;
-    }
-
-    private static CellColor? ReadDrawingSolidFillColor(XElement? solidFill, XNamespace drawingNs)
-    {
-        var value = solidFill?
-            .Element(drawingNs + "srgbClr")?
-            .Attribute("val")?
-            .Value;
-        if (string.IsNullOrWhiteSpace(value) || value.Length != 6)
-            return null;
-        return byte.TryParse(value[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
-               byte.TryParse(value[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
-               byte.TryParse(value[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)
-            ? new CellColor(r, g, b)
-            : null;
-    }
-
-    private static (CellColor? StartColor, CellColor? EndColor) ReadDrawingGradientFillColors(
-        XElement? gradientFill,
-        XNamespace drawingNs)
-    {
-        var colors = gradientFill?
-            .Element(drawingNs + "gsLst")?
-            .Elements(drawingNs + "gs")
-            .Select(gs => new
-            {
-                Position = int.TryParse(gs.Attribute("pos")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pos)
-                    ? pos
-                    : 0,
-                Color = ReadDrawingSolidFillColor(gs, drawingNs)
-            })
-            .Where(item => item.Color is not null)
-            .OrderBy(item => item.Position)
-            .Select(item => item.Color)
-            .ToList();
-
-        return colors is { Count: >= 2 }
-            ? (colors[0], colors[^1])
-            : (colors?.FirstOrDefault(), null);
-    }
-
-    private static DrawingShapeKind? ToDrawingShapeKind(string? preset) =>
-        preset switch
-        {
-            "rect" or "roundRect" => DrawingShapeKind.Rectangle,
-            "ellipse" => DrawingShapeKind.Ellipse,
-            "line" => DrawingShapeKind.Line,
-            _ => null
-        };
-
-    private static XlsxDrawingAnchor? TryReadTwoCellAnchor(XElement anchor)
-    {
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        var from = anchor.Element(spreadsheetDrawingNs + "from");
-        var to = anchor.Element(spreadsheetDrawingNs + "to");
-        if (from is null || to is null)
-            return null;
-
-        if (!TryReadAnchorCoordinate(from, spreadsheetDrawingNs, out var fromRow, out var fromCol, out var fromRowOffset, out var fromColOffset) ||
-            !TryReadAnchorCoordinate(to, spreadsheetDrawingNs, out var toRow, out var toCol, out var toRowOffset, out var toColOffset))
-        {
-            return null;
-        }
-
-        if (toRow <= fromRow || toCol <= fromCol)
-            return null;
-
-        return new XlsxDrawingAnchor(
-            fromRow,
-            fromCol,
-            fromRowOffset,
-            fromColOffset,
-            AbsoluteLeft: null,
-            AbsoluteTop: null,
-            toRow,
-            toCol,
-            toRowOffset,
-            toColOffset,
-            Width: null,
-            Height: null);
-    }
-
-    private static XlsxDrawingAnchor? TryReadOneCellAnchor(XElement anchor)
-    {
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        var from = anchor.Element(spreadsheetDrawingNs + "from");
-        var ext = anchor.Element(spreadsheetDrawingNs + "ext");
-        if (from is null || ext is null)
-            return null;
-
-        if (!TryReadAnchorCoordinate(from, spreadsheetDrawingNs, out var fromRow, out var fromCol, out var fromRowOffset, out var fromColOffset))
-            return null;
-
-        var width = EmusToPixels(ext.Attribute("cx")?.Value);
-        var height = EmusToPixels(ext.Attribute("cy")?.Value);
-        if (width <= 0 || height <= 0)
-            return null;
-
-        return new XlsxDrawingAnchor(
-            fromRow,
-            fromCol,
-            fromRowOffset,
-            fromColOffset,
-            AbsoluteLeft: null,
-            AbsoluteTop: null,
-            ToRowZeroBased: null,
-            ToColumnZeroBased: null,
-            ToRowOffset: null,
-            ToColumnOffset: null,
-            width,
-            height);
-    }
-
-    private static XlsxDrawingAnchor? TryReadAbsoluteAnchor(XElement anchor)
-    {
-        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-        var pos = anchor.Element(spreadsheetDrawingNs + "pos");
-        var ext = anchor.Element(spreadsheetDrawingNs + "ext");
-        if (pos is null || ext is null)
-            return null;
-
-        var left = EmusToPixels(pos.Attribute("x")?.Value);
-        var top = EmusToPixels(pos.Attribute("y")?.Value);
-        var width = EmusToPixels(ext.Attribute("cx")?.Value);
-        var height = EmusToPixels(ext.Attribute("cy")?.Value);
-        if (width <= 0 || height <= 0)
-            return null;
-
-        return new XlsxDrawingAnchor(
-            FromRowZeroBased: 0,
-            FromColumnZeroBased: 0,
-            FromRowOffset: 0,
-            FromColumnOffset: 0,
-            left,
-            top,
-            ToRowZeroBased: null,
-            ToColumnZeroBased: null,
-            ToRowOffset: null,
-            ToColumnOffset: null,
-            width,
-            height);
-    }
-
-    private static bool TryReadAnchorCoordinate(
-        XElement marker,
-        XNamespace spreadsheetDrawingNs,
-        out uint rowZeroBased,
-        out uint columnZeroBased,
-        out double rowOffset,
-        out double columnOffset)
-    {
-        rowZeroBased = 0;
-        columnZeroBased = 0;
-        rowOffset = EmusToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
-        columnOffset = EmusToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
-        return uint.TryParse(marker.Element(spreadsheetDrawingNs + "row")?.Value, out rowZeroBased) &&
-               uint.TryParse(marker.Element(spreadsheetDrawingNs + "col")?.Value, out columnZeroBased);
-    }
-
-    private static double EmusToPixels(string? value) =>
-        double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var emus)
-            ? emus / 9525.0
-            : 0;
-
     private static bool IsValidWorksheetRow(uint row) =>
         row is >= 1 and <= CellAddress.MaxRow;
 
     private static bool IsValidWorksheetColumn(uint column) =>
         column is >= 1 and <= CellAddress.MaxCol;
-
-    private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
-        where TEnum : struct, Enum =>
-        Enum.IsDefined(value) ? value : defaultValue;
-
-    private static double NonNegativeFiniteOrDefault(double value, double defaultValue) =>
-        double.IsFinite(value) && value >= 0 ? value : defaultValue;
-
-    private static WorksheetPageMargins ValidPageMarginsOrDefault(
-        WorksheetPageMargins margins,
-        WorksheetPageMargins defaultValue) =>
-        IsNonNegativeFinite(margins.Left) &&
-        IsNonNegativeFinite(margins.Right) &&
-        IsNonNegativeFinite(margins.Top) &&
-        IsNonNegativeFinite(margins.Bottom)
-            ? margins
-            : defaultValue;
-
-    private static WorksheetScaleToFit ValidScaleToFitOrDefault(
-        WorksheetScaleToFit scaleToFit,
-        WorksheetScaleToFit defaultValue) =>
-        scaleToFit.ScalePercent is < 10 or > 400 ||
-        scaleToFit.FitToPagesWide is < 1 ||
-        scaleToFit.FitToPagesTall is < 1
-            ? defaultValue
-            : scaleToFit;
-
-    private static bool IsNonNegativeFinite(double value) =>
-        double.IsFinite(value) && value >= 0;
 
     private static bool IsValidRepeatRange(WorksheetRepeatRange range, uint max) =>
         range.Start >= 1 && range.End >= range.Start && range.End <= max;
@@ -4532,36 +2198,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
-
-    private static string? ToXlsxWorksheetViewMode(WorksheetViewMode viewMode) =>
-        viewMode switch
-        {
-            WorksheetViewMode.PageBreakPreview => "pageBreakPreview",
-            WorksheetViewMode.PageLayout => "pageLayout",
-            _ => null
-        };
-
-    private static void ApplyChartAnchor(ChartModel chart, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, anchor.FromColumnZeroBased) + anchor.FromColumnOffset);
-        chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, anchor.FromRowZeroBased) + anchor.FromRowOffset);
-
-        var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
-            + anchor.ToColumnOffset!.Value
-            - anchor.FromColumnOffset);
-        var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
-            + anchor.ToRowOffset!.Value
-            - anchor.FromRowOffset);
-        if (width > 0)
-            chart.Width = width;
-        if (height > 0)
-            chart.Height = height;
-    }
 
     private static void ApplyChartExternalDataRelationshipMetadata(ChartModel chart, XlsxChartPackagePart chartPart)
     {
@@ -4581,122 +2217,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         chart.ExternalData.RelationshipType = relationship.Attribute("Type")?.Value;
         chart.ExternalData.Target = relationship.Attribute("Target")?.Value;
         chart.ExternalData.TargetMode = relationship.Attribute("TargetMode")?.Value;
-    }
-
-    private static void ApplyPictureAnchor(PictureModel picture, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
-            + anchor.ToColumnOffset!.Value
-            - anchor.FromColumnOffset);
-        var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
-            + anchor.ToRowOffset!.Value
-            - anchor.FromRowOffset);
-        if (width > 0)
-            picture.Width = width;
-        if (height > 0)
-            picture.Height = height;
-    }
-
-    private static void ApplyTextBoxAnchor(TextBoxModel textBox, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        var (width, height) = GetDrawingAnchorSize(anchor, sheet);
-        if (width > 0)
-            textBox.Width = width;
-        if (height > 0)
-            textBox.Height = height;
-    }
-
-    private static void ApplyDrawingShapeAnchor(DrawingShapeModel shape, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        var (width, height) = GetDrawingAnchorSize(anchor, sheet);
-        if (width > 0)
-            shape.Width = width;
-        if (height > 0)
-            shape.Height = height;
-    }
-
-    private static (double Width, double Height) GetDrawingAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)
-    {
-        var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
-            + anchor.ToColumnOffset!.Value
-            - anchor.FromColumnOffset);
-        var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
-            + anchor.ToRowOffset!.Value
-            - anchor.FromRowOffset);
-        return (width, height);
-    }
-
-    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
-    {
-        double width = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var col = firstColumn + offset;
-            if (!sheet.IsColEffectivelyHidden(col))
-                width += sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
-        }
-
-        return width;
-    }
-
-    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
-    {
-        double height = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var row = firstRow + offset;
-            if (!sheet.IsRowEffectivelyHidden(row))
-                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
-        }
-
-        return height;
-    }
-
-    private static void LoadNamedRanges(XLWorkbook xlWorkbook, Workbook workbook)
-    {
-        foreach (var nr in xlWorkbook.DefinedNames)
-        {
-            try
-            {
-                // Take only the first range address if there are multiple
-                var xlRange = nr.Ranges.FirstOrDefault();
-                if (xlRange is null) continue;
-
-                var firstCell = xlRange.FirstCell();
-                var lastCell  = xlRange.LastCell();
-
-                // Find the matching Freexcel sheet
-                var sheetName = firstCell.Worksheet.Name;
-                var sheet = workbook.GetSheet(sheetName);
-                if (sheet is null) continue;
-
-                var start = new CellAddress(sheet.Id,
-                    (uint)firstCell.Address.RowNumber,
-                    (uint)firstCell.Address.ColumnNumber);
-                var end = new CellAddress(sheet.Id,
-                    (uint)lastCell.Address.RowNumber,
-                    (uint)lastCell.Address.ColumnNumber);
-
-                workbook.DefineNamedRange(nr.Name, new GridRange(start, end));
-            }
-            catch
-            {
-                // Skip any named range that can't be mapped
-            }
-        }
     }
 
     public void Save(Workbook workbook, Stream stream)
@@ -4731,11 +2251,11 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 }
                 else if (cell.Value is not BlankValue)
                 {
-                    xlCell.Value = MapValueInverse(cell.Value);
+                    xlCell.Value = XlsxClosedXmlCellMapper.MapValueInverse(cell.Value);
                 }
 
                 var style = workbook.GetStyle(cell.StyleId);
-                ApplyStyle(xlCell, style);
+                XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
             }
 
             foreach (var (rowNum, height) in sheet.RowHeights)
@@ -4828,15 +2348,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     (int)printArea.End.Col);
             }
 
-            var pageOrientation = ValidEnumOrDefault(sheet.PageOrientation, WorksheetPageOrientation.Portrait);
-            var paperSize = ValidEnumOrDefault(sheet.PaperSize, WorksheetPaperSize.A4);
-            var pageMargins = ValidPageMarginsOrDefault(sheet.PageMargins, WorksheetPageMargins.Narrow);
-            var headerMargin = NonNegativeFiniteOrDefault(sheet.HeaderMargin, 0.3);
-            var footerMargin = NonNegativeFiniteOrDefault(sheet.FooterMargin, 0.3);
-            var scaleToFit = ValidScaleToFitOrDefault(sheet.ScaleToFit, WorksheetScaleToFit.Default);
-            var pageOrder = ValidEnumOrDefault(sheet.PageOrder, WorksheetPageOrder.DownThenOver);
-            var printErrorValue = ValidEnumOrDefault(sheet.PrintErrorValue, WorksheetPrintErrorValue.Displayed);
-            var printComments = ValidEnumOrDefault(sheet.PrintComments, WorksheetPrintComments.None);
+            var pageOrientation = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PageOrientation, WorksheetPageOrientation.Portrait);
+            var paperSize = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PaperSize, WorksheetPaperSize.A4);
+            var pageMargins = XlsxWorksheetValueSanitizer.ValidPageMarginsOrDefault(sheet.PageMargins, WorksheetPageMargins.Narrow);
+            var headerMargin = XlsxWorksheetValueSanitizer.NonNegativeFiniteOrDefault(sheet.HeaderMargin, 0.3);
+            var footerMargin = XlsxWorksheetValueSanitizer.NonNegativeFiniteOrDefault(sheet.FooterMargin, 0.3);
+            var scaleToFit = XlsxWorksheetValueSanitizer.ValidScaleToFitOrDefault(sheet.ScaleToFit, WorksheetScaleToFit.Default);
+            var pageOrder = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PageOrder, WorksheetPageOrder.DownThenOver);
+            var printErrorValue = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PrintErrorValue, WorksheetPrintErrorValue.Displayed);
+            var printComments = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PrintComments, WorksheetPrintComments.None);
 
             xlSheet.PageSetup.PageOrientation = pageOrientation == WorksheetPageOrientation.Landscape
                 ? XLPageOrientation.Landscape
@@ -4869,20 +2389,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 xlSheet.PageSetup.HorizontalDpi = printQualityDpi;
                 xlSheet.PageSetup.VerticalDpi = printQualityDpi;
             }
-            xlSheet.PageSetup.PrintErrorValue = ToXlsxPrintErrorValue(printErrorValue);
-            xlSheet.PageSetup.ShowComments = ToXlsxPrintComments(printComments);
+            xlSheet.PageSetup.PrintErrorValue = XlsxWorksheetPageSetupMapper.ToPrintErrorValue(printErrorValue);
+            xlSheet.PageSetup.ShowComments = XlsxWorksheetPageSetupMapper.ToPrintComments(printComments);
             xlSheet.PageSetup.DifferentFirstPageOnHF = sheet.DifferentFirstPageHeaderFooter;
             xlSheet.PageSetup.DifferentOddEvenPagesOnHF = sheet.DifferentOddEvenHeaderFooter;
             xlSheet.PageSetup.ScaleHFWithDocument = sheet.HeaderFooterScaleWithDocument;
             xlSheet.PageSetup.AlignHFWithMargins = sheet.HeaderFooterAlignWithMargins;
-            SetXlsxHeaderFooter(
+            XlsxWorksheetPageSetupMapper.SetHeaderFooter(
                 xlSheet.PageSetup.Header,
                 sheet.PageHeader,
                 sheet.FirstPageHeader,
                 sheet.EvenPageHeader,
                 sheet.DifferentFirstPageHeaderFooter,
                 sheet.DifferentOddEvenHeaderFooter);
-            SetXlsxHeaderFooter(
+            XlsxWorksheetPageSetupMapper.SetHeaderFooter(
                 xlSheet.PageSetup.Footer,
                 sheet.PageFooter,
                 sheet.FirstPageFooter,
@@ -4913,10 +2433,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
             }
 
             // Save CellValue conditional format rules back to XLSX
-            SaveConditionalFormats(sheet, xlSheet);
+            XlsxConditionalFormatClosedXmlMapper.Save(sheet, xlSheet);
 
             // Save data validation rules back to XLSX
-            try { SaveDataValidations(sheet, xlSheet); }
+            try { XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet); }
             catch { /* ignore DV save failures */ }
 
             // Save merged regions
@@ -4933,7 +2453,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         // Save named ranges
-        try { SaveNamedRanges(workbook, xlWorkbook); }
+        try { XlsxNamedRangeMapper.Save(workbook, xlWorkbook); }
         catch { /* ignore named-range save failures */ }
 
         using var packageStream = new MemoryStream();
@@ -4951,25 +2471,25 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
         {
             packageStream.Position = 0;
-            SaveWorksheetCalculationProperties(packageStream, workbook);
+            XlsxWorksheetCalculationPropertyMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
         {
             packageStream.Position = 0;
-            SaveWorksheetPhoneticProperties(packageStream, workbook);
+            XlsxWorksheetPhoneticPropertyMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
         {
             packageStream.Position = 0;
-            SaveAllowEditRanges(packageStream, workbook);
+            XlsxAllowEditRangeMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.DataValidations.Any(HasNativeDataValidationMetadata)))
+        if (workbook.Sheets.Any(sheet => sheet.DataValidations.Any(XlsxDataValidationNativeMetadataMapper.HasNativeMetadata)))
         {
             packageStream.Position = 0;
-            SaveDataValidationNativeMetadata(packageStream, workbook);
+            XlsxDataValidationNativeMetadataMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.ConditionalFormats.Any(IsAdvancedConditionalFormat)))
@@ -4981,31 +2501,19 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.Sparklines.Count > 0))
         {
             packageStream.Position = 0;
-            SaveWorksheetSparklines(packageStream, workbook);
+            XlsxSparklineMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.BackgroundImage is not null))
         {
             packageStream.Position = 0;
-            SaveWorksheetBackgrounds(packageStream, workbook);
+            XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet =>
-                !sheet.ShowGridlines ||
-                !sheet.ShowHeadings ||
-                !sheet.ShowRulers ||
-                ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
-                sheet.ZoomPercent != 100 ||
-                sheet.ShowFormulas ||
-                sheet.ViewTopRow.HasValue ||
-                sheet.ViewLeftCol.HasValue ||
-                sheet.ActiveRow.HasValue ||
-                sheet.ActiveCol.HasValue ||
-                (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
-                 (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))))
+        if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))
         {
             packageStream.Position = 0;
-            SaveSplitPaneSheetViews(packageStream, workbook);
+            XlsxWorksheetViewWriter.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => !string.IsNullOrWhiteSpace(sheet.CodeName)))
@@ -5017,31 +2525,31 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.GetUsedCells().Any(pair => pair.Value.IgnoreFormulaError)))
         {
             packageStream.Position = 0;
-            SaveWorksheetIgnoredErrors(packageStream, workbook);
+            XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook);
         }
 
         if (workbook.WatchedCells.Count > 0)
         {
             packageStream.Position = 0;
-            SaveWorksheetCellWatches(packageStream, workbook);
+            XlsxWorksheetDiagnosticsMapper.SaveCellWatches(packageStream, workbook);
         }
 
         if (workbook.Scenarios.Count > 0)
         {
             packageStream.Position = 0;
-            SaveWorksheetScenarios(packageStream, workbook);
+            XlsxWorksheetScenarioMapper.Save(packageStream, workbook);
         }
 
         if (workbook.CustomViews.Count > 0)
         {
             packageStream.Position = 0;
-            SaveCustomViews(packageStream, workbook);
+            XlsxCustomViewMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.CustomProperties.Count > 0))
         {
             packageStream.Position = 0;
-            SaveWorksheetCustomProperties(packageStream, workbook);
+            XlsxWorksheetCustomPropertyMapper.Save(packageStream, workbook);
         }
 
         packageStream.Position = 0;
@@ -5065,7 +2573,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.StructuredTables.Count > 0))
         {
             packageStream.Position = 0;
-            SaveStructuredTables(packageStream, workbook);
+            XlsxStructuredTableWriter.Save(packageStream, workbook);
         }
 
         if (workbook.PivotTableStyles.Count > 0)
@@ -5121,7 +2629,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
         var generatedEntriesBeforeMerge = generatedArchive.Entries
-            .Select(entry => NormalizeZipPath(entry.FullName.Replace('\\', '/')))
+            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var sourceEntry in sourceArchive.Entries)
@@ -5407,12 +2915,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     new XElement(freexcelNs + "selectedItems",
                         slicer.SelectedItems.Select(item =>
                             new XElement(freexcelNs + "selectedItem", new XAttribute("value", item)))))));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(slicerPath), new XDocument(
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(slicerPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
                         new XAttribute("Id", "rIdSlicerCache"),
                         new XAttribute("Type", "http://schemas.microsoft.com/office/2007/relationships/slicerCache"),
-                        new XAttribute("Target", GetRelativeTarget(slicerPath, cachePath))))));
+                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(slicerPath, cachePath))))));
             EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
             EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.slicerCache+xml");
             slicerIndex++;
@@ -5442,12 +2950,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
                     new XElement(slicerNs + "pivotTables",
                         new XElement(slicerNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(timelinePath), new XDocument(
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(timelinePath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
                         new XAttribute("Id", "rIdTimelineCache"),
                         new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/timelineCache"),
-                        new XAttribute("Target", GetRelativeTarget(timelinePath, cachePath))))));
+                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(timelinePath, cachePath))))));
             EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.timeline+xml");
             EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.timelineCache+xml");
             timelineIndex++;
@@ -5591,7 +3099,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (string.IsNullOrWhiteSpace(target))
             return false;
 
-        var targetPart = ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
+        var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
         return !string.IsNullOrWhiteSpace(targetPart) &&
                !generatedEntriesBeforeMerge.Contains(targetPart) &&
                targetArchive.GetEntry(targetPart) is not null;
@@ -5605,7 +3113,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private static string RelationshipPartToSourcePart(string relationshipPartPath)
     {
-        var normalized = NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
+        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
         if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
             return "";
 
@@ -5688,9 +3196,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -5751,9 +3259,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -5776,10 +3284,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var sourceWorksheetRels = LoadRelationshipTargets(
                 sourceArchive,
-                GetWorksheetRelsPath(sourceWorksheetPath),
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
                 sourceWorksheetPath,
                 packageRelNs);
-            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
             var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
                 ? LoadXml(targetWorksheetRelsEntry)
@@ -5829,37 +3337,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string sourcePart,
         string targetPart,
         string relationshipType)
-    {
-        var root = relsXml.Root;
-        if (root is null)
-        {
-            root = new XElement(packageRelNs + "Relationships");
-            relsXml.Add(root);
-        }
-
-        foreach (var relationship in root.Elements(packageRelNs + "Relationship"))
-        {
-            var type = relationship.Attribute("Type")?.Value;
-            var target = relationship.Attribute("Target")?.Value;
-            if (!string.Equals(type, relationshipType, StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(target))
-            {
-                continue;
-            }
-
-            var resolvedTarget = ResolveRelationshipTarget(sourcePart, target);
-            if (string.Equals(resolvedTarget, targetPart, StringComparison.OrdinalIgnoreCase))
-                return relationship.Attribute("Id")?.Value ?? "";
-        }
-
-        var id = NextRelationshipId(relsXml, packageRelNs);
-        root.Add(new XElement(
-            packageRelNs + "Relationship",
-            new XAttribute("Id", id),
-            new XAttribute("Type", relationshipType),
-            new XAttribute("Target", GetRelativeTarget(sourcePart, targetPart))));
-        return id;
-    }
+        => XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+            relsXml,
+            packageRelNs,
+            sourcePart,
+            targetPart,
+            relationshipType);
 
     private static void PreserveExternalLinkReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
     {
@@ -6000,7 +3483,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            var targetPart = ResolveRelationshipTarget("xl/workbook.xml", target);
+            var targetPart = XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", target);
             if (targetArchive.GetEntry(targetPart) is null)
                 continue;
 
@@ -6061,9 +3544,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -6084,13 +3567,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var sourceWorksheetRels = LoadRelationshipTargets(
                 sourceArchive,
-                GetWorksheetRelsPath(sourceWorksheetPath),
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
                 sourceWorksheetPath,
                 packageRelNs);
             if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var drawingPath))
                 continue;
 
-            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
             var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
                 ? LoadXml(targetWorksheetRelsEntry)
@@ -6142,9 +3625,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -6165,7 +3648,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var sourceWorksheetRels = LoadRelationshipTargets(
                 sourceArchive,
-                GetWorksheetRelsPath(sourceWorksheetPath),
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
                 sourceWorksheetPath,
                 packageRelNs);
             if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var printerSettingsPath) ||
@@ -6175,7 +3658,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 continue;
             }
 
-            var targetWorksheetRelsPath = GetWorksheetRelsPath(targetWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
                 ? LoadXml(targetWorksheetRelsEntry)
                 : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -6281,7 +3764,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             changed = true;
         if (MergeWorkbookViews(sourceBookViews, targetRoot, workbookNs))
             changed = true;
-        if (MergeWorkbookCustomViews(sourceCustomWorkbookViews, targetRoot, workbookNs, GetModeledCustomViewIds(workbook)))
+        if (MergeWorkbookCustomViews(sourceCustomWorkbookViews, targetRoot, workbookNs, XlsxCustomViewMapper.GetModeledIds(workbook)))
             changed = true;
         if (MergeWorkbookDefinedNames(sourceDefinedNames, targetRoot, workbookNs))
             changed = true;
@@ -6323,7 +3806,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             {
                 var retainedViews = sourceCustomWorkbookViews
                     .Elements(workbookNs + "customWorkbookView")
-                    .Where(view => !modeledCustomViewIds.Contains(NormalizeCustomViewId(view.Attribute("guid")?.Value) ?? string.Empty))
+                            .Where(view => !modeledCustomViewIds.Contains(XlsxCustomViewMapper.NormalizeId(view.Attribute("guid")?.Value) ?? string.Empty))
                     .Select(view => new XElement(view))
                     .ToList();
                 if (retainedViews.Count == 0)
@@ -6345,7 +3828,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Elements(workbookNs + "customWorkbookView")
             .Select(view => new
             {
-                Id = NormalizeCustomViewId(view.Attribute("guid")?.Value),
+                Id = XlsxCustomViewMapper.NormalizeId(view.Attribute("guid")?.Value),
                 View = view
             })
             .Where(item => !string.IsNullOrWhiteSpace(item.Id))
@@ -6354,7 +3837,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         foreach (var sourceView in sourceCustomWorkbookViews.Elements(workbookNs + "customWorkbookView"))
         {
-            var id = NormalizeCustomViewId(sourceView.Attribute("guid")?.Value);
+            var id = XlsxCustomViewMapper.NormalizeId(sourceView.Attribute("guid")?.Value);
             if (!string.IsNullOrWhiteSpace(id) && targetViewsById.TryGetValue(id, out var targetView))
             {
                 changed |= MergeMissingAttributes(sourceView, targetView, ["name", "guid"]);
@@ -6658,9 +4141,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -6754,7 +4237,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        GetModeledAllowEditRangeReferences(workbook, sheetName)))
+                        XlsxAllowEditRangeMapper.GetModeledReferences(workbook, sheetName)))
                     {
                         changed = true;
                     }
@@ -6785,7 +4268,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        GetModeledCustomViewIds(workbook)))
+                        XlsxCustomViewMapper.GetModeledIds(workbook)))
                     {
                         changed = true;
                     }
@@ -6798,7 +4281,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        GetModeledCustomPropertyNames(workbook, sheetName)))
+                        XlsxWorksheetCustomPropertyMapper.GetModeledNames(workbook, sheetName)))
                     {
                         changed = true;
                     }
@@ -6855,7 +4338,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        GetModeledScenarioNamesForSheet(workbook, sheetName)))
+                        XlsxWorksheetScenarioMapper.GetModeledNamesForSheet(workbook, sheetName)))
                 {
                     changed = true;
                 }
@@ -6953,9 +4436,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -6987,7 +4470,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         string worksheetPath,
         XNamespace packageRelNs)
     {
-        var relsEntry = archive.GetEntry(GetWorksheetRelsPath(worksheetPath));
+        var relsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
         if (relsEntry is null)
             return null;
 
@@ -7000,7 +4483,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ?.Value;
         return string.IsNullOrWhiteSpace(target)
             ? null
-            : ResolveRelationshipTarget(worksheetPath, target);
+            : XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
     }
 
     private static bool CanRestoreLegacyCommentPart(
@@ -7235,483 +4718,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return changed;
     }
 
-    private static void SaveWorksheetIgnoredErrors(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            var ignoredCells = sheet.GetUsedCells()
-                .Where(pair => pair.Value.IgnoreFormulaError)
-                .OrderBy(pair => pair.Key.Row)
-                .ThenBy(pair => pair.Key.Col)
-                .ToList();
-            if (ignoredCells.Count == 0)
-                continue;
-
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "ignoredErrors")?.Remove();
-            InsertWorksheetIgnoredErrorsInOrder(root, workbookNs, new XElement(
-                workbookNs + "ignoredErrors",
-                ignoredCells.Select(pair => new XElement(
-                    workbookNs + "ignoredError",
-                    new XAttribute("sqref", pair.Key.ToA1()),
-                    new XAttribute("numberStoredAsText", "1"),
-                    new XAttribute("evalError", "1"),
-                    new XAttribute("formula", "1"),
-                    new XAttribute("emptyCellReference", "1")))));
-
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
     private static void InsertWorksheetIgnoredErrorsInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement ignoredErrors)
     {
         InsertWorksheetMetadataElementInOrder(worksheetRoot, workbookNs, ignoredErrors);
-    }
-
-    private static void SaveWorksheetCellWatches(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var watchedCellsBySheet = workbook.WatchedCells
-            .GroupBy(address => address.Sheet)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .Distinct()
-                    .OrderBy(address => address.Row)
-                    .ThenBy(address => address.Col)
-                    .ToList());
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!watchedCellsBySheet.TryGetValue(sheet.Id, out var watchedCells) ||
-                watchedCells.Count == 0 ||
-                !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "cellWatches")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "cellWatches",
-                watchedCells.Select(address => new XElement(
-                    workbookNs + "cellWatch",
-                    new XAttribute("r", address.ToA1())))));
-
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static void SaveWorksheetScenarios(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            var scenariosForSheet = workbook.Scenarios
-                .Select(scenario => new
-                {
-                    Scenario = scenario,
-                    Changes = scenario.ChangingCells
-                        .Where(change => change.Address.Sheet == sheet.Id && IsSupportedScenarioValue(change.Value))
-                        .GroupBy(change => change.Address)
-                        .Select(group => group.Last())
-                        .OrderBy(change => change.Address.Row)
-                        .ThenBy(change => change.Address.Col)
-                        .ToList()
-                })
-                .Where(item => item.Changes.Count > 0)
-                .ToList();
-            if (scenariosForSheet.Count == 0 ||
-                !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "scenarios")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "scenarios",
-                scenariosForSheet.Select(item => new XElement(
-                    workbookNs + "scenario",
-                    new XAttribute("name", item.Scenario.Name),
-                    new XAttribute("count", item.Changes.Count.ToString(CultureInfo.InvariantCulture)),
-                    item.Changes.Select(change => new XElement(
-                        workbookNs + "inputCells",
-                        new XAttribute("r", change.Address.ToA1()),
-                        new XAttribute("val", FormatScenarioValue(change.Value))))))));
-
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static void SaveCustomViews(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        var customViews = workbook.CustomViews
-            .Select((view, index) => new
-            {
-                View = view,
-                Id = NormalizeCustomViewId(view.Id) ?? CreateDeterministicCustomViewId(view.Name, index),
-                States = view.Sheets
-                    .GroupBy(state => state.SheetName, StringComparer.OrdinalIgnoreCase)
-                    .Select(group => group.Last())
-                    .ToList()
-            })
-            .Where(item => !string.IsNullOrWhiteSpace(item.View.Name) && item.States.Count > 0)
-            .ToList();
-        if (customViews.Count == 0)
-            return;
-
-        workbookXml.Root?.Element(workbookNs + "customWorkbookViews")?.Remove();
-        InsertWorkbookCustomViewsInOrder(workbookXml.Root, workbookNs, new XElement(
-            workbookNs + "customWorkbookViews",
-            customViews.Select(item => new XElement(
-                workbookNs + "customWorkbookView",
-                new XAttribute("name", item.View.Name),
-                new XAttribute("guid", item.Id),
-                new XAttribute("autoUpdate", "0"),
-                new XAttribute("mergeInterval", "0"),
-                new XAttribute("personalView", "0")))));
-        ReplacePackageXml(archive, "xl/workbook.xml", workbookXml);
-
-        var customViewsBySheet = new Dictionary<string, List<XElement>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in customViews)
-        {
-            foreach (var state in item.States)
-            {
-                if (!customViewsBySheet.TryGetValue(state.SheetName, out var elements))
-                {
-                    elements = [];
-                    customViewsBySheet[state.SheetName] = elements;
-                }
-
-                elements.Add(ToCustomSheetViewXml(workbookNs, item.Id, state));
-            }
-        }
-
-        foreach (var (sheetName, customSheetViews) in customViewsBySheet)
-        {
-            if (!sheetPaths.TryGetValue(sheetName, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "customSheetViews")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "customSheetViews",
-                customSheetViews));
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static XElement ToCustomSheetViewXml(XNamespace workbookNs, string id, WorksheetCustomViewState state)
-    {
-        var frozenRows = ValidFrozenRowsOrZero(state.FrozenRows);
-        var frozenCols = ValidFrozenColumnsOrZero(state.FrozenCols);
-        var hasFrozenPanes = frozenRows > 0 || frozenCols > 0;
-        var splitRow = hasFrozenPanes ? null : state.SplitRow;
-        var splitColumn = hasFrozenPanes ? null : state.SplitColumn;
-
-        var customSheetView = new XElement(
-            workbookNs + "customSheetView",
-            new XAttribute("guid", id),
-            ToXlsxWorksheetViewMode(ValidEnumOrDefault(state.ViewMode, WorksheetViewMode.Normal)) is { } view
-                ? new XAttribute("view", view)
-                : null,
-            state.ShowGridlines ? null : new XAttribute("showGridLines", "0"),
-            state.ShowHeadings ? null : new XAttribute("showRowCol", "0"),
-            state.ShowRulers ? null : new XAttribute("showRuler", "0"),
-            state.ZoomPercent == 100 ? null : new XAttribute("scale", ValidZoomPercentOrDefault(state.ZoomPercent)),
-            state.ShowFormulas ? new XAttribute("showFormulas", "1") : null,
-            new XAttribute("state", "visible"));
-
-        if (hasFrozenPanes || splitRow.HasValue || splitColumn.HasValue)
-        {
-            customSheetView.Add(new XElement(
-                workbookNs + "pane",
-                splitColumn is { } splitColumnValue ? new XAttribute("xSplit", splitColumnValue) : null,
-                splitRow is { } splitRowValue ? new XAttribute("ySplit", splitRowValue) : null,
-                frozenCols > 0 ? new XAttribute("xSplit", frozenCols) : null,
-                frozenRows > 0 ? new XAttribute("ySplit", frozenRows) : null,
-                new XAttribute("state", hasFrozenPanes ? "frozen" : "split")));
-        }
-
-        return customSheetView;
-    }
-
-    private static void SaveWorksheetCustomProperties(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            var properties = sheet.CustomProperties
-                .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
-                .GroupBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.Last())
-                .OrderBy(property => property.Id)
-                .ThenBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (properties.Count == 0 || !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "customProperties")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "customProperties",
-                properties.Select(property => new XElement(
-                    workbookNs + "customPr",
-                    new XAttribute("name", property.Name),
-                    new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture))))));
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static string? NormalizeCustomViewId(string? id)
-    {
-        if (string.IsNullOrWhiteSpace(id))
-            return null;
-
-        var trimmed = id.Trim();
-        if (Guid.TryParse(trimmed.Trim('{', '}'), out var guid))
-            return $"{{{guid:D}}}";
-
-        return trimmed;
-    }
-
-    private static string CreateDeterministicCustomViewId(string name, int index)
-    {
-        var bytes = MD5.HashData(Encoding.UTF8.GetBytes($"Freexcel.CustomView:{index}:{name}"));
-        return $"{{{new Guid(bytes):D}}}";
-    }
-
-    private static void SaveWorksheetCalculationProperties(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "sheetCalcPr")?.Remove();
-            if (!sheet.FullCalculationOnLoad)
-            {
-                ReplacePackageXml(archive, worksheetPath, worksheetXml);
-                continue;
-            }
-
-            var sheetCalcPr = new XElement(workbookNs + "sheetCalcPr");
-            sheetCalcPr.SetAttributeValue("fullCalcOnLoad", sheet.FullCalculationOnLoad ? "1" : null);
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, sheetCalcPr);
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static void SaveWorksheetPhoneticProperties(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "phoneticPr")?.Remove();
-            if (sheet.PhoneticProperties is null)
-            {
-                ReplacePackageXml(archive, worksheetPath, worksheetXml);
-                continue;
-            }
-
-            var phoneticPr = new XElement(workbookNs + "phoneticPr");
-            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.FontId))
-                phoneticPr.SetAttributeValue("fontId", sheet.PhoneticProperties.FontId);
-            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Type))
-                phoneticPr.SetAttributeValue("type", sheet.PhoneticProperties.Type);
-            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Alignment))
-                phoneticPr.SetAttributeValue("alignment", sheet.PhoneticProperties.Alignment);
-
-            if (phoneticPr.HasAttributes)
-                InsertWorksheetMetadataElementInOrder(root, workbookNs, phoneticPr);
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
     }
 
     private static void InsertWorkbookCustomViewsInOrder(
@@ -7742,9 +4751,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         else
             insertionPoint.AddBeforeSelf(customWorkbookViews);
     }
-
-    private static int ValidZoomPercentOrDefault(int value) =>
-        value is >= 10 and <= 400 ? value : 100;
 
     private static void InsertWorksheetMetadataElementInOrder(
         XElement worksheetRoot,
@@ -8137,39 +5143,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return id >= 2 && id <= maxBreakId;
     }
 
-    private static HashSet<string> GetModeledScenarioNamesForSheet(Workbook workbook, string sheetName)
-    {
-        var sheet = workbook.GetSheet(sheetName);
-        if (sheet is null)
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        return workbook.Scenarios
-            .Where(scenario => scenario.ChangingCells.Any(change =>
-                change.Address.Sheet == sheet.Id &&
-                IsSupportedScenarioValue(change.Value)))
-            .Select(scenario => scenario.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static HashSet<string> GetModeledCustomViewIds(Workbook workbook)
-    {
-        return workbook.CustomViews
-            .Select((view, index) => NormalizeCustomViewId(view.Id) ?? CreateDeterministicCustomViewId(view.Name, index))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static HashSet<string> GetModeledCustomPropertyNames(Workbook workbook, string sheetName)
-    {
-        var sheet = workbook.GetSheet(sheetName);
-        if (sheet is null)
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        return sheet.CustomProperties
-            .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
-            .Select(property => property.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
     private static bool MergeWorksheetCalculationProperties(
         XElement sourceSheetCalcPr,
         XElement targetRoot,
@@ -8341,7 +5314,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             var retainedViews = sourceCustomSheetViews
                 .Elements(workbookNs + "customSheetView")
-                .Where(view => !modeledCustomViewIds.Contains(NormalizeCustomViewId(view.Attribute("guid")?.Value) ?? string.Empty))
+                .Where(view => !modeledCustomViewIds.Contains(XlsxCustomViewMapper.NormalizeId(view.Attribute("guid")?.Value) ?? string.Empty))
                 .Select(view => new XElement(view))
                 .ToList();
             if (retainedViews.Count == 0)
@@ -8359,7 +5332,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Elements(workbookNs + "customSheetView")
             .Select(view => new
             {
-                Id = NormalizeCustomViewId(view.Attribute("guid")?.Value),
+                Id = XlsxCustomViewMapper.NormalizeId(view.Attribute("guid")?.Value),
                 View = view
             })
             .Where(item => !string.IsNullOrWhiteSpace(item.Id))
@@ -8368,7 +5341,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         foreach (var sourceView in sourceCustomSheetViews.Elements(workbookNs + "customSheetView"))
         {
-            var id = NormalizeCustomViewId(sourceView.Attribute("guid")?.Value);
+            var id = XlsxCustomViewMapper.NormalizeId(sourceView.Attribute("guid")?.Value);
             if (!string.IsNullOrWhiteSpace(id) && targetViewsById.TryGetValue(id, out var targetView))
             {
                 changed |= MergeModeledCustomSheetViewMetadata(sourceView, targetView, workbookNs);
@@ -9000,16 +5973,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return changed;
     }
 
-    private static IReadOnlySet<string> GetModeledAllowEditRangeReferences(Workbook workbook, string sheetName)
-    {
-        var sheet = workbook.GetSheet(sheetName);
-        return sheet is null
-            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            : sheet.AllowEditRanges
-                .Select(range => range.ToString())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
     private static string? CanonicalSupportedProtectedRangeSqref(XElement protectedRange)
     {
         var sqref = protectedRange.Attribute("sqref")?.Value;
@@ -9221,9 +6184,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -9261,7 +6224,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         var worksheetRels = LoadRelationshipTargets(
             archive,
-            GetWorksheetRelsPath(worksheetPath),
+            XlsxPackagePath.GetRelationshipPartPath(worksheetPath),
             worksheetPath,
             packageRelNs);
         return worksheetRels.TryGetValue(drawingRelId, out var drawingPath)
@@ -9324,12 +6287,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace packageRelNs)
     {
         var relIdMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sourceRelsPath = GetWorksheetRelsPath(sourceDrawingPath);
+        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceDrawingPath);
         var sourceRelsEntry = sourceArchive.GetEntry(sourceRelsPath);
         if (sourceRelsEntry is null)
             return relIdMap;
 
-        var targetRelsPath = GetWorksheetRelsPath(targetDrawingPath);
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetDrawingPath);
         var sourceRelsXml = LoadXml(sourceRelsEntry);
         var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
             ? LoadXml(targetRelsEntry)
@@ -9360,14 +6323,14 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var targetMode = sourceRelationship.Attribute("TargetMode")?.Value;
             var resolvedTarget = string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                 ? target
-                : ResolveRelationshipTarget(sourceDrawingPath, target);
+                : XlsxPackagePath.ResolveRelationshipTarget(sourceDrawingPath, target);
             var targetRelationship = targetRelationships.FirstOrDefault(rel =>
                 string.Equals(rel.Attribute("Type")?.Value, type, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(rel.Attribute("TargetMode")?.Value, targetMode, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(
                     string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                         ? rel.Attribute("Target")?.Value
-                        : ResolveRelationshipTarget(targetDrawingPath, rel.Attribute("Target")?.Value ?? ""),
+                        : XlsxPackagePath.ResolveRelationshipTarget(targetDrawingPath, rel.Attribute("Target")?.Value ?? ""),
                     resolvedTarget,
                     StringComparison.OrdinalIgnoreCase));
             if (targetRelationship is not null)
@@ -9388,7 +6351,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XAttribute("Type", type),
                 new XAttribute("Target", string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase)
                     ? target
-                    : GetRelativeTarget(targetDrawingPath, resolvedTarget)),
+                    : XlsxPackagePath.GetRelationshipTarget(targetDrawingPath, resolvedTarget)),
                 string.IsNullOrWhiteSpace(targetMode) ? null : new XAttribute("TargetMode", targetMode)));
             changed = true;
         }
@@ -9534,7 +6497,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -9641,516 +6604,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             element.SetAttributeValue(name, value ? "1" : null);
     }
 
-    private static void SaveAllowEditRanges(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                sheet.AllowEditRanges.Count == 0 ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Elements(workbookNs + "protectedRanges").Remove();
-            var protectedRanges = new XElement(workbookNs + "protectedRanges",
-                sheet.AllowEditRanges.Select((range, index) =>
-                    new XElement(workbookNs + "protectedRange",
-                        new XAttribute("name", $"FreexcelAllowEditRange{index + 1}"),
-                        new XAttribute("sqref", range.ToString()))));
-
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, protectedRanges);
-
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static void SaveStructuredTables(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-        var tablePartIndex = 1;
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                sheet.StructuredTables.Count == 0 ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var worksheetRoot = worksheetXml.Root;
-            if (worksheetRoot is null)
-                continue;
-
-            var worksheetRelsPath = GetWorksheetRelsPath(worksheetPath);
-            var worksheetRelsEntry = archive.GetEntry(worksheetRelsPath);
-            var worksheetRelsXml = worksheetRelsEntry is not null
-                ? LoadXml(worksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
-
-            var tableParts = new List<XElement>();
-            foreach (var table in sheet.StructuredTables)
-            {
-                var tablePath = string.IsNullOrWhiteSpace(table.PackagePart)
-                    ? $"xl/tables/table{tablePartIndex}.xml"
-                    : table.PackagePart.TrimStart('/').Replace('\\', '/');
-                if (!tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
-                    tablePath = $"xl/tables/table{tablePartIndex}.xml";
-
-                tablePartIndex++;
-                ReplacePackageXml(archive, tablePath, ToStructuredTableXml(table, tablePath));
-                EnsureSpecificContentType(
-                    archive,
-                    $"/{tablePath}",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml");
-                var tableRelId = EnsureRelationshipForPackagePart(
-                    worksheetRelsXml,
-                    packageRelNs,
-                    worksheetPath,
-                    tablePath,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table");
-                tableParts.Add(new XElement(workbookNs + "tablePart", new XAttribute(relNs + "id", tableRelId)));
-            }
-
-            ReplacePackageXml(archive, worksheetRelsPath, worksheetRelsXml);
-            worksheetRoot.Elements(workbookNs + "tableParts").Remove();
-            worksheetRoot.Add(new XElement(
-                workbookNs + "tableParts",
-                new XAttribute("count", tableParts.Count.ToString(CultureInfo.InvariantCulture)),
-                tableParts));
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static XDocument ToStructuredTableXml(StructuredTableModel table, string tablePath)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var columns = table.Columns.Count > 0
-            ? table.Columns.ToList()
-            : Enumerable.Range(1, (int)(table.Range.End.Col - table.Range.Start.Col + 1))
-                .Select(index => new StructuredTableColumnModel(index, $"Column{index}"))
-                .ToList();
-
-        var root = new XElement(
-            workbookNs + "table",
-            new XAttribute("id", table.Id > 0 ? table.Id : ExtractTrailingNumber(tablePath)),
-            new XAttribute("name", string.IsNullOrWhiteSpace(table.Name) ? $"Table{ExtractTrailingNumber(tablePath)}" : table.Name),
-            new XAttribute("displayName", string.IsNullOrWhiteSpace(table.DisplayName) ? table.Name : table.DisplayName),
-            new XAttribute("ref", table.Range.ToString()),
-            new XAttribute("totalsRowShown", table.TotalsRowShown ? "1" : "0"));
-        foreach (var (name, value) in table.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && root.Attribute(name) is null)
-                root.SetAttributeValue(name, value);
-        }
-
-        if (table.HasAutoFilter)
-            root.Add(ToStructuredTableAutoFilterXml(table, workbookNs));
-        if (!string.IsNullOrWhiteSpace(table.NativeSortStateXml))
-        {
-            try
-            {
-                var sortState = XElement.Parse(table.NativeSortStateXml);
-                if (sortState.Name == workbookNs + "sortState")
-                    root.Add(sortState);
-            }
-            catch
-            {
-                // Ignore malformed native table sort payloads from older saves.
-            }
-        }
-        root.Add(new XElement(
-            workbookNs + "tableColumns",
-            new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
-            columns.Select(column => ToStructuredTableColumnXml(column, workbookNs))));
-        if (!string.IsNullOrWhiteSpace(table.StyleName))
-            root.Add(ToStructuredTableStyleInfoXml(table, workbookNs));
-        foreach (var nativeChildXml in (table.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs)
-                    root.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table payloads from older saves.
-            }
-        }
-
-        return new XDocument(root);
-    }
-
-    private static XElement ToStructuredTableColumnXml(StructuredTableColumnModel column, XNamespace workbookNs)
-    {
-        var element = new XElement(
-            workbookNs + "tableColumn",
-            new XAttribute("id", column.Id),
-            new XAttribute("name", column.Name),
-            string.IsNullOrWhiteSpace(column.TotalsRowLabel) ? null : new XAttribute("totalsRowLabel", column.TotalsRowLabel),
-            string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction),
-            string.IsNullOrWhiteSpace(column.CalculatedColumnFormula)
-                ? null
-                : new XElement(workbookNs + "calculatedColumnFormula", column.CalculatedColumnFormula),
-            string.IsNullOrWhiteSpace(column.TotalsRowFormula)
-                ? null
-                : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
-
-        foreach (var (name, value) in column.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
-        }
-
-        foreach (var nativeChildXml in (column.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs &&
-                    nativeChild.Name.LocalName is not "calculatedColumnFormula" and not "totalsRowFormula")
-                    element.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table-column payloads from older saves.
-            }
-        }
-
-        return element;
-    }
-
-    private static XElement ToStructuredTableStyleInfoXml(StructuredTableModel table, XNamespace workbookNs)
-    {
-        var element = new XElement(
-            workbookNs + "tableStyleInfo",
-            new XAttribute("name", table.StyleName!),
-            new XAttribute("showFirstColumn", table.ShowFirstColumn ? "1" : "0"),
-            new XAttribute("showLastColumn", table.ShowLastColumn ? "1" : "0"),
-            new XAttribute("showRowStripes", table.ShowRowStripes ? "1" : "0"),
-            new XAttribute("showColumnStripes", table.ShowColumnStripes ? "1" : "0"));
-
-        foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
-        }
-
-        foreach (var nativeChildXml in (table.NativeStyleInfoChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs)
-                    element.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table-style payloads from older saves.
-            }
-        }
-
-        return element;
-    }
-
-    private static XElement ToStructuredTableAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
-        AddStructuredTableAutoFilterNativeMetadata(new XElement(
-            workbookNs + "autoFilter",
-            new XAttribute("ref", table.Range.ToString()),
-            table.FilterColumns.Select(filterColumn => ToStructuredTableFilterColumnXml(filterColumn, workbookNs))),
-            table,
-            workbookNs);
-
-    private static XElement AddStructuredTableAutoFilterNativeMetadata(
-        XElement element,
-        StructuredTableModel table,
-        XNamespace workbookNs)
-    {
-        foreach (var (name, value) in table.NativeAutoFilterAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
-        }
-
-        foreach (var nativeChildXml in (table.NativeAutoFilterChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs && nativeChild.Name.LocalName != "filterColumn")
-                    element.Add(nativeChild);
-            }
-            catch
-            {
-                // Ignore malformed native table AutoFilter payloads from older saves.
-            }
-        }
-
-        return element;
-    }
-
-    private static XElement ToStructuredTableFilterColumnXml(StructuredTableFilterColumnModel filterColumn, XNamespace workbookNs)
-    {
-        var element = new XElement(
-            workbookNs + "filterColumn",
-            new XAttribute("colId", filterColumn.ColumnId.ToString(CultureInfo.InvariantCulture)));
-        foreach (var (name, value) in filterColumn.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && element.Attribute(name) is null)
-                element.SetAttributeValue(name, value);
-        }
-
-        if (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank)
-        {
-            element.Add(new XElement(
-                workbookNs + "filters",
-                filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
-                filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))));
-        }
-
-        foreach (var nativeFilterXml in filterColumn.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeFilter = XElement.Parse(nativeFilterXml);
-                if (nativeFilter.Name.Namespace == workbookNs && nativeFilter.Name.LocalName != "filters")
-                    element.Add(nativeFilter);
-            }
-            catch
-            {
-                // Ignore malformed native filter payloads from older saves; value filters above remain valid.
-            }
-        }
-
-        return element;
-    }
-
-    private static int ExtractTrailingNumber(string text)
-    {
-        var digits = new string(text.Reverse().TakeWhile(char.IsDigit).Reverse().ToArray());
-        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0
-            ? value
-            : 1;
-    }
-
-    private static bool HasNativeDataValidationMetadata(DataValidation validation) =>
-        (validation.NativeAttributes?.Count ?? 0) > 0 ||
-        (validation.NativeChildXmls?.Count ?? 0) > 0 ||
-        (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
-        (validation.NativeContainerChildXmls?.Count ?? 0) > 0;
-
-    private static void SaveDataValidationNativeMetadata(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                !relTargets.TryGetValue(relId, out var worksheetPath) ||
-                !sheet.DataValidations.Any(HasNativeDataValidationMetadata))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            var dataValidations = root.Element(workbookNs + "dataValidations");
-            if (dataValidations is null)
-                continue;
-
-            var changed = false;
-            var containerSource = sheet.DataValidations.FirstOrDefault(validation =>
-                (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
-                (validation.NativeContainerChildXmls?.Count ?? 0) > 0);
-            if (containerSource is not null)
-                changed |= ApplyDataValidationsContainerNativeMetadata(dataValidations, containerSource, workbookNs);
-
-            var validationsByRange = dataValidations
-                .Elements(workbookNs + "dataValidation")
-                .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
-                .ToDictionary(element => element.Attribute("sqref")!.Value, element => element, StringComparer.Ordinal);
-
-            foreach (var validation in sheet.DataValidations.Where(HasNativeDataValidationMetadata))
-            {
-                if (validationsByRange.TryGetValue(validation.AppliesTo.ToString(), out var validationElement))
-                    changed |= ApplyDataValidationNativeMetadata(validationElement, validation, workbookNs);
-            }
-
-            if (changed)
-                ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static bool ApplyDataValidationsContainerNativeMetadata(
-        XElement dataValidations,
-        DataValidation source,
-        XNamespace worksheetNs)
-    {
-        var changed = false;
-        foreach (var (name, value) in source.NativeContainerAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && dataValidations.Attribute(name) is null)
-            {
-                dataValidations.SetAttributeValue(name, value);
-                changed = true;
-            }
-        }
-
-        foreach (var nativeChildXml in (source.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "dataValidation")
-                {
-                    dataValidations.Add(nativeChild);
-                    changed = true;
-                }
-            }
-            catch
-            {
-                // Ignore malformed native data-validation container payloads from older saves.
-            }
-        }
-
-        return changed;
-    }
-
-    private static bool ApplyDataValidationNativeMetadata(
-        XElement validationElement,
-        DataValidation source,
-        XNamespace worksheetNs)
-    {
-        var changed = false;
-        foreach (var (name, value) in source.NativeAttributes ?? new Dictionary<string, string>())
-        {
-            if (!string.IsNullOrWhiteSpace(name) && validationElement.Attribute(name) is null)
-            {
-                validationElement.SetAttributeValue(name, value);
-                changed = true;
-            }
-        }
-
-        foreach (var nativeChildXml in (source.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
-        {
-            try
-            {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == worksheetNs)
-                {
-                    validationElement.Add(nativeChild);
-                    changed = true;
-                }
-            }
-            catch
-            {
-                // Ignore malformed native data-validation payloads from older saves.
-            }
-        }
-
-        return changed;
-    }
-
     private static void SaveAdvancedConditionalFormats(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -10172,7 +6625,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -10545,77 +6998,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => "none"
         };
 
-    private static void SaveWorksheetSparklines(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
-        XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                sheet.Sparklines.Count == 0 ||
-                !relTargets.TryGetValue(relId, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Elements(workbookNs + "extLst").Remove();
-            root.SetAttributeValue(XNamespace.Xmlns + "x14", x14Ns.NamespaceName);
-            root.SetAttributeValue(XNamespace.Xmlns + "xm", xmNs.NamespaceName);
-            root.Add(new XElement(
-                workbookNs + "extLst",
-                new XElement(
-                    workbookNs + "ext",
-                    new XAttribute("uri", "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}"),
-                    new XElement(
-                        x14Ns + "sparklineGroups",
-                        sheet.Sparklines
-                            .Where(sparkline =>
-                                sparkline.DataRange.Start.Sheet == sheet.Id &&
-                                sparkline.DataRange.End.Sheet == sheet.Id &&
-                                sparkline.Location.Sheet == sheet.Id &&
-                                Enum.IsDefined(sparkline.Kind))
-                            .GroupBy(sparkline => sparkline.Kind)
-                            .Select(group => ToSparklineGroupXml(sheet, group.Key, group, x14Ns, xmNs))))));
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
     private static void SavePivotTables(
         Stream xlsxStream,
         Workbook workbook,
@@ -10644,7 +7026,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var cachePath = $"xl/pivotCache/pivotCacheDefinition{cacheIndex++}.xml";
             ReplacePackageXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, workbookNs, relNs));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs));
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs));
             EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
 
             var cacheRelId = EnsureRelationshipForPackagePart(
@@ -10683,7 +7065,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -10722,7 +7104,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
 
         var worksheetXml = LoadXml(worksheetEntry);
-        var worksheetRelsPath = GetWorksheetRelsPath(worksheetPath);
+        var worksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(worksheetRelsPath) is { } worksheetRelsEntry
             ? LoadXml(worksheetRelsEntry)
             : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -10736,12 +7118,12 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var pivotPath = $"xl/pivotTables/pivotTable{pivotIndex++}.xml";
             var cacheRelId = "rIdPivotCache";
             ReplacePackageXml(archive, pivotPath, ToPivotTableDefinitionXml(pivot, workbookNs, cacheRelId, numberFormatIdMap));
-            ReplacePackageXml(archive, GetWorksheetRelsPath(pivotPath), new XDocument(
+            ReplacePackageXml(archive, XlsxPackagePath.GetRelationshipPartPath(pivotPath), new XDocument(
                 new XElement(packageRelNs + "Relationships",
                     new XElement(packageRelNs + "Relationship",
                         new XAttribute("Id", cacheRelId),
                         new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition"),
-                        new XAttribute("Target", GetRelativeTarget(pivotPath, cachePath))))));
+                        new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(pivotPath, cachePath))))));
             EnsureSpecificContentType(archive, $"/{pivotPath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml");
 
             var pivotRelId = EnsureRelationshipForPackagePart(
@@ -11107,29 +7489,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static string FormatInvariant(double value) =>
         value.ToString("0.########", CultureInfo.InvariantCulture);
 
-    private static XElement ToSparklineGroupXml(
-        Sheet sheet,
-        SparklineKind kind,
-        IEnumerable<SparklineModel> sparklines,
-        XNamespace x14Ns,
-        XNamespace xmNs) =>
-        new(x14Ns + "sparklineGroup",
-            new XAttribute("type", ToSparklineType(kind)),
-            new XElement(
-                x14Ns + "sparklines",
-                sparklines.Select(sparkline => new XElement(
-                    x14Ns + "sparkline",
-                    new XElement(xmNs + "f", $"{QuoteSheetName(sheet.Name)}!{sparkline.DataRange}"),
-                    new XElement(xmNs + "sqref", sparkline.Location.ToA1())))));
-
-    private static string ToSparklineType(SparklineKind kind) =>
-        kind switch
-        {
-            SparklineKind.Column => "column",
-            SparklineKind.WinLoss => "stacked",
-            _ => "line"
-        };
-
     private static string QuoteSheetName(string sheetName) =>
         sheetName.Any(ch => char.IsWhiteSpace(ch) || ch == '\'')
             ? $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'"
@@ -11397,7 +7756,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 new XElement(drawingNs + "themeElements",
                     new XElement(drawingNs + "clrScheme",
                         new XAttribute("name", $"{theme.Name} Colors"),
-                        ThemeColorElements.Select(color =>
+                        XlsxWorkbookThemeReader.ColorElements.Select(color =>
                             new XElement(drawingNs + color.ElementName,
                                 new XElement(drawingNs + "srgbClr",
                                     new XAttribute("val", FormatThemeColor(theme.GetColor(color.Slot))))))),
@@ -11436,7 +7795,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -11483,7 +7842,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
         var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
-        var drawingRelsPath = GetWorksheetRelsPath(drawingPath);
+        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
@@ -11504,7 +7863,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 packageRelNs + "Relationship",
                 new XAttribute("Id", chartRelId),
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart"),
-                new XAttribute("Target", GetRelativeTarget(drawingPath, chartPath))));
+                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
             anchors.Add(ToAbsoluteChartAnchor(chart, currentChartIndex, chartRelId, spreadsheetDrawingNs, drawingNs, chartNs, relNs));
         }
@@ -11528,7 +7887,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         for (var i = chartIndex - charts.Count; i < chartIndex; i++)
             EnsureContentTypeOverride(archive, $"/xl/charts/chart{i}.xml", "application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
 
-        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relsEntry = archive.GetEntry(relsPath);
         XDocument worksheetRelsXml;
         if (relsEntry is null)
@@ -11546,7 +7905,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             packageRelNs + "Relationship",
             new XAttribute("Id", drawingRelId),
             new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"),
-            new XAttribute("Target", GetRelativeTarget(worksheetPath, drawingPath))));
+            new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(worksheetPath, drawingPath))));
         var updatedRelsEntry = archive.CreateEntry(relsPath);
         using (var relsStream = updatedRelsEntry.Open())
             worksheetRelsXml.Save(relsStream);
@@ -11580,7 +7939,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             return;
         }
 
-        var relsPath = GetWorksheetRelsPath(chartPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
         archive.GetEntry(relsPath)?.Delete();
         ReplacePackageXml(archive, relsPath, new XDocument(new XElement(
             packageRelNs + "Relationships",
@@ -11642,7 +8001,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
             .ToDictionary(
                 e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
+                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
                 StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
@@ -11691,7 +8050,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 
         var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
-        var drawingRelsPath = GetWorksheetRelsPath(drawingPath);
+        var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
@@ -11701,7 +8060,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         {
             var currentPictureIndex = pictureIndex++;
             var contentType = string.IsNullOrWhiteSpace(picture.ContentType) ? "image/png" : picture.ContentType;
-            var extension = GetExtensionFromContentType(contentType).TrimStart('.');
+            var extension = XlsxPackagePath.GetImageExtension(contentType).TrimStart('.');
             var mediaPath = $"xl/media/freexcelPicture{currentPictureIndex}.{extension}";
             archive.GetEntry(mediaPath)?.Delete();
             var mediaEntry = archive.CreateEntry(mediaPath);
@@ -11714,7 +8073,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 packageRelNs + "Relationship",
                 new XAttribute("Id", imageRelId),
                 new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-                new XAttribute("Target", GetRelativeTarget(drawingPath, mediaPath))));
+                new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, mediaPath))));
             anchors.Add(ToOneCellPictureAnchor(
                 picture,
                 currentPictureIndex,
@@ -11750,7 +8109,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ReplacePackageXml(archive, drawingRelsPath, drawingRelsXml);
         EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
 
-        var relsPath = GetWorksheetRelsPath(worksheetPath);
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(relsPath) is { } relsEntry
             ? LoadXml(relsEntry)
             : new XDocument(new XElement(packageRelNs + "Relationships"));
@@ -13527,1039 +9886,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         xml.Save(stream);
     }
 
-    private static void SaveWorksheetBackgrounds(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-        var backgroundIndex = 1;
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
-                continue;
-            if (!sheetsByName.TryGetValue(name, out var sheet) || sheet.BackgroundImage is null)
-                continue;
-            if (!relTargets.TryGetValue(relId, out var worksheetPath))
-                continue;
-
-            WriteWorksheetBackground(archive, worksheetPath, sheet.BackgroundImage, backgroundIndex++);
-        }
-    }
-
-    private static void WriteWorksheetBackground(
-        ZipArchive archive,
-        string worksheetPath,
-        WorksheetBackgroundImage background,
-        int backgroundIndex)
-    {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return;
-
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var extension = GetExtensionFromContentType(background.ContentType);
-        var mediaFileName = GetWorksheetBackgroundMediaFileName(background.FileName, backgroundIndex, extension);
-        var imagePath = $"xl/media/{mediaFileName}";
-        var existingImageEntry = archive.GetEntry(imagePath);
-        existingImageEntry?.Delete();
-        var imageEntry = archive.CreateEntry(imagePath);
-        using (var imageStream = imageEntry.Open())
-            imageStream.Write(background.ImageBytes);
-
-        EnsureContentType(archive, extension.TrimStart('.'), background.ContentType);
-
-        var relsPath = GetWorksheetRelsPath(worksheetPath);
-        var relsEntry = archive.GetEntry(relsPath);
-        XDocument relsXml;
-        if (relsEntry is null)
-        {
-            relsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
-        }
-        else
-        {
-            relsXml = LoadXml(relsEntry);
-            relsEntry.Delete();
-        }
-
-        var relId = NextRelationshipId(relsXml, packageRelNs);
-        relsXml.Root!.Add(new XElement(
-            packageRelNs + "Relationship",
-            new XAttribute("Id", relId),
-            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
-            new XAttribute("Target", GetRelativeTarget(worksheetPath, imagePath))));
-
-        var updatedRelsEntry = archive.CreateEntry(relsPath);
-        using (var relsStream = updatedRelsEntry.Open())
-            relsXml.Save(relsStream);
-
-        var worksheetXml = LoadXml(worksheetEntry);
-        var root = worksheetXml.Root;
-        if (root is null)
-            return;
-
-        root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
-        root.Elements(worksheetNs + "picture").Remove();
-        root.Add(new XElement(worksheetNs + "picture", new XAttribute(relNs + "id", relId)));
-
-        worksheetEntry.Delete();
-        var updatedWorksheetEntry = archive.CreateEntry(worksheetPath);
-        using var worksheetStream = updatedWorksheetEntry.Open();
-        worksheetXml.Save(worksheetStream);
-    }
-
-    private static void SaveSplitPaneSheetViews(Stream xlsxStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
-            return;
-
-        var workbookXml = LoadXml(workbookEntry);
-        var relsXml = LoadXml(relsEntry);
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var splitSheets = workbook.Sheets
-            .Where(sheet =>
-                !sheet.ShowGridlines ||
-                !sheet.ShowHeadings ||
-                !sheet.ShowRulers ||
-                ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
-                sheet.ZoomPercent != 100 ||
-                sheet.ShowFormulas ||
-                sheet.ViewTopRow.HasValue ||
-                sheet.ViewLeftCol.HasValue ||
-                sheet.ActiveRow.HasValue ||
-                sheet.ActiveCol.HasValue ||
-                (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
-                 (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue)))
-            .ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId))
-                continue;
-            if (!splitSheets.TryGetValue(name, out var sheet))
-                continue;
-            if (!relTargets.TryGetValue(relId, out var worksheetPath))
-                continue;
-
-            UpdateSplitPaneSheetView(archive, worksheetPath, sheet);
-        }
-    }
-
-    private static void UpdateSplitPaneSheetView(ZipArchive archive, string worksheetPath, Sheet sheet)
-    {
-        var worksheetEntry = archive.GetEntry(worksheetPath);
-        if (worksheetEntry is null)
-            return;
-
-        var worksheetXml = LoadXml(worksheetEntry);
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = worksheetXml.Root;
-        if (root is null)
-            return;
-
-        var sheetViews = root.Element(worksheetNs + "sheetViews");
-        if (sheetViews is null)
-        {
-            sheetViews = new XElement(worksheetNs + "sheetViews");
-            root.AddFirst(sheetViews);
-        }
-
-        var sheetView = sheetViews.Elements(worksheetNs + "sheetView").FirstOrDefault();
-        if (sheetView is null)
-        {
-            sheetView = new XElement(worksheetNs + "sheetView", new XAttribute("workbookViewId", "0"));
-            sheetViews.Add(sheetView);
-        }
-
-        sheetView.SetAttributeValue("view", ToXlsxWorksheetViewMode(
-            ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal)));
-        sheetView.SetAttributeValue("showGridLines", sheet.ShowGridlines ? null : "0");
-        sheetView.SetAttributeValue("showRowColHeaders", sheet.ShowHeadings ? null : "0");
-        sheetView.SetAttributeValue("showRuler", sheet.ShowRulers ? null : "0");
-        sheetView.SetAttributeValue("zoomScale", sheet.ZoomPercent == 100 ? null : sheet.ZoomPercent);
-        sheetView.SetAttributeValue("showFormulas", sheet.ShowFormulas ? "1" : null);
-        sheetView.SetAttributeValue("topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
-        if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
-        {
-            sheetView.Elements(worksheetNs + "selection").Remove();
-            sheetView.Add(new XElement(
-                worksheetNs + "selection",
-                new XAttribute("activeCell", activeCell),
-                new XAttribute("sqref", activeCell)));
-        }
-
-        if (sheet.FrozenRows == 0 && sheet.FrozenCols == 0 &&
-            (sheet.SplitRow.HasValue || sheet.SplitColumn.HasValue))
-        {
-            sheetView.Elements(worksheetNs + "pane").Remove();
-            sheetView.AddFirst(new XElement(
-                worksheetNs + "pane",
-                sheet.SplitColumn is { } splitColumn ? new XAttribute("xSplit", splitColumn) : null,
-                sheet.SplitRow is { } splitRow ? new XAttribute("ySplit", splitRow) : null,
-                new XAttribute("state", "split")));
-        }
-
-        worksheetEntry.Delete();
-        var updatedEntry = archive.CreateEntry(worksheetPath);
-        using var stream = updatedEntry.Open();
-        worksheetXml.Save(stream);
-    }
-
-    private static string? ToOptionalA1(uint? row, uint? col)
-    {
-        return row is > 0 and <= CellAddress.MaxRow &&
-               col is > 0 and <= CellAddress.MaxCol
-            ? $"{CellAddress.NumberToColumnName(col.Value)}{row.Value}"
-            : null;
-    }
-
-    private static ScalarValue MapValue(IXLCell xlCell)
-    {
-        if (xlCell.Value.IsDateTime)
-        {
-            try { return DateTimeValue.FromDateTime(xlCell.GetDateTime()); }
-            catch (ArgumentException)
-            {
-                return TryGetUnifiedNumber(xlCell.Value, out var serial)
-                    ? new NumberValue(serial)
-                    : ErrorValue.Num;
-            }
-        }
-
-        return MapValue(xlCell.Value);
-    }
-
-    private static string NormalizeExcelFormulaText(string formulaText)
-    {
-        return formulaText
-            .Replace("_xlfn.", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("_xlws.", "", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static ScalarValue MapValue(XLCellValue xlValue)
-    {
-        if (xlValue.IsBlank) return BlankValue.Instance;
-        if (xlValue.IsNumber) return new NumberValue(xlValue.GetNumber());
-        if (xlValue.IsText) return new TextValue(xlValue.GetText());
-        if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
-        if (xlValue.IsDateTime)
-        {
-            try { return DateTimeValue.FromDateTime(xlValue.GetDateTime()); }
-            catch (ArgumentException)
-            {
-                try { return new NumberValue(xlValue.GetNumber()); }
-                catch { return ErrorValue.Num; }
-            }
-        }
-        if (xlValue.IsError) return MapErrorValue(xlValue.GetError());
-        return new TextValue(xlValue.ToString());
-    }
-
-    private static ScalarValue ParseScenarioValue(string rawValue)
-    {
-        if (string.Equals(rawValue, "TRUE", StringComparison.OrdinalIgnoreCase))
-            return new BoolValue(true);
-        if (string.Equals(rawValue, "FALSE", StringComparison.OrdinalIgnoreCase))
-            return new BoolValue(false);
-        if (rawValue.StartsWith('#'))
-            return rawValue.ToUpperInvariant() switch
-            {
-                "#DIV/0!" => ErrorValue.DivByZero,
-                "#VALUE!" => ErrorValue.Value,
-                "#REF!" => ErrorValue.Ref,
-                "#NAME?" => ErrorValue.Name,
-                "#NULL!" => ErrorValue.Null,
-                "#N/A" => ErrorValue.NA,
-                "#NUM!" => ErrorValue.Num,
-                _ => new ErrorValue(rawValue)
-            };
-        if (double.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
-            return new NumberValue(number);
-
-        return new TextValue(rawValue);
-    }
-
-    private static bool IsSupportedScenarioValue(ScalarValue value) => value switch
-    {
-        NumberValue number => double.IsFinite(number.Value),
-        DateTimeValue dateTime => double.IsFinite(dateTime.Value),
-        TextValue or BoolValue or ErrorValue => true,
-        _ => false
-    };
-
-    private static string FormatScenarioValue(ScalarValue value) => value switch
-    {
-        NumberValue number => number.Value.ToString("G17", CultureInfo.InvariantCulture),
-        DateTimeValue dateTime => dateTime.Value.ToString("G17", CultureInfo.InvariantCulture),
-        TextValue text => text.Value,
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        ErrorValue error => error.Code,
-        _ => string.Empty
-    };
-
-    private static bool TryGetUnifiedNumber(XLCellValue value, out double number)
-    {
-        number = 0;
-        if (!value.IsUnifiedNumber || XlCellValueNumberField is null)
-            return false;
-
-        if (XlCellValueNumberField.GetValue(value) is double raw)
-        {
-            number = raw;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static XLCellValue MapValueInverse(ScalarValue value) => value switch
-    {
-        NumberValue n => n.Value,
-        TextValue t => t.Value,
-        BoolValue b => b.Value,
-        DateTimeValue dt => DateTime.FromOADate(dt.Value),
-        ErrorValue e => MapErrorValueInverse(e),
-        _ => Blank.Value
-    };
-
-    private static ErrorValue MapErrorValue(XLError error) => error switch
-    {
-        XLError.NullValue => ErrorValue.Null,
-        XLError.DivisionByZero => ErrorValue.DivByZero,
-        XLError.IncompatibleValue => ErrorValue.Value,
-        XLError.CellReference => ErrorValue.Ref,
-        XLError.NameNotRecognized => ErrorValue.Name,
-        XLError.NumberInvalid => ErrorValue.Num,
-        XLError.NoValueAvailable => ErrorValue.NA,
-        _ => new ErrorValue(error.ToString())
-    };
-
-    private static XLError MapErrorValueInverse(ErrorValue error) => error.Code.ToUpperInvariant() switch
-    {
-        "#NULL!" => XLError.NullValue,
-        "#DIV/0!" => XLError.DivisionByZero,
-        "#VALUE!" => XLError.IncompatibleValue,
-        "#REF!" => XLError.CellReference,
-        "#NAME?" => XLError.NameNotRecognized,
-        "#NUM!" => XLError.NumberInvalid,
-        "#N/A" => XLError.NoValueAvailable,
-        _ => XLError.NoValueAvailable
-    };
-
-    private static CellStyle MapStyle(IXLStyle xlStyle, WorkbookTheme theme)
-    {
-        return new CellStyle
-        {
-            FontName = xlStyle.Font.FontName,
-            FontSize = IsSupportedFontSize(xlStyle.Font.FontSize)
-                ? xlStyle.Font.FontSize
-                : CellStyle.Default.FontSize,
-            Bold = xlStyle.Font.Bold,
-            Italic = xlStyle.Font.Italic,
-            Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
-            Strikethrough = xlStyle.Font.Strikethrough,
-            FontColor = MapColor(xlStyle.Font.FontColor, theme),
-            FillColor = xlStyle.Fill.PatternType == XLFillPatternValues.Solid
-                ? (CellColor?)MapColor(xlStyle.Fill.BackgroundColor, theme)
-                : null,
-            BorderTop = MapBorder(xlStyle.Border.TopBorder, xlStyle.Border.TopBorderColor, theme),
-            BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme),
-            BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme),
-            BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor, theme),
-            // ClosedXML returns empty string for built-in format ID 0 (General) and some
-            // other built-in IDs. Phase 2 limitation: built-in IDs without an explicit
-            // format string are treated as General.
-            NumberFormat = string.IsNullOrEmpty(xlStyle.NumberFormat.Format) ? "General" : xlStyle.NumberFormat.Format,
-            HorizontalAlignment = xlStyle.Alignment.Horizontal switch
-            {
-                XLAlignmentHorizontalValues.General => HorizontalAlignment.General,
-                XLAlignmentHorizontalValues.Left => HorizontalAlignment.Left,
-                XLAlignmentHorizontalValues.Center => HorizontalAlignment.Center,
-                XLAlignmentHorizontalValues.Right => HorizontalAlignment.Right,
-                XLAlignmentHorizontalValues.Justify => HorizontalAlignment.Justify,
-                XLAlignmentHorizontalValues.Distributed => HorizontalAlignment.Distributed,
-                _ => HorizontalAlignment.General,
-            },
-            VerticalAlignment = xlStyle.Alignment.Vertical switch
-            {
-                XLAlignmentVerticalValues.Top => VerticalAlignment.Top,
-                XLAlignmentVerticalValues.Center => VerticalAlignment.Center,
-                XLAlignmentVerticalValues.Bottom => VerticalAlignment.Bottom,
-                XLAlignmentVerticalValues.Justify => VerticalAlignment.Justify,
-                XLAlignmentVerticalValues.Distributed => VerticalAlignment.Distributed,
-                _ => VerticalAlignment.Bottom,
-            },
-            WrapText = xlStyle.Alignment.WrapText,
-            ShrinkToFit = xlStyle.Alignment.ShrinkToFit,
-            TextRotation = IsSupportedTextRotation(xlStyle.Alignment.TextRotation)
-                ? xlStyle.Alignment.TextRotation
-                : 0,
-            Locked = xlStyle.Protection.Locked,
-        };
-    }
-
-    private static CellColor MapColor(XLColor xlColor, WorkbookTheme theme)
-    {
-        if (xlColor.ColorType == XLColorType.Theme)
-            return theme.ResolveColor(ToWorkbookThemeColorSlot(xlColor.ThemeColor), xlColor.ThemeTint);
-
-        System.Drawing.Color c;
-        try
-        {
-            c = xlColor.Color;
-        }
-        catch (InvalidOperationException)
-        {
-            return new CellColor(0, 0, 0);
-        }
-
-        return new CellColor(c.R, c.G, c.B);
-    }
-
-    private static WorkbookThemeColorSlot ToWorkbookThemeColorSlot(XLThemeColor themeColor) => themeColor switch
-    {
-        XLThemeColor.Text1 => WorkbookThemeColorSlot.Dark1,
-        XLThemeColor.Background1 => WorkbookThemeColorSlot.Light1,
-        XLThemeColor.Text2 => WorkbookThemeColorSlot.Dark2,
-        XLThemeColor.Background2 => WorkbookThemeColorSlot.Light2,
-        XLThemeColor.Accent1 => WorkbookThemeColorSlot.Accent1,
-        XLThemeColor.Accent2 => WorkbookThemeColorSlot.Accent2,
-        XLThemeColor.Accent3 => WorkbookThemeColorSlot.Accent3,
-        XLThemeColor.Accent4 => WorkbookThemeColorSlot.Accent4,
-        XLThemeColor.Accent5 => WorkbookThemeColorSlot.Accent5,
-        XLThemeColor.Accent6 => WorkbookThemeColorSlot.Accent6,
-        XLThemeColor.Hyperlink => WorkbookThemeColorSlot.Hyperlink,
-        XLThemeColor.FollowedHyperlink => WorkbookThemeColorSlot.FollowedHyperlink,
-        _ => WorkbookThemeColorSlot.Dark1
-    };
-
-    private static CellBorder MapBorder(XLBorderStyleValues style, XLColor color, WorkbookTheme theme)
-    {
-        var mapped = style switch
-        {
-            XLBorderStyleValues.None => BorderStyle.None,
-            XLBorderStyleValues.Thin => BorderStyle.Thin,
-            XLBorderStyleValues.Medium => BorderStyle.Medium,
-            XLBorderStyleValues.Thick => BorderStyle.Thick,
-            XLBorderStyleValues.Dashed => BorderStyle.Dashed,
-            XLBorderStyleValues.Dotted => BorderStyle.Dotted,
-            XLBorderStyleValues.Double => BorderStyle.Double,
-            _ => BorderStyle.None,
-        };
-        return new CellBorder(mapped, MapColor(color, theme));
-    }
-
-    private static void ApplyStyle(IXLCell xlCell, CellStyle style)
-    {
-        var def = CellStyle.Default;
-
-        if (style.Bold != def.Bold) xlCell.Style.Font.Bold = style.Bold;
-        if (style.Italic != def.Italic) xlCell.Style.Font.Italic = style.Italic;
-        if (style.Underline != def.Underline)
-            xlCell.Style.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
-        if (style.Strikethrough != def.Strikethrough)
-            xlCell.Style.Font.Strikethrough = style.Strikethrough;
-        if (style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize))
-            xlCell.Style.Font.FontSize = style.FontSize;
-        if (style.FontName != def.FontName) xlCell.Style.Font.FontName = style.FontName;
-        if (style.FontColor != def.FontColor)
-            xlCell.Style.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
-
-        if (style.FillColor.HasValue)
-        {
-            xlCell.Style.Fill.PatternType = XLFillPatternValues.Solid;
-            xlCell.Style.Fill.BackgroundColor = XLColor.FromArgb(255, style.FillColor.Value.R, style.FillColor.Value.G, style.FillColor.Value.B);
-        }
-
-        if (style.BorderTop.Style != BorderStyle.None)
-        {
-            xlCell.Style.Border.TopBorder = MapBorderStyleInverse(style.BorderTop.Style);
-            xlCell.Style.Border.TopBorderColor = XLColor.FromArgb(255, style.BorderTop.Color.R, style.BorderTop.Color.G, style.BorderTop.Color.B);
-        }
-        if (style.BorderRight.Style != BorderStyle.None)
-        {
-            xlCell.Style.Border.RightBorder = MapBorderStyleInverse(style.BorderRight.Style);
-            xlCell.Style.Border.RightBorderColor = XLColor.FromArgb(255, style.BorderRight.Color.R, style.BorderRight.Color.G, style.BorderRight.Color.B);
-        }
-        if (style.BorderBottom.Style != BorderStyle.None)
-        {
-            xlCell.Style.Border.BottomBorder = MapBorderStyleInverse(style.BorderBottom.Style);
-            xlCell.Style.Border.BottomBorderColor = XLColor.FromArgb(255, style.BorderBottom.Color.R, style.BorderBottom.Color.G, style.BorderBottom.Color.B);
-        }
-        if (style.BorderLeft.Style != BorderStyle.None)
-        {
-            xlCell.Style.Border.LeftBorder = MapBorderStyleInverse(style.BorderLeft.Style);
-            xlCell.Style.Border.LeftBorderColor = XLColor.FromArgb(255, style.BorderLeft.Color.R, style.BorderLeft.Color.G, style.BorderLeft.Color.B);
-        }
-
-        if (style.HorizontalAlignment != def.HorizontalAlignment)
-            xlCell.Style.Alignment.Horizontal = style.HorizontalAlignment switch
-            {
-                HorizontalAlignment.Left => XLAlignmentHorizontalValues.Left,
-                HorizontalAlignment.Center => XLAlignmentHorizontalValues.Center,
-                HorizontalAlignment.Right => XLAlignmentHorizontalValues.Right,
-                HorizontalAlignment.Justify => XLAlignmentHorizontalValues.Justify,
-                HorizontalAlignment.Distributed => XLAlignmentHorizontalValues.Distributed,
-                _ => XLAlignmentHorizontalValues.General,
-            };
-
-        if (style.VerticalAlignment != def.VerticalAlignment)
-            xlCell.Style.Alignment.Vertical = style.VerticalAlignment switch
-            {
-                VerticalAlignment.Top => XLAlignmentVerticalValues.Top,
-                VerticalAlignment.Center => XLAlignmentVerticalValues.Center,
-                VerticalAlignment.Justify => XLAlignmentVerticalValues.Justify,
-                VerticalAlignment.Distributed => XLAlignmentVerticalValues.Distributed,
-                _ => XLAlignmentVerticalValues.Bottom,
-            };
-
-        if (style.WrapText != def.WrapText)
-            xlCell.Style.Alignment.WrapText = style.WrapText;
-
-        if (style.ShrinkToFit != def.ShrinkToFit)
-            xlCell.Style.Alignment.ShrinkToFit = style.ShrinkToFit;
-
-        if (style.TextRotation != def.TextRotation && IsSupportedTextRotation(style.TextRotation))
-            xlCell.Style.Alignment.TextRotation = style.TextRotation;
-
-        if (style.NumberFormat != def.NumberFormat)
-            xlCell.Style.NumberFormat.Format = style.NumberFormat;
-
-        if (style.Locked != def.Locked)
-            xlCell.Style.Protection.Locked = style.Locked;
-    }
-
-    // ── Conditional formatting load ────────────────────────────────────────────
-
-    private static void SaveNamedRanges(Workbook workbook, XLWorkbook xlWorkbook)
-    {
-        foreach (var (name, range) in workbook.NamedRanges)
-        {
-            try
-            {
-                var sheet = workbook.GetSheet(range.Start.Sheet);
-                if (sheet is null) continue;
-
-                // Find the matching ClosedXML worksheet by name
-                if (!xlWorkbook.TryGetWorksheet(sheet.Name, out var xlSheet)) continue;
-
-                var startA1 = range.Start.ToA1();
-                var endA1   = range.End.ToA1();
-                var sheetName = sheet.Name.Replace("'", "''");
-                var addr    = $"'{sheetName}'!{startA1}:{endA1}";
-
-                xlWorkbook.DefinedNames.Add(name, addr);
-            }
-            catch
-            {
-                // Skip any named range that can't be serialized
-            }
-        }
-    }
-
-    private static void LoadPrintArea(IXLWorksheet xlSheet, Sheet sheet)
-    {
-        var xlRange = xlSheet.PageSetup.PrintAreas.FirstOrDefault();
-        if (xlRange is null)
-            return;
-
-        var start = new CellAddress(
-            sheet.Id,
-            (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
-            (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
-        var end = new CellAddress(
-            sheet.Id,
-            (uint)xlRange.RangeAddress.LastAddress.RowNumber,
-            (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
-        sheet.PrintArea = new GridRange(start, end);
-    }
-
-    private static void LoadConditionalFormats(IXLWorksheet xlSheet, Sheet sheet, Workbook workbook)
-    {
-        int priority = 1;
-        foreach (var xlCf in xlSheet.ConditionalFormats)
-        {
-            // Map the range
-            var xlRange = xlCf.Range;
-            var sheetId = sheet.Id;
-            var start = new CellAddress(sheetId,
-                (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
-                (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
-            var end = new CellAddress(sheetId,
-                (uint)xlRange.RangeAddress.LastAddress.RowNumber,
-                (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
-            var appliesTo = new GridRange(start, end);
-
-            if (xlCf.ConditionalFormatType == XLConditionalFormatType.CellIs)
-            {
-                var op = MapOperator(xlCf.Operator);
-                if (op is null) { priority++; continue; }
-
-                var values = xlCf.Values;
-                string? v1 = values.TryGetValue(1, out var xv1) ? xv1.Value : null;
-                string? v2 = values.TryGetValue(2, out var xv2) ? xv2.Value : null;
-
-                var fmt = new ConditionalFormat
-                {
-                    AppliesTo    = appliesTo,
-                    Priority     = priority++,
-                    RuleType     = CfRuleType.CellValue,
-                    Operator     = op.Value,
-                    Value1       = v1,
-                    Value2       = v2,
-                    FormatIfTrue = MapStyle(xlCf.Style, workbook.Theme)
-                };
-                sheet.ConditionalFormats.Add(fmt);
-            }
-            else if (xlCf.ConditionalFormatType == XLConditionalFormatType.Expression)
-            {
-                var values = xlCf.Values;
-                string? formula = values.TryGetValue(1, out var xvf) ? xvf.Value : null;
-                if (string.IsNullOrWhiteSpace(formula)) { priority++; continue; }
-
-                // Strip leading = if present (Freexcel stores formula without it)
-                if (formula.StartsWith('=')) formula = formula[1..];
-
-                var fmt = new ConditionalFormat
-                {
-                    AppliesTo    = appliesTo,
-                    Priority     = priority++,
-                    RuleType     = CfRuleType.Formula,
-                    FormulaText  = formula,
-                    FormatIfTrue = MapStyle(xlCf.Style, workbook.Theme)
-                };
-                sheet.ConditionalFormats.Add(fmt);
-            }
-            // ColorScale, DataBar etc. are intentionally skipped on load for v1
-        }
-    }
-
-    private static CfOperator? MapOperator(XLCFOperator op) => op switch
-    {
-        XLCFOperator.Equal              => CfOperator.Equal,
-        XLCFOperator.NotEqual           => CfOperator.NotEqual,
-        XLCFOperator.GreaterThan        => CfOperator.GreaterThan,
-        XLCFOperator.EqualOrGreaterThan => CfOperator.GreaterThanOrEqual,
-        XLCFOperator.LessThan           => CfOperator.LessThan,
-        XLCFOperator.EqualOrLessThan    => CfOperator.LessThanOrEqual,
-        XLCFOperator.Between            => CfOperator.Between,
-        XLCFOperator.NotBetween         => CfOperator.NotBetween,
-        _                               => (CfOperator?)null
-    };
-
-    // ── Conditional formatting save ────────────────────────────────────────────
-
-    private static void SaveConditionalFormats(Sheet sheet, IXLWorksheet xlSheet)
-    {
-        foreach (var cf in sheet.ConditionalFormats)
-        {
-            if (!Enum.IsDefined(cf.RuleType) || !Enum.IsDefined(cf.Operator))
-                continue;
-            if (cf.RuleType is not (CfRuleType.CellValue or CfRuleType.Formula))
-                continue;
-            if (cf.FormatIfTrue is null && cf.RuleType != CfRuleType.ColorScale && cf.RuleType != CfRuleType.DataBar)
-                continue;
-
-            var rangeStr = $"{CellAddress.NumberToColumnName(cf.AppliesTo.Start.Col)}{cf.AppliesTo.Start.Row}" +
-                           $":{CellAddress.NumberToColumnName(cf.AppliesTo.End.Col)}{cf.AppliesTo.End.Row}";
-
-            try
-            {
-                var xlRange = xlSheet.Range(rangeStr);
-                var xlCf    = xlRange.AddConditionalFormat();
-
-                if (cf.RuleType == CfRuleType.Formula && !string.IsNullOrWhiteSpace(cf.FormulaText))
-                {
-                    // ClosedXML uses WhenIsTrue for formula-based CF rules
-                    var xlStyle = xlCf.WhenIsTrue("=" + cf.FormulaText);
-                    if (cf.FormatIfTrue is not null) ApplyCfStyle(xlStyle, cf.FormatIfTrue);
-                }
-                else if (cf.RuleType == CfRuleType.CellValue)
-                {
-                    var v1 = cf.Value1 ?? "";
-                    var v2 = cf.Value2 ?? "";
-                    IXLStyle xlStyle = cf.Operator switch
-                    {
-                        CfOperator.Equal              => xlCf.WhenEquals(v1),
-                        CfOperator.NotEqual           => xlCf.WhenNotEquals(v1),
-                        CfOperator.GreaterThan        => xlCf.WhenGreaterThan(v1),
-                        CfOperator.GreaterThanOrEqual => xlCf.WhenEqualOrGreaterThan(v1),
-                        CfOperator.LessThan           => xlCf.WhenLessThan(v1),
-                        CfOperator.LessThanOrEqual    => xlCf.WhenEqualOrLessThan(v1),
-                        CfOperator.Between            => xlCf.WhenBetween(v1, v2),
-                        CfOperator.NotBetween         => xlCf.WhenNotBetween(v1, v2),
-                        _                             => throw new InvalidOperationException("Unsupported conditional format operator.")
-                    };
-                    if (cf.FormatIfTrue is not null) ApplyCfStyle(xlStyle, cf.FormatIfTrue);
-                }
-                // ColorScale, DataBar, AboveAverage, Top10 — skip for now (partial support)
-            }
-            catch
-            {
-                // Skip rules that can't be serialized
-            }
-        }
-    }
-
-    /// <summary>Apply a <see cref="CellStyle"/> to an <see cref="IXLStyle"/> (used for CF rules).</summary>
-    private static void ApplyCfStyle(IXLStyle xlStyle, CellStyle style)
-    {
-        var def = CellStyle.Default;
-
-        if (style.Bold != def.Bold) xlStyle.Font.Bold = style.Bold;
-        if (style.Italic != def.Italic) xlStyle.Font.Italic = style.Italic;
-        if (style.Underline != def.Underline)
-            xlStyle.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
-        if (style.FontColor != def.FontColor)
-            xlStyle.Font.FontColor = XLColor.FromArgb(255, style.FontColor.R, style.FontColor.G, style.FontColor.B);
-
-        if (style.FillColor.HasValue)
-        {
-            xlStyle.Fill.PatternType = XLFillPatternValues.Solid;
-            xlStyle.Fill.BackgroundColor = XLColor.FromArgb(255,
-                style.FillColor.Value.R,
-                style.FillColor.Value.G,
-                style.FillColor.Value.B);
-        }
-    }
-
-    // ── Data validation load ───────────────────────────────────────────────────
-
-    private static void LoadDataValidations(IXLWorksheet xlSheet, Sheet sheet)
-    {
-        foreach (var xlDv in xlSheet.DataValidations)
-        {
-            try
-            {
-                var rangeAddr = xlDv.Ranges.FirstOrDefault()?.RangeAddress;
-                if (rangeAddr == null) continue;
-
-                var sheetId = sheet.Id;
-                var start = new CellAddress(sheetId,
-                    (uint)rangeAddr.FirstAddress.RowNumber,
-                    (uint)rangeAddr.FirstAddress.ColumnNumber);
-                var end = new CellAddress(sheetId,
-                    (uint)rangeAddr.LastAddress.RowNumber,
-                    (uint)rangeAddr.LastAddress.ColumnNumber);
-                var appliesTo = new GridRange(start, end);
-
-                var dv = new DataValidation
-                {
-                    AppliesTo    = appliesTo,
-                    AllowBlank   = xlDv.IgnoreBlanks,
-                    ShowDropdown = !xlDv.InCellDropdown.Equals(false),
-                    AlertStyle   = xlDv.ErrorStyle switch
-                    {
-                        XLErrorStyle.Warning => DvAlertStyle.Warning,
-                        XLErrorStyle.Information => DvAlertStyle.Information,
-                        _ => DvAlertStyle.Stop
-                    },
-                    ShowInputMessage = xlDv.ShowInputMessage,
-                    ShowErrorMessage = xlDv.ShowErrorMessage,
-                    ErrorTitle   = xlDv.ErrorTitle,
-                    ErrorMessage = xlDv.ErrorMessage,
-                    PromptTitle  = xlDv.InputTitle,
-                    PromptMessage = xlDv.InputMessage,
-                };
-
-                // Map type
-                dv.Type = xlDv.AllowedValues switch
-                {
-                    XLAllowedValues.WholeNumber => DvType.WholeNumber,
-                    XLAllowedValues.Decimal     => DvType.Decimal,
-                    XLAllowedValues.List        => DvType.List,
-                    XLAllowedValues.Date        => DvType.Date,
-                    XLAllowedValues.Time        => DvType.Time,
-                    XLAllowedValues.TextLength  => DvType.TextLength,
-                    XLAllowedValues.Custom      => DvType.Custom,
-                    _                           => DvType.Any
-                };
-
-                // Map operator
-                dv.Operator = xlDv.Operator switch
-                {
-                    XLOperator.Between            => DvOperator.Between,
-                    XLOperator.NotBetween         => DvOperator.NotBetween,
-                    XLOperator.EqualTo            => DvOperator.Equal,
-                    XLOperator.NotEqualTo         => DvOperator.NotEqual,
-                    XLOperator.GreaterThan        => DvOperator.GreaterThan,
-                    XLOperator.LessThan           => DvOperator.LessThan,
-                    XLOperator.EqualOrGreaterThan => DvOperator.GreaterThanOrEqual,
-                    XLOperator.EqualOrLessThan    => DvOperator.LessThanOrEqual,
-                    _                             => DvOperator.Between
-                };
-
-                // Map formula values
-                if (dv.Type == DvType.List)
-                {
-                    // ClosedXML stores list items in MinValue as a quoted formula like "\"A,B,C\""
-                    var raw = xlDv.MinValue ?? "";
-                    // Strip surrounding quotes if present
-                    if (raw.StartsWith('"') && raw.EndsWith('"') && raw.Length > 1)
-                        raw = raw.Substring(1, raw.Length - 2);
-                    dv.Formula1 = raw.Replace("\"\"", "\"");
-                }
-                else
-                {
-                    dv.Formula1 = xlDv.MinValue;
-                    dv.Formula2 = xlDv.MaxValue;
-                }
-
-                sheet.DataValidations.Add(dv);
-            }
-            catch
-            {
-                // Skip any individual validation we can't map
-            }
-        }
-    }
-
-    // ── Data validation save ───────────────────────────────────────────────────
-
-    private static void SaveDataValidations(Sheet sheet, IXLWorksheet xlSheet)
-    {
-        foreach (var dv in sheet.DataValidations)
-        {
-            if (!Enum.IsDefined(dv.Type) || !Enum.IsDefined(dv.Operator) || !Enum.IsDefined(dv.AlertStyle))
-                continue;
-
-            try
-            {
-                var rangeStr = $"{CellAddress.NumberToColumnName(dv.AppliesTo.Start.Col)}{dv.AppliesTo.Start.Row}" +
-                               $":{CellAddress.NumberToColumnName(dv.AppliesTo.End.Col)}{dv.AppliesTo.End.Row}";
-
-                var xlRange = xlSheet.Range(rangeStr);
-#pragma warning disable CS0618 // SetDataValidation is obsolete in newer ClosedXML but CreateDataValidation may not exist in 0.105
-                var xlDv    = xlRange.CreateDataValidation();
-#pragma warning restore CS0618
-
-                xlDv.IgnoreBlanks  = dv.AllowBlank;
-                xlDv.InCellDropdown = dv.ShowDropdown;
-                xlDv.ErrorStyle = dv.AlertStyle switch
-                {
-                    DvAlertStyle.Warning => XLErrorStyle.Warning,
-                    DvAlertStyle.Information => XLErrorStyle.Information,
-                    _ => XLErrorStyle.Stop
-                };
-                xlDv.ShowInputMessage = dv.ShowInputMessage;
-                xlDv.ShowErrorMessage = dv.ShowErrorMessage;
-
-                if (!string.IsNullOrEmpty(dv.ErrorTitle))   xlDv.ErrorTitle   = dv.ErrorTitle;
-                if (!string.IsNullOrEmpty(dv.ErrorMessage)) xlDv.ErrorMessage = dv.ErrorMessage;
-                if (!string.IsNullOrEmpty(dv.PromptTitle))  xlDv.InputTitle   = dv.PromptTitle;
-                if (!string.IsNullOrEmpty(dv.PromptMessage)) xlDv.InputMessage = dv.PromptMessage;
-
-                var f1 = dv.Formula1 ?? "";
-                var f2 = dv.Formula2 ?? "";
-
-                switch (dv.Type)
-                {
-                    case DvType.List:
-                        xlDv.List(f1, dv.ShowDropdown);
-                        break;
-
-                    case DvType.WholeNumber:
-                        ApplyNumericDv(xlDv.WholeNumber, dv.Operator, f1, f2);
-                        break;
-
-                    case DvType.Decimal:
-                        ApplyNumericDv(xlDv.Decimal, dv.Operator, f1, f2);
-                        break;
-
-                    case DvType.Date:
-                        ApplyNumericDv(xlDv.Date, dv.Operator, f1, f2);
-                        break;
-
-                    case DvType.Time:
-                        ApplyNumericDv(xlDv.Time, dv.Operator, f1, f2);
-                        break;
-
-                    case DvType.TextLength:
-                        ApplyNumericDv(xlDv.TextLength, dv.Operator, f1, f2);
-                        break;
-
-                    case DvType.Custom:
-                        xlDv.Custom(f1);
-                        break;
-
-                    // DvType.Any — leave as-is (ClosedXML default = no restriction)
-                }
-            }
-            catch
-            {
-                // Skip rules that can't be serialized
-            }
-        }
-    }
-
-    private static void ApplyNumericDv(IXLValidationCriteria rule, DvOperator op, string f1, string f2)
-    {
-        switch (op)
-        {
-            case DvOperator.Between:            rule.Between(f1, f2); break;
-            case DvOperator.NotBetween:         rule.NotBetween(f1, f2); break;
-            case DvOperator.Equal:              rule.EqualTo(f1); break;
-            case DvOperator.NotEqual:           rule.NotEqualTo(f1); break;
-            case DvOperator.GreaterThan:        rule.GreaterThan(f1); break;
-            case DvOperator.LessThan:           rule.LessThan(f1); break;
-            case DvOperator.GreaterThanOrEqual: rule.EqualOrGreaterThan(f1); break;
-            case DvOperator.LessThanOrEqual:    rule.EqualOrLessThan(f1); break;
-        }
-    }
-
-    private static void SetXlsxHeaderFooter(
-        IXLHeaderFooter target,
-        WorksheetHeaderFooter oddOrAllPages,
-        WorksheetHeaderFooter firstPage,
-        WorksheetHeaderFooter evenPages,
-        bool differentFirstPage,
-        bool differentOddEvenPages)
-    {
-        foreach (var occurrence in new[]
-                 {
-                     XLHFOccurrence.AllPages,
-                     XLHFOccurrence.OddPages,
-                     XLHFOccurrence.EvenPages,
-                     XLHFOccurrence.FirstPage
-                 })
-        {
-            target.Left.Clear(occurrence);
-            target.Center.Clear(occurrence);
-            target.Right.Clear(occurrence);
-        }
-
-        var primaryOccurrence = differentOddEvenPages ? XLHFOccurrence.OddPages : XLHFOccurrence.AllPages;
-        AddXlsxHeaderFooterText(target, oddOrAllPages, primaryOccurrence);
-        if (differentFirstPage)
-            AddXlsxHeaderFooterText(target, firstPage, XLHFOccurrence.FirstPage);
-        if (differentOddEvenPages)
-            AddXlsxHeaderFooterText(target, evenPages, XLHFOccurrence.EvenPages);
-    }
-
-    private static void AddXlsxHeaderFooterText(
-        IXLHeaderFooter target,
-        WorksheetHeaderFooter value,
-        XLHFOccurrence occurrence)
-    {
-        if (!string.IsNullOrEmpty(value.Left))
-            target.Left.AddText(ToXlsxHeaderFooterText(value.Left), occurrence);
-        if (!string.IsNullOrEmpty(value.Center))
-            target.Center.AddText(ToXlsxHeaderFooterText(value.Center), occurrence);
-        if (!string.IsNullOrEmpty(value.Right))
-            target.Right.AddText(ToXlsxHeaderFooterText(value.Right), occurrence);
-    }
-
-    private static string GetXlsxHeaderFooterText(IXLHFItem item, params XLHFOccurrence[] occurrences)
-    {
-        foreach (var occurrence in occurrences)
-        {
-            var text = item.GetText(occurrence);
-            if (!string.IsNullOrEmpty(text))
-                return text;
-        }
-
-        return "";
-    }
-
-    private static string ToXlsxHeaderFooterText(string text) =>
-        text
-            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase);
-
-    private static string FromXlsxHeaderFooterText(string text) =>
-        text
-            .Replace("&P", "&[Page]", StringComparison.Ordinal)
-            .Replace("&N", "&[Pages]", StringComparison.Ordinal);
-
-    private static XLPrintErrorValues ToXlsxPrintErrorValue(WorksheetPrintErrorValue value) =>
-        value switch
-        {
-            WorksheetPrintErrorValue.Blank => XLPrintErrorValues.Blank,
-            WorksheetPrintErrorValue.Dash => XLPrintErrorValues.Dash,
-            WorksheetPrintErrorValue.NotAvailable => XLPrintErrorValues.NA,
-            _ => XLPrintErrorValues.Displayed
-        };
-
-    private static WorksheetPrintErrorValue FromXlsxPrintErrorValue(XLPrintErrorValues value) =>
-        value switch
-        {
-            XLPrintErrorValues.Blank => WorksheetPrintErrorValue.Blank,
-            XLPrintErrorValues.Dash => WorksheetPrintErrorValue.Dash,
-            XLPrintErrorValues.NA => WorksheetPrintErrorValue.NotAvailable,
-            _ => WorksheetPrintErrorValue.Displayed
-        };
-
-    private static XLShowCommentsValues ToXlsxPrintComments(WorksheetPrintComments value) =>
-        value switch
-        {
-            WorksheetPrintComments.AtEnd => XLShowCommentsValues.AtEnd,
-            WorksheetPrintComments.AsDisplayed => XLShowCommentsValues.AsDisplayed,
-            _ => XLShowCommentsValues.None
-        };
-
-    private static WorksheetPrintComments FromXlsxPrintComments(XLShowCommentsValues value) =>
-        value switch
-        {
-            XLShowCommentsValues.AtEnd => WorksheetPrintComments.AtEnd,
-            XLShowCommentsValues.AsDisplayed => WorksheetPrintComments.AsDisplayed,
-            _ => WorksheetPrintComments.None
-        };
-
-    private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch
-    {
-        BorderStyle.Thin => XLBorderStyleValues.Thin,
-        BorderStyle.Medium => XLBorderStyleValues.Medium,
-        BorderStyle.Thick => XLBorderStyleValues.Thick,
-        BorderStyle.Dashed => XLBorderStyleValues.Dashed,
-        BorderStyle.Dotted => XLBorderStyleValues.Dotted,
-        BorderStyle.Double => XLBorderStyleValues.Double,
-        _ => XLBorderStyleValues.None,
-    };
-
-    // ── Merged regions load ────────────────────────────────────────────────────
-
     private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
     {
         foreach (var xlMerge in xlSheet.MergedRanges)
@@ -14585,25 +9911,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             [],
             new Dictionary<string, List<PendingPivotTableModel>>(StringComparer.OrdinalIgnoreCase));
     }
-
-    private sealed record SlicerTimelinePackageMetadata(
-        IReadOnlyList<SlicerModel> Slicers,
-        IReadOnlyList<TimelineModel> Timelines);
-
-    private sealed record SlicerCacheMetadata(
-        string Name,
-        string? SourceFieldName,
-        string? PivotTableName,
-        IReadOnlyList<string> SelectedItems);
-
-    private sealed record TimelineCacheMetadata(
-        string Name,
-        string? SourceFieldName,
-        string? PivotTableName,
-        string? StartDate,
-        string? EndDate,
-        string? SelectedStartDate,
-        string? SelectedEndDate);
 
     private sealed record PendingPivotTableModel(
         string Name,
@@ -14633,40 +9940,4 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<PivotLabelFilterModel> LabelFilters,
         IReadOnlyList<PivotSortModel> Sorts);
 
-    private sealed record StructuredTablePackageMetadata(
-        IReadOnlyDictionary<string, List<PendingStructuredTableModel>> TablesBySheetName)
-    {
-        public static StructuredTablePackageMetadata Empty { get; } = new(
-            new Dictionary<string, List<PendingStructuredTableModel>>(StringComparer.OrdinalIgnoreCase));
-    }
-
-    private sealed record PendingStructuredTableModel(
-        int Id,
-        string Name,
-        string DisplayName,
-        string RangeReference,
-        bool HasAutoFilter,
-        bool TotalsRowShown,
-        string? StyleName,
-        bool ShowFirstColumn,
-        bool ShowLastColumn,
-        bool ShowRowStripes,
-        bool ShowColumnStripes,
-        string PackagePart,
-        string? NativeSortStateXml,
-        IReadOnlyDictionary<string, string>? NativeAttributes,
-        IReadOnlyList<string>? NativeChildXmls,
-        IReadOnlyDictionary<string, string>? NativeAutoFilterAttributes,
-        IReadOnlyList<string>? NativeAutoFilterChildXmls,
-        IReadOnlyDictionary<string, string>? NativeStyleInfoAttributes,
-        IReadOnlyList<string>? NativeStyleInfoChildXmls,
-        IReadOnlyList<StructuredTableColumnModel> Columns,
-        IReadOnlyList<StructuredTableFilterColumnModel> FilterColumns);
-
-    private sealed record DataValidationNativeMetadata(
-        GridRange AppliesTo,
-        IReadOnlyDictionary<string, string> NativeAttributes,
-        IReadOnlyList<string> NativeChildXmls,
-        IReadOnlyDictionary<string, string> NativeContainerAttributes,
-        IReadOnlyList<string> NativeContainerChildXmls);
 }

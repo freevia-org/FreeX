@@ -16,7 +16,7 @@ public sealed class GoToSpecialDialog : Window
     {
         Title = "Go To Special";
         Width = 430;
-        Height = 430;
+        Height = 300;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -51,29 +51,12 @@ public sealed class GoToSpecialDialog : Window
             AddChoice(optionGrid, button, choiceRow++);
         }
 
-        var unavailableGroup = new GroupBox { Header = "Additional Excel options", Margin = new Thickness(0, 0, 0, 10) };
-        var unavailableGrid = CreateChoiceGrid();
-        unavailableGroup.Content = unavailableGrid;
-        content.Children.Add(unavailableGroup);
-
-        var unavailableRow = 0;
-        foreach (var choice in GetUnavailableChoices())
-        {
-            AddChoice(unavailableGrid, new RadioButton
-            {
-                Content = choice,
-                IsEnabled = false,
-                Margin = new Thickness(0, 0, 12, 6),
-                ToolTip = "This Excel Go To Special option is shown for parity and is not selectable yet."
-            }, unavailableRow++);
-        }
-
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
 
         content.Children.Add(new TextBlock
         {
-            Text = "Only supported options are selectable; unavailable options are shown to match Excel's dialog structure.",
+            Text = "The selectable options match the Go To Special commands Freexcel can apply to the current selection.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 0, 0, 8)
@@ -94,17 +77,6 @@ public sealed class GoToSpecialDialog : Window
             new(GoToSpecialKind.Comments, "Co_mments"),
             new(GoToSpecialKind.DataValidation, "_Data validation"),
             new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
-        ];
-
-    public static IReadOnlyList<string> GetUnavailableChoices() =>
-        [
-            "_Current region",
-            "Current _array",
-            "_Objects",
-            "Row _differences",
-            "Column di_fferences",
-            "_Last cell",
-            "_Conditional formats"
         ];
 
     public static bool TryParseChoice(string text, out GoToSpecialKind kind)
