@@ -634,13 +634,15 @@ public static class ChartRenderer
         if (!chart.IsPivotChart || !chart.ShowPivotChartFieldButtons)
             return;
 
-        var captions = new[]
-        {
-            string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName,
-            "Axis Fields",
-            "Values"
-        };
-        for (var index = 0; index < captions.Length; index++)
+        var captions = new List<string>();
+        if (chart.ShowPivotChartReportFilterButtons)
+            captions.Add(string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName);
+        if (chart.ShowPivotChartAxisFieldButtons)
+            captions.Add("Axis Fields");
+        if (chart.ShowPivotChartValueFieldButtons)
+            captions.Add("Values");
+
+        for (var index = 0; index < captions.Count; index++)
         {
             model.Annotations.Add(new TextAnnotation
             {
