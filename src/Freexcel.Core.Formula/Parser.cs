@@ -259,10 +259,24 @@ public sealed class Parser
                     if (string.IsNullOrWhiteSpace(selector.Value))
                         throw new FormulaParseException(
                             $"Expected structured reference column name at position {selector.Position}");
+                    if (selector.Value.Trim().StartsWith('@'))
+                        return new StructuredCurrentRowReferenceNode(
+                            selector.Value.Trim()[1..].Trim(),
+                            token.Value);
                     return new StructuredReferenceNode(token.Value, selector.Value.Trim());
                 }
 
                 return new NamedRangeNode(token.Value);
+            }
+
+            case TokenType.StructuredReferenceSelector:
+            {
+                var selector = Advance();
+                var value = selector.Value.Trim();
+                if (!value.StartsWith('@') || value.Length == 1)
+                    throw new FormulaParseException(
+                        $"Expected current-row structured reference at position {selector.Position}");
+                return new StructuredCurrentRowReferenceNode(value[1..].Trim());
             }
 
             case TokenType.OpenParen:
