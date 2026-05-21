@@ -708,6 +708,23 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageCommandButtons_ExposeVisibleAccessKeysForSaveAndClose()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var startScreen = document
+            .Descendants(presentation + "Grid")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
+
+        startScreen.Descendants(presentation + "Button")
+            .Select(button => button.Attribute("Content")?.Value)
+            .Should()
+            .Contain(["_Save", "_Close"]);
+    }
+
+    [Fact]
     public void BackstageMouseOnlyCommands_AreNotUsedForRecentPinnedTabs()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
@@ -1383,6 +1400,20 @@ public sealed class MainWindowXamlKeyTipTests
 
         searchBox.Attribute("AutomationProperties.Name")?.Value.Should().Be("Search PivotTable Fields");
         searchBox.IsBefore(availableFieldsList).Should().BeTrue("search should be above the available fields list");
+    }
+
+    [Fact]
+    public void PivotTableFieldListPane_RemoveButton_ExposesVisibleAccessKey()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document
+            .Descendants(presentation + "Button")
+            .Single(button => button.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click")
+            .Attribute("Content")?.Value
+            .Should()
+            .Be("_Remove");
     }
 
     [Fact]
