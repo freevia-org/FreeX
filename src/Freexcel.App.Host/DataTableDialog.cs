@@ -56,7 +56,7 @@ public sealed class DataTableDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10)
         });
-        root.Children.Add(new TextBlock { Text = "_Type:" });
+        root.Children.Add(new Label { Content = "_Type:", Target = _modeBox, Padding = new Thickness(0) });
         root.Children.Add(_modeBox);
         root.Children.Add(_modeHint);
 
@@ -159,10 +159,12 @@ public sealed class DataTableDialog : Window
     private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var labelBlock = new TextBlock
+        var labelBlock = new Label
         {
-            Text = label,
+            Content = label,
+            Target = textBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0),
             Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0)
         };
         Grid.SetRow(labelBlock, row);
