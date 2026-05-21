@@ -311,7 +311,12 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("_referenceBox");
         source.Should().Contain("_referencesList");
-        source.Should().Contain("All references:");
+        source.Should().Contain("_Reference:");
+        source.Should().Contain("_All references:");
+        source.Should().Contain("_Destination cell:");
+        source.Should().Contain("Use _labels in:");
+        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = \"_Delete\"");
         source.Should().Contain("AddReferenceButton_Click");
         source.Should().Contain("DeleteReferenceButton_Click");
         source.Should().Contain("CreateReferenceEditor(_referenceBox");
