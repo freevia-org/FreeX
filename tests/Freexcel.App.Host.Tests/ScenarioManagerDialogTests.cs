@@ -46,6 +46,24 @@ public sealed class ScenarioManagerDialogTests
     }
 
     [Fact]
+    public void DialogSource_ExposesKeyboardAccessKeysForFieldsActionsAndClose()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("\"_Scenarios:\"");
+        source.Should().Contain("\"Scenario _name:\"");
+        source.Should().Contain("\"Changing _cells:\"");
+        source.Should().Contain("\"_Comment:\"");
+        source.Should().Contain("\"_Add...\"");
+        source.Should().Contain("\"_Edit...\"");
+        source.Should().Contain("\"_Delete\"");
+        source.Should().Contain("\"_Merge...\"");
+        source.Should().Contain("\"_Show\"");
+        source.Should().Contain("\"S_ummary...\"");
+        source.Should().Contain("Content = \"_Close\"");
+    }
+
+    [Fact]
     public void DialogSource_FramesAddEditFieldsLikeExcel()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
