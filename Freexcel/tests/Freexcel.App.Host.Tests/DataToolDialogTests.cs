@@ -60,6 +60,10 @@ public sealed class DataToolDialogTests
         source.Should().Contain("_previewGrid");
         source.Should().Contain("_textQualifierBox");
         source.Should().Contain("_destinationBox");
+        source.Should().Contain("var label = new Label");
+        source.Should().Contain("Content = \"Text _qualifier:\"");
+        source.Should().Contain("Target = _textQualifierBox");
+        source.Should().Contain("new Label { Content = \"_Destination:\", Target = _destinationBox");
     }
 
     [Fact]
@@ -467,6 +471,9 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Select formula cell");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
+        source.Should().Contain("new Label { Content = \"_Type:\", Target = _modeBox");
+        source.Should().Contain("var labelBlock = new Label");
+        source.Should().Contain("Target = textBox");
         source.Should().Contain("Header = \"Inputs\"");
         source.Should().Contain("One-variable data tables use either");
         source.Should().Contain("Two-variable data tables require both");
@@ -478,7 +485,8 @@ public sealed class DataToolDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
 
         source.Should().Contain("_headersBox");
-        source.Should().Contain("My table has headers");
+        source.Should().Contain("Content = \"_My table has headers\"");
+        source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("ReferencePickerButton_Click");
         source.Should().Contain("Select table range");

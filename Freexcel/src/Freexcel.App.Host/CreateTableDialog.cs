@@ -11,7 +11,7 @@ public sealed class CreateTableDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _headersBox = new() { Content = "My table has headers", IsChecked = true };
+    private readonly CheckBox _headersBox = new() { Content = "_My table has headers", IsChecked = true };
     private readonly string _tableStyleName;
 
     public CreateTableDialogResult? Result { get; private set; }
@@ -29,7 +29,7 @@ public sealed class CreateTableDialog : Window
 
         _rangeBox.Text = defaultRangeText;
         var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(new TextBlock { Text = "Where is the data for your table?", Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(new Label { Content = "_Where is the data for your table?", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         root.Children.Add(CreateReferenceEditor(_rangeBox, "Select table range"));
         _headersBox.Margin = new Thickness(0, 0, 0, 16);
         root.Children.Add(_headersBox);
