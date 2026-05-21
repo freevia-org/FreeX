@@ -125,6 +125,24 @@ public sealed class FormulaRangeEntryPlannerTests
     }
 
     [Fact]
+    public void GetKeyboardCursor_UsesMovingSelectionCursorWhenFormulaRangeIsAlreadyExtended()
+    {
+        var cursor = CellAddress.Parse("B1", SheetId);
+
+        FormulaRangeEntryPlanner.GetKeyboardCursor(Range("A1", "B1"), cursor)
+            .Should()
+            .Be(cursor);
+    }
+
+    [Fact]
+    public void GetKeyboardCursor_FallsBackToRangeStartWhenNoSelectionCursorExists()
+    {
+        FormulaRangeEntryPlanner.GetKeyboardCursor(Range("A1", "B1"), selectionCursor: null)
+            .Should()
+            .Be(CellAddress.Parse("A1", SheetId));
+    }
+
+    [Fact]
     public void TryApplyRangeSelection_IgnoresNonFormulaText()
     {
         FormulaRangeEntryPlanner.TryApplyRangeSelection(

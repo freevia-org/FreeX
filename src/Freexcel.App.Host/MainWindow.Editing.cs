@@ -294,17 +294,21 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
-        var current = SheetGrid.SelectedRange?.Start;
-        if (current is null)
+        var selectedRange = SheetGrid.SelectedRange;
+        if (selectedRange is null)
             return;
+        var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
+        var current = formulaRangeEntryActive
+            ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange.Value, _selectionCursor)
+            : selectedRange.Value.Start;
 
         var intent = ExcelEditKeyPlanner.GetIntent(
             e.Key,
             Keyboard.Modifiers,
-            current.Value,
+            current,
             pageSize: Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1),
             allowFormulaBarNavigationKeys: false,
-            formulaRangeEntryActive: IsFormulaRangeEntryActive(_inlineEditor));
+            formulaRangeEntryActive: formulaRangeEntryActive);
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -520,8 +524,12 @@ public partial class MainWindow
             SheetGrid.Focus();
             e.Handled = true;
         }
-        else if (SheetGrid.SelectedRange?.Start is { } current)
+        else if (SheetGrid.SelectedRange is { } selectedRange)
         {
+            var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
+            var current = formulaRangeEntryActive
+                ? FormulaRangeEntryPlanner.GetKeyboardCursor(selectedRange, _selectionCursor)
+                : selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
             var intent = ExcelEditKeyPlanner.GetIntent(
                 e.Key,
@@ -529,7 +537,7 @@ public partial class MainWindow
                 current,
                 pageSize,
                 allowFormulaBarNavigationKeys: true,
-                formulaRangeEntryActive: IsFormulaRangeEntryActive(FormulaBar));
+                formulaRangeEntryActive: formulaRangeEntryActive);
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
