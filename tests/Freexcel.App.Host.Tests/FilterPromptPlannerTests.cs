@@ -41,6 +41,7 @@ public sealed class FilterPromptPlannerTests
     [Theory]
     [InlineData("blank", typeof(BlankFilterCriterion))]
     [InlineData("contains:East", typeof(TextContainsFilterCriterion))]
+    [InlineData("equals:East", typeof(TextEqualsFilterCriterion))]
     [InlineData(">=10", typeof(NumberGreaterThanOrEqualFilterCriterion))]
     public void TryPlan_ClassifiesConditionFilters(string input, Type criterionType)
     {
