@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -84,6 +85,15 @@ public sealed class PasteSpecialDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void DialogButtons_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.cs"));
+
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
     }
 
     private static RadioButton GetRadioButton(PasteSpecialDialog dialog, string fieldName)
