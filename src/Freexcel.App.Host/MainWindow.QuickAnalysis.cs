@@ -91,6 +91,9 @@ public partial class MainWindow
             case QuickAnalysisCommand.TextContains:
                 ShowCfDialog("Text Contains");
                 break;
+            case QuickAnalysisCommand.DateOccurring:
+                ShowCfDialog("Date Occurring");
+                break;
             case QuickAnalysisCommand.DuplicateValues:
                 ShowCfDialog("Duplicate Values");
                 break;
