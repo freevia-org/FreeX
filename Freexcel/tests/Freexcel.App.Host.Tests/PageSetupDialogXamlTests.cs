@@ -122,26 +122,35 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
-    public void SheetTab_DoesNotExposeUnwiredRangePickerButtons()
+    public void SheetTab_ExposesHonestRangePickerButtonsForPrintRanges()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        document.Descendants()
-            .Any(element => element.Attribute(x + "Name")?.Value == "PrintAreaBox")
-            .Should().BeTrue("print area remains editable as a text range");
-
-        foreach (var name in new[]
+        foreach (var (buttonName, targetName, automationName) in new[]
         {
-            "PrintAreaPickerButton",
-            "RowsRepeatPickerButton",
-            "ColumnsRepeatPickerButton"
+            ("PrintAreaPickerButton", "PrintAreaBox", "Focus print area range"),
+            ("RowsRepeatPickerButton", "RowsRepeatBox", "Focus rows to repeat range"),
+            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Focus columns to repeat range")
         })
         {
-            document.Descendants()
-                .Any(element => element.Attribute(x + "Name")?.Value == name)
-                .Should().BeFalse($"{name} should not be shown until worksheet range-picking is wired");
+            var button = document.Descendants(presentation + "Button")
+                .SingleOrDefault(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+            button.Should().NotBeNull($"{buttonName} should expose Excel-like picker affordance");
+            button!.Attribute("Content")?.Value.Should().Be("...");
+            button.Attribute("Click")?.Value.Should().Be("RangePickerButton_Click");
+            button.Attribute("ToolTip")?.Value.Should().Contain("Focuses and selects");
+            button.Attribute("Tag")?.Value.Should().Be(targetName);
+            button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
         }
+
+        source.Should().Contain("RangePickerButton_Click");
+        source.Should().Contain("target.Focus()");
+        source.Should().Contain("target.SelectAll()");
     }
 
     [Fact]
