@@ -14,7 +14,7 @@ public partial class MainWindow
         e.SystemKey == Key.None ? e.Key : e.SystemKey;
 
     private static bool IsStandaloneAltKey(Key key) =>
-        key is Key.LeftAlt or Key.RightAlt or Key.System;
+        StandaloneAltKeyTipTracker.IsStandaloneAltKey(key);
 
     private void EnterRibbonKeyTipMode(RibbonKeyTipScope scope)
     {
