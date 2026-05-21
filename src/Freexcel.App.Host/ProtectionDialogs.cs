@@ -60,7 +60,6 @@ public static class ProtectionDialogPlanner
 public sealed class PasswordProtectionDialog : Window
 {
     private readonly PasswordBox _passwordBox = new();
-    private readonly PasswordBox _confirmationBox = new();
     private readonly bool _requiresConfirmation;
 
     public string? Password { get; private set; }
@@ -89,11 +88,6 @@ public sealed class PasswordProtectionDialog : Window
         var passwordPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         passwordPanel.Children.Add(new Label { Content = prompt, Target = _passwordBox, Margin = new Thickness(0, 0, 0, 4) });
         passwordPanel.Children.Add(_passwordBox);
-        if (_requiresConfirmation)
-        {
-            passwordPanel.Children.Add(new Label { Content = "_Confirm password:", Target = _confirmationBox, Margin = new Thickness(0, 8, 0, 4) });
-            passwordPanel.Children.Add(_confirmationBox);
-        }
         passwordPanel.Children.Add(new TextBlock
         {
             Text = "Caution: lost or forgotten passwords cannot be recovered.",
@@ -142,13 +136,54 @@ public sealed class PasswordProtectionDialog : Window
 
     private void Accept()
     {
-        if (_requiresConfirmation && !ProtectionDialogPlanner.PasswordsMatch(_passwordBox.Password, _confirmationBox.Password))
+        if (_requiresConfirmation && !string.IsNullOrEmpty(_passwordBox.Password))
+        {
+            var confirmationDialog = new ConfirmPasswordDialog(_passwordBox.Password) { Owner = this };
+            if (confirmationDialog.ShowDialog() != true)
+                return;
+        }
+
+        Password = _passwordBox.Password;
+        DialogResult = true;
+    }
+}
+
+public sealed class ConfirmPasswordDialog : Window
+{
+    private readonly string _password;
+    private readonly PasswordBox _confirmationBox = new();
+
+    public ConfirmPasswordDialog(string password)
+    {
+        _password = password;
+        Title = "Confirm Password";
+        Width = 360;
+        Height = 170;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        var root = new StackPanel { Margin = new Thickness(12) };
+        root.Children.Add(new TextBlock
+        {
+            Text = "Reenter password to proceed.",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        root.Children.Add(new Label { Content = "_Password:", Target = _confirmationBox, Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(_confirmationBox);
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
+        Content = root;
+    }
+
+    private void Accept()
+    {
+        if (!ProtectionDialogPlanner.PasswordsMatch(_password, _confirmationBox.Password))
         {
             MessageBox.Show(this, "The confirmation password does not match.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        Password = _passwordBox.Password;
         DialogResult = true;
     }
 }
