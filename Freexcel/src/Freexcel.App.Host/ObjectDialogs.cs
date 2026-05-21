@@ -5,7 +5,20 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
-public sealed record HyperlinkDialogResult(string Target, string DisplayText);
+public enum HyperlinkLinkType
+{
+    ExistingFileOrWebPage,
+    CreateNewDocument,
+    PlaceInThisDocument,
+    EmailAddress
+}
+
+public sealed record HyperlinkDialogResult(
+    HyperlinkLinkType LinkType,
+    string Target,
+    string DisplayText,
+    string ScreenTip,
+    string Bookmark);
 
 public sealed class HyperlinkDialog : Window
 {
@@ -13,6 +26,9 @@ public sealed class HyperlinkDialog : Window
     private readonly TextBox _displayBox = new();
     private readonly Button _screenTipButton = new() { Content = "ScreenTip..." };
     private readonly Button _bookmarkButton = new() { Content = "Bookmark..." };
+    private readonly ListBox _linkTypes = new();
+    private string _screenTip = "";
+    private string _bookmark = "";
 
     public HyperlinkDialogResult Result { get; private set; }
 
@@ -27,19 +43,24 @@ public sealed class HyperlinkDialog : Window
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(16) };
-        var linkTypes = new ListBox
+        _linkTypes.Width = 170;
+        _linkTypes.Margin = new Thickness(0, 0, 12, 0);
+        _linkTypes.ItemsSource = new[]
         {
-            Width = 170,
-            Margin = new Thickness(0, 0, 12, 0),
-            ItemsSource = new[] { "Existing File or Web Page", "Place in This Document", "E-mail Address" },
-            SelectedIndex = 0
+            "Existing File or Web Page",
+            "Create New Document",
+            "Place in This Document",
+            "E-mail Address"
         };
-        DockPanel.SetDock(linkTypes, Dock.Left);
-        root.Children.Add(linkTypes);
+        _linkTypes.SelectedIndex = 0;
+        DockPanel.SetDock(_linkTypes, Dock.Left);
+        root.Children.Add(_linkTypes);
 
         var grid = DialogGrid(3);
         AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
         AddTextRow(grid, 1, "_Address:", _targetBox, target);
+        _screenTipButton.Click += ScreenTipButton_Click;
+        _bookmarkButton.Click += BookmarkButton_Click;
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = 96;
         _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
@@ -52,7 +73,7 @@ public sealed class HyperlinkDialog : Window
 
         grid.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
-            Result = CreateResult(_targetBox.Text, _displayBox.Text);
+            Result = CreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark);
             DialogResult = true;
         }));
         Grid.SetRow(grid.Children[^1], 3);
@@ -61,13 +82,51 @@ public sealed class HyperlinkDialog : Window
         Content = root;
     }
 
-    public static HyperlinkDialogResult CreateResult(string target, string? displayText)
+    public static HyperlinkDialogResult CreateResult(
+        string target,
+        string? displayText,
+        HyperlinkLinkType linkType = HyperlinkLinkType.ExistingFileOrWebPage,
+        string? screenTip = "",
+        string? bookmark = "")
     {
         var normalizedTarget = target.Trim();
         var normalizedDisplay = string.IsNullOrWhiteSpace(displayText)
             ? normalizedTarget
             : displayText.Trim();
-        return new HyperlinkDialogResult(normalizedTarget, normalizedDisplay);
+        return new HyperlinkDialogResult(
+            linkType,
+            normalizedTarget,
+            normalizedDisplay,
+            (screenTip ?? "").Trim(),
+            (bookmark ?? "").Trim());
+    }
+
+    private HyperlinkLinkType SelectedLinkType => _linkTypes.SelectedIndex switch
+    {
+        1 => HyperlinkLinkType.CreateNewDocument,
+        2 => HyperlinkLinkType.PlaceInThisDocument,
+        3 => HyperlinkLinkType.EmailAddress,
+        _ => HyperlinkLinkType.ExistingFileOrWebPage
+    };
+
+    private void ScreenTipButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ScreenTipDialog(_screenTip) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _screenTip = dialog.Result.Text;
+        _screenTipButton.ToolTip = string.IsNullOrWhiteSpace(_screenTip) ? null : _screenTip;
+    }
+
+    private void BookmarkButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BookmarkDialog(_bookmark) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _bookmark = dialog.Result.Text;
+        _bookmarkButton.ToolTip = string.IsNullOrWhiteSpace(_bookmark) ? null : _bookmark;
     }
 
     private static Grid DialogGrid(int inputRows)
@@ -99,6 +158,22 @@ public sealed class HyperlinkDialog : Window
         grid.Children.Add(box);
         Grid.SetRow(box, row);
         Grid.SetColumn(box, 1);
+    }
+}
+
+public sealed class ScreenTipDialog : TextEntryDialog
+{
+    public ScreenTipDialog(string? initialText = "")
+        : base("Set Hyperlink ScreenTip", "_ScreenTip text:", initialText)
+    {
+    }
+}
+
+public sealed class BookmarkDialog : TextEntryDialog
+{
+    public BookmarkDialog(string? initialText = "")
+        : base("Select Place in Document", "_Bookmark or cell reference:", initialText)
+    {
     }
 }
 
@@ -411,7 +486,7 @@ public sealed class ShapeGradientDialog : Window
 
 public sealed record TextEntryDialogResult(string Text);
 
-public sealed class TextEntryDialog : Window
+public class TextEntryDialog : Window
 {
     private readonly TextBox _textBox = new();
 
