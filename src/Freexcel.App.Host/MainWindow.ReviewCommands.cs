@@ -28,16 +28,23 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (dialog.Result.Action == SpellCheckDialogAction.Ignore)
+        if (dialog.Result.Action is SpellCheckDialogAction.Ignore or SpellCheckDialogAction.IgnoreAll)
         {
             MessageBox.Show("Spelling issues ignored.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var plan = SpellCheckService.PlanKnownCorrections(_workbook, _currentSheetId);
+        if (dialog.Result.Action == SpellCheckDialogAction.Add)
+        {
+            MessageBox.Show("Spelling issue skipped.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var replacement = dialog.Result.Replacement ?? issue.Suggestion;
+
         if (dialog.Result.Action == SpellCheckDialogAction.ReplaceAll)
         {
-            var edits = SpellCheckService.BuildCorrectionCellEdits(plan);
+            var edits = BuildSpellCheckReplaceAllEdits(issues, issue.Word, replacement);
             if (edits.Count == 0)
             {
                 MessageBox.Show("Spelling check is complete.", "Spell Check", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -52,8 +59,6 @@ public partial class MainWindow
             return;
         }
 
-        var replacement = dialog.Result.Replacement ?? issue.Suggestion;
-
         var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
         if (!TryExecuteSpellCheckEdits([(issue.Address, Cell.FromValue(new TextValue(corrected)))]))
             return;
@@ -61,6 +66,21 @@ public partial class MainWindow
         UpdateViewport();
         RefreshStatusBar();
     }
+
+    private static IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildSpellCheckReplaceAllEdits(
+        IReadOnlyList<SpellingIssue> issues,
+        string word,
+        string replacement) =>
+        issues
+            .Where(issue => string.Equals(issue.Word, word, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(issue => issue.Address)
+            .Select(group =>
+            {
+                var issue = group.First();
+                var corrected = SpellCheckService.ApplyCorrection(issue, replacement);
+                return (issue.Address, Cell.FromValue(new TextValue(corrected)));
+            })
+            .ToList();
 
     private bool TryExecuteSpellCheckEdits(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits) =>
         TryExecuteCommand(new EditCellsCommand(_currentSheetId, edits), "Spell Check");
