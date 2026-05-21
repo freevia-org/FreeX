@@ -24,7 +24,7 @@
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                 <Label Content="_Filter:" Target="{Binding ElementName=FilterBox}" VerticalAlignment="Center"/>
-                <ComboBox x:Name="FilterBox" Width="190" SelectedIndex="0">
+                <ComboBox x:Name="FilterBox" Width="190" SelectedIndex="0" SelectionChanged="FilterBox_SelectionChanged">
                     <ComboBoxItem Content="All names"/>
                     <ComboBoxItem Content="Names scoped to workbook"/>
                     <ComboBoxItem Content="Names scoped to worksheet"/>
