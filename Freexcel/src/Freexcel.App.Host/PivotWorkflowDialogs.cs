@@ -754,7 +754,8 @@ public sealed record PivotTableOptionsDialogResult(
     bool ShowColumnHeaders,
     bool ShowRowStripes,
     bool ShowColumnStripes,
-    PivotReportLayout ReportLayout);
+    PivotReportLayout ReportLayout,
+    string? EmptyValueText = null);
 
 public sealed class PivotTableOptionsDialog : Window
 {
@@ -811,7 +812,8 @@ public sealed class PivotTableOptionsDialog : Window
             pivotTable.ShowColumnHeaders,
             pivotTable.ShowRowStripes,
             pivotTable.ShowColumnStripes,
-            pivotTable.ReportLayout);
+            pivotTable.ReportLayout,
+            pivotTable.EmptyValueText);
 
     public static PivotTableOptionsDialogResult CreateResult(
         bool showRowGrandTotals,
@@ -825,7 +827,8 @@ public sealed class PivotTableOptionsDialog : Window
         bool showColumnHeaders,
         bool showRowStripes,
         bool showColumnStripes,
-        PivotReportLayout reportLayout) =>
+        PivotReportLayout reportLayout,
+        string? emptyValueText = null) =>
         new(
             showRowGrandTotals,
             showColumnGrandTotals,
@@ -838,7 +841,8 @@ public sealed class PivotTableOptionsDialog : Window
             showColumnHeaders,
             showRowStripes,
             showColumnStripes,
-            reportLayout);
+            reportLayout,
+            NormalizeEmptyValueText(emptyValueText));
 
     private DockPanel CreateContent()
     {
@@ -977,6 +981,7 @@ public sealed class PivotTableOptionsDialog : Window
         _columnHeadersBox.IsChecked = result.ShowColumnHeaders;
         _rowStripesBox.IsChecked = result.ShowRowStripes;
         _columnStripesBox.IsChecked = result.ShowColumnStripes;
+        _emptyCellsBox.Text = result.EmptyValueText ?? "";
     }
 
     private void Accept()
@@ -997,7 +1002,16 @@ public sealed class PivotTableOptionsDialog : Window
             _columnStripesBox.IsChecked == true,
             _reportLayoutBox.SelectedItem is PivotReportLayout reportLayout
                 ? reportLayout
-                : PivotReportLayout.Tabular);
+                : PivotReportLayout.Tabular,
+            _emptyCellsBox.Text);
         DialogResult = true;
+    }
+
+    private static string? NormalizeEmptyValueText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return text.Trim();
     }
 }
