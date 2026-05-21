@@ -363,7 +363,7 @@ public sealed class ShapeGradientDialog : Window
         stack.Children.Add(_startColorText);
         stack.Children.Add(_endColorText);
 
-        stack.Children.Add(new TextBlock { Text = "RGB override:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "RGB _override:", Target = _gradientBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _gradientBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_gradientBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
