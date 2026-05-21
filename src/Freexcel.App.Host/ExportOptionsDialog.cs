@@ -12,6 +12,8 @@ internal sealed class ExportOptionsDialog : Window
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly RadioButton _standardQualityButton = new() { Content = "_Standard", IsChecked = true };
     private readonly RadioButton _minimumSizeButton = new() { Content = "_Minimum size" };
+    private readonly RadioButton _allPagesButton = new() { Content = "_All", GroupName = "PageRange", IsChecked = true };
+    private readonly RadioButton _pagesRangeButton = new() { Content = "_Pages", GroupName = "PageRange" };
     private readonly TextBox _fromPageBox = new() { Width = 56 };
     private readonly TextBox _toPageBox = new() { Width = 56 };
 
@@ -35,12 +37,19 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_selectionButton);
         stack.Children.Add(_entireWorkbookButton);
 
-        var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
-        pageRangePanel.Children.Add(new Label { Content = "_Pages from", Target = _fromPageBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        stack.Children.Add(new TextBlock { Text = "Page range", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 4) });
+        stack.Children.Add(_allPagesButton);
+        var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        pageRangePanel.Children.Add(_pagesRangeButton);
+        pageRangePanel.Children.Add(new Label { Content = "_From", Target = _fromPageBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) });
         pageRangePanel.Children.Add(_fromPageBox);
         pageRangePanel.Children.Add(new Label { Content = "t_o", Target = _toPageBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 6, 0) });
         pageRangePanel.Children.Add(_toPageBox);
         stack.Children.Add(pageRangePanel);
+        _fromPageBox.IsEnabled = false;
+        _toPageBox.IsEnabled = false;
+        _allPagesButton.Checked += (_, _) => SetPageRangeFieldsEnabled(false);
+        _pagesRangeButton.Checked += (_, _) => SetPageRangeFieldsEnabled(true);
 
         stack.Children.Add(new TextBlock { Text = "PDF/XPS options", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 4) });
         stack.Children.Add(_documentPropertiesBox);
@@ -56,7 +65,9 @@ internal sealed class ExportOptionsDialog : Window
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
-            if (!ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out var pageRange, out var error))
+            ExportPageRange? pageRange = null;
+            if (_pagesRangeButton.IsChecked == true &&
+                !ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error))
             {
                 MessageBox.Show(this, error, "Export Options", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -81,6 +92,12 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(buttons);
 
         Content = stack;
+    }
+
+    private void SetPageRangeFieldsEnabled(bool enabled)
+    {
+        _fromPageBox.IsEnabled = enabled;
+        _toPageBox.IsEnabled = enabled;
     }
 
     public static ExportOptions CreateResult(

@@ -183,7 +183,6 @@ public sealed class ObjectSizeDialog : Window
 {
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
-    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true };
 
     public ObjectSizeDialogResult Result { get; private set; }
 
@@ -228,8 +227,7 @@ public sealed class ObjectSizeDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         AddLabeledTextBox(stack, "Height:", _heightBox);
         AddLabeledTextBox(stack, "Width:", _widthBox);
-        _lockAspectRatioBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_lockAspectRatioBox);
+        // Lock aspect ratio is hidden until proportional resizing is wired.
         stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
         return stack;
     }

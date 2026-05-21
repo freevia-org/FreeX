@@ -93,7 +93,7 @@ public sealed class InsertFunctionDialog : Window
         DockPanel.SetDock(btnRow, Dock.Bottom);
         var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
-        help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
+        help.Click += (_, _) => ShowFunctionHelp();
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += Ok_Click;
         btnRow.Children.Add(help);
@@ -154,6 +154,16 @@ public sealed class InsertFunctionDialog : Window
             SelectedFormula = CreateFormula(entry.Name);
             DialogResult = true;
         }
+    }
+
+    private void ShowFunctionHelp()
+    {
+        var entry = _listBox.SelectedItem as InsertFunctionCatalogEntry;
+        var message = entry is null
+            ? "Select a function to see its syntax and description. Use search or category filtering to narrow the list."
+            : $"{entry.Name}()\n\n{entry.Description}";
+
+        MessageBox.Show(this, message, "Function Help", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
 }
