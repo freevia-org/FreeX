@@ -23,25 +23,34 @@ public static class SheetProtectionWorkflow
 
     public static SheetProtectionAction CreateCommand(Sheet sheet, string? password)
     {
+        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password);
+        return CreateCommand(sheet, result);
+    }
+
+    public static SheetProtectionAction CreateCommand(Sheet sheet, ProtectionDialogResult result)
+    {
         if (sheet.IsProtected)
         {
             return new SheetProtectionAction(
                 new UnprotectSheetCommand(sheet.Id),
                 "Unprotect Sheet",
-                "Sheet is now unprotected.");
+                "Sheet is now unprotected.",
+                []);
         }
 
         return new SheetProtectionAction(
-            new ProtectSheetCommand(sheet.Id, password),
+            new ProtectSheetCommand(sheet.Id, result.Password),
             "Protect Sheet",
-            "Sheet is now protected.");
+            "Sheet is now protected.",
+            result.SelectedSheetPermissions);
     }
 }
 
 public sealed record SheetProtectionAction(
     IWorkbookCommand Command,
     string Title,
-    string SuccessMessage);
+    string SuccessMessage,
+    IReadOnlyList<string> SelectedSheetPermissions);
 
 public sealed record SheetProtectionUiText(
     string ButtonContent,

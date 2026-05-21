@@ -67,6 +67,9 @@ public sealed record FunctionCallNode(string FunctionName, IReadOnlyList<Formula
 /// </summary>
 public sealed record NamedRangeNode(string Name) : FormulaNode;
 
+/// <summary>A table structured reference to one data-body column (e.g. Sales[Amount]).</summary>
+public sealed record StructuredReferenceNode(string TableName, string ColumnName) : FormulaNode;
+
 /// <summary>A formula-level error literal produced by reference rewriting (e.g. #REF!).</summary>
 public sealed record ErrorNode(Model.ErrorValue Error) : FormulaNode;
 
