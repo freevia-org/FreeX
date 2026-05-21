@@ -58,7 +58,7 @@ public partial class MainWindow
                 throw new InvalidOperationException(pageRangeError);
 
             var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
-            PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange);
+            PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange, options.Quality);
 
             MessageBox.Show(
                 $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
