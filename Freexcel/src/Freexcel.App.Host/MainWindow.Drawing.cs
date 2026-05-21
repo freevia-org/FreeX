@@ -407,46 +407,33 @@ public partial class MainWindow
         switch (dialog.Result.Action)
         {
             case SelectionPaneDialogAction.MoveUp when dialog.Result.Target is { } target:
-                if (!ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges))
-                    return;
-                ApplySelectionPaneMove(target, forward: true);
+                ApplySelectionPaneChanges(dialog.Result, new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward: true));
                 break;
             case SelectionPaneDialogAction.MoveDown when dialog.Result.Target is { } target:
-                if (!ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges))
-                    return;
-                ApplySelectionPaneMove(target, forward: false);
+                ApplySelectionPaneChanges(dialog.Result, new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward: false));
                 break;
             default:
-                ApplySelectionPaneVisibilityChanges(dialog.Result.VisibilityChanges);
+                ApplySelectionPaneChanges(dialog.Result);
                 break;
         }
     }
 
-    private void ApplySelectionPaneMove(SelectionPaneItem target, bool forward)
+    private void ApplySelectionPaneChanges(SelectionPaneDialogResult result, IWorkbookCommand? moveCommand = null)
     {
-        var title = forward ? "Bring Forward" : "Send Backward";
-        if (!TryExecuteCommand(
-                new MoveSelectionPaneObjectCommand(_currentSheetId, target.Kind, target.Id, forward),
-                title))
+        var commands = new List<IWorkbookCommand>();
+        commands.AddRange(result.RenameChanges.Select(change =>
+            new RenameSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Name)));
+        commands.AddRange(result.VisibilityChanges.Select(change =>
+            new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible)));
+        if (moveCommand is not null)
+            commands.Add(moveCommand);
+
+        if (commands.Count == 0)
             return;
 
-        UpdateViewport();
-    }
-
-    private bool ApplySelectionPaneVisibilityChanges(IReadOnlyList<SelectionPaneVisibilityChange> changes)
-    {
-        foreach (var change in changes)
-        {
-            if (!TryExecuteCommand(
-                    new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible),
-                    change.IsVisible ? "Show Object" : "Hide Object"))
-                return false;
-        }
-
-        if (changes.Count > 0)
+        var label = moveCommand?.Label ?? "Selection Pane";
+        if (TryExecuteCommand(new CompositeWorkbookCommand(label, commands), label))
             UpdateViewport();
-
-        return true;
     }
 
     private DrawingShapeModel? GetTargetDrawingShape(SheetId sheetId)

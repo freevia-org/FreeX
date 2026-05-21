@@ -341,6 +341,7 @@ public sealed partial class NativeJsonAdapter
 
     private class ChartDto
     {
+        public string? Name { get; set; }
         public ChartType Type { get; set; } = ChartType.Column;
         public string? DataRange { get; set; }
         public bool IsVisible { get; set; } = true;
