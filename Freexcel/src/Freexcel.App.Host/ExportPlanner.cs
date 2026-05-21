@@ -123,7 +123,7 @@ internal static class ExportPlanner
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
-            (true, ExportFormat.Xps) => "document properties are not included in XPS output",
+            (true, ExportFormat.Xps) => "document properties are included",
             _ => "document properties are not included"
         };
         var open = options.OpenAfterPublish
