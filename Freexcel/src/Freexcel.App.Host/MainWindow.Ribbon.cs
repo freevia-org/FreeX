@@ -119,7 +119,7 @@ public partial class MainWindow
         var veryNarrow = availableWidth <= 700;
         foreach (var button in collapsedButtons)
         {
-            button.Width = veryNarrow ? 52 : 60;
+            button.Width = veryNarrow ? 56 : 64;
             button.Margin = veryNarrow ? new Thickness(0) : new Thickness(1, 0, 3, 0);
             button.Padding = veryNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
 
@@ -133,7 +133,7 @@ public partial class MainWindow
                 {
                     textBlock.Visibility = veryNarrow ? Visibility.Collapsed : Visibility.Visible;
                     textBlock.FontSize = veryNarrow ? 9 : 10;
-                    textBlock.MaxWidth = veryNarrow ? 50 : 56;
+                    textBlock.MaxWidth = veryNarrow ? 54 : 60;
                 }
                 else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
                 {
@@ -217,8 +217,8 @@ public partial class MainWindow
         var button = new Button
         {
             Tag = "RibbonCollapsedGroupButton",
-            Width = 60,
-            Height = 64,
+            Width = 64,
+            Height = 76,
             Margin = new Thickness(1, 0, 3, 0),
             Padding = new Thickness(3, 2, 3, 2),
             Visibility = Visibility.Collapsed,
@@ -229,7 +229,7 @@ public partial class MainWindow
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Children =
                 {
-                    RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush),
+                    RibbonIconFactory.CreateCommandIcon(groupName, icon, iconSize, glyphBrush),
                     new TextBlock
                     {
                         Text = groupName,
@@ -237,7 +237,7 @@ public partial class MainWindow
                         FontSize = 10,
                         TextWrapping = TextWrapping.Wrap,
                         TextAlignment = TextAlignment.Center,
-                        MaxWidth = 52,
+                        MaxWidth = 60,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center
                     },
                     RibbonIconFactory.CreateIcon(new RibbonCommandIcon(RibbonCommandIconKind.ChevronDown), 8, BrushFromRgb(31, 31, 31))
