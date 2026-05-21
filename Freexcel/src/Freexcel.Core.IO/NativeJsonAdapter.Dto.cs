@@ -350,6 +350,20 @@ public sealed partial class NativeJsonAdapter
         public string? PivotTableName { get; set; }
         public int? PivotCacheId { get; set; }
         public int? ChartStyleId { get; set; }
+        public string? PivotFormatsXml { get; set; }
+        public bool Uses1904DateSystem { get; set; }
+        public string? Language { get; set; }
+        public ChartColorMapOverrideModel? ColorMapOverride { get; set; }
+        public ChartExternalDataModel? ExternalData { get; set; }
+        public ChartManualLayoutModel? PlotAreaLayout { get; set; }
+        public ChartManualLayoutModel? LegendLayout { get; set; }
+        public bool RoundedCorners { get; set; }
+        public ChartBlankDisplayMode BlankDisplayMode { get; set; } = ChartBlankDisplayMode.Gap;
+        public bool ShowDataLabelsOverMaximum { get; set; }
+        public bool AutoTitleDeleted { get; set; }
+        public bool ShowDataInHiddenRowsAndColumns { get; set; }
+        public ChartProtectionModel? Protection { get; set; }
+        public ChartPrintSettingsModel? PrintSettings { get; set; }
         public bool ShowPivotChartFieldButtons { get; set; } = true;
         public bool ShowPivotChartReportFilterButtons { get; set; } = true;
         public bool ShowPivotChartAxisFieldButtons { get; set; } = true;

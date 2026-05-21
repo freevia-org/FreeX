@@ -22,8 +22,8 @@
         <Label Grid.Row="0" Grid.Column="0" Content="_Set cell:" Target="{Binding ElementName=SetCellBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="0" Grid.Column="1" x:Name="SetCellBox" Margin="0,4"/>
         <Button Grid.Row="0" Grid.Column="2" Content="..." CommandParameter="SetCellBox"
-                Click="RangePickerButton_Click" Margin="6,4,0,4" ToolTip="Collapse Dialog"
-                AutomationProperties.Name="Collapse Dialog"
+                Click="RangePickerButton_Click" Margin="6,4,0,4" ToolTip="Select set cell reference"
+                AutomationProperties.Name="Select set cell reference"
                 MinWidth="26" Padding="0"/>
 
         <!-- Row 1: To value -->
@@ -34,8 +34,8 @@
         <Label Grid.Row="2" Grid.Column="0" Content="_By changing cell:" Target="{Binding ElementName=ChangingCellBox}" VerticalAlignment="Center" Margin="0,4"/>
         <TextBox Grid.Row="2" Grid.Column="1" x:Name="ChangingCellBox" Margin="0,4"/>
         <Button Grid.Row="2" Grid.Column="2" Content="..." CommandParameter="ChangingCellBox"
-                Click="RangePickerButton_Click" Margin="6,4,0,4" ToolTip="Collapse Dialog"
-                AutomationProperties.Name="Collapse Dialog"
+                Click="RangePickerButton_Click" Margin="6,4,0,4" ToolTip="Select changing cell reference"
+                AutomationProperties.Name="Select changing cell reference"
                 MinWidth="26" Padding="0"/>
 
         <!-- Row 4: Buttons -->
