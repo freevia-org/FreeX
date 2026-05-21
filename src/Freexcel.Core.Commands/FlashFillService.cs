@@ -223,7 +223,9 @@ public static class FlashFillService
             ? '.'
             : userName.Contains('_', StringComparison.Ordinal)
                 ? '_'
-                : '\0';
+                : userName.Contains('-', StringComparison.Ordinal)
+                    ? '-'
+                    : '\0';
         if (separator == '\0')
             return false;
 
