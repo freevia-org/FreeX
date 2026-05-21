@@ -273,10 +273,13 @@ public sealed class Parser
             {
                 var selector = Advance();
                 var value = selector.Value.Trim();
-                if (!value.StartsWith('@') || value.Length == 1)
-                    throw new FormulaParseException(
-                        $"Expected current-row structured reference at position {selector.Position}");
-                return new StructuredCurrentRowReferenceNode(value[1..].Trim());
+                if (value.StartsWith('@') && value.Length > 1)
+                    return new StructuredCurrentRowReferenceNode(value[1..].Trim());
+                if (value.Contains("#This Row", StringComparison.OrdinalIgnoreCase))
+                    return new StructuredReferenceNode("", value);
+
+                throw new FormulaParseException(
+                    $"Expected current-row structured reference at position {selector.Position}");
             }
 
             case TokenType.OpenParen:
