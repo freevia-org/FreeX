@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using Freexcel.Core.Model;
 
@@ -8,6 +9,71 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class ConditionalFormatDialogTests
 {
+    [Fact]
+    public void NewRuleDialog_UsesExcelRuleShell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Formula", RangeFor(SheetId.New())));
+
+            dialog.Title.Should().Be("New Formatting Rule");
+            FindText(dialog.Content, "Select a Rule Type:").Should().NotBeNull();
+            FindText(dialog.Content, "Edit the Rule Description:").Should().NotBeNull();
+
+            var ruleTypeList = FindControl<ListBox>(dialog.Content);
+            ruleTypeList.Should().NotBeNull();
+            ruleTypeList!.Items.Cast<object>().Select(item => item.ToString()).Should().Contain([
+                "Format all cells based on their values",
+                "Format only cells that contain",
+                "Use a formula to determine which cells to format"
+            ]);
+            ruleTypeList.SelectedItem.Should().Be("Use a formula to determine which cells to format");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void EditRuleDialog_UsesExcelEditTitleAndRuleShell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ConditionalFormat
+            {
+                AppliesTo = RangeFor(SheetId.New()),
+                RuleType = CfRuleType.CellValue,
+                Operator = CfOperator.GreaterThan,
+                Value1 = "10"
+            };
+
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(existing));
+
+            dialog.Title.Should().Be("Edit Formatting Rule");
+            FindText(dialog.Content, "Select a Rule Type:").Should().NotBeNull();
+            FindText(dialog.Content, "Edit the Rule Description:").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Theory]
+    [InlineData("Data Bar", "DataBarPreview")]
+    [InlineData("Color Scale", "ColorScalePreview")]
+    [InlineData("Icon Set", "IconSetPreview")]
+    public void VisualRuleDialogs_ShowExcelLikePreviewArea(string ruleType, string previewLabel)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog(ruleType, RangeFor(SheetId.New())));
+
+            FindText(dialog.Content, "Preview:").Should().NotBeNull();
+            var preview = FindNamedControl<FrameworkElement>(dialog.Content, previewLabel);
+            preview.Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
     [Theory]
     [InlineData("Greater Than", typeof(HighlightCellsRuleDialog))]
     [InlineData("Top 10%", typeof(TopBottomRuleDialog))]
@@ -465,6 +531,34 @@ public sealed class ConditionalFormatDialogTests
         var field = typeof(ConditionalFormatDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static TextBlock? FindText(object? root, string text) =>
+        EnumerateLogical(root).OfType<TextBlock>().FirstOrDefault(block => Equals(block.Text, text));
+
+    private static T? FindControl<T>(object? root)
+        where T : DependencyObject =>
+        EnumerateLogical(root).OfType<T>().FirstOrDefault();
+
+    private static T? FindNamedControl<T>(object? root, string name)
+        where T : FrameworkElement =>
+        EnumerateLogical(root).OfType<T>().FirstOrDefault(element => element.Name == name);
+
+    private static IEnumerable<object> EnumerateLogical(object? root)
+    {
+        if (root is null)
+            yield break;
+
+        yield return root;
+
+        if (root is not DependencyObject dependencyObject)
+            yield break;
+
+        foreach (var child in LogicalTreeHelper.GetChildren(dependencyObject).Cast<object>())
+        {
+            foreach (var descendant in EnumerateLogical(child))
+                yield return descendant;
+        }
     }
 
     private static void ClickOkForTest(ConditionalFormatDialog dialog)
