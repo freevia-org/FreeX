@@ -30,6 +30,7 @@ public static class FlashFillService
             TryConstant(examples)
             ?? TryCaseTransform(examples)
             ?? TryInitials(examples)
+            ?? TryEmailDisplayName(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
             ?? TrySuffixTrim(examples)
@@ -200,6 +201,30 @@ public static class FlashFillService
         }
 
         return null;
+    }
+
+    private static Func<string, string?>? TryEmailDisplayName(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryFormatDottedEmailUserName(e.Source, out var displayName) && displayName == e.Expected))
+            return null;
+
+        return s => TryFormatDottedEmailUserName(s, out var displayName) ? displayName : null;
+    }
+
+    private static bool TryFormatDottedEmailUserName(string source, out string displayName)
+    {
+        displayName = string.Empty;
+        var atIndex = source.IndexOf('@', StringComparison.Ordinal);
+        if (atIndex <= 0)
+            return false;
+
+        var userName = source[..atIndex];
+        var parts = userName.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || parts.Any(part => part.Any(char.IsDigit)))
+            return false;
+
+        displayName = string.Join(' ', parts.Select(ToProperCase));
+        return true;
     }
 
     private static Func<string, string?>? TryInitials(IReadOnlyList<(string Source, string Expected)> examples)
