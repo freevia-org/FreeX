@@ -277,12 +277,59 @@ public sealed class PivotChartTypeDialog : Window
     public static PivotChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
 }
 
-public sealed record PivotChartOptionsDialogResult(int? ChartStyleId, bool ShowFieldButtons);
+public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptionsDialogResult>
+{
+    public PivotChartOptionsDialogResult(int? chartStyleId, bool showFieldButtons)
+        : this(chartStyleId, showFieldButtons, true, true, true)
+    {
+    }
+
+    public PivotChartOptionsDialogResult(
+        int? chartStyleId,
+        bool showFieldButtons,
+        bool showReportFilterButtons,
+        bool showAxisFieldButtons,
+        bool showValueFieldButtons)
+    {
+        ChartStyleId = chartStyleId;
+        ShowFieldButtons = showFieldButtons;
+        ShowReportFilterButtons = showReportFilterButtons;
+        ShowAxisFieldButtons = showAxisFieldButtons;
+        ShowValueFieldButtons = showValueFieldButtons;
+    }
+
+    public int? ChartStyleId { get; }
+    public bool ShowFieldButtons { get; }
+    public bool ShowReportFilterButtons { get; }
+    public bool ShowAxisFieldButtons { get; }
+    public bool ShowValueFieldButtons { get; }
+
+    public bool Equals(PivotChartOptionsDialogResult? other) =>
+        other is not null &&
+        ChartStyleId == other.ChartStyleId &&
+        ShowFieldButtons == other.ShowFieldButtons &&
+        ShowReportFilterButtons == other.ShowReportFilterButtons &&
+        ShowAxisFieldButtons == other.ShowAxisFieldButtons &&
+        ShowValueFieldButtons == other.ShowValueFieldButtons;
+
+    public override bool Equals(object? obj) => Equals(obj as PivotChartOptionsDialogResult);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            ChartStyleId,
+            ShowFieldButtons,
+            ShowReportFilterButtons,
+            ShowAxisFieldButtons,
+            ShowValueFieldButtons);
+}
 
 public sealed class PivotChartOptionsDialog : Window
 {
     private readonly TextBox _styleBox = new();
     private readonly CheckBox _showFieldButtonsBox = new() { Content = "_Show field buttons on chart" };
+    private readonly CheckBox _showReportFilterButtonsBox = new() { Content = "Report _filter buttons" };
+    private readonly CheckBox _showAxisFieldButtonsBox = new() { Content = "_Axis field buttons" };
+    private readonly CheckBox _showValueFieldButtonsBox = new() { Content = "_Value field buttons" };
 
     public PivotChartOptionsDialogResult Result { get; private set; }
 
@@ -298,7 +345,13 @@ public sealed class PivotChartOptionsDialog : Window
 
         _styleBox.Text = Result.ChartStyleId?.ToString() ?? "";
         _showFieldButtonsBox.IsChecked = Result.ShowFieldButtons;
-        _showFieldButtonsBox.Margin = new Thickness(0, 0, 0, 16);
+        _showFieldButtonsBox.Margin = new Thickness(0, 0, 0, 8);
+        _showReportFilterButtonsBox.IsChecked = Result.ShowReportFilterButtons;
+        _showReportFilterButtonsBox.Margin = new Thickness(18, 0, 0, 6);
+        _showAxisFieldButtonsBox.IsChecked = Result.ShowAxisFieldButtons;
+        _showAxisFieldButtonsBox.Margin = new Thickness(18, 0, 0, 6);
+        _showValueFieldButtonsBox.IsChecked = Result.ShowValueFieldButtons;
+        _showValueFieldButtonsBox.Margin = new Thickness(18, 0, 0, 16);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
@@ -308,6 +361,9 @@ public sealed class PivotChartOptionsDialog : Window
 
         var buttonPanel = PivotDialogLayout.CreateGroupPanel();
         buttonPanel.Children.Add(_showFieldButtonsBox);
+        buttonPanel.Children.Add(_showReportFilterButtonsBox);
+        buttonPanel.Children.Add(_showAxisFieldButtonsBox);
+        buttonPanel.Children.Add(_showValueFieldButtonsBox);
         buttonPanel.Children.Add(PivotDialogLayout.CreateHelpText("Field buttons let you filter and rearrange PivotChart data directly on the chart."));
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field buttons", buttonPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
@@ -315,14 +371,34 @@ public sealed class PivotChartOptionsDialog : Window
     }
 
     public static PivotChartOptionsDialogResult FromChart(ChartModel chart) =>
-        new(NormalizeStyleId(chart.ChartStyleId), chart.ShowPivotChartFieldButtons);
+        new(
+            NormalizeStyleId(chart.ChartStyleId),
+            chart.ShowPivotChartFieldButtons,
+            chart.ShowPivotChartReportFilterButtons,
+            chart.ShowPivotChartAxisFieldButtons,
+            chart.ShowPivotChartValueFieldButtons);
 
-    public static PivotChartOptionsDialogResult CreateResult(string? chartStyleIdText, bool showFieldButtons) =>
-        new(ParseStyleId(chartStyleIdText), showFieldButtons);
+    public static PivotChartOptionsDialogResult CreateResult(
+        string? chartStyleIdText,
+        bool showFieldButtons,
+        bool showReportFilterButtons = true,
+        bool showAxisFieldButtons = true,
+        bool showValueFieldButtons = true) =>
+        new(
+            ParseStyleId(chartStyleIdText),
+            showFieldButtons,
+            showReportFilterButtons,
+            showAxisFieldButtons,
+            showValueFieldButtons);
 
     private void Accept()
     {
-        Result = CreateResult(_styleBox.Text, _showFieldButtonsBox.IsChecked == true);
+        Result = CreateResult(
+            _styleBox.Text,
+            _showFieldButtonsBox.IsChecked == true,
+            _showReportFilterButtonsBox.IsChecked == true,
+            _showAxisFieldButtonsBox.IsChecked == true,
+            _showValueFieldButtonsBox.IsChecked == true);
         DialogResult = true;
     }
 
