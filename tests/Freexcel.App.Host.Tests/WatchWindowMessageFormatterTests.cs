@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -20,5 +21,15 @@ public sealed class WatchWindowMessageFormatterTests
     public void FormatRemoveResult_HandlesSingularPluralAndNoOp(int removed, string rangeText, string expected)
     {
         WatchWindowMessageFormatter.FormatRemoveResult(removed, rangeText).Should().Be(expected);
+    }
+
+    [Fact]
+    public void WatchWindowDialog_ExposesKeyboardAccessKeysForCommandButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("Content = \"_Refresh\"");
+        source.Should().Contain("Content = \"_Delete Watch\"");
+        source.Should().Contain("Content = \"_Close\"");
     }
 }
