@@ -47,6 +47,49 @@ public static class StructuredReferenceResolver
         return null;
     }
 
+    public static CellAddress? ResolveCurrentRowColumn(
+        Workbook? workbook,
+        Sheet? currentSheet,
+        CellAddress? currentAddress,
+        string? tableName,
+        string columnName)
+    {
+        if (currentAddress is null)
+            return null;
+
+        var sheets = workbook is not null
+            ? workbook.Sheets
+            : currentSheet is not null ? [currentSheet] : [];
+
+        foreach (var sheet in sheets)
+        {
+            if (!sheet.Id.Equals(currentAddress.Value.Sheet))
+                continue;
+
+            foreach (var table in sheet.StructuredTables)
+            {
+                if (!string.IsNullOrWhiteSpace(tableName) && !StructuredTableNameMatches(table, tableName))
+                    continue;
+                if (!IsDataBodyRow(table, currentAddress.Value.Row))
+                    continue;
+                if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+                    continue;
+
+                var columnIndex = table.Columns.FindIndex(column =>
+                    string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+                if (columnIndex < 0)
+                    return null;
+
+                return new CellAddress(
+                    sheet.Id,
+                    currentAddress.Value.Row,
+                    table.Range.Start.Col + (uint)columnIndex);
+            }
+        }
+
+        return null;
+    }
+
     private static GridRange? TryResolveTableSelector(Sheet sheet, StructuredTableModel table, string selector)
     {
         return selector.Trim().ToUpperInvariant() switch
@@ -127,6 +170,15 @@ public static class StructuredReferenceResolver
         return new GridRange(
             new CellAddress(sheet.Id, startRow, startCol),
             new CellAddress(sheet.Id, endRow, endCol));
+    }
+
+    private static bool IsDataBodyRow(StructuredTableModel table, uint row)
+    {
+        var startRow = table.Range.Start.Row + 1;
+        var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
+            ? table.Range.End.Row - 1
+            : table.Range.End.Row;
+        return row >= startRow && row <= endRow;
     }
 
     private static bool StructuredTableNameMatches(StructuredTableModel table, string name) =>

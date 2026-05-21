@@ -114,6 +114,18 @@ public class FormulaSerializerTests
     }
 
     [Fact]
+    public void Serialize_CurrentRowStructuredReference()
+    {
+        RoundTrip("=[@Amount]").Should().Be("[@Amount]");
+    }
+
+    [Fact]
+    public void Serialize_TableQualifiedCurrentRowStructuredReference()
+    {
+        RoundTrip("=Sales[@Amount]").Should().Be("SALES[@Amount]");
+    }
+
+    [Fact]
     public void Serialize_FunctionNoArgs() => RoundTrip("=NOW()").Should().Be("NOW()");
 
     [Fact]

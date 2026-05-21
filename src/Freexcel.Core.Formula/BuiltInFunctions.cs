@@ -9779,6 +9779,9 @@ public interface IEvalContext
     /// <summary>Returns the current workbook, or null when no workbook context.</summary>
     Model.Workbook? CurrentWorkbook { get; }
 
+    /// <summary>Returns the formula cell address, or null when evaluating without a host cell.</summary>
+    Model.CellAddress? CurrentCellAddress => null;
+
     /// <summary>Try to get the underlying cell on the current sheet (for FORMULATEXT/ISFORMULA).</summary>
     Model.Cell? TryGetCell(uint row, uint col);
 
