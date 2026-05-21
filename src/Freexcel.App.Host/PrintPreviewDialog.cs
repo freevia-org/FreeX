@@ -1,4 +1,7 @@
+using System.Globalization;
+using System.Printing;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -31,6 +34,36 @@ public sealed class PrintPreviewDialog : Window
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         var viewer = new DocumentViewer { Document = document };
+        var totalPages = Math.Max(1, document.Pages.Count);
+        var printerBox = new ComboBox
+        {
+            Width = 190,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Choose the printer used when Print opens the Windows print dialog."
+        };
+        AutomationProperties.SetName(printerBox, "Printer");
+        AutomationProperties.SetHelpText(printerBox, "Selects the initial printer for the Windows print dialog.");
+        PopulatePrinterBox(printerBox);
+        var copiesBox = new TextBox
+        {
+            Width = 44,
+            Text = "1",
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = "Number of copies to send to the Windows print dialog."
+        };
+        AutomationProperties.SetName(copiesBox, "Copies");
+        AutomationProperties.SetHelpText(copiesBox, "Enter a copy count from 1 to 999.");
+        var statusText = new TextBlock
+        {
+            Margin = new Thickness(4, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 280
+        };
+        AutomationProperties.SetName(statusText, "Print status");
+        AutomationProperties.SetHelpText(statusText, "Shows the selected printer, copy count, and preview page count.");
         var firstButton = new Button
         {
             Content = "_First Page",
@@ -62,7 +95,8 @@ public sealed class PrintPreviewDialog : Window
         var printButton = new Button
         {
             Content = "_Print...",
-            Padding = new Thickness(12, 4, 12, 4)
+            Padding = new Thickness(12, 4, 12, 4),
+            ToolTip = "Open the Windows print dialog with the selected printer and copy count."
         };
         var closeButton = new Button
         {
@@ -70,14 +104,41 @@ public sealed class PrintPreviewDialog : Window
             Padding = new Thickness(12, 4, 12, 4),
             ToolTip = "Return to the workbook."
         };
-        printButton.Click += (_, _) => ShowNativePrintDialog(document);
+        AutomationProperties.SetName(printButton, "Print");
+        AutomationProperties.SetHelpText(printButton, "Opens the Windows print dialog and applies the selected printer and copies when possible.");
+        printButton.Click += (_, _) =>
+        {
+            var copies = NormalizeCopyCount(copiesBox.Text);
+            copiesBox.Text = copies.ToString(CultureInfo.InvariantCulture);
+            ShowNativePrintDialog(document, printerBox.SelectedItem as PrintQueue, copies);
+            RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
+        };
         closeButton.Click += (_, _) => Close();
+        printerBox.SelectionChanged += (_, _) => RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
+        copiesBox.TextChanged += (_, _) => RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
+        RefreshPrintStatus(statusText, printerBox, copiesBox, totalPages);
+        toolbar.Items.Add(printButton);
+        toolbar.Items.Add(new Label
+        {
+            Content = "Pr_inter:",
+            Target = printerBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        toolbar.Items.Add(printerBox);
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Copies:",
+            Target = copiesBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        toolbar.Items.Add(copiesBox);
+        toolbar.Items.Add(statusText);
+        toolbar.Items.Add(new Separator());
         toolbar.Items.Add(firstButton);
         toolbar.Items.Add(previousButton);
         toolbar.Items.Add(nextButton);
         toolbar.Items.Add(lastButton);
         toolbar.Items.Add(new Separator());
-        var totalPages = Math.Max(1, document.Pages.Count);
         var pageNumberBox = new TextBox
         {
             Width = 44,
@@ -157,7 +218,6 @@ public sealed class PrintPreviewDialog : Window
         pageSetupButton.Click += (_, _) => showPageSetup?.Invoke();
         toolbar.Items.Add(pageSetupButton);
         toolbar.Items.Add(new Separator());
-        toolbar.Items.Add(printButton);
         toolbar.Items.Add(closeButton);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(new TextBlock
@@ -177,11 +237,70 @@ public sealed class PrintPreviewDialog : Window
     public static string CreateTitle(string workbookName) =>
         $"Print Preview - {workbookName.Trim()}";
 
-    private static void ShowNativePrintDialog(FixedDocument document)
+    public static int NormalizeCopyCount(string? text)
+    {
+        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var copies))
+            return 1;
+
+        return Math.Clamp(copies, 1, 999);
+    }
+
+    private static void ShowNativePrintDialog(FixedDocument document, PrintQueue? printQueue, int copies)
     {
         var dialog = new PrintDialog();
+        if (printQueue is not null)
+            dialog.PrintQueue = printQueue;
+
+        copies = NormalizeCopyCount(copies.ToString(CultureInfo.InvariantCulture));
+        if (dialog.PrintTicket is not null)
+            dialog.PrintTicket.CopyCount = copies;
+
         if (dialog.ShowDialog() == true)
             dialog.PrintDocument(document.DocumentPaginator, "Freexcel worksheet");
+    }
+
+    private static void PopulatePrinterBox(ComboBox printerBox)
+    {
+        try
+        {
+            using var server = new LocalPrintServer();
+            foreach (var queue in server.GetPrintQueues())
+                printerBox.Items.Add(queue);
+
+            if (printerBox.Items.Count > 0)
+            {
+                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
+                printerBox.SelectedItem = printerBox.Items
+                    .OfType<PrintQueue>()
+                    .FirstOrDefault(queue => string.Equals(
+                        queue.FullName,
+                        server.DefaultPrintQueue.FullName,
+                        StringComparison.OrdinalIgnoreCase));
+                if (printerBox.SelectedItem is null)
+                    printerBox.SelectedIndex = 0;
+
+                return;
+            }
+        }
+        catch (PrintSystemException)
+        {
+        }
+
+        printerBox.IsEnabled = false;
+        printerBox.ToolTip = "No installed printers were detected. Print opens the Windows print dialog so a printer can be chosen there.";
+        AutomationProperties.SetHelpText(printerBox, "No installed printers were detected. Use Print to choose a printer in the Windows print dialog.");
+    }
+
+    private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
+    {
+        var copies = NormalizeCopyCount(copiesBox.Text);
+        var pages = totalPages == 1 ? "1 page" : $"{totalPages} pages";
+        var copyText = copies == 1 ? "1 copy" : $"{copies} copies";
+        var printerName = printerBox.SelectedItem is PrintQueue queue
+            ? queue.FullName
+            : "Windows print dialog";
+
+        statusText.Text = $"Ready: {printerName}; {copyText}; {pages}";
     }
 
     private static void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
@@ -191,7 +310,7 @@ public sealed class PrintPreviewDialog : Window
 
         pageNumber = Math.Clamp(pageNumber, 1, totalPages);
         viewer.GoToPage(pageNumber);
-        pageNumberBox.Text = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        pageNumberBox.Text = pageNumber.ToString(CultureInfo.InvariantCulture);
         pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
     }
 }
