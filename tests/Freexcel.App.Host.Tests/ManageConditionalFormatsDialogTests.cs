@@ -183,6 +183,34 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void ScopeSelector_UsesExcelWorksheetLabelAndDefaultsToSelectionWhenAvailable()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        source.Should().Contain("ScopeSheet     = \"This Worksheet\"");
+        source.Should().Contain("ScopeSelection = \"Current Selection\"");
+        source.Should().Contain("_scopeBox.SelectedItem = selection.HasValue ? ScopeSelection : ScopeSheet");
+    }
+
+    [Fact]
+    public void ScopeSelector_DefaultsToCurrentSelectionWhenSelectionIsProvided()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheet = new Workbook("Book").AddSheet("Sheet1");
+            var selection = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 4, 4));
+            var dialog = new ManageConditionalFormatsDialog(sheet, selection);
+
+            var scope = GetControl<ComboBox>(dialog, "_scopeBox");
+
+            scope.SelectedItem.Should().Be("Current Selection");
+            scope.Items.Cast<string>().Should().Equal("This Worksheet", "Current Selection");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void NewRuleChooser_OffersSupportedExcelRuleFamilies()
     {
         StaTestRunner.Run(() =>
