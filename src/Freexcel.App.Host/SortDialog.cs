@@ -54,7 +54,9 @@ public sealed class SortDialog : Window
 
     private readonly ObservableCollection<SortDialogLevel> _levels;
     private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
+    private readonly IReadOnlyList<SortColumnChoice> _genericColumnChoices;
     private readonly CheckBox _headerCheck;
+    private readonly DataGridComboBoxColumn _sortByColumn;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
 
@@ -65,10 +67,12 @@ public sealed class SortDialog : Window
     public SortDialog(
         IEnumerable<SortDialogLevel>? levels = null,
         IEnumerable<SortColumnChoice>? columnChoices = null,
+        IEnumerable<SortColumnChoice>? genericColumnChoices = null,
         bool hasHeaders = true)
     {
         _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
         _columnChoices = NormalizeColumnChoices(columnChoices);
+        _genericColumnChoices = NormalizeColumnChoices(genericColumnChoices ?? columnChoices);
         ResultSortKeys = BuildSortKeys(_levels);
         ResultHasHeaders = hasHeaders;
 
@@ -96,6 +100,8 @@ public sealed class SortDialog : Window
         });
         DockPanel.SetDock(headerRow, Dock.Top);
         root.Children.Add(headerRow);
+        _headerCheck.Checked += (_, _) => UpdateColumnChoices();
+        _headerCheck.Unchecked += (_, _) => UpdateColumnChoices();
 
         var list = new DataGrid
         {
@@ -108,10 +114,9 @@ public sealed class SortDialog : Window
             Height = 220,
             Margin = new Thickness(0, 0, 0, 12)
         };
-        list.Columns.Add(new DataGridComboBoxColumn
+        _sortByColumn = new DataGridComboBoxColumn
         {
             Header = "Sort by",
-            ItemsSource = _columnChoices,
             DisplayMemberPath = nameof(SortColumnChoice.Label),
             SelectedValuePath = nameof(SortColumnChoice.ColumnOffset),
             SelectedValueBinding = new Binding(nameof(SortDialogLevel.ColumnOffset))
@@ -120,7 +125,9 @@ public sealed class SortDialog : Window
                 UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
             },
             Width = new DataGridLength(1, DataGridLengthUnitType.Star)
-        });
+        };
+        UpdateColumnChoices();
+        list.Columns.Add(_sortByColumn);
         list.Columns.Add(new DataGridComboBoxColumn
         {
             Header = "Sort On",
@@ -186,6 +193,11 @@ public sealed class SortDialog : Window
             Content = "_Options...",
             Width = 92,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        options.Click += (_, _) =>
+        {
+            var dialog = new SortOptionsDialog { Owner = this };
+            dialog.ShowDialog();
         };
         DockPanel.SetDock(options, Dock.Right);
         commandDock.Children.Add(options);
@@ -306,6 +318,13 @@ public sealed class SortDialog : Window
         return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
     }
 
+    private void UpdateColumnChoices()
+    {
+        _sortByColumn.ItemsSource = _headerCheck.IsChecked == true
+            ? _columnChoices
+            : _genericColumnChoices;
+    }
+
     private static string GetHeaderLabel(Sheet sheet, GridRange range, uint offset, string fallbackColumnName)
     {
         var address = new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col + offset);
@@ -319,5 +338,62 @@ public sealed class SortDialog : Window
         };
 
         return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
+    }
+}
+
+public sealed class SortOptionsDialog : Window
+{
+    public SortOptionsDialog()
+    {
+        Title = "Sort Options";
+        Width = 330;
+        Height = 210;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        var body = new StackPanel();
+        DockPanel.SetDock(body, Dock.Top);
+        root.Children.Add(body);
+
+        body.Children.Add(new CheckBox
+        {
+            Content = "Case _sensitive",
+            IsEnabled = false,
+            Margin = new Thickness(0, 0, 0, 10),
+            ToolTip = "Freexcel currently sorts cell values without case sensitivity."
+        });
+
+        var orientation = new GroupBox
+        {
+            Header = "Orientation",
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 10),
+            Content = new StackPanel
+            {
+                Children =
+                {
+                    new RadioButton { Content = "Sort top to _bottom", IsChecked = true },
+                    new RadioButton
+                    {
+                        Content = "Sort left to _right",
+                        IsEnabled = false,
+                        ToolTip = "Freexcel currently sorts selected rows from top to bottom."
+                    }
+                }
+            }
+        };
+        body.Children.Add(orientation);
+
+        body.Children.Add(new TextBlock
+        {
+            Text = "Unsupported Excel options are shown here but are not applied.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush
+        });
+
+        root.Children.Add(DialogButtonRowFactory.Create(() => DialogResult = true, buttonWidth: 72));
+        Content = root;
     }
 }

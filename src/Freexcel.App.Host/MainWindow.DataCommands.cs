@@ -55,13 +55,14 @@ public partial class MainWindow
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new TextToColumnsDialog { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
-        char delim = dialog.Result.Delimiter[0];
+        var delimiters = dialog.Result.Delimiters;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Text to Columns",
                 range,
-                currentRange => CreateTextToColumnsCommand(currentRange, delim),
+                currentRange => CreateTextToColumnsCommand(currentRange, delimiters),
                 out var outcome))
             return;
 
@@ -69,13 +70,13 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, char delimiter)
+    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, string delimiters)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return new EditCellsCommand(_currentSheetId, []);
 
-        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, delimiter);
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, delimiters);
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1
