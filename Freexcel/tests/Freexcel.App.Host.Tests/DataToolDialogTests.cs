@@ -256,11 +256,14 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("_filterInPlaceButton");
         source.Should().Contain("_copyToAnotherLocationButton");
-        source.Should().Contain("Filter the list, in-place");
-        source.Should().Contain("Copy to another location");
+        source.Should().Contain("Content = \"_Filter the list, in-place\"");
+        source.Should().Contain("Content = \"_Copy to another location\"");
+        source.Should().Contain("Content = \"_Unique records only\"");
         source.Should().Contain("AddReferenceRow(rangesGrid, 0, \"_List range:\", _listRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 1, \"_Criteria range:\", _criteriaRangeBox");
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
+        source.Should().Contain("var labelBlock = new Label");
+        source.Should().Contain("Target = textBox");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("ReferencePickerButton_Click");
