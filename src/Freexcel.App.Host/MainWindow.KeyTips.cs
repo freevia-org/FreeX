@@ -208,7 +208,7 @@ public partial class MainWindow
 
     private bool TryInvokeVisibleCommandKeyTip(string keyTip)
     {
-        var visibleKeyTipElements = GetVisibleKeyTipElements(RibbonKeyTipScope.Commands).ToList();
+        var visibleKeyTipElements = GetRoutableKeyTipElements(RibbonKeyTipScope.Commands).ToList();
         var match = RibbonKeyTipRouting.ResolveKeyTipElement(visibleKeyTipElements, keyTip);
         if (match is null)
             return false;
@@ -317,7 +317,45 @@ public partial class MainWindow
     }
 
     private bool HasVisibleCommandKeyTipPrefix(string keyTipPrefix) =>
-        RibbonKeyTipRouting.HasKeyTipPrefix(GetVisibleKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
+        RibbonKeyTipRouting.HasKeyTipPrefix(GetRoutableKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
+
+    private IEnumerable<FrameworkElement> GetRoutableKeyTipElements(RibbonKeyTipScope scope)
+    {
+        var seen = new HashSet<FrameworkElement>();
+        foreach (var element in GetVisibleKeyTipElements(scope))
+        {
+            if (seen.Add(element))
+                yield return element;
+        }
+
+        if (scope != RibbonKeyTipScope.Commands || RibbonTabs?.SelectedItem is not TabItem selectedTab)
+            yield break;
+
+        foreach (var element in EnumerateVisualDescendants(selectedTab).OfType<FrameworkElement>())
+        {
+            if (!IsRoutableSelectedTabKeyTipElement(element, scope, seen))
+                continue;
+
+            yield return element;
+        }
+
+        foreach (var element in EnumerateLogicalDescendants(selectedTab).OfType<FrameworkElement>())
+        {
+            if (!IsRoutableSelectedTabKeyTipElement(element, scope, seen))
+                continue;
+
+            yield return element;
+        }
+    }
+
+    private bool IsRoutableSelectedTabKeyTipElement(
+        FrameworkElement element,
+        RibbonKeyTipScope scope,
+        ISet<FrameworkElement> seen) =>
+        seen.Add(element) &&
+        !ReferenceEquals(element, KeyTipOverlay) &&
+        ShouldShowKeyTipElement(element, scope) &&
+        !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
 
     private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
     {

@@ -142,6 +142,12 @@ public partial class MainWindow
             case WorksheetContextMenuAction.NewComment:
                 ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.EditComment:
+                ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
+                break;
+            case WorksheetContextMenuAction.DeleteComment:
+                ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.NewNote:
                 ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
                 break;

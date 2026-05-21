@@ -32,6 +32,11 @@ public sealed class AutoFilterDialog : Window
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
     private readonly TextBox _criteriaBox = new();
+    private readonly ComboBox _criteriaSuggestionBox = new()
+    {
+        Visibility = Visibility.Collapsed,
+        IsTextSearchEnabled = true
+    };
     private readonly ComboBox _criteriaOperatorBox = new()
     {
         Visibility = Visibility.Collapsed,
@@ -62,6 +67,14 @@ public sealed class AutoFilterDialog : Window
         Title = $"AutoFilter - {menuPlan.HeaderText}";
         _clearFilterButton.Content = $"_Clear Filter From \"{menuPlan.HeaderText}\"";
         ShowFilterFamilyButton(menuPlan.FilterKind);
+        var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
+        if (criteriaSuggestions.Count > 0)
+        {
+            _criteriaSuggestionBox.ItemsSource = criteriaSuggestions;
+            _criteriaSuggestionBox.Visibility = Visibility.Visible;
+            _criteriaSuggestionBox.ToolTip = "Excel filter criteria templates";
+        }
+
         var criteriaOptions = GetCriteriaOptions(menuPlan.FilterKind);
         if (criteriaOptions.Count > 0)
         {
@@ -163,6 +176,22 @@ public sealed class AutoFilterDialog : Window
 
         _criteriaBox.Margin = new Thickness(0, 4, 0, 12);
         stack.Children.Add(_criteriaBox);
+
+        var criteriaSuggestionLabel = new Label
+        {
+            Content = "Criteria _template",
+            Target = _criteriaSuggestionBox,
+            Padding = new Thickness(0),
+            Visibility = _criteriaSuggestionBox.Visibility
+        };
+        stack.Children.Add(criteriaSuggestionLabel);
+        _criteriaSuggestionBox.Margin = new Thickness(0, 4, 0, 12);
+        _criteriaSuggestionBox.SelectionChanged += (_, _) =>
+        {
+            if (_criteriaSuggestionBox.SelectedItem is string suggestion)
+                _criteriaBox.Text = suggestion;
+        };
+        stack.Children.Add(_criteriaSuggestionBox);
 
         var buttons = new StackPanel
         {
