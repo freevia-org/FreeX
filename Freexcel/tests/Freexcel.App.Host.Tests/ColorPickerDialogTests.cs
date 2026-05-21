@@ -62,6 +62,10 @@ public sealed class ColorPickerDialogTests
         xaml.Should().Contain("Standard Colors");
         xaml.Should().Contain("Current");
         xaml.Should().Contain("New");
+        xaml.Should().Contain("CurrentForegroundPreview");
+        xaml.Should().Contain("CurrentBackgroundPreview");
+        xaml.Should().Contain("NewForegroundPreview");
+        xaml.Should().Contain("NewBackgroundPreview");
         xaml.Should().Contain("ThemeColorsPanel");
         xaml.Should().Contain("StandardColorsPanel");
     }
@@ -138,14 +142,41 @@ public sealed class ColorPickerDialogTests
             var dialog = new ColorPickerDialog(initialColor);
             try
             {
-                var currentPreview = (Border)dialog.FindName("CurrentColorPreview");
-                var newPreview = (Border)dialog.FindName("NewColorPreview");
+                var currentForegroundPreview = (TextBlock)dialog.FindName("CurrentForegroundPreview");
+                var currentBackgroundPreview = (Border)dialog.FindName("CurrentBackgroundPreview");
+                var newForegroundPreview = (TextBlock)dialog.FindName("NewForegroundPreview");
+                var newBackgroundPreview = (Border)dialog.FindName("NewBackgroundPreview");
                 var swatchButton = FindSwatchButton((Panel)dialog.FindName("ThemeColorsPanel"), newColor);
 
                 swatchButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
 
-                GetPreviewColor(currentPreview).Should().Be(initialColor);
-                GetPreviewColor(newPreview).Should().Be(newColor);
+                GetForegroundPreviewColor(currentForegroundPreview).Should().Be(initialColor);
+                GetBackgroundPreviewColor(currentBackgroundPreview).Should().Be(initialColor);
+                GetForegroundPreviewColor(newForegroundPreview).Should().Be(newColor);
+                GetBackgroundPreviewColor(newBackgroundPreview).Should().Be(newColor);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void Preview_ShowsColorAsForegroundAndBackgroundWithReadableFillText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ColorPickerDialog(new CellColor(0x00, 0x20, 0x60));
+            try
+            {
+                var foregroundPreview = (TextBlock)dialog.FindName("CurrentForegroundPreview");
+                var backgroundPreview = (Border)dialog.FindName("CurrentBackgroundPreview");
+                var backgroundText = (TextBlock)dialog.FindName("CurrentBackgroundText");
+
+                GetForegroundPreviewColor(foregroundPreview).Should().Be(new CellColor(0x00, 0x20, 0x60));
+                GetBackgroundPreviewColor(backgroundPreview).Should().Be(new CellColor(0x00, 0x20, 0x60));
+                backgroundText.Foreground.Should().BeSameAs(Brushes.White);
             }
             finally
             {
@@ -193,7 +224,13 @@ public sealed class ColorPickerDialogTests
             .OfType<Button>()
             .Single(button => button.Tag is CellColor swatchColor && swatchColor == color);
 
-    private static CellColor GetPreviewColor(Border preview)
+    private static CellColor GetForegroundPreviewColor(TextBlock preview)
+    {
+        var brush = preview.Foreground.Should().BeOfType<SolidColorBrush>().Subject;
+        return new CellColor(brush.Color.R, brush.Color.G, brush.Color.B);
+    }
+
+    private static CellColor GetBackgroundPreviewColor(Border preview)
     {
         var brush = preview.Background.Should().BeOfType<SolidColorBrush>().Subject;
         return new CellColor(brush.Color.R, brush.Color.G, brush.Color.B);
