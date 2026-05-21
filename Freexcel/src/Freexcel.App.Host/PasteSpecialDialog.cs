@@ -100,7 +100,7 @@ public sealed class PasteSpecialDialog : Window
         _rbValidation = new RadioButton { Content = "Validatio_n", Margin = new Thickness(0, 0, 0, 6) };
         _rbAllUsingSourceTheme = new RadioButton { Content = "All using source t_heme", Margin = new Thickness(0, 0, 0, 6) };
         _rbAllExceptBorders = new RadioButton { Content = "All e_xcept borders", Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllMergingConditionalFormats = new RadioButton { Content = "All merging conditional formats", Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllMergingConditionalFormats = new RadioButton { Content = "All merging conditional _formats", Margin = new Thickness(0, 0, 0, 6) };
         _rbColumnWidths = new RadioButton { Content = "Column _widths", Margin = new Thickness(0, 0, 0, 6) };
         _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number fo_rmats", Margin = new Thickness(0, 0, 0, 6) };
         _rbValuesAndNumberFormats = new RadioButton { Content = "Values and number for_mats", Margin = new Thickness(0, 0, 0, 6) };
