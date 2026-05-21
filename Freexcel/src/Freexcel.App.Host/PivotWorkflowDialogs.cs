@@ -831,7 +831,7 @@ public sealed class PivotTableOptionsDialog : Window
         var stack = CreateTabPanel();
         var dataPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(dataPanel, _refreshOnOpenBox);
-        AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and filter settings", IsChecked = true });
+        AddCheckBox(dataPanel, new CheckBox { Content = "Preserve source sort and _filter settings", IsChecked = true });
         dataPanel.Children.Add(new TextBlock
         {
             Text = "Retain items deleted from the data source: Automatic",
