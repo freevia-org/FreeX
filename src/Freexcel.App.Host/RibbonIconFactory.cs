@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Xml.Linq;
 using SharpVectors.Converters;
 using SharpVectors.Renderers.Wpf;
 
@@ -355,7 +356,7 @@ public static class RibbonIconFactory
             if (monochromeBrush is not null)
                 RecolorDrawing(drawing, monochromeBrush);
 
-            var vectorImage = new DrawingImage(drawing);
+            var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath));
             vectorImage.Freeze();
 
             lock (CommandIconCacheGate)
@@ -364,6 +365,67 @@ public static class RibbonIconFactory
         }
 
         return null;
+    }
+
+    private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath)
+    {
+        var bounds = TryReadSvgViewBox(filePath) ?? drawing.Bounds;
+        if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
+            return drawing;
+
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing(
+            Brushes.Transparent,
+            null,
+            new RectangleGeometry(bounds)));
+        group.Children.Add(drawing);
+        group.Freeze();
+        return group;
+    }
+
+    private static Rect? TryReadSvgViewBox(string filePath)
+    {
+        try
+        {
+            var root = XDocument.Load(filePath).Root;
+            if (root is null)
+                return null;
+
+            var viewBox = root.Attribute("viewBox")?.Value;
+            if (!string.IsNullOrWhiteSpace(viewBox))
+            {
+                var parts = viewBox
+                    .Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(part => double.Parse(part, System.Globalization.CultureInfo.InvariantCulture))
+                    .ToArray();
+                if (parts.Length == 4)
+                    return new Rect(parts[0], parts[1], parts[2], parts[3]);
+            }
+
+            var width = TryParseSvgLength(root.Attribute("width")?.Value);
+            var height = TryParseSvgLength(root.Attribute("height")?.Value);
+            return width is > 0 && height is > 0
+                ? new Rect(0, 0, width.Value, height.Value)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static double? TryParseSvgLength(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var numeric = new string(value
+            .Trim()
+            .TakeWhile(ch => char.IsDigit(ch) || ch is '.' or '-')
+            .ToArray());
+        return double.TryParse(numeric, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var result)
+            ? result
+            : null;
     }
 
     private static string BrushCacheKey(Brush brush) =>

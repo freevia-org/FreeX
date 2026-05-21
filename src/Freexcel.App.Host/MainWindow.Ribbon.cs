@@ -949,7 +949,7 @@ public partial class MainWindow
         if (button is Control control)
             control.Padding = new Thickness(1);
 
-        button.Content = CreateRibbonIconOnlyContent(commandName, 22);
+        button.Content = CreateRibbonIconOnlyContent(commandName, 20);
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
         button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
         return true;
@@ -1327,8 +1327,8 @@ public partial class MainWindow
         var tall = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium;
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
-        var iconSize = layoutKind == RibbonCommandLayoutKind.Large ? 32 : 22;
-        var slotSize = layoutKind == RibbonCommandLayoutKind.Large ? 34 : 24;
+        var iconSize = layoutKind == RibbonCommandLayoutKind.Large ? 32 : 20;
+        var slotSize = layoutKind == RibbonCommandLayoutKind.Large ? 34 : 20;
         var iconSlot = new Border
         {
             Width = slotSize,
