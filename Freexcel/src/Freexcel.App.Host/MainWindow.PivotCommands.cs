@@ -800,11 +800,10 @@ public partial class MainWindow
 
     private void PivotCalculatedFieldBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
+        if (!TryGetActivePivotTable(out _, out var pivotTable))
             return;
 
-        var headers = ReadPivotSourceHeaders(sheet, pivotTable);
-        var dialog = new PivotCalculatedFieldDialog(fieldNames: headers) { Owner = this };
+        var dialog = new PivotCalculatedFieldDialog { Owner = this };
         if (dialog.ShowDialog() != true ||
             string.IsNullOrWhiteSpace(dialog.Result.Name) ||
             string.IsNullOrWhiteSpace(dialog.Result.Formula))
@@ -833,18 +832,7 @@ public partial class MainWindow
 
         var headers = ReadPivotSourceHeaders(sheet, pivotTable);
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable) ?? 0;
-        var itemNamesBySourceFieldIndex = headers
-            .Select((_, index) => new KeyValuePair<int, IEnumerable<string>>(
-                index,
-                ReadPivotFieldItems(sheet, pivotTable, index)))
-            .ToDictionary(pair => pair.Key, pair => pair.Value);
-        var dialog = new PivotCalculatedItemDialog(
-            headers,
-            sourceIndex,
-            itemNamesBySourceFieldIndex: itemNamesBySourceFieldIndex)
-        {
-            Owner = this
-        };
+        var dialog = new PivotCalculatedItemDialog(headers, sourceIndex) { Owner = this };
         if (dialog.ShowDialog() != true ||
             string.IsNullOrWhiteSpace(dialog.Result.Name) ||
             string.IsNullOrWhiteSpace(dialog.Result.Formula))

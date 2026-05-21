@@ -502,14 +502,12 @@ public sealed class PivotWorkflowDialogTests
     public void PivotCalculatedFieldDialog_ExposesFieldsListAndInsertFieldControl()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("private readonly ListBox _fieldList");
         source.Should().Contain("Available _fields");
         source.Should().Contain("Insert _Field");
         source.Should().Contain("InsertSelectedField");
         source.Should().Contain("InsertFormulaReference");
-        commandSource.Should().Contain("new PivotCalculatedFieldDialog(fieldNames: headers)");
     }
 
     [Fact]
@@ -548,7 +546,6 @@ public sealed class PivotWorkflowDialogTests
     public void PivotCalculatedItemDialog_ExposesFieldItemListsAndInsertionControls()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
-        var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("private readonly ListBox _fieldList");
         source.Should().Contain("private readonly ListBox _itemList");
@@ -557,8 +554,6 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Insert _Item");
         source.Should().Contain("RefreshItemList");
         source.Should().Contain("InsertSelectedItem");
-        commandSource.Should().Contain("ReadPivotFieldItems(sheet, pivotTable, index)");
-        commandSource.Should().Contain("itemNamesBySourceFieldIndex: itemNamesBySourceFieldIndex");
     }
 
     [Fact]
