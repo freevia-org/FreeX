@@ -184,6 +184,20 @@ public partial class MainWindow
         var dialog = new SubtotalDialog(sheet is null ? null : SubtotalDialog.BuildColumnChoices(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
+        if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
+        {
+            if (!TryExecuteRepeatableCurrentRangeCommand(
+                    "Remove Subtotals",
+                    range,
+                    currentRange => new RemoveSubtotalRowsCommand(_currentSheetId, currentRange),
+                    out var removeOutcome))
+                return;
+
+            RecalculateIfAutomatic(removeOutcome.AffectedCells ?? []);
+            UpdateViewport();
+            return;
+        }
+
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Subtotal",
                 range,
