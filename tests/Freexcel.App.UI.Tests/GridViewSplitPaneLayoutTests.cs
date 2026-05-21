@@ -54,6 +54,33 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneCellLayoutPlanner_MapsPinnedCellsOutsideGridView()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(1, 1, "top-left"),
+                    Cell(1, 10, "top"),
+                    Cell(20, 1, "left")
+                ]));
+
+        var layouts = SplitPaneCellLayoutPlanner.CalculateLayouts(viewport);
+
+        layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect.X, layout.Rect.Y, layout.Rect.Width, layout.Rect.Height))
+            .Should().Equal(
+                (1u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18),
+                (1u, 10u, GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight, 64, 18),
+                (20u, 1u, GridView.RowHeaderWidth, GridView.ColHeaderHeight + 58, 64, 18));
+    }
+
+    [Fact]
     public void CalculateSplitPaneCellLayouts_UsesIndependentTopRightAndBottomLeftMetrics()
     {
         var viewport = new ViewportModel(
@@ -316,6 +343,17 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneViewportChrome_CalculatesScrollbarChromeOutsideGridView()
+    {
+        var viewport = SplitViewport();
+
+        var chrome = SplitPaneViewportChrome.CalculateScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
+
+        chrome.HorizontalTopRight!.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208, GridView.ColHeaderHeight + 58 - 10, 262, 10));
+        chrome.VerticalBottomLeft!.Track.Should().Be(new Rect(GridView.RowHeaderWidth + 208 - 10, GridView.ColHeaderHeight + 58, 10, 224));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarChrome_SizesThumbsFromVisibleSpan()
     {
         var viewport = SplitViewport();
@@ -480,6 +518,28 @@ public sealed class GridViewSplitPaneLayoutTests
             []);
 
         var arrows = GridView.CalculateFormulaTraceArrowLayouts(
+            viewport,
+            [new FormulaTraceArrow(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))],
+            sheetId);
+
+        arrows.Should().ContainSingle().Which.Should().Be(
+            new FormulaTraceArrowLayout(
+                new Point(GridView.RowHeaderWidth + 32, GridView.ColHeaderHeight + 10),
+                new Point(GridView.RowHeaderWidth + 64 + 32, GridView.ColHeaderHeight + 20 + 10)));
+    }
+
+    [Fact]
+    public void FormulaTraceLayoutPlanner_ReturnsCenterPointsOutsideGridView()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)],
+            null,
+            []);
+
+        var arrows = FormulaTraceLayoutPlanner.CalculateLayouts(
             viewport,
             [new FormulaTraceArrow(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))],
             sheetId);

@@ -588,6 +588,67 @@ public sealed class PasteCellsCommandTests
     }
 
     [Fact]
+    public void PasteCommandFactory_AllMergingConditionalFormatsCopiesContentAndAddsShiftedRules()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var sourceStart = new CellAddress(sheet.Id, 1, 1);
+        var sourceEnd = new CellAddress(sheet.Id, 2, 1);
+        var destinationStart = new CellAddress(sheet.Id, 4, 3);
+        var destinationEnd = new CellAddress(sheet.Id, 5, 3);
+        var existingRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 10, 1), new CellAddress(sheet.Id, 10, 1)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.LessThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { Italic = true },
+            Priority = 1
+        };
+        var sourceRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(sourceStart, sourceEnd),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "10",
+            FormatIfTrue = new CellStyle { Bold = true },
+            Priority = 2
+        };
+        sheet.ConditionalFormats.Add(existingRule);
+        sheet.ConditionalFormats.Add(sourceRule);
+
+        var sourceCell = Cell.FromValue(new NumberValue(42));
+        sheet.SetCell(sourceStart, sourceCell);
+
+        var command = PasteCommandFactory.CreateInternalPasteCommand(
+            wb,
+            sheet.Id,
+            new GridRange(sourceStart, sourceEnd),
+            [(sourceStart, sourceCell.Clone())],
+            destinationStart,
+            PasteCellsMode.All,
+            new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.AllMergingConditionalFormats));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(destinationStart).Should().Be(new NumberValue(42));
+        sheet.ConditionalFormats.Should().HaveCount(3);
+        sheet.ConditionalFormats.Should().Contain(existingRule);
+        var pastedRule = sheet.ConditionalFormats.Single(rule => rule.Id != existingRule.Id && rule.Id != sourceRule.Id);
+        pastedRule.AppliesTo.Should().Be(new GridRange(destinationStart, destinationEnd));
+        pastedRule.RuleType.Should().Be(CfRuleType.CellValue);
+        pastedRule.Operator.Should().Be(CfOperator.GreaterThan);
+        pastedRule.Value1.Should().Be("10");
+        pastedRule.FormatIfTrue!.Bold.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.GetCell(destinationStart).Should().BeNull();
+        sheet.ConditionalFormats.Should().Equal(existingRule, sourceRule);
+    }
+
+    [Fact]
     public void PasteCommandFactory_ExternalTextBuildsCommandForCurrentDestination()
     {
         var wb = new Workbook("test");

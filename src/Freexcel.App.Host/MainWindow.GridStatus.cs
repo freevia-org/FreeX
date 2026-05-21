@@ -8,6 +8,9 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
+    private sealed record ColumnResizeSnapshot(SheetId SheetId, uint StartCol, uint EndCol, Dictionary<uint, (bool Had, double Width)> Widths);
+    private sealed record RowResizeSnapshot(SheetId SheetId, uint StartRow, uint EndRow, Dictionary<uint, (bool Had, double Height)> Heights);
+
     private void RefreshStatusBar()
     {
         if (SheetGrid.SelectedRange is not { } range)
