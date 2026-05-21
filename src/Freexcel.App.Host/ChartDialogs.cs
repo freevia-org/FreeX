@@ -426,7 +426,7 @@ public sealed class ChartTitlesDialog : Window
 
     private static void AddInput(Panel stack, string label, TextBox box)
     {
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
     }
@@ -457,7 +457,7 @@ public sealed class ChartStyleDialog : Window
         _styleBox.Margin = new Thickness(0, 0, 0, 16);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Style", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Style", Target = _styleBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(_styleBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -1614,7 +1614,7 @@ public static void AddCheck(Panel stack, CheckBox checkBox)
 
 public static void AddCombo<T>(Panel stack, string label, ComboBox comboBox, IEnumerable<T> items)
 {
-    stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
+    stack.Children.Add(new Label { Content = label, Target = comboBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 0, 4) });
     comboBox.ItemsSource = items;
     comboBox.Margin = new Thickness(0, 0, 0, 8);
     stack.Children.Add(comboBox);
@@ -1622,7 +1622,7 @@ public static void AddCombo<T>(Panel stack, string label, ComboBox comboBox, IEn
 
 public static void AddText(Panel stack, string label, TextBox textBox)
 {
-    stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
+    stack.Children.Add(new Label { Content = label, Target = textBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 0, 4) });
     textBox.Margin = new Thickness(0, 0, 0, 8);
     stack.Children.Add(textBox);
 }
@@ -1636,7 +1636,7 @@ public static void AddNumericText(Panel stack, string label, TextBox textBox, st
 
 public static void AddColorText(Panel stack, string label, TextBox textBox)
 {
-    stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
+    stack.Children.Add(new Label { Content = label, Target = textBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 0, 4) });
     var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
     var pickerButton = new Button
     {

@@ -38,8 +38,8 @@ public sealed class HyperlinkDialog : Window
         root.Children.Add(linkTypes);
 
         var grid = DialogGrid(3);
-        AddTextRow(grid, 0, "Text to display:", _displayBox, displayText);
-        AddTextRow(grid, 1, "Address:", _targetBox, target);
+        AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
+        AddTextRow(grid, 1, "_Address:", _targetBox, target);
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = 96;
         _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
@@ -83,9 +83,11 @@ public sealed class HyperlinkDialog : Window
 
     private static void AddTextRow(Grid grid, int row, string label, TextBox box, string value)
     {
-        grid.Children.Add(new TextBlock
+        grid.Children.Add(new Label
         {
-            Text = label,
+            Content = label,
+            Target = box,
+            Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8)
         });
@@ -159,7 +161,7 @@ public sealed class ObjectSizeDialog : Window
 
     private static void AddLabeledTextBox(Panel stack, string label, TextBox box)
     {
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
     }
@@ -167,7 +169,7 @@ public sealed class ObjectSizeDialog : Window
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(box);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
@@ -278,7 +280,7 @@ public sealed class PictureCropDialog : Window
 
     private static void AddCropBox(Panel stack, string label, TextBox box)
     {
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
     }
@@ -361,7 +363,7 @@ public sealed class ShapeGradientDialog : Window
         stack.Children.Add(_startColorText);
         stack.Children.Add(_endColorText);
 
-        stack.Children.Add(new TextBlock { Text = "RGB override:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "RGB _override:", Target = _gradientBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _gradientBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_gradientBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
