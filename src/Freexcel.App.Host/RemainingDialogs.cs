@@ -508,12 +508,13 @@ public sealed class SparklineDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Data range", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
-        stack.Children.Add(new TextBlock { Text = "Location", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Location:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
+        stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>();
         _kindBox.SelectedItem = kind;
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
