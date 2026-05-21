@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Microsoft.Extensions.Logging;
 using Freexcel.Core.Model;
 using Freexcel.Core.Commands;
@@ -64,12 +65,23 @@ public partial class MainWindow : Window
     private bool _normalizingRibbonSurface;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
+    private readonly IReadOnlyList<Brush> _formulaReferenceBrushes =
+    [
+        new SolidColorBrush(Color.FromRgb(32, 112, 214)),
+        new SolidColorBrush(Color.FromRgb(192, 80, 77)),
+        new SolidColorBrush(Color.FromRgb(112, 48, 160)),
+        new SolidColorBrush(Color.FromRgb(0, 128, 64)),
+        new SolidColorBrush(Color.FromRgb(237, 125, 49)),
+        new SolidColorBrush(Color.FromRgb(0, 153, 153))
+    ];
     private System.Windows.Controls.TextBox? _inlineEditor;
+    private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private CellAddress? _formulaEditCell;
     private CellAddress? _formulaRangeSelectionAnchor;
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
+    private readonly List<UIElement> _formulaReferenceGridOverlays = [];
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
     private ColumnResizeSnapshot? _columnResizeSnapshot;
@@ -131,6 +143,7 @@ public partial class MainWindow : Window
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
         FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
+        FormulaBar.TextChanged += (_, _) => RefreshFormulaReferenceHighlights();
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;
