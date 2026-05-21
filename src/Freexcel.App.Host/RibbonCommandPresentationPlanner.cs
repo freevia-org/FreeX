@@ -302,12 +302,11 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("conditional formatting") ||
         name.Contains("format as table") ||
         name.Contains("cell styles") ||
-        name.Contains("pivottable") ||
+        name == "pivottable" ||
         name is "table" ||
         name.Contains("recommended chart") ||
         name.Contains("picture") ||
         name.Contains("link") ||
-        name.Contains("new note") ||
         name.Contains("insert symbol") ||
         name.Contains("text box") ||
         name.Contains("rectangle") ||
@@ -323,14 +322,6 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("print titles") ||
         name.Contains("insert function") ||
         name.Contains("autosum") ||
-        name.Contains("recently used") ||
-        name.Contains("financial") ||
-        name.Contains("logical") ||
-        name.Contains("text functions") ||
-        name.Contains("date") ||
-        name.Contains("lookup") ||
-        name.Contains("math") ||
-        name.Contains("more functions") ||
         name.Contains("name manager") ||
         name.Contains("watch window") ||
         name.Contains("calculation options") ||
@@ -357,7 +348,6 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("show changes") ||
         name.Contains("new comment") ||
         name.Contains("show comments") ||
-        name.Contains("notes") ||
         name.Contains("protect sheet") ||
         name.Contains("protect workbook") ||
         name.Contains("allow edit") ||

@@ -53,6 +53,21 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialog_ExposesExcelLikeSourcePlacementAndDataModelAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("Choose the data that you want to analyze");
+        source.Should().Contain("_selectTableRangeButton");
+        source.Should().Contain("_externalSourceButton");
+        source.Should().Contain("_dataModelBox");
+        source.Should().Contain("Use an external data source");
+        source.Should().Contain("Add this data to the Data Model");
+        source.Should().Contain("New worksheet");
+        source.Should().Contain("Existing worksheet");
+    }
+
+    [Fact]
     public void PivotTableDataSourceDialog_CreateResult_TrimsSourceRangeText()
     {
         PivotTableDataSourceDialog.CreateResult("  Sales!A1:E200  ")
@@ -172,6 +187,27 @@ public sealed class PivotWorkflowDialogTests
                 true,
                 true,
                 PivotReportLayout.Compact));
+    }
+
+    [Fact]
+    public void PivotTableOptionsDialog_UsesExcelStyleTabbedOptionShell()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        foreach (var content in new[]
+        {
+            "Layout & Format",
+            "Totals & Filters",
+            "Display",
+            "Printing",
+            "Data",
+            "Alt Text",
+            "_emptyCellsBox",
+            "_autofitColumnsBox",
+            "_preserveFormattingBox",
+            "_refreshOnOpenBox"
+        })
+            source.Should().Contain(content);
     }
 
     [Fact]
