@@ -289,8 +289,8 @@ public sealed record ShapeGradientDialogResult(CellColor StartColor, CellColor E
 public sealed class ShapeGradientDialog : Window
 {
     private readonly TextBox _gradientBox = new();
-    private readonly Button _startColorButton = new() { Content = "Start Color..." };
-    private readonly Button _endColorButton = new() { Content = "End Color..." };
+    private readonly Button _startColorButton = new() { Content = "_Start Color..." };
+    private readonly Button _endColorButton = new() { Content = "_End Color..." };
     private readonly TextBlock _startColorText = new();
     private readonly TextBlock _endColorText = new();
     private CellColor _startColor = new(31, 119, 180);
