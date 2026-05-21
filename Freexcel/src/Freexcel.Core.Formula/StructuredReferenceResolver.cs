@@ -27,8 +27,19 @@ public static class StructuredReferenceResolver
         {
             foreach (var table in sheet.StructuredTables)
             {
-                if (!StructuredTableNameMatches(table, tableName))
+                if (string.IsNullOrWhiteSpace(tableName))
+                {
+                    if (currentAddress is null || !sheet.Id.Equals(currentAddress.Value.Sheet))
+                        continue;
+                    if (!IsDataBodyRow(table, currentAddress.Value.Row))
+                        continue;
+                    if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+                        continue;
+                }
+                else if (!StructuredTableNameMatches(table, tableName))
+                {
                     continue;
+                }
 
                 if (TryParseCombinedColumnRangeSelector(selector, out var rangeSection, out var rangeStartColumn, out var rangeEndColumn))
                 {
