@@ -107,6 +107,13 @@ public class FormulaSerializerTests
     public void Serialize_FunctionCall() => RoundTrip("=SUM(A1:A3)").Should().Be("SUM(A1:A3)");
 
     [Fact]
+    public void Serialize_CombinedStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[#Data],[Amount]])")
+            .Should().Be("SUM(SALES[[#Data],[Amount]])");
+    }
+
+    [Fact]
     public void Serialize_FunctionNoArgs() => RoundTrip("=NOW()").Should().Be("NOW()");
 
     [Fact]
