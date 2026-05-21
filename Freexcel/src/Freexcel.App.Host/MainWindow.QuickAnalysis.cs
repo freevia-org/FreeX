@@ -79,8 +79,38 @@ public partial class MainWindow
             case QuickAnalysisCommand.GreaterThan:
                 ShowCfDialog("Greater Than");
                 break;
+            case QuickAnalysisCommand.LessThan:
+                ShowCfDialog("Less Than");
+                break;
+            case QuickAnalysisCommand.Between:
+                ShowCfDialog("Between");
+                break;
+            case QuickAnalysisCommand.EqualTo:
+                ShowCfDialog("Equal To");
+                break;
+            case QuickAnalysisCommand.TextContains:
+                ShowCfDialog("Text Contains");
+                break;
+            case QuickAnalysisCommand.DuplicateValues:
+                ShowCfDialog("Duplicate Values");
+                break;
             case QuickAnalysisCommand.Top10:
                 ShowCfDialog("Top 10 Items");
+                break;
+            case QuickAnalysisCommand.Top10Percent:
+                ShowCfDialog("Top 10%");
+                break;
+            case QuickAnalysisCommand.Bottom10:
+                ShowCfDialog("Bottom 10 Items");
+                break;
+            case QuickAnalysisCommand.Bottom10Percent:
+                ShowCfDialog("Bottom 10%");
+                break;
+            case QuickAnalysisCommand.AboveAverage:
+                ShowCfDialog("Above Average");
+                break;
+            case QuickAnalysisCommand.BelowAverage:
+                ShowCfDialog("Below Average");
                 break;
             case QuickAnalysisCommand.ClearConditionalFormatting:
                 CfClearRulesMenuItem_Click(sender, e);
