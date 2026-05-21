@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -9,6 +10,18 @@ namespace Freexcel.App.Host.Tests;
 
 public sealed class ConditionalFormatDialogTests
 {
+    [Fact]
+    public void BaseRuleDialog_ExposesKeyboardAccessKeysForFieldsAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ConditionalFormatDialog.cs"));
+
+        source.Should().Contain("isBetween ? \"_Minimum:\" : \"_Value:\"");
+        source.Should().Contain("Content = \"Ma_ximum:\"");
+        source.Should().Contain("isDataBar ? \"_Bar color:\" : \"_Format:\"");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+    }
+
     [Fact]
     public void NewRuleDialog_UsesExcelRuleShell()
     {
