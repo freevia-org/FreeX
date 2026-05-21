@@ -7,13 +7,20 @@ namespace Freexcel.App.Host;
 
 public sealed record SubtotalColumnChoice(uint Offset, string Header, bool IsSelected);
 
+public enum SubtotalDialogAction
+{
+    Apply,
+    RemoveAll
+}
+
 public sealed record SubtotalDialogResult(
     uint GroupColumnOffset,
     IReadOnlyList<uint> SubtotalColumnOffsets,
     int FunctionNumber,
     bool ReplaceCurrentSubtotals,
     bool PageBreakBetweenGroups,
-    bool SummaryBelowData);
+    bool SummaryBelowData,
+    SubtotalDialogAction Action = SubtotalDialogAction.Apply);
 
 public sealed class SubtotalDialog : Window
 {
@@ -24,9 +31,9 @@ public sealed class SubtotalDialog : Window
     private readonly List<CheckBox> _subtotalColumnBoxes = [];
     private readonly StackPanel _subtotalColumnPanel = new();
     private readonly ComboBox _functionBox = new ComboBox { ItemsSource = SubtotalFunctionChoices, SelectedItem = "Sum" };
-    private readonly CheckBox _replaceBox = new() { Content = "_Replace current subtotals", IsChecked = true };
-    private readonly CheckBox _pageBreakBox = new() { Content = "_Page break between groups" };
-    private readonly CheckBox _summaryBelowBox = new() { Content = "_Summary below data", IsChecked = true };
+    private readonly CheckBox _replaceBox = new() { IsChecked = true };
+    private readonly CheckBox _pageBreakBox = new();
+    private readonly CheckBox _summaryBelowBox = new() { IsChecked = true };
 
     public SubtotalDialogResult? Result { get; private set; }
 
@@ -36,7 +43,7 @@ public sealed class SubtotalDialog : Window
 
         Title = "Subtotal";
         Width = 380;
-        Height = 360;
+        Height = 390;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -46,6 +53,8 @@ public sealed class SubtotalDialog : Window
         _groupColumnBox.ItemsSource = columnChoices;
         _groupColumnBox.SelectedValue = columnChoices[0].Offset;
         root.Children.Add(_groupColumnBox);
+        root.Children.Add(new Label { Content = "_Use function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        root.Children.Add(_functionBox);
         root.Children.Add(new Label { Content = "_Add subtotal to:", Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         foreach (var column in columnChoices)
         {
@@ -60,12 +69,13 @@ public sealed class SubtotalDialog : Window
             _subtotalColumnPanel.Children.Add(box);
         }
         root.Children.Add(new GroupBox { Header = "Add subtotal to:", Content = _subtotalColumnPanel });
-        root.Children.Add(new Label { Content = "_Use function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(_functionBox);
+        _replaceBox.Content = "_Replace current subtotals";
+        _pageBreakBox.Content = "_Page break between groups";
+        _summaryBelowBox.Content = "_Summary below data";
         root.Children.Add(_replaceBox);
         root.Children.Add(_pageBreakBox);
         root.Children.Add(_summaryBelowBox);
-        root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
+        root.Children.Add(CreateSubtotalButtonRow(Accept, RemoveAll));
         Content = root;
     }
 
@@ -92,6 +102,16 @@ public sealed class SubtotalDialog : Window
             pageBreakBetweenGroups,
             summaryBelowData);
     }
+
+    public static SubtotalDialogResult CreateRemoveAllResult() =>
+        new(
+            GroupColumnOffset: 0,
+            SubtotalColumnOffsets: [],
+            FunctionNumber: 9,
+            ReplaceCurrentSubtotals: false,
+            PageBreakBetweenGroups: false,
+            SummaryBelowData: true,
+            Action: SubtotalDialogAction.RemoveAll);
 
     public static IReadOnlyList<SubtotalColumnChoice> BuildColumnChoices(Sheet sheet, GridRange range)
     {
@@ -134,6 +154,36 @@ public sealed class SubtotalDialog : Window
         }
 
         DialogResult = true;
+    }
+
+    private void RemoveAll()
+    {
+        Result = CreateRemoveAllResult();
+        DialogResult = true;
+    }
+
+    private static Grid CreateSubtotalButtonRow(Action accept, Action removeAll)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var removeButton = new Button
+        {
+            Content = "_Remove All",
+            Width = 92,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        removeButton.Click += (_, _) => removeAll();
+        grid.Children.Add(removeButton);
+
+        var buttons = TextToColumnsDialog.CreateButtonRow(accept);
+        buttons.Margin = new Thickness(0);
+        Grid.SetColumn(buttons, 2);
+        grid.Children.Add(buttons);
+
+        return grid;
     }
 
     private static IReadOnlyList<SubtotalColumnChoice> NormalizeColumnChoices(IEnumerable<SubtotalColumnChoice>? columns)
