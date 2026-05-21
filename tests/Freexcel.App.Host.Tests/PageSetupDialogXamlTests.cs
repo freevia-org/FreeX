@@ -21,16 +21,32 @@ public sealed class PageSetupDialogXamlTests
 
         foreach (var content in new[]
         {
+            "_Orientation:",
+            "_Paper size:",
+            "First _page number:",
+            "Print _quality:",
+            "_Left:",
+            "_Right:",
+            "_Top:",
+            "_Bottom:",
+            "_Header:",
+            "_Footer:",
+            "Print _area:",
+            "_Rows to repeat at top:",
+            "_Columns to repeat at left:",
             "_Center horizontally",
             "Center _vertically",
             "_Print gridlines",
             "Print row and column _headings",
+            "Pa_ge order:",
             "_Black and white",
             "_Draft quality",
+            "Cell _errors as:",
+            "Co_mments:",
             "_OK",
             "_Cancel"
         })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.Should().Contain(content);
     }
 
     [Fact]
@@ -45,7 +61,7 @@ public sealed class PageSetupDialogXamlTests
             .Descendants(presentation + "RadioButton")
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
-            .Contain(["Adjust to:", "Fit to:"]);
+            .Contain(["_Adjust to:", "_Fit to:"]);
 
         foreach (var name in new[] { "ScalePercentBox", "FitPagesWideBox", "FitPagesTallBox" })
         {
@@ -80,7 +96,7 @@ public sealed class PageSetupDialogXamlTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
 
-        foreach (var content in new[] { "Print Pre_view", "_Print...", "Options..." })
+        foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
             xaml.Should().Contain($"Content=\"{content}\"");
     }
 }
