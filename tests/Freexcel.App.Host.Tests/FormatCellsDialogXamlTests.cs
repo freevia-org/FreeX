@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Freexcel.App.Host;
 using Freexcel.Core.Model;
 using FluentAssertions;
@@ -158,8 +159,18 @@ public sealed class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(new CellStyle());
             try
             {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
                 var combo = GetControl<ComboBox>(dialog, "NumberFormatCombo");
-                combo.Items.Cast<string>().Should().Contain(new[]
+                var labels = new HashSet<string>();
+
+                foreach (var category in new[] { "General", "Number", "Currency", "Accounting", "Percentage", "Fraction", "Scientific", "Text" })
+                {
+                    categories.SelectedItem = category;
+                    foreach (var label in combo.Items.Cast<string>())
+                        labels.Add(label);
+                }
+
+                labels.Should().Contain(new[]
                 {
                     "General",
                     "Number (#,##0.00)",
@@ -175,6 +186,61 @@ public sealed class FormatCellsDialogXamlTests
                     .Should().Be("$#,##0.00");
                 FormatCellsDialog.ResolveNumberFormat("Fraction (# ?/?)", 8)
                     .Should().Be("# ?/?");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_SwitchesTypeListForEachFormatCategory()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                var categories = GetControl<ListBox>(dialog, "NumberCategoryList");
+                var types = GetControl<ComboBox>(dialog, "NumberFormatCombo");
+
+                categories.SelectedItem = "Number";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "0",
+                    "0.00",
+                    "#,##0",
+                    "#,##0.00"
+                });
+
+                categories.SelectedItem = "Currency";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "$#,##0",
+                    "$#,##0.00",
+                    "$#,##0;[Red]($#,##0)",
+                    "$#,##0.00;[Red]($#,##0.00)"
+                });
+
+                categories.SelectedItem = "Date";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "m/d/yyyy",
+                    "mmmm d, yyyy",
+                    "d-mmm-yy"
+                });
+
+                categories.SelectedItem = "Custom";
+                types.Items.Cast<string>().Should().Contain(new[]
+                {
+                    "General",
+                    "#,##0.00",
+                    "$#,##0.00",
+                    "0.00%",
+                    "m/d/yyyy",
+                    "h:mm AM/PM"
+                });
             }
             finally
             {
@@ -429,6 +495,30 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_FontTab_PopulatesInstalledFontsAndKeepsCustomCurrentFont()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const string customFont = "Freexcel Test Font Not Installed";
+            var dialog = ShowDialogForTest(new CellStyle { FontName = customFont });
+            try
+            {
+                var fontBox = GetControl<ComboBox>(dialog, "DlgFontNameBox");
+                var availableFonts = fontBox.Items.Cast<string>().ToArray();
+
+                availableFonts.Should().Contain(customFont);
+                fontBox.SelectedItem.Should().Be(customFont);
+                availableFonts.Should().Contain(Fonts.SystemFontFamilies.Select(f => f.Source));
+                availableFonts.Should().HaveCountGreaterThan(6);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_DoesNotEmitUnsupportedTextRotation()
     {
         StaTestRunner.Run(() =>
@@ -496,7 +586,8 @@ public sealed class FormatCellsDialogXamlTests
             var dialog = ShowDialogForTest(new CellStyle());
             try
             {
-                GetControl<ComboBox>(dialog, "NumberFormatCombo").SelectedIndex = 2;
+                GetControl<ListBox>(dialog, "NumberCategoryList").SelectedItem = "Currency";
+                GetControl<ComboBox>(dialog, "NumberFormatCombo").SelectedItem = "Currency ($#,##0.00)";
                 GetControl<ComboBox>(dialog, "DlgHAlignBox").SelectedItem = nameof(CellHAlign.Right);
                 GetControl<ComboBox>(dialog, "DlgVAlignBox").SelectedItem = nameof(CellVAlign.Center);
                 GetControl<CheckBox>(dialog, "DlgWrapTextCheck").IsChecked = true;
