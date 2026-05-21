@@ -69,6 +69,14 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ShapeGradientDialog_LabelsRgbOverrideWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"RGB _override:\", Target = _gradientBox");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
