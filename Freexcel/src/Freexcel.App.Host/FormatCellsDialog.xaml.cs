@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Freexcel.Core.Model;
 using CellHAlign = Freexcel.Core.Model.HorizontalAlignment;
 using CellVAlign = Freexcel.Core.Model.VerticalAlignment;
@@ -99,10 +100,14 @@ public partial class FormatCellsDialog : Window
         DlgFontNameBox.SelectedItem = s.FontName;
         DlgFontSizeBox.ItemsSource  = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36" };
         DlgFontSizeBox.Text         = s.FontSize.ToString("0.#");
+        DlgFontStyleList.ItemsSource = new[] { "Regular", "Italic", "Bold", "Bold Italic" };
         DlgBoldCheck.IsChecked      = s.Bold;
         DlgItalicCheck.IsChecked    = s.Italic;
+        DlgFontStyleList.SelectedItem = FontStyleLabel(s.Bold, s.Italic);
+        DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double" };
         DlgUnderlineCheck.IsChecked = s.Underline;
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
+        DlgUnderlineStyleBox.SelectedItem = s.DoubleUnderline ? "Double" : s.Underline ? "Single" : "None";
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
         DlgSuperscriptCheck.IsChecked = s.Superscript;
         DlgSubscriptCheck.IsChecked = s.Subscript;
@@ -112,6 +117,9 @@ public partial class FormatCellsDialog : Window
             ? ColorInputParser.FormatRgbColor(s.FillColor.Value)
             : "";
         DlgClearFillCheck.IsChecked = false;
+        DlgFillPatternColorBox.Text = "";
+        DlgFillPatternStyleBox.ItemsSource = new[] { "None", "Solid", "Gray 25%", "Gray 50%", "Horizontal", "Vertical" };
+        DlgFillPatternStyleBox.SelectedIndex = 0;
 
         DlgHAlignBox.ItemsSource  = Enum.GetNames(typeof(CellHAlign));
         DlgHAlignBox.SelectedItem = s.HorizontalAlignment.ToString();
@@ -126,8 +134,17 @@ public partial class FormatCellsDialog : Window
         PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight);
         PopulateBorder(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, s.BorderBottom);
         PopulateBorder(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, s.BorderLeft);
+        DlgBorderLineStyleBox.ItemsSource = Enum.GetNames(typeof(BorderStyle));
+        DlgBorderLineStyleBox.SelectedItem = s.BorderBottom.Style == BorderStyle.None
+            ? nameof(BorderStyle.Thin)
+            : s.BorderBottom.Style.ToString();
+        DlgBorderLineColorBox.Text = ColorInputParser.FormatRgbColor(s.BorderBottom.Color);
 
         DlgLockedCheck.IsChecked = s.Locked;
+
+        UpdateFontPreview();
+        UpdateFillPreview();
+        UpdateBorderPreview();
     }
 
     private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -158,6 +175,50 @@ public partial class FormatCellsDialog : Window
 
         if (index >= 0 && index < NumberFormatLabels.Length)
             NumberFormatCombo.SelectedIndex = index;
+    }
+
+    private void FontStyleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DlgFontStyleList.SelectedItem is not string style)
+            return;
+
+        DlgBoldCheck.IsChecked = style.Contains("Bold", StringComparison.OrdinalIgnoreCase);
+        DlgItalicCheck.IsChecked = style.Contains("Italic", StringComparison.OrdinalIgnoreCase);
+        UpdateFontPreview();
+    }
+
+    private void UnderlineStyleBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DlgUnderlineStyleBox.SelectedItem is not string underline)
+            return;
+
+        DlgUnderlineCheck.IsChecked = underline == "Single";
+        DlgDoubleUnderlineCheck.IsChecked = underline == "Double";
+        UpdateFontPreview();
+    }
+
+    private void FontPreviewInput_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DlgFontSamplePreview is null)
+            return;
+
+        UpdateFontPreview();
+    }
+
+    private void FillPreviewInput_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DlgFillSamplePreview is null)
+            return;
+
+        UpdateFillPreview();
+    }
+
+    private void BorderPreviewInput_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DlgBorderPreviewArea is null)
+            return;
+
+        UpdateBorderPreview();
     }
 
     public static string? ResolveNumberFormat(string text, int selectedIndex)
@@ -262,6 +323,9 @@ public partial class FormatCellsDialog : Window
     private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgFillColorBox, allowNoColor: true);
 
+    private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
+        PickColorInto(DlgBorderLineColorBox, allowNoColor: false);
+
     private void DlgBorderTopColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgBorderTopColorBox, allowNoColor: false);
 
@@ -274,6 +338,27 @@ public partial class FormatCellsDialog : Window
     private void DlgBorderLeftColorPickerButton_Click(object sender, RoutedEventArgs e) =>
         PickColorInto(DlgBorderLeftColorBox, allowNoColor: false);
 
+    private void DlgBorderPresetNoneButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderPreset(BorderStyle.None);
+
+    private void DlgBorderPresetOutlineButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderPreset(SelectedBorderLineStyle());
+
+    private void DlgBorderPresetInsideButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderPreset(SelectedBorderLineStyle());
+
+    private void DlgBorderPreviewTopButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderSide(DlgBorderTopStyleBox, DlgBorderTopColorBox);
+
+    private void DlgBorderPreviewRightButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderSide(DlgBorderRightStyleBox, DlgBorderRightColorBox);
+
+    private void DlgBorderPreviewBottomButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderSide(DlgBorderBottomStyleBox, DlgBorderBottomColorBox);
+
+    private void DlgBorderPreviewLeftButton_Click(object sender, RoutedEventArgs e) =>
+        ApplyBorderSide(DlgBorderLeftStyleBox, DlgBorderLeftColorBox);
+
     private void PickColorInto(TextBox target, bool allowNoColor)
     {
         var initial = TryParseColor(target.Text);
@@ -284,6 +369,91 @@ public partial class FormatCellsDialog : Window
         target.Text = dialog.SelectedColor is { } color ? ColorInputParser.FormatRgbColor(color) : "";
     }
 
+    private void ApplyBorderPreset(BorderStyle style)
+    {
+        SetBorderSide(DlgBorderTopStyleBox, DlgBorderTopColorBox, style);
+        SetBorderSide(DlgBorderRightStyleBox, DlgBorderRightColorBox, style);
+        SetBorderSide(DlgBorderBottomStyleBox, DlgBorderBottomColorBox, style);
+        SetBorderSide(DlgBorderLeftStyleBox, DlgBorderLeftColorBox, style);
+        UpdateBorderPreview();
+    }
+
+    private void ApplyBorderSide(ComboBox styleBox, TextBox colorBox)
+    {
+        SetBorderSide(styleBox, colorBox, SelectedBorderLineStyle());
+        UpdateBorderPreview();
+    }
+
+    private void SetBorderSide(ComboBox styleBox, TextBox colorBox, BorderStyle style)
+    {
+        styleBox.SelectedItem = style.ToString();
+        if (style != BorderStyle.None)
+            colorBox.Text = DlgBorderLineColorBox.Text;
+    }
+
+    private BorderStyle SelectedBorderLineStyle()
+        => DlgBorderLineStyleBox.SelectedItem is string selectedStyle
+            && Enum.TryParse(selectedStyle, out BorderStyle parsedStyle)
+            && Enum.IsDefined(parsedStyle)
+                ? parsedStyle
+                : BorderStyle.Thin;
+
+    private void UpdateFontPreview()
+    {
+        if (DlgFontSamplePreview is null)
+            return;
+
+        DlgFontSamplePreview.FontFamily = new FontFamily(DlgFontNameBox.Text);
+        DlgFontSamplePreview.FontSize = FormatCellsInputParser.TryParseFontSize(DlgFontSizeBox.Text) ?? 11;
+        DlgFontSamplePreview.FontWeight = DlgBoldCheck.IsChecked == true ? FontWeights.Bold : FontWeights.Normal;
+        DlgFontSamplePreview.FontStyle = DlgItalicCheck.IsChecked == true ? FontStyles.Italic : FontStyles.Normal;
+        DlgFontSamplePreview.Foreground = BrushForColor(TryParseColor(DlgFontColorBox.Text), Brushes.Black);
+
+        var decorations = new TextDecorationCollection();
+        if (DlgUnderlineCheck.IsChecked == true || DlgDoubleUnderlineCheck.IsChecked == true)
+        {
+            foreach (var decoration in TextDecorations.Underline)
+                decorations.Add(decoration);
+        }
+
+        if (DlgStrikeCheck.IsChecked == true)
+        {
+            foreach (var decoration in TextDecorations.Strikethrough)
+                decorations.Add(decoration);
+        }
+
+        DlgFontSamplePreview.TextDecorations = decorations;
+    }
+
+    private void UpdateFillPreview()
+    {
+        if (DlgFillSamplePreview is null)
+            return;
+
+        var fillBrush = DlgClearFillCheck.IsChecked == true
+            ? Brushes.White
+            : BrushForColor(TryParseColor(DlgFillColorBox.Text), Brushes.White);
+
+        DlgFillBackgroundPreview.Background = fillBrush;
+        DlgFillSamplePreview.Background = fillBrush;
+    }
+
+    private void UpdateBorderPreview()
+    {
+        if (DlgBorderPreviewArea is null)
+            return;
+
+        var top = PreviewThickness(DlgBorderTopStyleBox.SelectedItem as string);
+        var right = PreviewThickness(DlgBorderRightStyleBox.SelectedItem as string);
+        var bottom = PreviewThickness(DlgBorderBottomStyleBox.SelectedItem as string);
+        var left = PreviewThickness(DlgBorderLeftStyleBox.SelectedItem as string);
+
+        DlgBorderPreviewArea.BorderThickness = new Thickness(left, top, right, bottom);
+        DlgBorderPreviewArea.BorderBrush = BrushForColor(
+            TryParseColor(DlgBorderLineColorBox.Text) ?? TryParseColor(DlgBorderBottomColorBox.Text),
+            Brushes.Black);
+    }
+
     private static CellColor? TryParseColor(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
@@ -291,6 +461,29 @@ public partial class FormatCellsDialog : Window
             ? color
             : null;
     }
+
+    private static Brush BrushForColor(CellColor? color, Brush fallback)
+        => color is { } rgb
+            ? new SolidColorBrush(Color.FromRgb(rgb.R, rgb.G, rgb.B))
+            : fallback;
+
+    private static double PreviewThickness(string? selectedStyle)
+        => selectedStyle switch
+        {
+            nameof(BorderStyle.None) => 0,
+            nameof(BorderStyle.Medium) => 2,
+            nameof(BorderStyle.Thick) => 3,
+            nameof(BorderStyle.Double) => 3,
+            _ => 1
+        };
+
+    private static string FontStyleLabel(bool bold, bool italic) => (bold, italic) switch
+    {
+        (true, true) => "Bold Italic",
+        (true, false) => "Bold",
+        (false, true) => "Italic",
+        _ => "Regular"
+    };
 
     private static string CategoryForFormatIndex(int index) => index switch
     {
