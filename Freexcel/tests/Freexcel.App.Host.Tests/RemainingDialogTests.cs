@@ -59,6 +59,20 @@ public sealed class RemainingDialogTests
         result.Should().Be(new FillSeriesStepDialogResult(-2));
     }
 
+    [Fact]
+    public void FillSeriesStepDialog_CreateResult_CapturesExcelSeriesOptions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("enum FillSeriesDirection");
+        source.Should().Contain("enum FillSeriesType");
+        source.Should().Contain("enum FillSeriesDateUnit");
+        source.Should().Contain("FillSeriesDirection.Rows");
+        source.Should().Contain("FillSeriesType.Date");
+        source.Should().Contain("FillSeriesDateUnit.Month");
+        source.Should().Contain("StopValue");
+    }
+
     [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
@@ -75,6 +89,19 @@ public sealed class RemainingDialogTests
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
 
         result.Should().Be(new ZoomDialogResult(125));
+    }
+
+    [Fact]
+    public void ZoomDialog_ExposesExcelPresetPercentsAndCustomPercent()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("ZoomPresets");
+        source.Should().Contain("200");
+        source.Should().Contain("100");
+        source.Should().Contain("75");
+        source.Should().Contain("_customZoomButton");
+        source.Should().Contain("_zoomBox");
     }
 
     [Fact]
@@ -150,6 +177,15 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void StatusDialogs_UseSharedExcelStyleButtonRows()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("DialogButtonRowFactory.Create");
+        source.Should().NotContain("InsertChartDialog.CreateButtonRow");
+    }
+
+    [Fact]
     public void ForecastSheetDialog_TryCreateResult_RequiresPositivePeriods()
     {
         ForecastSheetDialog.TryCreateResult("0", out _, out var error).Should().BeFalse();
@@ -174,6 +210,17 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_ExposesRangePickerButtonsForDataAndLocation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("_dataRangePickerButton");
+        source.Should().Contain("_locationPickerButton");
+        source.Should().Contain("Select Data Range");
+        source.Should().Contain("Select Location Range");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
@@ -191,5 +238,17 @@ public sealed class RemainingDialogTests
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")
             .Should()
             .Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+    }
+
+    [Fact]
+    public void SpellCheckDialog_ExposesExcelLikeIgnoreChangeAndAddActions()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("SpellCheckDialogAction.Add");
+        source.Should().Contain("Content = \"_Ignore\"");
+        source.Should().Contain("Content = \"_Change\"");
+        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("CreateAddResult");
     }
 }

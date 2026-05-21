@@ -31,7 +31,19 @@ public sealed class OptionsDialogSourceTests
         document.Descendants(presentation + "ListBoxItem")
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
-            .Contain(["_General", "_Formulas", "_View", "_Save"]);
+            .Contain([
+                "_General",
+                "_Formulas",
+                "_Proofing",
+                "_Save",
+                "_Language",
+                "_Ease of Access",
+                "_Advanced",
+                "_Customize Ribbon",
+                "_Quick Access Toolbar",
+                "_Add-ins",
+                "_Trust Center"
+            ]);
 
         AssertLabelTargets(document, presentation, "Default _font:", "OptDefaultFont");
         AssertLabelTargets(document, presentation, "Font _size:", "OptDefaultFontSize");
@@ -65,5 +77,26 @@ public sealed class OptionsDialogSourceTests
 
             label.Attribute("Target")?.Value.Should().Be($"{{Binding ElementName={target}}}");
         }
+    }
+
+    [Fact]
+    public void OptionsDialog_ExposesExcelLikeAdvancedAndDisplayAffordances()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "OptionsDialog.xaml.cs"));
+
+        xaml.Should().Contain("x:Name=\"PanelAdvanced\"");
+        xaml.Should().Contain("Editing options");
+        xaml.Should().Contain("Display options for this workbook");
+        xaml.Should().Contain("x:Name=\"OptAfterEnterDirection\"");
+        xaml.Should().Contain("x:Name=\"OptShowGridlines\"");
+        xaml.Should().Contain("x:Name=\"OptShowHeadings\"");
+        xaml.Should().Contain("x:Name=\"OptObjectsDisplay\"");
+        xaml.Should().Contain("x:Name=\"PanelTrustCenter\"");
+        xaml.Should().Contain("Trust Center _Settings...");
+
+        source.Should().Contain("PanelAdvanced.Visibility");
+        source.Should().Contain("OptAfterEnterDirection.ItemsSource");
+        source.Should().Contain("OptObjectsDisplay.ItemsSource");
     }
 }

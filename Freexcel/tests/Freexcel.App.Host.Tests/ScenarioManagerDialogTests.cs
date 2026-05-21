@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Freexcel.Core.Model;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -28,5 +29,30 @@ public sealed class ScenarioManagerDialogTests
         ScenarioManagerDialog.TryParseAction(text, out var action).Should().BeTrue();
 
         action.Should().Be(expected);
+    }
+
+    [Fact]
+    public void DialogSource_UsesExcelLikeScenarioListAndSideButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("ListBox");
+        source.Should().Contain("Add...");
+        source.Should().Contain("Edit...");
+        source.Should().Contain("Delete");
+        source.Should().Contain("Merge...");
+        source.Should().Contain("Show");
+        source.Should().Contain("Summary...");
+    }
+
+    [Fact]
+    public void DialogSource_FramesAddEditFieldsLikeExcel()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
+
+        source.Should().Contain("Scenario name:");
+        source.Should().Contain("Changing cells:");
+        source.Should().Contain("Comment:");
+        source.Should().Contain("Add/Edit Scenario");
     }
 }

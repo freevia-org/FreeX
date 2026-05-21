@@ -21,8 +21,8 @@ public sealed class EvaluateFormulaDialog : Window
         _session = FormulaEvaluationSession.Start(summary);
 
         Title = "Evaluate Formula";
-        Width = 520;
-        Height = 300;
+        Width = 600;
+        Height = 360;
         MinWidth = 420;
         MinHeight = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -39,6 +39,19 @@ public sealed class EvaluateFormulaDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
+        var help = new Button { Content = "Help on this formula", Width = 128, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
+        buttons.Children.Add(help);
+
+        var restart = new Button { Content = "_Restart", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        restart.Click += (_, _) =>
+        {
+            while (_session.CanMovePrevious)
+                _session.MovePrevious();
+            Refresh();
+        };
+        buttons.Children.Add(restart);
+
         _previousButton = new Button { Content = "_Previous", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _previousButton.Click += (_, _) =>
         {
@@ -46,6 +59,14 @@ public sealed class EvaluateFormulaDialog : Window
             Refresh();
         };
         buttons.Children.Add(_previousButton);
+
+        var stepOut = new Button { Content = "Step Out", Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        stepOut.Click += (_, _) =>
+        {
+            _session.MovePrevious();
+            Refresh();
+        };
+        buttons.Children.Add(stepOut);
 
         _nextButton = new Button { Content = "_Evaluate", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _nextButton.Click += (_, _) =>
@@ -55,12 +76,27 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_nextButton);
 
+        var stepIn = new Button { Content = "Step In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        stepIn.Click += (_, _) =>
+        {
+            _session.MoveNext();
+            Refresh();
+        };
+        buttons.Children.Add(stepIn);
+
         var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
         var stack = new StackPanel();
         root.Children.Add(stack);
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Evaluation:",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
 
         stack.Children.Add(new TextBlock
         {
