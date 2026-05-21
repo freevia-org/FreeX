@@ -98,7 +98,7 @@ public sealed class WorkbookStatisticsDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         });
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(() => Window.GetWindow(stack)!.DialogResult = true));
+        stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
 }
@@ -134,7 +134,7 @@ public sealed class AccessibilityCheckerDialog : Window
             MinHeight = 80,
             Margin = new Thickness(0, 0, 0, 16)
         });
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(() => Window.GetWindow(stack)!.DialogResult = true));
+        stack.Children.Add(DialogButtonRowFactory.Create(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;
     }
 }
