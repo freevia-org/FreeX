@@ -12,12 +12,12 @@
                     HorizontalAlignment="Right"
                     Margin="0,14,0,0">
             <Button x:Name="SaveButton"
-                    Content="Save"
+                    Content="_Save"
                     Width="86"
                     Margin="0,0,8,0"
                     IsDefault="True"
                     Click="SaveButton_Click"/>
-            <Button Content="Cancel"
+            <Button Content="_Cancel"
                     Width="86"
                     IsCancel="True"/>
         </StackPanel>
@@ -32,17 +32,17 @@
                 <StackPanel Orientation="Horizontal"
                             Margin="0,0,0,14">
                     <Button x:Name="OfficePresetButton"
-                            Content="Office"
+                            Content="_Office"
                             Width="92"
                             Margin="0,0,8,0"
                             Click="OfficePresetButton_Click"/>
                     <Button x:Name="ColorfulPresetButton"
-                            Content="Freexcel Colorful"
+                            Content="Freexcel _Colorful"
                             Width="126"
                             Margin="0,0,8,0"
                             Click="ColorfulPresetButton_Click"/>
                     <Button x:Name="GrayscalePresetButton"
-                            Content="Grayscale"
+                            Content="_Grayscale"
                             Width="92"
                             Click="GrayscalePresetButton_Click"/>
                 </StackPanel>
@@ -59,14 +59,14 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Name:" VerticalAlignment="Center" Margin="0,0,10,8"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="_Name:" Target="{Binding ElementName=ThemeNameBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,8"/>
                     <TextBox x:Name="ThemeNameBox"
                              Grid.Row="0"
                              Grid.Column="1"
                              Margin="0,0,0,8"
                              AutomationProperties.Name="Theme name"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Heading font:" VerticalAlignment="Center" Margin="0,0,10,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="_Heading font:" Target="{Binding ElementName=HeadingFontBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,8"/>
                     <ComboBox x:Name="HeadingFontBox"
                               Grid.Row="1"
                               Grid.Column="1"
@@ -74,7 +74,7 @@
                               IsEditable="True"
                               AutomationProperties.Name="Heading font"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Body font:" VerticalAlignment="Center" Margin="0,0,10,8"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="_Body font:" Target="{Binding ElementName=BodyFontBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,8"/>
                     <ComboBox x:Name="BodyFontBox"
                               Grid.Row="2"
                               Grid.Column="1"
@@ -82,7 +82,7 @@
                               IsEditable="True"
                               AutomationProperties.Name="Body font"/>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Effects:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Label Grid.Row="3" Grid.Column="0" Content="_Effects:" Target="{Binding ElementName=EffectsBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <ComboBox x:Name="EffectsBox"
                               Grid.Row="3"
                               Grid.Column="1"
@@ -96,7 +96,7 @@
 
                 <UniformGrid Columns="2">
                     <StackPanel Margin="0,0,10,8">
-                        <TextBlock Text="Dark 1"/>
+                        <Label Content="_Dark 1" Target="{Binding ElementName=Dark1ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Dark1ColorPickerButton"
                                     Content="..."
@@ -109,7 +109,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8">
-                        <TextBlock Text="Light 1"/>
+                        <Label Content="_Light 1" Target="{Binding ElementName=Light1ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Light1ColorPickerButton"
                                     Content="..."
@@ -122,7 +122,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,8">
-                        <TextBlock Text="Dark 2"/>
+                        <Label Content="D_ark 2" Target="{Binding ElementName=Dark2ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Dark2ColorPickerButton"
                                     Content="..."
@@ -135,7 +135,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8">
-                        <TextBlock Text="Light 2"/>
+                        <Label Content="L_ight 2" Target="{Binding ElementName=Light2ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Light2ColorPickerButton"
                                     Content="..."
@@ -148,7 +148,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,8">
-                        <TextBlock Text="Accent 1"/>
+                        <Label Content="_Accent 1" Target="{Binding ElementName=Accent1ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent1ColorPickerButton"
                                     Content="..."
@@ -161,7 +161,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8">
-                        <TextBlock Text="Accent 2"/>
+                        <Label Content="A_ccent 2" Target="{Binding ElementName=Accent2ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent2ColorPickerButton"
                                     Content="..."
@@ -174,7 +174,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,8">
-                        <TextBlock Text="Accent 3"/>
+                        <Label Content="Ac_cent 3" Target="{Binding ElementName=Accent3ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent3ColorPickerButton"
                                     Content="..."
@@ -187,7 +187,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8">
-                        <TextBlock Text="Accent 4"/>
+                        <Label Content="Acc_ent 4" Target="{Binding ElementName=Accent4ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent4ColorPickerButton"
                                     Content="..."
@@ -200,7 +200,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,8">
-                        <TextBlock Text="Accent 5"/>
+                        <Label Content="Acce_nt 5" Target="{Binding ElementName=Accent5ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent5ColorPickerButton"
                                     Content="..."
@@ -213,7 +213,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8">
-                        <TextBlock Text="Accent 6"/>
+                        <Label Content="Accen_t 6" Target="{Binding ElementName=Accent6ColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="Accent6ColorPickerButton"
                                     Content="..."
@@ -226,7 +226,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,8">
-                        <TextBlock Text="Hyperlink"/>
+                        <Label Content="H_yperlink" Target="{Binding ElementName=HyperlinkColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="HyperlinkColorPickerButton"
                                     Content="..."
@@ -239,7 +239,7 @@
                         </DockPanel>
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8">
-                        <TextBlock Text="Followed Hyperlink"/>
+                        <Label Content="Followed Hype_rlink" Target="{Binding ElementName=FollowedHyperlinkColorBox}" Padding="0"/>
                         <DockPanel>
                             <Button x:Name="FollowedHyperlinkColorPickerButton"
                                     Content="..."
