@@ -22,11 +22,11 @@ public sealed class PivotTableDialog : Window
     private readonly TextBox _sourceRangeBox = new();
     private readonly TextBox _destinationRangeBox = new();
     private readonly RadioButton _selectTableRangeButton = new() { Content = "Select a _table or range", IsChecked = true };
-    private readonly RadioButton _externalSourceButton = new() { Content = "Use an external data source", IsEnabled = false };
-    private readonly RadioButton _newWorksheetButton = new() { Content = "New worksheet" };
-    private readonly RadioButton _existingWorksheetButton = new() { Content = "Existing worksheet", IsChecked = true };
-    private readonly CheckBox _dataModelBox = new() { Content = "Add this data to the Data Model", IsEnabled = false };
-    private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable Fields pane", IsChecked = true };
+    private readonly RadioButton _externalSourceButton = new() { Content = "Use an _external data source", IsEnabled = false };
+    private readonly RadioButton _newWorksheetButton = new() { Content = "_New worksheet" };
+    private readonly RadioButton _existingWorksheetButton = new() { Content = "_Existing worksheet", IsChecked = true };
+    private readonly CheckBox _dataModelBox = new() { Content = "Add this data to the Data _Model", IsEnabled = false };
+    private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable _Fields pane", IsChecked = true };
 
     public PivotTableDialogResult Result { get; private set; }
 
@@ -81,8 +81,8 @@ public sealed class PivotTableDialog : Window
         });
 
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-        var ok = new Button { Content = "Create", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var ok = new Button { Content = "_Create", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
             Result = CreateResult(
