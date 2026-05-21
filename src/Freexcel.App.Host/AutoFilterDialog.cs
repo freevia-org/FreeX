@@ -31,7 +31,7 @@ public sealed class AutoFilterDialog : Window
     private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
-    private readonly TextBox _criteriaBox = new();
+    private readonly TextBox _criteriaBox = new() { IsReadOnly = true };
     private readonly ComboBox _criteriaSuggestionBox = new()
     {
         Visibility = Visibility.Collapsed,
@@ -52,6 +52,13 @@ public sealed class AutoFilterDialog : Window
     private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
     private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
     private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };
+    private readonly GroupBox _customFilterGroup = new() { Header = "Custom filter", Visibility = Visibility.Collapsed };
+    private readonly Label _criteriaSuggestionLabel = new()
+    {
+        Content = "Criteria _template",
+        Padding = new Thickness(0),
+        Visibility = Visibility.Collapsed
+    };
     private CellColor? _selectedColorFilter;
 
     public AutoFilterDialogResult Result { get; private set; }
@@ -73,6 +80,7 @@ public sealed class AutoFilterDialog : Window
             _criteriaSuggestionBox.ItemsSource = criteriaSuggestions;
             _criteriaSuggestionBox.Visibility = Visibility.Visible;
             _criteriaSuggestionBox.ToolTip = "Excel filter criteria templates";
+            _criteriaSuggestionLabel.Visibility = Visibility.Visible;
         }
 
         var criteriaOptions = GetCriteriaOptions(menuPlan.FilterKind);
@@ -84,7 +92,8 @@ public sealed class AutoFilterDialog : Window
             _criteriaOperatorBox.ToolTip = $"{GetFilterFamilyHeader(menuPlan.FilterKind)} operator";
             _criteriaValueBox.Visibility = Visibility.Visible;
             _criteriaValueBox.ToolTip = "Value for the selected typed filter";
-            _criteriaBox.ToolTip = "Parser-ready filter criterion generated from the operator and value.";
+            _criteriaBox.ToolTip = "Generated criterion that will be applied.";
+            _customFilterGroup.Visibility = Visibility.Visible;
         }
 
         if (HasFilterByColorEntry(menuPlan))
@@ -162,36 +171,35 @@ public sealed class AutoFilterDialog : Window
         selectionRow.Children.Add(clearAll);
         stack.Children.Add(selectionRow);
 
-        stack.Children.Add(new Label { Content = "Filter _operator", Target = _criteriaOperatorBox, Padding = new Thickness(0) });
+        var customFilterPanel = new StackPanel();
+        _customFilterGroup.Content = customFilterPanel;
+        stack.Children.Add(_customFilterGroup);
+
+        customFilterPanel.Children.Add(new Label { Content = "Show rows where:", Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = "Filter _operator", Target = _criteriaOperatorBox, Padding = new Thickness(0) });
         _criteriaOperatorBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaOperatorBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
-        stack.Children.Add(_criteriaOperatorBox);
+        customFilterPanel.Children.Add(_criteriaOperatorBox);
 
-        stack.Children.Add(new Label { Content = "Filter _value", Target = _criteriaValueBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = "Filter _value", Target = _criteriaValueBox, Padding = new Thickness(0) });
         _criteriaValueBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaValueBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
-        stack.Children.Add(_criteriaValueBox);
+        customFilterPanel.Children.Add(_criteriaValueBox);
 
-        stack.Children.Add(new Label { Content = "_Criteria text", Target = _criteriaBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = "_Criteria text", Target = _criteriaBox, Padding = new Thickness(0) });
 
         _criteriaBox.Margin = new Thickness(0, 4, 0, 12);
-        stack.Children.Add(_criteriaBox);
+        customFilterPanel.Children.Add(_criteriaBox);
 
-        var criteriaSuggestionLabel = new Label
-        {
-            Content = "Criteria _template",
-            Target = _criteriaSuggestionBox,
-            Padding = new Thickness(0),
-            Visibility = _criteriaSuggestionBox.Visibility
-        };
-        stack.Children.Add(criteriaSuggestionLabel);
+        _criteriaSuggestionLabel.Target = _criteriaSuggestionBox;
+        customFilterPanel.Children.Add(_criteriaSuggestionLabel);
         _criteriaSuggestionBox.Margin = new Thickness(0, 4, 0, 12);
         _criteriaSuggestionBox.SelectionChanged += (_, _) =>
         {
             if (_criteriaSuggestionBox.SelectedItem is string suggestion)
                 _criteriaBox.Text = suggestion;
         };
-        stack.Children.Add(_criteriaSuggestionBox);
+        customFilterPanel.Children.Add(_criteriaSuggestionBox);
 
         var buttons = new StackPanel
         {

@@ -7,6 +7,15 @@ namespace Freexcel.Core.Formula.Tests;
 public sealed class StructuredReferenceFormulaTests
 {
     [Fact]
+    public void Lexer_CombinedTableSelector_EmitsSingleSelectorToken()
+    {
+        var tokens = new Lexer("=SUM(Sales[[#Data],[Amount]])").Tokenize();
+
+        tokens.Select(token => $"{token.Type}:{token.Value}")
+            .Should().Contain("StructuredReferenceSelector:[#Data],[Amount]");
+    }
+
+    [Fact]
     public void Sum_TableColumnReference_UsesTableDataBodyCells()
     {
         var (workbook, sheet) = CreateSalesWorkbook();
@@ -26,6 +35,34 @@ public sealed class StructuredReferenceFormulaTests
         var result = evaluator.Evaluate("=SUM(Sales[Missing])", sheet, workbook);
 
         result.Should().Be(ErrorValue.Name);
+    }
+
+    [Theory]
+    [InlineData("=COLUMNS(Sales[#Headers])", 2)]
+    [InlineData("=ROWS(Sales[#Data])", 2)]
+    [InlineData("=ROWS(Sales[#All])", 3)]
+    public void TableSelectorReference_ResolvesModeledTableSections(string formula, double expected)
+    {
+        var (workbook, sheet) = CreateSalesWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate(formula, sheet, workbook);
+
+        result.Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=COLUMNS(Sales[[#Headers],[Amount]])", 1)]
+    [InlineData("=SUM(Sales[[#Data],[Amount]])", 30)]
+    [InlineData("=ROWS(Sales[[#Totals],[Amount]])", 1)]
+    public void CombinedTableSelectorReference_ResolvesSectionColumnIntersections(string formula, double expected)
+    {
+        var (workbook, sheet) = CreateSalesWorkbookWithTotals();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate(formula, sheet, workbook);
+
+        result.Should().Be(new NumberValue(expected));
     }
 
     private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbook()
@@ -54,6 +91,33 @@ public sealed class StructuredReferenceFormulaTests
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        sheet.StructuredTables.Add(table);
+
+        return (workbook, sheet);
+    }
+
+    private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbookWithTotals()
+    {
+        var (workbook, sheet) = CreateSalesWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        sheet.StructuredTables.Clear();
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            HasAutoFilter = true,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region", TotalsRowLabel: "Total"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount", TotalsRowFunction: "sum"));
         sheet.StructuredTables.Add(table);
 
         return (workbook, sheet);

@@ -141,6 +141,27 @@ function Body($slug, [int]$n) {
         '^page-setup$|^calculation-options$|^options$' { return Gear $n }
         '^print-gridlines$' { return (Grid $n) + "`n" + (Txt $checkGlyph 15 5 4 $n) }
         '^print-headings$' { return (Grid $n) + "`n" + (Txt 'A' 6 5 4 $n) + "`n" + (Txt '1' 4 8 4 $n) }
+        '^insert-function$' { return (Doc $n) + "`n" + (Txt 'fx' 10.5 10.8 7.2 $n) }
+        '^autosum$' { return Txt $sigmaGlyph 10 10 13 $n }
+        '^recently-used$' { return "  <circle class=""r"" cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 6 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (L 10 10 10 6 $n 'r' 1) + "`n" + (L 10 10 14 10 $n 'r' 1) }
+        '^math-trig$' { return (Txt '√' 8 10 10 $n) + "`n" + (L 10 14 16 6 $n 's' 1) }
+        '^text$' { return Txt 'T' 10 10 12 $n 'font-family="Georgia,serif"' }
+        '^date-time$|^date-time-formats$' { return "  <rect class=""f s"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 11 $n)"" stroke-width=""$(S 1 $n)""/>`n  <rect class=""b"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 3 $n)""/>`n" + (Txt '7' 10 12 6 $n) }
+        '^logical$' { return (Txt 'T' 7 8 6 $n) + "`n" + (Txt 'F' 13 13 6 $n) + "`n" + (L 5 11 15 11 $n 's' .8) }
+        '^lookup-reference$' { return "  <circle class=""r"" cx=""$(S 8 $n)"" cy=""$(S 8 $n)"" r=""$(S 4 $n)"" stroke-width=""$(S 1.1 $n)""/>`n" + (L 11 11 16 16 $n 'r' 1.1) + "`n" + (Rct 11.5 4 5 5 $n 'f s' .7) }
+        '^more-functions$' { return (Txt $sigmaGlyph 7 10 7 $n) + "`n" + (Txt '...' 13 10 6 $n) }
+        '^define-name$|^use-in-formula$|^create-from-selection$' { return "  <path class=""f s"" d=""M$(S 4 $n) $(S 6 $n) H$(S 12 $n) L$(S 16 $n) $(S 10 $n) L$(S 12 $n) $(S 14 $n) H$(S 4 $n) Z"" stroke-width=""$(S 1 $n)""/>`n  <circle class=""b"" cx=""$(S 12 $n)"" cy=""$(S 10 $n)"" r=""$(S 1 $n)""/>" }
+        '^name-manager$' { return (Doc $n) + "`n" + (Txt 'fx' 9 8 5.5 $n) + "`n" + (L 6 13 14 13 $n 'b' 1) }
+        '^trace-precedents$' { return (Txt 'fx' 14 10 5.5 $n) + "`n" + (Arrow 4 10 10 10 $n 'b' 1) }
+        '^trace-dependents$' { return (Txt 'fx' 6 10 5.5 $n) + "`n" + (Arrow 10 10 16 10 $n 'b' 1) }
+        '^show-formulas$' { return (Txt '=' 6 8 7 $n) + "`n" + (Txt 'fx' 12 12 6 $n) }
+        '^error-checking$' { return "  <path class=""y s"" d=""M$(S 10 $n) $(S 3 $n) L$(S 17 $n) $(S 16 $n) H$(S 3 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '!' 10 11 8 $n) }
+        '^watch-window$' { return (WindowIcon $n) + "`n" + (Txt 'fx' 10 10 5.5 $n) }
+        '^remove-arrows$' { return (Arrow 5 10 15 10 $n 'b' 1) + "`n" + (L 5 5 15 15 $n 'r' 1.2) }
+        '^evaluate-formula$' { return (Txt 'fx' 7 9 6 $n) + "`n" + (Arrow 10 14 16 8 $n 'g' 1) }
+        '^calculate-now$' { return (Txt 'fx' 8 10 7 $n) + "`n" + (Txt $boltGlyph 14 10 8 $n) }
+        '^calculate-sheet$' { return (Grid $n) + "`n" + (Txt $boltGlyph 10 10 8 $n) }
+        '^calculation-options$' { return Gear $n }
         '^text-to-columns$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1.4) + "`n" + (Arrow 8 10 5 10 $n 'g' 1) + "`n" + (Arrow 12 10 15 10 $n 'g' 1) }
         '^get-data$' { return (Database $n) + "`n" + (Arrow 14 15 17 12 $n 'g' .9) }
         '^refresh-all$' { return (Database $n) + "`n  <path class=""r"" d=""M$(S 14 $n) $(S 7 $n) A$(S 5 $n) $(S 5 $n) 0 1 0 $(S 15 $n) $(S 13 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 13 5 16 7 $n 'g' .9) }
@@ -157,18 +178,26 @@ function Body($slug, [int]$n) {
         '^group$|^ungroup$' { return "  <path class=""r"" d=""M$(S 7 $n) $(S 4 $n) C$(S 4.8 $n) $(S 4 $n) $(S 5 $n) $(S 7 $n) $(S 5 $n) $(S 10 $n) C$(S 5 $n) $(S 13 $n) $(S 4.8 $n) $(S 16 $n) $(S 7 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""r"" d=""M$(S 13 $n) $(S 4 $n) C$(S 15.2 $n) $(S 4 $n) $(S 15 $n) $(S 7 $n) $(S 15 $n) $(S 10 $n) C$(S 15 $n) $(S 13 $n) $(S 15.2 $n) $(S 16 $n) $(S 13 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '+' 10 10 7 $n) }
         '^hide-detail$|^collapse$' { return (Grid $n) + "`n" + (Txt '-' 15 5 8 $n) }
         '^show-detail$|^expand$' { return (Grid $n) + "`n" + (Txt '+' 15 5 8 $n) }
-        '^bring-forward$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 7 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>`n" + (Rct 8 4 8 8 $n) }
-        '^send-backward$' { return (Rct 5 7 8 8 $n) + "`n  <rect class=""b"" x=""$(S 8 $n)"" y=""$(S 4 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>" }
-        '^rotate$' { return "  <path class=""r"" d=""M$(S 14 $n) $(S 7 $n) A$(S 5 $n) $(S 5 $n) 0 1 0 $(S 15 $n) $(S 13 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 12 5 16 7 $n 'g' 1) }
-        '^selection-pane$' { return WindowIcon $n }
-        '^outline-color$|^outline$' { return Rct 4 5 12 10 $n 's' 1.2 }
-        '^fill$|^gradient$' { return "  <rect class=""g2"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)""/>`n" + (Rct 4 5 12 10 $n 's' 1) }
-        '^crop$' { return "  <path class=""s"" d=""M$(S 6 $n) $(S 3 $n) V$(S 14 $n) H$(S 17 $n) M$(S 3 $n) $(S 6 $n) H$(S 14 $n) V$(S 17 $n)"" stroke-width=""$(S 1.2 $n)""/>" }
+        '^bring-forward$' { return "  <rect class=""b"" x=""$(S 4.5 $n)"" y=""$(S 8 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>`n" + (Rct 8 4 8 8 $n) }
+        '^send-backward$' { return (Rct 4.5 8 8 8 $n) + "`n  <rect class=""b"" x=""$(S 8 $n)"" y=""$(S 4 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>" }
+        '^object-size$' { return (Rct 5 6 10 8 $n) + "`n" + (Arrow 5 16 15 16 $n 'b' .9) + "`n" + (Arrow 16 14 16 6 $n 'b' .9) }
+        '^object-rotate$|^rotate$' { return "  <path class=""r"" d=""M$(S 14.5 $n) $(S 6.5 $n) A$(S 5.2 $n) $(S 5.2 $n) 0 1 0 $(S 15 $n) $(S 13.2 $n)"" stroke-width=""$(S 1.1 $n)""/>`n" + (Arrow 12 4.5 16.5 6.5 $n 'g' 1) }
+        '^selection-pane$' { return (WindowIcon $n) + "`n" + (L 5 6 11 6 $n 'b' .8) + "`n" + (L 5 9 9 9 $n 'b' .8) }
+        '^object-outline$|^outline-color$|^outline$' { return "  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""none"" stroke=""#5b9bd5"" stroke-width=""$(S 1.4 $n)"" vector-effect=""non-scaling-stroke""/>`n  <rect class=""rd"" x=""$(S 5 $n)"" y=""$(S 16 $n)"" width=""$(S 10 $n)"" height=""$(S 1.6 $n)""/>" }
+        '^object-fill$|^fill$' { return "  <rect class=""y"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)""/>`n" + (Rct 4 5 12 10 $n 's' 1) }
+        '^shape-gradient$|^gradient$' { return "  <defs><linearGradient id=""grad"" x1=""0"" x2=""1""><stop offset=""0"" stop-color=""#5b9bd5""/><stop offset=""1"" stop-color=""#ffffff""/></linearGradient></defs>`n  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""url(#grad)"" stroke=""#1f1f1f"" stroke-width=""$(S 1 $n)"" vector-effect=""non-scaling-stroke""/>" }
+        '^crop$' { return "  <rect class=""f s"" x=""$(S 5 $n)"" y=""$(S 5 $n)"" width=""$(S 10 $n)"" height=""$(S 10 $n)"" stroke-width=""$(S .8 $n)""/>`n  <path class=""s"" d=""M$(S 6.5 $n) $(S 2.8 $n) V$(S 13.5 $n) H$(S 17.2 $n) M$(S 2.8 $n) $(S 6.5 $n) H$(S 13.5 $n) V$(S 17.2 $n)"" stroke-width=""$(S 1.2 $n)""/>" }
+        '^object-effects$|^effects$' { return (Txt $sparkleGlyph 9 8.5 10 $n) + "`n" + (Txt $sparkleGlyph 14.5 14 5 $n) }
         '^normal$|^custom-views$|^new-window$|^arrange-all$|^view-side-by-side$|^synchronous-scrolling$|^reset-window-position$|^switch-windows$' { return WindowIcon $n }
         '^page-break-preview$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1) + "`n" + (L 3 10 17 10 $n 'b' 1) }
         '^page-layout$' { return Doc $n }
         '^freeze-panes$' { return (Grid $n) + "`n" + (L 8 3 8 17 $n 'r' 1.2) + "`n" + (L 3 8 17 8 $n 'r' 1.2) }
         '^hide-unhide$' { return Eye $n }
+        '^statistics$|^workbook-stats$|^workbook-statistics$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 10 $n)"" width=""$(S 2.5 $n)"" height=""$(S 6 $n)""/><rect class=""k"" x=""$(S 9 $n)"" y=""$(S 6 $n)"" width=""$(S 2.5 $n)"" height=""$(S 10 $n)""/><rect class=""g"" x=""$(S 13 $n)"" y=""$(S 3.5 $n)"" width=""$(S 2.5 $n)"" height=""$(S 12.5 $n)""/>" }
+        '^accessibility-checker$|^accessibility$' { return "  <path class=""y s"" d=""M$(S 10 $n) $(S 3 $n) L$(S 17 $n) $(S 16 $n) H$(S 3 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '!' 10 11 8 $n) }
+        '^alt-text$' { return (Rct 4 5 12 10 $n) + "`n" + (Txt 'alt' 10 10 5.2 $n) }
+        '^allow-edit-ranges$' { return (Grid $n) + "`n  <path class=""g"" d=""M$(S 7 $n) $(S 11 $n) L$(S 9 $n) $(S 13 $n) L$(S 14 $n) $(S 7 $n) L$(S 15.5 $n) $(S 8.5 $n) L$(S 9.2 $n) $(S 15.5 $n) L$(S 5.5 $n) $(S 12 $n) Z""/>" }
+        '^share$' { return "  <circle class=""b"" cx=""$(S 6 $n)"" cy=""$(S 7 $n)"" r=""$(S 2 $n)""/><circle class=""b"" cx=""$(S 14 $n)"" cy=""$(S 6 $n)"" r=""$(S 2 $n)""/><circle class=""b"" cx=""$(S 13 $n)"" cy=""$(S 14 $n)"" r=""$(S 2 $n)""/>`n" + (L 8 7 12 6 $n 'r' .9) + "`n" + (L 8 8 11.5 13 $n 'r' .9) }
         'chart|sparkline' { return Chart $slug $n }
         'pivot|table|grid|cell|row|column|border|format' { return Grid $n }
         'theme|color|font|margin|print|paper|page|scale|header|footer|break|background|effect|option' { if ($slug -match 'colors') { return "  <rect class=""b"" x=""$(S 4 $n)"" y=""$(S 4 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""o"" x=""$(S 8 $n)"" y=""$(S 4 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""g"" x=""$(S 12 $n)"" y=""$(S 4 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""y"" x=""$(S 4 $n)"" y=""$(S 8 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""rd"" x=""$(S 8 $n)"" y=""$(S 8 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/><rect class=""p"" x=""$(S 12 $n)"" y=""$(S 8 $n)"" width=""$(S 4 $n)"" height=""$(S 4 $n)""/>" }; return Doc $n }

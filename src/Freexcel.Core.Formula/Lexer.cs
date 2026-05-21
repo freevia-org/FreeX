@@ -160,14 +160,29 @@ public sealed class Lexer
     {
         var start = _pos;
         _pos++; // skip opening bracket
+        var depth = 1;
         var sb = new StringBuilder();
 
         while (_pos < _text.Length)
         {
             var c = _text[_pos];
-            if (c == ']')
+            if (c == '[')
+            {
+                depth++;
+                sb.Append(c);
+                _pos++;
+                continue;
+            }
+            else if (c == ']')
             {
                 _pos++;
+                if (depth > 1)
+                {
+                    depth--;
+                    sb.Append(c);
+                    continue;
+                }
+
                 if (_pos < _text.Length && _text[_pos] == ']')
                 {
                     sb.Append(']');

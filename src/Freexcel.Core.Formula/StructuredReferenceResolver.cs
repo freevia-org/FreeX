@@ -8,7 +8,14 @@ public static class StructuredReferenceResolver
         Workbook? workbook,
         Sheet? currentSheet,
         string tableName,
-        string columnName)
+        string columnNameOrSelector)
+        => Resolve(workbook, currentSheet, tableName, columnNameOrSelector);
+
+    public static GridRange? Resolve(
+        Workbook? workbook,
+        Sheet? currentSheet,
+        string tableName,
+        string selector)
     {
         var sheets = workbook is not null
             ? workbook.Sheets
@@ -21,26 +28,105 @@ public static class StructuredReferenceResolver
                 if (!StructuredTableNameMatches(table, tableName))
                     continue;
 
+                if (TryParseCombinedSelector(selector, out var section, out var columnName))
+                    return ResolveSectionColumn(sheet, table, section, columnName);
+
+                if (TryResolveTableSelector(sheet, table, selector) is { } selectedRange)
+                    return selectedRange;
+
                 var columnIndex = table.Columns.FindIndex(column =>
-                    string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(column.Name, selector, StringComparison.OrdinalIgnoreCase));
                 if (columnIndex < 0)
                     return null;
 
-                var startRow = table.Range.Start.Row + 1;
-                var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
-                    ? table.Range.End.Row - 1
-                    : table.Range.End.Row;
-                if (startRow > endRow)
-                    return null;
-
                 var col = table.Range.Start.Col + (uint)columnIndex;
-                return new GridRange(
-                    new CellAddress(sheet.Id, startRow, col),
-                    new CellAddress(sheet.Id, endRow, col));
+                return DataBodyRange(sheet, table, col, col);
             }
         }
 
         return null;
+    }
+
+    private static GridRange? TryResolveTableSelector(Sheet sheet, StructuredTableModel table, string selector)
+    {
+        return selector.Trim().ToUpperInvariant() switch
+        {
+            "#ALL" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.Start.Col),
+                new CellAddress(sheet.Id, table.Range.End.Row, table.Range.End.Col)),
+            "#HEADERS" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.Start.Col),
+                new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.End.Col)),
+            "#DATA" => DataBodyRange(sheet, table, table.Range.Start.Col, table.Range.End.Col),
+            "#TOTALS" when table.TotalsRowShown => new GridRange(
+                new CellAddress(sheet.Id, table.Range.End.Row, table.Range.Start.Col),
+                new CellAddress(sheet.Id, table.Range.End.Row, table.Range.End.Col)),
+            _ => null
+        };
+    }
+
+    private static GridRange? ResolveSectionColumn(
+        Sheet sheet,
+        StructuredTableModel table,
+        string section,
+        string columnName)
+    {
+        var columnIndex = table.Columns.FindIndex(column =>
+            string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+        if (columnIndex < 0)
+            return null;
+
+        var col = table.Range.Start.Col + (uint)columnIndex;
+        return section.Trim().ToUpperInvariant() switch
+        {
+            "#ALL" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, col),
+                new CellAddress(sheet.Id, table.Range.End.Row, col)),
+            "#HEADERS" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, col),
+                new CellAddress(sheet.Id, table.Range.Start.Row, col)),
+            "#DATA" => DataBodyRange(sheet, table, col, col),
+            "#TOTALS" when table.TotalsRowShown => new GridRange(
+                new CellAddress(sheet.Id, table.Range.End.Row, col),
+                new CellAddress(sheet.Id, table.Range.End.Row, col)),
+            _ => null
+        };
+    }
+
+    private static bool TryParseCombinedSelector(string selector, out string section, out string columnName)
+    {
+        section = "";
+        columnName = "";
+
+        var parts = ParseCombinedSelectorParts(selector);
+        if (parts.Count != 2 || !parts[0].StartsWith('#'))
+            return false;
+
+        section = parts[0];
+        columnName = parts[1];
+        return !string.IsNullOrWhiteSpace(columnName);
+    }
+
+    private static List<string> ParseCombinedSelectorParts(string selector)
+    {
+        var cleaned = selector
+            .Replace("[", "", StringComparison.Ordinal)
+            .Replace("]", "", StringComparison.Ordinal);
+        return cleaned.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+    }
+
+    private static GridRange? DataBodyRange(Sheet sheet, StructuredTableModel table, uint startCol, uint endCol)
+    {
+        var startRow = table.Range.Start.Row + 1;
+        var endRow = table.TotalsRowShown && table.Range.End.Row > startRow
+            ? table.Range.End.Row - 1
+            : table.Range.End.Row;
+        if (startRow > endRow)
+            return null;
+
+        return new GridRange(
+            new CellAddress(sheet.Id, startRow, startCol),
+            new CellAddress(sheet.Id, endRow, endCol));
     }
 
     private static bool StructuredTableNameMatches(StructuredTableModel table, string name) =>
