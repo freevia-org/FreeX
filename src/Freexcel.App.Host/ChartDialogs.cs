@@ -587,13 +587,13 @@ public sealed class SelectDataSourceDialog : Window
             "Series list",
             "Name and values are inferred from the selected chart range.",
             _seriesList,
-            ("Add series", "Edit series", "Remove series")));
+            ("_Add series", "_Edit series", "_Remove series")));
         stack.Children.Add(CreateSourceListPanel(
             "Horizontal (Category) Axis Labels",
             "Axis label list",
             "Axis labels are inferred from the first category column.",
             _axisLabelsList,
-            ("Edit Axis Labels", null, null)));
+            ("_Edit Axis Labels", null, null)));
         _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
         _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 16);
         stack.Children.Add(_firstColumnCategoriesBox);
