@@ -215,6 +215,7 @@ public class NumberFormatterTests
     [InlineData("[$Gs-3C0A]#,##0.00", 1234.5, "Gs1.234,50")]
     [InlineData("[$$-440A]#,##0.00", 1234.5, "$1,234.50")]
     [InlineData("[$$-500A]#,##0.00", 1234.5, "$1,234.50")]
+    [InlineData("[$\u20B9-4009]#,##0.00", 1234567.89, "\u20B912,34,567.89")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
     [InlineData("[$XYZ-999]#,##0.00", 1234.5, "XYZ1,234.50")]
     public void CustomNumberSubset_UsesKnownLcidDecimalAndGroupSeparators(
