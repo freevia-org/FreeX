@@ -29,6 +29,11 @@ public partial class DataValidationDialog : Window
         UpdateVisibility();
     }
 
+    private void OperatorCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateVisibility();
+    }
+
     private void UpdateVisibility()
     {
         if (TypeCombo == null) return;

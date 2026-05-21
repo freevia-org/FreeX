@@ -21,6 +21,37 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void DataValidationDialog_OperatorSelectionChangesRefreshFormulaLabelsAndVisibility()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "=Sheet1!$B$2:$B$8" };
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "WholeNumber");
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "OperatorCombo"), "Between");
+
+                GetControl<Label>(dialog, "Formula1Label").Content.Should().Be("_Minimum:");
+                GetControl<Label>(dialog, "Formula2Label").Visibility.Should().Be(Visibility.Visible);
+                GetControl<TextBox>(dialog, "Formula2Box").Visibility.Should().Be(Visibility.Visible);
+                GetControl<Button>(dialog, "UseSelection2Button").Visibility.Should().Be(Visibility.Visible);
+
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "OperatorCombo"), "Equal");
+
+                GetControl<Label>(dialog, "Formula1Label").Content.Should().Be("_Value:");
+                GetControl<Label>(dialog, "Formula2Label").Visibility.Should().Be(Visibility.Collapsed);
+                GetControl<TextBox>(dialog, "Formula2Box").Visibility.Should().Be(Visibility.Collapsed);
+                GetControl<Button>(dialog, "UseSelection2Button").Visibility.Should().Be(Visibility.Collapsed);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DataValidationDialog_UsesExcelStyleSettingsInputAndErrorTabs()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
@@ -163,5 +194,12 @@ public sealed class DataValidationDialogTests
         var method = typeof(DataValidationDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         method.Should().NotBeNull();
         method!.Invoke(dialog, [dialog, new RoutedEventArgs()]);
+    }
+
+    private static void SelectComboItemByTag(ComboBox comboBox, string tag)
+    {
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => string.Equals(item.Tag as string, tag, StringComparison.Ordinal));
     }
 }
