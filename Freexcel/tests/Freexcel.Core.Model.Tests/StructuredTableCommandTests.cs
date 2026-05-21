@@ -196,6 +196,44 @@ public sealed class StructuredTableCommandTests
     }
 
     [Fact]
+    public void RefreshStructuredTableTotalsCommand_MaterializesLabelsAndCommonFunctionsWithUndo()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        SeedTotalsTable(sheet);
+        var table = new StructuredTableModel
+        {
+            Id = 3,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3)),
+            TotalsRowShown = true,
+            Columns =
+            {
+                new StructuredTableColumnModel(1, "Region", TotalsRowLabel: "Total"),
+                new StructuredTableColumnModel(2, "Sales", TotalsRowFunction: "sum"),
+                new StructuredTableColumnModel(3, "Orders", TotalsRowFunction: "count")
+            }
+        };
+        sheet.StructuredTables.Add(table);
+        var ctx = new SimpleCtx(wb);
+        var command = new RefreshStructuredTableTotalsCommand(sheet.Id, table.Id);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(5, 1).Should().Be(new TextValue("Total"));
+        sheet.GetValue(5, 2).Should().Be(new NumberValue(45));
+        sheet.GetValue(5, 3).Should().Be(new NumberValue(2));
+
+        command.Revert(ctx);
+
+        sheet.GetValue(5, 1).Should().Be(BlankValue.Instance);
+        sheet.GetValue(5, 2).Should().Be(BlankValue.Instance);
+        sheet.GetValue(5, 3).Should().Be(BlankValue.Instance);
+    }
+
+    [Fact]
     public void CreateStyledStructuredTableCommand_AppliesTableMetadataAndBandedStylesAsOneUndoableOperation()
     {
         var wb = new Workbook("test");
@@ -278,5 +316,21 @@ public sealed class StructuredTableCommandTests
         sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new TextValue("Closed"));
         sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("North"));
         sheet.SetCell(new CellAddress(sheet.Id, 5, 2), BlankValue.Instance);
+    }
+
+    private static void SeedTotalsTable(Sheet sheet)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Orders"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), BlankValue.Instance);
     }
 }

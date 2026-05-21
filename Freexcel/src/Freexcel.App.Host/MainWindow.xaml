@@ -633,7 +633,7 @@
                                     </StackPanel>
                                 </Button>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="2,1,0,0">
-                                    <Button Click="CutBtn_Click" Width="54" Height="20" Margin="1,0"
+                                    <Button Click="CutBtn_Click" Width="126" Height="20" Margin="1,0"
                                             Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Cut"
                                             local:RibbonTooltip.KeyTip="X"
@@ -644,7 +644,7 @@
                                             <TextBlock Text="Cut" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Click="CopyBtn_Click" Width="54" Height="20" Margin="1,1,0,0"
+                                    <Button Click="CopyBtn_Click" Width="126" Height="20" Margin="1,1,0,0"
                                             Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Copy"
                                             local:RibbonTooltip.KeyTip="C"
@@ -655,7 +655,7 @@
                                             <TextBlock Text="Copy" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button Click="FormatPainterBtn_Click" PreviewMouseLeftButtonDown="FormatPainterBtn_PreviewMouseLeftButtonDown" Width="86" Height="20" Margin="1,1,0,0"
+                                    <Button Click="FormatPainterBtn_Click" PreviewMouseLeftButtonDown="FormatPainterBtn_PreviewMouseLeftButtonDown" Width="126" Height="20" Margin="1,1,0,0"
                                             Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Format Painter"
                                             local:RibbonTooltip.KeyTip="FP"
