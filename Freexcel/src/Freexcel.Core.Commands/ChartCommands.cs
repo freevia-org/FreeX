@@ -280,8 +280,14 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
     private readonly Guid _chartId;
     private readonly int? _chartStyleId;
     private readonly bool _showFieldButtons;
+    private readonly bool? _showReportFilterButtons;
+    private readonly bool? _showAxisFieldButtons;
+    private readonly bool? _showValueFieldButtons;
     private int? _previousChartStyleId;
     private bool? _previousShowFieldButtons;
+    private bool? _previousShowReportFilterButtons;
+    private bool? _previousShowAxisFieldButtons;
+    private bool? _previousShowValueFieldButtons;
 
     public string Label => "PivotChart Options";
 
@@ -289,12 +295,18 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
         SheetId sheetId,
         Guid chartId,
         int? chartStyleId,
-        bool showFieldButtons)
+        bool showFieldButtons,
+        bool? showReportFilterButtons = null,
+        bool? showAxisFieldButtons = null,
+        bool? showValueFieldButtons = null)
     {
         _sheetId = sheetId;
         _chartId = chartId;
         _chartStyleId = NormalizeStyleId(chartStyleId);
         _showFieldButtons = showFieldButtons;
+        _showReportFilterButtons = showReportFilterButtons;
+        _showAxisFieldButtons = showAxisFieldButtons;
+        _showValueFieldButtons = showValueFieldButtons;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -307,8 +319,14 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
 
         _previousChartStyleId = chart.ChartStyleId;
         _previousShowFieldButtons = chart.ShowPivotChartFieldButtons;
+        _previousShowReportFilterButtons = chart.ShowPivotChartReportFilterButtons;
+        _previousShowAxisFieldButtons = chart.ShowPivotChartAxisFieldButtons;
+        _previousShowValueFieldButtons = chart.ShowPivotChartValueFieldButtons;
         chart.ChartStyleId = _chartStyleId;
         chart.ShowPivotChartFieldButtons = _showFieldButtons;
+        chart.ShowPivotChartReportFilterButtons = _showReportFilterButtons ?? chart.ShowPivotChartReportFilterButtons;
+        chart.ShowPivotChartAxisFieldButtons = _showAxisFieldButtons ?? chart.ShowPivotChartAxisFieldButtons;
+        chart.ShowPivotChartValueFieldButtons = _showValueFieldButtons ?? chart.ShowPivotChartValueFieldButtons;
         return new CommandOutcome(true, AffectedCells: [chart.DataRange.Start]);
     }
 
@@ -323,8 +341,14 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
 
         chart.ChartStyleId = _previousChartStyleId;
         chart.ShowPivotChartFieldButtons = _previousShowFieldButtons.Value;
+        chart.ShowPivotChartReportFilterButtons = _previousShowReportFilterButtons ?? true;
+        chart.ShowPivotChartAxisFieldButtons = _previousShowAxisFieldButtons ?? true;
+        chart.ShowPivotChartValueFieldButtons = _previousShowValueFieldButtons ?? true;
         _previousChartStyleId = null;
         _previousShowFieldButtons = null;
+        _previousShowReportFilterButtons = null;
+        _previousShowAxisFieldButtons = null;
+        _previousShowValueFieldButtons = null;
     }
 
     private static int? NormalizeStyleId(int? chartStyleId)
