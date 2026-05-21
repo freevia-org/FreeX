@@ -44,7 +44,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_lockAspectRatioBox");
         source.Should().Contain("Height:");
         source.Should().Contain("Width:");
-        source.Should().Contain("Lock aspect ratio");
+        source.Should().Contain("Content = \"_Lock aspect ratio\"");
     }
 
     [Fact]
