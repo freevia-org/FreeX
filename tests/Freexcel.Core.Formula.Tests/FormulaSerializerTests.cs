@@ -126,6 +126,13 @@ public class FormulaSerializerTests
     }
 
     [Fact]
+    public void Serialize_MultiColumnStructuredReference()
+    {
+        RoundTrip("=SUM(Sales[[Amount]:[Tax]])")
+            .Should().Be("SUM(SALES[[Amount]:[Tax]])");
+    }
+
+    [Fact]
     public void Serialize_FunctionNoArgs() => RoundTrip("=NOW()").Should().Be("NOW()");
 
     [Fact]
