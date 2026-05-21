@@ -84,6 +84,26 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void DirectAltTopLevelKeyTips_OpenTabsAndBackstage()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.HandleDirectTopLevelKeyTip(Key.N).Should().BeTrue();
+
+            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+            harness.KeyTipScope.Should().Be("Commands");
+
+            harness.HandleDirectTopLevelKeyTip(Key.F).Should().BeTrue();
+
+            harness.StartScreenIsVisible.Should().BeTrue();
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.VisibleCommandKeyTips("N").Should().ContainSingle().Which.Should().Be("New");
+        });
+    }
+
+    [Fact]
     public void CrossTabMenuKeyTips_RouteThroughStaticRibbonMenus()
     {
         RunSta(() =>
@@ -191,6 +211,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MainWindow _window;
         private readonly MethodInfo _enterKeyTipMode;
         private readonly MethodInfo _handleActiveRibbonKeyTip;
+        private readonly MethodInfo _tryHandleDirectRibbonKeyTip;
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
@@ -203,6 +224,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "EnterRibbonKeyTipMode");
             _handleActiveRibbonKeyTip = typeof(MainWindow).GetMethod("HandleActiveRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "HandleActiveRibbonKeyTip");
+            _tryHandleDirectRibbonKeyTip = typeof(MainWindow).GetMethod("TryHandleDirectRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleDirectRibbonKeyTip");
             _getVisibleKeyTipElements = typeof(MainWindow).GetMethod("GetVisibleKeyTipElements", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
@@ -295,6 +318,13 @@ public sealed class MainWindowRibbonKeyTipTests
         {
             _handleActiveRibbonKeyTip.Invoke(_window, [key]);
             PumpDispatcher();
+        }
+
+        public bool HandleDirectTopLevelKeyTip(Key key)
+        {
+            var handled = (bool)_tryHandleDirectRibbonKeyTip.Invoke(_window, [key])!;
+            PumpDispatcher();
+            return handled;
         }
 
         public void OpenRibbonMenu(Key tabKeyTip, params Key[] commandKeyTips)
