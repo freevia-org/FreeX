@@ -17,9 +17,13 @@ public sealed record SubtotalDialogResult(
 
 public sealed class SubtotalDialog : Window
 {
+    private static readonly IReadOnlyList<string> SubtotalFunctionChoices =
+        ["Sum", "Count", "Average", "Max", "Min", "Product", "Count Numbers", "StdDev", "StdDevp", "Var", "Varp"];
+
     private readonly ComboBox _groupColumnBox = new() { DisplayMemberPath = nameof(SubtotalColumnChoice.Header), SelectedValuePath = nameof(SubtotalColumnChoice.Offset) };
     private readonly List<CheckBox> _subtotalColumnBoxes = [];
-    private readonly TextBox _functionBox = new() { Text = "sum" };
+    private readonly StackPanel _subtotalColumnPanel = new();
+    private readonly ComboBox _functionBox = new ComboBox { ItemsSource = SubtotalFunctionChoices, SelectedItem = "Sum" };
     private readonly CheckBox _replaceBox = new() { Content = "_Replace current subtotals", IsChecked = true };
     private readonly CheckBox _pageBreakBox = new() { Content = "_Page break between groups" };
     private readonly CheckBox _summaryBelowBox = new() { Content = "_Summary below data", IsChecked = true };
@@ -53,8 +57,9 @@ public sealed class SubtotalDialog : Window
                 Margin = new Thickness(0, 0, 0, 4)
             };
             _subtotalColumnBoxes.Add(box);
-            root.Children.Add(box);
+            _subtotalColumnPanel.Children.Add(box);
         }
+        root.Children.Add(new GroupBox { Header = "Add subtotal to:", Content = _subtotalColumnPanel });
         root.Children.Add(new Label { Content = "_Use function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(_functionBox);
         root.Children.Add(_replaceBox);
@@ -117,7 +122,7 @@ public sealed class SubtotalDialog : Window
             Result = CreateResult(
                 groupColumnOffset,
                 subtotalColumnOffsets,
-                _functionBox.Text,
+                _functionBox.SelectedItem?.ToString() ?? "",
                 _replaceBox.IsChecked == true,
                 _pageBreakBox.IsChecked == true,
                 _summaryBelowBox.IsChecked == true);
