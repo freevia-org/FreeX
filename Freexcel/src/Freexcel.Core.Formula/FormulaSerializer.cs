@@ -84,6 +84,14 @@ public static class FormulaSerializer
                 sb.Append(']');
                 break;
 
+            case StructuredCurrentRowReferenceNode current:
+                if (!string.IsNullOrWhiteSpace(current.TableName))
+                    sb.Append(current.TableName);
+                sb.Append("[@");
+                sb.Append(current.ColumnName.Replace("]", "]]"));
+                sb.Append(']');
+                break;
+
             case FunctionCallNode f:
                 sb.Append(f.FunctionName);
                 sb.Append('(');
