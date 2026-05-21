@@ -154,6 +154,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialog_ExposesExcelStyleFunctionDropdownAndSubtotalChecklist()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.Should().Contain("_functionBox = new ComboBox");
+        source.Should().Contain("SubtotalFunctionChoices");
+        source.Should().Contain("ItemsSource = SubtotalFunctionChoices");
+        source.Should().Contain("SelectedItem = \"Sum\"");
+        source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
+        source.Should().Contain("_subtotalColumnPanel");
+    }
+
+    [Fact]
     public void AdvancedFilterDialog_ParsesRangesAndOptionalCopyToCellOnCurrentSheet()
     {
         var sheetId = SheetId.New();
@@ -450,6 +463,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void CreateTableDialog_ExposesHeadersCheckboxAndRangePicker()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CreateTableDialog.cs"));
+
+        source.Should().Contain("_headersBox");
+        source.Should().Contain("My table has headers");
+        source.Should().Contain("CreateReferenceEditor(_rangeBox");
+        source.Should().Contain("ReferencePickerButton_Click");
+        source.Should().Contain("Select table range");
+    }
+
+    [Fact]
     public void CreateTableDialog_ParsesRangeHeadersAndStyle()
     {
         var sheetId = SheetId.New();
@@ -466,5 +491,19 @@ public sealed class DataToolDialogTests
         result.Range.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 12, 3)));
         result.FirstRowHasHeaders.Should().BeFalse();
         result.TableStyleName.Should().Be("TableStyleMedium2");
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+
+        source.Should().Contain("_Select All");
+        source.Should().Contain("_Unselect All");
+        source.Should().Contain("_My data has headers");
+        source.Should().Contain("_columnsPanel");
+        source.Should().Contain("Columns:");
+        source.Should().Contain("SelectAllButton_Click");
+        source.Should().Contain("UnselectAllButton_Click");
     }
 }
