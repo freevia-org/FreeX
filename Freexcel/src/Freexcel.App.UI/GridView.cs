@@ -217,6 +217,15 @@ public class GridView : FrameworkElement
         set => SetValue(SelectedRangeProperty, value);
     }
 
+    public static readonly DependencyProperty EditingCellProperty =
+        DependencyProperty.Register(nameof(EditingCell), typeof(CellAddress?), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public CellAddress? EditingCell
+    {
+        get => (CellAddress?)GetValue(EditingCellProperty);
+        set => SetValue(EditingCellProperty, value);
+    }
+
     public static readonly DependencyProperty SelectedRangesProperty =
         DependencyProperty.Register(nameof(SelectedRanges), typeof(IReadOnlyList<GridRange>), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
@@ -2333,7 +2342,7 @@ public class GridView : FrameworkElement
                 DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
             }
 
-            if (string.IsNullOrEmpty(cell.DisplayText) && cell.ConditionalIcon is null)
+            if (!ShouldDrawCellContent(cell, EditingCell))
             {
                 dc.Pop();
                 continue;
@@ -2540,7 +2549,7 @@ public class GridView : FrameworkElement
         {
             if (!rowLookup.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;
-            if (string.IsNullOrEmpty(cell.DisplayText) && cell.ConditionalIcon is null) continue;
+            if (!ShouldDrawCellContent(cell, EditingCell)) continue;
 
             var cellMerge = FindMerge(cell.Row, cell.Col);
             if (cellMerge.HasValue && (cell.Row != cellMerge.Value.Start.Row || cell.Col != cellMerge.Value.Start.Col))
@@ -2681,6 +2690,14 @@ public class GridView : FrameworkElement
         Rect cellRect,
         ConditionalFormatIcon icon) =>
         ConditionalIconLayoutPlanner.CalculateCellLayout(cellRect, icon);
+
+    public static bool ShouldDrawCellContent(DisplayCell cell, CellAddress? editingCell)
+    {
+        if (editingCell is { } address && address.Row == cell.Row && address.Col == cell.Col)
+            return false;
+
+        return !string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null;
+    }
 
     private static void DrawConditionalIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
     {
