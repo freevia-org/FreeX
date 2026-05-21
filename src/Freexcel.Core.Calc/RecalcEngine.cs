@@ -292,7 +292,8 @@ public sealed class RecalcEngine
                     workbook,
                     workbook.GetSheet(defaultSheetId),
                     structured.TableName,
-                    structured.ColumnName);
+                    structured.ColumnName,
+                    formulaCell);
                 if (structuredRange is null)
                     break;
 
