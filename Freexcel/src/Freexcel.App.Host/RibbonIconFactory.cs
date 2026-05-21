@@ -527,6 +527,12 @@ public static class RibbonIconFactory
             "sort-and-filter" => "sort",
             "find-and-select" => "find",
             "percent-style" => "percent-style",
+            "object-fill" => "fill",
+            "object-outline" => "outline-color",
+            "object-size" => "size",
+            "object-rotate" => "rotate",
+            "shape-gradient" => "gradient",
+            "object-effects" => "effects",
             _ => ""
         };
 

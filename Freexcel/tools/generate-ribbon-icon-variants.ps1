@@ -157,13 +157,16 @@ function Body($slug, [int]$n) {
         '^group$|^ungroup$' { return "  <path class=""r"" d=""M$(S 7 $n) $(S 4 $n) C$(S 4.8 $n) $(S 4 $n) $(S 5 $n) $(S 7 $n) $(S 5 $n) $(S 10 $n) C$(S 5 $n) $(S 13 $n) $(S 4.8 $n) $(S 16 $n) $(S 7 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""r"" d=""M$(S 13 $n) $(S 4 $n) C$(S 15.2 $n) $(S 4 $n) $(S 15 $n) $(S 7 $n) $(S 15 $n) $(S 10 $n) C$(S 15 $n) $(S 13 $n) $(S 15.2 $n) $(S 16 $n) $(S 13 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '+' 10 10 7 $n) }
         '^hide-detail$|^collapse$' { return (Grid $n) + "`n" + (Txt '-' 15 5 8 $n) }
         '^show-detail$|^expand$' { return (Grid $n) + "`n" + (Txt '+' 15 5 8 $n) }
-        '^bring-forward$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 7 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>`n" + (Rct 8 4 8 8 $n) }
-        '^send-backward$' { return (Rct 5 7 8 8 $n) + "`n  <rect class=""b"" x=""$(S 8 $n)"" y=""$(S 4 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>" }
-        '^rotate$' { return "  <path class=""r"" d=""M$(S 14 $n) $(S 7 $n) A$(S 5 $n) $(S 5 $n) 0 1 0 $(S 15 $n) $(S 13 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 12 5 16 7 $n 'g' 1) }
-        '^selection-pane$' { return WindowIcon $n }
-        '^outline-color$|^outline$' { return Rct 4 5 12 10 $n 's' 1.2 }
-        '^fill$|^gradient$' { return "  <rect class=""g2"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)""/>`n" + (Rct 4 5 12 10 $n 's' 1) }
-        '^crop$' { return "  <path class=""s"" d=""M$(S 6 $n) $(S 3 $n) V$(S 14 $n) H$(S 17 $n) M$(S 3 $n) $(S 6 $n) H$(S 14 $n) V$(S 17 $n)"" stroke-width=""$(S 1.2 $n)""/>" }
+        '^bring-forward$' { return "  <rect class=""b"" x=""$(S 4.5 $n)"" y=""$(S 8 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>`n" + (Rct 8 4 8 8 $n) }
+        '^send-backward$' { return (Rct 4.5 8 8 8 $n) + "`n  <rect class=""b"" x=""$(S 8 $n)"" y=""$(S 4 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>" }
+        '^object-size$' { return (Rct 5 6 10 8 $n) + "`n" + (Arrow 5 16 15 16 $n 'b' .9) + "`n" + (Arrow 16 14 16 6 $n 'b' .9) }
+        '^object-rotate$|^rotate$' { return "  <path class=""r"" d=""M$(S 14.5 $n) $(S 6.5 $n) A$(S 5.2 $n) $(S 5.2 $n) 0 1 0 $(S 15 $n) $(S 13.2 $n)"" stroke-width=""$(S 1.1 $n)""/>`n" + (Arrow 12 4.5 16.5 6.5 $n 'g' 1) }
+        '^selection-pane$' { return (WindowIcon $n) + "`n" + (L 5 6 11 6 $n 'b' .8) + "`n" + (L 5 9 9 9 $n 'b' .8) }
+        '^object-outline$|^outline-color$|^outline$' { return "  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""none"" stroke=""#5b9bd5"" stroke-width=""$(S 1.4 $n)"" vector-effect=""non-scaling-stroke""/>`n  <rect class=""rd"" x=""$(S 5 $n)"" y=""$(S 16 $n)"" width=""$(S 10 $n)"" height=""$(S 1.6 $n)""/>" }
+        '^object-fill$|^fill$' { return "  <rect class=""y"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)""/>`n" + (Rct 4 5 12 10 $n 's' 1) }
+        '^shape-gradient$|^gradient$' { return "  <defs><linearGradient id=""grad"" x1=""0"" x2=""1""><stop offset=""0"" stop-color=""#5b9bd5""/><stop offset=""1"" stop-color=""#ffffff""/></linearGradient></defs>`n  <rect x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" fill=""url(#grad)"" stroke=""#1f1f1f"" stroke-width=""$(S 1 $n)"" vector-effect=""non-scaling-stroke""/>" }
+        '^crop$' { return "  <rect class=""f s"" x=""$(S 5 $n)"" y=""$(S 5 $n)"" width=""$(S 10 $n)"" height=""$(S 10 $n)"" stroke-width=""$(S .8 $n)""/>`n  <path class=""s"" d=""M$(S 6.5 $n) $(S 2.8 $n) V$(S 13.5 $n) H$(S 17.2 $n) M$(S 2.8 $n) $(S 6.5 $n) H$(S 13.5 $n) V$(S 17.2 $n)"" stroke-width=""$(S 1.2 $n)""/>" }
+        '^object-effects$|^effects$' { return (Txt $sparkleGlyph 9 8.5 10 $n) + "`n" + (Txt $sparkleGlyph 14.5 14 5 $n) }
         '^normal$|^custom-views$|^new-window$|^arrange-all$|^view-side-by-side$|^synchronous-scrolling$|^reset-window-position$|^switch-windows$' { return WindowIcon $n }
         '^page-break-preview$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1) + "`n" + (L 3 10 17 10 $n 'b' 1) }
         '^page-layout$' { return Doc $n }
