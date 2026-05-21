@@ -7,6 +7,7 @@ $starGlyph = [char]0x2605
 $sparkleGlyph = [char]0x2726
 $sigmaGlyph = [char]0x03A3
 $boltGlyph = [char]0x26A1
+$checkGlyph = [char]0x2713
 
 function S([double]$v, [int]$n) { [math]::Round($v * $n / 20.0, 2).ToString($culture) }
 function Svg([int]$n, [string]$body) {
@@ -118,19 +119,19 @@ function Body($slug, [int]$n) {
         'increase-decimal' { return (Txt '0.0' 8 7 4.5 $n) + "`n" + (Txt '0.00' 8 13 4.5 $n) + "`n" + (Arrow 13 10 17 10 $n 'b' 1) }
         'decrease-decimal' { return (Txt '0.00' 10 7 4.5 $n) + "`n" + (Txt '0.0' 10 13 4.5 $n) + "`n" + (Arrow 17 10 13 10 $n 'b' 1) }
         'orientation' { return "  <text class=""t"" x=""$(S 9 $n)"" y=""$(S 8 $n)"" font-size=""$(S 6 $n)"" transform=""rotate(-45 $(S 9 $n) $(S 8 $n))"">ab</text>`n" + (Arrow 5 15 15 5 $n 'b' 1) }
-        '^themes$' { return "  <path class=""f s"" d=""M$(S 5 $n) $(S 2.5 $n) H$(S 13 $n) L$(S 16 $n) $(S 5.5 $n) V$(S 17 $n) H$(S 5 $n) Z"" stroke-width=""$(S 1 $n)""/>`n  <rect class=""p"" x=""$(S 7 $n)"" y=""$(S 7 $n)"" width=""$(S 6 $n)"" height=""$(S 6 $n)""/>" }
-        '^fonts$' { return Txt 'Aa' 10 10 8 $n }
-        '^effects$' { return Txt $sparkleGlyph 10 10 12 $n }
-        '^background$' { return "  <rect class=""f s"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 10 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""g2"" d=""M$(S 5 $n) $(S 14 $n) L$(S 8 $n) $(S 10 $n) L$(S 11 $n) $(S 13 $n) L$(S 14 $n) $(S 9 $n) L$(S 16 $n) $(S 14 $n) Z""/><circle class=""y"" cx=""$(S 12 $n)"" cy=""$(S 8 $n)"" r=""$(S 1.3 $n)""/>" }
-        '^margins$' { return (Doc $n) + "`n" + (Rct 7 5 6 10 $n 's' .7) }
-        '^paper-size$|^size$' { return "  <path class=""f s"" d=""M$(S 6 $n) $(S 3 $n) H$(S 14 $n) V$(S 17 $n) H$(S 6 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 5 4 5 16 $n 'b' 1) + "`n" + (Arrow 15 16 15 4 $n 'b' 1) }
-        '^print-area$' { return (Grid $n) + "`n" + (Rct 5.5 5.5 9 9 $n 's' 1.2) }
-        '^scale$|^scale-to-fit$' { return (Doc $n) + "`n" + (Arrow 7 14 14 7 $n 'g' 1) }
-        '^breaks$' { return (Doc $n) + "`n" + (L 6 10 14 10 $n 'r' 1) + "`n  <path class=""rd"" d=""M$(S 9 $n) $(S 8 $n) H$(S 11 $n) V$(S 12 $n) H$(S 9 $n) Z""/>" }
-        '^print-titles$' { return (Doc $n) + "`n" + (L 6 6 14 6 $n 's' 1.2) + "`n" + (L 6 9 14 9 $n 's' .8) }
-        '^header-footer$' { return (Doc $n) + "`n" + (L 6 5 14 5 $n 's' .8) + "`n" + (L 6 15 14 15 $n 's' .8) }
+        '^themes$' { return "  <path class=""f s"" d=""M$(S 4.5 $n) $(S 2.5 $n) H$(S 13.3 $n) L$(S 16 $n) $(S 5.2 $n) V$(S 17.5 $n) H$(S 4.5 $n) Z"" stroke-width=""$(S 1 $n)""/>`n  <rect class=""p"" x=""$(S 7 $n)"" y=""$(S 6 $n)"" width=""$(S 6 $n)"" height=""$(S 6 $n)""/>`n  <rect class=""g2"" x=""$(S 7 $n)"" y=""$(S 12 $n)"" width=""$(S 3 $n)"" height=""$(S 3 $n)""/>`n  <rect class=""b"" x=""$(S 10 $n)"" y=""$(S 12 $n)"" width=""$(S 3 $n)"" height=""$(S 3 $n)""/>" }
+        '^fonts$' { return (Txt 'Aa' 9.5 9.5 8.5 $n) + "`n" + (L 5 15 15 15 $n 's' .9) }
+        '^effects$' { return (Txt $sparkleGlyph 10 9 11 $n) + "`n" + (Txt $sparkleGlyph 15 15 4.5 $n) }
+        '^background$' { return "  <rect class=""f s"" x=""$(S 3.5 $n)"" y=""$(S 4.5 $n)"" width=""$(S 13 $n)"" height=""$(S 11 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""g2"" d=""M$(S 4.5 $n) $(S 14.5 $n) L$(S 8 $n) $(S 10 $n) L$(S 11 $n) $(S 13 $n) L$(S 14.5 $n) $(S 8.5 $n) L$(S 16.5 $n) $(S 14.5 $n) Z""/><circle class=""y"" cx=""$(S 12.5 $n)"" cy=""$(S 7.6 $n)"" r=""$(S 1.4 $n)""/>" }
+        '^margins$' { return "  <path class=""f s"" d=""M$(S 5 $n) $(S 2.5 $n) H$(S 15 $n) V$(S 17.5 $n) H$(S 5 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Rct 7.2 5 5.6 10 $n 's' .7) + "`n" + (L 5 5 7.2 5 $n 'b' .9) + "`n" + (L 12.8 15 15 15 $n 'b' .9) }
+        '^paper-size$|^size$' { return "  <path class=""f s"" d=""M$(S 6 $n) $(S 2.8 $n) H$(S 14 $n) V$(S 17.2 $n) H$(S 6 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 4.6 4 4.6 16 $n 'b' .9) + "`n" + (Arrow 15.4 16 15.4 4 $n 'b' .9) }
+        '^print-area$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 6.5 $n)"" y=""$(S 6.5 $n)"" width=""$(S 7 $n)"" height=""$(S 7 $n)"" opacity=""0.55""/>`n" + (Rct 6.5 6.5 7 7 $n 's' 1.1) }
+        '^scale$|^scale-to-fit$' { return (Doc $n) + "`n" + (Arrow 6.5 14 13.5 7 $n 'g' .95) + "`n" + (Arrow 13.5 7 16 4.5 $n 'b' .95) }
+        '^breaks$' { return (Doc $n) + "`n" + (L 6 10 14 10 $n 'r' 1) + "`n  <path d=""M$(S 7 $n) $(S 8 $n) L$(S 8.5 $n) $(S 11.8 $n) M$(S 11.5 $n) $(S 8 $n) L$(S 13 $n) $(S 11.8 $n)"" fill=""none"" stroke=""#d83b01"" stroke-width=""$(S 1 $n)"" stroke-linecap=""round"" vector-effect=""non-scaling-stroke""/>" }
+        '^print-titles$' { return (Grid $n) + "`n" + (L 3 6.5 17 6.5 $n 'g' 1.2) + "`n" + (L 6.5 3 6.5 17 $n 'b' 1.2) }
+        '^header-footer$' { return (Doc $n) + "`n" + (L 6 5 14 5 $n 'b' 1) + "`n" + (L 6 15 14 15 $n 'g' 1) }
         '^page-setup$|^calculation-options$|^options$' { return Gear $n }
-        '^print-gridlines$' { return (Grid $n) + "`n" + (Txt 'âœ“' 15 5 4 $n) }
+        '^print-gridlines$' { return (Grid $n) + "`n" + (Txt $checkGlyph 15 5 4 $n) }
         '^print-headings$' { return (Grid $n) + "`n" + (Txt 'A' 6 5 4 $n) + "`n" + (Txt '1' 4 8 4 $n) }
         '^text-to-columns$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1.4) + "`n" + (Arrow 8 10 5 10 $n 'g' 1) + "`n" + (Arrow 12 10 15 10 $n 'g' 1) }
         '^flash-fill$' { return (Grid $n) + "`n" + (Txt $boltGlyph 10 10 8 $n) }
