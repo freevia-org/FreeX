@@ -40,10 +40,18 @@ public partial class HeaderFooterDialog : Window
         FooterLeftBox.Text = Footer.Left;
         FooterCenterBox.Text = Footer.Center;
         FooterRightBox.Text = Footer.Right;
-        FirstHeaderBox.Text = ToCombinedText(FirstPageHeader);
-        FirstFooterBox.Text = ToCombinedText(FirstPageFooter);
-        EvenHeaderBox.Text = ToCombinedText(EvenPageHeader);
-        EvenFooterBox.Text = ToCombinedText(EvenPageFooter);
+        FirstHeaderLeftBox.Text = FirstPageHeader.Left;
+        FirstHeaderCenterBox.Text = FirstPageHeader.Center;
+        FirstHeaderRightBox.Text = FirstPageHeader.Right;
+        FirstFooterLeftBox.Text = FirstPageFooter.Left;
+        FirstFooterCenterBox.Text = FirstPageFooter.Center;
+        FirstFooterRightBox.Text = FirstPageFooter.Right;
+        EvenHeaderLeftBox.Text = EvenPageHeader.Left;
+        EvenHeaderCenterBox.Text = EvenPageHeader.Center;
+        EvenHeaderRightBox.Text = EvenPageHeader.Right;
+        EvenFooterLeftBox.Text = EvenPageFooter.Left;
+        EvenFooterCenterBox.Text = EvenPageFooter.Center;
+        EvenFooterRightBox.Text = EvenPageFooter.Right;
         DifferentFirstPageBox.IsChecked = DifferentFirstPage;
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleWithDocument;
@@ -110,10 +118,22 @@ public partial class HeaderFooterDialog : Window
             FooterLeftBox.Text,
             FooterCenterBox.Text,
             FooterRightBox.Text);
-        FirstPageHeader = FromCombinedText(FirstHeaderBox.Text);
-        FirstPageFooter = FromCombinedText(FirstFooterBox.Text);
-        EvenPageHeader = FromCombinedText(EvenHeaderBox.Text);
-        EvenPageFooter = FromCombinedText(EvenFooterBox.Text);
+        FirstPageHeader = new WorksheetHeaderFooter(
+            FirstHeaderLeftBox.Text,
+            FirstHeaderCenterBox.Text,
+            FirstHeaderRightBox.Text);
+        FirstPageFooter = new WorksheetHeaderFooter(
+            FirstFooterLeftBox.Text,
+            FirstFooterCenterBox.Text,
+            FirstFooterRightBox.Text);
+        EvenPageHeader = new WorksheetHeaderFooter(
+            EvenHeaderLeftBox.Text,
+            EvenHeaderCenterBox.Text,
+            EvenHeaderRightBox.Text);
+        EvenPageFooter = new WorksheetHeaderFooter(
+            EvenFooterLeftBox.Text,
+            EvenFooterCenterBox.Text,
+            EvenFooterRightBox.Text);
         DifferentFirstPage = DifferentFirstPageBox.IsChecked == true;
         DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
         ScaleWithDocument = ScaleWithDocumentBox.IsChecked == true;
@@ -122,17 +142,4 @@ public partial class HeaderFooterDialog : Window
         Close();
     }
 
-    private static string ToCombinedText(WorksheetHeaderFooter value) =>
-        string.Join(" | ", new[] { value.Left, value.Center, value.Right });
-
-    private static WorksheetHeaderFooter FromCombinedText(string text)
-    {
-        var parts = text.Split('|', 3, StringSplitOptions.TrimEntries);
-        return parts.Length switch
-        {
-            1 => new WorksheetHeaderFooter("", parts[0], ""),
-            2 => new WorksheetHeaderFooter(parts[0], parts[1], ""),
-            _ => new WorksheetHeaderFooter(parts[0], parts[1], parts[2])
-        };
-    }
 }
