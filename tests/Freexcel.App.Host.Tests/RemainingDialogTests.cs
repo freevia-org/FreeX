@@ -360,7 +360,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("PDF/XPS options");
         source.Should().Contain("Content = \"_Include document properties\"");
         source.Should().Contain("Content = \"_Open after publishing\"");
-        source.Should().NotContain("Content = \"_Ignore print areas\"");
+        source.Should().Contain("Content = \"_Ignore print areas\"");
         source.Should().NotContain("CSV options");
         source.Should().NotContain("Content = \"CSV _delimiter:\"");
     }
