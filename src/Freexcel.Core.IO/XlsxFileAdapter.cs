@@ -238,6 +238,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 {
                     if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
                     {
+                        chart.Name = chartPart.Name;
                     XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                         ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                         sheet.Charts.Add(chart);
@@ -252,6 +253,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             picturePart.Anchor?.FromRowZeroBased + 1 ?? 1,
                             picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                         Kind = PictureKind.Image,
+                        Name = picturePart.Name,
                         ImageBytes = picturePart.ImageBytes.ToArray(),
                         ContentType = picturePart.ContentType,
                         AltText = picturePart.AltText,
@@ -272,6 +274,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             textBoxPart.Anchor?.FromRowZeroBased + 1 ?? 1,
                             textBoxPart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                         Text = textBoxPart.Text,
+                        Name = textBoxPart.Name,
                         AltText = textBoxPart.AltText,
                         RotationDegrees = textBoxPart.RotationDegrees,
                         FillColor = textBoxPart.FillColor,
@@ -289,6 +292,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                             shapePart.Anchor?.FromRowZeroBased + 1 ?? 1,
                             shapePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                         Kind = shapePart.Kind,
+                        Name = shapePart.Name,
                         AltText = shapePart.AltText,
                         RotationDegrees = shapePart.RotationDegrees,
                         FillColor = shapePart.FillColor,

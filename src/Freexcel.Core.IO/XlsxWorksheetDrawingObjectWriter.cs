@@ -186,7 +186,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(spreadsheetDrawingNs + "nvPicPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", pictureIndex + 1),
-                        new XAttribute("name", $"Picture {pictureIndex}"),
+                        new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvPicPr")),
                 new XElement(spreadsheetDrawingNs + "blipFill",
@@ -229,7 +229,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", shapeIndex + 100),
-                        new XAttribute("name", $"TextBox {shapeIndex}"),
+                        new XAttribute("name", DrawingName(textBox.Name, $"TextBox {shapeIndex}")),
                         string.IsNullOrWhiteSpace(textBox.AltText) ? null : new XAttribute("descr", textBox.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
                 ToShapePropertiesForDrawingObject(
@@ -263,7 +263,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", shapeIndex + 200),
-                        new XAttribute("name", $"Shape {shapeIndex}"),
+                        new XAttribute("name", DrawingName(shape.Name, $"Shape {shapeIndex}")),
                         string.IsNullOrWhiteSpace(shape.AltText) ? null : new XAttribute("descr", shape.AltText)),
                     new XElement(spreadsheetDrawingNs + "cNvSpPr")),
                 ToShapePropertiesForDrawingObject(
@@ -419,6 +419,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double.IsFinite(shape.Height) &&
         shape.Width > 0 &&
         shape.Height > 0;
+
+    private static string DrawingName(string? name, string fallback) =>
+        string.IsNullOrWhiteSpace(name) ? fallback : name;
 
     private static string FormatColor(CellColor color) =>
         $"{color.R:X2}{color.G:X2}{color.B:X2}";
