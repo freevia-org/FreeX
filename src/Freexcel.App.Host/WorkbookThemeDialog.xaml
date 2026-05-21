@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Customize Theme"
-        Width="520"
-        Height="640"
+        Width="620"
+        Height="700"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <DockPanel Margin="16">
@@ -93,6 +93,29 @@
                 <TextBlock Text="Theme Colors"
                            FontWeight="SemiBold"
                            Margin="0,0,0,8"/>
+
+                <Border x:Name="ThemePreviewPane"
+                        BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                        BorderThickness="1"
+                        Padding="10"
+                        Margin="0,0,0,14"
+                        Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                    <StackPanel>
+                        <TextBlock Text="Sample"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8"/>
+                        <TextBlock x:Name="PreviewHeadingText"
+                                   Text="Heading"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock x:Name="PreviewBodyText"
+                                   Text="Body text and hyperlinks"
+                                   Margin="0,2,0,10"/>
+                        <UniformGrid x:Name="PreviewAccentStrip"
+                                     Columns="6"
+                                     Height="22"/>
+                    </StackPanel>
+                </Border>
 
                 <UniformGrid Columns="2">
                     <StackPanel Margin="0,0,10,8">
