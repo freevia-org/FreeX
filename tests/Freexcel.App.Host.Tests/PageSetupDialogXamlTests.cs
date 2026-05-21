@@ -15,6 +15,7 @@ public sealed class PageSetupDialogXamlTests
         {
             "_Page",
             "_Margins",
+            "_Header/Footer",
             "_Sheet"
         })
             xaml.Should().Contain($"Header=\"{header}\"");
@@ -31,6 +32,14 @@ public sealed class PageSetupDialogXamlTests
             "_Bottom:",
             "_Header:",
             "_Footer:",
+            "_Header preset:",
+            "_Footer preset:",
+            "Custom _Header...",
+            "Custom _Footer...",
+            "_Different first page",
+            "Different _odd and even pages",
+            "_Scale with document",
+            "_Align with page margins",
             "Print _area:",
             "_Rows to repeat at top:",
             "_Columns to repeat at left:",
@@ -72,14 +81,45 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
-    public void SheetTab_ProvidesRangePickerAffordancesForPrintAreaAndTitles()
+    public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var tab = document.Descendants(presentation + "TabItem")
+            .Single(element => element.Attribute("Header")?.Value == "_Header/Footer");
+
+        foreach (var name in new[]
+        {
+            "HeaderPresetBox",
+            "FooterPresetBox",
+            "CustomHeaderButton",
+            "CustomFooterButton",
+            "DifferentFirstPageBox",
+            "DifferentOddEvenBox",
+            "ScaleWithDocumentBox",
+            "AlignWithMarginsBox"
+        })
+        {
+            tab.Descendants()
+                .Any(element => element.Attribute(x + "Name")?.Value == name)
+                .Should().BeTrue($"{name} should exist on the Page Setup Header/Footer tab");
+        }
+    }
+
+    [Fact]
+    public void SheetTab_DoesNotExposeUnwiredRangePickerButtons()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
+        document.Descendants()
+            .Any(element => element.Attribute(x + "Name")?.Value == "PrintAreaBox")
+            .Should().BeTrue("print area remains editable as a text range");
+
         foreach (var name in new[]
         {
-            "PrintAreaBox",
             "PrintAreaPickerButton",
             "RowsRepeatPickerButton",
             "ColumnsRepeatPickerButton"
@@ -87,16 +127,29 @@ public sealed class PageSetupDialogXamlTests
         {
             document.Descendants()
                 .Any(element => element.Attribute(x + "Name")?.Value == name)
-                .Should().BeTrue($"{name} should exist for range selection affordance");
+                .Should().BeFalse($"{name} should not be shown until worksheet range-picking is wired");
         }
     }
 
     [Fact]
-    public void Footer_ExposesExcelLikePrintActions()
+    public void Footer_DoesNotExposeUnwiredPrintActions()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.Should().NotContain($"Content=\"{content}\"");
+    }
+
+    [Fact]
+    public void PageSetupHandler_AppliesHeaderFooterValuesReturnedByDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PageLayout.cs"));
+
+        source.Should().Contain("new CompositeWorkbookCommand(");
+        source.Should().Contain("new SetHeaderFooterCommand(");
+        source.Should().Contain("dialog.FirstPageHeader");
+        source.Should().Contain("dialog.EvenPageFooter");
+        source.Should().Contain("dialog.ScaleHeaderFooterWithDocument");
+        source.Should().Contain("dialog.AlignHeaderFooterWithMargins");
     }
 }
