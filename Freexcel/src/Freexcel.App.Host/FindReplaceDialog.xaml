@@ -2,54 +2,125 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Find &amp; Replace"
-        Width="400" Height="260"
+        Width="560" Height="430"
+        MinWidth="520" MinHeight="360"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         ShowInTaskbar="False">
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Find row -->
-        <Grid Grid.Row="0" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="80"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Label Content="_Find:" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
-            <TextBox x:Name="FindBox" Grid.Column="1" KeyDown="FindBox_KeyDown"/>
-        </Grid>
+        <TabControl x:Name="FindReplaceTabs" Grid.Row="0" Margin="0,0,0,10">
+            <TabItem x:Name="FindTab" Header="_Find">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="88"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Label Content="_Find what:" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
+                    <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown"/>
+                    <Button Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0"/>
+                </Grid>
+            </TabItem>
 
-        <!-- Replace row -->
-        <Grid Grid.Row="1" Margin="0,0,0,8" x:Name="ReplaceRow">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="80"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Label Content="_Replace:" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
-            <TextBox x:Name="ReplaceBox"/>
-        </Grid>
+            <TabItem x:Name="ReplaceTab" Header="_Replace">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-        <!-- Options -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
-            <CheckBox x:Name="MatchCaseBox" Content="Match _case" Margin="0,0,12,0"/>
-            <CheckBox x:Name="MatchEntireBox" Content="_Entire cell" Margin="0,0,12,0"/>
-            <CheckBox x:Name="SearchFormulasBox" Content="Search _formulas"/>
-        </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Label Content="_Find what:" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
+                        <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown"/>
+                        <Button Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0"/>
+                    </Grid>
 
-        <!-- Status label -->
-        <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" Height="18" Margin="0,0,0,8"/>
+                    <Grid x:Name="ReplaceRow" Grid.Row="1" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="88"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Label Content="_Replace with:" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
+                        <TextBox x:Name="ReplaceBox" Grid.Column="1" MinWidth="260"/>
+                        <Button Grid.Column="2" Content="For_mat..." Width="84" Margin="8,0,0,0"/>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
 
-        <!-- Buttons -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+        <Expander x:Name="OptionsExpander" Grid.Row="1" Header="Options &gt;&gt;" IsExpanded="True" Margin="0,0,0,10">
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="88"/>
+                    <ColumnDefinition Width="150"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="150"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Label Content="_Within:" Target="{Binding ElementName=WithinCombo}" VerticalAlignment="Center"/>
+                <ComboBox x:Name="WithinCombo" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
+                    <ComboBoxItem Content="Sheet"/>
+                    <ComboBoxItem Content="Workbook"/>
+                </ComboBox>
+
+                <Label Content="_Search:" Target="{Binding ElementName=SearchCombo}" Grid.Column="2" VerticalAlignment="Center"/>
+                <ComboBox x:Name="SearchCombo" Grid.Column="3" SelectedIndex="0" Margin="0,0,0,6">
+                    <ComboBoxItem Content="By Rows"/>
+                    <ComboBoxItem Content="By Columns"/>
+                </ComboBox>
+
+                <Label Content="_Look in:" Target="{Binding ElementName=LookInCombo}" Grid.Row="1" VerticalAlignment="Center"/>
+                <ComboBox x:Name="LookInCombo" Grid.Row="1" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
+                    <ComboBoxItem Content="Formulas"/>
+                    <ComboBoxItem Content="Values"/>
+                    <ComboBoxItem Content="Comments"/>
+                </ComboBox>
+
+                <CheckBox x:Name="MatchCaseBox" Grid.Row="2" Grid.ColumnSpan="2" Content="Match _case" Margin="0,2,12,0"/>
+                <CheckBox x:Name="MatchEntireBox" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Match entire cell _contents" Margin="0,2,0,0"/>
+            </Grid>
+        </Expander>
+
+        <DataGrid x:Name="FindResultsGrid"
+                  Grid.Row="2"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  IsReadOnly="True"
+                  HeadersVisibility="Column"
+                  MinHeight="120"
+                  Margin="0,0,0,8">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Cell" Binding="{Binding Address}" Width="90"/>
+                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" MinHeight="18" Margin="0,0,0,8"/>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="FindAllBtn" Content="Find _All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
             <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
-            <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="80" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
+            <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
             <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
         </StackPanel>
     </Grid>

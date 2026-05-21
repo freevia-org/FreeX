@@ -9,6 +9,15 @@ namespace Freexcel.App.Host;
 
 public sealed record ChartTypePickerOption(ChartType Type, string DisplayName, bool IsRecommended = false);
 
+public sealed record ChartTypePickerCategory(string Name, IReadOnlyList<ChartTypePickerOption> Options);
+
+public sealed record ChartTypeGalleryChoice(
+    ChartType Type,
+    string CategoryName,
+    string SubtypeName,
+    string PreviewText,
+    bool IsRecommended = false);
+
 public static class ChartTypePickerPlanner
 {
     private static readonly ChartTypePickerOption[] Options =
@@ -44,13 +53,60 @@ public static class ChartTypePickerPlanner
         .Select(type => Options.Single(option => option.Type == type))
         .Where(option => option.IsRecommended && ChartTypeSupport.IsRenderable(option.Type))
         .ToList();
+
+    public static IReadOnlyList<ChartTypePickerCategory> GetCategories()
+    {
+        var supported = GetSupportedOptions();
+        return new (string Name, ChartType[] Types)[]
+            {
+                ("Column", [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn]),
+                ("Line", [ChartType.Line]),
+                ("Pie", [ChartType.Pie, ChartType.Doughnut]),
+                ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar]),
+                ("Area", [ChartType.Area]),
+                ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),
+                ("Stock", [ChartType.Stock]),
+                ("Radar", [ChartType.Radar])
+            }
+            .Select(category => new ChartTypePickerCategory(
+                category.Name,
+                category.Types
+                    .Select(type => supported.FirstOrDefault(option => option.Type == type))
+                    .OfType<ChartTypePickerOption>()
+                    .ToList()))
+            .Where(category => category.Options.Count > 0)
+            .ToList();
+    }
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetGalleryChoices(string categoryName) =>
+        GetCategories()
+            .Where(category => category.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(category => category.Options.Select(option => new ChartTypeGalleryChoice(
+                option.Type,
+                category.Name,
+                option.DisplayName,
+                $"Preview: {option.DisplayName}",
+                option.IsRecommended)))
+            .ToList();
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices() =>
+        GetRecommendedOptions()
+            .Select(option => new ChartTypeGalleryChoice(
+                option.Type,
+                "Recommended Charts",
+                option.DisplayName,
+                $"Preview: {option.DisplayName}",
+                IsRecommended: true))
+            .ToList();
 }
 
 public sealed record InsertChartDialogResult(ChartType ChartType, bool UseRecommendedLayout);
 
 public sealed class InsertChartDialog : Window
 {
-    private readonly ComboBox _chartTypeBox = new();
+    private readonly ListBox _recommendedGallery = new();
+    private readonly ListBox _categoryList = new();
+    private readonly ListBox _subtypeGallery = new();
     private readonly CheckBox _recommendedBox = new() { Content = "Use recommended layout" };
 
     public InsertChartDialogResult Result { get; private set; } = CreateRecommendedResult();
@@ -58,25 +114,37 @@ public sealed class InsertChartDialog : Window
     public InsertChartDialog()
     {
         Title = "Insert Chart";
-        Width = 360;
-        Height = 220;
+        Width = 660;
+        Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Chart type", Margin = new Thickness(0, 0, 0, 4) });
-        _chartTypeBox.ItemsSource = ChartTypePickerPlanner.GetSupportedOptions();
-        _chartTypeBox.DisplayMemberPath = nameof(ChartTypePickerOption.DisplayName);
-        _chartTypeBox.SelectedIndex = 0;
-        _chartTypeBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_chartTypeBox);
-
+        var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
+        var tabs = new TabControl { Height = 310, Margin = new Thickness(0, 0, 0, 12) };
+        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
+        _recommendedGallery.SelectedIndex = 0;
+        tabs.Items.Add(new TabItem
+        {
+            Header = "Recommended Charts",
+            Content = CreateRecommendedChartsPanel(_recommendedGallery)
+        });
+        tabs.Items.Add(new TabItem
+        {
+            Header = "All Charts",
+            Content = CreateAllChartsPanel(_categoryList, _subtypeGallery)
+        });
+        DockPanel.SetDock(tabs, Dock.Top);
+        root.Children.Add(tabs);
         _recommendedBox.IsChecked = true;
-        _recommendedBox.Margin = new Thickness(0, 0, 0, 16);
-        stack.Children.Add(_recommendedBox);
-        stack.Children.Add(CreateButtonRow(Accept));
-        Content = stack;
+        _recommendedBox.Margin = new Thickness(0, 0, 0, 10);
+        DockPanel.SetDock(_recommendedBox, Dock.Top);
+        root.Children.Add(_recommendedBox);
+        var buttons = CreateButtonRow(Accept);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        Content = root;
     }
 
     public static InsertChartDialogResult CreateResult(ChartType chartType) =>
@@ -87,12 +155,171 @@ public sealed class InsertChartDialog : Window
 
     private void Accept()
     {
-        var selected = _chartTypeBox.SelectedItem is ChartTypePickerOption option
-            ? option.Type
-            : ChartType.Column;
+        var selected = SelectedGalleryChoice(_recommendedGallery, _subtypeGallery)?.Type ?? ChartType.Column;
         Result = new InsertChartDialogResult(selected, _recommendedBox.IsChecked == true);
         DialogResult = true;
     }
+
+    private static ChartTypeGalleryChoice? SelectedGalleryChoice(ListBox recommendedGallery, ListBox subtypeGallery) =>
+        subtypeGallery.SelectedItem as ChartTypeGalleryChoice
+        ?? recommendedGallery.SelectedItem as ChartTypeGalleryChoice;
+
+    private static Grid CreateRecommendedChartsPanel(ListBox gallery)
+    {
+        var grid = CreatePickerGrid();
+        var heading = new StackPanel();
+        heading.Children.Add(new TextBlock
+        {
+            Text = "Choose a chart type",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 2)
+        });
+        heading.Children.Add(CreateInlineHelp("Recently used and suggested for your data"));
+        grid.Children.Add(heading);
+        gallery.Margin = new Thickness(0, 34, 12, 0);
+        AutomationProperties.SetName(gallery, "Chart subtype gallery");
+        Grid.SetRow(gallery, 1);
+        grid.Children.Add(gallery);
+        var preview = CreatePreviewPanel("Preview", "Recommended chart preview");
+        Grid.SetColumn(preview, 1);
+        Grid.SetRowSpan(preview, 2);
+        grid.Children.Add(preview);
+        return grid;
+    }
+
+    internal static Grid CreateAllChartsPanel(
+        ListBox categoryList,
+        ListBox subtypeGallery,
+        ChartType? selectedType = null)
+    {
+        var categories = ChartTypePickerPlanner.GetCategories();
+        var grid = CreatePickerGrid();
+        categoryList.ItemsSource = categories;
+        categoryList.DisplayMemberPath = nameof(ChartTypePickerCategory.Name);
+        categoryList.Width = 150;
+        categoryList.Margin = new Thickness(0, 24, 12, 0);
+        AutomationProperties.SetName(categoryList, "Chart categories");
+        subtypeGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
+        subtypeGallery.Margin = new Thickness(0, 24, 12, 0);
+        AutomationProperties.SetName(subtypeGallery, "Chart subtype gallery");
+        categoryList.SelectionChanged += (_, _) =>
+        {
+            if (categoryList.SelectedItem is not ChartTypePickerCategory category)
+                return;
+
+            subtypeGallery.ItemsSource = ChartTypePickerPlanner.GetGalleryChoices(category.Name);
+            subtypeGallery.SelectedIndex = 0;
+        };
+
+        var selectedCategory = categories.FirstOrDefault(category =>
+            selectedType is not null && category.Options.Any(option => option.Type == selectedType.Value))
+            ?? categories.FirstOrDefault();
+        categoryList.SelectedItem = selectedCategory;
+        if (selectedType is not null && subtypeGallery.ItemsSource is IEnumerable<ChartTypeGalleryChoice> choices)
+        {
+            subtypeGallery.SelectedItem = choices.FirstOrDefault(choice => choice.Type == selectedType.Value)
+                ?? choices.FirstOrDefault();
+        }
+
+        var heading = new StackPanel();
+        heading.Children.Add(new TextBlock
+        {
+            Text = "All Charts",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 2)
+        });
+        heading.Children.Add(CreateInlineHelp("Choose a subtype to see how the chart will represent categories and values."));
+        grid.Children.Add(heading);
+        Grid.SetRow(categoryList, 1);
+        grid.Children.Add(categoryList);
+        Grid.SetColumn(subtypeGallery, 1);
+        Grid.SetRow(subtypeGallery, 1);
+        grid.Children.Add(subtypeGallery);
+        var preview = CreatePreviewPanel("Preview", "Chart preview");
+        Grid.SetColumn(preview, 2);
+        Grid.SetRowSpan(preview, 2);
+        grid.Children.Add(preview);
+        return grid;
+    }
+
+    private static Grid CreatePickerGrid()
+    {
+        var grid = new Grid { Margin = new Thickness(12), MinHeight = 250 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        return grid;
+    }
+
+    private static Border CreatePreviewPanel(string title, string body) =>
+        new()
+        {
+            BorderBrush = SystemColors.ControlDarkBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14),
+            Margin = new Thickness(0, 24, 0, 0),
+            Child = new StackPanel
+            {
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = title,
+                        FontWeight = FontWeights.SemiBold,
+                        Margin = new Thickness(0, 0, 0, 12)
+                    },
+                    new TextBlock
+                    {
+                        Text = body,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 14)
+                    },
+                    new TextBlock
+                    {
+                        Text = "Chart preview sample",
+                        FontWeight = FontWeights.SemiBold,
+                        Margin = new Thickness(0, 0, 0, 8)
+                    },
+                    new Grid
+                    {
+                        Height = 92,
+                        Children =
+                        {
+                            new Border
+                            {
+                                BorderBrush = SystemColors.ControlDarkBrush,
+                                BorderThickness = new Thickness(0, 0, 0, 1),
+                                VerticalAlignment = System.Windows.VerticalAlignment.Bottom
+                            },
+                            new StackPanel
+                            {
+                                Orientation = Orientation.Horizontal,
+                                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                                VerticalAlignment = System.Windows.VerticalAlignment.Bottom,
+                                Children =
+                                {
+                                    CreatePreviewBar(26),
+                                    CreatePreviewBar(54),
+                                    CreatePreviewBar(38),
+                                    CreatePreviewBar(72)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+    private static Border CreatePreviewBar(double height) =>
+        new()
+        {
+            Width = 22,
+            Height = height,
+            Margin = new Thickness(4, 0, 4, 0),
+            Background = SystemColors.HighlightBrush
+        };
 
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 76);
@@ -102,7 +329,8 @@ public sealed record ChangeChartTypeDialogResult(ChartType ChartType);
 
 public sealed class ChangeChartTypeDialog : Window
 {
-    private readonly ComboBox _chartTypeBox = new();
+    private readonly ListBox _categoryList = new();
+    private readonly ListBox _subtypeGallery = new();
 
     public ChartType SelectedChartType { get; private set; }
     public ChangeChartTypeDialogResult Result { get; private set; }
@@ -112,27 +340,36 @@ public sealed class ChangeChartTypeDialog : Window
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
         Title = "Change Chart Type";
-        Width = 340;
-        Height = 180;
+        Width = 640;
+        Height = 390;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        _chartTypeBox.ItemsSource = ChartTypePickerPlanner.GetSupportedOptions();
-        _chartTypeBox.DisplayMemberPath = nameof(ChartTypePickerOption.DisplayName);
-        _chartTypeBox.SelectedItem = ChartTypePickerPlanner.GetSupportedOptions()
-            .FirstOrDefault(option => option.Type == currentType);
-        stack.Children.Add(_chartTypeBox);
-        stack.Children.Add(CreateButtonRow());
-        Content = stack;
+        var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
+        var heading = new TextBlock
+        {
+            Text = "Choose a chart type",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        DockPanel.SetDock(heading, Dock.Top);
+        root.Children.Add(heading);
+        var panel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
+        panel.Height = 290;
+        DockPanel.SetDock(panel, Dock.Top);
+        root.Children.Add(panel);
+        var buttons = CreateButtonRow();
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        Content = root;
     }
 
     public static ChangeChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
 
     private StackPanel CreateButtonRow() => InsertChartDialog.CreateButtonRow(() =>
     {
-        if (_chartTypeBox.SelectedItem is ChartTypePickerOption option)
+        if (_subtypeGallery.SelectedItem is ChartTypeGalleryChoice option)
             SelectedChartType = option.Type;
         Result = CreateResult(SelectedChartType);
         DialogResult = true;
@@ -266,7 +503,7 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = "Object in sheet", IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = "_Object in sheet", IsChecked = true };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
@@ -284,7 +521,7 @@ public sealed class MoveChartDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         _targetBox.Text = currentSheetName;
         stack.Children.Add(_objectInSheet);
-        stack.Children.Add(new RadioButton { Content = "New chart sheet", Margin = new Thickness(0, 4, 0, 8) });
+        stack.Children.Add(new RadioButton { Content = "_New chart sheet", Margin = new Thickness(0, 4, 0, 8) });
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -320,8 +557,8 @@ public sealed record SelectDataSourceDialogResult(
 public sealed class SelectDataSourceDialog : Window
 {
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains category labels" };
-    private readonly CheckBox _switchRowColumnBox = new() { Content = "Switch Row/Column" };
+    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains _category labels" };
+    private readonly CheckBox _switchRowColumnBox = new() { Content = "_Switch Row/Column" };
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
 
@@ -338,13 +575,25 @@ public sealed class SelectDataSourceDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Chart data range", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Chart data range:", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
         stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_switchRowColumnBox);
-        stack.Children.Add(CreateSourceListPanel("Legend Entries (Series)", _seriesList));
-        stack.Children.Add(CreateSourceListPanel("Horizontal (Category) Axis Labels", _axisLabelsList));
+        _seriesList.Items.Add("Series 1");
+        _axisLabelsList.Items.Add("Category labels");
+        stack.Children.Add(CreateSourceListPanel(
+            "Legend Entries (Series)",
+            "Series list",
+            "Name and values are inferred from the selected chart range.",
+            _seriesList,
+            ("_Add series", "_Edit series", "_Remove series")));
+        stack.Children.Add(CreateSourceListPanel(
+            "Horizontal (Category) Axis Labels",
+            "Axis label list",
+            "Axis labels are inferred from the first category column.",
+            _axisLabelsList,
+            ("_Edit Axis Labels", null, null)));
         _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
         _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 16);
         stack.Children.Add(_firstColumnCategoriesBox);
@@ -391,7 +640,12 @@ public sealed class SelectDataSourceDialog : Window
         textBox.SelectAll();
     }
 
-    private static Grid CreateSourceListPanel(string title, ListBox list)
+    private static Grid CreateSourceListPanel(
+        string title,
+        string automationName,
+        string helpText,
+        ListBox list,
+        (string Add, string? Edit, string? Remove) buttons)
     {
         var panel = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -399,23 +653,30 @@ public sealed class SelectDataSourceDialog : Window
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        panel.Children.Add(new TextBlock { Text = title, Margin = new Thickness(0, 0, 0, 4) });
+        var header = new StackPanel();
+        header.Children.Add(new TextBlock { Text = title, Margin = new Thickness(0, 0, 0, 2) });
+        header.Children.Add(CreateInlineHelp(helpText));
+        panel.Children.Add(header);
+        AutomationProperties.SetName(list, automationName);
+        AutomationProperties.SetHelpText(list, helpText);
         Grid.SetRow(list, 1);
         panel.Children.Add(list);
 
-        var buttons = AddEditRemoveButtons();
-        Grid.SetColumn(buttons, 1);
-        Grid.SetRowSpan(buttons, 2);
-        panel.Children.Add(buttons);
+        var buttonPanel = AddEditRemoveButtons(buttons);
+        Grid.SetColumn(buttonPanel, 1);
+        Grid.SetRowSpan(buttonPanel, 2);
+        panel.Children.Add(buttonPanel);
         return panel;
     }
 
-    private static StackPanel AddEditRemoveButtons()
+    private static StackPanel AddEditRemoveButtons((string Add, string? Edit, string? Remove) labels)
     {
         var stack = new StackPanel { Margin = new Thickness(8, 20, 0, 0) };
-        stack.Children.Add(new Button { Content = "Add", Width = 74, Margin = new Thickness(0, 0, 0, 4) });
-        stack.Children.Add(new Button { Content = "Edit", Width = 74, Margin = new Thickness(0, 0, 0, 4) });
-        stack.Children.Add(new Button { Content = "Remove", Width = 74 });
+        stack.Children.Add(new Button { Content = labels.Add, Width = 92, Margin = new Thickness(0, 0, 0, 4) });
+        if (labels.Edit is not null)
+            stack.Children.Add(new Button { Content = labels.Edit, Width = 92, Margin = new Thickness(0, 0, 0, 4) });
+        if (labels.Remove is not null)
+            stack.Children.Add(new Button { Content = labels.Remove, Width = 92 });
         return stack;
     }
 }
@@ -522,21 +783,30 @@ public sealed class ChartAreaLegendDialog : Window
 
     private StackPanel CreateContent()
     {
-        var stack = ChartDialogHelpers.DialogStack();
-        ChartDialogHelpers.AddColorText(stack, "Chart area fill color", _chartAreaFillBox);
-        ChartDialogHelpers.AddColorText(stack, "Plot area fill color", _plotAreaFillBox);
-        ChartDialogHelpers.AddColorText(stack, "Plot area border color", _plotAreaBorderBox);
-        ChartDialogHelpers.AddText(stack, "Plot area border width", _plotAreaBorderThicknessBox);
-        ChartDialogHelpers.AddCheck(stack, _showLegendBox);
-        ChartDialogHelpers.AddCombo(stack, "Legend position", _legendPositionBox, Enum.GetValues<ChartLegendPosition>());
-        ChartDialogHelpers.AddCheck(stack, _legendOverlayBox);
-        ChartDialogHelpers.AddColorText(stack, "Legend text color", _legendTextBox);
-        ChartDialogHelpers.AddColorText(stack, "Legend fill color", _legendFillBox);
-        ChartDialogHelpers.AddColorText(stack, "Legend border color", _legendBorderBox);
-        ChartDialogHelpers.AddText(stack, "Legend border width", _legendBorderThicknessBox);
-        ChartDialogHelpers.AddText(stack, "Legend font size", _legendFontSizeBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
-        return stack;
+        var root = ChartDialogHelpers.DialogStack();
+        {
+            var stack = new StackPanel();
+            stack.Children.Add(CreateInlineHelp("Set the chart and plot area fills, borders, and line weights."));
+            ChartDialogHelpers.AddColorText(stack, "Chart area fill color", _chartAreaFillBox);
+            ChartDialogHelpers.AddColorText(stack, "Plot area fill color", _plotAreaFillBox);
+            ChartDialogHelpers.AddColorText(stack, "Plot area border color", _plotAreaBorderBox);
+            ChartDialogHelpers.AddNumericText(stack, "Plot area border width", _plotAreaBorderThicknessBox, "Enter a line width from 0 to 10 points.");
+            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+        }
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddCheck(stack, _showLegendBox);
+            ChartDialogHelpers.AddCombo(stack, "Legend position", _legendPositionBox, Enum.GetValues<ChartLegendPosition>());
+            ChartDialogHelpers.AddCheck(stack, _legendOverlayBox);
+            ChartDialogHelpers.AddColorText(stack, "Legend text color", _legendTextBox);
+            ChartDialogHelpers.AddColorText(stack, "Legend fill color", _legendFillBox);
+            ChartDialogHelpers.AddColorText(stack, "Legend border color", _legendBorderBox);
+            ChartDialogHelpers.AddNumericText(stack, "Legend border width", _legendBorderThicknessBox, "Enter a line width from 0 to 10 points.");
+            ChartDialogHelpers.AddNumericText(stack, "Legend font size", _legendFontSizeBox, "Enter a font size from 6 to 72 points.");
+            root.Children.Add(CreateGroupBox("Legend", stack));
+        }
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
     }
 
     private void Load(ChartAreaLegendDialogResult result)
@@ -678,23 +948,31 @@ public sealed class ChartDataLabelsDialog : Window
 
     private StackPanel CreateContent()
     {
-        var stack = ChartDialogHelpers.DialogStack();
-        ChartDialogHelpers.AddCheck(stack, _showBox);
-        ChartDialogHelpers.AddCombo(stack, "Position", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
-        ChartDialogHelpers.AddCheck(stack, _categoryBox);
-        ChartDialogHelpers.AddCheck(stack, _seriesBox);
-        ChartDialogHelpers.AddCheck(stack, _percentageBox);
-        ChartDialogHelpers.AddCombo(stack, "Separator", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
-        ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
-        ChartDialogHelpers.AddCheck(stack, _calloutsBox);
-        ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
-        ChartDialogHelpers.AddColorText(stack, "Border color", _borderBox);
-        ChartDialogHelpers.AddColorText(stack, "Text color", _textBox);
-        ChartDialogHelpers.AddText(stack, "Border thickness", _borderThicknessBox);
-        ChartDialogHelpers.AddText(stack, "Font size", _fontSizeBox);
-        ChartDialogHelpers.AddText(stack, "Text angle", _angleBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
-        return stack;
+        var root = ChartDialogHelpers.DialogStack();
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddCheck(stack, _showBox);
+            ChartDialogHelpers.AddCombo(stack, "Position", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
+            ChartDialogHelpers.AddCheck(stack, _categoryBox);
+            ChartDialogHelpers.AddCheck(stack, _seriesBox);
+            ChartDialogHelpers.AddCheck(stack, _percentageBox);
+            ChartDialogHelpers.AddCombo(stack, "Separator", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
+            ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCheck(stack, _calloutsBox);
+            root.Children.Add(CreateGroupBox("Label Options", stack));
+        }
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
+            ChartDialogHelpers.AddColorText(stack, "Border color", _borderBox);
+            ChartDialogHelpers.AddColorText(stack, "Text color", _textBox);
+            ChartDialogHelpers.AddNumericText(stack, "Border thickness", _borderThicknessBox, "Enter a border width in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Font size", _fontSizeBox, "Enter a font size in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Text angle", _angleBox, "Enter degrees from -90 to 90.");
+            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+        }
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
     }
 
     private void Load(ChartDataLabelsDialogResult result)
@@ -811,18 +1089,26 @@ public sealed class ChartTrendlineOptionsDialog : Window
 
     private StackPanel CreateContent()
     {
-        var stack = ChartDialogHelpers.DialogStack();
-        ChartDialogHelpers.AddCheck(stack, _showBox);
-        ChartDialogHelpers.AddCombo(stack, "Type", _typeBox, Enum.GetValues<ChartTrendlineType>());
-        ChartDialogHelpers.AddText(stack, "Moving average period", _periodBox);
-        ChartDialogHelpers.AddText(stack, "Polynomial order", _orderBox);
-        ChartDialogHelpers.AddCheck(stack, _equationBox);
-        ChartDialogHelpers.AddCheck(stack, _rSquaredBox);
-        ChartDialogHelpers.AddColorText(stack, "Line color", _colorBox);
-        ChartDialogHelpers.AddText(stack, "Line width", _thicknessBox);
-        ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>());
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
-        return stack;
+        var root = ChartDialogHelpers.DialogStack();
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddCheck(stack, _showBox);
+            ChartDialogHelpers.AddCombo(stack, "Type", _typeBox, Enum.GetValues<ChartTrendlineType>());
+            ChartDialogHelpers.AddNumericText(stack, "Moving average period", _periodBox, "Enter a period from 2 to 255.");
+            ChartDialogHelpers.AddNumericText(stack, "Polynomial order", _orderBox, "Enter an order from 2 to 6.");
+            ChartDialogHelpers.AddCheck(stack, _equationBox);
+            ChartDialogHelpers.AddCheck(stack, _rSquaredBox);
+            root.Children.Add(CreateGroupBox("Trendline Options", stack));
+        }
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddColorText(stack, "Line color", _colorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Line width", _thicknessBox, "Enter a line width in points.");
+            ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>());
+            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+        }
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
     }
 
     private void Load(ChartTrendlineOptionsDialogResult result)
@@ -914,14 +1200,16 @@ public sealed class ChartErrorBarsDialog : Window
 
     private StackPanel CreateContent()
     {
-        var stack = ChartDialogHelpers.DialogStack();
+        var root = ChartDialogHelpers.DialogStack();
+        var stack = new StackPanel();
         ChartDialogHelpers.AddCheck(stack, _showBox);
         ChartDialogHelpers.AddCombo(stack, "Type", _kindBox, Enum.GetValues<ChartErrorBarKind>());
         ChartDialogHelpers.AddCombo(stack, "Direction", _directionBox, Enum.GetValues<ChartErrorBarDirection>());
-        ChartDialogHelpers.AddText(stack, "Value", _valueBox);
+        ChartDialogHelpers.AddNumericText(stack, "Value", _valueBox, "Enter the error amount or percentage.");
         ChartDialogHelpers.AddCheck(stack, _endCapsBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
-        return stack;
+        root.Children.Add(CreateGroupBox("Error Amount", stack));
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
     }
 
     private void Load(ChartErrorBarsDialogResult result)
@@ -1090,28 +1378,41 @@ public sealed class ChartAxisFormatDialog : Window
 
     private StackPanel CreateContent()
     {
-        var stack = ChartDialogHelpers.DialogStack();
-        ChartDialogHelpers.AddText(stack, "Minimum (blank for Auto)", _minimumBox);
-        ChartDialogHelpers.AddText(stack, "Maximum (blank for Auto)", _maximumBox);
-        ChartDialogHelpers.AddText(stack, "Major unit", _majorUnitBox);
-        ChartDialogHelpers.AddText(stack, "Minor unit", _minorUnitBox);
-        ChartDialogHelpers.AddCheck(stack, _logBox);
-        ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
-        ChartDialogHelpers.AddCheck(stack, _majorGridBox);
-        ChartDialogHelpers.AddCheck(stack, _minorGridBox);
-        ChartDialogHelpers.AddColorText(stack, "Major gridline color", _majorGridColorBox);
-        ChartDialogHelpers.AddColorText(stack, "Minor gridline color", _minorGridColorBox);
-        ChartDialogHelpers.AddText(stack, "Gridline width", _gridlineThicknessBox);
-        ChartDialogHelpers.AddCombo(stack, "Major tick marks", _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
-        ChartDialogHelpers.AddCombo(stack, "Minor tick marks", _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
-        ChartDialogHelpers.AddCheck(stack, _labelsBox);
-        ChartDialogHelpers.AddColorText(stack, "Label color", _labelColorBox);
-        ChartDialogHelpers.AddText(stack, "Label font size", _labelFontSizeBox);
-        ChartDialogHelpers.AddText(stack, "Label angle", _labelAngleBox);
-        ChartDialogHelpers.AddColorText(stack, "Axis line color", _lineColorBox);
-        ChartDialogHelpers.AddText(stack, "Axis line width", _lineThicknessBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
-        return stack;
+        var root = ChartDialogHelpers.DialogStack();
+        {
+            var stack = new StackPanel();
+            stack.Children.Add(CreateInlineHelp("Leave bounds blank for Auto."));
+            ChartDialogHelpers.AddNumericText(stack, "Minimum (blank for Auto)", _minimumBox, "Blank or Auto keeps the automatic minimum.");
+            ChartDialogHelpers.AddNumericText(stack, "Maximum (blank for Auto)", _maximumBox, "Blank or Auto keeps the automatic maximum.");
+            ChartDialogHelpers.AddNumericText(stack, "Major unit", _majorUnitBox, "Blank keeps the automatic major unit.");
+            ChartDialogHelpers.AddNumericText(stack, "Minor unit", _minorUnitBox, "Blank keeps the automatic minor unit.");
+            ChartDialogHelpers.AddCheck(stack, _logBox);
+            ChartDialogHelpers.AddCombo(stack, "Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            root.Children.Add(CreateGroupBox("Axis Options", stack));
+        }
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddCheck(stack, _majorGridBox);
+            ChartDialogHelpers.AddCheck(stack, _minorGridBox);
+            ChartDialogHelpers.AddColorText(stack, "Major gridline color", _majorGridColorBox);
+            ChartDialogHelpers.AddColorText(stack, "Minor gridline color", _minorGridColorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Gridline width", _gridlineThicknessBox, "Enter a gridline width in points.");
+            root.Children.Add(CreateGroupBox("Gridlines", stack));
+        }
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddCombo(stack, "Major tick marks", _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCombo(stack, "Minor tick marks", _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCheck(stack, _labelsBox);
+            ChartDialogHelpers.AddColorText(stack, "Label color", _labelColorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Label font size", _labelFontSizeBox, "Enter a font size in points.");
+            ChartDialogHelpers.AddNumericText(stack, "Label angle", _labelAngleBox, "Enter label rotation in degrees.");
+            ChartDialogHelpers.AddColorText(stack, "Axis line color", _lineColorBox);
+            ChartDialogHelpers.AddNumericText(stack, "Axis line width", _lineThicknessBox, "Enter an axis line width in points.");
+            root.Children.Add(CreateGroupBox("Tick Marks", stack));
+        }
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
     }
 
     private void Load(ChartAxisFormatDialogResult result)
@@ -1237,16 +1538,25 @@ public sealed class ChartSeriesFormatDialog : Window
 
     private StackPanel CreateContent(int seriesCount)
     {
-        var stack = ChartDialogHelpers.DialogStack();
-        ChartDialogHelpers.AddCombo(stack, "Series", _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => $"Series {index + 1}").ToArray());
-        ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
-        ChartDialogHelpers.AddColorText(stack, "Line color", _strokeBox);
-        ChartDialogHelpers.AddText(stack, "Line width", _strokeThicknessBox);
-        ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend("(none)").ToArray());
-        ChartDialogHelpers.AddCombo(stack, "Marker", _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend("(none)").ToArray());
-        ChartDialogHelpers.AddText(stack, "Marker size", _markerSizeBox);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
-        return stack;
+        var root = ChartDialogHelpers.DialogStack();
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddCombo(stack, "Series", _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => $"Series {index + 1}").ToArray());
+            stack.Children.Add(CreateInlineHelp("Choose the series to format without changing the chart data."));
+            root.Children.Add(CreateGroupBox("Series Options", stack));
+        }
+        {
+            var stack = new StackPanel();
+            ChartDialogHelpers.AddColorText(stack, "Fill color", _fillBox);
+            ChartDialogHelpers.AddColorText(stack, "Line color", _strokeBox);
+            ChartDialogHelpers.AddNumericText(stack, "Line width", _strokeThicknessBox, "Blank keeps the automatic line width.");
+            ChartDialogHelpers.AddCombo(stack, "Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend("(none)").ToArray());
+            ChartDialogHelpers.AddCombo(stack, "Marker", _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend("(none)").ToArray());
+            ChartDialogHelpers.AddNumericText(stack, "Marker size", _markerSizeBox, "Blank keeps the automatic marker size.");
+            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+        }
+        root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return root;
     }
 
     private void Load(ChartSeriesFormatDialogResult result)
@@ -1278,6 +1588,24 @@ internal static class ChartDialogHelpers
 {
 public static StackPanel DialogStack() => new() { Margin = new Thickness(16) };
 
+public static GroupBox CreateGroupBox(string header, UIElement content) =>
+    new()
+    {
+        Header = header,
+        Content = content,
+        Padding = new Thickness(10),
+        Margin = new Thickness(0, 0, 0, 10)
+    };
+
+public static TextBlock CreateInlineHelp(string text) =>
+    new()
+    {
+        Text = text,
+        TextWrapping = TextWrapping.Wrap,
+        Foreground = SystemColors.GrayTextBrush,
+        Margin = new Thickness(0, 0, 0, 6)
+    };
+
 public static void AddCheck(Panel stack, CheckBox checkBox)
 {
     checkBox.Margin = new Thickness(0, 0, 0, 6);
@@ -1297,6 +1625,13 @@ public static void AddText(Panel stack, string label, TextBox textBox)
     stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
     textBox.Margin = new Thickness(0, 0, 0, 8);
     stack.Children.Add(textBox);
+}
+
+public static void AddNumericText(Panel stack, string label, TextBox textBox, string helpText)
+{
+    AddText(stack, label, textBox);
+    AutomationProperties.SetHelpText(textBox, helpText);
+    textBox.ToolTip = helpText;
 }
 
 public static void AddColorText(Panel stack, string label, TextBox textBox)

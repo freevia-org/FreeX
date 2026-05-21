@@ -94,7 +94,7 @@ public class ExportPlannerTests
     }
 
     [Fact]
-    public void ExportOptions_DescribeWithXpsFormatDoesNotClaimPdfDocumentProperties()
+    public void ExportOptions_DescribeWithXpsFormatIncludesDocumentProperties()
     {
         var options = new ExportOptions(
             ExportContentScope.Selection,
@@ -102,7 +102,7 @@ public class ExportPlannerTests
             OpenAfterPublish: true);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; document properties are not included in XPS output; open after publishing.");
+            .Should().Be("Selection; document properties are included; open after publishing.");
     }
 
     [Fact]
@@ -140,10 +140,13 @@ public class ExportPlannerTests
 
         foreach (var expected in new[]
         {
-            "Content = \"_Active sheet\"",
-            "Content = \"_Selection\"",
-            "Content = \"_Entire workbook\"",
+            "Content = \"Active _sheet(s)\"",
+            "Content = \"Selected _range\"",
+            "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
+            "Content = \"_Ignore print areas\"",
+            "Content = \"_Create bookmarks using sheet names\"",
+            "Content = \"Save _only the active sheet\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Pages from\"",
             "Target = _fromPageBox",
@@ -220,7 +223,7 @@ public class ExportPlannerTests
     }
 
     [Fact]
-    public void DescribeRequest_ForXpsDoesNotClaimPdfDocumentPropertiesAreEmbedded()
+    public void DescribeRequest_ForXpsIncludesDocumentProperties()
     {
         var request = ExportPlanner.PlanExport(
             @"C:\temp\report.xps",
@@ -230,7 +233,7 @@ public class ExportPlannerTests
                 OpenAfterPublish: false));
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; document properties are not included in XPS output.");
+            "Options: Active sheet only; document properties are included.");
     }
 
     [Theory]
@@ -431,6 +434,28 @@ public class ExportPlannerTests
                 Keywords: "Freexcel, spreadsheet"));
     }
 
+    [Fact]
+    public void XpsDocumentProperties_ApplyToPackageProperties_WhenOptionIsRequested()
+    {
+        var workbook = new Workbook("Budget Model");
+        using var stream = new MemoryStream();
+        using var package = System.IO.Packaging.Package.Open(stream, FileMode.Create, FileAccess.ReadWrite);
+
+        XpsDocumentProperties.ApplyToPackage(
+            package,
+            XpsDocumentProperties.FromWorkbook(
+                workbook,
+                new ExportOptions(
+                    ExportContentScope.ActiveSheet,
+                    IncludeDocumentProperties: true,
+                    OpenAfterPublish: false)));
+
+        package.PackageProperties.Title.Should().Be("Budget Model");
+        package.PackageProperties.Creator.Should().Be("Freexcel");
+        package.PackageProperties.Subject.Should().Be("Freexcel workbook export");
+        package.PackageProperties.Keywords.Should().Be("Freexcel, spreadsheet");
+    }
+
     private static FixedDocument CreateOnePageDocument()
         => CreateDocument(pageCount: 1);
 
@@ -521,6 +546,7 @@ public class ExportPlannerTests
         printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
         printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange)");

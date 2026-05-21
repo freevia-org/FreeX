@@ -124,6 +124,17 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Vlookup_OmittedRangeLookup_DefaultsToApproximateMatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),   (1, 2, new TextValue("one")),
+            (2, 1, new NumberValue(10)),  (2, 2, new TextValue("ten")),
+            (3, 1, new NumberValue(100)), (3, 2, new TextValue("hundred")));
+
+        _eval.Evaluate("=VLOOKUP(15,A1:B3,2,)", sheet).Should().Be(new TextValue("ten"));
+    }
+
+    [Fact]
     public void Vlookup_TextKey_ExactMatch()
     {
         var sheet = MakeSheet(
@@ -199,6 +210,16 @@ public class FunctionLibraryTests
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)), (1, 2, new NumberValue(20)));
         _eval.Evaluate("=HLOOKUP(99,A1:B2,2,FALSE)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Hlookup_OmittedRangeLookup_DefaultsToApproximateMatch()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)), (1, 3, new NumberValue(100)),
+            (2, 1, new TextValue("one")), (2, 2, new TextValue("ten")), (2, 3, new TextValue("hundred")));
+
+        _eval.Evaluate("=HLOOKUP(15,A1:C2,2,)", sheet).Should().Be(new TextValue("ten"));
     }
 
     [Fact]
@@ -407,6 +428,17 @@ public class FunctionLibraryTests
             (3, 1, new NumberValue(10)));
         // lookup 7 with match_type=1 → position 2 (5 is largest <= 7)
         _eval.Evaluate("=MATCH(7,A1:A3,1)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Match_OmittedMatchType_DefaultsToAscendingApproximate()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(5)),
+            (3, 1, new NumberValue(10)));
+
+        _eval.Evaluate("=MATCH(7,A1:A3,)", sheet).Should().Be(new NumberValue(2));
     }
 
     [Fact]
@@ -2435,11 +2467,31 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_OmittedIfNotFound_DefaultsToNA()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("A")), (2, 1, new TextValue("B")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2,,0)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Xlookup_LookupArrayArgumentError_PropagatesError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)));
 
         _eval.Evaluate("=XLOOKUP(\"B\",NA(),A1:A1)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xlookup_LookupArrayElementError_PropagatesErrorWhenNoMatchFoundFirst()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA), (2, 1, new TextValue("A")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -2511,6 +2563,16 @@ public class FunctionLibraryTests
     public void Xmatch_LookupArrayArgumentError_PropagatesError()
     {
         _eval.Evaluate("=XMATCH(\"A\",NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xmatch_LookupArrayElementError_PropagatesErrorWhenNoMatchFoundFirst()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA),
+            (2, 1, new TextValue("A")));
+
+        _eval.Evaluate("=XMATCH(\"Z\",A1:A2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -10,7 +11,7 @@ public sealed class CreateTableDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _headersBox = new() { Content = "My table has headers", IsChecked = true };
+    private readonly CheckBox _headersBox = new() { Content = "_My table has headers", IsChecked = true };
     private readonly string _tableStyleName;
 
     public CreateTableDialogResult? Result { get; private set; }
@@ -28,9 +29,8 @@ public sealed class CreateTableDialog : Window
 
         _rangeBox.Text = defaultRangeText;
         var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(new TextBlock { Text = "Where is the data for your table?", Margin = new Thickness(0, 0, 0, 4) });
-        _rangeBox.Margin = new Thickness(0, 0, 0, 12);
-        root.Children.Add(_rangeBox);
+        root.Children.Add(new Label { Content = "_Where is the data for your table?", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(CreateReferenceEditor(_rangeBox, "Select table range"));
         _headersBox.Margin = new Thickness(0, 0, 0, 16);
         root.Children.Add(_headersBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
@@ -45,6 +45,32 @@ public sealed class CreateTableDialog : Window
         out CreateTableDialogResult result,
         out string? error) =>
         CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
+
+    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
+    {
+        var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
+        var pickerButton = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(0, 0, 6, 0),
+            Tag = textBox
+        };
+        AutomationProperties.SetName(pickerButton, automationName);
+        pickerButton.Click += ReferencePickerButton_Click;
+        panel.Children.Add(pickerButton);
+        panel.Children.Add(textBox);
+        return panel;
+    }
+
+    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: TextBox textBox })
+            return;
+
+        textBox.Focus();
+        textBox.SelectAll();
+    }
 
     private void Accept()
     {

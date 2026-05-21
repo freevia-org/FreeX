@@ -24,6 +24,12 @@ public sealed class DataTableDialog : Window
     private readonly TextBox _formulaBox = new();
     private readonly TextBox _rowInputBox = new();
     private readonly TextBox _columnInputBox = new();
+    private readonly TextBlock _modeHint = new()
+    {
+        Foreground = SystemColors.GrayTextBrush,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 6, 0, 0)
+    };
 
     public DataTableDialogResult? Result { get; private set; }
 
@@ -31,28 +37,41 @@ public sealed class DataTableDialog : Window
     {
         _sheetId = sheetId;
         Title = "Data Table";
-        Width = 340;
-        Height = 260;
+        Width = 420;
+        Height = 310;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         _modeBox.ItemsSource = Enum.GetValues<DataTableMode>();
         _modeBox.SelectedItem = DataTableMode.OneVariable;
+        _modeBox.SelectionChanged += (_, _) => UpdateModeHint();
         _formulaBox.Text = new CellAddress(sheetId, range.Start.Row, Math.Min(CellAddress.MaxCol, range.Start.Col + 1)).ToA1();
         _columnInputBox.Text = _formulaBox.Text;
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new TextBlock { Text = "Type:" });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Substitute values in the selected table using one or two worksheet input cells.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+        root.Children.Add(new Label { Content = "_Type:", Target = _modeBox, Padding = new Thickness(0) });
         root.Children.Add(_modeBox);
-        root.Children.Add(new TextBlock { Text = "Formula cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_formulaBox, "Select formula cell"));
-        root.Children.Add(new TextBlock { Text = "Row input cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_rowInputBox, "Select row input cell"));
-        root.Children.Add(new TextBlock { Text = "Column input cell:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_columnInputBox, "Select column input cell"));
-        root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
+        root.Children.Add(_modeHint);
+
+        var inputGroup = new GroupBox { Header = "Inputs", Margin = new Thickness(0, 12, 0, 0) };
+        var grid = new Grid { Margin = new Thickness(8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddReferenceRow(grid, 0, "_Formula cell:", _formulaBox, "Select formula cell");
+        AddReferenceRow(grid, 1, "_Row input cell:", _rowInputBox, "Select row input cell");
+        AddReferenceRow(grid, 2, "_Column input cell:", _columnInputBox, "Select column input cell");
+        inputGroup.Content = grid;
+        root.Children.Add(inputGroup);
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 14, 0, 0)));
         Content = root;
+        UpdateModeHint();
     }
 
     public static bool TryParse(
@@ -125,7 +144,7 @@ public sealed class DataTableDialog : Window
         var panel = new DockPanel();
         var pickerButton = new Button
         {
-            Content = "...",
+            Content = "Collapse Dialog",
             Width = 28,
             Margin = new Thickness(0, 0, 6, 0),
             Tag = textBox
@@ -135,6 +154,35 @@ public sealed class DataTableDialog : Window
         panel.Children.Add(pickerButton);
         panel.Children.Add(textBox);
         return panel;
+    }
+
+    private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
+    {
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var labelBlock = new Label
+        {
+            Content = label,
+            Target = textBox,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0)
+        };
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        var editor = CreateReferenceEditor(textBox, automationName);
+        editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
+        Grid.SetRow(editor, row);
+        Grid.SetColumn(editor, 1);
+        grid.Children.Add(editor);
+    }
+
+    private void UpdateModeHint()
+    {
+        _modeHint.Text = _modeBox.SelectedItem is DataTableMode.TwoVariable
+            ? "Two-variable data tables require both a row input cell and a column input cell."
+            : "One-variable data tables use either the row input cell or the column input cell.";
     }
 
     private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)

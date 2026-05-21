@@ -3247,7 +3247,7 @@
                             <Button Content="Columns" Click="PivotFieldToColumnsBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Columns"/>
                             <Button Content="Values" Click="PivotFieldToValuesBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Values"/>
                             <Button Content="Filters" Click="PivotFieldToFiltersBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Add selected PivotTable field to Filters"/>
-                            <Button Content="Remove" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Remove selected PivotTable field"/>
+                            <Button Content="_Remove" Click="PivotFieldRemoveBtn_Click" Margin="1" MinHeight="24" AutomationProperties.Name="Remove selected PivotTable field"/>
                         </UniformGrid>
                         <DockPanel Margin="0,6,0,0" LastChildFill="False">
                             <CheckBox x:Name="PivotFieldListDeferLayoutCheckBox"
@@ -3776,12 +3776,12 @@
                             Click="SsInfoBtn_Click"
                             local:RibbonTooltip.Title="Info"
                             local:RibbonTooltip.KeyTip="I"/>
-                    <Button Content="Save" HorizontalAlignment="Stretch"
+                    <Button Content="_Save" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveButton_Click"
                             local:RibbonTooltip.Title="Save"
                             local:RibbonTooltip.KeyTip="S"/>
-                    <Button Content="Save As" HorizontalAlignment="Stretch"
+                    <Button Content="_Save As" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveAsButton_Click"
                             local:RibbonTooltip.Title="Save As"
@@ -3797,8 +3797,8 @@
                             Click="ExportPdfButton_Click"
                             local:RibbonTooltip.Title="Export PDF/XPS"
                             local:RibbonTooltip.KeyTip="E"
-                            local:RibbonTooltip.Description="Save the active sheet as a PDF file or an XPS package."/>
-                    <Button Content="Close" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.Description="Save sheets, the current selection, or the workbook as a PDF file or an XPS package."/>
+                    <Button Content="_Close" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsCloseBtn_Click"
                             local:RibbonTooltip.Title="Close"

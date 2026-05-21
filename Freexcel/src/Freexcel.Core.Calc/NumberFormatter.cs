@@ -6,6 +6,38 @@ namespace Freexcel.Core.Calc;
 
 public static class NumberFormatter
 {
+    private readonly record struct LocaleFormatSeparators(
+        string DecimalSeparator,
+        string GroupSeparator,
+        string DateSeparator);
+
+    private static readonly IReadOnlyDictionary<string, LocaleFormatSeparators> LocaleFormatCatalog =
+        new Dictionary<string, LocaleFormatSeparators>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["409"] = new(".", ",", "/"),
+            ["405"] = new(",", " ", "."),
+            ["406"] = new(",", ".", "-"),
+            ["407"] = new(",", ".", "."),
+            ["40B"] = new(",", " ", "."),
+            ["40C"] = new(",", " ", "/"),
+            ["40E"] = new(",", " ", "."),
+            ["410"] = new(",", ".", "/"),
+            ["413"] = new(",", ".", "-"),
+            ["414"] = new(",", " ", "."),
+            ["415"] = new(",", " ", "."),
+            ["416"] = new(",", ".", "/"),
+            ["419"] = new(",", " ", "."),
+            ["41D"] = new(",", " ", "-"),
+            ["41F"] = new(",", ".", "."),
+            ["422"] = new(",", " ", "."),
+            ["807"] = new(".", "'", "."),
+            ["813"] = new(",", ".", "/"),
+            ["816"] = new(",", " ", "/"),
+            ["C0A"] = new(",", ".", "/"),
+            ["1009"] = new(".", ",", "-"),
+            ["100C"] = new(".", "'", ".")
+        };
+
     private static readonly string[] IndexedFormatColors =
     [
         "",
@@ -555,25 +587,16 @@ public static class NumberFormatter
         if (normalized.Length == 0)
             normalized = "0";
 
-        (string DecimalSeparator, string GroupSeparator, string DateSeparator)? separators = normalized switch
-        {
-            "409" => (".", ",", "/"),
-            "407" => (",", ".", "."),
-            "40C" => (",", " ", "/"),
-            "422" => (",", " ", "."),
-            _ => null
-        };
-
-        if (separators is null)
+        if (!LocaleFormatCatalog.TryGetValue(normalized, out var separators))
             return false;
 
         numberFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
-        numberFormat.NumberDecimalSeparator = separators.Value.DecimalSeparator;
-        numberFormat.NumberGroupSeparator = separators.Value.GroupSeparator;
-        numberFormat.PercentDecimalSeparator = separators.Value.DecimalSeparator;
-        numberFormat.PercentGroupSeparator = separators.Value.GroupSeparator;
+        numberFormat.NumberDecimalSeparator = separators.DecimalSeparator;
+        numberFormat.NumberGroupSeparator = separators.GroupSeparator;
+        numberFormat.PercentDecimalSeparator = separators.DecimalSeparator;
+        numberFormat.PercentGroupSeparator = separators.GroupSeparator;
         dateTimeFormat = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
-        dateTimeFormat.DateSeparator = separators.Value.DateSeparator;
+        dateTimeFormat.DateSeparator = separators.DateSeparator;
         return true;
     }
 

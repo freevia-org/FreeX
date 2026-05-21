@@ -1,5 +1,7 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FluentAssertions;
@@ -90,6 +92,56 @@ public sealed class ManageConditionalFormatsDialogTests
         };
 
         ManageConditionalFormatsDialog.PreviewBrush(rule).Should().BeSameAs(Brushes.LightGray);
+    }
+
+    [Fact]
+    public void PreviewBrush_DataBarUsesRuleColor()
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = CfRuleType.DataBar,
+            DataBarColor = new RgbColor(91, 155, 213)
+        };
+
+        var brush = ManageConditionalFormatsDialog.PreviewBrush(rule).Should().BeOfType<SolidColorBrush>().Subject;
+        brush.Color.Should().Be(Color.FromRgb(91, 155, 213));
+    }
+
+    [Fact]
+    public void PreviewBrush_ColorScaleUsesGradientPreview()
+    {
+        var rule = new ConditionalFormat
+        {
+            RuleType = CfRuleType.ColorScale,
+            MinColor = new RgbColor(99, 190, 123),
+            MaxColor = new RgbColor(248, 105, 107)
+        };
+
+        var brush = ManageConditionalFormatsDialog.PreviewBrush(rule).Should().BeOfType<LinearGradientBrush>().Subject;
+        brush.GradientStops.Should().ContainSingle(stop => stop.Color == Color.FromRgb(99, 190, 123));
+        brush.GradientStops.Should().ContainSingle(stop => stop.Color == Color.FromRgb(248, 105, 107));
+    }
+
+    [Fact]
+    public void AppliesToColumn_UsesEditableRangeTextAndPickerButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ManageConditionalFormatsDialog.cs"));
+
+        source.Should().Contain("typeof(TextBox)");
+        source.Should().Contain("typeof(Button)");
+        source.Should().Contain("new Binding(nameof(ConditionalFormat.AppliesTo))");
+        source.Should().Contain("new AppliesToRangeConverter(_sheet.Id)");
+        source.Should().Contain("ToolTipProperty, \"Select range\"");
+    }
+
+    [Fact]
+    public void TryParseAppliesToText_AcceptsExcelAbsoluteRangeText()
+    {
+        var sheetId = SheetId.New();
+        var fallback = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1));
+
+        ManageConditionalFormatsDialog.TryParseAppliesToText("$B$2:$D$5", sheetId, fallback)
+            .Should().Be(new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 5, 4)));
     }
 
     [Fact]

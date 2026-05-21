@@ -56,10 +56,48 @@ public sealed class ExcelParityRoundTripTests
     }
 
     [Theory]
+    [InlineData(0.1, 3)]
+    [InlineData(0.5, 10)]
+    [InlineData(0.9, 30)]
+    public void TInv_RoundTripsThroughTDist(double probability, double degreesFreedom)
+    {
+        double x = Number($"=T.INV({D(probability)},{D(degreesFreedom)})");
+
+        Number($"=T.DIST({D(x)},{D(degreesFreedom)},TRUE)").Should().BeApproximately(probability, 1e-5);
+    }
+
+    [Theory]
+    [InlineData(0.1, 5, 10)]
+    [InlineData(0.5, 8, 12)]
+    [InlineData(0.9, 12, 20)]
+    public void FInv_RoundTripsThroughFDist(double probability, double degFreedom1, double degFreedom2)
+    {
+        double x = Number($"=F.INV({D(probability)},{D(degFreedom1)},{D(degFreedom2)})");
+
+        Number($"=F.DIST({D(x)},{D(degFreedom1)},{D(degFreedom2)},TRUE)")
+            .Should().BeApproximately(probability, 1e-5);
+    }
+
+    [Theory]
+    [InlineData(0.1, 2)]
+    [InlineData(0.5, 5)]
+    [InlineData(0.9, 12)]
+    public void ChiSqInv_RoundTripsThroughChiSqDist(double probability, double degreesFreedom)
+    {
+        double x = Number($"=CHISQ.INV({D(probability)},{D(degreesFreedom)})");
+
+        Number($"=CHISQ.DIST({D(x)},{D(degreesFreedom)},TRUE)").Should().BeApproximately(probability, 1e-5);
+    }
+
+    [Theory]
     [InlineData(-512)]
+    [InlineData(-255)]
+    [InlineData(-128)]
     [InlineData(-1)]
     [InlineData(0)]
     [InlineData(1)]
+    [InlineData(42)]
+    [InlineData(255)]
     [InlineData(511)]
     public void BinaryEngineeringConversion_RoundTripsThroughDecimal(double value)
     {
@@ -68,9 +106,12 @@ public sealed class ExcelParityRoundTripTests
 
     [Theory]
     [InlineData(-549755813888)]
+    [InlineData(-65536)]
     [InlineData(-1)]
     [InlineData(0)]
+    [InlineData(16)]
     [InlineData(255)]
+    [InlineData(65535)]
     [InlineData(549755813887)]
     public void HexEngineeringConversion_RoundTripsThroughDecimal(double value)
     {
@@ -79,9 +120,12 @@ public sealed class ExcelParityRoundTripTests
 
     [Theory]
     [InlineData(-536870912)]
+    [InlineData(-4096)]
     [InlineData(-1)]
     [InlineData(0)]
+    [InlineData(8)]
     [InlineData(64)]
+    [InlineData(4095)]
     [InlineData(536870911)]
     public void OctalEngineeringConversion_RoundTripsThroughDecimal(double value)
     {

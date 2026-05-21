@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows.Controls;
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -11,6 +12,7 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbValidation", PasteSpecialDialogMode.Validation)]
     [InlineData("_rbAllUsingSourceTheme", PasteSpecialDialogMode.AllUsingSourceTheme)]
     [InlineData("_rbAllExceptBorders", PasteSpecialDialogMode.AllExceptBorders)]
+    [InlineData("_rbAllMergingConditionalFormats", PasteSpecialDialogMode.AllMergingConditionalFormats)]
     [InlineData("_rbFormulasAndNumberFormats", PasteSpecialDialogMode.FormulasAndNumberFormats)]
     [InlineData("_rbValuesAndNumberFormats", PasteSpecialDialogMode.ValuesAndNumberFormats)]
     [InlineData("_rbLinkedPicture", PasteSpecialDialogMode.LinkedPicture)]
@@ -34,13 +36,14 @@ public sealed class PasteSpecialDialogTests
 
     [Theory]
     [InlineData("_rbAll", "_All")]
-    [InlineData("_rbValues", "_Values only")]
-    [InlineData("_rbFormulas", "_Formulas only")]
-    [InlineData("_rbFormats", "Forma_ts only")]
+    [InlineData("_rbValues", "_Values")]
+    [InlineData("_rbFormulas", "_Formulas")]
+    [InlineData("_rbFormats", "Forma_ts")]
     [InlineData("_rbComments", "_Comments and notes")]
     [InlineData("_rbValidation", "Validatio_n")]
     [InlineData("_rbAllUsingSourceTheme", "All using source t_heme")]
     [InlineData("_rbAllExceptBorders", "All e_xcept borders")]
+    [InlineData("_rbAllMergingConditionalFormats", "All merging conditional _formats")]
     [InlineData("_rbColumnWidths", "Column _widths")]
     [InlineData("_rbFormulasAndNumberFormats", "Formulas and number fo_rmats")]
     [InlineData("_rbValuesAndNumberFormats", "Values and number for_mats")]
@@ -84,6 +87,27 @@ public sealed class PasteSpecialDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void DialogButtons_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.cs"));
+
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+    }
+
+    [Fact]
+    public void Layout_UsesExcelStyleGroupedPasteAndOperationSections()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PasteSpecialDialog.cs"));
+
+        source.Should().Contain("Header = \"Paste\"");
+        source.Should().Contain("Header = \"Operation\"");
+        source.Should().Contain("CreatePasteOptionsPanel");
+        source.Should().Contain("CreateOperationGroup");
+        source.Should().Contain("_pasteLinkButton");
     }
 
     private static RadioButton GetRadioButton(PasteSpecialDialog dialog, string fieldName)

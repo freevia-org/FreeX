@@ -8,6 +8,8 @@ namespace Freexcel.App.Host;
 
 public partial class PageSetupDialog : Window
 {
+    private readonly SheetId _sheetId;
+
     public WorksheetPageOrientation Orientation { get; private set; }
     public WorksheetPaperSize PaperSize { get; private set; }
     public WorksheetPageMargins Margins { get; private set; }
@@ -15,6 +17,7 @@ public partial class PageSetupDialog : Window
     public double FooterMargin { get; private set; }
     public bool PrintGridlines { get; private set; }
     public bool PrintHeadings { get; private set; }
+    public GridRange? PrintArea { get; private set; }
     public WorksheetScaleToFit ScaleToFit { get; private set; }
     public WorksheetRepeatRange? PrintTitleRows { get; private set; }
     public WorksheetRepeatRange? PrintTitleColumns { get; private set; }
@@ -31,6 +34,7 @@ public partial class PageSetupDialog : Window
     public PageSetupDialog(Sheet sheet)
     {
         InitializeComponent();
+        _sheetId = sheet.Id;
         Orientation = sheet.PageOrientation;
         PaperSize = sheet.PaperSize;
         Margins = sheet.PageMargins;
@@ -38,6 +42,7 @@ public partial class PageSetupDialog : Window
         FooterMargin = sheet.FooterMargin;
         PrintGridlines = sheet.PrintGridlines;
         PrintHeadings = sheet.PrintHeadings;
+        PrintArea = sheet.PrintArea;
         ScaleToFit = sheet.ScaleToFit;
         PrintTitleRows = sheet.PrintTitleRows;
         PrintTitleColumns = sheet.PrintTitleColumns;
@@ -70,9 +75,24 @@ public partial class PageSetupDialog : Window
         FooterMarginBox.Text = FooterMargin.ToString(CultureInfo.InvariantCulture);
         CenterHorizontallyBox.IsChecked = CenterHorizontally;
         CenterVerticallyBox.IsChecked = CenterVertically;
-        ScaleBox.Text = PageLayoutInputParser.FormatScaleToFit(ScaleToFit);
+        if (ScaleToFit.ScalePercent.HasValue)
+        {
+            AdjustToRadioButton.IsChecked = true;
+            ScalePercentBox.Text = ScaleToFit.ScalePercent.Value.ToString(CultureInfo.InvariantCulture);
+            FitPagesWideBox.Text = "1";
+            FitPagesTallBox.Text = "1";
+        }
+        else
+        {
+            FitToRadioButton.IsChecked = true;
+            ScalePercentBox.Text = "100";
+            FitPagesWideBox.Text = (ScaleToFit.FitToPagesWide ?? 1).ToString(CultureInfo.InvariantCulture);
+            FitPagesTallBox.Text = (ScaleToFit.FitToPagesTall ?? 1).ToString(CultureInfo.InvariantCulture);
+        }
+
         FirstPageNumberBox.Text = FirstPageNumber?.ToString(CultureInfo.InvariantCulture) ?? "";
         PrintQualityBox.Text = PrintQualityDpi?.ToString(CultureInfo.InvariantCulture) ?? "";
+        PrintAreaBox.Text = PrintArea?.ToString() ?? "";
         RowsRepeatBox.Text = PrintTitleRows is { } rows ? $"{rows.Start}:{rows.End}" : "";
         ColumnsRepeatBox.Text = PrintTitleColumns is { } cols
             ? $"{CellAddress.NumberToColumnName(cols.Start)}:{CellAddress.NumberToColumnName(cols.End)}"
@@ -118,7 +138,10 @@ public partial class PageSetupDialog : Window
             return;
         }
 
-        if (!PageLayoutInputParser.TryParseScaleToFit(ScaleBox.Text, out var scaleToFit))
+        var scaleText = FitToRadioButton.IsChecked == true
+            ? $"{FitPagesWideBox.Text}x{FitPagesTallBox.Text}"
+            : ScalePercentBox.Text;
+        if (!PageLayoutInputParser.TryParseScaleToFit(scaleText, out var scaleToFit))
         {
             MessageBox.Show(this, "Enter scaling as percent 10-400 or pages wide x tall, for example 1x1.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -135,6 +158,13 @@ public partial class PageSetupDialog : Window
         if (!PageLayoutInputParser.TryParseOptionalPrintQuality(PrintQualityBox.Text, out var printQualityDpi))
         {
             MessageBox.Show(this, "Enter a positive print quality DPI value, or leave it blank for printer default.",
+                "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryParseOptionalPrintArea(PrintAreaBox.Text, out var printArea))
+        {
+            MessageBox.Show(this, "Enter print area as a cell range like A1:C10, or leave it blank.",
                 "Page Setup", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -159,6 +189,7 @@ public partial class PageSetupDialog : Window
         Margins = margins;
         HeaderMargin = headerMargin;
         FooterMargin = footerMargin;
+        PrintArea = printArea;
         ScaleToFit = scaleToFit;
         PrintGridlines = PrintGridlinesBox.IsChecked == true;
         PrintHeadings = PrintHeadingsBox.IsChecked == true;
@@ -188,6 +219,27 @@ public partial class PageSetupDialog : Window
         };
         DialogResult = true;
         Close();
+    }
+
+    private bool TryParseOptionalPrintArea(string input, out GridRange? printArea)
+    {
+        var trimmed = input.Trim();
+        if (trimmed.Length == 0)
+        {
+            printArea = null;
+            return true;
+        }
+
+        try
+        {
+            printArea = GridRange.Parse(trimmed, _sheetId);
+            return true;
+        }
+        catch (FormatException)
+        {
+            printArea = null;
+            return false;
+        }
     }
 
 }
