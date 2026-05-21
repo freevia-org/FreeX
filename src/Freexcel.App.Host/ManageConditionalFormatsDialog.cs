@@ -175,24 +175,42 @@ public sealed class ManageConditionalFormatsDialog : Window
         gridView.Columns.Add(descCol);
 
         // Column 3 — format preview (colored rectangle)
-        var fmtCol = new GridViewColumn { Header = "Format", Width = 60 };
+        var fmtCol = new GridViewColumn { Header = "Format", Width = 95 };
         var fmtTemplate = new DataTemplate();
         var rectFactory  = new FrameworkElementFactory(typeof(Rectangle));
-        rectFactory.SetValue(Rectangle.WidthProperty, 40.0);
-        rectFactory.SetValue(Rectangle.HeightProperty, 14.0);
+        rectFactory.SetValue(Rectangle.WidthProperty, 78.0);
+        rectFactory.SetValue(Rectangle.HeightProperty, 16.0);
         rectFactory.SetValue(Rectangle.MarginProperty, new Thickness(0, 2, 0, 2));
+        rectFactory.SetValue(Rectangle.StrokeProperty, Brushes.DarkGray);
+        rectFactory.SetValue(Rectangle.StrokeThicknessProperty, 0.5);
         rectFactory.SetBinding(Rectangle.FillProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
         fmtTemplate.VisualTree = rectFactory;
         fmtCol.CellTemplate = fmtTemplate;
         gridView.Columns.Add(fmtCol);
 
         // Column 4 — AppliesTo range
-        var appliesToCol = new GridViewColumn { Header = "Applies To", Width = 130 };
+        var appliesToCol = new GridViewColumn { Header = "Applies To", Width = 170 };
         var appliesToTemplate = new DataTemplate();
-        var appliesToFactory  = new FrameworkElementFactory(typeof(TextBlock));
-        appliesToFactory.SetBinding(TextBlock.TextProperty, new Binding(".") { Converter = new AppliesToConverter() });
-        appliesToFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
-        appliesToTemplate.VisualTree = appliesToFactory;
+        var appliesToPanelFactory = new FrameworkElementFactory(typeof(DockPanel));
+        appliesToPanelFactory.SetValue(DockPanel.LastChildFillProperty, true);
+        var rangePickerFactory = new FrameworkElementFactory(typeof(Button));
+        rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
+        rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
+        rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
+        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Select range");
+        rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
+        var appliesToFactory = new FrameworkElementFactory(typeof(TextBox));
+        appliesToFactory.SetValue(Control.PaddingProperty, new Thickness(2, 0, 2, 0));
+        appliesToFactory.SetValue(Control.VerticalContentAlignmentProperty, System.Windows.VerticalAlignment.Center);
+        appliesToFactory.SetBinding(TextBox.TextProperty, new Binding(nameof(ConditionalFormat.AppliesTo))
+        {
+            Converter = new AppliesToRangeConverter(_sheet.Id),
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.LostFocus
+        });
+        appliesToPanelFactory.AppendChild(rangePickerFactory);
+        appliesToPanelFactory.AppendChild(appliesToFactory);
+        appliesToTemplate.VisualTree = appliesToPanelFactory;
         appliesToCol.CellTemplate = appliesToTemplate;
         gridView.Columns.Add(appliesToCol);
 
@@ -522,6 +540,25 @@ public sealed class ManageConditionalFormatsDialog : Window
     {
         if (cf.RuleType == CfRuleType.IconSet)
             return Brushes.LightGray;
+        if (cf.RuleType == CfRuleType.DataBar)
+            return new SolidColorBrush(Color.FromRgb(cf.DataBarColor.R, cf.DataBarColor.G, cf.DataBarColor.B));
+        if (cf.RuleType == CfRuleType.ColorScale)
+        {
+            var stops = new GradientStopCollection
+            {
+                new(Color.FromRgb(cf.MinColor.R, cf.MinColor.G, cf.MinColor.B), 0),
+                new(Color.FromRgb(cf.MaxColor.R, cf.MaxColor.G, cf.MaxColor.B), 1)
+            };
+
+            if (cf.UseThreeColorScale)
+                stops.Insert(1, new GradientStop(Color.FromRgb(cf.MidColor.R, cf.MidColor.G, cf.MidColor.B), 0.5));
+
+            return new LinearGradientBrush(stops)
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5)
+            };
+        }
         if (cf.FormatIfTrue?.FillColor is { } fc)
             return new SolidColorBrush(Color.FromRgb(fc.R, fc.G, fc.B));
         return Brushes.LightGray;
@@ -532,6 +569,22 @@ public sealed class ManageConditionalFormatsDialog : Window
         var sc = CellAddress.NumberToColumnName(r.Start.Col);
         var ec = CellAddress.NumberToColumnName(r.End.Col);
         return $"${sc}${r.Start.Row}:${ec}${r.End.Row}";
+    }
+
+    public static GridRange TryParseAppliesToText(string text, SheetId sheetId, GridRange fallback)
+    {
+        var normalized = text.Trim().Replace("$", "", StringComparison.Ordinal);
+        if (!normalized.Contains(':', StringComparison.Ordinal))
+            normalized = $"{normalized}:{normalized}";
+
+        try
+        {
+            return GridRange.Parse(normalized, sheetId);
+        }
+        catch (FormatException)
+        {
+            return fallback;
+        }
     }
 
     public static string StopIfTrueText(ConditionalFormat cf) => cf.StopIfTrue ? "Yes" : "";
@@ -564,6 +617,21 @@ internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         => Binding.DoNothing;
+}
+
+internal sealed class AppliesToRangeConverter(SheetId sheetId) : System.Windows.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        => value is GridRange range ? ManageConditionalFormatsDialog.AppliesToString(range) : "";
+
+    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+    {
+        if (value is not string text)
+            return Binding.DoNothing;
+
+        var fallback = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 1, 1));
+        return ManageConditionalFormatsDialog.TryParseAppliesToText(text, sheetId, fallback);
+    }
 }
 
 internal sealed class StopIfTrueConverter : System.Windows.Data.IValueConverter
