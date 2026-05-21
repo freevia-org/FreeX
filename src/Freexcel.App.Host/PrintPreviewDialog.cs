@@ -31,6 +31,13 @@ public sealed class PrintPreviewDialog : Window
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         var viewer = new DocumentViewer { Document = document };
+        var firstButton = new Button
+        {
+            Content = "_First Page",
+            Padding = new Thickness(10, 4, 10, 4),
+            Command = NavigationCommands.FirstPage,
+            CommandTarget = viewer
+        };
         var previousButton = new Button
         {
             Content = "_Previous Page",
@@ -45,14 +52,30 @@ public sealed class PrintPreviewDialog : Window
             Command = NavigationCommands.NextPage,
             CommandTarget = viewer
         };
+        var lastButton = new Button
+        {
+            Content = "_Last Page",
+            Padding = new Thickness(10, 4, 10, 4),
+            Command = NavigationCommands.LastPage,
+            CommandTarget = viewer
+        };
         var printButton = new Button
         {
             Content = "_Print...",
             Padding = new Thickness(12, 4, 12, 4)
         };
+        var closeButton = new Button
+        {
+            Content = "_Close Preview",
+            Padding = new Thickness(12, 4, 12, 4),
+            ToolTip = "Return to the workbook."
+        };
         printButton.Click += (_, _) => ShowNativePrintDialog(document);
+        closeButton.Click += (_, _) => Close();
+        toolbar.Items.Add(firstButton);
         toolbar.Items.Add(previousButton);
         toolbar.Items.Add(nextButton);
+        toolbar.Items.Add(lastButton);
         toolbar.Items.Add(new Separator());
         var totalPages = Math.Max(1, document.Pages.Count);
         var pageNumberBox = new TextBox
@@ -135,6 +158,7 @@ public sealed class PrintPreviewDialog : Window
         toolbar.Items.Add(pageSetupButton);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(printButton);
+        toolbar.Items.Add(closeButton);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(new TextBlock
         {
