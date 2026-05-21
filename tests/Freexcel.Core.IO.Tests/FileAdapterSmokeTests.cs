@@ -566,6 +566,73 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_ChartDesignMetadata()
+    {
+        var workbook = new Workbook("ChartDesignNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            PivotFormatsXml = "<c:pivotFmts><c:pivotFmt /></c:pivotFmts>",
+            Uses1904DateSystem = true,
+            Language = "en-US",
+            RoundedCorners = true,
+            BlankDisplayMode = ChartBlankDisplayMode.Zero,
+            ShowDataLabelsOverMaximum = true,
+            AutoTitleDeleted = true,
+            ShowDataInHiddenRowsAndColumns = true,
+            ColorMapOverride = new ChartColorMapOverrideModel
+            {
+                UseMasterColorMapping = true,
+                OverrideMappings = { ["accent1"] = "accent2" }
+            },
+            ExternalData = new ChartExternalDataModel
+            {
+                RelationshipId = "rIdExternal",
+                RelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+                Target = "../externalLinks/externalLink1.xml",
+                TargetMode = "External",
+                AutoUpdate = true
+            },
+            PlotAreaLayout = new ChartManualLayoutModel { LayoutTarget = "inner", XMode = "factor", X = 0.1, Y = 0.2, Width = 0.8, Height = 0.6 },
+            LegendLayout = new ChartManualLayoutModel { LayoutTarget = "inner", X = 0.76, Height = 0.7 },
+            Protection = new ChartProtectionModel { ChartObject = true, Data = true, Formatting = false, Selection = true, UserInterface = true },
+            PrintSettings = new ChartPrintSettingsModel
+            {
+                PageMargins = new ChartPageMarginsModel { Left = 0.7, Right = 0.7, Top = 0.75, Bottom = 0.75, Header = 0.3, Footer = 0.3 },
+                PageSetup = new ChartPageSetupModel { PaperSize = "9", Orientation = "landscape", Copies = 2, BlackAndWhite = true, Draft = false }
+            }
+        };
+        sheet.Charts.Add(chart);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedChart = adapter.Load(ms).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.PivotFormatsXml.Should().Be(chart.PivotFormatsXml);
+        loadedChart.Uses1904DateSystem.Should().BeTrue();
+        loadedChart.Language.Should().Be("en-US");
+        loadedChart.RoundedCorners.Should().BeTrue();
+        loadedChart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Zero);
+        loadedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        loadedChart.AutoTitleDeleted.Should().BeTrue();
+        loadedChart.ShowDataInHiddenRowsAndColumns.Should().BeTrue();
+        loadedChart.ColorMapOverride.Should().BeEquivalentTo(chart.ColorMapOverride);
+        loadedChart.ExternalData.Should().BeEquivalentTo(chart.ExternalData);
+        loadedChart.PlotAreaLayout.Should().BeEquivalentTo(chart.PlotAreaLayout);
+        loadedChart.LegendLayout.Should().BeEquivalentTo(chart.LegendLayout);
+        loadedChart.Protection.Should().BeEquivalentTo(chart.Protection);
+        loadedChart.PrintSettings.Should().BeEquivalentTo(chart.PrintSettings);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesChartIndexesAgainstPersistedDataRange()
     {
         var workbook = new Workbook("ChartIndexSanitizeTest");
