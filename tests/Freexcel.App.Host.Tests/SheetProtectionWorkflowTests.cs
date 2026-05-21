@@ -20,6 +20,22 @@ public sealed class SheetProtectionWorkflowTests
     }
 
     [Fact]
+    public void CreateCommand_ForUnprotectedSheet_CarriesSelectedDialogPermissions()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var result = ProtectionDialogPlanner.CreateSheetResult(
+            sheet,
+            password: "secret",
+            selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
+
+        var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
+
+        action.Title.Should().Be("Protect Sheet");
+        action.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
+    }
+
+    [Fact]
     public void CreateCommand_ForProtectedSheet_UnprotectsWithoutNewPassword()
     {
         var workbook = new Workbook("test");
