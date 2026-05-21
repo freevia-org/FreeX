@@ -80,7 +80,7 @@ public sealed class ScenarioManagerDialog : Window
         AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Add);
         _editButton = AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Edit, isEnabled: false);
         _deleteButton = AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.Delete, isEnabled: false);
-        AddActionButton(sideButtons, "_Merge...", ScenarioManagerAction.List, isEnabled: false);
+        AddActionButton(sideButtons, "_List...", ScenarioManagerAction.List);
         _showButton = AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null);
         AddActionButton(sideButtons, "S_ummary...", ScenarioManagerAction.Report);
         UpdateSelectionState();
