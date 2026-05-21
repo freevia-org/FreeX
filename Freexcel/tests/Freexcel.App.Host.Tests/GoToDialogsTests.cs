@@ -85,6 +85,7 @@ public sealed class GoToDialogsTests
         source.Should().NotContain("Header = \"Additional Excel options\"");
         source.Should().NotContain("IsEnabled = false");
         source.Should().NotContain("shown for parity");
+        source.Should().NotContain("The selectable options match");
         source.Should().Contain("DialogButtonRowFactory.Create");
     }
 
