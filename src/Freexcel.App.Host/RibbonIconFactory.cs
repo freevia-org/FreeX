@@ -2,26 +2,25 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
+using System.Xml.Linq;
+using SharpVectors.Converters;
+using SharpVectors.Renderers.Wpf;
 
 namespace Freexcel.App.Host;
 
 public static class RibbonIconFactory
 {
     private const double Artboard = 24;
-    private const int UltraCommandIconPixels = 96;
-    private const int VeryLargeCommandIconPixels = 80;
-    private const int MegaCommandIconPixels = 72;
-    private const int SuperCommandIconPixels = 64;
-    private const int JumboCommandIconPixels = 56;
-    private const int ExtraLargeCommandIconPixels = 48;
-    private const int LargeCommandIconPixels = 40;
-    private const int MediumCommandIconPixels = 32;
-    private const int SmallCommandIconPixels = 24;
     private static readonly object CommandIconCacheGate = new();
     private static readonly Dictionary<string, ImageSource> CommandIconCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> MissingCommandIcons = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly WpfDrawingSettings SvgDrawingSettings = new()
+    {
+        IncludeRuntime = false,
+        OptimizePath = true,
+        TextAsGeometry = true
+    };
 
     public static FrameworkElement CreateCommandIcon(
         string commandName,
@@ -29,22 +28,17 @@ public static class RibbonIconFactory
         double size,
         Brush glyphBrush)
     {
-        if (IsWhiteBrush(glyphBrush))
-            return CreateIcon(fallbackIcon, size, glyphBrush);
-
-        if (TryLoadCommandIcon(commandName, size) is { } source)
+        if (TryLoadCommandIcon(commandName, glyphBrush) is { } source)
         {
             var image = new Image
             {
                 Source = source,
+                Width = size,
+                Height = size,
                 Stretch = Stretch.Uniform,
                 SnapsToDevicePixels = true,
                 UseLayoutRounding = true
             };
-            SetDpiAwareIconSize(image, size);
-            image.Loaded += (_, _) => SetDpiAwareIconSize(image, size);
-            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
-            RenderOptions.SetEdgeMode(image, EdgeMode.Aliased);
             return image;
         }
 
@@ -318,36 +312,18 @@ public static class RibbonIconFactory
         };
     }
 
-    private static void SetDpiAwareIconSize(FrameworkElement element, double physicalPixels)
-    {
-        var dpi = VisualTreeHelper.GetDpi(element);
-        var dpiScaleX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1;
-        var dpiScaleY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
-        element.Width = physicalPixels / dpiScaleX;
-        element.Height = physicalPixels / dpiScaleY;
-    }
-
-    private static ImageSource? TryLoadCommandIcon(string commandName, double size)
+    private static ImageSource? TryLoadCommandIcon(string commandName, Brush glyphBrush)
     {
         var slug = ToCommandIconSlug(commandName);
         if (slug.Length == 0)
             return null;
 
-        var pixelSize = size switch
-        {
-            >= 96 => UltraCommandIconPixels,
-            >= 80 => VeryLargeCommandIconPixels,
-            >= 72 => MegaCommandIconPixels,
-            >= 64 => SuperCommandIconPixels,
-            >= 56 => JumboCommandIconPixels,
-            >= 48 => ExtraLargeCommandIconPixels,
-            >= 40 => LargeCommandIconPixels,
-            >= 32 => MediumCommandIconPixels,
-            _ => SmallCommandIconPixels
-        };
         foreach (var candidateSlug in GetCommandIconSlugCandidates(slug))
         {
-            var cacheKey = $"{pixelSize}/{candidateSlug}";
+            var monochromeBrush = IsWhiteBrush(glyphBrush) ? glyphBrush : null;
+            var cacheKey = monochromeBrush is null
+                ? candidateSlug
+                : candidateSlug + "|mono|" + BrushCacheKey(monochromeBrush);
             lock (CommandIconCacheGate)
             {
                 if (CommandIconCache.TryGetValue(cacheKey, out var cached))
@@ -359,9 +335,8 @@ public static class RibbonIconFactory
             var filePath = System.IO.Path.Combine(
                 AppContext.BaseDirectory,
                 "Resources",
-                "CommandIcons",
-                pixelSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                candidateSlug + ".png");
+                "CommandIconsSvg",
+                candidateSlug + ".svg");
             if (!File.Exists(filePath))
             {
                 lock (CommandIconCacheGate)
@@ -369,21 +344,121 @@ public static class RibbonIconFactory
                 continue;
             }
 
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.DecodePixelWidth = pixelSize;
-            bitmap.DecodePixelHeight = pixelSize;
-            bitmap.UriSource = new System.Uri(filePath, System.UriKind.Absolute);
-            bitmap.EndInit();
-            bitmap.Freeze();
+            using var reader = new FileSvgReader(SvgDrawingSettings);
+            var drawing = reader.Read(filePath);
+            if (drawing is null)
+            {
+                lock (CommandIconCacheGate)
+                    MissingCommandIcons.Add(cacheKey);
+                continue;
+            }
+
+            if (monochromeBrush is not null)
+                RecolorDrawing(drawing, monochromeBrush);
+
+            var vectorImage = new DrawingImage(WrapDrawingInSvgViewBox(drawing, filePath));
+            vectorImage.Freeze();
 
             lock (CommandIconCacheGate)
-                CommandIconCache[cacheKey] = bitmap;
-            return bitmap;
+                CommandIconCache[cacheKey] = vectorImage;
+            return vectorImage;
         }
 
         return null;
+    }
+
+    private static Drawing WrapDrawingInSvgViewBox(Drawing drawing, string filePath)
+    {
+        var bounds = TryReadSvgViewBox(filePath) ?? drawing.Bounds;
+        if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0)
+            return drawing;
+
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing(
+            Brushes.Transparent,
+            null,
+            new RectangleGeometry(bounds)));
+        group.Children.Add(drawing);
+        group.Freeze();
+        return group;
+    }
+
+    private static Rect? TryReadSvgViewBox(string filePath)
+    {
+        try
+        {
+            var root = XDocument.Load(filePath).Root;
+            if (root is null)
+                return null;
+
+            var viewBox = root.Attribute("viewBox")?.Value;
+            if (!string.IsNullOrWhiteSpace(viewBox))
+            {
+                var parts = viewBox
+                    .Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(part => double.Parse(part, System.Globalization.CultureInfo.InvariantCulture))
+                    .ToArray();
+                if (parts.Length == 4)
+                    return new Rect(parts[0], parts[1], parts[2], parts[3]);
+            }
+
+            var width = TryParseSvgLength(root.Attribute("width")?.Value);
+            var height = TryParseSvgLength(root.Attribute("height")?.Value);
+            return width is > 0 && height is > 0
+                ? new Rect(0, 0, width.Value, height.Value)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static double? TryParseSvgLength(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var numeric = new string(value
+            .Trim()
+            .TakeWhile(ch => char.IsDigit(ch) || ch is '.' or '-')
+            .ToArray());
+        return double.TryParse(numeric, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var result)
+            ? result
+            : null;
+    }
+
+    private static string BrushCacheKey(Brush brush) =>
+        brush is SolidColorBrush solid
+            ? solid.Color.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : brush.ToString() ?? "brush";
+
+    private static void RecolorDrawing(Drawing drawing, Brush brush)
+    {
+        switch (drawing)
+        {
+            case DrawingGroup group:
+                foreach (var child in group.Children)
+                    RecolorDrawing(child, brush);
+                break;
+            case GeometryDrawing geometry:
+                if (geometry.Brush is not null)
+                    geometry.Brush = brush;
+                if (geometry.Pen is not null)
+                    geometry.Pen = new Pen(brush, geometry.Pen.Thickness)
+                    {
+                        DashCap = geometry.Pen.DashCap,
+                        EndLineCap = geometry.Pen.EndLineCap,
+                        LineJoin = geometry.Pen.LineJoin,
+                        MiterLimit = geometry.Pen.MiterLimit,
+                        StartLineCap = geometry.Pen.StartLineCap,
+                        DashStyle = geometry.Pen.DashStyle
+                    };
+                break;
+            case GlyphRunDrawing glyph:
+                glyph.ForegroundBrush = brush;
+                break;
+        }
     }
 
     private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
