@@ -29,6 +29,23 @@ public sealed class ProtectionDialogTests
 
         result.Mode.Should().Be(ProtectionDialogMode.Protect);
         result.Password.Should().Be("secret");
+        result.SelectedSheetPermissions.Should().Equal(["Select locked cells", "Select unlocked cells"]);
+    }
+
+    [Fact]
+    public void SheetProtectionDialogResult_ForUnprotectedSheetKeepsSelectedPermissions()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        var result = ProtectionDialogPlanner.CreateSheetResult(
+            sheet,
+            password: "secret",
+            selectedSheetPermissions: ["Select unlocked cells", "Sort"]);
+
+        result.Mode.Should().Be(ProtectionDialogMode.Protect);
+        result.Password.Should().Be("secret");
+        result.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
     }
 
     [Fact]
