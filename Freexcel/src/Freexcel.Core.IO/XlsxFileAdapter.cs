@@ -2553,7 +2553,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         packageStream.Position = 0;
-        SaveWorkbookTheme(packageStream, workbook.Theme);
+        XlsxWorkbookThemeWriter.Save(packageStream, workbook.Theme);
 
         if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, IsSupportedXlsxChart))
         {
@@ -6464,16 +6464,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
     }
 
-    private static void SaveWorkbookTheme(Stream xlsxStream, WorkbookTheme theme)
-    {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        const string themePath = "xl/theme/theme1.xml";
-        archive.GetEntry(themePath)?.Delete();
-        var themeEntry = archive.CreateEntry(themePath);
-        using var stream = themeEntry.Open();
-        ToThemeXml(theme).Save(stream);
-    }
-
     private static void SaveWorksheetCodeNames(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -7741,37 +7731,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ch is >= 'A' and <= 'F' ||
             ch is >= 'a' and <= 'f');
 
-    private static XDocument ToThemeXml(WorkbookTheme theme)
-    {
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
-
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(drawingNs + "theme",
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                new XAttribute("name", theme.Name),
-                new XElement(drawingNs + "themeElements",
-                    new XElement(drawingNs + "clrScheme",
-                        new XAttribute("name", $"{theme.Name} Colors"),
-                        XlsxWorkbookThemeReader.ColorElements.Select(color =>
-                            new XElement(drawingNs + color.ElementName,
-                                new XElement(drawingNs + "srgbClr",
-                                    new XAttribute("val", FormatThemeColor(theme.GetColor(color.Slot))))))),
-                    new XElement(drawingNs + "fontScheme",
-                        new XAttribute("name", $"{theme.Name} Fonts"),
-                        new XElement(drawingNs + "majorFont",
-                            new XElement(drawingNs + "latin",
-                                new XAttribute("typeface", theme.MajorFontName))),
-                        new XElement(drawingNs + "minorFont",
-                            new XElement(drawingNs + "latin",
-                                new XAttribute("typeface", theme.MinorFontName)))),
-                    new XElement(drawingNs + "fmtScheme",
-                        new XAttribute("name", theme.EffectsName)))));
-    }
-
-    private static string FormatThemeColor(CellColor color) =>
-        $"{color.R:X2}{color.G:X2}{color.B:X2}";
-
     private static XDocument ToChartXml(ChartModel chart, Sheet sheet)
     {
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -8547,6 +8506,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             : new XElement(drawingNs + "solidFill", colorElement);
     }
 
+    private static string FormatThemeColor(CellColor color) =>
+        $"{color.R:X2}{color.G:X2}{color.B:X2}";
+
     private static void ApplyTint(XElement colorElement, double tint, XNamespace drawingNs)
     {
         if (tint > 0)
@@ -9275,39 +9237,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return start == end
             ? $"{quotedSheet}!{start}"
             : $"{quotedSheet}!{start}:{end}";
-    }
-
-    private static long PixelsToEmus(double pixels) =>
-        (long)Math.Round(Math.Max(0, pixels) * 9525.0);
-
-    private static void EnsureContentTypeOverride(ZipArchive archive, string partName, string contentType)
-    {
-        const string contentTypesPath = "[Content_Types].xml";
-        var entry = archive.GetEntry(contentTypesPath);
-        if (entry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var xml = LoadXml(entry);
-        var existing = xml.Root?
-            .Elements(contentTypeNs + "Override")
-            .FirstOrDefault(e => string.Equals(e.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
-        {
-            existing.SetAttributeValue("ContentType", contentType);
-        }
-        else
-        {
-            xml.Root?.Add(new XElement(
-                contentTypeNs + "Override",
-                new XAttribute("PartName", partName),
-                new XAttribute("ContentType", contentType)));
-        }
-
-        entry.Delete();
-        var updatedEntry = archive.CreateEntry(contentTypesPath);
-        using var stream = updatedEntry.Open();
-        xml.Save(stream);
     }
 
     private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
