@@ -5,10 +5,14 @@ namespace Freexcel.App.Host;
 
 internal sealed class ExportOptionsDialog : Window
 {
-    private readonly RadioButton _activeSheetButton = new() { Content = "_Active sheet", IsChecked = true };
-    private readonly RadioButton _selectionButton = new() { Content = "_Selection" };
-    private readonly RadioButton _entireWorkbookButton = new() { Content = "_Entire workbook" };
+    private readonly RadioButton _activeSheetButton = new() { Content = "Active _sheet(s)", IsChecked = true };
+    private readonly RadioButton _selectionButton = new() { Content = "Selected _range" };
+    private readonly RadioButton _entireWorkbookButton = new() { Content = "_Workbook" };
     private readonly CheckBox _documentPropertiesBox = new() { Content = "_Include document properties" };
+    private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
+    private readonly CheckBox _createBookmarksBox = new() { Content = "_Create bookmarks using sheet names" };
+    private readonly CheckBox _csvActiveSheetOnlyBox = new() { Content = "Save _only the active sheet", IsChecked = true };
+    private readonly TextBox _csvDelimiterBox = new() { Width = 48, Text = "," };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
     private readonly TextBox _fromPageBox = new() { Width = 56 };
     private readonly TextBox _toPageBox = new() { Width = 56 };
@@ -18,8 +22,8 @@ internal sealed class ExportOptionsDialog : Window
     public ExportOptionsDialog(bool hasSelection)
     {
         Title = "Export Options";
-        Width = 360;
-        Height = 305;
+        Width = 430;
+        Height = 440;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -28,7 +32,7 @@ internal sealed class ExportOptionsDialog : Window
             _selectionButton.ToolTip = "Select a cell range before exporting the selection.";
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Publish what", Margin = new Thickness(0, 0, 0, 6) });
+        stack.Children.Add(new TextBlock { Text = "Publish what", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
         stack.Children.Add(_activeSheetButton);
         stack.Children.Add(_selectionButton);
         stack.Children.Add(_entireWorkbookButton);
@@ -40,11 +44,21 @@ internal sealed class ExportOptionsDialog : Window
         pageRangePanel.Children.Add(_toPageBox);
         stack.Children.Add(pageRangePanel);
 
+        stack.Children.Add(new TextBlock { Text = "PDF options", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 4) });
         stack.Children.Add(_documentPropertiesBox);
+        stack.Children.Add(_ignorePrintAreasBox);
+        stack.Children.Add(_createBookmarksBox);
+
+        stack.Children.Add(new TextBlock { Text = "CSV options", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 4) });
+        stack.Children.Add(_csvActiveSheetOnlyBox);
+        var csvDelimiterPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+        csvDelimiterPanel.Children.Add(new Label { Content = "CSV _delimiter:", Target = _csvDelimiterBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        csvDelimiterPanel.Children.Add(_csvDelimiterBox);
+        stack.Children.Add(csvDelimiterPanel);
+
         stack.Children.Add(_openAfterPublishBox);
 
-        _documentPropertiesBox.Margin = new Thickness(0, 14, 0, 4);
-        _openAfterPublishBox.Margin = new Thickness(0, 0, 0, 18);
+        _openAfterPublishBox.Margin = new Thickness(0, 14, 0, 18);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };

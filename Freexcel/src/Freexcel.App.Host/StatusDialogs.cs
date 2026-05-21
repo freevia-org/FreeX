@@ -33,30 +33,42 @@ public sealed class GoalSeekStatusDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right
         };
 
-        var okButton = new Button
-        {
-            Content = "_OK",
-            Width = 76,
-            Margin = new Thickness(4, 0, 0, 0),
-            IsDefault = true
-        };
-        okButton.Click += (_, _) =>
-        {
-            ApplyResult = result.Converged;
-            DialogResult = result.Converged;
-        };
-        buttons.Children.Add(okButton);
-
         if (result.Converged)
         {
-            var cancelButton = new Button
+            var keepButton = new Button
             {
-                Content = "_Cancel",
-                Width = 76,
+                Content = "_Keep Result",
+                Width = 104,
+                Margin = new Thickness(4, 0, 0, 0),
+                IsDefault = true
+            };
+            keepButton.Click += (_, _) =>
+            {
+                ApplyResult = true;
+                DialogResult = true;
+            };
+            buttons.Children.Add(keepButton);
+
+            var restoreButton = new Button
+            {
+                Content = "_Restore Original Values",
+                Width = 152,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsCancel = true
             };
-            buttons.Children.Add(cancelButton);
+            buttons.Children.Add(restoreButton);
+        }
+        else
+        {
+            var okButton = new Button
+            {
+                Content = "_OK",
+                Width = 76,
+                Margin = new Thickness(4, 0, 0, 0),
+                IsDefault = true
+            };
+            okButton.Click += (_, _) => DialogResult = false;
+            buttons.Children.Add(okButton);
         }
 
         stack.Children.Add(buttons);
@@ -68,8 +80,8 @@ public sealed class GoalSeekStatusDialog : Window
         var foundValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
         var actualResult = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
         return result.Converged
-            ? $"Goal Seek found a solution.\nChanging cell value: {foundValue}"
-            : $"Goal Seek could not find a solution.\nClosest value: {foundValue}\nActual result: {actualResult}";
+            ? $"Goal Seek found a solution.\nCurrent value: {foundValue}\nTarget value: {actualResult}"
+            : $"Goal Seek could not find a solution.\nCurrent value: {foundValue}\nTarget value: {actualResult}";
     }
 }
 
