@@ -159,7 +159,7 @@ public sealed class ObjectSizeDialog : Window
 
     private static void AddLabeledTextBox(Panel stack, string label, TextBox box)
     {
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
     }
@@ -167,7 +167,7 @@ public sealed class ObjectSizeDialog : Window
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(box);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
@@ -278,7 +278,7 @@ public sealed class PictureCropDialog : Window
 
     private static void AddCropBox(Panel stack, string label, TextBox box)
     {
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 8);
         stack.Children.Add(box);
     }
