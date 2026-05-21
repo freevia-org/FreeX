@@ -72,7 +72,7 @@ public sealed class PivotFilterDialogXamlTests
         document.Descendants(presentation + "TabItem")
             .Select(element => element.Attribute("Header")?.Value)
             .Should()
-            .Contain(["Summarize Values By", "Show Values As", "Number Format"]);
+            .Contain(["_Summarize Values By", "Show Values _As", "_Number Format"]);
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)

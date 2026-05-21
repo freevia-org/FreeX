@@ -10,9 +10,12 @@ public static class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.NewWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.N),
         new(KeyboardCommandShortcut.OpenWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.O),
         new(KeyboardCommandShortcut.SaveWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.S),
-        new(KeyboardCommandShortcut.Copy, (key, modifiers) => (modifiers == ModifierKeys.Control || modifiers == (ModifierKeys.Control | ModifierKeys.Shift)) && key == Key.C),
-        new(KeyboardCommandShortcut.Cut, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.X),
-        new(KeyboardCommandShortcut.Paste, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.V),
+        new(KeyboardCommandShortcut.Copy, (key, modifiers) => (modifiers == ModifierKeys.Control || modifiers == (ModifierKeys.Control | ModifierKeys.Shift)) && key == Key.C ||
+            modifiers == ModifierKeys.Control && key == Key.Insert),
+        new(KeyboardCommandShortcut.Cut, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.X ||
+            modifiers == ModifierKeys.Shift && key == Key.Delete),
+        new(KeyboardCommandShortcut.Paste, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.V ||
+            modifiers == ModifierKeys.Shift && key == Key.Insert),
         new(KeyboardCommandShortcut.SelectCurrentRegionOrAll, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.A),
         new(KeyboardCommandShortcut.Undo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Z),
         new(KeyboardCommandShortcut.Redo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Y),
@@ -72,7 +75,7 @@ public static class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.SelectAllDependents, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemCloseBrackets),
         new(KeyboardCommandShortcut.SelectCellsWithComments, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.O),
         new(KeyboardCommandShortcut.EditCell, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F2),
-        new(KeyboardCommandShortcut.ClearSelection, (key, modifiers) => !HasControl(modifiers) && key == Key.Delete),
+        new(KeyboardCommandShortcut.ClearSelection, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.Delete),
         new(KeyboardCommandShortcut.ClearSelectionAndEdit, (key, modifiers) => !HasControl(modifiers) && key == Key.Back),
         new(KeyboardCommandShortcut.RepeatLastAction, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F4),
     ];
