@@ -24,7 +24,6 @@ public sealed class ManageConditionalFormatsDialog : Window
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
 
     private readonly ComboBox _scopeBox;
-    private readonly ComboBox _newRuleTypeBox;
     private readonly ListView _listView;
     private readonly Button _editBtn;
     private readonly Button _deleteBtn;
@@ -33,31 +32,6 @@ public sealed class ManageConditionalFormatsDialog : Window
 
     private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
-
-    private static readonly string[] NewRuleTypeChoices =
-    [
-        "Greater Than",
-        "Less Than",
-        "Equal To",
-        "Between",
-        "Text Contains",
-        "Date Occurring",
-        "Duplicate Values",
-        "Blanks",
-        "No Blanks",
-        "Errors",
-        "No Errors",
-        "Top 10 Items",
-        "Bottom 10 Items",
-        "Top 10%",
-        "Bottom 10%",
-        "Above Average",
-        "Below Average",
-        "Data Bar",
-        "Color Scale",
-        "Icon Set",
-        "Formula"
-    ];
 
     public ManageConditionalFormatsDialog(Sheet sheet, GridRange? selection)
     {
@@ -124,8 +98,7 @@ public sealed class ManageConditionalFormatsDialog : Window
         };
         DockPanel.SetDock(toolBar, Dock.Bottom);
 
-        _newRuleTypeBox = new ComboBox { Width = 135, Margin = new Thickness(0, 0, 6, 0), ItemsSource = NewRuleTypeChoices, SelectedItem = NewRuleTypeChoices[0] };
-        var newBtn   = new Button { Content = "_New Rule",    Width = 94, Margin = new Thickness(0, 0, 6, 0) };
+        var newBtn   = new Button { Content = "_New Rule...", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
         _editBtn     = new Button { Content = "_Edit Rule",   Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         _deleteBtn   = new Button { Content = "_Delete Rule", Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
         _moveUpBtn   = new Button { Content = "▲", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
@@ -137,7 +110,6 @@ public sealed class ManageConditionalFormatsDialog : Window
         _moveUpBtn.Click   += MoveUp_Click;
         _moveDownBtn.Click += MoveDown_Click;
 
-        toolBar.Children.Add(_newRuleTypeBox);
         toolBar.Children.Add(newBtn);
         toolBar.Children.Add(_editBtn);
         toolBar.Children.Add(_deleteBtn);
@@ -277,8 +249,7 @@ public sealed class ManageConditionalFormatsDialog : Window
                 new CellAddress(_sheet.Id, 1, 1),
                 new CellAddress(_sheet.Id, 1, 1));
 
-        var ruleType = _newRuleTypeBox.SelectedItem as string ?? NewRuleTypeChoices[0];
-        var dlg = ConditionalFormatDialogFactory.Create(ruleType, defaultRange);
+        var dlg = new ConditionalFormatDialog("Greater Than", defaultRange);
         dlg.Owner = this;
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } newRule)
         {
