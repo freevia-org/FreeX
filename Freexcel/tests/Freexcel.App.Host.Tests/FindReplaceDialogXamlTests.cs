@@ -26,7 +26,7 @@ public sealed class FindReplaceDialogXamlTests
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
-            .Contain(["Find All", "_Find Next", "_Replace All", "_Close"]);
+            .Contain(["Find _All", "_Find Next", "_Replace All", "_Close"]);
 
         static void AssertLabelTargets(XDocument document, XNamespace presentation, string content, string target)
         {
@@ -80,7 +80,7 @@ public sealed class FindReplaceDialogXamlTests
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
-            .Contain(["Format...", "Find All"]);
+            .Contain(["For_mat...", "Find _All"]);
 
         AssertNamedElement(document, presentation, xaml, "DataGrid", "FindResultsGrid");
     }
