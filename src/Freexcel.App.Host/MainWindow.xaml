@@ -3122,15 +3122,29 @@
                         local:RibbonTooltip.KeyTip="FX"
                         local:RibbonTooltip.Description="Search for and insert a function into the selected cell."/>
 
-                <TextBox x:Name="FormulaBar" Grid.Column="2" FontFamily="Calibri" FontSize="15"
-                         TextOptions.TextFormattingMode="Display"
-                         TextOptions.TextRenderingMode="ClearType"
-                         TextOptions.TextHintingMode="Fixed"
-                         AcceptsReturn="True"
-                         VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
-                         AutomationProperties.Name="Formula Bar"
-                         AutomationProperties.HelpText="Edit the active cell value or formula"
-                         PreviewKeyDown="FormulaBar_KeyDown"/>
+                <Grid Grid.Column="2">
+                    <TextBlock x:Name="FormulaBarReferenceOverlay"
+                               Margin="6,3,4,2"
+                               FontFamily="Calibri"
+                               FontSize="15"
+                               IsHitTestVisible="False"
+                               VerticalAlignment="Center"
+                               Visibility="Collapsed"
+                               TextOptions.TextFormattingMode="Display"
+                               TextOptions.TextRenderingMode="ClearType"
+                               TextOptions.TextHintingMode="Fixed"/>
+                    <TextBox x:Name="FormulaBar" FontFamily="Calibri" FontSize="15"
+                             TextOptions.TextFormattingMode="Display"
+                             TextOptions.TextRenderingMode="ClearType"
+                             TextOptions.TextHintingMode="Fixed"
+                             AcceptsReturn="True"
+                             Background="Transparent"
+                             CaretBrush="Black"
+                             VerticalContentAlignment="Center" BorderBrush="#C0C0C0" Padding="4,2"
+                             AutomationProperties.Name="Formula Bar"
+                             AutomationProperties.HelpText="Edit the active cell value or formula"
+                             PreviewKeyDown="FormulaBar_KeyDown"/>
+                </Grid>
 
                 <!-- Expand/collapse chevron -->
                 <Button x:Name="FormulaBarExpandBtn" Grid.Column="3"
