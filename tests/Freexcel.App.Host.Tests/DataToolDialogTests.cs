@@ -33,8 +33,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Step 1 of 3");
         source.Should().Contain("_delimitedButton");
         source.Should().Contain("_fixedWidthButton");
-        source.Should().Contain("Delimited");
-        source.Should().Contain("Fixed width");
+        source.Should().Contain("Content = \"_Delimited\"");
+        source.Should().Contain("Content = \"_Fixed width\"");
     }
 
     [Fact]
