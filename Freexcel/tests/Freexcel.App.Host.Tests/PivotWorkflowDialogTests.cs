@@ -271,7 +271,7 @@ public sealed class PivotWorkflowDialogTests
             "Field list and buttons",
             "PivotTable Style Options",
             "Data options",
-            "Preserve source sort and filter settings"
+            "Preserve source sort and _filter settings"
         })
             source.Should().Contain(content);
     }
