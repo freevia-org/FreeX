@@ -1699,7 +1699,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var cellWatches = XlsxWorksheetDiagnosticsMapper.ReadCellWatches(worksheetXml, worksheetNs);
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = ReadWorksheetCustomViews(worksheetXml, worksheetNs);
-        var customProperties = ReadWorksheetCustomProperties(worksheetXml, worksheetNs);
+        var customProperties = XlsxWorksheetCustomPropertyMapper.Read(worksheetXml, worksheetNs);
         var codeName = worksheetXml.Root?
             .Element(worksheetNs + "sheetPr")?
             .Attribute("codeName")?
@@ -1744,31 +1744,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             customViews,
             customProperties,
             codeName);
-    }
-
-    private static IReadOnlyList<WorksheetCustomProperty> ReadWorksheetCustomProperties(
-        XDocument worksheetXml,
-        XNamespace worksheetNs)
-    {
-        var properties = new List<WorksheetCustomProperty>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var customProperty in worksheetXml.Root?
-                     .Element(worksheetNs + "customProperties")?
-                     .Elements(worksheetNs + "customPr") ?? [])
-        {
-            var name = customProperty.Attribute("name")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                !int.TryParse(customProperty.Attribute("id")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ||
-                id <= 0 ||
-                !seen.Add(name))
-            {
-                continue;
-            }
-
-            properties.Add(new WorksheetCustomProperty(name, id));
-        }
-
-        return properties;
     }
 
     private static WorksheetPhoneticProperties? ReadWorksheetPhoneticProperties(XElement? phoneticPr)
@@ -3311,7 +3286,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.CustomProperties.Count > 0))
         {
             packageStream.Position = 0;
-            SaveWorksheetCustomProperties(packageStream, workbook);
+            XlsxWorksheetCustomPropertyMapper.Save(packageStream, workbook);
         }
 
         packageStream.Position = 0;
@@ -5043,7 +5018,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        GetModeledCustomPropertyNames(workbook, sheetName)))
+                        XlsxWorksheetCustomPropertyMapper.GetModeledNames(workbook, sheetName)))
                     {
                         changed = true;
                     }
@@ -5604,58 +5579,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return customSheetView;
     }
 
-    private static void SaveWorksheetCustomProperties(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            var properties = sheet.CustomProperties
-                .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
-                .GroupBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.Last())
-                .OrderBy(property => property.Id)
-                .ThenBy(property => property.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (properties.Count == 0 || !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "customProperties")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "customProperties",
-                properties.Select(property => new XElement(
-                    workbookNs + "customPr",
-                    new XAttribute("name", property.Name),
-                    new XAttribute("id", property.Id.ToString(CultureInfo.InvariantCulture))))));
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
     private static string? NormalizeCustomViewId(string? id)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -6201,18 +6124,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         return workbook.CustomViews
             .Select((view, index) => NormalizeCustomViewId(view.Id) ?? CreateDeterministicCustomViewId(view.Name, index))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static HashSet<string> GetModeledCustomPropertyNames(Workbook workbook, string sheetName)
-    {
-        var sheet = workbook.GetSheet(sheetName);
-        if (sheet is null)
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        return sheet.CustomProperties
-            .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
-            .Select(property => property.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
