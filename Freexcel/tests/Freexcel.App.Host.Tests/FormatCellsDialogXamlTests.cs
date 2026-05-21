@@ -258,6 +258,21 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderTab_LabelsIndividualSideStyleControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var target in new[]
+        {
+            "Content=\"_Top:\" Target=\"{Binding ElementName=DlgBorderTopStyleBox}\"",
+            "Content=\"_Right:\" Target=\"{Binding ElementName=DlgBorderRightStyleBox}\"",
+            "Content=\"_Bottom:\" Target=\"{Binding ElementName=DlgBorderBottomStyleBox}\"",
+            "Content=\"_Left:\" Target=\"{Binding ElementName=DlgBorderLeftStyleBox}\""
+        })
+            xaml.Should().Contain(target);
+    }
+
+    [Fact]
     public void FormatCellsDialog_FillTab_ExposesBackgroundPatternColorAndSamplePreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
