@@ -31,8 +31,11 @@ public sealed class FormulaDialogAccessKeyTests
 
         foreach (var expected in new[]
         {
+            "Content = \"_Help on this formula\"",
             "Content = \"_Previous\"",
+            "Content = \"Step _Out\"",
             "Content = \"_Evaluate\"",
+            "Content = \"Step _In\"",
             "Content = \"_Close\""
         })
             source.Should().Contain(expected);
