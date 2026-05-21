@@ -820,7 +820,9 @@ public static class PivotTableRefreshService
                         dataField,
                         pivotTable,
                         headers),
-                        dataField);
+                        dataField,
+                        pivotTable,
+                        isEmptyIntersection: columnRows.Count == 0);
                     outputColumn++;
                 }
             }
@@ -884,8 +886,16 @@ public static class PivotTableRefreshService
         Sheet sheet,
         CellAddress address,
         double value,
-        PivotDataFieldModel dataField)
+        PivotDataFieldModel dataField,
+        PivotTableModel? pivotTable = null,
+        bool isEmptyIntersection = false)
     {
+        if (isEmptyIntersection && !string.IsNullOrWhiteSpace(pivotTable?.EmptyValueText))
+        {
+            sheet.SetCell(address, new TextValue(pivotTable.EmptyValueText));
+            return;
+        }
+
         var cell = Cell.FromValue(new NumberValue(value));
         if (TryResolveNumberFormat(workbook, dataField, out var formatCode) &&
             formatCode != CellStyle.Default.NumberFormat)
