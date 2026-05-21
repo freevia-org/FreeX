@@ -144,9 +144,6 @@ public class ExportPlannerTests
             "Content = \"Selected _range\"",
             "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
-            "Content = \"_Ignore print areas\"",
-            "Content = \"_Create bookmarks using sheet names\"",
-            "Content = \"Save _only the active sheet\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Pages from\"",
             "Target = _fromPageBox",
@@ -156,6 +153,10 @@ public class ExportPlannerTests
             "Content = \"_Cancel\""
         })
             source.Should().Contain(expected);
+
+        source.Should().NotContain("_Ignore print areas");
+        source.Should().NotContain("_Create bookmarks using sheet names");
+        source.Should().NotContain("CSV _delimiter:");
     }
 
     [Theory]

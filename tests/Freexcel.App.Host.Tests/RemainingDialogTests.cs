@@ -304,18 +304,19 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void ExportOptionsDialog_ExposesWorkbookSheetRangePdfAndCsvChoices()
+    public void ExportOptionsDialog_ExposesOnlyHonoredPdfXpsChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
 
         source.Should().Contain("Content = \"_Workbook\"");
         source.Should().Contain("Content = \"Active _sheet(s)\"");
         source.Should().Contain("Content = \"Selected _range\"");
-        source.Should().Contain("PDF options");
-        source.Should().Contain("Content = \"_Ignore print areas\"");
-        source.Should().Contain("CSV options");
-        source.Should().Contain("Content = \"Save _only the active sheet\"");
-        source.Should().Contain("Content = \"CSV _delimiter:\"");
+        source.Should().Contain("PDF/XPS options");
+        source.Should().Contain("Content = \"_Include document properties\"");
+        source.Should().Contain("Content = \"_Open after publishing\"");
+        source.Should().NotContain("Content = \"_Ignore print areas\"");
+        source.Should().NotContain("CSV options");
+        source.Should().NotContain("Content = \"CSV _delimiter:\"");
     }
 
     [Fact]
