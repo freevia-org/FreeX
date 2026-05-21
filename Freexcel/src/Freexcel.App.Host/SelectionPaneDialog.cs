@@ -30,10 +30,10 @@ public sealed class SelectionPaneDialog : Window
 {
     private readonly IReadOnlyList<SelectionPaneItem> _sourceItems;
     private readonly ListBox _list = new();
-    private readonly Button _moveUpButton = new() { Content = "Bring Forward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _moveDownButton = new() { Content = "Send Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _showAllButton = new() { Content = "Show All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _hideAllButton = new() { Content = "Hide All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _moveUpButton = new() { Content = "_Bring Forward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _moveDownButton = new() { Content = "Send _Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _showAllButton = new() { Content = "Show _All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _hideAllButton = new() { Content = "_Hide All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
 
     public SelectionPaneDialogResult Result { get; private set; }
 
@@ -60,9 +60,9 @@ public sealed class SelectionPaneDialog : Window
         _showAllButton.Click += (_, _) => SetAllVisibility(true);
         _hideAllButton.Click += (_, _) => SetAllVisibility(false);
 
-        var okButton = new Button { Content = "OK", Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+        var okButton = new Button { Content = "_OK", Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         okButton.Click += (_, _) => AcceptVisibility();
-        var cancelButton = new Button { Content = "Cancel", Width = 78, IsCancel = true };
+        var cancelButton = new Button { Content = "_Cancel", Width = 78, IsCancel = true };
 
         var moveRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
         moveRow.Children.Add(_moveUpButton);
