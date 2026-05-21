@@ -46,6 +46,25 @@ public static class PasteCommandFactory
         var targetSheet = workbook.GetSheet(targetSheetId);
         var activeSheetName = targetSheet?.Name ?? "";
 
+        if (options.ContentKind == PasteSpecialContentKind.AllMergingConditionalFormats)
+        {
+            var pasteCommand = CreateInternalPasteCommand(
+                workbook,
+                targetSheetId,
+                sourceRange,
+                sourceCells,
+                destination,
+                mode,
+                options with { ContentKind = PasteSpecialContentKind.Default });
+
+            return new CompositeWorkbookCommand(
+                "Paste Special",
+                [
+                    pasteCommand,
+                    new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, options.Transpose)
+                ]);
+        }
+
         if (options.Transpose ||
             options.Operation != PasteSpecialOperation.None ||
             options.SkipBlanks ||
