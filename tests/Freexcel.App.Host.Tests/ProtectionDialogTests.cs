@@ -99,10 +99,11 @@ public sealed class ProtectionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
 
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("DialogButtonRowFactory.Create");
         source.Should().Contain("new Label { Content = \"_Range:\"");
         source.Should().Contain("Target = _rangeBox");
+        source.Should().Contain("Header = \"Range\"");
+        source.Should().Contain("Use an A1-style range");
     }
 
     [Fact]
@@ -111,6 +112,9 @@ public sealed class ProtectionDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
 
         source.Should().Contain("Allow all users of this worksheet to:");
+        source.Should().Contain("Header = \"Password\"");
+        source.Should().Contain("Protect worksheet and contents of locked cells");
+        source.Should().Contain("Caution: lost or forgotten passwords cannot be recovered.");
         source.Should().Contain("_Confirm password:");
         source.Should().Contain("Select locked cells");
         source.Should().Contain("Edit scenarios");
