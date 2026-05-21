@@ -69,15 +69,16 @@ public static class FilterInputParser
     public static bool TryParseAverage(string input, out bool above)
     {
         var trimmed = input.Trim();
-        if (trimmed.Equals("aboveavg", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("aboveaverage", StringComparison.OrdinalIgnoreCase))
+        var compact = trimmed.Replace(" ", "", StringComparison.Ordinal);
+        if (compact.Equals("aboveavg", StringComparison.OrdinalIgnoreCase) ||
+            compact.Equals("aboveaverage", StringComparison.OrdinalIgnoreCase))
         {
             above = true;
             return true;
         }
 
-        if (trimmed.Equals("belowavg", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("belowaverage", StringComparison.OrdinalIgnoreCase))
+        if (compact.Equals("belowavg", StringComparison.OrdinalIgnoreCase) ||
+            compact.Equals("belowaverage", StringComparison.OrdinalIgnoreCase))
         {
             above = false;
             return true;
