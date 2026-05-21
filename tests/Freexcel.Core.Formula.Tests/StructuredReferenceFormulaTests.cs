@@ -65,6 +65,20 @@ public sealed class StructuredReferenceFormulaTests
         result.Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=SUM(Sales[[Amount]:[Tax]])", 33)]
+    [InlineData("=SUM(Sales[[#Data],[Amount]:[Tax]])", 33)]
+    [InlineData("=COLUMNS(Sales[[#Headers],[Amount]:[Tax]])", 2)]
+    public void MultiColumnStructuredReference_ResolvesColumnRange(string formula, double expected)
+    {
+        var (workbook, sheet) = CreateSalesWorkbookWithTax();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate(formula, sheet, workbook);
+
+        result.Should().Be(new NumberValue(expected));
+    }
+
     private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbook()
     {
         var workbook = new Workbook("StructuredReferenceTest");
@@ -118,6 +132,41 @@ public sealed class StructuredReferenceFormulaTests
         };
         table.Columns.Add(new StructuredTableColumnModel(1, "Region", TotalsRowLabel: "Total"));
         table.Columns.Add(new StructuredTableColumnModel(2, "Amount", TotalsRowFunction: "sum"));
+        sheet.StructuredTables.Add(table);
+
+        return (workbook, sheet);
+    }
+
+    private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbookWithTax()
+    {
+        var workbook = new Workbook("StructuredReferenceTest");
+        var sheet = workbook.AddSheet("Data");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Tax"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(2));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 3)),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        table.Columns.Add(new StructuredTableColumnModel(3, "Tax"));
         sheet.StructuredTables.Add(table);
 
         return (workbook, sheet);
