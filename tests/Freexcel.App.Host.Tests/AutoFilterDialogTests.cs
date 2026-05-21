@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -65,6 +66,23 @@ public sealed class AutoFilterDialogTests
         result.SelectedValues.Should().Equal("Apple", "");
         result.SearchText.Should().Be("a");
         result.CriteriaText.Should().Be("contains: App");
+        result.ColorFilter.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildResult_CarriesOptionalColorFilter()
+    {
+        var color = new CellColor(33, 115, 70);
+
+        var result = AutoFilterDialog.BuildResult(
+            AutoFilterSortDirection.None,
+            [new AutoFilterDialogItem("Apple", "Apple", true)],
+            "",
+            "",
+            color);
+
+        result.ColorFilter.Should().Be(color);
+        result.CriteriaText.Should().Be("Apple");
     }
 
     [Fact]
@@ -113,5 +131,16 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("Content = \"_Criteria text\"");
         source.Should().Contain("Content = \"_Search\"");
+    }
+
+    [Fact]
+    public void DialogControls_ExposeFilterByColorPickerWhenMenuPlanSupportsIt()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "AutoFilterDialog.cs"));
+
+        source.Should().Contain("_filterByColorButton");
+        source.Should().Contain("Content = \"Filter by _Color\"");
+        source.Should().Contain("new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)");
+        source.Should().Contain("HasFilterByColorEntry");
     }
 }

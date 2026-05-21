@@ -3662,6 +3662,42 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesSharedStringRichTextAndPhonetics()
+    {
+        var workbook = new Workbook("SharedStringNativeMetadata");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Rich phonetic"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddSharedStringRichTextAndPhonetics(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).SetCell(new CellAddress(loaded.GetSheetAt(0).Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var sharedStringsXml = LoadPackageXml(archive.GetEntry("xl/sharedStrings.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var richString = sharedStringsXml.Root!
+            .Elements(worksheetNs + "si")
+            .Single(element => element.Elements(worksheetNs + "r").Any(run =>
+                run.Element(worksheetNs + "rPr")?.Element(worksheetNs + "rFont")?.Attribute("val")?.Value == "FreexcelRich"));
+        richString.Elements(worksheetNs + "r").Should().HaveCount(2);
+        richString.Element(worksheetNs + "rPh").Should().NotBeNull();
+        richString.Element(worksheetNs + "rPh")!
+            .Element(worksheetNs + "t")!
+            .Value.Should().Be("ri-chi");
+        richString.Element(worksheetNs + "phoneticPr").Should().NotBeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesLegacyCommentAuthorsAndRichText()
     {
         var workbook = new Workbook("CommentNativeMetadata");
@@ -15156,6 +15192,42 @@ public class FileAdapterSmokeTests
                                 new XElement(
                                     worksheetNs + "r",
                                     new XElement(worksheetNs + "t", "this input"))))))));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddSharedStringRichTextAndPhonetics(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var sharedStringsXml = LoadPackageXml(archive.GetEntry("xl/sharedStrings.xml")!);
+            var sharedString = sharedStringsXml.Root!
+                .Elements(worksheetNs + "si")
+                .Single(element => element.Element(worksheetNs + "t")?.Value == "Rich phonetic");
+            sharedString.ReplaceNodes(
+                new XElement(
+                    worksheetNs + "r",
+                    new XElement(
+                        worksheetNs + "rPr",
+                        new XElement(worksheetNs + "b"),
+                        new XElement(worksheetNs + "rFont", new XAttribute("val", "FreexcelRich"))),
+                    new XElement(worksheetNs + "t", "Rich ")),
+                new XElement(
+                    worksheetNs + "r",
+                    new XElement(worksheetNs + "t", "phonetic")),
+                new XElement(
+                    worksheetNs + "rPh",
+                    new XAttribute("sb", "0"),
+                    new XAttribute("eb", "4"),
+                    new XElement(worksheetNs + "t", "ri-chi")),
+                new XElement(
+                    worksheetNs + "phoneticPr",
+                    new XAttribute("fontId", "1"),
+                    new XAttribute("type", "noConversion")));
+            ReplacePackageXml(archive, "xl/sharedStrings.xml", sharedStringsXml);
         }
 
         packageStream.Position = 0;
