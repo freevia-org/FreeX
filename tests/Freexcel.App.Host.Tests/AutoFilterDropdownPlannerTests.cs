@@ -162,7 +162,7 @@ public sealed class AutoFilterDropdownPlannerTests
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Number);
         AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
             .Entries.Single(entry => entry.Header == "Number Filters")
-            .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "above average", "below average", "blank", "nonblank");
+            .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "toppercent:", "bottompercent:", "above average", "below average", "blank", "nonblank");
 
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Date);

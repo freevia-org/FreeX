@@ -79,6 +79,8 @@ public static class AutoFilterDropdownPlanner
         "between:",
         "top:",
         "bottom:",
+        "toppercent:",
+        "bottompercent:",
         "above average",
         "below average",
         "blank",
