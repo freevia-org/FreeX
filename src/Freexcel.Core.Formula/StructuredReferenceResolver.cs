@@ -28,6 +28,9 @@ public static class StructuredReferenceResolver
                 if (!StructuredTableNameMatches(table, tableName))
                     continue;
 
+                if (TryParseCombinedSelector(selector, out var section, out var columnName))
+                    return ResolveSectionColumn(sheet, table, section, columnName);
+
                 if (TryResolveTableSelector(sheet, table, selector) is { } selectedRange)
                     return selectedRange;
 
@@ -60,6 +63,56 @@ public static class StructuredReferenceResolver
                 new CellAddress(sheet.Id, table.Range.End.Row, table.Range.End.Col)),
             _ => null
         };
+    }
+
+    private static GridRange? ResolveSectionColumn(
+        Sheet sheet,
+        StructuredTableModel table,
+        string section,
+        string columnName)
+    {
+        var columnIndex = table.Columns.FindIndex(column =>
+            string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+        if (columnIndex < 0)
+            return null;
+
+        var col = table.Range.Start.Col + (uint)columnIndex;
+        return section.Trim().ToUpperInvariant() switch
+        {
+            "#ALL" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, col),
+                new CellAddress(sheet.Id, table.Range.End.Row, col)),
+            "#HEADERS" => new GridRange(
+                new CellAddress(sheet.Id, table.Range.Start.Row, col),
+                new CellAddress(sheet.Id, table.Range.Start.Row, col)),
+            "#DATA" => DataBodyRange(sheet, table, col, col),
+            "#TOTALS" when table.TotalsRowShown => new GridRange(
+                new CellAddress(sheet.Id, table.Range.End.Row, col),
+                new CellAddress(sheet.Id, table.Range.End.Row, col)),
+            _ => null
+        };
+    }
+
+    private static bool TryParseCombinedSelector(string selector, out string section, out string columnName)
+    {
+        section = "";
+        columnName = "";
+
+        var parts = ParseCombinedSelectorParts(selector);
+        if (parts.Count != 2 || !parts[0].StartsWith('#'))
+            return false;
+
+        section = parts[0];
+        columnName = parts[1];
+        return !string.IsNullOrWhiteSpace(columnName);
+    }
+
+    private static List<string> ParseCombinedSelectorParts(string selector)
+    {
+        var cleaned = selector
+            .Replace("[", "", StringComparison.Ordinal)
+            .Replace("]", "", StringComparison.Ordinal);
+        return cleaned.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
     }
 
     private static GridRange? DataBodyRange(Sheet sheet, StructuredTableModel table, uint startCol, uint endCol)
