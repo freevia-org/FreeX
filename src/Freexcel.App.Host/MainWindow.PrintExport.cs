@@ -154,13 +154,18 @@ public partial class MainWindow
 
     private System.Windows.Documents.FixedDocument RenderExportDocument(ExportOptions options) =>
         options.Scope == ExportContentScope.EntireWorkbook
-            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService)
-            : PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ResolveExportRange(options));
+            ? PrintRenderer.RenderWorkbook(_workbook, _viewportService, options.IgnorePrintAreas)
+            : PrintRenderer.RenderWorksheet(
+                _workbook,
+                _currentSheetId,
+                _viewportService,
+                ResolveExportRange(options),
+                options.IgnorePrintAreas);
 
     private System.Windows.Documents.DocumentPaginator RenderExportPaginator(ExportOptions options)
     {
         var paginator = options.Scope == ExportContentScope.EntireWorkbook
-            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService)
+            ? PrintRenderer.CreateWorkbookPaginator(_workbook, _viewportService, options.IgnorePrintAreas)
             : RenderExportDocument(options).DocumentPaginator;
 
         if (!ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount, out var pageRangeError))

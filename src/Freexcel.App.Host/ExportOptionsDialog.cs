@@ -10,6 +10,7 @@ internal sealed class ExportOptionsDialog : Window
     private readonly RadioButton _entireWorkbookButton = new() { Content = "_Workbook" };
     private readonly CheckBox _documentPropertiesBox = new() { Content = "_Include document properties" };
     private readonly CheckBox _openAfterPublishBox = new() { Content = "_Open after publishing" };
+    private readonly CheckBox _ignorePrintAreasBox = new() { Content = "_Ignore print areas" };
     private readonly RadioButton _standardQualityButton = new() { Content = "_Standard", IsChecked = true };
     private readonly RadioButton _minimumSizeButton = new() { Content = "_Minimum size" };
     private readonly RadioButton _allPagesButton = new() { Content = "_All", GroupName = "PageRange", IsChecked = true };
@@ -23,7 +24,7 @@ internal sealed class ExportOptionsDialog : Window
     {
         Title = "Export Options";
         Width = 430;
-        Height = 310;
+        Height = 334;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
@@ -53,6 +54,7 @@ internal sealed class ExportOptionsDialog : Window
 
         stack.Children.Add(new TextBlock { Text = "PDF/XPS options", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 4) });
         stack.Children.Add(_documentPropertiesBox);
+        stack.Children.Add(_ignorePrintAreasBox);
         stack.Children.Add(_standardQualityButton);
         stack.Children.Add(_minimumSizeButton);
 
@@ -81,6 +83,7 @@ internal sealed class ExportOptionsDialog : Window
                         : ExportContentScope.ActiveSheet,
                 _documentPropertiesBox.IsChecked == true,
                 _openAfterPublishBox.IsChecked == true,
+                _ignorePrintAreasBox.IsChecked == true,
                 pageRange,
                 _minimumSizeButton.IsChecked == true
                     ? ExportQuality.MinimumSize
@@ -104,12 +107,14 @@ internal sealed class ExportOptionsDialog : Window
         ExportContentScope scope,
         bool includeDocumentProperties,
         bool openAfterPublish,
+        bool ignorePrintAreas = false,
         ExportPageRange? pageRange = null,
         ExportQuality quality = ExportQuality.Standard) =>
         new(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
             openAfterPublish,
+            ignorePrintAreas,
             pageRange,
             Enum.IsDefined(quality) ? quality : ExportQuality.Standard);
 }

@@ -89,6 +89,7 @@ public class ExportPlannerTests
             ExportContentScope.ActiveSheet,
             IncludeDocumentProperties: false,
             OpenAfterPublish: false,
+            IgnorePrintAreas: false,
             Quality: ExportQuality.Standard));
 
         ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
@@ -102,11 +103,12 @@ public class ExportPlannerTests
             ExportContentScope.Selection,
             IncludeDocumentProperties: true,
             OpenAfterPublish: true,
+            IgnorePrintAreas: true,
             PageRange: new ExportPageRange(2, 4),
             Quality: ExportQuality.MinimumSize);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; pages 2-4; minimum size; document properties are included; open after publishing.");
+            .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; open after publishing.");
     }
 
     [Fact]
@@ -140,6 +142,7 @@ public class ExportPlannerTests
                 ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
                 openAfterPublish: true,
+                ignorePrintAreas: true,
                 pageRange: new ExportPageRange(3, 3),
                 quality: ExportQuality.MinimumSize)
             .Should()
@@ -147,6 +150,7 @@ public class ExportPlannerTests
                 ExportContentScope.EntireWorkbook,
                 IncludeDocumentProperties: true,
                 OpenAfterPublish: true,
+                IgnorePrintAreas: true,
                 PageRange: new ExportPageRange(3, 3),
                 Quality: ExportQuality.MinimumSize));
     }
@@ -163,6 +167,7 @@ public class ExportPlannerTests
             "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
             "Content = \"_Open after publishing\"",
+            "Content = \"_Ignore print areas\"",
             "Content = \"_Standard\"",
             "Content = \"_Minimum size\"",
             "Content = \"_All\"",
@@ -176,7 +181,6 @@ public class ExportPlannerTests
         })
             source.Should().Contain(expected);
 
-        source.Should().NotContain("_Ignore print areas");
         source.Should().NotContain("_Create bookmarks using sheet names");
         source.Should().NotContain("CSV _delimiter:");
     }

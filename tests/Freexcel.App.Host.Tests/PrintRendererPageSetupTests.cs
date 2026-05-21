@@ -51,6 +51,31 @@ public sealed class PrintRendererPageSetupTests
     }
 
     [Fact]
+    public void RenderWorksheet_CanIgnoreConfiguredPrintAreaForExport()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Ignore print area");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Inside print area"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 80), new TextValue("Outside print area"));
+            sheet.PrintArea = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 1));
+
+            var printAreaDocument = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
+            var ignoredPrintAreaDocument = PrintRenderer.RenderWorksheet(
+                workbook,
+                sheet.Id,
+                new ViewportService(),
+                ignorePrintArea: true);
+
+            printAreaDocument.Pages.Should().HaveCount(1);
+            ignoredPrintAreaDocument.Pages.Count.Should().BeGreaterThan(1);
+        });
+    }
+
+    [Fact]
     public void RenderWorkbook_CombinesVisibleWorksheetsAndSkipsHiddenSheets()
     {
         StaTestRunner.Run(() =>
