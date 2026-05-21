@@ -15,8 +15,8 @@ public sealed class GoToSpecialDialog : Window
     public GoToSpecialDialog()
     {
         Title = "Go To Special";
-        Width = 300;
-        Height = 260;
+        Width = 360;
+        Height = 420;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -36,6 +36,18 @@ public sealed class GoToSpecialDialog : Window
             };
             _buttons.Add(button);
             optionPanel.Children.Add(button);
+        }
+
+        optionPanel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
+        foreach (var choice in GetUnavailableChoices())
+        {
+            optionPanel.Children.Add(new RadioButton
+            {
+                Content = choice,
+                IsEnabled = false,
+                Margin = new Thickness(0, 0, 0, 6),
+                ToolTip = "This Excel Go To Special option is shown for parity and is not selectable yet."
+            });
         }
 
         if (_buttons.Count > 0)
@@ -65,6 +77,17 @@ public sealed class GoToSpecialDialog : Window
             new(GoToSpecialKind.Comments, "Co_mments"),
             new(GoToSpecialKind.DataValidation, "_Data validation"),
             new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
+        ];
+
+    public static IReadOnlyList<string> GetUnavailableChoices() =>
+        [
+            "_Current region",
+            "Current _array",
+            "_Objects",
+            "Row _differences",
+            "Column di_fferences",
+            "_Last cell",
+            "_Conditional formats"
         ];
 
     public static bool TryParseChoice(string text, out GoToSpecialKind kind)
