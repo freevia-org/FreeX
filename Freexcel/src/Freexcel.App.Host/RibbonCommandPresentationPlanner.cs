@@ -312,6 +312,9 @@ public static class RibbonCommandPresentationPlanner
         name.Contains("rectangle") ||
         name.Contains("ellipse") ||
         name == "line" ||
+        name.Contains("bring forward") ||
+        name.Contains("send backward") ||
+        name.Contains("selection pane") ||
         name.Contains("themes") ||
         name.Contains("margins") ||
         name.Contains("orientation") ||
