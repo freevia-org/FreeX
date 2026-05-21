@@ -29,9 +29,22 @@ public sealed class WatchWindowMessageFormatterTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
 
         source.Should().Contain("Content = \"_Add Watch\"");
+        source.Should().Contain("IsEnabled = _addWatch is not null");
+        source.Should().Contain("_addWatch?.Invoke()");
         source.Should().Contain("Content = \"_Refresh\"");
         source.Should().Contain("Content = \"_Delete Watch\"");
         source.Should().Contain("Content = \"_Close\"");
+    }
+
+    [Fact]
+    public void WatchWindowDialog_WiresAddWatchToCurrentSelectionWorkflow()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.FormulaCommands.cs"));
+
+        dialogSource.Should().Contain("Action? addWatch");
+        mainWindowSource.Should().Contain("AddWatchFromSelection(showMessage: false)");
+        mainWindowSource.Should().Contain("AddWatchFromSelection(showMessage: true)");
     }
 
     [Fact]

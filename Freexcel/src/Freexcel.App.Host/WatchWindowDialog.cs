@@ -10,6 +10,7 @@ namespace Freexcel.App.Host;
 public sealed class WatchWindowDialog : Window
 {
     private readonly Func<IReadOnlyList<WatchWindowEntry>> _getEntries;
+    private readonly Action? _addWatch;
     private readonly Action<CellAddress> _navigateTo;
     private readonly Action<CellAddress> _removeWatch;
     private readonly ObservableCollection<WatchWindowRow> _rows = [];
@@ -17,10 +18,12 @@ public sealed class WatchWindowDialog : Window
 
     public WatchWindowDialog(
         Func<IReadOnlyList<WatchWindowEntry>> getEntries,
+        Action? addWatch,
         Action<CellAddress> navigateTo,
         Action<CellAddress> removeWatch)
     {
         _getEntries = getEntries;
+        _addWatch = addWatch;
         _navigateTo = navigateTo;
         _removeWatch = removeWatch;
 
@@ -49,8 +52,13 @@ public sealed class WatchWindowDialog : Window
             Width = 96,
             Height = 26,
             Margin = new Thickness(4, 0, 0, 0),
-            IsEnabled = false,
-            ToolTip = "Select cells in the worksheet, then use Formulas > Add Watch."
+            IsEnabled = _addWatch is not null,
+            ToolTip = "Add the current worksheet selection to the Watch Window."
+        };
+        add.Click += (_, _) =>
+        {
+            _addWatch?.Invoke();
+            Refresh();
         };
         buttons.Children.Add(add);
 
