@@ -1550,9 +1550,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             _ => "min"
         };
 
-    private static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
-        => XlsxPackageXmlEditor.NextRelationshipId(relsXml, packageRelNs);
-
     private static void EnsureContentType(ZipArchive archive, string extension, string contentType)
         => XlsxPackageXmlEditor.EnsureDefaultContentType(archive, extension, contentType);
 
@@ -2625,22 +2622,10 @@ public sealed class XlsxFileAdapter : IFileAdapter
         using var sourceStream = new MemoryStream(sourcePackage.Bytes, writable: false);
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
-        var generatedEntriesBeforeMerge = generatedArchive.Entries
-            .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, generatedArchive);
 
-        foreach (var sourceEntry in sourceArchive.Entries)
-        {
-            if (IsPackageMetadataEntry(sourceEntry.FullName))
-                continue;
-            if (generatedArchive.GetEntry(sourceEntry.FullName) is not null)
-                continue;
-
-            CopyZipEntry(sourceEntry, generatedArchive);
-        }
-
-        MergeContentTypes(sourceArchive, generatedArchive);
-        MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
+        XlsxPackageMetadataMerger.MergeContentTypes(sourceArchive, generatedArchive);
+        XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, generatedArchive, generatedEntriesBeforeMerge);
         PreserveDocumentProperties(sourceArchive, generatedArchive);
         PreserveWorkbookMetadataBlocks(sourceArchive, generatedArchive, workbook);
         PreserveStylesheetMetadata(sourceArchive, generatedArchive);
@@ -2698,7 +2683,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
         if (targetEntry is null)
         {
-            CopyZipEntry(sourceEntry, targetArchive);
+            XlsxPackageMetadataMerger.CopyEntry(sourceEntry, targetArchive);
             return;
         }
 
@@ -2824,168 +2809,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "count",
             targetTableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
         return changed;
-    }
-
-    private static bool IsPackageMetadataEntry(string entryName) =>
-        string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
-        entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
-
-    private static void CopyZipEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive)
-    {
-        var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
-        targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
-        using var sourceStream = sourceEntry.Open();
-        using var targetStream = targetEntry.Open();
-        sourceStream.CopyTo(targetStream);
-    }
-
-    private static void MergeContentTypes(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        var sourceEntry = sourceArchive.GetEntry("[Content_Types].xml");
-        var targetEntry = targetArchive.GetEntry("[Content_Types].xml");
-        if (sourceEntry is null || targetEntry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var sourceXml = LoadXml(sourceEntry);
-        var targetXml = LoadXml(targetEntry);
-        var targetRoot = targetXml.Root;
-        var sourceRoot = sourceXml.Root;
-        if (targetRoot is null || sourceRoot is null)
-            return;
-
-        var existingDefaults = targetRoot
-            .Elements(contentTypeNs + "Default")
-            .Select(element => element.Attribute("Extension")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceDefault in sourceRoot.Elements(contentTypeNs + "Default"))
-        {
-            var extension = sourceDefault.Attribute("Extension")?.Value;
-            if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(extension))
-                targetRoot.Add(new XElement(sourceDefault));
-        }
-
-        var existingOverrides = targetRoot
-            .Elements(contentTypeNs + "Override")
-            .Select(element => element.Attribute("PartName")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceOverride in sourceRoot.Elements(contentTypeNs + "Override"))
-        {
-            var partName = sourceOverride.Attribute("PartName")?.Value;
-            if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(partName))
-                targetRoot.Add(new XElement(sourceOverride));
-        }
-
-        ReplacePackageXml(targetArchive, "[Content_Types].xml", targetXml);
-    }
-
-    private static void MergeRelationshipParts(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
-        IReadOnlySet<string> generatedEntriesBeforeMerge)
-    {
-        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        foreach (var sourceEntry in sourceArchive.Entries.Where(entry =>
-                     entry.FullName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase)))
-        {
-            var targetEntry = targetArchive.GetEntry(sourceEntry.FullName);
-            if (targetEntry is null)
-            {
-                CopyZipEntry(sourceEntry, targetArchive);
-                continue;
-            }
-
-            var sourceXml = LoadXml(sourceEntry);
-            var targetXml = LoadXml(targetEntry);
-            var sourceRoot = sourceXml.Root;
-            var targetRoot = targetXml.Root;
-            if (sourceRoot is null || targetRoot is null)
-                continue;
-
-            var existingRelationships = targetRoot
-                .Elements(relationshipNs + "Relationship")
-                .Select(RelationshipSignature)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var existingIds = targetRoot
-                .Elements(relationshipNs + "Relationship")
-                .Select(element => element.Attribute("Id")?.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
-            {
-                if (!ShouldPreserveRelationship(sourceEntry.FullName, sourceRelationship, targetArchive, generatedEntriesBeforeMerge))
-                    continue;
-
-                if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)))
-                    continue;
-
-                var copy = new XElement(sourceRelationship);
-                var id = copy.Attribute("Id")?.Value;
-                if (!string.IsNullOrWhiteSpace(id) && existingIds.Contains(id))
-                    copy.SetAttributeValue("Id", NextRelationshipId(targetXml, relationshipNs));
-                targetRoot.Add(copy);
-                var copiedId = copy.Attribute("Id")?.Value;
-                if (!string.IsNullOrWhiteSpace(copiedId))
-                    existingIds.Add(copiedId);
-            }
-
-            ReplacePackageXml(targetArchive, sourceEntry.FullName, targetXml);
-        }
-    }
-
-    private static bool ShouldPreserveRelationship(
-        string relationshipPartPath,
-        XElement relationship,
-        ZipArchive targetArchive,
-        IReadOnlySet<string> generatedEntriesBeforeMerge)
-    {
-        var targetMode = relationship.Attribute("TargetMode")?.Value;
-        if (string.Equals(targetMode, "External", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var relationshipType = relationship.Attribute("Type")?.Value;
-        if (string.Equals(
-                relationshipType,
-                "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var target = relationship.Attribute("Target")?.Value;
-        if (string.IsNullOrWhiteSpace(target))
-            return false;
-
-        var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);
-        return !string.IsNullOrWhiteSpace(targetPart) &&
-               !generatedEntriesBeforeMerge.Contains(targetPart) &&
-               targetArchive.GetEntry(targetPart) is not null;
-    }
-
-    private static string RelationshipSignature(XElement relationship) =>
-        string.Join("|",
-            relationship.Attribute("Type")?.Value ?? "",
-            relationship.Attribute("Target")?.Value ?? "",
-            relationship.Attribute("TargetMode")?.Value ?? "");
-
-    private static string RelationshipPartToSourcePart(string relationshipPartPath)
-    {
-        var normalized = XlsxPackagePath.NormalizeZipPath(relationshipPartPath.Replace('\\', '/'));
-        if (string.Equals(normalized, "_rels/.rels", StringComparison.OrdinalIgnoreCase))
-            return "";
-
-        const string relsSegment = "/_rels/";
-        var relsIndex = normalized.IndexOf(relsSegment, StringComparison.OrdinalIgnoreCase);
-        if (relsIndex < 0 || !normalized.EndsWith(".rels", StringComparison.OrdinalIgnoreCase))
-            return normalized;
-
-        var directory = normalized[..relsIndex];
-        var fileName = normalized[(relsIndex + relsSegment.Length)..^".rels".Length];
-        return string.IsNullOrEmpty(directory) ? fileName : $"{directory}/{fileName}";
     }
 
     private static void PreservePivotXmlReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
