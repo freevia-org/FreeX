@@ -238,7 +238,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 {
                     if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, out var chart))
                     {
-                        ApplyChartAnchor(chart, chartPart.Anchor, sheet);
+                    XlsxDrawingAnchorApplier.ApplyToChart(chart, chartPart.Anchor, sheet);
                         ApplyChartExternalDataRelationshipMetadata(chart, chartPart);
                         sheet.Charts.Add(chart);
                     }
@@ -260,7 +260,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         CropRight = picturePart.CropRight,
                         CropBottom = picturePart.CropBottom
                     };
-                    ApplyPictureAnchor(picture, picturePart.Anchor, sheet);
+                    XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
                     sheet.Pictures.Add(picture);
                 }
                 foreach (var textBoxPart in layout.TextBoxParts)
@@ -277,7 +277,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         FillColor = textBoxPart.FillColor,
                         OutlineColor = textBoxPart.OutlineColor
                     };
-                    ApplyTextBoxAnchor(textBox, textBoxPart.Anchor, sheet);
+                XlsxDrawingAnchorApplier.ApplyToTextBox(textBox, textBoxPart.Anchor, sheet);
                     sheet.TextBoxes.Add(textBox);
                 }
                 foreach (var shapePart in layout.ShapeParts)
@@ -296,7 +296,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                         GradientFillEndColor = shapePart.GradientFillEndColor,
                         HasShadowEffect = shapePart.HasShadowEffect
                     };
-                    ApplyDrawingShapeAnchor(shape, shapePart.Anchor, sheet);
+                XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
                     sheet.DrawingShapes.Add(shape);
                 }
                 foreach (var sparkline in layout.Sparklines)
@@ -2199,28 +2199,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static bool IsSupportedFontSize(double fontSize) =>
         double.IsFinite(fontSize) && fontSize is >= 1 and <= 409;
 
-    private static void ApplyChartAnchor(ChartModel chart, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        chart.Left = anchor.AbsoluteLeft ?? (SumColumnPixels(sheet, 1, anchor.FromColumnZeroBased) + anchor.FromColumnOffset);
-        chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, anchor.FromRowZeroBased) + anchor.FromRowOffset);
-
-        var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
-            + anchor.ToColumnOffset!.Value
-            - anchor.FromColumnOffset);
-        var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
-            + anchor.ToRowOffset!.Value
-            - anchor.FromRowOffset);
-        if (width > 0)
-            chart.Width = width;
-        if (height > 0)
-            chart.Height = height;
-    }
-
     private static void ApplyChartExternalDataRelationshipMetadata(ChartModel chart, XlsxChartPackagePart chartPart)
     {
         if (chart.ExternalData?.RelationshipId is not { Length: > 0 } relationshipId)
@@ -2239,88 +2217,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         chart.ExternalData.RelationshipType = relationship.Attribute("Type")?.Value;
         chart.ExternalData.Target = relationship.Attribute("Target")?.Value;
         chart.ExternalData.TargetMode = relationship.Attribute("TargetMode")?.Value;
-    }
-
-    private static void ApplyPictureAnchor(PictureModel picture, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
-            + anchor.ToColumnOffset!.Value
-            - anchor.FromColumnOffset);
-        var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
-            + anchor.ToRowOffset!.Value
-            - anchor.FromRowOffset);
-        if (width > 0)
-            picture.Width = width;
-        if (height > 0)
-            picture.Height = height;
-    }
-
-    private static void ApplyTextBoxAnchor(TextBoxModel textBox, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        var (width, height) = GetDrawingAnchorSize(anchor, sheet);
-        if (width > 0)
-            textBox.Width = width;
-        if (height > 0)
-            textBox.Height = height;
-    }
-
-    private static void ApplyDrawingShapeAnchor(DrawingShapeModel shape, XlsxDrawingAnchor? anchor, Sheet sheet)
-    {
-        if (anchor is null)
-            return;
-
-        var (width, height) = GetDrawingAnchorSize(anchor, sheet);
-        if (width > 0)
-            shape.Width = width;
-        if (height > 0)
-            shape.Height = height;
-    }
-
-    private static (double Width, double Height) GetDrawingAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)
-    {
-        var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
-            + anchor.ToColumnOffset!.Value
-            - anchor.FromColumnOffset);
-        var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
-            + anchor.ToRowOffset!.Value
-            - anchor.FromRowOffset);
-        return (width, height);
-    }
-
-    private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
-    {
-        double width = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var col = firstColumn + offset;
-            if (!sheet.IsColEffectivelyHidden(col))
-                width += sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth) * 8;
-        }
-
-        return width;
-    }
-
-    private static double SumRowPixels(Sheet sheet, uint firstRow, uint count)
-    {
-        double height = 0;
-        for (var offset = 0u; offset < count; offset++)
-        {
-            var row = firstRow + offset;
-            if (!sheet.IsRowEffectivelyHidden(row))
-                height += sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight);
-        }
-
-        return height;
     }
 
     public void Save(Workbook workbook, Stream stream)
