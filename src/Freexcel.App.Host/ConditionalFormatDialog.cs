@@ -226,11 +226,11 @@ public class ConditionalFormatDialog : Window
         {
             Height = needsValue ? (isBetween ? 260 : 220) : 180;
 
-            var lbl1 = new Label { Content = isBetween ? "Minimum:" : "Value:", Padding = new Thickness(0) };
             _value1Box  = new TextBox { Margin = new Thickness(0, 4, 0, 8) };
-            _value2Label = new Label { Content = "Maximum:", Padding = new Thickness(0),
-                Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed };
+            var lbl1 = new Label { Content = isBetween ? "_Minimum:" : "_Value:", Target = _value1Box, Padding = new Thickness(0) };
             _value2Box  = new TextBox { Margin = new Thickness(0, 4, 0, 8),
+                Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed };
+            _value2Label = new Label { Content = "Ma_ximum:", Target = _value2Box, Padding = new Thickness(0),
                 Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed };
 
             if (needsValue)
@@ -241,22 +241,22 @@ public class ConditionalFormatDialog : Window
             }
         }
 
-        var colorLabel = new Label { Content = "Format:", Padding = new Thickness(0) };
         _colorBox = new ComboBox { Margin = new Thickness(0, 4, 0, 12) };
+        var colorLabel = new Label { Content = "_Format:", Target = _colorBox, Padding = new Thickness(0) };
         foreach (var (lbl, _) in ColorOptions) _colorBox.Items.Add(lbl);
         _colorBox.SelectedIndex = 0;
 
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-        var ok     = new Button { Content = "OK",     Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var ok     = new Button { Content = "_OK",     Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += Ok_Click;
         btnRow.Children.Add(ok);
         btnRow.Children.Add(cancel);
 
         if (!isIconSet && !isColorScale)
         {
-            colorLabel.Content = isDataBar ? "Bar color:" : "Format:";
+            colorLabel.Content = isDataBar ? "_Bar color:" : "_Format:";
             inner.Children.Add(colorLabel);
             inner.Children.Add(_colorBox);
         }

@@ -11,19 +11,32 @@ public sealed record RemoveDuplicatesDialogResult(IReadOnlyList<uint> SelectedCo
 public sealed class RemoveDuplicatesDialog : Window
 {
     private readonly List<CheckBox> _boxes = [];
+    private readonly CheckBox _hasHeadersBox = new() { Content = "_My data has headers", IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly StackPanel _columnsPanel = new();
 
     public RemoveDuplicatesDialogResult? Result { get; private set; }
 
     public RemoveDuplicatesDialog(IEnumerable<RemoveDuplicateColumnChoice> columns)
     {
         Title = "Remove Duplicates";
-        Width = 320;
-        Height = 320;
+        Width = 360;
+        Height = 360;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new StackPanel { Margin = new Thickness(12) };
+        root.Children.Add(_hasHeadersBox);
+        root.Children.Add(new TextBlock { Text = "Columns:", Margin = new Thickness(0, 0, 0, 4) });
+        var bulkButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        var selectAllButton = new Button { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
+        selectAllButton.Click += SelectAllButton_Click;
+        var unselectAllButton = new Button { Content = "_Unselect All", Width = 88 };
+        unselectAllButton.Click += UnselectAllButton_Click;
+        bulkButtons.Children.Add(selectAllButton);
+        bulkButtons.Children.Add(unselectAllButton);
+        root.Children.Add(bulkButtons);
+
         foreach (var column in columns)
         {
             var box = new CheckBox
@@ -34,8 +47,14 @@ public sealed class RemoveDuplicatesDialog : Window
                 Margin = new Thickness(0, 0, 0, 4)
             };
             _boxes.Add(box);
-            root.Children.Add(box);
+            _columnsPanel.Children.Add(box);
         }
+        root.Children.Add(new ScrollViewer
+        {
+            Content = _columnsPanel,
+            Height = 160,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        });
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
     }
@@ -88,6 +107,22 @@ public sealed class RemoveDuplicatesDialog : Window
                 return new RemoveDuplicateColumnChoice((uint)index, header, true);
             })
             .ToList();
+
+    private void SelectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetColumnSelection(true);
+    }
+
+    private void UnselectAllButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetColumnSelection(false);
+    }
+
+    private void SetColumnSelection(bool isSelected)
+    {
+        foreach (var box in _boxes)
+            box.IsChecked = isSelected;
+    }
 
     private void Accept()
     {
