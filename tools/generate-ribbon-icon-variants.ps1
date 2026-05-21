@@ -141,6 +141,9 @@ function Body($slug, [int]$n) {
         '^page-setup$|^calculation-options$|^options$' { return Gear $n }
         '^print-gridlines$' { return (Grid $n) + "`n" + (Txt $checkGlyph 15 5 4 $n) }
         '^print-headings$' { return (Grid $n) + "`n" + (Txt 'A' 6 5 4 $n) + "`n" + (Txt '1' 4 8 4 $n) }
+        '^pivottable$' { return (Grid $n) + "`n  <rect class=""b"" x=""$(S 3 $n)"" y=""$(S 3 $n)"" width=""$(S 14 $n)"" height=""$(S 3.5 $n)"" opacity="".55""/>`n  <rect class=""g2"" x=""$(S 3 $n)"" y=""$(S 6.5 $n)"" width=""$(S 3.5 $n)"" height=""$(S 10.5 $n)"" opacity="".65""/>" }
+        '^table$' { return (Grid $n) + "`n  <rect class=""g2"" x=""$(S 3 $n)"" y=""$(S 3 $n)"" width=""$(S 14 $n)"" height=""$(S 3.5 $n)"" opacity="".7""/>" }
+        '^show-detail$' { return (Grid $n) + "`n" + (Txt '+' 15 5 7 $n) }
         '^insert-function$' { return (Doc $n) + "`n" + (Txt 'fx' 10.5 10.8 7.2 $n) }
         '^autosum$' { return Txt $sigmaGlyph 10 10 13 $n }
         '^recently-used$' { return "  <circle class=""r"" cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 6 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (L 10 10 10 6 $n 'r' 1) + "`n" + (L 10 10 14 10 $n 'r' 1) }

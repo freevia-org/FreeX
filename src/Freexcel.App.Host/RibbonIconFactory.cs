@@ -541,6 +541,9 @@ public static class RibbonIconFactory
             "workbook-stats" => "statistics",
             "workbook-statistics" => "statistics",
             "accessibility" => "accessibility-checker",
+            "refresh-pivot" => "refresh-all",
+            "show-details" => "show-detail",
+            "links-and-objects" => "hyperlink",
             _ => ""
         };
 
