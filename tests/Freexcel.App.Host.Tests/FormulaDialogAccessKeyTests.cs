@@ -16,10 +16,12 @@ public sealed class FormulaDialogAccessKeyTests
             "Content = \"_Left column\"",
             "Content = \"_Bottom row\"",
             "Content = \"_Right column\"",
-            "Content = \"_OK\"",
-            "Content = \"_Cancel\""
+            "DialogButtonRowFactory.Create"
         })
             source.Should().Contain(expected);
+
+        source.Should().Contain("Header = \"Create names from\"");
+        source.Should().Contain("Excel creates named ranges");
     }
 
     [Fact]
