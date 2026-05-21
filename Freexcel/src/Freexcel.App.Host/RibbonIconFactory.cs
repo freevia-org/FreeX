@@ -544,6 +544,8 @@ public static class RibbonIconFactory
             "refresh-pivot" => "refresh-all",
             "show-details" => "show-detail",
             "links-and-objects" => "hyperlink",
+            "help-online" => "help",
+            "about-freexcel" => "about",
             _ => ""
         };
 
