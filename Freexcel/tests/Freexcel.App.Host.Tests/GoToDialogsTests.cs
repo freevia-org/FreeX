@@ -81,20 +81,10 @@ public sealed class GoToDialogsTests
         })
             source.Should().Contain(expected);
 
-        foreach (var expected in new[]
-        {
-            "_Current region",
-            "Current _array",
-            "_Objects",
-            "Row _differences",
-            "Column di_fferences",
-            "_Last cell",
-            "_Conditional formats"
-        })
-            source.Should().Contain(expected);
-
         source.Should().Contain("Header = \"Go to special\"");
-        source.Should().Contain("Header = \"Additional Excel options\"");
+        source.Should().NotContain("Header = \"Additional Excel options\"");
+        source.Should().NotContain("IsEnabled = false");
+        source.Should().NotContain("shown for parity");
         source.Should().Contain("DialogButtonRowFactory.Create");
     }
 

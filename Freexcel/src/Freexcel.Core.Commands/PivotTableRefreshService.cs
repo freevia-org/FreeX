@@ -178,7 +178,7 @@ public static class PivotTableRefreshService
     private static void ApplyPivotTableStyle(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
     {
         var materialized = GetMaterializedOutputRange(sheet, pivotTable);
-        var palette = ResolvePivotStylePalette(pivotTable.StyleName);
+        var palette = PivotStylePaletteResolver.Resolve(pivotTable.StyleName);
         var headerStyle = workbook.RegisterStyle(new CellStyle
         {
             Bold = true,
@@ -283,62 +283,6 @@ public static class PivotTableRefreshService
 
     private static bool IsPivotSubtotalCaption(string value) =>
         value.EndsWith(" Total", StringComparison.OrdinalIgnoreCase);
-
-    private static PivotStylePalette ResolvePivotStylePalette(string styleName)
-    {
-        if (string.IsNullOrWhiteSpace(styleName))
-            return LightPalette();
-
-        return styleName switch
-        {
-            "PivotStyleDark4" => DarkPalette(new CellColor(68, 84, 106), new CellColor(217, 225, 242), new CellColor(180, 198, 231), new CellColor(242, 242, 242), new CellColor(142, 169, 219)),
-            "PivotStyleDark7" => DarkPalette(new CellColor(31, 78, 121), new CellColor(217, 226, 243), new CellColor(184, 204, 228), new CellColor(232, 240, 248), new CellColor(149, 179, 215)),
-            "PivotStyleMedium4" => MediumPalette(new CellColor(112, 173, 71), new CellColor(226, 239, 218), new CellColor(198, 224, 180), new CellColor(235, 245, 230), new CellColor(169, 208, 142)),
-            "PivotStyleMedium9" => MediumPalette(new CellColor(91, 155, 213), new CellColor(221, 235, 247), new CellColor(221, 235, 247), new CellColor(234, 243, 252), new CellColor(157, 195, 230)),
-            "PivotStyleMedium10" => MediumPalette(new CellColor(237, 125, 49), new CellColor(252, 228, 214), new CellColor(248, 203, 173), new CellColor(253, 239, 230), new CellColor(244, 177, 131)),
-            "PivotStyleMedium17" => MediumPalette(new CellColor(112, 48, 160), new CellColor(229, 223, 236), new CellColor(204, 192, 218), new CellColor(243, 235, 250), new CellColor(178, 161, 199)),
-            _ when styleName.StartsWith("PivotStyleDark", StringComparison.OrdinalIgnoreCase) =>
-                DarkPalette(new CellColor(68, 68, 68), new CellColor(217, 217, 217), new CellColor(191, 191, 191), new CellColor(242, 242, 242), new CellColor(166, 166, 166)),
-            _ when styleName.StartsWith("PivotStyleMedium", StringComparison.OrdinalIgnoreCase) =>
-                MediumPalette(new CellColor(91, 155, 213), new CellColor(221, 235, 247), new CellColor(221, 235, 247), new CellColor(234, 243, 252), new CellColor(157, 195, 230)),
-            _ => LightPalette()
-        };
-    }
-
-    private static PivotStylePalette LightPalette() =>
-        new(
-            HeaderFill: new CellColor(217, 225, 242),
-            HeaderFont: CellColor.Black,
-            SubtotalFill: new CellColor(234, 241, 221),
-            GrandTotalFill: new CellColor(234, 241, 221),
-            GrandTotalFont: CellColor.Black,
-            StripeFill: new CellColor(242, 248, 238),
-            Border: new CellColor(191, 191, 191));
-
-    private static PivotStylePalette MediumPalette(
-        CellColor headerFill,
-        CellColor subtotalFill,
-        CellColor grandTotalFill,
-        CellColor stripeFill,
-        CellColor border) =>
-        new(headerFill, CellColor.White, subtotalFill, grandTotalFill, CellColor.Black, stripeFill, border);
-
-    private static PivotStylePalette DarkPalette(
-        CellColor headerFill,
-        CellColor subtotalFill,
-        CellColor grandTotalFill,
-        CellColor stripeFill,
-        CellColor border) =>
-        new(headerFill, CellColor.White, subtotalFill, grandTotalFill, CellColor.Black, stripeFill, border);
-
-    private sealed record PivotStylePalette(
-        CellColor HeaderFill,
-        CellColor HeaderFont,
-        CellColor SubtotalFill,
-        CellColor GrandTotalFill,
-        CellColor GrandTotalFont,
-        CellColor StripeFill,
-        CellColor Border);
 
     private static IReadOnlyList<string>? ReadDetailColumnKeys(
         Sheet sheet,
@@ -1559,12 +1503,11 @@ public static class PivotTableRefreshService
         IReadOnlyList<ScalarValue> row,
         IReadOnlyList<string> headers)
     {
-        var parser = new CalculatedFieldExpressionParser(formula, name =>
+        return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
         {
             var index = headers.ToList().FindIndex(header => string.Equals(header, name, StringComparison.OrdinalIgnoreCase));
             return index >= 0 && index < row.Count ? Number(row[index]) : 0;
         });
-        return parser.Parse();
     }
 
     private static double EvaluateCalculatedItem(
@@ -1574,14 +1517,13 @@ public static class PivotTableRefreshService
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers)
     {
-        var parser = new CalculatedFieldExpressionParser(formula, name =>
+        return PivotCalculatedExpressionEvaluator.Evaluate(formula, name =>
         {
             var group = groups.FirstOrDefault(candidate =>
                 candidate.Key.Values.Count > 0 &&
                 string.Equals(candidate.Key.Values[0], name, StringComparison.CurrentCultureIgnoreCase));
             return group is null ? 0 : Aggregate(group, dataField, pivotTable, headers);
         });
-        return parser.Parse();
     }
 
     private sealed class PivotKey : IEquatable<PivotKey>
@@ -1633,129 +1575,4 @@ public static class PivotTableRefreshService
         }
     }
 
-    private sealed class CalculatedFieldExpressionParser
-    {
-        private readonly string _text;
-        private readonly Func<string, double> _fieldValue;
-        private int _position;
-
-        public CalculatedFieldExpressionParser(string text, Func<string, double> fieldValue)
-        {
-            _text = text ?? "";
-            _fieldValue = fieldValue;
-        }
-
-        public double Parse()
-        {
-            var value = ParseAddSubtract();
-            SkipWhitespace();
-            return value;
-        }
-
-        private double ParseAddSubtract()
-        {
-            var value = ParseMultiplyDivide();
-            while (true)
-            {
-                SkipWhitespace();
-                if (TryConsume('+'))
-                    value += ParseMultiplyDivide();
-                else if (TryConsume('-'))
-                    value -= ParseMultiplyDivide();
-                else
-                    return value;
-            }
-        }
-
-        private double ParseMultiplyDivide()
-        {
-            var value = ParseUnary();
-            while (true)
-            {
-                SkipWhitespace();
-                if (TryConsume('*'))
-                    value *= ParseUnary();
-                else if (TryConsume('/'))
-                {
-                    var denominator = ParseUnary();
-                    value = Math.Abs(denominator) < double.Epsilon ? 0 : value / denominator;
-                }
-                else
-                    return value;
-            }
-        }
-
-        private double ParseUnary()
-        {
-            SkipWhitespace();
-            if (TryConsume('+'))
-                return ParseUnary();
-            if (TryConsume('-'))
-                return -ParseUnary();
-            return ParsePrimary();
-        }
-
-        private double ParsePrimary()
-        {
-            SkipWhitespace();
-            if (TryConsume('('))
-            {
-                var value = ParseAddSubtract();
-                TryConsume(')');
-                return value;
-            }
-
-            if (Peek() == '[')
-                return _fieldValue(ReadBracketedIdentifier());
-            if (char.IsLetter(Peek()) || Peek() == '_')
-                return _fieldValue(ReadIdentifier());
-            return ReadNumber();
-        }
-
-        private string ReadBracketedIdentifier()
-        {
-            TryConsume('[');
-            var start = _position;
-            while (_position < _text.Length && _text[_position] != ']')
-                _position++;
-            var value = _text[start.._position].Trim();
-            TryConsume(']');
-            return value;
-        }
-
-        private string ReadIdentifier()
-        {
-            var start = _position;
-            while (_position < _text.Length && (char.IsLetterOrDigit(_text[_position]) || _text[_position] == '_' || _text[_position] == ' '))
-                _position++;
-            return _text[start.._position].Trim();
-        }
-
-        private double ReadNumber()
-        {
-            var start = _position;
-            while (_position < _text.Length && (char.IsDigit(_text[_position]) || _text[_position] == '.'))
-                _position++;
-            return double.TryParse(_text[start.._position], NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-                ? value
-                : 0;
-        }
-
-        private char Peek() => _position < _text.Length ? _text[_position] : '\0';
-
-        private bool TryConsume(char ch)
-        {
-            SkipWhitespace();
-            if (Peek() != ch)
-                return false;
-            _position++;
-            return true;
-        }
-
-        private void SkipWhitespace()
-        {
-            while (_position < _text.Length && char.IsWhiteSpace(_text[_position]))
-                _position++;
-        }
-    }
 }

@@ -99,10 +99,10 @@ public static class ChartRenderer
                 },
                 AreInsideLabelsAngled = Math.Abs(chart.DataLabelAngle) > 0.5,
                 InsideLabelFormat = chart.ShowDataLabels && chart.DataLabelPosition != ChartDataLabelPosition.OutsideEnd
-                    ? GetPieLabelFormat(chart, pieSeriesName)
+                    ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
                     : "",
                 OutsideLabelFormat = chart.ShowDataLabels && chart.DataLabelPosition == ChartDataLabelPosition.OutsideEnd
-                    ? GetPieLabelFormat(chart, pieSeriesName)
+                    ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
                     : ""
             };
             var pieFormat = GetSeriesFormat(chart, 0);
@@ -203,7 +203,7 @@ public static class ChartRenderer
                 var series = new RectangleBarSeries
                 {
                     Title = seriesName,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 4),
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
                 ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
@@ -218,7 +218,7 @@ public static class ChartRenderer
                         series.Items.Add(new RectangleBarItem(i - 0.35, Math.Min(0, v), i + 0.35, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -239,7 +239,7 @@ public static class ChartRenderer
                 var series = new BarSeries
                 {
                     Title = seriesName,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 0),
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 0),
                     LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
                 };
                 ApplyBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
@@ -254,7 +254,7 @@ public static class ChartRenderer
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), v, i, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), v, i, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -298,7 +298,7 @@ public static class ChartRenderer
                 var series = new AreaSeries
                 {
                     Title = seriesName,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 1)
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1)
                 };
                 ApplyAreaFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
@@ -312,7 +312,7 @@ public static class ChartRenderer
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -332,7 +332,7 @@ public static class ChartRenderer
                 {
                     Title = seriesName,
                     MarkerType = MarkerType.Circle,
-                    LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
                     LabelMargin = ToLabelMargin(chart.DataLabelPosition),
                     YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
                 };
@@ -352,7 +352,7 @@ public static class ChartRenderer
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, (int)(r - dataStartRow), GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
+                            AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelFormatter.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
                     }
                 }
                 if (firstSeriesPoints is null)
@@ -525,7 +525,7 @@ public static class ChartRenderer
         var series = new LineSeries
         {
             Title = title,
-            LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+            LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
             LabelMargin = ToLabelMargin(chart.DataLabelPosition),
             YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
         };
@@ -600,7 +600,7 @@ public static class ChartRenderer
             var series = new RectangleBarSeries
             {
                 Title = seriesName,
-                LabelFormatString = GetNativeValueLabelFormat(chart, 4)
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
             ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
             ApplyNativeDataLabelStyle(series, chart, theme);
@@ -620,7 +620,7 @@ public static class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -634,13 +634,15 @@ public static class ChartRenderer
         if (!chart.IsPivotChart || !chart.ShowPivotChartFieldButtons)
             return;
 
-        var captions = new[]
-        {
-            string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName,
-            "Axis Fields",
-            "Values"
-        };
-        for (var index = 0; index < captions.Length; index++)
+        var captions = new List<string>();
+        if (chart.ShowPivotChartReportFilterButtons)
+            captions.Add(string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName);
+        if (chart.ShowPivotChartAxisFieldButtons)
+            captions.Add("Axis Fields");
+        if (chart.ShowPivotChartValueFieldButtons)
+            captions.Add("Values");
+
+        for (var index = 0; index < captions.Count; index++)
         {
             model.Annotations.Add(new TextAnnotation
             {
@@ -694,7 +696,7 @@ public static class ChartRenderer
             var series = new RectangleBarSeries
             {
                 Title = seriesName,
-                LabelFormatString = GetNativeValueLabelFormat(chart, 4)
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
             };
             ApplyRectangleBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
             ApplyNativeDataLabelStyle(series, chart, theme);
@@ -714,7 +716,7 @@ public static class ChartRenderer
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -766,7 +768,7 @@ public static class ChartRenderer
             {
                 Title = seriesName,
                 MarkerType = MarkerType.Circle,
-                LabelFormatString = GetNativeValueLabelFormat(chart, 1),
+                LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
                 LabelMargin = ToLabelMargin(chart.DataLabelPosition)
             };
             ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
@@ -786,7 +788,7 @@ public static class ChartRenderer
                 if (seriesIndex == 0)
                     trendPoints.Add(new DataPoint(x, y));
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, GetCategory(categories, fallbackIndex), x, y, y);
+                    AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, fallbackIndex, ChartDataLabelFormatter.GetCategory(categories, fallbackIndex), x, y, y);
             }
 
             model.Series.Add(series);
@@ -837,7 +839,7 @@ public static class ChartRenderer
     }
 
     private static double GetStackedLabelValue(ChartModel chart, bool normalizeToPercent, double sourceValue, double displayValue) =>
-        normalizeToPercent && ShouldRenderPercentageLabels(chart)
+        normalizeToPercent && ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
             ? displayValue / 100
             : sourceValue;
 
@@ -1146,12 +1148,7 @@ public static class ChartRenderer
     }
 
     private static bool ShouldUseNativeValueLabels(ChartModel chart) =>
-        chart.ShowDataLabels
-            && !chart.ShowDataLabelCategoryName
-            && !chart.ShowDataLabelSeriesName
-            && !ShouldRenderPercentageLabels(chart)
-            && !IsPercentStackedChart(chart)
-            && !RequiresDataLabelAnnotationFormatting(chart);
+        ChartDataLabelFormatter.ShouldUseNativeValueLabels(chart);
 
     private static void ApplyNativeDataLabelStyle(PlotElement element, ChartModel chart, WorkbookTheme theme)
     {
@@ -1164,42 +1161,7 @@ public static class ChartRenderer
     }
 
     private static bool ShouldUseAnnotationLabels(ChartModel chart) =>
-        chart.ShowDataLabels
-            && (chart.ShowDataLabelCategoryName
-                || chart.ShowDataLabelSeriesName
-                || ShouldRenderPercentageLabels(chart)
-                || IsPercentStackedChart(chart)
-                || RequiresDataLabelAnnotationFormatting(chart));
-
-    private static bool ShouldRenderPercentageLabels(ChartModel chart) =>
-        chart.ShowDataLabelPercentage
-            && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type);
-
-    private static bool IsPercentStackedChart(ChartModel chart) =>
-        chart.Type is ChartType.PercentStackedColumn or ChartType.PercentStackedBar;
-
-    private static bool RequiresDataLabelAnnotationFormatting(ChartModel chart) =>
-        chart.ShowDataLabelCallouts
-            || chart.DataLabelFillColor is not null
-            || chart.DataLabelFillThemeColor is not null
-            || chart.DataLabelBorderColor is not null
-            || chart.DataLabelBorderThemeColor is not null
-            || chart.DataLabelBorderThickness > 0
-            || Math.Abs(chart.DataLabelAngle) > 0.5;
-
-    private static string GetCategory(IReadOnlyList<string> categories, int index) =>
-        index >= 0 && index < categories.Count ? categories[index] : "";
-
-    private static string FormatDataLabel(ChartModel chart, string seriesName, string categoryName, double value)
-    {
-        var parts = new List<string>();
-        if (chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName))
-            parts.Add(seriesName);
-        if (chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName))
-            parts.Add(categoryName);
-        parts.Add(FormatLabelValue(chart, value));
-        return string.Join(GetDataLabelSeparatorText(chart.DataLabelSeparator), parts);
-    }
+        ChartDataLabelFormatter.ShouldUseAnnotationLabels(chart);
 
     private static void AddDataLabelAnnotation(
         PlotModel model,
@@ -1219,7 +1181,7 @@ public static class ChartRenderer
         var fillColor = pointFormat?.ResolveFillColor(theme) ?? chart.ResolveDataLabelFillColor(theme);
         model.Annotations.Add(new TextAnnotation
         {
-            Text = FormatDataLabel(chart, seriesName, categoryName, value),
+            Text = ChartDataLabelFormatter.FormatDataLabel(chart, seriesName, categoryName, value),
             TextPosition = new DataPoint(x, y),
             TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
             TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
@@ -1260,70 +1222,11 @@ public static class ChartRenderer
                 seriesName,
                 seriesIndex,
                 pointIndex,
-                GetCategory(categories, (int)Math.Round(point.X)),
+                ChartDataLabelFormatter.GetCategory(categories, (int)Math.Round(point.X)),
                 point.X,
                 point.Y,
                 point.Y);
         }
-    }
-
-    private static string GetPieLabelFormat(ChartModel chart, string seriesName)
-    {
-        var valuePart = chart.ShowDataLabelPercentage
-            ? "{2:0%}"
-            : GetPieValueFormat(chart.DataLabelNumberFormat);
-        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
-        if (chart.ShowDataLabelSeriesName && chart.ShowDataLabelCategoryName)
-            return $"{seriesName}{separator}{{1}}{separator}{valuePart}";
-        if (chart.ShowDataLabelSeriesName)
-            return $"{seriesName}{separator}{valuePart}";
-        if (chart.ShowDataLabelCategoryName)
-            return $"{{1}}{separator}{valuePart}";
-        return valuePart;
-    }
-
-    private static string GetDataLabelSeparatorText(ChartDataLabelSeparator separator) =>
-        separator switch
-        {
-            ChartDataLabelSeparator.Semicolon => "; ",
-            ChartDataLabelSeparator.NewLine => Environment.NewLine,
-            ChartDataLabelSeparator.Space => " ",
-            _ => ", "
-        };
-
-    private static string FormatLabelValue(ChartModel chart, double value) =>
-        ShouldRenderPercentageLabels(chart)
-            ? value.ToString("0%", System.Globalization.CultureInfo.InvariantCulture)
-            : chart.DataLabelNumberFormat switch
-        {
-            ChartDataLabelNumberFormat.Number => value.ToString("0.00"),
-            ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", System.Globalization.CultureInfo.InvariantCulture),
-            ChartDataLabelNumberFormat.Percent => value.ToString("0%", System.Globalization.CultureInfo.InvariantCulture),
-            _ => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
-        };
-
-    private static string GetPieValueFormat(ChartDataLabelNumberFormat format) =>
-        format switch
-        {
-            ChartDataLabelNumberFormat.Number => "{0:0.00}",
-            ChartDataLabelNumberFormat.Currency => "{0:$#,##0.00}",
-            ChartDataLabelNumberFormat.Percent => "{0:0%}",
-            _ => "{0}"
-        };
-
-    private static string? GetNativeValueLabelFormat(ChartModel chart, int valueIndex)
-    {
-        if (!ShouldUseNativeValueLabels(chart))
-            return null;
-
-        var format = chart.DataLabelNumberFormat switch
-        {
-            ChartDataLabelNumberFormat.Number => ":0.00",
-            ChartDataLabelNumberFormat.Currency => ":$#,##0.00",
-            ChartDataLabelNumberFormat.Percent => ":0%",
-            _ => ""
-        };
-        return $"{{{valueIndex}{format}}}";
     }
 
     private static bool UsesSecondaryAxis(ChartModel chart, int seriesIndex)
@@ -1395,15 +1298,11 @@ public static class ChartRenderer
         if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type) || points is null || points.Count < 2)
             return;
 
-        var trendPoints = chart.TrendlineType switch
-        {
-            ChartTrendlineType.Exponential => CalculateExponentialTrendline(points),
-            ChartTrendlineType.Logarithmic => CalculateLogarithmicTrendline(points),
-            ChartTrendlineType.Power => CalculatePowerTrendline(points),
-            ChartTrendlineType.MovingAverage => CalculateMovingAverageTrendline(points, chart.TrendlinePeriod),
-            ChartTrendlineType.Polynomial => CalculatePolynomialTrendline(points, chart.TrendlineOrder),
-            _ => CalculateLinearTrendline(points)
-        };
+        var trendPoints = ChartTrendlineCalculator.Calculate(
+            chart.TrendlineType,
+            points,
+            chart.TrendlinePeriod,
+            chart.TrendlineOrder);
         if (trendPoints.Count < 2)
             return;
 
@@ -1456,7 +1355,7 @@ public static class ChartRenderer
         var lines = new List<string>();
         if (chart.ShowTrendlineEquation)
             lines.Add(GetTrendlineEquationText(chart, trendPoints));
-        if (chart.ShowTrendlineRSquared && TryCalculateRSquared(sourcePoints, trendPoints, out var rSquared))
+        if (chart.ShowTrendlineRSquared && ChartTrendlineCalculator.TryCalculateRSquared(sourcePoints, trendPoints, out var rSquared))
             lines.Add($"R² = {rSquared:0.0000}");
         if (lines.Count == 0)
             return;
@@ -1542,60 +1441,6 @@ public static class ChartRenderer
     private static string FormatSigned(double value) =>
         value < 0 ? $"- {Math.Abs(value):0.###}" : $"+ {value:0.###}";
 
-    private static bool TryCalculateRSquared(
-        IReadOnlyList<DataPoint> sourcePoints,
-        IReadOnlyList<DataPoint> trendPoints,
-        out double rSquared)
-    {
-        rSquared = 0;
-        var matches = new List<(double Actual, double Predicted)>();
-        foreach (var point in sourcePoints)
-        {
-            if (TryInterpolateTrendY(trendPoints, point.X, out var predicted))
-                matches.Add((point.Y, predicted));
-        }
-
-        if (matches.Count < 2)
-            return false;
-
-        var mean = matches.Average(match => match.Actual);
-        var total = matches.Sum(match => Math.Pow(match.Actual - mean, 2));
-        if (Math.Abs(total) < double.Epsilon)
-            return false;
-
-        var residual = matches.Sum(match => Math.Pow(match.Actual - match.Predicted, 2));
-        rSquared = 1 - (residual / total);
-        return !double.IsNaN(rSquared) && !double.IsInfinity(rSquared);
-    }
-
-    private static bool TryInterpolateTrendY(IReadOnlyList<DataPoint> trendPoints, double x, out double y)
-    {
-        y = 0;
-        if (trendPoints.Count == 0 || x < trendPoints[0].X || x > trendPoints[^1].X)
-            return false;
-
-        for (var i = 1; i < trendPoints.Count; i++)
-        {
-            var left = trendPoints[i - 1];
-            var right = trendPoints[i];
-            if (x > right.X)
-                continue;
-
-            var dx = right.X - left.X;
-            if (Math.Abs(dx) < double.Epsilon)
-            {
-                y = right.Y;
-                return true;
-            }
-
-            var t = (x - left.X) / dx;
-            y = left.Y + ((right.Y - left.Y) * t);
-            return true;
-        }
-
-        return false;
-    }
-
     private static string GetTrendlineTitle(ChartTrendlineType type) =>
         type switch
         {
@@ -1606,207 +1451,6 @@ public static class ChartRenderer
             ChartTrendlineType.Polynomial => "Polynomial Trendline",
             _ => "Linear Trendline"
         };
-
-    private static IReadOnlyList<DataPoint> CalculateLinearTrendline(IReadOnlyList<DataPoint> points)
-    {
-        var n = points.Count;
-        var sumX = points.Sum(point => point.X);
-        var sumY = points.Sum(point => point.Y);
-        var sumXY = points.Sum(point => point.X * point.Y);
-        var sumXX = points.Sum(point => point.X * point.X);
-        var denominator = (n * sumXX) - (sumX * sumX);
-        if (Math.Abs(denominator) < double.Epsilon)
-            return [];
-
-        var slope = ((n * sumXY) - (sumX * sumY)) / denominator;
-        var intercept = (sumY - (slope * sumX)) / n;
-        var minX = points.Min(point => point.X);
-        var maxX = points.Max(point => point.X);
-        return [new DataPoint(minX, intercept + slope * minX), new DataPoint(maxX, intercept + slope * maxX)];
-    }
-
-    private static IReadOnlyList<DataPoint> CalculateExponentialTrendline(IReadOnlyList<DataPoint> points)
-    {
-        var positivePoints = points.Where(point => point.Y > 0).ToList();
-        if (positivePoints.Count < 2)
-            return [];
-
-        var n = positivePoints.Count;
-        var sumX = positivePoints.Sum(point => point.X);
-        var sumLogY = positivePoints.Sum(point => Math.Log(point.Y));
-        var sumXLogY = positivePoints.Sum(point => point.X * Math.Log(point.Y));
-        var sumXX = positivePoints.Sum(point => point.X * point.X);
-        var denominator = (n * sumXX) - (sumX * sumX);
-        if (Math.Abs(denominator) < double.Epsilon)
-            return [];
-
-        var b = ((n * sumXLogY) - (sumX * sumLogY)) / denominator;
-        var logA = (sumLogY - (b * sumX)) / n;
-        var a = Math.Exp(logA);
-        var minX = positivePoints.Min(point => point.X);
-        var maxX = positivePoints.Max(point => point.X);
-        return [new DataPoint(minX, a * Math.Exp(b * minX)), new DataPoint(maxX, a * Math.Exp(b * maxX))];
-    }
-
-    private static IReadOnlyList<DataPoint> CalculateLogarithmicTrendline(IReadOnlyList<DataPoint> points)
-    {
-        var positiveXPoints = points.Where(point => point.X > 0).ToList();
-        if (positiveXPoints.Count < 2)
-            return [];
-
-        var n = positiveXPoints.Count;
-        var sumLogX = positiveXPoints.Sum(point => Math.Log(point.X));
-        var sumY = positiveXPoints.Sum(point => point.Y);
-        var sumLogXY = positiveXPoints.Sum(point => Math.Log(point.X) * point.Y);
-        var sumLogXLogX = positiveXPoints.Sum(point => Math.Log(point.X) * Math.Log(point.X));
-        var denominator = (n * sumLogXLogX) - (sumLogX * sumLogX);
-        if (Math.Abs(denominator) < double.Epsilon)
-            return [];
-
-        var slope = ((n * sumLogXY) - (sumLogX * sumY)) / denominator;
-        var intercept = (sumY - (slope * sumLogX)) / n;
-        var minX = positiveXPoints.Min(point => point.X);
-        var maxX = positiveXPoints.Max(point => point.X);
-        return [
-            new DataPoint(minX, intercept + slope * Math.Log(minX)),
-            new DataPoint(maxX, intercept + slope * Math.Log(maxX))];
-    }
-
-    private static IReadOnlyList<DataPoint> CalculatePowerTrendline(IReadOnlyList<DataPoint> points)
-    {
-        var positivePoints = points.Where(point => point.X > 0 && point.Y > 0).ToList();
-        if (positivePoints.Count < 2)
-            return [];
-
-        var n = positivePoints.Count;
-        var sumLogX = positivePoints.Sum(point => Math.Log(point.X));
-        var sumLogY = positivePoints.Sum(point => Math.Log(point.Y));
-        var sumLogXLogY = positivePoints.Sum(point => Math.Log(point.X) * Math.Log(point.Y));
-        var sumLogXLogX = positivePoints.Sum(point => Math.Log(point.X) * Math.Log(point.X));
-        var denominator = (n * sumLogXLogX) - (sumLogX * sumLogX);
-        if (Math.Abs(denominator) < double.Epsilon)
-            return [];
-
-        var b = ((n * sumLogXLogY) - (sumLogX * sumLogY)) / denominator;
-        var logA = (sumLogY - (b * sumLogX)) / n;
-        var a = Math.Exp(logA);
-        var minX = positivePoints.Min(point => point.X);
-        var maxX = positivePoints.Max(point => point.X);
-        return [
-            new DataPoint(minX, a * Math.Pow(minX, b)),
-            new DataPoint(maxX, a * Math.Pow(maxX, b))];
-    }
-
-    private static IReadOnlyList<DataPoint> CalculateMovingAverageTrendline(IReadOnlyList<DataPoint> points, int period)
-    {
-        var windowSize = Math.Max(2, period);
-        if (points.Count < windowSize)
-            return [];
-
-        var trendPoints = new List<DataPoint>();
-        for (var i = windowSize - 1; i < points.Count; i++)
-        {
-            var average = points.Skip(i - windowSize + 1).Take(windowSize).Average(point => point.Y);
-            trendPoints.Add(new DataPoint(points[i].X, average));
-        }
-
-        return trendPoints;
-    }
-
-    private static IReadOnlyList<DataPoint> CalculatePolynomialTrendline(IReadOnlyList<DataPoint> points, int order)
-    {
-        var degree = Math.Clamp(order, 2, 6);
-        if (points.Count <= degree)
-            return [];
-
-        var coefficients = SolvePolynomialLeastSquares(points, degree);
-        if (coefficients is null)
-            return [];
-
-        var minX = points.Min(point => point.X);
-        var maxX = points.Max(point => point.X);
-        var samples = Math.Max(16, points.Count * 4);
-        var trendPoints = new List<DataPoint>(samples);
-        for (var i = 0; i < samples; i++)
-        {
-            var x = samples == 1 ? minX : minX + ((maxX - minX) * i / (samples - 1));
-            trendPoints.Add(new DataPoint(x, EvaluatePolynomial(coefficients, x)));
-        }
-
-        return trendPoints;
-    }
-
-    private static double[]? SolvePolynomialLeastSquares(IReadOnlyList<DataPoint> points, int degree)
-    {
-        var size = degree + 1;
-        var matrix = new double[size, size];
-        var vector = new double[size];
-
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-                matrix[row, col] = points.Sum(point => Math.Pow(point.X, row + col));
-
-            vector[row] = points.Sum(point => point.Y * Math.Pow(point.X, row));
-        }
-
-        return SolveLinearSystem(matrix, vector);
-    }
-
-    private static double EvaluatePolynomial(IReadOnlyList<double> coefficients, double x)
-    {
-        var y = 0.0;
-        var power = 1.0;
-        foreach (var coefficient in coefficients)
-        {
-            y += coefficient * power;
-            power *= x;
-        }
-
-        return y;
-    }
-
-    private static double[]? SolveLinearSystem(double[,] matrix, double[] vector)
-    {
-        var size = vector.Length;
-        for (var pivot = 0; pivot < size; pivot++)
-        {
-            var pivotRow = pivot;
-            for (var row = pivot + 1; row < size; row++)
-            {
-                if (Math.Abs(matrix[row, pivot]) > Math.Abs(matrix[pivotRow, pivot]))
-                    pivotRow = row;
-            }
-
-            if (Math.Abs(matrix[pivotRow, pivot]) < 1e-10)
-                return null;
-
-            if (pivotRow != pivot)
-            {
-                for (var col = pivot; col < size; col++)
-                    (matrix[pivot, col], matrix[pivotRow, col]) = (matrix[pivotRow, col], matrix[pivot, col]);
-                (vector[pivot], vector[pivotRow]) = (vector[pivotRow], vector[pivot]);
-            }
-
-            var divisor = matrix[pivot, pivot];
-            for (var col = pivot; col < size; col++)
-                matrix[pivot, col] /= divisor;
-            vector[pivot] /= divisor;
-
-            for (var row = 0; row < size; row++)
-            {
-                if (row == pivot)
-                    continue;
-
-                var factor = matrix[row, pivot];
-                for (var col = pivot; col < size; col++)
-                    matrix[row, col] -= factor * matrix[pivot, col];
-                vector[row] -= factor * vector[pivot];
-            }
-        }
-
-        return vector;
-    }
 
     private static void AddSecondaryAxisIfRequested(PlotModel model, ChartModel chart)
     {
@@ -1865,3 +1509,6 @@ public static class ChartRenderer
             _ => overlay ? OxyPlot.Legends.LegendPosition.RightTop : OxyPlot.Legends.LegendPosition.RightMiddle
         };
 }
+
+
+

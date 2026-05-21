@@ -3,7 +3,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Globalization;
-using System.IO;
 using Freexcel.Core.Model;
 using CellHAlign  = Freexcel.Core.Model.HorizontalAlignment;
 using CellVAlign  = Freexcel.Core.Model.VerticalAlignment;
@@ -62,13 +61,9 @@ public class GridView : FrameworkElement
 
     private const double ResizeHitZone = 4;
     private const double SplitDividerHitZone = 4;
-    private const double SplitScrollbarThickness = 10;
-    private const double SplitScrollbarMinThumb = 24;
     private const double MinCellSize   = 5;
     private const double DefaultCellFontSizePoints = 11.0;
     private const double PageMarginGuideHitZone = 5;
-    private const double PageMarginRulerHandleLength = 12;
-    private const double PageMarginRulerHandleThickness = 8;
 
     private static readonly Typeface DefaultTypeface       = new("Calibri");
     private static readonly Brush    GridLineBrush         = MakeBrush(220, 220, 220);
@@ -91,8 +86,6 @@ public class GridView : FrameworkElement
     private static readonly Brush    SplitScrollbarThumbBrush = MakeBrush(188, 188, 188);
     private static readonly Pen      SplitScrollbarPen        = new(MakeBrush(196, 196, 196), 1);
     private static readonly Brush    FormulaTraceArrowBrush   = MakeBrush(0, 102, 204);
-    private const double ConditionalIconGutterWidth = 20;
-    private const double ConditionalIconSize = 10;
     private static readonly Pen      FormulaTraceArrowPen     = MakeFormulaTraceArrowPen();
 
     private static double ToDisplayFontSize(double pointSize) =>
@@ -990,16 +983,16 @@ public class GridView : FrameworkElement
         {
             var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
             var topButton = new Rect(rect.Left + 6, rect.Top + 6, Math.Min(150, Math.Max(80, rect.Width - 12)), 24);
-            if (topButton.Contains(pos))
+            if (chart.ShowPivotChartReportFilterButtons && topButton.Contains(pos))
                 return (chart, string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName!);
 
             var bottomTop = rect.Bottom - 36;
             var axisButton = new Rect(rect.Left + 6, bottomTop, 118, 24);
-            if (axisButton.Contains(pos))
+            if (chart.ShowPivotChartAxisFieldButtons && axisButton.Contains(pos))
                 return (chart, "Axis Fields");
 
             var valuesButton = new Rect(rect.Right - 120, bottomTop, 104, 24);
-            if (valuesButton.Contains(pos))
+            if (chart.ShowPivotChartValueFieldButtons && valuesButton.Contains(pos))
                 return (chart, "Values");
         }
 
@@ -1248,353 +1241,40 @@ public class GridView : FrameworkElement
     public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome(
         ViewportModel viewport,
         double actualWidth,
-        double actualHeight)
-    {
-        if (viewport.SplitPanes is not { } splitPanes)
-            return new SplitPaneScrollbarChrome(null, null);
+        double actualHeight) =>
+        SplitPaneViewportChrome.CalculateScrollbarChrome(viewport, actualWidth, actualHeight);
 
-        var dividerLayout = CalculateSplitDividerLayout(viewport);
-        SplitPaneScrollbar? horizontalTopRight = null;
-        SplitPaneScrollbar? verticalBottomLeft = null;
-        var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
-        var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-
-        if (dividerLayout.HorizontalY is { } horizontalY &&
-            dividerLayout.VerticalX is { } verticalX &&
-            topRightColumns.Count > 0)
-        {
-            var track = new Rect(
-                verticalX,
-                Math.Max(ColHeaderHeight, horizontalY - SplitScrollbarThickness),
-                Math.Max(0, actualWidth - verticalX),
-                SplitScrollbarThickness);
-            horizontalTopRight = new SplitPaneScrollbar(
-                SplitPaneScrollbarOrientation.Horizontal,
-                SplitPaneRegion.TopRight,
-                track,
-                CalculateHorizontalSplitScrollbarThumb(track, topRightColumns[0].Col, topRightColumns.Count, CellAddress.MaxCol),
-                Math.Max(1, topRightColumns.Count),
-                Math.Max(1, CellAddress.MaxCol - (uint)Math.Max(1, topRightColumns.Count) + 1));
-        }
-
-        if (dividerLayout.HorizontalY is { } bottomY &&
-            dividerLayout.VerticalX is { } leftX &&
-            bottomLeftRows.Count > 0)
-        {
-            var track = new Rect(
-                Math.Max(CalculateRowHeaderWidth(viewport), leftX - SplitScrollbarThickness),
-                bottomY,
-                SplitScrollbarThickness,
-                Math.Max(0, actualHeight - bottomY));
-            verticalBottomLeft = new SplitPaneScrollbar(
-                SplitPaneScrollbarOrientation.Vertical,
-                SplitPaneRegion.BottomLeft,
-                track,
-                CalculateVerticalSplitScrollbarThumb(track, bottomLeftRows[0].Row, bottomLeftRows.Count, CellAddress.MaxRow),
-                Math.Max(1, bottomLeftRows.Count),
-                Math.Max(1, CellAddress.MaxRow - (uint)Math.Max(1, bottomLeftRows.Count) + 1));
-        }
-
-        return new SplitPaneScrollbarChrome(horizontalTopRight, verticalBottomLeft);
-    }
-
-    private static Rect CalculateHorizontalSplitScrollbarThumb(Rect track, uint firstColumn, int visibleColumns, uint maxColumn)
-    {
-        var trackWidth = Math.Max(0, track.Width - 2);
-        var thumbWidth = Math.Min(trackWidth, Math.Max(SplitScrollbarMinThumb, trackWidth * Math.Max(1, visibleColumns) / maxColumn));
-        var available = Math.Max(0, track.Width - thumbWidth - 2);
-        var maxStartColumn = Math.Max(1, maxColumn - (uint)Math.Max(1, visibleColumns) + 1);
-        var ratio = maxStartColumn <= 1 ? 0 : (double)(Math.Max(1, firstColumn) - 1) / (maxStartColumn - 1);
-        return new Rect(track.X + 1 + available * ratio, track.Y + 1, thumbWidth, Math.Max(0, track.Height - 2));
-    }
-
-    private static Rect CalculateVerticalSplitScrollbarThumb(Rect track, uint firstRow, int visibleRows, uint maxRow)
-    {
-        var trackHeight = Math.Max(0, track.Height - 2);
-        var thumbHeight = Math.Min(trackHeight, Math.Max(SplitScrollbarMinThumb, trackHeight * Math.Max(1, visibleRows) / maxRow));
-        var available = Math.Max(0, track.Height - thumbHeight - 2);
-        var maxStartRow = Math.Max(1, maxRow - (uint)Math.Max(1, visibleRows) + 1);
-        var ratio = maxStartRow <= 1 ? 0 : (double)(Math.Max(1, firstRow) - 1) / (maxStartRow - 1);
-        return new Rect(track.X + 1, track.Y + 1 + available * ratio, Math.Max(0, track.Width - 2), thumbHeight);
-    }
-
-    public static SplitPaneScrollbarHit? HitTestSplitPaneScrollbar(SplitPaneScrollbarChrome chrome, Point pos)
-    {
-        if (HitTestSplitPaneScrollbar(chrome.HorizontalTopRight, pos) is { } horizontalHit)
-            return horizontalHit;
-
-        return HitTestSplitPaneScrollbar(chrome.VerticalBottomLeft, pos);
-    }
+    public static SplitPaneScrollbarHit? HitTestSplitPaneScrollbar(SplitPaneScrollbarChrome chrome, Point pos) =>
+        SplitPaneViewportChrome.HitTestScrollbar(chrome, pos);
 
     public static SplitPaneScrollbarScrollTarget? CalculateSplitPaneScrollbarScrollTarget(
         SplitPaneScrollbarChrome chrome,
-        Point pos)
-    {
-        if (CalculateSplitPaneScrollbarScrollTarget(chrome.HorizontalTopRight, pos, CellAddress.MaxCol) is { } horizontal)
-            return horizontal;
-
-        return CalculateSplitPaneScrollbarScrollTarget(chrome.VerticalBottomLeft, pos, CellAddress.MaxRow);
-    }
+        Point pos) =>
+        SplitPaneViewportChrome.CalculateScrollTarget(chrome, pos);
 
     public static SplitPaneScrollbarScrollTarget CalculateSplitPaneScrollbarThumbDragTarget(
         SplitPaneScrollbar scrollbar,
         Point pos,
-        double pointerOffset)
-    {
-        var trackStart = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? scrollbar.Track.Left + 1
-            : scrollbar.Track.Top + 1;
-        var trackLength = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? scrollbar.Track.Width
-            : scrollbar.Track.Height;
-        var thumbLength = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? scrollbar.Thumb.Width
-            : scrollbar.Thumb.Height;
-        var available = Math.Max(1, trackLength - thumbLength - 2);
-        var position = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? pos.X
-            : pos.Y;
-        var ratio = Math.Max(0, Math.Min(1, (position - pointerOffset - trackStart) / available));
-        var index = (uint)Math.Max(1, Math.Min(scrollbar.MaxStartIndex, 1 + Math.Round(ratio * (scrollbar.MaxStartIndex - 1))));
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, index);
-    }
+        double pointerOffset) =>
+        SplitPaneViewportChrome.CalculateThumbDragTarget(scrollbar, pos, pointerOffset);
 
     public static SplitPaneScrollbarScrollTarget CalculateSplitPaneScrollbarWheelTarget(
         SplitPaneScrollbar scrollbar,
         uint currentIndex,
         int notches,
-        uint step = 3)
-    {
-        var next = (long)Math.Max(1, currentIndex) - (long)notches * step;
-        var clamped = (uint)Math.Max(1, Math.Min(scrollbar.MaxStartIndex, next));
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, clamped);
-    }
+        uint step = 3) =>
+        SplitPaneViewportChrome.CalculateWheelTarget(scrollbar, currentIndex, notches, step);
 
     public static SplitPaneScrollbarScrollTarget? CalculateSplitPaneScrollbarInteractionTarget(
         ViewportModel viewport,
         SplitPaneScrollbarChrome chrome,
-        Point pos)
-    {
-        var hit = HitTestSplitPaneScrollbar(chrome, pos);
-        if (hit is null)
-            return null;
-
-        if (hit.Part == SplitPaneScrollbarPart.Thumb)
-            return CalculateSplitPaneScrollbarScrollTarget(chrome, pos);
-
-        if (viewport.SplitPanes is not { } splitPanes)
-            return null;
-
-        if (hit is { Region: SplitPaneRegion.TopRight, Orientation: SplitPaneScrollbarOrientation.Horizontal } &&
-            chrome.HorizontalTopRight is { } horizontal)
-        {
-            var columns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
-            if (columns.Count == 0)
-                return null;
-
-            var current = columns[0].Col;
-            var page = (uint)Math.Max(1, columns.Count);
-            var beforeThumb = pos.X < horizontal.Thumb.Left;
-            var next = beforeThumb
-                ? current > page ? current - page : 1
-                : Math.Min(CellAddress.MaxCol, current + page);
-            return new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, next);
-        }
-
-        if (hit is { Region: SplitPaneRegion.BottomLeft, Orientation: SplitPaneScrollbarOrientation.Vertical } &&
-            chrome.VerticalBottomLeft is { } vertical)
-        {
-            var rows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-            if (rows.Count == 0)
-                return null;
-
-            var current = rows[0].Row;
-            var page = (uint)Math.Max(1, rows.Count);
-            var beforeThumb = pos.Y < vertical.Thumb.Top;
-            var next = beforeThumb
-                ? current > page ? current - page : 1
-                : Math.Min(CellAddress.MaxRow, current + page);
-            return new SplitPaneScrollbarScrollTarget(SplitPaneRegion.BottomLeft, SplitPaneScrollbarOrientation.Vertical, next);
-        }
-
-        return null;
-    }
-
-    private static SplitPaneScrollbarScrollTarget? CalculateSplitPaneScrollbarScrollTarget(
-        SplitPaneScrollbar? scrollbar,
-        Point pos,
-        uint maxIndex)
-    {
-        if (scrollbar is null || !scrollbar.Track.Contains(pos))
-            return null;
-
-        var trackStart = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? scrollbar.Track.Left + 1
-            : scrollbar.Track.Top + 1;
-        var trackLength = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? scrollbar.Track.Width
-            : scrollbar.Track.Height;
-        var thumbLength = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? scrollbar.Thumb.Width
-            : scrollbar.Thumb.Height;
-        var available = Math.Max(1, trackLength - thumbLength - 2);
-        var position = scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? pos.X
-            : pos.Y;
-        var ratio = Math.Max(0, Math.Min(1, (position - trackStart) / available));
-        var maxStartIndex = scrollbar.MaxStartIndex;
-        var index = (uint)Math.Max(1, Math.Min(maxStartIndex, 1 + Math.Round(ratio * (maxStartIndex - 1))));
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, index);
-    }
-
-    private static SplitPaneScrollbarHit? HitTestSplitPaneScrollbar(SplitPaneScrollbar? scrollbar, Point pos)
-    {
-        if (scrollbar is null || !scrollbar.Track.Contains(pos))
-            return null;
-
-        var part = scrollbar.Thumb.Contains(pos)
-            ? SplitPaneScrollbarPart.Thumb
-            : SplitPaneScrollbarPart.Track;
-        return new SplitPaneScrollbarHit(part, scrollbar.Orientation, scrollbar.Region);
-    }
+        Point pos) =>
+        SplitPaneViewportChrome.CalculateInteractionTarget(viewport, chrome, pos);
 
     public static IReadOnlyList<SplitPaneCellLayout> CalculateSplitPaneCellLayouts(
         ViewportModel viewport,
-        IReadOnlyList<GridRange>? mergedRegions = null)
-    {
-        if (viewport.SplitPanes is not { } splitPanes)
-            return [];
-
-        var topRows = splitPanes.TopRows ?? [];
-        var leftColumns = splitPanes.LeftColumns ?? [];
-        var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
-        var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-        var topRowLookup = topRows.ToDictionary(row => row.Row);
-        var bottomLeftRowLookup = bottomLeftRows.ToDictionary(row => row.Row);
-        var leftColumnLookup = leftColumns.ToDictionary(column => column.Col);
-        var topRightColumnLookup = topRightColumns.ToDictionary(column => column.Col);
-        var dividerLayout = CalculateSplitDividerLayout(viewport);
-        var horizontalY = dividerLayout.HorizontalY ?? ColHeaderHeight;
-        var verticalX = dividerLayout.VerticalX ?? CalculateRowHeaderWidth(viewport);
-        var layouts = new List<SplitPaneCellLayout>();
-        var occupied = new HashSet<(uint Row, uint Col)>(
-            (splitPanes.Cells ?? [])
-            .Where(cell => !string.IsNullOrEmpty(cell.DisplayText))
-            .Select(cell => (cell.Row, cell.Col)));
-
-        foreach (var cell in splitPanes.Cells ?? [])
-        {
-            var merge = FindMerge(mergedRegions, cell.Row, cell.Col);
-            if (merge.HasValue && (cell.Row != merge.Value.Start.Row || cell.Col != merge.Value.Start.Col))
-                continue;
-
-            var isTopPane = topRowLookup.TryGetValue(cell.Row, out var topRow);
-            var isLeftPane = leftColumnLookup.TryGetValue(cell.Col, out var leftColumn);
-            var row = isTopPane
-                ? topRow!
-                : bottomLeftRowLookup.GetValueOrDefault(cell.Row);
-            var column = isLeftPane
-                ? leftColumn!
-                : topRightColumnLookup.GetValueOrDefault(cell.Col);
-
-            if (row is null || column is null)
-            {
-                continue;
-            }
-
-            var rowMetrics = isTopPane ? topRows : bottomLeftRows;
-            var colMetrics = isLeftPane ? leftColumns : topRightColumns;
-            var width = column.Width;
-            var height = row.Height;
-            if (merge.HasValue)
-            {
-                width += SumMergedColumnWidths(merge.Value, colMetrics, cell.Col);
-                height += SumMergedRowHeights(merge.Value, rowMetrics, cell.Row);
-            }
-
-            var x = isLeftPane
-                ? CalculateRowHeaderWidth(viewport) + column.LeftOffset
-                : verticalX + column.LeftOffset;
-            var y = isTopPane
-                ? ColHeaderHeight + row.TopOffset
-                : horizontalY + row.TopOffset;
-
-            var rect = new Rect(x, y, width, height);
-            var textClipRect = rect;
-            if (CanOverflowSplitPaneText(cell, merge))
-            {
-                var renderWidth = width + SumEmptyOverflowColumnWidths(cell, colMetrics, occupied);
-                textClipRect = new Rect(x, y, renderWidth, height);
-            }
-
-            layouts.Add(new SplitPaneCellLayout(cell, rect, textClipRect));
-        }
-
-        return layouts;
-    }
-
-    private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge)
-    {
-        return CanOverflowCellText(cell.Style, cell.RawValue, cell.DisplayText, merge);
-    }
-
-    private static double SumEmptyOverflowColumnWidths(
-        DisplayCell cell,
-        IReadOnlyList<ColMetric> columns,
-        HashSet<(uint Row, uint Col)> occupied)
-    {
-        double width = 0;
-        var nextCol = cell.Col + 1;
-        while (columns.FirstOrDefault(column => column.Col == nextCol) is { } nextMetric &&
-               !occupied.Contains((cell.Row, nextCol)))
-        {
-            width += nextMetric.Width;
-            nextCol++;
-        }
-
-        return width;
-    }
-
-    private static GridRange? FindMerge(IReadOnlyList<GridRange>? mergedRegions, uint row, uint col)
-    {
-        if (mergedRegions is null)
-            return null;
-
-        foreach (var merge in mergedRegions)
-        {
-            if (row >= merge.Start.Row && row <= merge.End.Row &&
-                col >= merge.Start.Col && col <= merge.End.Col)
-                return merge;
-        }
-
-        return null;
-    }
-
-    private static double SumMergedColumnWidths(GridRange merge, IReadOnlyList<ColMetric> columns, uint anchorCol)
-    {
-        double width = 0;
-        for (uint col = anchorCol + 1; col <= merge.End.Col; col++)
-        {
-            var metric = columns.FirstOrDefault(column => column.Col == col);
-            if (metric is not null)
-                width += metric.Width;
-        }
-
-        return width;
-    }
-
-    private static double SumMergedRowHeights(GridRange merge, IReadOnlyList<RowMetric> rows, uint anchorRow)
-    {
-        double height = 0;
-        for (uint row = anchorRow + 1; row <= merge.End.Row; row++)
-        {
-            var metric = rows.FirstOrDefault(metric => metric.Row == row);
-            if (metric is not null)
-                height += metric.Height;
-        }
-
-        return height;
-    }
+        IReadOnlyList<GridRange>? mergedRegions = null) =>
+        SplitPaneCellLayoutPlanner.CalculateLayouts(viewport, mergedRegions);
 
     public static CellAddress? HitTestViewportCell(ViewportModel viewport, SheetId sheetId, Point pos)
     {
@@ -2125,52 +1805,10 @@ public class GridView : FrameworkElement
     }
 
     private static bool TryLoadWorksheetBackgroundImage(WorksheetBackgroundImage background, out ImageSource? image)
-    {
-        image = null;
-        if (background.ImageBytes.Length == 0)
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(background.ImageBytes);
-            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            image = bitmap;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WpfBitmapImageLoader.TryLoad(background.ImageBytes, out image);
 
     private static bool TryLoadPictureImage(PictureModel picture, out ImageSource? image)
-    {
-        image = null;
-        if (picture.ImageBytes is not { Length: > 0 })
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(picture.ImageBytes);
-            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
-            bitmap.BeginInit();
-            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            bitmap.StreamSource = stream;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            image = bitmap;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WpfBitmapImageLoader.TryLoad(picture.ImageBytes, out image);
 
     private void RenderSparklines(DrawingContext dc)
     {
@@ -2209,24 +1847,15 @@ public class GridView : FrameworkElement
 
     private static void DrawLineSparkline(DrawingContext dc, IReadOnlyList<double> values, Rect rect, Pen pen)
     {
-        if (values.Count == 1)
+        var layout = SparklineLayoutPlanner.CalculateLineLayout(values, rect);
+        if (layout.SinglePoint is { } point)
         {
-            var point = new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
             dc.DrawEllipse(pen.Brush, null, point, 1.5, 1.5);
             return;
         }
 
-        var min = values.Min();
-        var max = values.Max();
-        var span = Math.Abs(max - min) < 0.0000001 ? 1 : max - min;
-        var points = values
-            .Select((value, index) => new Point(
-                rect.Left + rect.Width * index / (values.Count - 1),
-                rect.Bottom - ((value - min) / span * rect.Height)))
-            .ToList();
-
-        for (var i = 1; i < points.Count; i++)
-            dc.DrawLine(pen, points[i - 1], points[i]);
+        foreach (var segment in layout.Segments)
+            dc.DrawLine(pen, segment.Start, segment.End);
     }
 
     private static void DrawColumnSparkline(
@@ -2237,22 +1866,8 @@ public class GridView : FrameworkElement
         Brush positiveFill,
         Brush negativeFill)
     {
-        var maxAbs = values.Select(Math.Abs).DefaultIfEmpty(1).Max();
-        if (maxAbs < 0.0000001) maxAbs = 1;
-        var axis = rect.Top + rect.Height / 2;
-        var slot = rect.Width / values.Count;
-        var barWidth = Math.Max(1, slot * 0.65);
-
-        for (var i = 0; i < values.Count; i++)
-        {
-            var value = winLoss ? Math.Sign(values[i]) : values[i];
-            var height = winLoss
-                ? rect.Height / 2
-                : Math.Abs(value) / maxAbs * rect.Height / 2;
-            var x = rect.Left + i * slot + (slot - barWidth) / 2;
-            var y = value >= 0 ? axis - height : axis;
-            dc.DrawRectangle(value >= 0 ? positiveFill : negativeFill, null, new Rect(x, y, barWidth, Math.Max(1, height)));
-        }
+        foreach (var bar in SparklineLayoutPlanner.CalculateColumnLayout(values, rect, winLoss).Bars)
+            dc.DrawRectangle(bar.IsNegative ? negativeFill : positiveFill, null, bar.Rect);
     }
 
     private void RenderResizeLine(DrawingContext dc)
@@ -2333,75 +1948,15 @@ public class GridView : FrameworkElement
     public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts(
         ViewportModel viewport,
         IReadOnlyList<FormulaTraceArrow> arrows,
-        SheetId sheetId)
-    {
-        var layouts = new List<FormulaTraceArrowLayout>();
-        foreach (var arrow in arrows)
-        {
-            var fromOnCurrentSheet = arrow.From.Sheet.Equals(sheetId);
-            var toOnCurrentSheet = arrow.To.Sheet.Equals(sheetId);
-            var fromVisible = fromOnCurrentSheet && TryGetCellRect(viewport, arrow.From, out var fromRect);
-            var toVisible = toOnCurrentSheet && TryGetCellRect(viewport, arrow.To, out var toRect);
-
-            if (fromVisible && toVisible)
-            {
-                layouts.Add(new FormulaTraceArrowLayout(
-                    CenterOf(fromRect),
-                    CenterOf(toRect)));
-                continue;
-            }
-
-            var markerKind = fromOnCurrentSheet && toOnCurrentSheet
-                ? FormulaTraceArrowLayoutKind.OffscreenMarker
-                : FormulaTraceArrowLayoutKind.CrossSheetMarker;
-
-            if (fromVisible)
-                layouts.Add(new FormulaTraceArrowLayout(CenterOf(fromRect), CenterOf(fromRect), markerKind, arrow.To));
-            else if (toVisible)
-                layouts.Add(new FormulaTraceArrowLayout(CenterOf(toRect), CenterOf(toRect), markerKind, arrow.From));
-        }
-
-        return layouts;
-    }
+        SheetId sheetId) =>
+        FormulaTraceLayoutPlanner.CalculateLayouts(viewport, arrows, sheetId);
 
     public static CellAddress? HitTestFormulaTraceMarker(
         ViewportModel viewport,
         IReadOnlyList<FormulaTraceArrow> arrows,
         SheetId sheetId,
-        Point pos)
-    {
-        const double hitRadius = 8;
-        foreach (var arrow in CalculateFormulaTraceArrowLayouts(viewport, arrows, sheetId))
-        {
-            if (arrow.Kind == FormulaTraceArrowLayoutKind.VisibleArrow ||
-                arrow.NavigationTarget is null ||
-                (arrow.Start - pos).Length > hitRadius)
-            {
-                continue;
-            }
-
-            return arrow.NavigationTarget.Value;
-        }
-
-        return null;
-    }
-
-    private static Point CenterOf(Rect rect) =>
-        new(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
-
-    private static bool TryGetCellRect(ViewportModel viewport, CellAddress address, out Rect rect)
-    {
-        var row = viewport.RowMetrics.FirstOrDefault(r => r.Row == address.Row);
-        var col = viewport.ColMetrics.FirstOrDefault(c => c.Col == address.Col);
-        if (row is null || col is null)
-        {
-            rect = Rect.Empty;
-            return false;
-        }
-
-        rect = new Rect(col.LeftOffset + CalculateRowHeaderWidth(viewport), row.TopOffset + ColHeaderHeight, col.Width, row.Height);
-        return true;
-    }
+        Point pos) =>
+        FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, pos);
 
     private static void DrawFormulaTraceArrow(DrawingContext dc, FormulaTraceArrowLayout arrow)
     {
@@ -2496,53 +2051,15 @@ public class GridView : FrameworkElement
         Rect pageBounds,
         WorksheetPaperSize paperSize,
         WorksheetPageOrientation orientation,
-        WorksheetPageMargins margins)
-    {
-        var guide = WorksheetPageLayout.GetMarginGuideFractions(paperSize, orientation, margins);
-        var marginLeft = pageBounds.Left + pageBounds.Width * guide.Left;
-        var marginRight = pageBounds.Left + pageBounds.Width * guide.Right;
-        var marginTop = pageBounds.Top + pageBounds.Height * guide.Top;
-        var marginBottom = pageBounds.Top + pageBounds.Height * guide.Bottom;
-
-        return new PageMarginRulerHandles(
-            new Rect(
-                marginLeft - PageMarginRulerHandleThickness / 2,
-                pageBounds.Top - PageMarginRulerHandleLength - 2,
-                PageMarginRulerHandleThickness,
-                PageMarginRulerHandleLength),
-            new Rect(
-                marginRight - PageMarginRulerHandleThickness / 2,
-                pageBounds.Top - PageMarginRulerHandleLength - 2,
-                PageMarginRulerHandleThickness,
-                PageMarginRulerHandleLength),
-            new Rect(
-                pageBounds.Left - PageMarginRulerHandleLength - 2,
-                marginTop - PageMarginRulerHandleThickness / 2,
-                PageMarginRulerHandleLength,
-                PageMarginRulerHandleThickness),
-            new Rect(
-                pageBounds.Left - PageMarginRulerHandleLength - 2,
-                marginBottom - PageMarginRulerHandleThickness / 2,
-                PageMarginRulerHandleLength,
-                PageMarginRulerHandleThickness));
-    }
+        WorksheetPageMargins margins) =>
+        PageMarginRulerLayoutPlanner.CalculateHandles(pageBounds, paperSize, orientation, margins);
 
     public static WorksheetPageMarginEdge? HitTestPageMarginRulerHandles(
         PageMarginRulerHandles handles,
         Point pos,
         bool showRulers = true)
     {
-        if (!showRulers) return null;
-        if (handles.Left.Contains(pos))
-            return WorksheetPageMarginEdge.Left;
-        if (handles.Right.Contains(pos))
-            return WorksheetPageMarginEdge.Right;
-        if (handles.Top.Contains(pos))
-            return WorksheetPageMarginEdge.Top;
-        if (handles.Bottom.Contains(pos))
-            return WorksheetPageMarginEdge.Bottom;
-
-        return null;
+        return PageMarginRulerLayoutPlanner.HitTestHandles(handles, pos, showRulers);
     }
 
     private (double Top, double Left, double Bottom, double Right,
@@ -2638,55 +2155,15 @@ public class GridView : FrameworkElement
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
-        double columnHeaderHeight)
-    {
-        var visibleRows = viewport.RowMetrics
-            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
-            .ToList();
-        var visibleColumns = viewport.ColMetrics
-            .Where(column => column.Col >= range.Start.Col && column.Col <= range.End.Col)
-            .ToList();
-
-        if (visibleRows.Count == 0 || visibleColumns.Count == 0)
-            return null;
-
-        var top = visibleRows.Min(row => row.TopOffset) + columnHeaderHeight;
-        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + columnHeaderHeight;
-        var left = visibleColumns.Min(column => column.LeftOffset) + rowHeaderWidth;
-        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + rowHeaderWidth;
-
-        if (right <= left || bottom <= top)
-            return null;
-
-        return new Rect(new Point(left, top), new Point(right, bottom));
-    }
+        double columnHeaderHeight) =>
+        SelectionMarqueeLayoutPlanner.CalculateVisibleSelectionRect(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
     public static Rect? CalculateClipboardMarquee(
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
-        double columnHeaderHeight)
-    {
-        var visibleRows = viewport.RowMetrics
-            .Where(row => row.Row >= range.Start.Row && row.Row <= range.End.Row)
-            .ToList();
-        var visibleColumns = viewport.ColMetrics
-            .Where(column => column.Col >= range.Start.Col && column.Col <= range.End.Col)
-            .ToList();
-
-        if (visibleRows.Count == 0 || visibleColumns.Count == 0)
-            return null;
-
-        var top = visibleRows.Min(row => row.TopOffset) + columnHeaderHeight;
-        var bottom = visibleRows.Max(row => row.TopOffset + row.Height) + columnHeaderHeight;
-        var left = visibleColumns.Min(column => column.LeftOffset) + rowHeaderWidth;
-        var right = visibleColumns.Max(column => column.LeftOffset + column.Width) + rowHeaderWidth;
-
-        if (right <= left || bottom <= top)
-            return null;
-
-        return new Rect(new Point(left, top), new Point(right, bottom));
-    }
+        double columnHeaderHeight) =>
+        SelectionMarqueeLayoutPlanner.CalculateClipboardMarquee(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
     private void RenderSelection(DrawingContext dc)
     {
@@ -3202,26 +2679,8 @@ public class GridView : FrameworkElement
 
     public static ConditionalIconCellLayout CalculateConditionalIconCellLayout(
         Rect cellRect,
-        ConditionalFormatIcon icon)
-    {
-        var size = Math.Min(ConditionalIconSize, Math.Max(6, cellRect.Height - 6));
-        var iconRect = new Rect(
-            Math.Round(cellRect.Left + 4),
-            Math.Round(cellRect.Top + (cellRect.Height - size) / 2),
-            size,
-            size);
-
-        if (!icon.ShowValue)
-            return new ConditionalIconCellLayout(iconRect, Rect.Empty, ShouldDrawText: false);
-
-        var textLeft = Math.Min(cellRect.Right, cellRect.Left + ConditionalIconGutterWidth);
-        var textRect = new Rect(
-            textLeft,
-            cellRect.Top,
-            Math.Max(0, cellRect.Right - textLeft),
-            cellRect.Height);
-        return new ConditionalIconCellLayout(iconRect, textRect, ShouldDrawText: true);
-    }
+        ConditionalFormatIcon icon) =>
+        ConditionalIconLayoutPlanner.CalculateCellLayout(cellRect, icon);
 
     private static void DrawConditionalIcon(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
     {
@@ -3257,58 +2716,11 @@ public class GridView : FrameworkElement
         }
     }
 
-    public static ConditionalIconGlyphKind ResolveConditionalIconGlyphKind(ConditionalFormatIcon icon)
-    {
-        var style = icon.Style ?? "";
-        if (style.Contains("TrafficLights", StringComparison.OrdinalIgnoreCase) ||
-            style.Contains("RedToBlack", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.TrafficLight;
-        if (style.Contains("Signs", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Sign;
-        if (style.Contains("Symbols", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Symbol;
-        if (style.Contains("Flags", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Flag;
-        if (style.Contains("Rating", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Rating;
-        if (style.Contains("Quarters", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Quarter;
-        if (style.Contains("Boxes", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Box;
-        return ConditionalIconGlyphKind.Arrow;
-    }
+    public static ConditionalIconGlyphKind ResolveConditionalIconGlyphKind(ConditionalFormatIcon icon) =>
+        ConditionalIconLayoutPlanner.ResolveGlyphKind(icon);
 
-    public static string ResolveConditionalIconColor(ConditionalFormatIcon icon)
-    {
-        if (icon.Style.Contains("Gray", StringComparison.OrdinalIgnoreCase))
-            return "#666666";
-
-        var index = Math.Clamp(icon.IconIndex, 0, Math.Max(0, icon.IconCount - 1));
-        return icon.IconCount switch
-        {
-            >= 5 => index switch
-            {
-                0 => "#C00000",
-                1 => "#ED7D31",
-                2 => "#FFC000",
-                3 => "#92D050",
-                _ => "#00B050"
-            },
-            4 => index switch
-            {
-                0 => "#C00000",
-                1 => "#FFC000",
-                2 => "#92D050",
-                _ => "#00B050"
-            },
-            _ => index switch
-            {
-                0 => "#C00000",
-                1 => "#FFC000",
-                _ => "#00B050"
-            }
-        };
-    }
+    public static string ResolveConditionalIconColor(ConditionalFormatIcon icon) =>
+        ConditionalIconLayoutPlanner.ResolveColor(icon);
 
     private static Point Center(Rect rect) =>
         new(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
@@ -3528,21 +2940,8 @@ public class GridView : FrameworkElement
         dc.DrawLine(pen, p1, p2);
     }
 
-    public static TextDecorationCollection? BuildTextDecorations(CellStyle? style)
-    {
-        if (style is null)
-            return null;
-
-        var decorations = new TextDecorationCollection();
-        if (style.Underline || style.DoubleUnderline)
-            foreach (var decoration in TextDecorations.Underline)
-                decorations.Add(decoration);
-        if (style.Strikethrough)
-            foreach (var decoration in TextDecorations.Strikethrough)
-                decorations.Add(decoration);
-
-        return decorations.Count == 0 ? null : decorations;
-    }
+    public static TextDecorationCollection? BuildTextDecorations(CellStyle? style) =>
+        CellTextDecorationPlanner.Build(style);
 }
 
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
