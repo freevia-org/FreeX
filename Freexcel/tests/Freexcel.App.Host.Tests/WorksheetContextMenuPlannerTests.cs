@@ -40,6 +40,8 @@ public sealed class WorksheetContextMenuPlannerTests
             "Column Width...",
             "AutoFit Column Width",
             "New Comment",
+            "Edit Comment...",
+            "Delete Comment",
             "New Note",
             "Edit Note...",
             "Delete Note",
@@ -88,6 +90,10 @@ public sealed class WorksheetContextMenuPlannerTests
             .Action.Should().Be(WorksheetContextMenuAction.ClearComments);
         commands.Single(command => command.Header == "New Comment")
             .Action.Should().Be(WorksheetContextMenuAction.NewComment);
+        commands.Single(command => command.Header == "Edit Comment...")
+            .Action.Should().Be(WorksheetContextMenuAction.EditComment);
+        commands.Single(command => command.Header == "Delete Comment")
+            .Action.Should().Be(WorksheetContextMenuAction.DeleteComment);
         commands.Single(command => command.Header == "Edit Note...")
             .Action.Should().Be(WorksheetContextMenuAction.EditNote);
         commands.Single(command => command.Header == "Show Notes")
@@ -100,6 +106,8 @@ public sealed class WorksheetContextMenuPlannerTests
     [InlineData("Paste", "_Paste")]
     [InlineData("Paste Special...", "Paste _Special...")]
     [InlineData("Quick Analysis", "_Quick Analysis")]
+    [InlineData("Edit Comment...", "_Edit Comment...")]
+    [InlineData("Delete Comment", "Delete _Comment")]
     [InlineData("Format Cells...", "_Format Cells...")]
     [InlineData("Clear Contents", "Clear C_ontents")]
     public void BuildCommands_ProvidesKeyboardAccessHeaders(string header, string expectedAccessHeader)
