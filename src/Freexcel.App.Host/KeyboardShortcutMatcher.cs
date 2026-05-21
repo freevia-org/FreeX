@@ -190,21 +190,21 @@ public static class KeyboardShortcutMatcher
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)
     {
         shortcut = default;
-        if ((key == Key.B && (modifiers & ModifierKeys.Control) != 0) ||
+        if ((key == Key.B && modifiers == ModifierKeys.Control) ||
             (key is Key.D2 or Key.NumPad2 && modifiers == ModifierKeys.Control))
         {
             shortcut = FontToggleShortcut.Bold;
             return true;
         }
 
-        if ((key == Key.I && (modifiers & ModifierKeys.Control) != 0) ||
+        if ((key == Key.I && modifiers == ModifierKeys.Control) ||
             (key is Key.D3 or Key.NumPad3 && modifiers == ModifierKeys.Control))
         {
             shortcut = FontToggleShortcut.Italic;
             return true;
         }
 
-        if ((key == Key.U && (modifiers & ModifierKeys.Control) != 0) ||
+        if ((key == Key.U && modifiers == ModifierKeys.Control) ||
             (key is Key.D4 or Key.NumPad4 && modifiers == ModifierKeys.Control))
         {
             shortcut = FontToggleShortcut.Underline;
