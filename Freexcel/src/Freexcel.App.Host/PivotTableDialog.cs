@@ -23,8 +23,8 @@ public sealed class PivotTableDialog : Window
     private readonly TextBox _destinationRangeBox = new();
     private readonly RadioButton _selectTableRangeButton = new() { Content = "Select a _table or range", IsChecked = true };
     private readonly RadioButton _externalSourceButton = new() { Content = "Use an _external data source", IsEnabled = false };
-    private readonly RadioButton _newWorksheetButton = new() { Content = "_New worksheet" };
-    private readonly RadioButton _existingWorksheetButton = new() { Content = "_Existing worksheet", IsChecked = true };
+    private readonly RadioButton _newWorksheetButton = new() { Content = "_New worksheet", IsChecked = true };
+    private readonly RadioButton _existingWorksheetButton = new() { Content = "_Existing worksheet" };
     private readonly CheckBox _dataModelBox = new() { Content = "Add this data to the Data _Model", IsEnabled = false };
     private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable _Fields pane", IsChecked = true };
 
@@ -36,7 +36,7 @@ public sealed class PivotTableDialog : Window
         var destinationText = FormatDestination(workbook, sourceSheetId, sourceRange);
         Result = CreateResult(
             sourceRangeText,
-            PivotTableDestinationKind.ExistingWorksheet,
+            PivotTableDestinationKind.NewWorksheet,
             destinationText,
             openFieldList: true);
 

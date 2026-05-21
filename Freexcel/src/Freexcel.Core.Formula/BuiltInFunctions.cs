@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Freexcel.Core.Model;
 
@@ -151,6 +152,10 @@ public static class BuiltInFunctions
         ["EXACT"]       = (Exact, 2, 2),
         ["CODE"]        = (Code, 1, 1),
         ["CHAR"]        = (Char, 1, 1),
+        ["ASC"]         = (Asc, 1, 1),
+        ["DBCS"]        = (Dbcs, 1, 1),
+        ["PHONETIC"]    = (Phonetic, 1, 1),
+        ["BAHTTEXT"]    = (BahtText, 1, 1),
 
         // ── Phase 4a: Math / Trig ────────────────────────────────────────────
         ["SIN"]      = (Sin, 1, 1),
@@ -2634,6 +2639,185 @@ public static class BuiltInFunctions
         if (code <= 0 || code > 255) return ErrorValue.Value;
         return new TextValue(ExcelAnsiCodeToChar(code).ToString());
     }
+
+    private static ScalarValue Asc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return TextResult(ConvertToHalfWidth(ToText(args[0])));
+    }
+
+    private static ScalarValue Dbcs(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return TextResult(ConvertToFullWidth(ToText(args[0])));
+    }
+
+    private static ScalarValue Phonetic(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        var value = args[0] is RangeValue rv ? rv.At(1, 1) : args[0];
+        return value is ErrorValue rangeError ? rangeError : TextResult(ToText(value));
+    }
+
+    private static ScalarValue BahtText(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+
+        var value = ToNumber(args[0]);
+        if (!double.IsFinite(value)) return ErrorValue.Value;
+
+        var rounded = Math.Round(Math.Abs(value), 2, MidpointRounding.AwayFromZero);
+        if (rounded > long.MaxValue) return ErrorValue.Num;
+
+        long baht = (long)Math.Floor(rounded);
+        int satang = (int)Math.Round((rounded - baht) * 100, MidpointRounding.AwayFromZero);
+        if (satang == 100)
+        {
+            baht++;
+            satang = 0;
+        }
+
+        var result = new StringBuilder();
+        if (value < 0) result.Append("ลบ");
+        result.Append(ThaiNumberToText(baht));
+        result.Append("บาท");
+        result.Append(satang == 0 ? "ถ้วน" : ThaiNumberToText(satang) + "สตางค์");
+        return TextResult(result.ToString());
+    }
+
+    private static string ConvertToHalfWidth(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            if (ch == '\u3000')
+            {
+                sb.Append(' ');
+            }
+            else if (ch is >= '\uFF01' and <= '\uFF5E')
+            {
+                sb.Append((char)(ch - 0xFEE0));
+            }
+            else if (FullWidthKanaToHalfWidth.TryGetValue(ch, out var kana))
+            {
+                sb.Append(kana);
+            }
+            else
+            {
+                sb.Append(ch);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string ConvertToFullWidth(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch == ' ')
+            {
+                sb.Append('\u3000');
+            }
+            else if (ch is >= '!' and <= '~')
+            {
+                sb.Append((char)(ch + 0xFEE0));
+            }
+            else if (i + 1 < text.Length &&
+                     (text[i + 1] == '\uFF9E' || text[i + 1] == '\uFF9F') &&
+                     HalfWidthKanaToFullWidth.TryGetValue(text.Substring(i, 2), out var combinedKana))
+            {
+                sb.Append(combinedKana);
+                i++;
+            }
+            else if (HalfWidthKanaToFullWidth.TryGetValue(ch.ToString(), out var kana))
+            {
+                sb.Append(kana);
+            }
+            else
+            {
+                sb.Append(ch);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string ThaiNumberToText(long value)
+    {
+        if (value == 0) return "ศูนย์";
+        if (value >= 1_000_000)
+        {
+            var high = value / 1_000_000;
+            var low = value % 1_000_000;
+            return ThaiNumberToText(high) + "ล้าน" + (low == 0 ? "" : ThaiNumberUnderMillionToText((int)low));
+        }
+
+        return ThaiNumberUnderMillionToText((int)value);
+    }
+
+    private static string ThaiNumberUnderMillionToText(int value)
+    {
+        string[] digits = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+        string[] positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน"];
+        var chars = value.ToString(CultureInfo.InvariantCulture).Reverse().ToArray();
+        var sb = new StringBuilder();
+
+        for (int pos = chars.Length - 1; pos >= 0; pos--)
+        {
+            int digit = chars[pos] - '0';
+            if (digit == 0) continue;
+
+            if (pos == 1)
+            {
+                sb.Append(digit switch
+                {
+                    1 => "สิบ",
+                    2 => "ยี่สิบ",
+                    _ => digits[digit] + "สิบ"
+                });
+            }
+            else if (pos == 0 && digit == 1 && value > 10)
+            {
+                sb.Append("เอ็ด");
+            }
+            else
+            {
+                sb.Append(digits[digit]);
+                sb.Append(positions[pos]);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static readonly Dictionary<char, string> FullWidthKanaToHalfWidth = new()
+    {
+        ['。'] = "｡", ['「'] = "｢", ['」'] = "｣", ['、'] = "､", ['・'] = "･",
+        ['ヲ'] = "ｦ", ['ァ'] = "ｧ", ['ィ'] = "ｨ", ['ゥ'] = "ｩ", ['ェ'] = "ｪ", ['ォ'] = "ｫ",
+        ['ャ'] = "ｬ", ['ュ'] = "ｭ", ['ョ'] = "ｮ", ['ッ'] = "ｯ", ['ー'] = "ｰ",
+        ['ア'] = "ｱ", ['イ'] = "ｲ", ['ウ'] = "ｳ", ['エ'] = "ｴ", ['オ'] = "ｵ",
+        ['カ'] = "ｶ", ['キ'] = "ｷ", ['ク'] = "ｸ", ['ケ'] = "ｹ", ['コ'] = "ｺ",
+        ['サ'] = "ｻ", ['シ'] = "ｼ", ['ス'] = "ｽ", ['セ'] = "ｾ", ['ソ'] = "ｿ",
+        ['タ'] = "ﾀ", ['チ'] = "ﾁ", ['ツ'] = "ﾂ", ['テ'] = "ﾃ", ['ト'] = "ﾄ",
+        ['ナ'] = "ﾅ", ['ニ'] = "ﾆ", ['ヌ'] = "ﾇ", ['ネ'] = "ﾈ", ['ノ'] = "ﾉ",
+        ['ハ'] = "ﾊ", ['ヒ'] = "ﾋ", ['フ'] = "ﾌ", ['ヘ'] = "ﾍ", ['ホ'] = "ﾎ",
+        ['マ'] = "ﾏ", ['ミ'] = "ﾐ", ['ム'] = "ﾑ", ['メ'] = "ﾒ", ['モ'] = "ﾓ",
+        ['ヤ'] = "ﾔ", ['ユ'] = "ﾕ", ['ヨ'] = "ﾖ",
+        ['ラ'] = "ﾗ", ['リ'] = "ﾘ", ['ル'] = "ﾙ", ['レ'] = "ﾚ", ['ロ'] = "ﾛ",
+        ['ワ'] = "ﾜ", ['ン'] = "ﾝ", ['゛'] = "ﾞ", ['゜'] = "ﾟ",
+        ['ガ'] = "ｶﾞ", ['ギ'] = "ｷﾞ", ['グ'] = "ｸﾞ", ['ゲ'] = "ｹﾞ", ['ゴ'] = "ｺﾞ",
+        ['ザ'] = "ｻﾞ", ['ジ'] = "ｼﾞ", ['ズ'] = "ｽﾞ", ['ゼ'] = "ｾﾞ", ['ゾ'] = "ｿﾞ",
+        ['ダ'] = "ﾀﾞ", ['ヂ'] = "ﾁﾞ", ['ヅ'] = "ﾂﾞ", ['デ'] = "ﾃﾞ", ['ド'] = "ﾄﾞ",
+        ['バ'] = "ﾊﾞ", ['ビ'] = "ﾋﾞ", ['ブ'] = "ﾌﾞ", ['ベ'] = "ﾍﾞ", ['ボ'] = "ﾎﾞ",
+        ['パ'] = "ﾊﾟ", ['ピ'] = "ﾋﾟ", ['プ'] = "ﾌﾟ", ['ペ'] = "ﾍﾟ", ['ポ'] = "ﾎﾟ",
+        ['ヴ'] = "ｳﾞ"
+    };
+
+    private static readonly Dictionary<string, string> HalfWidthKanaToFullWidth =
+        FullWidthKanaToHalfWidth.ToDictionary(pair => pair.Value, pair => pair.Key.ToString(), StringComparer.Ordinal);
 
     private static char ExcelAnsiCodeToChar(int code) => code switch
     {
