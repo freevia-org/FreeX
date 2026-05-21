@@ -13,4 +13,5 @@
   <path class="s" d="M3 13.5 L17 13.5" stroke-width="0.7"/>
   <path class="r" d="M8 3 L8 17" stroke-width="1.2"/>
   <path class="r" d="M3 8 L17 8" stroke-width="1.2"/>
+  <rect class="b" x="3" y="3" width="5" height="5" opacity=".35"/>
 </svg>

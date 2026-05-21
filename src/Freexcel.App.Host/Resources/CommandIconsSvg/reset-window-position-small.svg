@@ -6,4 +6,8 @@
   </defs>
   <rect class="f s" x="4" y="5" width="8" height="7" stroke-width="1"/>
   <rect class="f s" x="8" y="8" width="8" height="7" stroke-width="1"/>
+  <path class="r" d="M14 5 L9 5" stroke-width="0.8"/>
+  <polygon class="g" points="11.4 3.5 9 5 11.4 6.5"/>
+  <path class="r" d="M6 15 L11 15" stroke-width="0.8"/>
+  <polygon class="g" points="8.6 16.5 11 15 8.6 13.5"/>
 </svg>
