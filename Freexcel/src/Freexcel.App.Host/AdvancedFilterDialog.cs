@@ -20,6 +20,13 @@ public sealed class AdvancedFilterDialog : Window
     private readonly RadioButton _filterInPlaceButton = new() { Content = "Filter the list, in-place", IsChecked = true };
     private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "Copy to another location" };
     private readonly CheckBox _uniqueBox = new() { Content = "Unique records only" };
+    private readonly TextBlock _copyToHint = new()
+    {
+        Text = "Copy to is available when Copy to another location is selected.",
+        TextWrapping = TextWrapping.Wrap,
+        Foreground = SystemColors.GrayTextBrush,
+        Margin = new Thickness(0, 2, 0, 0)
+    };
 
     public AdvancedFilterDialogResult? Result { get; private set; }
 
@@ -27,26 +34,56 @@ public sealed class AdvancedFilterDialog : Window
     {
         _sheetId = sheetId;
         Title = "Advanced Filter";
-        Width = 360;
-        Height = 260;
+        Width = 420;
+        Height = 340;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         _listRangeBox.Text = defaultListRange;
-        var root = new StackPanel { Margin = new Thickness(12) };
+        var root = new DockPanel { Margin = new Thickness(12) };
+        DockPanel.SetDock(root, Dock.Top);
+
+        var content = new StackPanel();
+        root.Children.Add(content);
+
+        content.Children.Add(new TextBlock
+        {
+            Text = "Action",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+
+        var actionGroup = new GroupBox { Header = "Action", Margin = new Thickness(0, 0, 0, 10) };
+        var actionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
+        _filterInPlaceButton.Margin = new Thickness(0, 0, 0, 4);
+        _copyToAnotherLocationButton.Margin = new Thickness(0, 0, 0, 0);
         _filterInPlaceButton.Checked += (_, _) => UpdateCopyToState();
         _copyToAnotherLocationButton.Checked += (_, _) => UpdateCopyToState();
-        root.Children.Add(_filterInPlaceButton);
-        root.Children.Add(_copyToAnotherLocationButton);
-        root.Children.Add(new TextBlock { Text = "List range:" });
-        root.Children.Add(CreateReferenceEditor(_listRangeBox, "Select list range"));
-        root.Children.Add(new TextBlock { Text = "Criteria range:", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_criteriaRangeBox, "Select criteria range"));
-        root.Children.Add(new TextBlock { Text = "Copy to cell (optional):", Margin = new Thickness(0, 8, 0, 0) });
-        root.Children.Add(CreateReferenceEditor(_copyToBox, "Select copy-to cell"));
-        root.Children.Add(_uniqueBox);
-        root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
+        actionPanel.Children.Add(_filterInPlaceButton);
+        actionPanel.Children.Add(_copyToAnotherLocationButton);
+        actionGroup.Content = actionPanel;
+        content.Children.Add(actionGroup);
+
+        var rangesGrid = new Grid();
+        rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range");
+        AddReferenceRow(rangesGrid, 1, "_Criteria range:", _criteriaRangeBox, "Select criteria range");
+        AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell");
+        content.Children.Add(rangesGrid);
+        content.Children.Add(_copyToHint);
+
+        _uniqueBox.Margin = new Thickness(0, 10, 0, 0);
+        content.Children.Add(_uniqueBox);
+        content.Children.Add(new TextBlock
+        {
+            Text = "Criteria should include column labels in the first row, matching Excel Advanced Filter.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 10, 0, 0)
+        });
+        content.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76, rowMargin: new Thickness(0, 14, 0, 0)));
         Content = root;
         UpdateCopyToState();
     }
@@ -108,7 +145,7 @@ public sealed class AdvancedFilterDialog : Window
         var panel = new DockPanel();
         var pickerButton = new Button
         {
-            Content = "...",
+            Content = "Collapse Dialog",
             Width = 28,
             Margin = new Thickness(0, 0, 6, 0),
             Tag = textBox
@@ -118,6 +155,26 @@ public sealed class AdvancedFilterDialog : Window
         panel.Children.Add(pickerButton);
         panel.Children.Add(textBox);
         return panel;
+    }
+
+    private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
+    {
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0)
+        };
+        Grid.SetRow(labelBlock, row);
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        var editor = CreateReferenceEditor(textBox, automationName);
+        editor.Margin = new Thickness(0, row == 0 ? 0 : 8, 0, 0);
+        Grid.SetRow(editor, row);
+        Grid.SetColumn(editor, 1);
+        grid.Children.Add(editor);
     }
 
     private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
@@ -132,6 +189,9 @@ public sealed class AdvancedFilterDialog : Window
     private void UpdateCopyToState()
     {
         _copyToBox.IsEnabled = _copyToAnotherLocationButton.IsChecked == true;
+        _copyToHint.Visibility = _copyToAnotherLocationButton.IsChecked == true
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void Accept()
