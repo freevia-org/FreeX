@@ -69,6 +69,20 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PlanExport_AppendsXpsExtensionForExplicitExtensionlessXpsRequests()
+    {
+        var request = ExportPlanner.PlanExport(@"C:\temp\report", ExportFormat.Xps, ExportOptions.ExcelLikeDefault);
+
+        request.Should().Be(new ExportRequest(
+            @"C:\temp\report.xps",
+            ExportFormat.Xps,
+            ExportOptions.ExcelLikeDefault,
+            null));
+        request.UsesXpsFallback.Should().BeFalse();
+        request.ActualPath.Should().Be(@"C:\temp\report.xps");
+    }
+
+    [Fact]
     public void ExportOptions_DefaultsToActiveSheetWithoutDocumentProperties()
     {
         ExportOptions.ExcelLikeDefault.Should().Be(new ExportOptions(
@@ -579,7 +593,8 @@ public class ExportPlannerTests
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null)");
-        printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, optionsDialog.Result)");
+        printExport.Should().Contain("saveDlg.FilterIndex == 2");
+        printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("RenderExportPaginator(options)");
         printExport.Should().Contain("ApplyExportPageRange(options");
