@@ -327,6 +327,29 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialog_ExposesAccessKeysForModeledCheckboxes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        foreach (var content in new[]
+        {
+            "Content = \"Show _row grand totals\"",
+            "Content = \"Show _column grand totals\"",
+            "Content = \"Show _subtotals\"",
+            "Content = \"_Repeat item labels\"",
+            "Content = \"Insert _blank line after each item\"",
+            "Content = \"Row _headers\"",
+            "Content = \"Column hea_ders\"",
+            "Content = \"Banded _rows\"",
+            "Content = \"Banded c_olumns\"",
+            "Content = \"_Autofit column widths on update\"",
+            "Content = \"_Preserve cell formatting on update\"",
+            "Content = \"_Refresh data when opening the file\""
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
     public void PivotFieldGroupingDialog_CreateResult_TrimsFieldAndClampsNumberRangeInterval()
     {
         var result = PivotFieldGroupingDialog.CreateResult(
@@ -496,6 +519,15 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Chart style");
         source.Should().Contain("Style IDs match the built-in Excel chart style gallery");
         source.Should().Contain("Field buttons");
-        source.Should().Contain("Show field buttons on chart");
+        source.Should().Contain("_Show field buttons on chart");
+    }
+
+    [Fact]
+    public void PivotAuxiliaryDialogs_ExposeAccessKeysForModeledCheckboxes()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        source.Should().Contain("Content = \"_Show field buttons on chart\"");
+        source.Should().Contain("Content = \"_Ungroup selected field\"");
     }
 }

@@ -282,7 +282,7 @@ public sealed record PivotChartOptionsDialogResult(int? ChartStyleId, bool ShowF
 public sealed class PivotChartOptionsDialog : Window
 {
     private readonly TextBox _styleBox = new();
-    private readonly CheckBox _showFieldButtonsBox = new() { Content = "Show field buttons on chart" };
+    private readonly CheckBox _showFieldButtonsBox = new() { Content = "_Show field buttons on chart" };
 
     public PivotChartOptionsDialogResult Result { get; private set; }
 
@@ -359,7 +359,7 @@ public sealed class PivotFieldGroupingDialog : Window
     private readonly TextBox _startBox = new();
     private readonly TextBox _endBox = new();
     private readonly TextBox _intervalBox = new();
-    private readonly CheckBox _ungroupBox = new() { Content = "Ungroup selected field" };
+    private readonly CheckBox _ungroupBox = new() { Content = "_Ungroup selected field" };
     private readonly IReadOnlyList<PivotSourceFieldOption> _fields;
 
     public PivotFieldGroupingDialogResult Result { get; private set; }
@@ -690,22 +690,22 @@ public sealed class PivotTableOptionsDialog : Window
         "PivotStyleDark4"
     ];
 
-    private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show row grand totals" };
-    private readonly CheckBox _columnGrandTotalsBox = new() { Content = "Show column grand totals" };
-    private readonly CheckBox _subtotalsBox = new() { Content = "Show subtotals" };
+    private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show _row grand totals" };
+    private readonly CheckBox _columnGrandTotalsBox = new() { Content = "Show _column grand totals" };
+    private readonly CheckBox _subtotalsBox = new() { Content = "Show _subtotals" };
     private readonly ComboBox _subtotalPlacementBox = new();
-    private readonly CheckBox _repeatItemLabelsBox = new() { Content = "Repeat item labels" };
-    private readonly CheckBox _blankLineBox = new() { Content = "Insert blank line after each item" };
+    private readonly CheckBox _repeatItemLabelsBox = new() { Content = "_Repeat item labels" };
+    private readonly CheckBox _blankLineBox = new() { Content = "Insert _blank line after each item" };
     private readonly ComboBox _reportLayoutBox = new();
     private readonly ComboBox _styleBox = new();
-    private readonly CheckBox _rowHeadersBox = new() { Content = "Row headers" };
-    private readonly CheckBox _columnHeadersBox = new() { Content = "Column headers" };
-    private readonly CheckBox _rowStripesBox = new() { Content = "Banded rows" };
-    private readonly CheckBox _columnStripesBox = new() { Content = "Banded columns" };
+    private readonly CheckBox _rowHeadersBox = new() { Content = "Row _headers" };
+    private readonly CheckBox _columnHeadersBox = new() { Content = "Column hea_ders" };
+    private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
+    private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
-    private readonly CheckBox _autofitColumnsBox = new() { Content = "Autofit column widths on update", IsChecked = true };
-    private readonly CheckBox _preserveFormattingBox = new() { Content = "Preserve cell formatting on update", IsChecked = true };
-    private readonly CheckBox _refreshOnOpenBox = new() { Content = "Refresh data when opening the file" };
+    private readonly CheckBox _autofitColumnsBox = new() { Content = "_Autofit column widths on update", IsChecked = true };
+    private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
+    private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
