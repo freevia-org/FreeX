@@ -20,7 +20,9 @@ public sealed class ScenarioManagerDialogTests
 
     [Theory]
     [InlineData("save", ScenarioManagerAction.Save)]
-    [InlineData("add", ScenarioManagerAction.Save)]
+    [InlineData("add", ScenarioManagerAction.Add)]
+    [InlineData("edit", ScenarioManagerAction.Edit)]
+    [InlineData("delete", ScenarioManagerAction.Delete)]
     [InlineData("show", ScenarioManagerAction.Show)]
     [InlineData("list", ScenarioManagerAction.List)]
     [InlineData("report", ScenarioManagerAction.Report)]
@@ -43,6 +45,8 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("Merge...");
         source.Should().Contain("Show");
         source.Should().Contain("S_ummary...");
+        source.Should().Contain("UpdateSelectionState");
+        source.Should().Contain("ScenarioManagerAction.Delete");
     }
 
     [Fact]
@@ -72,5 +76,6 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("Changing _cells:");
         source.Should().Contain("Comment:");
         source.Should().Contain("Add/Edit Scenario");
+        source.Should().Contain("_newNameBox.Text = selected.Name");
     }
 }

@@ -239,11 +239,16 @@ public partial class MainWindow
 
         switch (dialog.SelectedAction)
         {
+            case ScenarioManagerAction.Add:
+            case ScenarioManagerAction.Edit:
             case ScenarioManagerAction.Save:
                 SaveScenarioFromSelection(dialog.NewScenarioName);
                 break;
             case ScenarioManagerAction.Show:
                 ShowScenarioByName(dialog.SelectedScenarioName);
+                break;
+            case ScenarioManagerAction.Delete:
+                DeleteScenarioByName(dialog.SelectedScenarioName);
                 break;
             case ScenarioManagerAction.List:
                 ListScenarios();
@@ -304,6 +309,22 @@ public partial class MainWindow
             EnsureCellVisible(first);
         }
 
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    private void DeleteScenarioByName(string? scenarioName)
+    {
+        if (string.IsNullOrWhiteSpace(scenarioName))
+            return;
+
+        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), "Scenario Manager", out var outcome))
+        {
+            ShowCommandError(outcome, "Scenario Manager");
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         RefreshStatusBar();
     }
