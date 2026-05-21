@@ -58,11 +58,26 @@ public sealed class SortDialogTests
         foreach (var content in new[]
         {
             "_Add Level",
-            "_Remove Level",
+            "_Delete Level",
+            "_Copy Level",
+            "_Options...",
             "_OK",
             "_Cancel"
         })
             source.Should().Contain($"Content = \"{content}\"");
+    }
+
+    [Fact]
+    public void DialogLayout_ExposesExcelCustomSortFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+
+        source.Should().Contain("My data has _headers");
+        source.Should().Contain("Sort levels");
+        source.Should().Contain("Header = \"Sort by\"");
+        source.Should().Contain("Header = \"Sort On\"");
+        source.Should().Contain("Header = \"Order\"");
+        source.Should().Contain("Cell Values");
     }
 
     [Fact]
@@ -93,5 +108,22 @@ public sealed class SortDialogTests
             .Equal(
                 new SortDialogLevel(0, true),
                 new SortDialogLevel(2, true));
+    }
+
+    [Fact]
+    public void CopyLevel_InsertsDuplicateAfterRequestedLevel()
+    {
+        var levels = new[]
+        {
+            new SortDialogLevel(0, true),
+            new SortDialogLevel(2, false)
+        };
+
+        SortDialog.CopyLevel(levels, 1)
+            .Should()
+            .Equal(
+                new SortDialogLevel(0, true),
+                new SortDialogLevel(2, false),
+                new SortDialogLevel(2, false));
     }
 }

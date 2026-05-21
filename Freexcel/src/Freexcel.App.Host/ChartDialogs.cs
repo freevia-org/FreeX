@@ -9,6 +9,15 @@ namespace Freexcel.App.Host;
 
 public sealed record ChartTypePickerOption(ChartType Type, string DisplayName, bool IsRecommended = false);
 
+public sealed record ChartTypePickerCategory(string Name, IReadOnlyList<ChartTypePickerOption> Options);
+
+public sealed record ChartTypeGalleryChoice(
+    ChartType Type,
+    string CategoryName,
+    string SubtypeName,
+    string PreviewText,
+    bool IsRecommended = false);
+
 public static class ChartTypePickerPlanner
 {
     private static readonly ChartTypePickerOption[] Options =
@@ -44,13 +53,60 @@ public static class ChartTypePickerPlanner
         .Select(type => Options.Single(option => option.Type == type))
         .Where(option => option.IsRecommended && ChartTypeSupport.IsRenderable(option.Type))
         .ToList();
+
+    public static IReadOnlyList<ChartTypePickerCategory> GetCategories()
+    {
+        var supported = GetSupportedOptions();
+        return new (string Name, ChartType[] Types)[]
+            {
+                ("Column", [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn]),
+                ("Line", [ChartType.Line]),
+                ("Pie", [ChartType.Pie, ChartType.Doughnut]),
+                ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar]),
+                ("Area", [ChartType.Area]),
+                ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),
+                ("Stock", [ChartType.Stock]),
+                ("Radar", [ChartType.Radar])
+            }
+            .Select(category => new ChartTypePickerCategory(
+                category.Name,
+                category.Types
+                    .Select(type => supported.FirstOrDefault(option => option.Type == type))
+                    .OfType<ChartTypePickerOption>()
+                    .ToList()))
+            .Where(category => category.Options.Count > 0)
+            .ToList();
+    }
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetGalleryChoices(string categoryName) =>
+        GetCategories()
+            .Where(category => category.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(category => category.Options.Select(option => new ChartTypeGalleryChoice(
+                option.Type,
+                category.Name,
+                option.DisplayName,
+                $"Preview: {option.DisplayName}",
+                option.IsRecommended)))
+            .ToList();
+
+    public static IReadOnlyList<ChartTypeGalleryChoice> GetRecommendedGalleryChoices() =>
+        GetRecommendedOptions()
+            .Select(option => new ChartTypeGalleryChoice(
+                option.Type,
+                "Recommended Charts",
+                option.DisplayName,
+                $"Preview: {option.DisplayName}",
+                IsRecommended: true))
+            .ToList();
 }
 
 public sealed record InsertChartDialogResult(ChartType ChartType, bool UseRecommendedLayout);
 
 public sealed class InsertChartDialog : Window
 {
-    private readonly ComboBox _chartTypeBox = new();
+    private readonly ListBox _recommendedGallery = new();
+    private readonly ListBox _categoryList = new();
+    private readonly ListBox _subtypeGallery = new();
     private readonly CheckBox _recommendedBox = new() { Content = "Use recommended layout" };
 
     public InsertChartDialogResult Result { get; private set; } = CreateRecommendedResult();
@@ -58,25 +114,37 @@ public sealed class InsertChartDialog : Window
     public InsertChartDialog()
     {
         Title = "Insert Chart";
-        Width = 360;
-        Height = 220;
+        Width = 660;
+        Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Chart type", Margin = new Thickness(0, 0, 0, 4) });
-        _chartTypeBox.ItemsSource = ChartTypePickerPlanner.GetSupportedOptions();
-        _chartTypeBox.DisplayMemberPath = nameof(ChartTypePickerOption.DisplayName);
-        _chartTypeBox.SelectedIndex = 0;
-        _chartTypeBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_chartTypeBox);
-
+        var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
+        var tabs = new TabControl { Height = 310, Margin = new Thickness(0, 0, 0, 12) };
+        _recommendedGallery.ItemsSource = ChartTypePickerPlanner.GetRecommendedGalleryChoices();
+        _recommendedGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
+        _recommendedGallery.SelectedIndex = 0;
+        tabs.Items.Add(new TabItem
+        {
+            Header = "Recommended Charts",
+            Content = CreateRecommendedChartsPanel(_recommendedGallery)
+        });
+        tabs.Items.Add(new TabItem
+        {
+            Header = "All Charts",
+            Content = CreateAllChartsPanel(_categoryList, _subtypeGallery)
+        });
+        DockPanel.SetDock(tabs, Dock.Top);
+        root.Children.Add(tabs);
         _recommendedBox.IsChecked = true;
-        _recommendedBox.Margin = new Thickness(0, 0, 0, 16);
-        stack.Children.Add(_recommendedBox);
-        stack.Children.Add(CreateButtonRow(Accept));
-        Content = stack;
+        _recommendedBox.Margin = new Thickness(0, 0, 0, 10);
+        DockPanel.SetDock(_recommendedBox, Dock.Top);
+        root.Children.Add(_recommendedBox);
+        var buttons = CreateButtonRow(Accept);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        Content = root;
     }
 
     public static InsertChartDialogResult CreateResult(ChartType chartType) =>
@@ -87,12 +155,123 @@ public sealed class InsertChartDialog : Window
 
     private void Accept()
     {
-        var selected = _chartTypeBox.SelectedItem is ChartTypePickerOption option
-            ? option.Type
-            : ChartType.Column;
+        var selected = SelectedGalleryChoice(_recommendedGallery, _subtypeGallery)?.Type ?? ChartType.Column;
         Result = new InsertChartDialogResult(selected, _recommendedBox.IsChecked == true);
         DialogResult = true;
     }
+
+    private static ChartTypeGalleryChoice? SelectedGalleryChoice(ListBox recommendedGallery, ListBox subtypeGallery) =>
+        subtypeGallery.SelectedItem as ChartTypeGalleryChoice
+        ?? recommendedGallery.SelectedItem as ChartTypeGalleryChoice;
+
+    private static Grid CreateRecommendedChartsPanel(ListBox gallery)
+    {
+        var grid = CreatePickerGrid();
+        grid.Children.Add(new TextBlock
+        {
+            Text = "Choose a chart type",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        gallery.Margin = new Thickness(0, 24, 12, 0);
+        AutomationProperties.SetName(gallery, "Chart subtype gallery");
+        Grid.SetRow(gallery, 1);
+        grid.Children.Add(gallery);
+        var preview = CreatePreviewPanel("Preview", "Recommended chart preview");
+        Grid.SetColumn(preview, 1);
+        Grid.SetRowSpan(preview, 2);
+        grid.Children.Add(preview);
+        return grid;
+    }
+
+    internal static Grid CreateAllChartsPanel(
+        ListBox categoryList,
+        ListBox subtypeGallery,
+        ChartType? selectedType = null)
+    {
+        var categories = ChartTypePickerPlanner.GetCategories();
+        var grid = CreatePickerGrid();
+        categoryList.ItemsSource = categories;
+        categoryList.DisplayMemberPath = nameof(ChartTypePickerCategory.Name);
+        categoryList.Width = 150;
+        categoryList.Margin = new Thickness(0, 24, 12, 0);
+        AutomationProperties.SetName(categoryList, "Chart categories");
+        subtypeGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
+        subtypeGallery.Margin = new Thickness(0, 24, 12, 0);
+        AutomationProperties.SetName(subtypeGallery, "Chart subtype gallery");
+        categoryList.SelectionChanged += (_, _) =>
+        {
+            if (categoryList.SelectedItem is not ChartTypePickerCategory category)
+                return;
+
+            subtypeGallery.ItemsSource = ChartTypePickerPlanner.GetGalleryChoices(category.Name);
+            subtypeGallery.SelectedIndex = 0;
+        };
+
+        var selectedCategory = categories.FirstOrDefault(category =>
+            selectedType is not null && category.Options.Any(option => option.Type == selectedType.Value))
+            ?? categories.FirstOrDefault();
+        categoryList.SelectedItem = selectedCategory;
+        if (selectedType is not null && subtypeGallery.ItemsSource is IEnumerable<ChartTypeGalleryChoice> choices)
+        {
+            subtypeGallery.SelectedItem = choices.FirstOrDefault(choice => choice.Type == selectedType.Value)
+                ?? choices.FirstOrDefault();
+        }
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = "All Charts",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        Grid.SetRow(categoryList, 1);
+        grid.Children.Add(categoryList);
+        Grid.SetColumn(subtypeGallery, 1);
+        Grid.SetRow(subtypeGallery, 1);
+        grid.Children.Add(subtypeGallery);
+        var preview = CreatePreviewPanel("Preview", "Chart preview");
+        Grid.SetColumn(preview, 2);
+        Grid.SetRowSpan(preview, 2);
+        grid.Children.Add(preview);
+        return grid;
+    }
+
+    private static Grid CreatePickerGrid()
+    {
+        var grid = new Grid { Margin = new Thickness(12), MinHeight = 250 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        return grid;
+    }
+
+    private static Border CreatePreviewPanel(string title, string body) =>
+        new()
+        {
+            BorderBrush = SystemColors.ControlDarkBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14),
+            Margin = new Thickness(0, 24, 0, 0),
+            Child = new StackPanel
+            {
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = title,
+                        FontWeight = FontWeights.SemiBold,
+                        Margin = new Thickness(0, 0, 0, 12)
+                    },
+                    new TextBlock
+                    {
+                        Text = body,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                }
+            }
+        };
 
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 76);
@@ -102,7 +281,8 @@ public sealed record ChangeChartTypeDialogResult(ChartType ChartType);
 
 public sealed class ChangeChartTypeDialog : Window
 {
-    private readonly ComboBox _chartTypeBox = new();
+    private readonly ListBox _categoryList = new();
+    private readonly ListBox _subtypeGallery = new();
 
     public ChartType SelectedChartType { get; private set; }
     public ChangeChartTypeDialogResult Result { get; private set; }
@@ -112,27 +292,36 @@ public sealed class ChangeChartTypeDialog : Window
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
         Title = "Change Chart Type";
-        Width = 340;
-        Height = 180;
+        Width = 640;
+        Height = 390;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        _chartTypeBox.ItemsSource = ChartTypePickerPlanner.GetSupportedOptions();
-        _chartTypeBox.DisplayMemberPath = nameof(ChartTypePickerOption.DisplayName);
-        _chartTypeBox.SelectedItem = ChartTypePickerPlanner.GetSupportedOptions()
-            .FirstOrDefault(option => option.Type == currentType);
-        stack.Children.Add(_chartTypeBox);
-        stack.Children.Add(CreateButtonRow());
-        Content = stack;
+        var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
+        var heading = new TextBlock
+        {
+            Text = "Choose a chart type",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        DockPanel.SetDock(heading, Dock.Top);
+        root.Children.Add(heading);
+        var panel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
+        panel.Height = 290;
+        DockPanel.SetDock(panel, Dock.Top);
+        root.Children.Add(panel);
+        var buttons = CreateButtonRow();
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+        Content = root;
     }
 
     public static ChangeChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);
 
     private StackPanel CreateButtonRow() => InsertChartDialog.CreateButtonRow(() =>
     {
-        if (_chartTypeBox.SelectedItem is ChartTypePickerOption option)
+        if (_subtypeGallery.SelectedItem is ChartTypeGalleryChoice option)
             SelectedChartType = option.Type;
         Result = CreateResult(SelectedChartType);
         DialogResult = true;
