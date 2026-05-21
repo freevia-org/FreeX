@@ -93,7 +93,7 @@ public sealed class TextToColumnsDialog : Window
         body.Children.Add(CreateQualifierPanel());
         body.Children.Add(new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) });
         body.Children.Add(_previewGrid);
-        body.Children.Add(new TextBlock { Text = "_Destination:", Margin = new Thickness(0, 10, 0, 4) });
+        body.Children.Add(new Label { Content = "_Destination:", Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 10, 0, 4) });
         body.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
 
         root.Children.Add(CreateButtonRow(Accept));
@@ -160,10 +160,12 @@ public sealed class TextToColumnsDialog : Window
     private DockPanel CreateQualifierPanel()
     {
         var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
-        var label = new TextBlock
+        var label = new Label
         {
-            Text = "Text _qualifier:",
+            Content = "Text _qualifier:",
+            Target = _textQualifierBox,
             VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 8, 0)
         };
         DockPanel.SetDock(label, Dock.Left);
