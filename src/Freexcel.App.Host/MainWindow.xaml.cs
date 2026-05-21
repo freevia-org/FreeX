@@ -74,7 +74,7 @@ public partial class MainWindow : Window
         new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 153, 153))
     ];
     private System.Windows.Controls.TextBox? _inlineEditor;
-    private System.Windows.Controls.Border? _inlineEditorMask;
+    private System.Windows.Controls.Border? _inlineEditorChrome;
     private System.Windows.Controls.TextBlock? _inlineFormulaReferenceOverlay;
     private System.Windows.Controls.ComboBox? _validationDropdown;
     private CellAddress? _formulaEditCell;

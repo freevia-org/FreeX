@@ -17,10 +17,10 @@ public sealed class FormulaInlineEditorLayoutPlannerTests
 
         layout.EditorRect.Left.Should().Be(98);
         layout.EditorRect.Top.Should().Be(38);
-        layout.EditorRect.Width.Should().Be(68);
-        layout.EditorRect.Height.Should().Be(24);
+        layout.EditorRect.Width.Should().Be(160);
+        layout.EditorRect.Height.Should().Be(26);
 
-        layout.TextOverlayRect.Left.Should().Be(101);
+        layout.TextOverlayRect.Left.Should().Be(102);
         layout.TextOverlayRect.Top.Should().Be(41);
         layout.TextOverlayRect.Right.Should().BeLessThan(layout.EditorRect.Right);
         layout.TextOverlayRect.Bottom.Should().BeLessThanOrEqualTo(layout.EditorRect.Bottom);

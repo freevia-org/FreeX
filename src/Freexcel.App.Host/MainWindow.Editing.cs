@@ -60,22 +60,24 @@ public partial class MainWindow
 
         if (_inlineEditor == null)
         {
-            _inlineEditorMask = new System.Windows.Controls.Border
+            _inlineEditorChrome = new System.Windows.Controls.Border
             {
                 Background = System.Windows.Media.Brushes.White,
+                BorderThickness = new System.Windows.Thickness(2),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(33, 115, 70)),
                 IsHitTestVisible = false,
                 Visibility = Visibility.Collapsed
             };
             _inlineEditor = new System.Windows.Controls.TextBox
             {
-                BorderThickness = new System.Windows.Thickness(2),
-                BorderBrush     = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(33, 115, 70)),
-                Padding         = new System.Windows.Thickness(1),
+                BorderThickness = new System.Windows.Thickness(0),
+                Padding         = new System.Windows.Thickness(4, 0, 4, 0),
                 FontFamily      = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize        = 15.0,
                 Background      = System.Windows.Media.Brushes.Transparent,
                 AcceptsReturn   = false,
+                VerticalContentAlignment = System.Windows.VerticalAlignment.Center,
             };
             TextOptions.SetTextFormattingMode(_inlineEditor, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineEditor, TextRenderingMode.ClearType);
@@ -93,15 +95,15 @@ public partial class MainWindow
                 FontSize = 15.0,
                 IsHitTestVisible = false,
                 Margin = new Thickness(0),
-                VerticalAlignment = System.Windows.VerticalAlignment.Top,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
                 Visibility = Visibility.Collapsed
             };
             TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
             TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
-            EditOverlay.Children.Add(_inlineEditorMask);
-            EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
+            EditOverlay.Children.Add(_inlineEditorChrome);
             EditOverlay.Children.Add(_inlineEditor);
+            EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
         }
 
         // Cell metrics are in unzoomed coordinates; the EditOverlay is not transformed, so scale.
@@ -113,12 +115,12 @@ public partial class MainWindow
         var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
-        if (_inlineEditorMask is not null)
+        if (_inlineEditorChrome is not null)
         {
-            System.Windows.Controls.Canvas.SetLeft(_inlineEditorMask, layout.EditorRect.Left);
-            System.Windows.Controls.Canvas.SetTop(_inlineEditorMask, layout.EditorRect.Top);
-            _inlineEditorMask.Width = layout.EditorRect.Width;
-            _inlineEditorMask.Height = layout.EditorRect.Height;
+            System.Windows.Controls.Canvas.SetLeft(_inlineEditorChrome, layout.EditorRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineEditorChrome, layout.EditorRect.Top);
+            _inlineEditorChrome.Width = layout.EditorRect.Width;
+            _inlineEditorChrome.Height = layout.EditorRect.Height;
         }
 
         System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.EditorRect.Left);
@@ -133,9 +135,10 @@ public partial class MainWindow
             _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
         }
 
-        if (_inlineEditorMask is not null)
-            _inlineEditorMask.Visibility = Visibility.Visible;
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Visible;
         _inlineEditor.Visibility  = Visibility.Visible;
+        SheetGrid.EditingCell = addr;
         EditOverlay.IsHitTestVisible = true;
         RefreshFormulaReferenceHighlights();
         _inlineEditor.Focus();
@@ -147,8 +150,9 @@ public partial class MainWindow
     {
         if (_inlineEditor == null) return;
         _inlineEditor.Visibility = Visibility.Collapsed;
-        if (_inlineEditorMask is not null)
-            _inlineEditorMask.Visibility = Visibility.Collapsed;
+        if (_inlineEditorChrome is not null)
+            _inlineEditorChrome.Visibility = Visibility.Collapsed;
+        SheetGrid.EditingCell = null;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();
         EditOverlay.IsHitTestVisible = false;
@@ -395,6 +399,16 @@ public partial class MainWindow
         {
             var text = _inlineEditor!.Text;
             FormulaBar.Text = text;
+            if (string.IsNullOrEmpty(text))
+            {
+                HideInlineEditor(commit: false);
+                ClearFormulaRangeEntryState();
+                SetActiveCell(next);
+                EnsureCellVisible(next);
+                e.Handled = true;
+                return;
+            }
+
             if (CommitEdit())
             {
                 HideInlineEditor(commit: false);
