@@ -180,6 +180,21 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartDataAndMoveDialogs_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("Content = \"_Object in sheet\"");
+        source.Should().Contain("Content = \"_New chart sheet\"");
+        source.Should().Contain("Content = \"_Chart data range:\"");
+        source.Should().Contain("Content = \"_Switch Row/Column\"");
+        source.Should().Contain("Content = \"First column contains _category labels\"");
+        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = \"_Edit\"");
+        source.Should().Contain("Content = \"_Remove\"");
+    }
+
+    [Fact]
     public void SelectDataSourceDialog_NormalizesSourceRangeAndCategoryState()
     {
         var result = SelectDataSourceDialog.CreateResult("  A1:D12  ", true);
