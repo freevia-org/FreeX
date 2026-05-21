@@ -255,6 +255,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void UnhideSheetDialog_LabelsSheetPickerWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Sheet:\", Target = _sheetBox");
+    }
+
+    [Fact]
     public void SpellCheckDialog_CreateReplaceResult_CapturesReplacement()
     {
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")

@@ -599,7 +599,7 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.IsEditable = true;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Sheet:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Sheet:", Target = _sheetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _sheetBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_sheetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
