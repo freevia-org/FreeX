@@ -6,7 +6,6 @@ namespace Freexcel.Core.IO;
 public static class XlsxChartPartReader
 {
     private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-    private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     public static bool TryReadSupportedChart(XDocument chartXml, SheetId sheetId, out ChartModel chart)
     {
@@ -155,7 +154,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = chartType,
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
         foreach (var series in plotChart.Descendants().Where(element => element.Name.LocalName == "ser"))
@@ -240,7 +239,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = chartType,
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
         foreach (var plotChart in plotCharts)
@@ -287,7 +286,7 @@ public static class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -315,7 +314,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ReadBarChartType(firstBarChart!, barDirection),
-            Title = ReadTitle(chartXml),
+            Title = XlsxChartLevelReader.ReadTitle(chartXml),
             UseComboLineForSecondarySeries = true
         };
         ApplyBarChartMetadata(firstBarChart!, result);
@@ -405,7 +404,7 @@ public static class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -432,7 +431,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ReadBarChartType(firstBarChart!, barDirection),
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
         ApplyBarChartMetadata(firstBarChart!, result);
 
@@ -484,7 +483,7 @@ public static class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -510,7 +509,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ChartType.Line,
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
         foreach (var lineChart in lineCharts)
@@ -556,7 +555,7 @@ public static class XlsxChartPartReader
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -575,7 +574,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = chartType,
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
         if (chartType == ChartType.Doughnut &&
@@ -617,7 +616,7 @@ public static class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -644,7 +643,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ChartType.Bubble,
-            Title = ReadTitle(chartXml),
+            Title = XlsxChartLevelReader.ReadTitle(chartXml),
             FirstColIsCategories = false
         };
 
@@ -675,7 +674,7 @@ public static class XlsxChartPartReader
 
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -695,7 +694,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ChartType.Area,
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
         foreach (var areaChart in areaCharts)
@@ -777,7 +776,7 @@ public static class XlsxChartPartReader
         result.DataRange = XlsxChartSeriesRangeReader.UnionRanges(ranges);
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -796,7 +795,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ChartType.Area,
-            Title = ReadTitle(chartXml)
+            Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
 
         foreach (var areaChart in areaCharts)
@@ -841,7 +840,7 @@ public static class XlsxChartPartReader
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -859,7 +858,7 @@ public static class XlsxChartPartReader
         var result = new ChartModel
         {
             Type = ChartType.Scatter,
-            Title = ReadTitle(chartXml),
+            Title = XlsxChartLevelReader.ReadTitle(chartXml),
             FirstColIsCategories = false
         };
 
@@ -903,7 +902,7 @@ public static class XlsxChartPartReader
             .ToList();
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.FirstRowIsHeader = hasTitleRange;
-        ApplyChartLevelProperties(chartXml, result);
+        XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
         chart = result;
         return true;
@@ -921,130 +920,6 @@ public static class XlsxChartPartReader
             (_, "percentStacked") => ChartType.PercentStackedColumn,
             _ => ChartType.Column
         };
-    }
-
-    private static string? ReadTitle(XDocument chartXml)
-    {
-        var title = chartXml.Root?
-            .Element(ChartNs + "chart")?
-            .Element(ChartNs + "title");
-
-        return title?
-            .Descendants(DrawingNs + "t")
-            .Select(element => element.Value)
-            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
-    }
-
-    private static void ApplyChartLevelProperties(XDocument chartXml, ChartModel chart)
-    {
-        var chartElement = chartXml.Root?.Element(ChartNs + "chart");
-        XlsxChartFormattingReader.ApplyChartTitleFormatting(chartElement?.Element(ChartNs + "title"), chart);
-        XlsxChartFormattingReader.ApplyChartAreaShapeProperties(chartXml.Root?.Element(ChartNs + "spPr"), chart);
-        var plotArea = chartElement?.Element(ChartNs + "plotArea");
-        chart.PlotAreaLayout = XlsxChartMetadataReader.ReadManualLayout(plotArea?.Element(ChartNs + "layout"));
-        chart.DataTable = ReadChartDataTable(plotArea?.Element(ChartNs + "dTable"));
-        XlsxChartFormattingReader.ApplyPlotAreaShapeProperties(plotArea?.Element(ChartNs + "spPr"), chart);
-        XlsxChartAxisReader.ApplyAxisMetadata(plotArea, chart);
-        XlsxChartDataLabelReader.ApplyDataLabels(plotArea, chart);
-
-        var legend = chartElement?.Element(ChartNs + "legend");
-        if (legend is null)
-        {
-            chart.ShowLegend = false;
-            chart.LegendPosition = ChartLegendPosition.None;
-            chart.LegendOverlay = false;
-            return;
-        }
-
-        chart.ShowLegend = true;
-        chart.LegendLayout = XlsxChartMetadataReader.ReadManualLayout(legend.Element(ChartNs + "layout"));
-        chart.LegendPosition = legend.Element(ChartNs + "legendPos")?.Attribute("val")?.Value switch
-        {
-            "l" => ChartLegendPosition.Left,
-            "t" => ChartLegendPosition.Top,
-            "b" => ChartLegendPosition.Bottom,
-            "r" => ChartLegendPosition.Right,
-            _ => ChartLegendPosition.Right
-        };
-        chart.LegendOverlay = XlsxChartScalarReader.IsTrue(legend.Element(ChartNs + "overlay")?.Attribute("val")?.Value);
-        ApplyLegendFormatting(legend, chart);
-    }
-
-    private static ChartDataTableModel? ReadChartDataTable(XElement? dataTable)
-    {
-        if (dataTable is null)
-            return null;
-
-        return new ChartDataTableModel
-        {
-            ShowHorizontalBorder = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showHorzBorder")?.Attribute("val")?.Value),
-            ShowVerticalBorder = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showVertBorder")?.Attribute("val")?.Value),
-            ShowOutline = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showOutline")?.Attribute("val")?.Value),
-            ShowLegendKeys = XlsxChartScalarReader.ReadOptionalBool(dataTable.Element(ChartNs + "showKeys")?.Attribute("val")?.Value)
-        };
-    }
-
-    private static void ApplyLegendFormatting(XElement legend, ChartModel chart)
-    {
-        var shapeProperties = legend.Element(ChartNs + "spPr");
-        var fill = shapeProperties?.Element(DrawingNs + "solidFill");
-        if (fill is not null)
-        {
-            if (XlsxDrawingColorReader.TryReadThemeColorReference(fill, DrawingNs, out var fillThemeColor))
-            {
-                chart.LegendFillThemeColor = fillThemeColor;
-                chart.LegendFillColor = null;
-            }
-            else if (XlsxDrawingColorReader.TryReadConcreteColor(fill, DrawingNs, out var fillColor))
-            {
-                chart.LegendFillColor = fillColor;
-                chart.LegendFillThemeColor = null;
-            }
-        }
-
-        var line = shapeProperties?.Element(DrawingNs + "ln");
-        if (line is not null)
-        {
-            if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-                chart.LegendBorderThickness = Math.Clamp(emus / 12700.0, 0, 10);
-
-            var lineFill = line.Element(DrawingNs + "solidFill");
-            if (lineFill is not null)
-            {
-                if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var borderThemeColor))
-                {
-                    chart.LegendBorderThemeColor = borderThemeColor;
-                    chart.LegendBorderColor = null;
-                }
-                else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var borderColor))
-                {
-                    chart.LegendBorderColor = borderColor;
-                    chart.LegendBorderThemeColor = null;
-                }
-            }
-        }
-
-        var textProperties = legend
-            .Element(ChartNs + "txPr")?
-            .Descendants(DrawingNs + "defRPr")
-            .FirstOrDefault();
-        if (textProperties is null)
-            return;
-
-        if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
-            chart.LegendFontSize = Math.Clamp(size / 100.0, 6, 72);
-
-        var textFill = textProperties.Element(DrawingNs + "solidFill");
-        if (textFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(textFill, DrawingNs, out var textThemeColor))
-        {
-            chart.LegendTextThemeColor = textThemeColor;
-            chart.LegendTextColor = null;
-        }
-        else if (textFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(textFill, DrawingNs, out var textColor))
-        {
-            chart.LegendTextColor = textColor;
-            chart.LegendTextThemeColor = null;
-        }
     }
 
 
