@@ -233,6 +233,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SparklineDialog_LabelsEditableControlsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
+        source.Should().Contain("new Label { Content = \"_Location:\", Target = _locationBox");
+        source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
+    }
+
+    [Fact]
     public void SheetNameDialog_CreateResult_TrimsSheetName()
     {
         SheetNameDialog.CreateResult("  Report  ").Should().Be(new SheetNameDialogResult("Report"));
