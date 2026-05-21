@@ -1,6 +1,8 @@
 using Freexcel.Core.Model;
 using FluentAssertions;
 using System.IO;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Xml.Linq;
 
 namespace Freexcel.App.Host.Tests;
@@ -25,7 +27,20 @@ public sealed class ColorPickerDialogTests
 
         columns.Should().HaveCount(10);
         columns.Should().OnlyContain(column => column.Shades.Count == 6);
-        columns.Select(column => column.Name).Should().Contain(["Text/Background", "Accent 1", "Accent 6"]);
+        columns.Select(column => column.Name).Should().Equal(
+            "Text/Background Dark 1",
+            "Text/Background Light 1",
+            "Text/Background Dark 2",
+            "Text/Background Light 2",
+            "Accent 1",
+            "Accent 2",
+            "Accent 3",
+            "Accent 4",
+            "Accent 5",
+            "Accent 6");
+        columns[0].Shades[0].Hex.Should().Be("#000000");
+        columns[1].Shades[0].Hex.Should().Be("#FFFFFF");
+        columns[4].Shades[0].Hex.Should().Be("#4472C4");
         columns.SelectMany(column => column.Shades).Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
     }
 
@@ -111,5 +126,76 @@ public sealed class ColorPickerDialogTests
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void SelectingSwatch_UpdatesNewPreviewButKeepsCurrentPreview()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialColor = new CellColor(0x21, 0x73, 0x46);
+            var newColor = new CellColor(0xED, 0x7D, 0x31);
+            var dialog = new ColorPickerDialog(initialColor);
+            try
+            {
+                var currentPreview = (Border)dialog.FindName("CurrentColorPreview");
+                var newPreview = (Border)dialog.FindName("NewColorPreview");
+                var swatchButton = FindSwatchButton((Panel)dialog.FindName("ThemeColorsPanel"), newColor);
+
+                swatchButton.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+
+                GetPreviewColor(currentPreview).Should().Be(initialColor);
+                GetPreviewColor(newPreview).Should().Be(newColor);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ThemePanel_AddsSwatchesByRowsSoExcelColumnsStayVertical()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ColorPickerDialog();
+            try
+            {
+                var panel = (Panel)dialog.FindName("ThemeColorsPanel");
+                var firstRow = panel.Children
+                    .OfType<Button>()
+                    .Take(10)
+                    .Select(button => (CellColor)button.Tag)
+                    .ToArray();
+
+                firstRow.Should().Equal(
+                    new CellColor(0x00, 0x00, 0x00),
+                    new CellColor(0xFF, 0xFF, 0xFF),
+                    new CellColor(0x44, 0x54, 0x6A),
+                    new CellColor(0xE7, 0xE6, 0xE6),
+                    new CellColor(0x44, 0x72, 0xC4),
+                    new CellColor(0xED, 0x7D, 0x31),
+                    new CellColor(0xA5, 0xA5, 0xA5),
+                    new CellColor(0xFF, 0xC0, 0x00),
+                    new CellColor(0x5B, 0x9B, 0xD5),
+                    new CellColor(0x70, 0xAD, 0x47));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    private static Button FindSwatchButton(Panel panel, CellColor color) =>
+        panel.Children
+            .OfType<Button>()
+            .Single(button => button.Tag is CellColor swatchColor && swatchColor == color);
+
+    private static CellColor GetPreviewColor(Border preview)
+    {
+        var brush = preview.Background.Should().BeOfType<SolidColorBrush>().Subject;
+        return new CellColor(brush.Color.R, brush.Color.G, brush.Color.B);
     }
 }
