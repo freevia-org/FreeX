@@ -44,6 +44,51 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
     }
 
+    [Theory]
+    [InlineData(Key.Up, 9, 5)]
+    [InlineData(Key.Down, 11, 5)]
+    [InlineData(Key.Left, 10, 4)]
+    [InlineData(Key.Right, 10, 6)]
+    [InlineData(Key.PageUp, 1, 5)]
+    [InlineData(Key.PageDown, 19, 5)]
+    public void GetIntent_SelectsFormulaReferenceRangeInsteadOfCommittingWhenFormulaRangeEntryIsActive(
+        Key key,
+        uint expectedRow,
+        uint expectedCol)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            ModifierKeys.None,
+            Current,
+            pageSize: 9,
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.SelectFormulaReference);
+        intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
+    }
+
+    [Theory]
+    [InlineData(Key.Enter, ModifierKeys.None, 11, 5)]
+    [InlineData(Key.Tab, ModifierKeys.None, 10, 6)]
+    public void GetIntent_StillCommitsEnterAndTabWhenFormulaRangeEntryIsActive(
+        Key key,
+        ModifierKeys modifiers,
+        uint expectedRow,
+        uint expectedCol)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            modifiers,
+            Current,
+            pageSize: 9,
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitAndMove);
+        intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
+    }
+
     [Fact]
     public void GetIntent_MapsAltEnterToLineBreakInsertion()
     {

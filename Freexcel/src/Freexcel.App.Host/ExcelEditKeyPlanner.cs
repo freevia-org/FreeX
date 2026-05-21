@@ -10,7 +10,8 @@ public static class ExcelEditKeyPlanner
         ModifierKeys modifiers,
         CellAddress current,
         int pageSize,
-        bool allowFormulaBarNavigationKeys)
+        bool allowFormulaBarNavigationKeys,
+        bool formulaRangeEntryActive = false)
     {
         if (key == Key.Enter && modifiers == ModifierKeys.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
@@ -22,6 +23,25 @@ public static class ExcelEditKeyPlanner
             return ExcelEditKeyIntent.None;
 
         var shiftHeld = (modifiers & ModifierKeys.Shift) != 0;
+
+        if (formulaRangeEntryActive && key is Key.Up or Key.Down or Key.Left or Key.Right or Key.PageUp or Key.PageDown)
+        {
+            var referenceTarget = key switch
+            {
+                Key.Up => new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+                Key.Down => new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
+                Key.Left => new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+                Key.Right => new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
+                Key.PageUp => new CellAddress(current.Sheet, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
+                Key.PageDown => new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + (uint)pageSize), current.Col),
+                _ => (CellAddress?)null
+            };
+
+            return referenceTarget is { } formulaReferenceTarget
+                ? new ExcelEditKeyIntent(ExcelEditKeyAction.SelectFormulaReference, formulaReferenceTarget)
+                : ExcelEditKeyIntent.None;
+        }
+
         var target = key switch
         {
             Key.Enter => shiftHeld
@@ -57,5 +77,6 @@ public enum ExcelEditKeyAction
     None,
     CommitAndMove,
     InsertLineBreak,
-    CommitSelection
+    CommitSelection,
+    SelectFormulaReference
 }
