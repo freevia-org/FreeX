@@ -193,6 +193,12 @@ public partial class MainWindow
         var dialog = new GoToDialog(_currentSheetId, defaultAddress) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
+        if (dialog.SelectedSpecialKind is { } specialKind)
+        {
+            SelectGoToSpecialMatches(specialKind, showEmptyMessage: true);
+            return;
+        }
+
         SetActiveCell(dialog.SelectedAddress);
         EnsureCellVisible(dialog.SelectedAddress);
     }
