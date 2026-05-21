@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -24,12 +25,67 @@ public sealed class PrintPreviewDialog : Window
             Padding = new Thickness(4),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        var viewer = new DocumentViewer { Document = document };
+        var previousButton = new Button
+        {
+            Content = "_Previous Page",
+            Padding = new Thickness(10, 4, 10, 4),
+            Command = NavigationCommands.PreviousPage,
+            CommandTarget = viewer
+        };
+        var nextButton = new Button
+        {
+            Content = "_Next Page",
+            Padding = new Thickness(10, 4, 10, 4),
+            Command = NavigationCommands.NextPage,
+            CommandTarget = viewer
+        };
         var printButton = new Button
         {
             Content = "_Print...",
             Padding = new Thickness(12, 4, 12, 4)
         };
         printButton.Click += (_, _) => ShowNativePrintDialog(document);
+        toolbar.Items.Add(previousButton);
+        toolbar.Items.Add(nextButton);
+        toolbar.Items.Add(new Separator());
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Zoom:",
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var zoomBox = new ComboBox
+        {
+            Width = 82,
+            SelectedIndex = 2
+        };
+        foreach (var zoom in new[] { "50%", "75%", "100%", "125%", "Page Width" })
+            zoomBox.Items.Add(zoom);
+        zoomBox.SelectionChanged += (_, _) =>
+        {
+            if (zoomBox.SelectedItem is not string value)
+                return;
+
+            if (value == "Page Width")
+                viewer.FitToWidth();
+            else if (double.TryParse(value.TrimEnd('%'), out var zoom))
+                viewer.Zoom = zoom;
+        };
+        toolbar.Items.Add(zoomBox);
+        toolbar.Items.Add(new Separator());
+        toolbar.Items.Add(new Button
+        {
+            Content = "_Margins",
+            Padding = new Thickness(10, 4, 10, 4),
+            ToolTip = "Review worksheet margin settings before printing."
+        });
+        toolbar.Items.Add(new Button
+        {
+            Content = "Page _Setup...",
+            Padding = new Thickness(10, 4, 10, 4),
+            ToolTip = "Use Page Layout settings to change paper, orientation, margins, and scaling."
+        });
+        toolbar.Items.Add(new Separator());
         toolbar.Items.Add(printButton);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(new TextBlock
@@ -42,7 +98,7 @@ public sealed class PrintPreviewDialog : Window
         });
         DockPanel.SetDock(toolbar, Dock.Top);
         root.Children.Add(toolbar);
-        root.Children.Add(new DocumentViewer { Document = document });
+        root.Children.Add(viewer);
         Content = root;
     }
 
