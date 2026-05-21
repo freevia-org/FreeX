@@ -30,8 +30,19 @@ public sealed class QuickAnalysisPlannerTests
             .Should()
             .Contain([
                 QuickAnalysisCommand.DataBar,
+                QuickAnalysisCommand.LessThan,
+                QuickAnalysisCommand.Between,
+                QuickAnalysisCommand.EqualTo,
+                QuickAnalysisCommand.TextContains,
+                QuickAnalysisCommand.DateOccurring,
+                QuickAnalysisCommand.DuplicateValues,
                 QuickAnalysisCommand.IconSet,
                 QuickAnalysisCommand.Top10,
+                QuickAnalysisCommand.Top10Percent,
+                QuickAnalysisCommand.Bottom10,
+                QuickAnalysisCommand.Bottom10Percent,
+                QuickAnalysisCommand.AboveAverage,
+                QuickAnalysisCommand.BelowAverage,
                 QuickAnalysisCommand.ClearConditionalFormatting,
                 QuickAnalysisCommand.ColumnChart,
                 QuickAnalysisCommand.StackedColumnChart,
@@ -51,6 +62,28 @@ public sealed class QuickAnalysisPlannerTests
                 QuickAnalysisCommand.FormatAsTable,
                 QuickAnalysisCommand.LineSparkline
             ]);
+
+        options.Where(option => option.Group == "Formatting")
+            .Select(option => option.Label)
+            .Should()
+            .Equal(
+                "Data Bars",
+                "Color Scale",
+                "Icon Set",
+                "Greater Than...",
+                "Less Than...",
+                "Between...",
+                "Equal To...",
+                "Text that Contains...",
+                "A Date Occurring...",
+                "Duplicate Values...",
+                "Top 10...",
+                "Top 10%",
+                "Bottom 10...",
+                "Bottom 10%",
+                "Above Average",
+                "Below Average",
+                "Clear Conditional Formatting");
 
         options.Where(option => option.Group == "Charts")
             .Select(option => option.Label)

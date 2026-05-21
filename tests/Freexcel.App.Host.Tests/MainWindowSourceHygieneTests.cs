@@ -65,6 +65,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var altKeyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.AltKeyTips.cs"));
+
+        selectionSource.Should().NotContain("TryHandleTopLevelRibbonKeyTip(keyTip)");
+        selectionSource.Should().NotContain("TryInvokeTopLevelQatKeyTip(qatKeyTip)");
+        altKeyTipSource.Should().Contain("WM_SYSKEYDOWN");
+        altKeyTipSource.Should().Contain("StandaloneAltKeyTipTracker.IsAltVirtualKey");
+        altKeyTipSource.Should().Contain("_standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();");
+    }
+
+    [Fact]
     public void SheetTabsController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
@@ -831,7 +844,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
         source.Should().Contain("NormalizeExistingRibbonIconText();");
         source.Should().Contain("GetRibbonIconAccentBrushes");
-        source.Should().Contain("RibbonIconFactory.CreateIcon(icon, iconSize, glyphBrush)");
+        source.Should().Contain("RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush)");
         source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
         source.Should().NotContain("icon.Glyph");
         source.Should().Contain("RibbonCommandIconAccent.Chart");
@@ -1193,6 +1206,35 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, option)");
         source.Should().Contain("StatusReadyText.Text = preview.StatusText");
         source.Should().Contain("StatusReadyText.Text = \"Ready\"");
+    }
+
+    [Fact]
+    public void QuickAnalysisMenu_RoutesExpandedConditionalFormattingGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("case QuickAnalysisCommand.LessThan:");
+        source.Should().Contain("ShowCfDialog(\"Less Than\")");
+        source.Should().Contain("case QuickAnalysisCommand.Between:");
+        source.Should().Contain("ShowCfDialog(\"Between\")");
+        source.Should().Contain("case QuickAnalysisCommand.EqualTo:");
+        source.Should().Contain("ShowCfDialog(\"Equal To\")");
+        source.Should().Contain("case QuickAnalysisCommand.TextContains:");
+        source.Should().Contain("ShowCfDialog(\"Text Contains\")");
+        source.Should().Contain("case QuickAnalysisCommand.DateOccurring:");
+        source.Should().Contain("ShowCfDialog(\"Date Occurring\")");
+        source.Should().Contain("case QuickAnalysisCommand.DuplicateValues:");
+        source.Should().Contain("ShowCfDialog(\"Duplicate Values\")");
+        source.Should().Contain("case QuickAnalysisCommand.Top10Percent:");
+        source.Should().Contain("ShowCfDialog(\"Top 10%\")");
+        source.Should().Contain("case QuickAnalysisCommand.Bottom10:");
+        source.Should().Contain("ShowCfDialog(\"Bottom 10 Items\")");
+        source.Should().Contain("case QuickAnalysisCommand.Bottom10Percent:");
+        source.Should().Contain("ShowCfDialog(\"Bottom 10%\")");
+        source.Should().Contain("case QuickAnalysisCommand.AboveAverage:");
+        source.Should().Contain("ShowCfDialog(\"Above Average\")");
+        source.Should().Contain("case QuickAnalysisCommand.BelowAverage:");
+        source.Should().Contain("ShowCfDialog(\"Below Average\")");
     }
 
     [Fact]

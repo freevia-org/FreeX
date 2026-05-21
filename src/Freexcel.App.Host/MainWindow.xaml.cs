@@ -26,10 +26,10 @@ public partial class MainWindow : Window
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
     private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
+    private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
     private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
     private string _ribbonKeyTipSequence = "";
     private ContextMenu? _activeRibbonKeyTipMenu;
-    private bool _pendingStandaloneAltKeyTip;
     private readonly WorkbookRef _workbookRef;
     private Workbook _workbook;
     private SheetId _currentSheetId;
