@@ -77,7 +77,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageStream);
         packageStream.Position = 0;
-        var pivotTableStyleMetadata = LoadPivotTableStyleMetadata(packageStream);
+        var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(packageStream);
         packageStream.Position = 0;
         var xlsxCustomViews = XlsxWorkbookMetadataReader.LoadCustomViews(packageStream);
 
@@ -825,59 +825,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             labelFilters,
             sorts);
         return true;
-    }
-
-    private static List<PivotTableStyleModel> LoadPivotTableStyleMetadata(Stream xlsxStream)
-    {
-        var result = new List<PivotTableStyleModel>();
-        try
-        {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var stylesEntry = archive.GetEntry("xl/styles.xml");
-            if (stylesEntry is null)
-                return result;
-
-            var stylesXml = LoadXml(stylesEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var styleElement in stylesXml.Root?
-                         .Element(workbookNs + "tableStyles")?
-                         .Elements(workbookNs + "tableStyle") ?? [])
-            {
-                var name = styleElement.Attribute("name")?.Value;
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-
-                var appliesToPivotTables = ReadBoolAttribute(styleElement, "pivot");
-                if (!appliesToPivotTables)
-                    continue;
-
-                var model = new PivotTableStyleModel
-                {
-                    Name = name,
-                    AppliesToPivotTables = true,
-                    AppliesToTables = ReadBoolAttribute(styleElement, "table")
-                };
-                foreach (var element in styleElement.Elements(workbookNs + "tableStyleElement"))
-                {
-                    var type = element.Attribute("type")?.Value;
-                    if (string.IsNullOrWhiteSpace(type))
-                        continue;
-
-                    model.Elements.Add(new PivotTableStyleElementModel(
-                        type,
-                        ReadIntAttribute(element, "dxfId"),
-                        ReadIntAttribute(element, "size")));
-                }
-
-                result.Add(model);
-            }
-        }
-        catch
-        {
-            return result;
-        }
-
-        return result;
     }
 
     private static Dictionary<int, IReadOnlyList<string>> ReadNativePivotFieldSelections(
