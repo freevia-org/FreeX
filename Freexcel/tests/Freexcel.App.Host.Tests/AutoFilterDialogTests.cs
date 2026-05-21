@@ -219,6 +219,11 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("_criteriaOperatorBox");
         source.Should().Contain("_criteriaValueBox");
+        source.Should().Contain("_customFilterGroup");
+        source.Should().Contain("Header = \"Custom filter\"");
+        source.Should().Contain("IsReadOnly = true");
+        source.Should().Contain("_customFilterGroup.Visibility = Visibility.Visible");
+        source.Should().Contain("_criteriaSuggestionLabel.Visibility = Visibility.Visible");
         source.Should().Contain("BuildCriteriaText");
         source.Should().NotContain("filterButton.Click += (_, _) => _criteriaBox.Focus()");
     }
