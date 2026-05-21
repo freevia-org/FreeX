@@ -3250,35 +3250,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static bool IsValidWorksheetColumn(uint column) =>
         column is >= 1 and <= CellAddress.MaxCol;
 
-    private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
-        where TEnum : struct, Enum =>
-        Enum.IsDefined(value) ? value : defaultValue;
-
-    private static double NonNegativeFiniteOrDefault(double value, double defaultValue) =>
-        double.IsFinite(value) && value >= 0 ? value : defaultValue;
-
-    private static WorksheetPageMargins ValidPageMarginsOrDefault(
-        WorksheetPageMargins margins,
-        WorksheetPageMargins defaultValue) =>
-        IsNonNegativeFinite(margins.Left) &&
-        IsNonNegativeFinite(margins.Right) &&
-        IsNonNegativeFinite(margins.Top) &&
-        IsNonNegativeFinite(margins.Bottom)
-            ? margins
-            : defaultValue;
-
-    private static WorksheetScaleToFit ValidScaleToFitOrDefault(
-        WorksheetScaleToFit scaleToFit,
-        WorksheetScaleToFit defaultValue) =>
-        scaleToFit.ScalePercent is < 10 or > 400 ||
-        scaleToFit.FitToPagesWide is < 1 ||
-        scaleToFit.FitToPagesTall is < 1
-            ? defaultValue
-            : scaleToFit;
-
-    private static bool IsNonNegativeFinite(double value) =>
-        double.IsFinite(value) && value >= 0;
-
     private static bool IsValidRepeatRange(WorksheetRepeatRange range, uint max) =>
         range.Start >= 1 && range.End >= range.Start && range.End <= max;
 
@@ -3589,15 +3560,15 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     (int)printArea.End.Col);
             }
 
-            var pageOrientation = ValidEnumOrDefault(sheet.PageOrientation, WorksheetPageOrientation.Portrait);
-            var paperSize = ValidEnumOrDefault(sheet.PaperSize, WorksheetPaperSize.A4);
-            var pageMargins = ValidPageMarginsOrDefault(sheet.PageMargins, WorksheetPageMargins.Narrow);
-            var headerMargin = NonNegativeFiniteOrDefault(sheet.HeaderMargin, 0.3);
-            var footerMargin = NonNegativeFiniteOrDefault(sheet.FooterMargin, 0.3);
-            var scaleToFit = ValidScaleToFitOrDefault(sheet.ScaleToFit, WorksheetScaleToFit.Default);
-            var pageOrder = ValidEnumOrDefault(sheet.PageOrder, WorksheetPageOrder.DownThenOver);
-            var printErrorValue = ValidEnumOrDefault(sheet.PrintErrorValue, WorksheetPrintErrorValue.Displayed);
-            var printComments = ValidEnumOrDefault(sheet.PrintComments, WorksheetPrintComments.None);
+            var pageOrientation = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PageOrientation, WorksheetPageOrientation.Portrait);
+            var paperSize = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PaperSize, WorksheetPaperSize.A4);
+            var pageMargins = XlsxWorksheetValueSanitizer.ValidPageMarginsOrDefault(sheet.PageMargins, WorksheetPageMargins.Narrow);
+            var headerMargin = XlsxWorksheetValueSanitizer.NonNegativeFiniteOrDefault(sheet.HeaderMargin, 0.3);
+            var footerMargin = XlsxWorksheetValueSanitizer.NonNegativeFiniteOrDefault(sheet.FooterMargin, 0.3);
+            var scaleToFit = XlsxWorksheetValueSanitizer.ValidScaleToFitOrDefault(sheet.ScaleToFit, WorksheetScaleToFit.Default);
+            var pageOrder = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PageOrder, WorksheetPageOrder.DownThenOver);
+            var printErrorValue = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PrintErrorValue, WorksheetPrintErrorValue.Displayed);
+            var printComments = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.PrintComments, WorksheetPrintComments.None);
 
             xlSheet.PageSetup.PageOrientation = pageOrientation == WorksheetPageOrientation.Landscape
                 ? XLPageOrientation.Landscape
@@ -3755,7 +3726,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 !sheet.ShowGridlines ||
                 !sheet.ShowHeadings ||
                 !sheet.ShowRulers ||
-                ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
+                XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
                 sheet.ZoomPercent != 100 ||
                 sheet.ShowFormulas ||
                 sheet.ViewTopRow.HasValue ||
@@ -6278,13 +6249,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var customSheetView = new XElement(
             workbookNs + "customSheetView",
             new XAttribute("guid", id),
-            ToXlsxWorksheetViewMode(ValidEnumOrDefault(state.ViewMode, WorksheetViewMode.Normal)) is { } view
+            ToXlsxWorksheetViewMode(XlsxWorksheetValueSanitizer.ValidEnumOrDefault(state.ViewMode, WorksheetViewMode.Normal)) is { } view
                 ? new XAttribute("view", view)
                 : null,
             state.ShowGridlines ? null : new XAttribute("showGridLines", "0"),
             state.ShowHeadings ? null : new XAttribute("showRowCol", "0"),
             state.ShowRulers ? null : new XAttribute("showRuler", "0"),
-            state.ZoomPercent == 100 ? null : new XAttribute("scale", ValidZoomPercentOrDefault(state.ZoomPercent)),
+            state.ZoomPercent == 100 ? null : new XAttribute("scale", XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(state.ZoomPercent)),
             state.ShowFormulas ? new XAttribute("showFormulas", "1") : null,
             new XAttribute("state", "visible"));
 
@@ -6503,9 +6474,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         else
             insertionPoint.AddBeforeSelf(customWorkbookViews);
     }
-
-    private static int ValidZoomPercentOrDefault(int value) =>
-        value is >= 10 and <= 400 ? value : 100;
 
     private static void InsertWorksheetMetadataElementInOrder(
         XElement worksheetRoot,
@@ -12422,7 +12390,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 !sheet.ShowGridlines ||
                 !sheet.ShowHeadings ||
                 !sheet.ShowRulers ||
-                ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
+                XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) != WorksheetViewMode.Normal ||
                 sheet.ZoomPercent != 100 ||
                 sheet.ShowFormulas ||
                 sheet.ViewTopRow.HasValue ||
@@ -12475,7 +12443,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         sheetView.SetAttributeValue("view", ToXlsxWorksheetViewMode(
-            ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal)));
+            XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal)));
         sheetView.SetAttributeValue("showGridLines", sheet.ShowGridlines ? null : "0");
         sheetView.SetAttributeValue("showRowColHeaders", sheet.ShowHeadings ? null : "0");
         sheetView.SetAttributeValue("showRuler", sheet.ShowRulers ? null : "0");
@@ -13382,3 +13350,4 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyDictionary<string, string> NativeContainerAttributes,
         IReadOnlyList<string> NativeContainerChildXmls);
 }
+
