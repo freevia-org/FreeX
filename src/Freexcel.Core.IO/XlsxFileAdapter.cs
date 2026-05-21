@@ -427,7 +427,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sheet.ActiveRow = layout?.ActiveRow;
             sheet.ActiveCol = layout?.ActiveCol;
 
-            try { LoadPrintArea(xlSheet, sheet); }
+            try { XlsxWorksheetPageSetupMapper.LoadPrintArea(xlSheet, sheet); }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Print-area load failed: {ex.Message}"); }
 
             sheet.PageOrientation = xlSheet.PageSetup.PageOrientation == XLPageOrientation.Landscape
@@ -461,36 +461,36 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sheet.PrintQualityDpi = xlSheet.PageSetup.HorizontalDpi > 0
                 ? xlSheet.PageSetup.HorizontalDpi
                 : xlSheet.PageSetup.VerticalDpi > 0 ? xlSheet.PageSetup.VerticalDpi : null;
-            sheet.PrintErrorValue = FromXlsxPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
-            sheet.PrintComments = FromXlsxPrintComments(xlSheet.PageSetup.ShowComments);
+            sheet.PrintErrorValue = XlsxWorksheetPageSetupMapper.FromPrintErrorValue(xlSheet.PageSetup.PrintErrorValue);
+            sheet.PrintComments = XlsxWorksheetPageSetupMapper.FromPrintComments(xlSheet.PageSetup.ShowComments);
             sheet.DifferentFirstPageHeaderFooter = xlSheet.PageSetup.DifferentFirstPageOnHF;
             sheet.DifferentOddEvenHeaderFooter = xlSheet.PageSetup.DifferentOddEvenPagesOnHF;
             sheet.HeaderFooterScaleWithDocument = xlSheet.PageSetup.ScaleHFWithDocument;
             sheet.HeaderFooterAlignWithMargins = xlSheet.PageSetup.AlignHFWithMargins;
             sheet.PageHeader = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
             sheet.PageFooter = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.OddPages, XLHFOccurrence.AllPages)));
             sheet.FirstPageHeader = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.FirstPage)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.FirstPage)));
             sheet.FirstPageFooter = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.FirstPage)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.FirstPage)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.FirstPage)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.FirstPage)));
             sheet.EvenPageHeader = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.EvenPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Left, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Center, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Header.Right, XLHFOccurrence.EvenPages)));
             sheet.EvenPageFooter = new WorksheetHeaderFooter(
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.EvenPages)),
-                FromXlsxHeaderFooterText(GetXlsxHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.EvenPages)));
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Left, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Center, XLHFOccurrence.EvenPages)),
+                XlsxWorksheetPageSetupMapper.FromHeaderFooterText(XlsxWorksheetPageSetupMapper.GetHeaderFooterText(xlSheet.PageSetup.Footer.Right, XLHFOccurrence.EvenPages)));
             if (xlSheet.PageSetup.FirstRowToRepeatAtTop > 0 && xlSheet.PageSetup.LastRowToRepeatAtTop > 0)
             {
                 sheet.PrintTitleRows = new WorksheetRepeatRange(
@@ -3018,20 +3018,20 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 xlSheet.PageSetup.HorizontalDpi = printQualityDpi;
                 xlSheet.PageSetup.VerticalDpi = printQualityDpi;
             }
-            xlSheet.PageSetup.PrintErrorValue = ToXlsxPrintErrorValue(printErrorValue);
-            xlSheet.PageSetup.ShowComments = ToXlsxPrintComments(printComments);
+            xlSheet.PageSetup.PrintErrorValue = XlsxWorksheetPageSetupMapper.ToPrintErrorValue(printErrorValue);
+            xlSheet.PageSetup.ShowComments = XlsxWorksheetPageSetupMapper.ToPrintComments(printComments);
             xlSheet.PageSetup.DifferentFirstPageOnHF = sheet.DifferentFirstPageHeaderFooter;
             xlSheet.PageSetup.DifferentOddEvenPagesOnHF = sheet.DifferentOddEvenHeaderFooter;
             xlSheet.PageSetup.ScaleHFWithDocument = sheet.HeaderFooterScaleWithDocument;
             xlSheet.PageSetup.AlignHFWithMargins = sheet.HeaderFooterAlignWithMargins;
-            SetXlsxHeaderFooter(
+            XlsxWorksheetPageSetupMapper.SetHeaderFooter(
                 xlSheet.PageSetup.Header,
                 sheet.PageHeader,
                 sheet.FirstPageHeader,
                 sheet.EvenPageHeader,
                 sheet.DifferentFirstPageHeaderFooter,
                 sheet.DifferentOddEvenHeaderFooter);
-            SetXlsxHeaderFooter(
+            XlsxWorksheetPageSetupMapper.SetHeaderFooter(
                 xlSheet.PageSetup.Footer,
                 sheet.PageFooter,
                 sheet.FirstPageFooter,
@@ -10791,23 +10791,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     // ── Conditional formatting load ────────────────────────────────────────────
 
-    private static void LoadPrintArea(IXLWorksheet xlSheet, Sheet sheet)
-    {
-        var xlRange = xlSheet.PageSetup.PrintAreas.FirstOrDefault();
-        if (xlRange is null)
-            return;
-
-        var start = new CellAddress(
-            sheet.Id,
-            (uint)xlRange.RangeAddress.FirstAddress.RowNumber,
-            (uint)xlRange.RangeAddress.FirstAddress.ColumnNumber);
-        var end = new CellAddress(
-            sheet.Id,
-            (uint)xlRange.RangeAddress.LastAddress.RowNumber,
-            (uint)xlRange.RangeAddress.LastAddress.ColumnNumber);
-        sheet.PrintArea = new GridRange(start, end);
-    }
-
     private static void LoadConditionalFormats(IXLWorksheet xlSheet, Sheet sheet, Workbook workbook)
     {
         int priority = 1;
@@ -11140,104 +11123,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             case DvOperator.LessThanOrEqual:    rule.EqualOrLessThan(f1); break;
         }
     }
-
-    private static void SetXlsxHeaderFooter(
-        IXLHeaderFooter target,
-        WorksheetHeaderFooter oddOrAllPages,
-        WorksheetHeaderFooter firstPage,
-        WorksheetHeaderFooter evenPages,
-        bool differentFirstPage,
-        bool differentOddEvenPages)
-    {
-        foreach (var occurrence in new[]
-                 {
-                     XLHFOccurrence.AllPages,
-                     XLHFOccurrence.OddPages,
-                     XLHFOccurrence.EvenPages,
-                     XLHFOccurrence.FirstPage
-                 })
-        {
-            target.Left.Clear(occurrence);
-            target.Center.Clear(occurrence);
-            target.Right.Clear(occurrence);
-        }
-
-        var primaryOccurrence = differentOddEvenPages ? XLHFOccurrence.OddPages : XLHFOccurrence.AllPages;
-        AddXlsxHeaderFooterText(target, oddOrAllPages, primaryOccurrence);
-        if (differentFirstPage)
-            AddXlsxHeaderFooterText(target, firstPage, XLHFOccurrence.FirstPage);
-        if (differentOddEvenPages)
-            AddXlsxHeaderFooterText(target, evenPages, XLHFOccurrence.EvenPages);
-    }
-
-    private static void AddXlsxHeaderFooterText(
-        IXLHeaderFooter target,
-        WorksheetHeaderFooter value,
-        XLHFOccurrence occurrence)
-    {
-        if (!string.IsNullOrEmpty(value.Left))
-            target.Left.AddText(ToXlsxHeaderFooterText(value.Left), occurrence);
-        if (!string.IsNullOrEmpty(value.Center))
-            target.Center.AddText(ToXlsxHeaderFooterText(value.Center), occurrence);
-        if (!string.IsNullOrEmpty(value.Right))
-            target.Right.AddText(ToXlsxHeaderFooterText(value.Right), occurrence);
-    }
-
-    private static string GetXlsxHeaderFooterText(IXLHFItem item, params XLHFOccurrence[] occurrences)
-    {
-        foreach (var occurrence in occurrences)
-        {
-            var text = item.GetText(occurrence);
-            if (!string.IsNullOrEmpty(text))
-                return text;
-        }
-
-        return "";
-    }
-
-    private static string ToXlsxHeaderFooterText(string text) =>
-        text
-            .Replace("&[Page]", "&P", StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Pages]", "&N", StringComparison.OrdinalIgnoreCase);
-
-    private static string FromXlsxHeaderFooterText(string text) =>
-        text
-            .Replace("&P", "&[Page]", StringComparison.Ordinal)
-            .Replace("&N", "&[Pages]", StringComparison.Ordinal);
-
-    private static XLPrintErrorValues ToXlsxPrintErrorValue(WorksheetPrintErrorValue value) =>
-        value switch
-        {
-            WorksheetPrintErrorValue.Blank => XLPrintErrorValues.Blank,
-            WorksheetPrintErrorValue.Dash => XLPrintErrorValues.Dash,
-            WorksheetPrintErrorValue.NotAvailable => XLPrintErrorValues.NA,
-            _ => XLPrintErrorValues.Displayed
-        };
-
-    private static WorksheetPrintErrorValue FromXlsxPrintErrorValue(XLPrintErrorValues value) =>
-        value switch
-        {
-            XLPrintErrorValues.Blank => WorksheetPrintErrorValue.Blank,
-            XLPrintErrorValues.Dash => WorksheetPrintErrorValue.Dash,
-            XLPrintErrorValues.NA => WorksheetPrintErrorValue.NotAvailable,
-            _ => WorksheetPrintErrorValue.Displayed
-        };
-
-    private static XLShowCommentsValues ToXlsxPrintComments(WorksheetPrintComments value) =>
-        value switch
-        {
-            WorksheetPrintComments.AtEnd => XLShowCommentsValues.AtEnd,
-            WorksheetPrintComments.AsDisplayed => XLShowCommentsValues.AsDisplayed,
-            _ => XLShowCommentsValues.None
-        };
-
-    private static WorksheetPrintComments FromXlsxPrintComments(XLShowCommentsValues value) =>
-        value switch
-        {
-            XLShowCommentsValues.AtEnd => WorksheetPrintComments.AtEnd,
-            XLShowCommentsValues.AsDisplayed => WorksheetPrintComments.AsDisplayed,
-            _ => WorksheetPrintComments.None
-        };
 
     private static XLBorderStyleValues MapBorderStyleInverse(BorderStyle style) => style switch
     {
