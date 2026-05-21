@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml.Linq;
 using Freexcel.Core.Model;
 
@@ -246,7 +245,7 @@ public static class XlsxChartPartReader
 
         foreach (var plotChart in plotCharts)
         {
-            ApplyChartGuideLineMetadata(plotChart, result);
+            XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(plotChart, result);
             var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, plotChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in plotChart.Elements(ChartNs + "ser"))
@@ -267,8 +266,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -349,15 +348,15 @@ public static class XlsxChartPartReader
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
 
         foreach (var lineChart in lineCharts)
         {
-            ApplyChartGuideLineMetadata(lineChart, result);
+            XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(lineChart, result);
             var lineUsesSecondaryAxis = UsesSecondaryValueAxis(plotArea, lineChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
@@ -379,8 +378,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -465,8 +464,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -516,7 +515,7 @@ public static class XlsxChartPartReader
 
         foreach (var lineChart in lineCharts)
         {
-            ApplyChartGuideLineMetadata(lineChart, result);
+            XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(lineChart, result);
             var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, lineChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
@@ -537,8 +536,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -605,7 +604,7 @@ public static class XlsxChartPartReader
 
             ApplyPieExplosion(series, result);
             XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
-            ApplyTrendline(series, result);
+            XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
             seriesIndex++;
         }
 
@@ -664,7 +663,7 @@ public static class XlsxChartPartReader
                 result.SeriesFormats.Add(format);
 
             XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
-            ApplyTrendline(series, result);
+            XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
             seriesIndex++;
         }
 
@@ -721,15 +720,15 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
 
         foreach (var lineChart in lineCharts)
         {
-            ApplyChartGuideLineMetadata(lineChart, result);
+            XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(lineChart, result);
             var usesSecondaryAxis = UsesSecondaryValueAxis(plotArea, lineChart);
             var fallbackSeriesIndex = 0;
             foreach (var series in lineChart.Elements(ChartNs + "ser"))
@@ -751,8 +750,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -822,8 +821,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -885,8 +884,8 @@ public static class XlsxChartPartReader
                     result.SeriesFormats.Add(format);
 
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
-                ApplyTrendline(series, result);
-                ApplyErrorBars(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
         }
@@ -1047,114 +1046,6 @@ public static class XlsxChartPartReader
             chart.LegendTextThemeColor = null;
         }
     }
-
-    private static void ApplyTrendline(XElement series, ChartModel chart)
-    {
-        if (chart.ShowLinearTrendline)
-            return;
-
-        var trendline = series.Element(ChartNs + "trendline");
-        if (trendline is null)
-            return;
-
-        chart.ShowLinearTrendline = true;
-        chart.TrendlineType = FromXlsxTrendlineType(trendline.Element(ChartNs + "trendlineType")?.Attribute("val")?.Value);
-        if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, out var period))
-            chart.TrendlinePeriod = Math.Max(2, period);
-        if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, out var order))
-            chart.TrendlineOrder = Math.Clamp(order, 2, 6);
-
-        chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
-        chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
-        ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
-    }
-
-    private static void ApplyErrorBars(XElement series, ChartModel chart)
-    {
-        if (chart.ShowErrorBars)
-            return;
-
-        var errorBars = series.Element(ChartNs + "errBars");
-        if (errorBars is null)
-            return;
-
-        chart.ShowErrorBars = true;
-        chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
-        chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
-        chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
-
-        if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
-    }
-
-    private static void ApplyChartGuideLineMetadata(XElement plotChart, ChartModel chart)
-    {
-        chart.ShowDropLines |= plotChart.Element(ChartNs + "dropLines") is not null;
-        chart.ShowHighLowLines |= plotChart.Element(ChartNs + "hiLowLines") is not null;
-        chart.ShowUpDownBars |= plotChart.Element(ChartNs + "upDownBars") is not null;
-    }
-
-    private static void ApplyTrendlineShapeProperties(XElement? shapeProperties, ChartModel chart)
-    {
-        var line = shapeProperties?.Element(DrawingNs + "ln");
-        if (line is null)
-            return;
-
-        if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.TrendlineThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
-
-        chart.TrendlineDashStyle = FromXlsxPresetDash(line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value);
-
-        var lineFill = line.Element(DrawingNs + "solidFill");
-        if (lineFill is null)
-            return;
-
-        if (XlsxDrawingColorReader.TryReadThemeColorReference(lineFill, DrawingNs, out var themeColor))
-        {
-            chart.TrendlineThemeColor = themeColor;
-            chart.TrendlineColor = null;
-        }
-        else if (XlsxDrawingColorReader.TryReadConcreteColor(lineFill, DrawingNs, out var color))
-        {
-            chart.TrendlineColor = color;
-            chart.TrendlineThemeColor = null;
-        }
-    }
-
-    private static ChartTrendlineType FromXlsxTrendlineType(string? value) =>
-        value switch
-        {
-            "exp" => ChartTrendlineType.Exponential,
-            "log" => ChartTrendlineType.Logarithmic,
-            "power" => ChartTrendlineType.Power,
-            "movingAvg" => ChartTrendlineType.MovingAverage,
-            "poly" => ChartTrendlineType.Polynomial,
-            _ => ChartTrendlineType.Linear
-        };
-
-    private static ChartErrorBarKind FromXlsxErrorBarKind(string? value) =>
-        value switch
-        {
-            "percentage" => ChartErrorBarKind.Percentage,
-            "fixedVal" => ChartErrorBarKind.FixedValue,
-            _ => ChartErrorBarKind.StandardError
-        };
-
-    private static ChartErrorBarDirection FromXlsxErrorBarDirection(string? value) =>
-        value switch
-        {
-            "plus" => ChartErrorBarDirection.Plus,
-            "minus" => ChartErrorBarDirection.Minus,
-            _ => ChartErrorBarDirection.Both
-        };
-
-    private static ChartLineDashStyle FromXlsxPresetDash(string? value) =>
-        value switch
-        {
-            "dot" => ChartLineDashStyle.Dot,
-            "dash" => ChartLineDashStyle.Dash,
-            _ => ChartLineDashStyle.Solid
-        };
 
     private static void ApplyChartTitleFormatting(XElement? titleElement, ChartModel chart)
     {
@@ -1456,7 +1347,7 @@ public static class XlsxChartPartReader
             strokeThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
-            ? FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
+            ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
 
         if (fillColor is null &&
@@ -1500,7 +1391,7 @@ public static class XlsxChartPartReader
             strokeThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
-            ? FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
+            ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
 
         var marker = series.Element(ChartNs + "marker");
