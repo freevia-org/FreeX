@@ -219,7 +219,15 @@ public static class FlashFillService
             return false;
 
         var userName = source[..atIndex];
-        var parts = userName.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        var separator = userName.Contains('.', StringComparison.Ordinal)
+            ? '.'
+            : userName.Contains('_', StringComparison.Ordinal)
+                ? '_'
+                : '\0';
+        if (separator == '\0')
+            return false;
+
+        var parts = userName.Split(separator, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2 || parts.Any(part => part.Any(char.IsDigit)))
             return false;
 
