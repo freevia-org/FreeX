@@ -129,8 +129,30 @@ public partial class PivotValueFieldSettingsDialog : Window
 
     private void NumberFormatButton_Click(object sender, RoutedEventArgs e)
     {
-        NumberFormatPresetBox.Focus();
-        NumberFormatPresetBox.IsDropDownOpen = true;
+        var style = new CellStyle { NumberFormat = CurrentNumberFormatCode() };
+        var dialog = new FormatCellsDialog(style, FormatCellsDialogTab.Number)
+        {
+            Owner = this,
+            Title = "Format Cells"
+        };
+
+        if (dialog.ShowDialog() != true || dialog.ResultDiff?.NumberFormat is not { } numberFormat)
+            return;
+
+        NumberFormatCodeBox.Text = numberFormat;
+        NumberFormatBox.Text = PivotValueFieldSettingsInputParser.DefaultCustomNumberFormatId.ToString(CultureInfo.InvariantCulture);
+        NumberFormatPresetBox.Text = numberFormat;
+    }
+
+    private string CurrentNumberFormatCode()
+    {
+        var customCode = PivotValueFieldSettingsInputParser.ResolveOptionalNumberFormatCode(NumberFormatCodeBox.Text);
+        if (!string.IsNullOrWhiteSpace(customCode))
+            return customCode;
+
+        return NumberFormatPresetBox.SelectedItem as string
+            ?? NumberFormatPresetBox.Text
+            ?? "General";
     }
 
     private void UpdateBaseFieldState()
