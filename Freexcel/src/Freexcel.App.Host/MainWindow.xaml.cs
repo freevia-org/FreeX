@@ -954,7 +954,8 @@ public partial class MainWindow : Window
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var dialog = new SortDialog(columnChoices: SortDialog.BuildColumnChoices(range)) { Owner = this };
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var dialog = new SortDialog(columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -963,7 +964,7 @@ public partial class MainWindow : Window
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, currentRange, keys)))
+                currentRange => new SortCommand(_currentSheetId, SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders), keys)))
             return;
         UpdateViewport();
     }
