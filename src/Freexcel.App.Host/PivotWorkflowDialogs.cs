@@ -780,14 +780,13 @@ public sealed class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
-        AddCombo(layoutPanel, "Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
+        AddLabeledControl(layoutPanel, "_Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);
         AddCheckBox(layoutPanel, _blankLineBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout section", layoutPanel));
 
         var formatPanel = PivotDialogLayout.CreateGroupPanel();
-        formatPanel.Children.Add(new TextBlock { Text = "For empty cells show:", Margin = new Thickness(0, 0, 0, 4) });
-        formatPanel.Children.Add(_emptyCellsBox);
+        AddLabeledControl(formatPanel, "For _empty cells show:", _emptyCellsBox);
         AddCheckBox(formatPanel, _autofitColumnsBox);
         AddCheckBox(formatPanel, _preserveFormattingBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Format section", formatPanel));
@@ -804,7 +803,7 @@ public sealed class PivotTableOptionsDialog : Window
 
         var filtersPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(filtersPanel, _subtotalsBox);
-        AddCombo(filtersPanel, "Subtotal placement", _subtotalPlacementBox, Enum.GetValues<PivotSubtotalPlacement>());
+        AddLabeledControl(filtersPanel, "Subtotal _placement", _subtotalPlacementBox, Enum.GetValues<PivotSubtotalPlacement>());
         stack.Children.Add(PivotDialogLayout.CreateGroupBox("Filters and subtotals", filtersPanel));
         return stack;
     }
@@ -813,7 +812,7 @@ public sealed class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        AddCombo(stylePanel, "PivotTable style", _styleBox, StyleNames);
+        AddLabeledControl(stylePanel, "PivotTable _style", _styleBox, StyleNames);
         AddCheckBox(stylePanel, _rowHeadersBox);
         AddCheckBox(stylePanel, _columnHeadersBox);
         AddCheckBox(stylePanel, _rowStripesBox);
@@ -864,12 +863,23 @@ public sealed class PivotTableOptionsDialog : Window
         stack.Children.Add(checkBox);
     }
 
-    private static void AddCombo<T>(Panel stack, string label, ComboBox comboBox, IEnumerable<T> items)
+    private static void AddLabeledControl(Panel stack, string label, Control control)
     {
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) });
+        stack.Children.Add(new Label
+        {
+            Content = label,
+            Target = control,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 3, 0, 4)
+        });
+        control.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(control);
+    }
+
+    private static void AddLabeledControl<T>(Panel stack, string label, ComboBox comboBox, IEnumerable<T> items)
+    {
         comboBox.ItemsSource = items;
-        comboBox.Margin = new Thickness(0, 0, 0, 8);
-        stack.Children.Add(comboBox);
+        AddLabeledControl(stack, label, comboBox);
     }
 
     private void Load(PivotTableOptionsDialogResult result)
