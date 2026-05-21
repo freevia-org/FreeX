@@ -36,6 +36,33 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void SetSelectionForSearch_UpdatesVisibleMatchesAndPreservesHiddenSelections()
+    {
+        var items = new[]
+        {
+            new AutoFilterDialogItem("Apple", "Apple", false),
+            new AutoFilterDialogItem("Apricot", "Apricot", false),
+            new AutoFilterDialogItem("Banana", "Banana", true)
+        };
+
+        var updated = AutoFilterDialog.SetSelectionForSearch(items, "ap", isSelected: true);
+
+        updated.Should().Equal(
+            new AutoFilterDialogItem("Apple", "Apple", true),
+            new AutoFilterDialogItem("Apricot", "Apricot", true),
+            new AutoFilterDialogItem("Banana", "Banana", true));
+    }
+
+    [Theory]
+    [InlineData(AutoFilterMenuFilterKind.Text, "Text Filters")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "Number Filters")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "Date Filters")]
+    public void GetFilterFamilyHeader_ReturnsExcelTypedFilterAffordance(AutoFilterMenuFilterKind filterKind, string expected)
+    {
+        AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(expected);
+    }
+
+    [Fact]
     public void DialogItems_AreMutableForChecklistBinding()
     {
         var item = new AutoFilterDialogItem("Apple", "Apple", true);
@@ -122,6 +149,10 @@ public sealed class AutoFilterDialogTests
             "_No sort",
             "Sort _A to Z",
             "Sort _Z to A",
+            "_Clear Filter From",
+            "_Text Filters",
+            "_Number Filters",
+            "_Date Filters",
             "_Select All",
             "_Clear All",
             "_OK",
