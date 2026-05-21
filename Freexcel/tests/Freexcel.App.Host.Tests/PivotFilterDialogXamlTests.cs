@@ -140,25 +140,47 @@ public sealed class PivotFilterDialogXamlTests
     }
 
     [Fact]
-    public void PivotFieldFilterDialog_UsesSupportedItemChecklistOnly()
+    public void PivotFieldFilterDialog_ExposesItemLabelAndValueFilterTabsWithActions()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotFieldFilterDialog.xaml.cs"));
 
         document.Descendants(presentation + "TabItem")
             .Select(element => element.Attribute("Header")?.Value)
             .Should()
-            .Equal("Select _Items");
+            .Equal("Select _Items", "_Label Filters", "_Value Filters");
 
         document.Descendants(presentation + "TextBlock")
             .Select(element => element.Attribute("Text")?.Value)
             .Should()
-            .Contain("Choose items to show:");
+            .Contain([
+                "Choose items to show:",
+                "Open the full label filter dialog to filter PivotTable items by their captions.",
+                "Open the full value filter dialog to filter PivotTable items by summarized values."
+            ]);
+
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "LabelFilterButton")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("LabelFilterButton_Click");
+
+        document.Descendants(presentation + "Button")
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "ValueFilterButton")
+            .Attribute("Click")?.Value
+            .Should()
+            .Be("ValueFilterButton_Click");
 
         document.Descendants(presentation + "ComboBox")
             .Any(element => element.Attribute("IsEnabled")?.Value == "False")
             .Should()
             .BeFalse("the field checklist should not show disabled label/value filter previews");
+
+        source.Should().Contain("public PivotFieldFilterDialogAction RequestedAction");
+        source.Should().Contain("LabelFilterButton_Click");
+        source.Should().Contain("ValueFilterButton_Click");
     }
 
     [Theory]
