@@ -271,6 +271,14 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SpellCheckDialog_LabelsReplacementBoxWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = \"_Change to:\", Target = _replacementBox");
+    }
+
+    [Fact]
     public void SpellCheckDialog_ExposesExcelLikeIgnoreChangeAndAddActions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
