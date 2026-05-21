@@ -22,7 +22,7 @@
                 <ColumnDefinition Width="80"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Find:" VerticalAlignment="Center"/>
+            <Label Content="_Find:" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
             <TextBox x:Name="FindBox" Grid.Column="1" KeyDown="FindBox_KeyDown"/>
         </Grid>
 
@@ -32,15 +32,15 @@
                 <ColumnDefinition Width="80"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Replace:" VerticalAlignment="Center"/>
+            <Label Content="_Replace:" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
             <TextBox x:Name="ReplaceBox"/>
         </Grid>
 
         <!-- Options -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
-            <CheckBox x:Name="MatchCaseBox" Content="Match case" Margin="0,0,12,0"/>
-            <CheckBox x:Name="MatchEntireBox" Content="Entire cell" Margin="0,0,12,0"/>
-            <CheckBox x:Name="SearchFormulasBox" Content="Search formulas"/>
+            <CheckBox x:Name="MatchCaseBox" Content="Match _case" Margin="0,0,12,0"/>
+            <CheckBox x:Name="MatchEntireBox" Content="_Entire cell" Margin="0,0,12,0"/>
+            <CheckBox x:Name="SearchFormulasBox" Content="Search _formulas"/>
         </StackPanel>
 
         <!-- Status label -->
@@ -48,9 +48,9 @@
 
         <!-- Buttons -->
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="FindNextBtn" Content="Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
-            <Button x:Name="ReplaceAllBtn" Content="Replace All" Width="80" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
-            <Button Content="Close" Width="60" IsCancel="True" Click="Close_Click"/>
+            <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
+            <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="80" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
+            <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
         </StackPanel>
     </Grid>
 </Window>
