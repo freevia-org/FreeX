@@ -1104,13 +1104,28 @@ public partial class MainWindow
             .Concat(pivotTable.PageFields)
             .FirstOrDefault(field => field.SourceFieldIndex == sourceIndex.Value)
             ?.SelectedItems;
-        var dialog = new PivotFieldFilterDialog(ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value), existingItems)
+        var dialog = new PivotFieldFilterDialog(
+            ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value),
+            existingItems,
+            pivotTable.DataFields.Count > 0)
         {
             Owner = this,
             Title = $"{PivotUiPlanner.FieldCaption(headers, sourceIndex.Value)} Filter"
         };
         if (dialog.ShowDialog() != true)
             return;
+
+        if (dialog.RequestedAction == PivotFieldFilterDialogAction.LabelFilter)
+        {
+            PivotFieldLabelFilterMenuItem_Click(sender, e);
+            return;
+        }
+
+        if (dialog.RequestedAction == PivotFieldFilterDialogAction.ValueFilter)
+        {
+            PivotFieldValueFilterMenuItem_Click(sender, e);
+            return;
+        }
 
         var allItems = ReadPivotFieldItems(sheet, pivotTable, sourceIndex.Value).ToList();
         var selectedItems = dialog.SelectedItems;
