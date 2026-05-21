@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Media;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
 using static Freexcel.App.Host.ChartDialogHelpers;
@@ -436,7 +439,7 @@ public sealed record ChartStyleDialogResult(int? ChartStyleId);
 
 public sealed class ChartStyleDialog : Window
 {
-    private readonly ComboBox _styleBox = new();
+    private readonly ListBox _styleGallery = new();
 
     public ChartStyleDialogResult Result { get; private set; }
 
@@ -444,21 +447,26 @@ public sealed class ChartStyleDialog : Window
     {
         Result = FromChart(chart);
         Title = "Chart Styles";
-        Width = 340;
-        Height = 180;
+        Width = 480;
+        Height = 350;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
         var options = GetStyleOptions();
-        _styleBox.ItemsSource = options;
-        _styleBox.DisplayMemberPath = nameof(ChartStyleOption.DisplayName);
-        _styleBox.SelectedItem = options.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? options[0];
-        _styleBox.Margin = new Thickness(0, 0, 0, 16);
+        _styleGallery.ItemsSource = options;
+        _styleGallery.ItemTemplate = CreateStyleGalleryTemplate();
+        var itemsPanelFactory = new FrameworkElementFactory(typeof(UniformGrid), "ChartStyleGalleryPanel");
+        itemsPanelFactory.SetValue(UniformGrid.ColumnsProperty, 4);
+        _styleGallery.ItemsPanel = new ItemsPanelTemplate(itemsPanelFactory);
+        _styleGallery.SelectedItem = options.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? options[0];
+        _styleGallery.Margin = new Thickness(0, 0, 0, 16);
+        _styleGallery.Height = 230;
+        AutomationProperties.SetName(_styleGallery, "Chart style gallery");
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new Label { Content = "_Style", Target = _styleBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        stack.Children.Add(_styleBox);
+        stack.Children.Add(new Label { Content = "_Style", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(_styleGallery);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
     }
@@ -470,16 +478,68 @@ public sealed class ChartStyleDialog : Window
         new(NormalizeStyleId(chartStyleId));
 
     public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
-        new[] { new ChartStyleOption(null, "Automatic") }
-            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, $"Style {index}")))
+        new[] { new ChartStyleOption(null, "Automatic", "Use current chart formatting") }
+            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, $"Style {index}", $"Preview style {index}")))
             .ToList();
 
     private void Accept()
     {
-        Result = _styleBox.SelectedItem is ChartStyleOption option
+        Result = _styleGallery.SelectedItem is ChartStyleOption option
             ? CreateResult(option.StyleId)
             : CreateResult(null);
         DialogResult = true;
+    }
+
+    private static DataTemplate CreateStyleGalleryTemplate()
+    {
+        var root = new FrameworkElementFactory(typeof(StackPanel));
+        root.SetValue(StackPanel.MarginProperty, new Thickness(4));
+        root.SetValue(StackPanel.WidthProperty, 96.0);
+
+        root.AppendChild(CreateStylePreviewSwatch());
+
+        var label = new FrameworkElementFactory(typeof(TextBlock));
+        label.SetBinding(TextBlock.TextProperty, new Binding(nameof(ChartStyleOption.DisplayName)));
+        label.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        label.SetValue(TextBlock.MarginProperty, new Thickness(0, 4, 0, 0));
+        root.AppendChild(label);
+
+        var previewLabel = new FrameworkElementFactory(typeof(TextBlock));
+        previewLabel.SetBinding(TextBlock.TextProperty, new Binding(nameof(ChartStyleOption.PreviewLabel)));
+        previewLabel.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        previewLabel.SetValue(TextBlock.ForegroundProperty, SystemColors.GrayTextBrush);
+        previewLabel.SetValue(TextBlock.FontSizeProperty, 10.0);
+        previewLabel.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        root.AppendChild(previewLabel);
+
+        return new DataTemplate { VisualTree = root };
+    }
+
+    private static FrameworkElementFactory CreateStylePreviewSwatch()
+    {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BorderBrushProperty, SystemColors.ControlDarkBrush);
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        border.SetValue(Border.HeightProperty, 42.0);
+        border.SetValue(Border.BackgroundProperty, Brushes.White);
+
+        var bars = new FrameworkElementFactory(typeof(StackPanel));
+        bars.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        bars.SetValue(StackPanel.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+        bars.SetValue(StackPanel.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Bottom);
+        bars.SetValue(StackPanel.MarginProperty, new Thickness(0, 0, 0, 5));
+        foreach (var height in new[] { 18.0, 28.0, 22.0 })
+        {
+            var bar = new FrameworkElementFactory(typeof(Border));
+            bar.SetValue(Border.WidthProperty, 10.0);
+            bar.SetValue(Border.HeightProperty, height);
+            bar.SetValue(Border.MarginProperty, new Thickness(3, 0, 3, 0));
+            bar.SetValue(Border.BackgroundProperty, SystemColors.HighlightBrush);
+            bars.AppendChild(bar);
+        }
+
+        border.AppendChild(bars);
+        return border;
     }
 
     private static int? NormalizeStyleId(int? value)
@@ -491,7 +551,7 @@ public sealed class ChartStyleDialog : Window
     }
 }
 
-public sealed record ChartStyleOption(int? StyleId, string DisplayName);
+public sealed record ChartStyleOption(int? StyleId, string DisplayName, string PreviewLabel);
 
 public enum MoveChartTargetKind
 {

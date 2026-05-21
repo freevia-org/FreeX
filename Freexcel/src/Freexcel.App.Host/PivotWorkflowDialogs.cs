@@ -225,7 +225,8 @@ public sealed record PivotChartTypeDialogResult(ChartType ChartType);
 
 public sealed class PivotChartTypeDialog : Window
 {
-    private readonly ComboBox _chartTypeBox = new();
+    private readonly ListBox _categoryList = new();
+    private readonly ListBox _subtypeGallery = new();
 
     public ChartType SelectedChartType { get; private set; }
     public PivotChartTypeDialogResult Result { get; private set; }
@@ -235,20 +236,15 @@ public sealed class PivotChartTypeDialog : Window
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
         Title = "Change PivotChart Type";
-        Width = 460;
-        Height = 340;
+        Width = 640;
+        Height = 410;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var options = ChartTypePickerPlanner.GetSupportedOptions();
-        _chartTypeBox.ItemsSource = options;
-        _chartTypeBox.DisplayMemberPath = nameof(ChartTypePickerOption.DisplayName);
-        _chartTypeBox.SelectedItem = options.FirstOrDefault(option => option.Type == currentType);
-
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(PivotDialogLayout.CreateHelpText("Pick a chart type for the selected PivotTable data."));
-        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 12), Height = 180 };
+        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 12), Height = 290 };
         tabs.Items.Add(new TabItem
         {
             Header = "Recommended PivotCharts",
@@ -260,13 +256,13 @@ public sealed class PivotChartTypeDialog : Window
             }, new Thickness(8))
         });
 
-        var allChartsPanel = PivotDialogLayout.CreateGroupPanel();
-        PivotDialogLayout.AddLabeledControl(allChartsPanel, "Chart _type", _chartTypeBox);
+        var allChartsPanel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
+        allChartsPanel.ToolTip = "Chart categories and Chart subtype gallery match the Insert Chart picker.";
         tabs.Items.Add(new TabItem { Header = "All Charts", Content = allChartsPanel });
         stack.Children.Add(tabs);
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
         {
-            if (_chartTypeBox.SelectedItem is ChartTypePickerOption option)
+            if (_subtypeGallery.SelectedItem is ChartTypeGalleryChoice option)
                 SelectedChartType = option.Type;
             Result = CreateResult(SelectedChartType);
             DialogResult = true;
