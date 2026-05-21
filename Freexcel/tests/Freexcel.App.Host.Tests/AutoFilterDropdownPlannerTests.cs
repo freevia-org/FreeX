@@ -168,7 +168,7 @@ public sealed class AutoFilterDropdownPlannerTests
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Date);
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
             .Entries.Single(entry => entry.Header == "Date Filters")
-            .CriteriaSuggestions.Should().Equal("date=", "date>", "date<", "datebetween:", "blank", "nonblank");
+            .CriteriaSuggestions.Should().Equal("date=", "date<>", "date>", "date>=", "date<", "date<=", "datebetween:", "blank", "nonblank");
     }
 
     [Fact]
