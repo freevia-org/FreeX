@@ -59,10 +59,10 @@
                          Margin="0,8,0,0"
                          SelectionChanged="TabList_SelectionChanged"
                          ItemContainerStyle="{StaticResource OptionTabItem}">
-                    <ListBoxItem Content="General"/>
-                    <ListBoxItem Content="Formulas"/>
-                    <ListBoxItem Content="View"/>
-                    <ListBoxItem Content="Save"/>
+                    <ListBoxItem Content="_General"/>
+                    <ListBoxItem Content="_Formulas"/>
+                    <ListBoxItem Content="_View"/>
+                    <ListBoxItem Content="_Save"/>
                 </ListBox>
             </Border>
 
@@ -83,10 +83,10 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
 
                         <CheckBox x:Name="OptCollapseRibbon"
-                                  Content="Collapse the ribbon automatically"
+                                  Content="_Collapse the ribbon automatically"
                                   Margin="0,0,0,6" FontSize="12"/>
                         <CheckBox x:Name="OptShowScreenTips"
-                                  Content="Show feature descriptions in ScreenTips"
+                                  Content="Show feature descriptions in _ScreenTips"
                                   Margin="0,0,0,4" FontSize="12"/>
 
                         <!-- When creating new workbooks -->
@@ -99,8 +99,12 @@
                                 <ColumnDefinition Width="230"/>
                                 <ColumnDefinition Width="200"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Use this as the default font:"
-                                       VerticalAlignment="Center" FontSize="12"/>
+                            <Label Grid.Column="0"
+                                   Content="Default _font:"
+                                   Target="{Binding ElementName=OptDefaultFont}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
                             <ComboBox x:Name="OptDefaultFont" Grid.Column="1"
                                       Height="24" VerticalAlignment="Center"/>
                         </Grid>
@@ -110,8 +114,12 @@
                                 <ColumnDefinition Width="230"/>
                                 <ColumnDefinition Width="80"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Font size:"
-                                       VerticalAlignment="Center" FontSize="12"/>
+                            <Label Grid.Column="0"
+                                   Content="Font _size:"
+                                   Target="{Binding ElementName=OptDefaultFontSize}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
                             <ComboBox x:Name="OptDefaultFontSize" Grid.Column="1"
                                       Height="24" VerticalAlignment="Center"
                                       IsEditable="True"/>
@@ -122,8 +130,12 @@
                                 <ColumnDefinition Width="230"/>
                                 <ColumnDefinition Width="80"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Include this many sheets:"
-                                       VerticalAlignment="Center" FontSize="12"/>
+                            <Label Grid.Column="0"
+                                   Content="Include this many _sheets:"
+                                   Target="{Binding ElementName=OptSheetCount}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
                             <TextBox x:Name="OptSheetCount" Grid.Column="1"
                                      Height="24" VerticalContentAlignment="Center"
                                      Padding="6,0" FontSize="12"/>
@@ -139,8 +151,12 @@
                                 <ColumnDefinition Width="230"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="User name:"
-                                       VerticalAlignment="Center" FontSize="12"/>
+                            <Label Grid.Column="0"
+                                   Content="User _name:"
+                                   Target="{Binding ElementName=OptUserName}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
                             <TextBox x:Name="OptUserName" Grid.Column="1"
                                      Height="24" VerticalContentAlignment="Center"
                                      Padding="6,0" FontSize="12"/>
@@ -156,10 +172,10 @@
 
                         <TextBlock Text="Workbook Calculation" FontSize="12"
                                    FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <RadioButton x:Name="OptCalcAuto" Content="Automatic"
+                        <RadioButton x:Name="OptCalcAuto" Content="_Automatic"
                                      GroupName="CalcMode" FontSize="12"
                                      Margin="0,0,0,6"/>
-                        <RadioButton x:Name="OptCalcManual" Content="Manual"
+                        <RadioButton x:Name="OptCalcManual" Content="_Manual"
                                      GroupName="CalcMode" FontSize="12"
                                      Margin="0,0,0,4"/>
                         <TextBlock Text="In Manual mode, press F9 to recalculate the workbook."
@@ -169,10 +185,10 @@
                                    FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
 
-                        <CheckBox x:Name="OptR1C1" Content="Use R1C1 reference style"
+                        <CheckBox x:Name="OptR1C1" Content="Use _R1C1 reference style"
                                   FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox x:Name="OptFormulasAutocomplete"
-                                  Content="Enable AutoComplete for cell values"
+                                  Content="Enable _AutoComplete for cell values"
                                   FontSize="12" Margin="0,0,0,4"/>
 
                         <TextBlock Text="Error Checking Rules"
@@ -192,10 +208,10 @@
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
 
                         <CheckBox x:Name="OptShowFormulaBar"
-                                  Content="Show formula bar"
+                                  Content="Show formula _bar"
                                   FontSize="12" Margin="0,0,0,6"/>
                         <CheckBox x:Name="OptFormulaBarExpanded"
-                                  Content="Expand formula bar"
+                                  Content="Expand formula ba_r"
                                   FontSize="12" Margin="0,0,0,4"/>
                     </StackPanel>
 
@@ -211,8 +227,12 @@
                                 <ColumnDefinition Width="230"/>
                                 <ColumnDefinition Width="200"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Save files in this format:"
-                                       VerticalAlignment="Center" FontSize="12"/>
+                            <Label Grid.Column="0"
+                                   Content="Save files in this _format:"
+                                   Target="{Binding ElementName=OptDefaultFormat}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
                             <ComboBox x:Name="OptDefaultFormat" Grid.Column="1"
                                       Height="24" VerticalAlignment="Center"/>
                         </Grid>
@@ -226,8 +246,12 @@
                                 <ColumnDefinition Width="230"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Recent files location:"
-                                       VerticalAlignment="Center" FontSize="12"/>
+                            <Label Grid.Column="0"
+                                   Content="Recent files _location:"
+                                   Target="{Binding ElementName=OptRecentFilesPath}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
                             <TextBox x:Name="OptRecentFilesPath" Grid.Column="1"
                                      Height="24" IsReadOnly="True"
                                      VerticalContentAlignment="Center"
@@ -243,9 +267,9 @@
         <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#C8C8C8"
                 Padding="16,10" Background="#F5F5F5">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="OkBtn" Content="OK" Width="80" Height="26"
+                <Button x:Name="OkBtn" Content="_OK" Width="80" Height="26"
                         Margin="0,0,8,0" IsDefault="True" Click="OkBtn_Click"/>
-                <Button Content="Cancel" Width="80" Height="26"
+                <Button Content="_Cancel" Width="80" Height="26"
                         IsCancel="True" Click="CancelBtn_Click"/>
             </StackPanel>
         </Border>
