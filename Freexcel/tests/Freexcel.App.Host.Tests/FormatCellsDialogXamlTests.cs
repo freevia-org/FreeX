@@ -245,6 +245,25 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderTab_ExposesAccessKeysForPresetPreviewAndDetailsControls()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var content in new[]
+        {
+            "Content=\"_None\"",
+            "Content=\"_Outline\"",
+            "Content=\"_Inside\"",
+            "Content=\"To_p\"",
+            "Content=\"L_eft\"",
+            "Content=\"Ri_ght\"",
+            "Content=\"Botto_m\"",
+            "Header=\"Individual border _details\""
+        })
+            xaml.Should().Contain(content);
+    }
+
+    [Fact]
     public void FormatCellsDialog_BorderTab_LabelsLineControlsWithAccessKeyTargets()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
