@@ -1884,7 +1884,7 @@
                         <!-- ▌Sparklines ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Line"    Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SparklineLineBtn_Click"
                                         local:RibbonTooltip.Title="Line Sparkline"
                                         local:RibbonTooltip.KeyTip="SL"
@@ -1905,7 +1905,7 @@
                         <!-- ▌Links / Text / Symbols ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <UniformGrid Grid.Row="0" Rows="3" Columns="2" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Link"      Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
                                         local:RibbonTooltip.Title="Insert Link"
                                         local:RibbonTooltip.KeyTip="K"
@@ -1941,7 +1941,7 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                            </UniformGrid>
+                            </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Links &amp; Objects" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
 
@@ -2063,7 +2063,7 @@
                         <!-- Themes -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeBtn_Click"
                                         local:RibbonTooltip.Title="Themes"
                                         local:RibbonTooltip.KeyTip="TH"
@@ -2135,7 +2135,7 @@
                         <!-- ▌Page Setup ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Margins" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageMarginsBtn_Click"
                                         local:RibbonTooltip.Title="Margins"
                                         local:RibbonTooltip.KeyTip="M"
@@ -2313,7 +2313,7 @@
                         <!-- ▌Defined Names ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Define Name"    Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DefineNameBtn_Click"
                                         local:RibbonTooltip.Title="Define Name"
                                         local:RibbonTooltip.KeyTip="DN"
@@ -2338,7 +2338,7 @@
                         <!-- ▌Formula Auditing ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Trace Precedents"  Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TracePrecedentsBtn_Click"
                                         local:RibbonTooltip.Title="Trace Precedents"
                                         local:RibbonTooltip.KeyTip="TP"
@@ -2392,7 +2392,7 @@
                         <!-- ▌Calculation ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Calculate Now"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CalcNowBtn_Click"
                                         local:RibbonTooltip.Title="Calculate Now"
                                         local:RibbonTooltip.KeyTip="C"
@@ -2432,7 +2432,7 @@
                         <!-- ▌Get &amp; Transform ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Get Data"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="GetDataBtn_Click"
                                         local:RibbonTooltip.Title="Get Data"
                                         local:RibbonTooltip.KeyTip="D"
@@ -2449,7 +2449,7 @@
                         <!-- ▌Sort &amp; Filter ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Width="64" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
                                             local:RibbonTooltip.Title="Sort Ascending"
@@ -2504,7 +2504,7 @@
                         <!-- ▌Data Tools ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Text to Columns"   Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
                                         local:RibbonTooltip.Title="Text to Columns"
                                         local:RibbonTooltip.KeyTip="E"
@@ -2537,7 +2537,7 @@
                         <!-- ▌What-If Analysis ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Goal Seek" Width="90" Height="22" Margin="1,1"
                                         Style="{StaticResource RibbonBtn}" Click="GoalSeekBtn_Click"
                                         local:RibbonTooltip.Title="Goal Seek"
@@ -2568,7 +2568,7 @@
                         <!-- ▌Outline ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Group" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="GroupRowsBtn_Click"
                                             local:RibbonTooltip.Title="Group"
@@ -2623,7 +2623,7 @@
                         <!-- ▌Proofing ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Spelling" Width="104" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -2645,7 +2645,7 @@
 
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Accessibility" Width="96" Height="22"
                                         Style="{StaticResource RibbonBtn}" FontSize="12"
                                         Margin="1,1"
@@ -2711,7 +2711,7 @@
                         <!-- ▌Protect ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button x:Name="ProtectSheetButton" Content="Protect Sheet"    Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectSheetBtn_Click"
                                         local:RibbonTooltip.Title="Protect Sheet"
                                         local:RibbonTooltip.KeyTip="PS"
@@ -2797,7 +2797,7 @@
                         <!-- ▌Freeze Panes ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Freeze Panes" Width="106" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FreezePanesPickerBtn_Click"
                                         local:RibbonTooltip.Title="Freeze Panes"
                                         local:RibbonTooltip.KeyTip="F"
@@ -2824,7 +2824,7 @@
                         <!-- ▌Zoom ▌ -->
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Zoom" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomPickerBtn_Click"
                                         local:RibbonTooltip.Title="Zoom"
                                         local:RibbonTooltip.KeyTip="Q"
