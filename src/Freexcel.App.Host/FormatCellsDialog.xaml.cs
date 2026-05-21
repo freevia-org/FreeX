@@ -114,9 +114,6 @@ public partial class FormatCellsDialog : Window
             ? ColorInputParser.FormatRgbColor(s.FillColor.Value)
             : "";
         DlgClearFillCheck.IsChecked = false;
-        DlgFillPatternColorBox.Text = "";
-        DlgFillPatternStyleBox.ItemsSource = new[] { "None", "Solid", "Gray 25%", "Gray 50%", "Horizontal", "Vertical" };
-        DlgFillPatternStyleBox.SelectedIndex = 0;
 
         DlgHAlignBox.ItemsSource  = Enum.GetNames(typeof(CellHAlign));
         DlgHAlignBox.SelectedItem = s.HorizontalAlignment.ToString();

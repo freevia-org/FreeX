@@ -305,15 +305,14 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
-    public void FormatCellsDialog_FillTab_ExposesBackgroundPatternColorAndSamplePreview()
+    public void FormatCellsDialog_FillTab_ExposesBackgroundColorAndSamplePreviewWithoutUnsupportedPatternControls()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml.cs"));
 
         foreach (var text in new[]
         {
             "Content=\"_Background Color:\"",
-            "Content=\"Pattern _Color:\"",
-            "Content=\"Pattern _Style:\"",
             "Text=\"Sample\""
         })
             xaml.Should().Contain(text);
@@ -321,12 +320,16 @@ public sealed class FormatCellsDialogXamlTests
         foreach (var controlName in new[]
         {
             "DlgFillBackgroundPreview",
-            "DlgFillPatternColorBox",
-            "DlgFillPatternStyleBox",
             "DlgFillSamplePreview",
             "DlgFillPalettePanel"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+
+        foreach (var unsupported in new[] { "DlgFillPatternColorBox", "DlgFillPatternStyleBox", "Pattern _Color:", "Pattern _Style:" })
+        {
+            xaml.Should().NotContain(unsupported);
+            source.Should().NotContain(unsupported);
+        }
     }
 
     [Fact]
@@ -355,9 +358,7 @@ public sealed class FormatCellsDialogXamlTests
 
         foreach (var target in new[]
         {
-            "Content=\"_Background Color:\" Target=\"{Binding ElementName=DlgFillColorBox}\"",
-            "Content=\"Pattern _Color:\" Target=\"{Binding ElementName=DlgFillPatternColorBox}\"",
-            "Content=\"Pattern _Style:\" Target=\"{Binding ElementName=DlgFillPatternStyleBox}\""
+            "Content=\"_Background Color:\" Target=\"{Binding ElementName=DlgFillColorBox}\""
         })
             xaml.Should().Contain(target);
     }

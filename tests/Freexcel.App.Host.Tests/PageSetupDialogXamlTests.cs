@@ -81,6 +81,19 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void PageTab_DisablesInactiveScalingInputsByMode()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml.cs"));
+
+        xaml.Should().Contain("Checked=\"ScalingMode_Changed\"");
+        source.Should().Contain("UpdateScalingInputState");
+        source.Should().Contain("ScalePercentBox.IsEnabled = adjustTo");
+        source.Should().Contain("FitPagesWideBox.IsEnabled = fitTo");
+        source.Should().Contain("FitPagesTallBox.IsEnabled = fitTo");
+    }
+
+    [Fact]
     public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PageSetupDialog.xaml"));

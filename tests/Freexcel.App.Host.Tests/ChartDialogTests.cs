@@ -145,8 +145,21 @@ public sealed class ChartDialogTests
         var options = ChartStyleDialog.GetStyleOptions();
 
         options.Should().HaveCount(49);
-        options[0].Should().Be(new ChartStyleOption(null, "Automatic"));
+        options[0].Should().Be(new ChartStyleOption(null, "Automatic", "Use current chart formatting"));
         options.Skip(1).Select(option => option.StyleId).Should().Equal(Enumerable.Range(1, 48).Cast<int?>());
+        options.Skip(1).Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.PreviewLabel));
+    }
+
+    [Fact]
+    public void ChartStyleDialog_UsesVisualGalleryInsteadOfPlainStyleCombo()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("Chart style gallery");
+        source.Should().Contain("CreateStyleGalleryTemplate");
+        source.Should().Contain("CreateStylePreviewSwatch");
+        source.Should().Contain("UniformGrid");
+        source.Should().NotContain("private readonly ComboBox _styleBox");
     }
 
     [Fact]
@@ -543,7 +556,7 @@ public sealed class ChartDialogTests
         foreach (var expected in new[]
         {
             "new Label { Content = label, Target = box",
-            "new Label { Content = \"_Style\", Target = _styleBox",
+            "new Label { Content = \"_Style\", Target = _styleGallery",
             "new Label { Content = label, Target = comboBox",
             "new Label { Content = label, Target = textBox"
         })

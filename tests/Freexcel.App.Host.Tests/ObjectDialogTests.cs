@@ -64,10 +64,11 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("_widthBox");
         source.Should().Contain("_heightBox");
-        source.Should().Contain("_lockAspectRatioBox");
         source.Should().Contain("Height:");
         source.Should().Contain("Width:");
-        source.Should().Contain("Content = \"_Lock aspect ratio\"");
+        source.Should().Contain("Lock aspect ratio is hidden until proportional resizing is wired");
+        source.Should().NotContain("_lockAspectRatioBox");
+        source.Should().NotContain("Content = \"_Lock aspect ratio\"");
     }
 
     [Fact]
@@ -92,11 +93,16 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void ShapeGradientDialog_LabelsRgbOverrideWithAccessKeyTarget()
+    public void ShapeGradientDialog_LabelsStopRgbEditorsWithAccessKeyTargets()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
 
-        source.Should().Contain("new Label { Content = \"RGB _override:\", Target = _gradientBox");
+        source.Should().Contain("Gradient stops");
+        source.Should().Contain("AddStopRow(grid, 0, \"Stop 1 _color (RGB):\", _startColorBox");
+        source.Should().Contain("AddStopRow(grid, 1, \"Stop 2 c_olor (RGB):\", _endColorBox");
+        source.Should().Contain("Target = box");
+        source.Should().NotContain("RGB _override:");
+        source.Should().NotContain("_gradientBox");
     }
 
     [Fact]

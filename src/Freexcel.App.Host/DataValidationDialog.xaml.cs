@@ -29,6 +29,11 @@ public partial class DataValidationDialog : Window
         UpdateVisibility();
     }
 
+    private void OperatorCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateVisibility();
+    }
+
     private void UpdateVisibility()
     {
         if (TypeCombo == null) return;
@@ -46,13 +51,13 @@ public partial class DataValidationDialog : Window
 
         // Formula1 label changes by type
         if (isList)
-            Formula1Label.Text = "Source:";
+            Formula1Label.Content = "_Source:";
         else if (isCustom)
-            Formula1Label.Text = "Formula:";
+            Formula1Label.Content = "_Formula:";
         else
         {
             var opTag = (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
-            Formula1Label.Text = (opTag == "Between" || opTag == "NotBetween") ? "Minimum:" : "Value:";
+            Formula1Label.Content = (opTag == "Between" || opTag == "NotBetween") ? "_Minimum:" : "_Value:";
         }
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;

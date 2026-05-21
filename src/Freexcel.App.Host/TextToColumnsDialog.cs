@@ -14,19 +14,32 @@ public enum TextToColumnsDelimiterKind
     Custom
 }
 
-public sealed record TextToColumnsDialogResult(TextToColumnsDelimiterKind DelimiterKind, string Delimiter)
+public enum TextToColumnsSplitMode
+{
+    Delimited,
+    FixedWidth
+}
+
+public sealed record TextToColumnsDialogResult(
+    TextToColumnsDelimiterKind DelimiterKind,
+    string Delimiter,
+    TextToColumnsSplitMode SplitMode = TextToColumnsSplitMode.Delimited,
+    IReadOnlyList<int>? FixedWidthBreakPositions = null)
 {
     public string Delimiters => Delimiter;
 }
 
 public sealed class TextToColumnsDialog : Window
 {
+    private readonly RadioButton _delimitedButton = new() { Content = "_Delimited", IsChecked = true };
+    private readonly RadioButton _fixedWidthButton = new() { Content = "Fi_xed width" };
     private readonly CheckBox _tabBox = new() { Content = "_Tab" };
     private readonly CheckBox _semicolonBox = new() { Content = "_Semicolon" };
     private readonly CheckBox _commaBox = new() { Content = "_Comma", IsChecked = true };
     private readonly CheckBox _spaceBox = new() { Content = "S_pace" };
     private readonly CheckBox _otherBox = new() { Content = "_Other:" };
     private readonly TextBox _customBox = new() { Width = 48, Margin = new Thickness(6, 0, 0, 0) };
+    private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
     private readonly ListView _previewGrid = new() { Height = 88 };
     private readonly IReadOnlyList<string> _previewRows;
 
@@ -38,7 +51,7 @@ public sealed class TextToColumnsDialog : Window
 
         Title = "Text to Columns";
         Width = 500;
-        Height = 300;
+        Height = 390;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -46,27 +59,42 @@ public sealed class TextToColumnsDialog : Window
         _otherBox.Checked += (_, _) => _customBox.Focus();
         foreach (var box in new[] { _tabBox, _semicolonBox, _commaBox, _spaceBox, _otherBox })
         {
-            box.Checked += (_, _) => RefreshPreview();
-            box.Unchecked += (_, _) => RefreshPreview();
+            box.Checked += (_, _) => RefreshMode();
+            box.Unchecked += (_, _) => RefreshMode();
         }
+        _delimitedButton.Checked += (_, _) => RefreshMode();
+        _fixedWidthButton.Checked += (_, _) => RefreshMode();
         _customBox.TextChanged += (_, _) => RefreshPreview();
+        _fixedWidthBreaksBox.TextChanged += (_, _) => RefreshPreview();
 
         var root = new DockPanel { Margin = new Thickness(12) };
+        var buttons = CreateWizardButtonRow(Accept);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
+
         var body = new StackPanel();
         DockPanel.SetDock(body, Dock.Top);
         root.Children.Add(body);
 
         body.Children.Add(new TextBlock
         {
-            Text = "Choose the delimiter that separates the selected text.",
+            Text = "Text Wizard - Step 2 of 3",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        body.Children.Add(new TextBlock
+        {
+            Text = "Choose the delimiters that separate your selected text.",
             Margin = new Thickness(0, 0, 0, 10)
         });
+        body.Children.Add(CreateOriginalDataTypePanel());
         body.Children.Add(CreateDelimiterPanel());
+        body.Children.Add(CreateFixedWidthPanel());
         body.Children.Add(new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) });
         body.Children.Add(_previewGrid);
 
-        root.Children.Add(CreateButtonRow(Accept));
         Content = root;
+        RefreshMode();
         RefreshPreview();
     }
 
@@ -102,6 +130,19 @@ public sealed class TextToColumnsDialog : Window
         return new TextToColumnsDialogResult(primaryKind, delimiters);
     }
 
+    public static TextToColumnsDialogResult CreateFixedWidthResult(string? breakPositionsText)
+    {
+        var positions = ParseFixedWidthBreakPositions(breakPositionsText);
+        if (positions.Count == 0)
+            throw new ArgumentException("Enter at least one fixed-width break position.", nameof(breakPositionsText));
+
+        return new TextToColumnsDialogResult(
+            TextToColumnsDelimiterKind.Comma,
+            string.Empty,
+            TextToColumnsSplitMode.FixedWidth,
+            positions);
+    }
+
     public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
     {
         if (sheet is null)
@@ -115,6 +156,21 @@ public sealed class TextToColumnsDialog : Window
         }
 
         return rows;
+    }
+
+    private GroupBox CreateOriginalDataTypePanel()
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(_delimitedButton);
+        panel.Children.Add(_fixedWidthButton);
+
+        return new GroupBox
+        {
+            Header = "Original data type",
+            Content = panel,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
     }
 
     private GroupBox CreateDelimiterPanel()
@@ -134,6 +190,33 @@ public sealed class TextToColumnsDialog : Window
         {
             Header = "Delimiters",
             Content = panel,
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+    }
+
+    private GroupBox CreateFixedWidthPanel()
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var label = new Label
+        {
+            Content = "_Column breaks:",
+            Target = _fixedWidthBreaksBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        };
+        Grid.SetColumn(label, 0);
+        grid.Children.Add(label);
+        Grid.SetColumn(_fixedWidthBreaksBox, 1);
+        grid.Children.Add(_fixedWidthBreaksBox);
+
+        return new GroupBox
+        {
+            Header = "Fixed width",
+            Content = grid,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -160,7 +243,9 @@ public sealed class TextToColumnsDialog : Window
     {
         try
         {
-            Result = CreateResult(SelectedDelimiterKinds(), _customBox.Text);
+            Result = _fixedWidthButton.IsChecked == true
+                ? CreateFixedWidthResult(_fixedWidthBreaksBox.Text)
+                : CreateResult(SelectedDelimiterKinds(), _customBox.Text);
             DialogResult = true;
         }
         catch (Exception ex)
@@ -171,6 +256,44 @@ public sealed class TextToColumnsDialog : Window
 
     internal static StackPanel CreateButtonRow(Action accept) =>
         DialogButtonRowFactory.Create(accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
+
+    private static StackPanel CreateWizardButtonRow(Action accept)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+
+        panel.Children.Add(new Button
+        {
+            Content = "< _Back",
+            Width = 72,
+            Margin = new Thickness(0, 0, 8, 0),
+            IsEnabled = false,
+            ToolTip = "This dialog opens on the split-options step."
+        });
+        var nextButton = new Button
+        {
+            Content = "_Next >",
+            Width = 72,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        nextButton.Click += (_, _) => accept();
+        panel.Children.Add(nextButton);
+        var finishButton = new Button
+        {
+            Content = "_Finish",
+            Width = 72,
+            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = true
+        };
+        finishButton.Click += (_, _) => accept();
+        panel.Children.Add(finishButton);
+        panel.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
+        return panel;
+    }
 
     private static IReadOnlyList<string> NormalizePreviewRows(IEnumerable<string>? previewRows)
     {
@@ -184,21 +307,46 @@ public sealed class TextToColumnsDialog : Window
             : rows;
     }
 
+    private void RefreshMode()
+    {
+        var fixedWidth = _fixedWidthButton.IsChecked == true;
+        _tabBox.IsEnabled = !fixedWidth;
+        _semicolonBox.IsEnabled = !fixedWidth;
+        _commaBox.IsEnabled = !fixedWidth;
+        _spaceBox.IsEnabled = !fixedWidth;
+        _otherBox.IsEnabled = !fixedWidth;
+        _customBox.IsEnabled = !fixedWidth && _otherBox.IsChecked == true;
+        _fixedWidthBreaksBox.IsEnabled = fixedWidth;
+        RefreshPreview();
+    }
+
     private void RefreshPreview()
     {
-        TextToColumnsDialogResult result;
+        IReadOnlyList<string[]> rows;
         try
         {
-            result = CreateResult(SelectedDelimiterKinds(), _customBox.Text);
+            if (_fixedWidthButton.IsChecked == true)
+            {
+                var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
+                rows = _previewRows
+                    .Select(row => TextToColumnsPlanner.SplitFixedWidthText(row, positions).ToArray())
+                    .ToList();
+            }
+            else
+            {
+                var result = CreateResult(SelectedDelimiterKinds(), _customBox.Text);
+                rows = _previewRows
+                    .Select(row => TextToColumnsPlanner.SplitText(row, result.Delimiters).ToArray())
+                    .ToList();
+            }
         }
         catch
         {
-            result = CreateResult(TextToColumnsDelimiterKind.Comma);
+            rows = _previewRows
+                .Select(row => TextToColumnsPlanner.SplitText(row, ",").ToArray())
+                .ToList();
         }
 
-        var rows = _previewRows
-            .Select(row => TextToColumnsPlanner.SplitText(row, result.Delimiters).ToArray())
-            .ToList();
         var columnCount = Math.Max(1, rows.Count == 0 ? 1 : rows.Max(row => row.Length));
         var view = new GridView();
         for (var index = 0; index < columnCount; index++)
@@ -222,4 +370,13 @@ public sealed class TextToColumnsDialog : Window
             padded[index] = index < row.Count ? row[index] : string.Empty;
         return padded;
     }
+
+    public static IReadOnlyList<int> ParseFixedWidthBreakPositions(string? text) =>
+        (text ?? string.Empty)
+            .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => int.TryParse(part, out var position) ? position : 0)
+            .Where(position => position > 0)
+            .Distinct()
+            .Order()
+            .ToList();
 }

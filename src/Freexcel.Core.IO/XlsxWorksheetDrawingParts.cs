@@ -5,11 +5,12 @@ using Freexcel.Core.Model;
 
 namespace Freexcel.Core.IO;
 
-internal sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, XlsxDrawingAnchor? Anchor);
+internal sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, string? Name, XlsxDrawingAnchor? Anchor);
 
 internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
     string ContentType,
+    string? Name,
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double CropLeft,
@@ -19,6 +20,7 @@ internal sealed record XlsxPicturePackagePart(
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
+    string? Name,
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
@@ -27,6 +29,7 @@ internal sealed record XlsxTextBoxPackagePart(
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
+    string? Name,
     string? AltText,
     XlsxDrawingAnchor? Anchor,
     double RotationDegrees,
@@ -102,6 +105,7 @@ internal static class XlsxWorksheetDrawingPartReader
             charts.Add(new XlsxChartPackagePart(
                 XlsxPackageXmlEditor.LoadXml(chartEntry),
                 chartRelationships,
+                ReadNonVisualName(chartElement),
                 ReadNearestAnchor(chartElement)));
         }
 
@@ -155,10 +159,8 @@ internal static class XlsxWorksheetDrawingPartReader
             using var ms = new MemoryStream();
             imageStream.CopyTo(ms);
 
-            var altText = pictureElement
-                .Descendants(spreadsheetDrawingNs + "cNvPr")
-                .Select(element => element.Attribute("descr")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            var name = ReadNonVisualName(pictureElement);
+            var altText = ReadNonVisualDescription(pictureElement);
             var sourceRectangle = pictureElement
                 .Element(spreadsheetDrawingNs + "blipFill")?
                 .Element(drawingNs + "srcRect");
@@ -166,6 +168,7 @@ internal static class XlsxWorksheetDrawingPartReader
             pictures.Add(new XlsxPicturePackagePart(
                 ms.ToArray(),
                 XlsxPackagePath.GetImageContentType(imagePath),
+                name,
                 altText,
                 ReadNearestAnchor(pictureElement),
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
@@ -193,10 +196,8 @@ internal static class XlsxWorksheetDrawingPartReader
 
         foreach (var shapeElement in drawingContext.Value.DrawingXml.Descendants(spreadsheetDrawingNs + "sp"))
         {
-            var altText = shapeElement
-                .Descendants(spreadsheetDrawingNs + "cNvPr")
-                .Select(element => element.Attribute("descr")?.Value)
-                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            var name = ReadNonVisualName(shapeElement);
+            var altText = ReadNonVisualDescription(shapeElement);
             var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
             var rotation = ReadDrawingRotation(spPr?.Element(drawingNs + "xfrm"));
             var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
@@ -212,7 +213,7 @@ internal static class XlsxWorksheetDrawingPartReader
 
             if (!string.IsNullOrEmpty(text))
             {
-                textBoxes.Add(new XlsxTextBoxPackagePart(text, altText, ReadNearestAnchor(shapeElement), rotation, fillColor, outlineColor));
+                textBoxes.Add(new XlsxTextBoxPackagePart(text, name, altText, ReadNearestAnchor(shapeElement), rotation, fillColor, outlineColor));
                 continue;
             }
 
@@ -223,6 +224,7 @@ internal static class XlsxWorksheetDrawingPartReader
             if (ToDrawingShapeKind(preset) is { } kind)
                 shapes.Add(new XlsxShapePackagePart(
                     kind,
+                    name,
                     altText,
                     ReadNearestAnchor(shapeElement),
                     rotation,
@@ -269,6 +271,25 @@ internal static class XlsxWorksheetDrawingPartReader
         return drawingEntry is null
             ? null
             : (drawingPath, XlsxPackageXmlEditor.LoadXml(drawingEntry));
+    }
+
+    private static string? ReadNonVisualName(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var name = element
+            .Descendants(spreadsheetDrawingNs + "cNvPr")
+            .Select(item => item.Attribute("name")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        return string.IsNullOrWhiteSpace(name) ? null : name;
+    }
+
+    private static string? ReadNonVisualDescription(XElement element)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        return element
+            .Descendants(spreadsheetDrawingNs + "cNvPr")
+            .Select(item => item.Attribute("descr")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static XlsxDrawingAnchor? ReadNearestAnchor(XElement element)

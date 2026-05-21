@@ -6,6 +6,7 @@ internal static class NativeJsonVisualDtoMapper
 {
     public static PictureDto FromPicture(PictureModel picture) => new()
     {
+        Name = picture.Name,
         Anchor = picture.Anchor.ToA1(),
         Kind = ValidEnumOrDefault(picture.Kind, PictureKind.CellRangeSnapshot),
         SourceRowCount = picture.SourceRowCount,
@@ -39,6 +40,7 @@ internal static class NativeJsonVisualDtoMapper
             var picture = new PictureModel
             {
                 Anchor = CellAddress.Parse(pictureDto.Anchor, sheetId),
+                Name = pictureDto.Name,
                 Kind = ValidEnumOrDefault(pictureDto.Kind, PictureKind.CellRangeSnapshot),
                 SourceRowCount = pictureDto.SourceRowCount,
                 SourceColumnCount = pictureDto.SourceColumnCount,
@@ -69,6 +71,7 @@ internal static class NativeJsonVisualDtoMapper
 
     public static TextBoxDto FromTextBox(TextBoxModel textBox) => new()
     {
+        Name = textBox.Name,
         Anchor = textBox.Anchor.ToA1(),
         Text = textBox.Text,
         Width = PositiveFiniteOrDefault(textBox.Width, 180),
@@ -92,6 +95,7 @@ internal static class NativeJsonVisualDtoMapper
             return new TextBoxModel
             {
                 Anchor = CellAddress.Parse(textBoxDto.Anchor, sheetId),
+                Name = textBoxDto.Name,
                 Text = textBoxDto.Text ?? "",
                 Width = PositiveFiniteOrDefault(textBoxDto.Width, 180),
                 Height = PositiveFiniteOrDefault(textBoxDto.Height, 80),
@@ -112,6 +116,7 @@ internal static class NativeJsonVisualDtoMapper
 
     public static DrawingShapeDto FromDrawingShape(DrawingShapeModel shape) => new()
     {
+        Name = shape.Name,
         Anchor = shape.Anchor.ToA1(),
         Kind = ValidEnumOrDefault(shape.Kind, DrawingShapeKind.Rectangle),
         Width = PositiveFiniteOrDefault(shape.Width, 120),
@@ -137,6 +142,7 @@ internal static class NativeJsonVisualDtoMapper
             return new DrawingShapeModel
             {
                 Anchor = CellAddress.Parse(shapeDto.Anchor, sheetId),
+                Name = shapeDto.Name,
                 Kind = ValidEnumOrDefault(shapeDto.Kind, DrawingShapeKind.Rectangle),
                 Width = PositiveFiniteOrDefault(shapeDto.Width, 120),
                 Height = PositiveFiniteOrDefault(shapeDto.Height, 70),
@@ -201,6 +207,7 @@ internal static class NativeJsonVisualDtoMapper
 
 internal class PictureDto
 {
+    public string? Name { get; set; }
     public string? Anchor { get; set; }
     public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
     public uint SourceRowCount { get; set; }
@@ -228,6 +235,7 @@ internal class PictureCellDto
 
 internal class TextBoxDto
 {
+    public string? Name { get; set; }
     public string? Anchor { get; set; }
     public string? Text { get; set; }
     public double Width { get; set; } = 180;
@@ -243,6 +251,7 @@ internal class TextBoxDto
 
 internal class DrawingShapeDto
 {
+    public string? Name { get; set; }
     public string? Anchor { get; set; }
     public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
     public double Width { get; set; } = 120;

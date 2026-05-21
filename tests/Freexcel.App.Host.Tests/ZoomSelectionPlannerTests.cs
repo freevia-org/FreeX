@@ -30,4 +30,17 @@ public sealed class ZoomSelectionPlannerTests
             .Should()
             .Be(expected);
     }
+
+    [Fact]
+    public void CalculateDialogZoomPercent_UsesFitPercentWhenDialogRequestsFitSelection()
+    {
+        ZoomSelectionPlanner.CalculateDialogZoomPercent(
+                new ZoomDialogResult(125, FitSelection: true),
+                gridWidth: 800,
+                gridHeight: 300,
+                selectedColumns: 5,
+                selectedRows: 10)
+            .Should()
+            .Be(150);
+    }
 }
