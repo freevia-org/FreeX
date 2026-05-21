@@ -6,5 +6,5 @@
   </defs>
   <path class="f s" d="M8 4 H20.8 L25.6 8.8 V27.2 H8 Z M20.8 4 V8.8 H25.6" stroke-width="1.6"/>
   <path class="r" d="M9.6 16 L22.4 16" stroke-width="1.6"/>
-  <path class="rd" d="M14.4 12.8 H17.6 V19.2 H14.4 Z"/>
+  <path d="M11.2 12.8 L13.6 18.88 M18.4 12.8 L20.8 18.88" fill="none" stroke="#d83b01" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
 </svg>
