@@ -223,6 +223,7 @@ public static class FilterInputParser
         const string endsPrefix = "ends:";
         const string textNotEqualsPrefix = "text<>";
         const string textEqualsPrefix = "text=";
+        const string equalsPrefix = "equals:";
 
         if (trimmed.StartsWith(notContainsPrefix, StringComparison.OrdinalIgnoreCase))
         {
@@ -273,6 +274,15 @@ public static class FilterInputParser
         {
             return TryParseTextCriterion(
                 trimmed[textEqualsPrefix.Length..],
+                text => new TextEqualsFilterCriterion(text),
+                out criterion,
+                out error);
+        }
+
+        if (trimmed.StartsWith(equalsPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryParseTextCriterion(
+                trimmed[equalsPrefix.Length..],
                 text => new TextEqualsFilterCriterion(text),
                 out criterion,
                 out error);
