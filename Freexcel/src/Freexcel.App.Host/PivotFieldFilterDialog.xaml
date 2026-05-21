@@ -66,35 +66,6 @@
                     </ListBox>
                 </Grid>
             </TabItem>
-            <TabItem Header="_Label Filters">
-                <StackPanel Margin="10">
-                    <TextBlock Text="Show items for which the label"
-                               Margin="0,0,0,6"/>
-                    <ComboBox IsEnabled="False"
-                              SelectedIndex="0"
-                              AutomationProperties.Name="Label filter operator preview">
-                        <ComboBoxItem Content="Equals"/>
-                    </ComboBox>
-                    <TextBox IsEnabled="False"
-                             Margin="0,8,0,0"
-                             AutomationProperties.Name="Label filter value preview"/>
-                </StackPanel>
-            </TabItem>
-            <TabItem Header="_Value Filters">
-                <StackPanel Margin="10">
-                    <TextBlock Text="Show items for which the value"
-                               Margin="0,0,0,6"/>
-                    <ComboBox IsEnabled="False"
-                              SelectedIndex="0"
-                              AutomationProperties.Name="Value filter operator preview">
-                        <ComboBoxItem Content="Greater Than"/>
-                    </ComboBox>
-                    <TextBox IsEnabled="False"
-                             Text="0"
-                             Margin="0,8,0,0"
-                             AutomationProperties.Name="Value filter preview"/>
-                </StackPanel>
-            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>
