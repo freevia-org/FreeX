@@ -151,7 +151,9 @@ public class ExportPlannerTests
             "Content = \"_Open after publishing\"",
             "Content = \"_Standard\"",
             "Content = \"_Minimum size\"",
-            "Content = \"_Pages from\"",
+            "Content = \"_All\"",
+            "Content = \"_Pages\"",
+            "_fromPageBox.IsEnabled = false",
             "Target = _fromPageBox",
             "Content = \"t_o\"",
             "Target = _toPageBox",
@@ -557,6 +559,18 @@ public class ExportPlannerTests
 
         source.Should().Contain("marginsButton.Click += (_, _) => showMargins?.Invoke()");
         source.Should().Contain("pageSetupButton.Click += (_, _) => showPageSetup?.Invoke()");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesPageEntryAndStatus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"_Page:\"");
+        source.Should().Contain("pageNumberBox");
+        source.Should().Contain("pageStatusText");
+        source.Should().Contain("Page 1 of");
+        source.Should().Contain("NavigationCommands.GoToPage");
     }
 
     [Fact]

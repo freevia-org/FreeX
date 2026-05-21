@@ -51,10 +51,13 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
-        source.Should().Contain("Choose the delimiter that separates the selected text.");
+        source.Should().Contain("Original data type");
+        source.Should().Contain("Content = \"_Delimited\"");
+        source.Should().Contain("Content = \"Fi_xed width\"");
+        source.Should().Contain("IsEnabled = false");
+        source.Should().Contain("Fixed-width splitting is not supported yet.");
+        source.Should().Contain("Choose the delimiters that separate your selected text.");
         source.Should().Contain("Header = \"Delimiters\"");
-        source.Should().NotContain("Step 1 of 3");
-        source.Should().NotContain("_Fixed width");
         source.Should().NotContain("_Destination:");
     }
 
@@ -79,6 +82,20 @@ public sealed class DataToolDialogTests
         source.Should().Contain("TextToColumnsPlanner.SplitText");
         source.Should().NotContain("_textQualifierBox");
         source.Should().NotContain("_destinationBox");
+    }
+
+    [Fact]
+    public void TextToColumnsDialog_UsesExcelWizardChromeAroundDelimitedFlow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
+
+        source.Should().Contain("Step 2 of 3");
+        source.Should().Contain("CreateWizardButtonRow");
+        source.Should().Contain("Content = \"< _Back\"");
+        source.Should().Contain("Content = \"_Next >\"");
+        source.Should().Contain("Content = \"_Finish\"");
+        source.Should().Contain("IsDefault = true");
+        source.Should().Contain("Accept()");
     }
 
     [Fact]
@@ -321,6 +338,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("AddReferenceRow(rangesGrid, 2, \"Copy _to:\", _copyToBox");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
+        source.Should().Contain("Content = \"...\"");
+        source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("ReferencePickerButton_Click");
@@ -538,6 +557,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("ReferencePickerButton_Click");
         source.Should().Contain("Select row input cell");
         source.Should().Contain("Select column input cell");
+        source.Should().Contain("Content = \"...\"");
+        source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().Contain("Header = \"Inputs\"");

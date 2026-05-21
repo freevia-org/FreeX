@@ -4,6 +4,16 @@ namespace Freexcel.App.Host;
 
 public static class ZoomSelectionPlanner
 {
+    public static double CalculateDialogZoomPercent(
+        ZoomDialogResult result,
+        double gridWidth,
+        double gridHeight,
+        uint selectedColumns,
+        uint selectedRows) =>
+        result.FitSelection
+            ? CalculateFitPercent(gridWidth, gridHeight, selectedColumns, selectedRows)
+            : result.ZoomPercent;
+
     public static double CalculateFitPercent(
         double gridWidth,
         double gridHeight,

@@ -141,7 +141,22 @@ public partial class PageSetupDialog : Window
         DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
         ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
         AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
+        UpdateScalingInputState();
         UpdateHeaderFooterPreview();
+    }
+
+    private void ScalingMode_Changed(object sender, RoutedEventArgs e) => UpdateScalingInputState();
+
+    private void UpdateScalingInputState()
+    {
+        if (ScalePercentBox is null || FitPagesWideBox is null || FitPagesTallBox is null)
+            return;
+
+        var adjustTo = AdjustToRadioButton.IsChecked == true;
+        var fitTo = FitToRadioButton.IsChecked == true;
+        ScalePercentBox.IsEnabled = adjustTo;
+        FitPagesWideBox.IsEnabled = fitTo;
+        FitPagesTallBox.IsEnabled = fitTo;
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)

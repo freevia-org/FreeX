@@ -54,6 +54,45 @@ public sealed class PrintPreviewDialog : Window
         toolbar.Items.Add(previousButton);
         toolbar.Items.Add(nextButton);
         toolbar.Items.Add(new Separator());
+        var totalPages = Math.Max(1, document.Pages.Count);
+        var pageNumberBox = new TextBox
+        {
+            Width = 44,
+            Text = "1",
+            Margin = new Thickness(0, 0, 4, 0),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        var pageStatusText = new TextBlock
+        {
+            Text = $"Page 1 of {totalPages}",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        toolbar.Items.Add(new Label
+        {
+            Content = "_Page:",
+            Target = pageNumberBox,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        pageNumberBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter)
+                return;
+
+            NavigateToPage(viewer, pageNumberBox, pageStatusText, totalPages);
+            e.Handled = true;
+        };
+        pageNumberBox.CommandBindings.Add(new CommandBinding(
+            NavigationCommands.GoToPage,
+            (_, e) =>
+            {
+                NavigateToPage(viewer, pageNumberBox, pageStatusText, totalPages);
+                e.Handled = true;
+            }));
+        pageNumberBox.InputBindings.Add(new KeyBinding(NavigationCommands.GoToPage, new KeyGesture(Key.Enter)));
+        toolbar.Items.Add(pageNumberBox);
+        toolbar.Items.Add(pageStatusText);
+        toolbar.Items.Add(new Separator());
         toolbar.Items.Add(new Label
         {
             Content = "_Zoom:",
@@ -119,5 +158,16 @@ public sealed class PrintPreviewDialog : Window
         var dialog = new PrintDialog();
         if (dialog.ShowDialog() == true)
             dialog.PrintDocument(document.DocumentPaginator, "Freexcel worksheet");
+    }
+
+    private static void NavigateToPage(DocumentViewer viewer, TextBox pageNumberBox, TextBlock pageStatusText, int totalPages)
+    {
+        if (!int.TryParse(pageNumberBox.Text.Trim(), out var pageNumber))
+            return;
+
+        pageNumber = Math.Clamp(pageNumber, 1, totalPages);
+        viewer.GoToPage(pageNumber);
+        pageNumberBox.Text = pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        pageStatusText.Text = $"Page {pageNumber} of {totalPages}";
     }
 }
