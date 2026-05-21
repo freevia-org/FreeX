@@ -1221,6 +1221,8 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ShowCfDialog(\"Equal To\")");
         source.Should().Contain("case QuickAnalysisCommand.TextContains:");
         source.Should().Contain("ShowCfDialog(\"Text Contains\")");
+        source.Should().Contain("case QuickAnalysisCommand.DateOccurring:");
+        source.Should().Contain("ShowCfDialog(\"Date Occurring\")");
         source.Should().Contain("case QuickAnalysisCommand.DuplicateValues:");
         source.Should().Contain("ShowCfDialog(\"Duplicate Values\")");
         source.Should().Contain("case QuickAnalysisCommand.Top10Percent:");
