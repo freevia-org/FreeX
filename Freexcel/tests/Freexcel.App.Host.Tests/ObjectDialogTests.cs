@@ -35,6 +35,19 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectSizeDialog_ExposesExcelLikeWidthHeightAndAspectRatioControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("_widthBox");
+        source.Should().Contain("_heightBox");
+        source.Should().Contain("_lockAspectRatioBox");
+        source.Should().Contain("Height:");
+        source.Should().Contain("Width:");
+        source.Should().Contain("Lock aspect ratio");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
@@ -69,6 +82,19 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void PictureCropDialog_ExposesSeparateExcelCropEdgeFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("_cropLeftBox");
+        source.Should().Contain("_cropTopBox");
+        source.Should().Contain("_cropRightBox");
+        source.Should().Contain("_cropBottomBox");
+        source.Should().Contain("Left:");
+        source.Should().Contain("Right:");
+    }
+
+    [Fact]
     public void ShapeGradientDialog_TryCreateResult_ParsesTwoRgbColors()
     {
         ShapeGradientDialog.TryCreateResult("31,119,180; 180,210,240", out var result, out _).Should().BeTrue();
@@ -87,6 +113,18 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_endColorButton");
         source.Should().Contain("new ColorPickerDialog(_startColor)");
         source.Should().Contain("new ColorPickerDialog(_endColor)");
+    }
+
+    [Fact]
+    public void HyperlinkDialog_ExposesExcelLikeLinkTypeAndScreenTipAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("Existing File or Web Page");
+        source.Should().Contain("Place in This Document");
+        source.Should().Contain("E-mail Address");
+        source.Should().Contain("_screenTipButton");
+        source.Should().Contain("_bookmarkButton");
     }
 
     [Fact]
