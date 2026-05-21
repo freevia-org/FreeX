@@ -49,6 +49,7 @@ public sealed class NamedRangeDialogXamlTests
     public void Dialog_ProvidesFilterAndRefersToRangePickerAffordance()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         foreach (var name in new[] { "FilterBox", "RefersToPickerButton" })
@@ -57,6 +58,10 @@ public sealed class NamedRangeDialogXamlTests
                 .Any(element => element.Attribute(x + "Name")?.Value == name)
                 .Should().BeTrue($"{name} should exist for Excel-like name manager workflow");
         }
+
+        document.Descendants(presentation + "ComboBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FilterBox")
+            .Attribute("SelectionChanged")?.Value.Should().Be("FilterBox_SelectionChanged");
     }
 
     [Fact]
@@ -76,18 +81,32 @@ public sealed class NamedRangeDialogXamlTests
     }
 
     [Fact]
-    public void Source_ProvidesNewEditNameDialogWithScopeCommentAndRefersToFields()
+    public void Source_ProvidesNewEditNameDialogWithPersistedFieldsOnly()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
 
         source.Should().Contain("NameDefinitionDialog");
-        source.Should().Contain("_scopeBox");
-        source.Should().Contain("_commentBox");
         source.Should().Contain("_refersToBox");
         source.Should().Contain("_rangePickerButton");
         source.Should().Contain("_rangePickerButton.Click");
         source.Should().Contain("_refersToBox.SelectAll");
         source.Should().NotContain("IsEnabled = false");
-        source.Should().Contain("ScopeOptions");
+        source.Should().NotContain("_scopeBox");
+        source.Should().NotContain("_commentBox");
+        source.Should().NotContain("ScopeOptions");
+    }
+
+    [Fact]
+    public void Planner_FiltersWorkbookAndWorksheetScopedNames()
+    {
+        var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
+        var sheetName = new NamedRangeViewModel("Local", "Sheet2!B1:B2", "Sheet2!B1:B2", "Sheet2", "");
+
+        NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.All)
+            .Should().Equal(workbookName, sheetName);
+        NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.Workbook)
+            .Should().Equal(workbookName);
+        NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.Worksheet)
+            .Should().Equal(sheetName);
     }
 }
