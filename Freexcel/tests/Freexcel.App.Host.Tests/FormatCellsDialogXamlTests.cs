@@ -223,7 +223,7 @@ public sealed class FormatCellsDialogXamlTests
         {
             "Text=\"Presets\"",
             "Text=\"Line\"",
-            "Text=\"Color:\"",
+            "Content=\"_Color:\"",
             "Text=\"Border\""
         })
             xaml.Should().Contain(text);
@@ -242,6 +242,19 @@ public sealed class FormatCellsDialogXamlTests
             "DlgBorderPreviewLeftButton"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_BorderTab_LabelsLineControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var target in new[]
+        {
+            "Content=\"_Style:\" Target=\"{Binding ElementName=DlgBorderLineStyleBox}\"",
+            "Content=\"_Color:\" Target=\"{Binding ElementName=DlgBorderLineColorBox}\""
+        })
+            xaml.Should().Contain(target);
     }
 
     [Fact]
