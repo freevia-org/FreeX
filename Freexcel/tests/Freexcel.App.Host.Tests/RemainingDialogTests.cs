@@ -139,8 +139,20 @@ public sealed class RemainingDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
 
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = \"_Keep Result\"");
+        source.Should().Contain("Content = \"_Restore Original Values\"");
+    }
+
+    [Fact]
+    public void StatusDialogs_ExposeClearExcelLikeStatusLabelsAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "StatusDialogs.cs"));
+
+        source.Should().Contain("Target value:");
+        source.Should().Contain("Current value:");
+        source.Should().Contain("Content = \"_Keep Result\"");
+        source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("DialogButtonRowFactory.Create");
     }
 
     [Fact]
@@ -250,5 +262,33 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Change\"");
         source.Should().Contain("Content = \"_Add\"");
         source.Should().Contain("CreateAddResult");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_ExposesWorkbookSheetRangePdfAndCsvChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ExportOptionsDialog.cs"));
+
+        source.Should().Contain("Content = \"_Workbook\"");
+        source.Should().Contain("Content = \"Active _sheet(s)\"");
+        source.Should().Contain("Content = \"Selected _range\"");
+        source.Should().Contain("PDF options");
+        source.Should().Contain("Content = \"_Ignore print areas\"");
+        source.Should().Contain("CSV options");
+        source.Should().Contain("Content = \"Save _only the active sheet\"");
+        source.Should().Contain("Content = \"CSV _delimiter:\"");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_ExposesExcelLikePreviewToolbarAffordances()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"_Previous Page\"");
+        source.Should().Contain("Content = \"_Next Page\"");
+        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Content = \"_Margins\"");
+        source.Should().Contain("Content = \"Page _Setup...\"");
+        source.Should().Contain("Content = \"_Print...\"");
     }
 }

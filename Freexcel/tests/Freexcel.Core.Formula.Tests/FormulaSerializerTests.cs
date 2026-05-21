@@ -158,8 +158,31 @@ public class FormulaSerializerTests
         FormulaSerializer.Serialize(node).Should().Be("#REF!");
     }
 
-    [Fact]
-    public void Serialize_ErrorLiteral() => RoundTrip("=#N/A").Should().Be("#N/A");
+    [Theory]
+    [InlineData("=#NULL!", "#NULL!")]
+    [InlineData("=#DIV/0!", "#DIV/0!")]
+    [InlineData("=#VALUE!", "#VALUE!")]
+    [InlineData("=#REF!", "#REF!")]
+    [InlineData("=#NAME?", "#NAME?")]
+    [InlineData("=#NUM!", "#NUM!")]
+    [InlineData("=#N/A", "#N/A")]
+    [InlineData("=#SPILL!", "#SPILL!")]
+    [InlineData("=#CALC!", "#CALC!")]
+    public void Serialize_ErrorLiteral(string formula, string expected)
+    {
+        RoundTrip(formula).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("=TAKE(A1:C3,,2)", "TAKE(A1:C3,,2)")]
+    [InlineData("=DROP(A1:C3,,1)", "DROP(A1:C3,,1)")]
+    [InlineData("=EXPAND(A1:B1,,3)", "EXPAND(A1:B1,,3)")]
+    [InlineData("=EXPAND(A1:B1,2,,\"pad\")", "EXPAND(A1:B1,2,,\"pad\")")]
+    [InlineData("=INDEX(A1:B2,1,)", "INDEX(A1:B2,1,)")]
+    public void Serialize_OmittedFunctionArguments(string formula, string expected)
+    {
+        RoundTrip(formula).Should().Be(expected);
+    }
 
     [Fact]
     public void Serialize_ParensPreserved_AddInsideMultiply()

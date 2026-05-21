@@ -28,8 +28,22 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
 
+        source.Should().Contain("Content = \"_Add Watch\"");
         source.Should().Contain("Content = \"_Refresh\"");
         source.Should().Contain("Content = \"_Delete Watch\"");
         source.Should().Contain("Content = \"_Close\"");
+    }
+
+    [Fact]
+    public void WatchWindowDialog_ExposesExcelLikeWatchColumns()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "WatchWindowDialog.cs"));
+
+        source.Should().Contain("Header = \"Book\"");
+        source.Should().Contain("Header = \"Sheet\"");
+        source.Should().Contain("Header = \"Name\"");
+        source.Should().Contain("Header = \"Cell\"");
+        source.Should().Contain("Header = \"Value\"");
+        source.Should().Contain("Header = \"Formula\"");
     }
 }
