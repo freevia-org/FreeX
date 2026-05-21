@@ -1,7 +1,5 @@
 using System.Windows;
-using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 namespace Freexcel.App.Host;
 
@@ -18,34 +16,25 @@ public sealed record TextToColumnsDialogResult(TextToColumnsDelimiterKind Delimi
 
 public sealed class TextToColumnsDialog : Window
 {
-    private readonly TextBlock _stepOneIndicator = CreateStepIndicator("Step 1 of 3", true);
-    private readonly TextBlock _stepTwoIndicator = CreateStepIndicator("Step 2 of 3", false);
-    private readonly TextBlock _stepThreeIndicator = CreateStepIndicator("Step 3 of 3", false);
-    private readonly RadioButton _delimitedButton = new() { Content = "_Delimited", IsChecked = true, GroupName = "TextToColumnsSourceMode" };
-    private readonly RadioButton _fixedWidthButton = new() { Content = "_Fixed width", GroupName = "TextToColumnsSourceMode" };
     private readonly CheckBox _tabBox = new() { Content = "_Tab" };
     private readonly CheckBox _semicolonBox = new() { Content = "_Semicolon" };
     private readonly CheckBox _commaBox = new() { Content = "_Comma", IsChecked = true };
     private readonly CheckBox _spaceBox = new() { Content = "S_pace" };
     private readonly CheckBox _otherBox = new() { Content = "_Other:" };
     private readonly TextBox _customBox = new() { Width = 48, Margin = new Thickness(6, 0, 0, 0) };
-    private readonly ComboBox _textQualifierBox = new() { Width = 120 };
     private readonly ListView _previewGrid = new() { Height = 88 };
-    private readonly TextBox _destinationBox = new() { Text = "$A$1" };
 
     public TextToColumnsDialogResult? Result { get; private set; }
 
     public TextToColumnsDialog()
     {
         Title = "Text to Columns";
-        Width = 520;
-        Height = 430;
+        Width = 500;
+        Height = 300;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        _textQualifierBox.ItemsSource = new[] { "\"", "'", "{none}" };
-        _textQualifierBox.SelectedIndex = 0;
         _previewGrid.ItemsSource = new[]
         {
             new { Column1 = "East", Column2 = "42", Column3 = "Open" },
@@ -69,32 +58,14 @@ public sealed class TextToColumnsDialog : Window
         DockPanel.SetDock(body, Dock.Top);
         root.Children.Add(body);
 
-        body.Children.Add(CreateStepRow());
         body.Children.Add(new TextBlock
         {
-            Text = "Choose the file type that best describes your data:",
-            Margin = new Thickness(0, 10, 0, 6)
-        });
-        body.Children.Add(_delimitedButton);
-        body.Children.Add(new TextBlock
-        {
-            Text = "Characters such as commas or tabs separate each field.",
-            Margin = new Thickness(24, 0, 0, 6),
-            Foreground = Brushes.DimGray
-        });
-        body.Children.Add(_fixedWidthButton);
-        body.Children.Add(new TextBlock
-        {
-            Text = "Fields are aligned in columns with spaces between each field.",
-            Margin = new Thickness(24, 0, 0, 12),
-            Foreground = Brushes.DimGray
+            Text = "Choose the delimiter that separates the selected text.",
+            Margin = new Thickness(0, 0, 0, 10)
         });
         body.Children.Add(CreateDelimiterPanel());
-        body.Children.Add(CreateQualifierPanel());
         body.Children.Add(new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) });
         body.Children.Add(_previewGrid);
-        body.Children.Add(new Label { Content = "_Destination:", Target = _destinationBox, Padding = new Thickness(0), Margin = new Thickness(0, 10, 0, 4) });
-        body.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
 
         root.Children.Add(CreateButtonRow(Accept));
         Content = root;
@@ -117,24 +88,6 @@ public sealed class TextToColumnsDialog : Window
         return new TextToColumnsDialogResult(delimiterKind, delimiter);
     }
 
-    private static TextBlock CreateStepIndicator(string text, bool isCurrent) =>
-        new()
-        {
-            Text = text,
-            FontWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal,
-            Foreground = isCurrent ? Brushes.Black : Brushes.DimGray,
-            Margin = new Thickness(0, 0, 14, 0)
-        };
-
-    private StackPanel CreateStepRow()
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(_stepOneIndicator);
-        row.Children.Add(_stepTwoIndicator);
-        row.Children.Add(_stepThreeIndicator);
-        return row;
-    }
-
     private GroupBox CreateDelimiterPanel()
     {
         var panel = new WrapPanel();
@@ -155,49 +108,6 @@ public sealed class TextToColumnsDialog : Window
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
         };
-    }
-
-    private DockPanel CreateQualifierPanel()
-    {
-        var panel = new DockPanel { Margin = new Thickness(0, 0, 0, 2) };
-        var label = new Label
-        {
-            Content = "Text _qualifier:",
-            Target = _textQualifierBox,
-            VerticalAlignment = VerticalAlignment.Center,
-            Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        DockPanel.SetDock(label, Dock.Left);
-        panel.Children.Add(label);
-        panel.Children.Add(_textQualifierBox);
-        return panel;
-    }
-
-    private static DockPanel CreateReferenceEditor(TextBox textBox, string automationName)
-    {
-        var panel = new DockPanel();
-        var pickerButton = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = textBox
-        };
-        AutomationProperties.SetName(pickerButton, automationName);
-        pickerButton.Click += ReferencePickerButton_Click;
-        panel.Children.Add(pickerButton);
-        panel.Children.Add(textBox);
-        return panel;
-    }
-
-    private static void ReferencePickerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { Tag: TextBox textBox })
-            return;
-
-        textBox.Focus();
-        textBox.SelectAll();
     }
 
     private TextToColumnsDelimiterKind SelectedDelimiterKind()
