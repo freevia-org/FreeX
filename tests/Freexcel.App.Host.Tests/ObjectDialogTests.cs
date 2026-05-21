@@ -48,6 +48,15 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ObjectDialogs_LabelSharedInputHelpersWithTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
+
+        source.Should().Contain("new Label { Content = label, Target = box");
+        source.Should().NotContain("new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) }");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
