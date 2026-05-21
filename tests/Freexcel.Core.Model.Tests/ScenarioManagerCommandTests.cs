@@ -85,6 +85,26 @@ public sealed class ScenarioManagerCommandTests
     }
 
     [Fact]
+    public void DeleteScenarioCommand_RemovesScenarioAndUndoRestoresIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        workbook.Scenarios.Add(new WorkbookScenario("Base", [new ScenarioCellValue(address, new NumberValue(1))]));
+        workbook.Scenarios.Add(new WorkbookScenario("Best Case", [new ScenarioCellValue(address, new NumberValue(42))]));
+
+        var command = new DeleteScenarioCommand("Best Case");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        workbook.Scenarios.Select(scenario => scenario.Name).Should().Equal("Base");
+
+        command.Revert(ctx);
+
+        workbook.Scenarios.Select(scenario => scenario.Name).Should().Equal("Base", "Best Case");
+    }
+
+    [Fact]
     public void ScenarioSummaryReportCommand_CreatesReportSheetAndUndoRemovesIt()
     {
         var workbook = new Workbook("test");

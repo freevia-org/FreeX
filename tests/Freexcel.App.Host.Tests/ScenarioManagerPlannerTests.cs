@@ -16,9 +16,12 @@ public sealed class ScenarioManagerPlannerTests
 
     [Theory]
     [InlineData("save", ScenarioManagerAction.Save)]
-    [InlineData("add", ScenarioManagerAction.Save)]
+    [InlineData("add", ScenarioManagerAction.Add)]
+    [InlineData("edit", ScenarioManagerAction.Edit)]
     [InlineData("show", ScenarioManagerAction.Show)]
     [InlineData("apply", ScenarioManagerAction.Show)]
+    [InlineData("delete", ScenarioManagerAction.Delete)]
+    [InlineData("remove", ScenarioManagerAction.Delete)]
     [InlineData("list", ScenarioManagerAction.List)]
     [InlineData("manager", ScenarioManagerAction.List)]
     [InlineData("report", ScenarioManagerAction.Report)]
@@ -31,7 +34,6 @@ public sealed class ScenarioManagerPlannerTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("delete")]
     [InlineData("scenario")]
     public void TryParseAction_RejectsUnknownActions(string input)
     {

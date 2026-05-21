@@ -4,8 +4,11 @@ namespace Freexcel.App.Host;
 
 public enum ScenarioManagerAction
 {
+    Add,
+    Edit,
     Save,
     Show,
+    Delete,
     List,
     Report
 }
@@ -19,8 +22,11 @@ public static class ScenarioManagerPlanner
     {
         action = input.Trim().ToLowerInvariant() switch
         {
-            "save" or "add" => ScenarioManagerAction.Save,
+            "save" => ScenarioManagerAction.Save,
+            "add" => ScenarioManagerAction.Add,
+            "edit" => ScenarioManagerAction.Edit,
             "show" or "apply" => ScenarioManagerAction.Show,
+            "delete" or "remove" => ScenarioManagerAction.Delete,
             "list" or "manager" => ScenarioManagerAction.List,
             "report" or "summary" => ScenarioManagerAction.Report,
             _ => null
