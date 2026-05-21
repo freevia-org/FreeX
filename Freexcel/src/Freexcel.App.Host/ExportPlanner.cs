@@ -34,6 +34,7 @@ internal sealed record ExportOptions(
     ExportContentScope Scope,
     bool IncludeDocumentProperties,
     bool OpenAfterPublish,
+    bool IgnorePrintAreas = false,
     ExportPageRange? PageRange = null,
     ExportQuality Quality = ExportQuality.Standard)
 {
@@ -100,6 +101,9 @@ internal static class ExportPlanner
             ? null
             : options.PageRange.ToString();
         var quality = DescribeQuality(options.Quality);
+        var printAreas = options.IgnorePrintAreas
+            ? "print areas are ignored"
+            : null;
         var properties = options.IncludeDocumentProperties
             ? "document properties are included"
             : "document properties are not included";
@@ -107,7 +111,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, open);
     }
 
     public static string DescribeOptions(ExportOptions options, ExportFormat format) =>
@@ -134,6 +138,9 @@ internal static class ExportPlanner
             ? null
             : options.PageRange.ToString();
         var quality = DescribeQuality(options.Quality);
+        var printAreas = options.IgnorePrintAreas
+            ? "print areas are ignored"
+            : null;
         var properties = (options.IncludeDocumentProperties, format) switch
         {
             (true, ExportFormat.Pdf) => "document properties are included",
@@ -144,7 +151,7 @@ internal static class ExportPlanner
             ? "open after publishing"
             : null;
 
-        return JoinOptionParts(scope, pageRange, quality, properties, open);
+        return JoinOptionParts(scope, pageRange, quality, printAreas, properties, open);
     }
 
     public static bool TryCreatePageRange(string fromText, string toText, out ExportPageRange? range, out string? error)
