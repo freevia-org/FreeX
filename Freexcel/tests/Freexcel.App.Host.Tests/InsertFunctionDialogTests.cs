@@ -28,6 +28,29 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void CategoryChoices_StartWithExcelMostRecentlyUsedThenAll()
+    {
+        var categories = InsertFunctionDialog.BuildCategoryChoices(InsertFunctionDialog.BuildCatalog());
+
+        categories.Take(2).Should().Equal("Most Recently Used", "All");
+    }
+
+    [Fact]
+    public void FilterCatalog_DefaultMostRecentlyUsedShowsRecommendedFunctionsButSearchSpansCatalog()
+    {
+        var catalog = InsertFunctionDialog.BuildCatalog();
+
+        var recent = InsertFunctionDialog.FilterCatalog(catalog, "Most Recently Used", "");
+
+        recent.Select(entry => entry.Name).Should().StartWith(["SUM", "AVERAGE", "COUNT"]);
+        recent.Select(entry => entry.Name).Should().Contain(["IF", "XLOOKUP"]);
+
+        var searched = InsertFunctionDialog.FilterCatalog(catalog, "Most Recently Used", "match");
+
+        searched.Select(entry => entry.Name).Should().Contain(["MATCH", "XMATCH"]);
+    }
+
+    [Fact]
     public void CreateFormula_UsesSelectedFunctionName()
     {
         InsertFunctionDialog.CreateFormula(" xlookup ").Should().Be("XLOOKUP()");
@@ -56,6 +79,8 @@ public sealed class InsertFunctionDialogTests
 
         source.Should().Contain("Search for a _function:");
         source.Should().Contain("Or select a _category:");
+        source.Should().Contain("MostRecentlyUsedCategory");
+        source.Should().Contain("_categoryBox.SelectedItem = MostRecentlyUsedCategory");
         source.Should().Contain("_Go");
         source.Should().Contain("Select a _function:");
         source.Should().Contain("Formula syntax and help");
