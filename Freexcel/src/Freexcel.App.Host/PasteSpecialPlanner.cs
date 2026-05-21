@@ -13,6 +13,7 @@ public static class PasteSpecialPlanner
             ContentKind: selection.Mode switch
             {
                 PasteSpecialDialogMode.AllExceptBorders => PasteSpecialContentKind.AllExceptBorders,
+                PasteSpecialDialogMode.AllMergingConditionalFormats => PasteSpecialContentKind.AllMergingConditionalFormats,
                 PasteSpecialDialogMode.FormulasAndNumberFormats => PasteSpecialContentKind.FormulasAndNumberFormats,
                 PasteSpecialDialogMode.ValuesAndNumberFormats => PasteSpecialContentKind.ValuesAndNumberFormats,
                 _ => PasteSpecialContentKind.Default

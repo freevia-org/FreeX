@@ -107,6 +107,38 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void PivotChartRenderer_HidesIndividualFieldButtonAnnotations()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartValueFieldButtons = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Region"),
+                Cell(1, 2, "Sum of Amount"),
+                Cell(2, 1, "East"),
+                Cell(2, 2, "10")
+            ],
+            [],
+            []));
+
+        model.Annotations
+            .OfType<TextAnnotation>()
+            .Select(annotation => annotation.Text)
+            .Should()
+            .Contain(["PivotTable1", "Axis Fields"])
+            .And
+            .NotContain("Values");
+    }
+
+    [Fact]
     public void GridView_HitTestsPivotChartFieldButtons()
     {
         var sheetId = SheetId.New();
@@ -171,6 +203,40 @@ public sealed class ChartRendererTests
                 columnHeaderHeight: 24)
             .Should()
             .BeNull();
+    }
+
+    [Fact]
+    public void GridView_DoesNotHitTestIndividuallyHiddenPivotChartFieldButtons()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            ShowPivotChartValueFieldButtons = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            Left = 100,
+            Top = 80,
+            Width = 400,
+            Height = 300
+        };
+
+        GridView.HitTestPivotChartFieldButton(
+                [chart],
+                new System.Windows.Point(428, 374),
+                rowHeaderWidth: 40,
+                columnHeaderHeight: 24)
+            .Should()
+            .BeNull();
+
+        GridView.HitTestPivotChartFieldButton(
+                [chart],
+                new System.Windows.Point(148, 374),
+                rowHeaderWidth: 40,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be((chart, "Axis Fields"));
     }
 
     [Fact]
