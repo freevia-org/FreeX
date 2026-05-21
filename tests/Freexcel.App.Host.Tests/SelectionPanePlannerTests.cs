@@ -97,4 +97,17 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("SetAllVisibility(true)");
         source.Should().Contain("SetAllVisibility(false)");
     }
+
+    [Fact]
+    public void SelectionPaneDialog_ExposesKeyboardAccessKeysForCommandButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SelectionPaneDialog.cs"));
+
+        source.Should().Contain("Content = \"_Bring Forward\"");
+        source.Should().Contain("Content = \"Send _Backward\"");
+        source.Should().Contain("Content = \"Show _All\"");
+        source.Should().Contain("Content = \"_Hide All\"");
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+    }
 }
