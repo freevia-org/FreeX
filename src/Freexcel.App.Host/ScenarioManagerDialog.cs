@@ -40,7 +40,7 @@ public sealed class ScenarioManagerDialog : Window
         Grid.SetColumn(left, 0);
         body.Children.Add(left);
 
-        left.Children.Add(new TextBlock { Text = "Scenarios:", Margin = new Thickness(0, 0, 0, 4) });
+        left.Children.Add(new Label { Content = "_Scenarios:", Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
         _scenarioList.SelectedIndex = _scenarioList.Items.Count > 0 ? 0 : -1;
@@ -63,20 +63,20 @@ public sealed class ScenarioManagerDialog : Window
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         editor.Content = fields;
 
-        AddField(fields, row: 0, "Scenario name:", _newNameBox);
+        AddField(fields, row: 0, "Scenario _name:", _newNameBox);
         _newNameBox.Text = workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {workbook.Scenarios.Count + 1}";
-        AddField(fields, row: 1, "Changing cells:", _changingCellsBox);
-        AddField(fields, row: 2, "Comment:", _commentBox);
+        AddField(fields, row: 1, "Changing _cells:", _changingCellsBox);
+        AddField(fields, row: 2, "_Comment:", _commentBox);
 
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
         Grid.SetColumn(sideButtons, 1);
         body.Children.Add(sideButtons);
-        AddActionButton(sideButtons, "Add...", ScenarioManagerAction.Save);
-        AddActionButton(sideButtons, "Edit...", ScenarioManagerAction.Save);
-        AddActionButton(sideButtons, "Delete", ScenarioManagerAction.List, isEnabled: false);
-        AddActionButton(sideButtons, "Merge...", ScenarioManagerAction.List, isEnabled: false);
-        AddActionButton(sideButtons, "Show", ScenarioManagerAction.Show);
-        AddActionButton(sideButtons, "Summary...", ScenarioManagerAction.Report);
+        AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Save);
+        AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Save);
+        AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.List, isEnabled: false);
+        AddActionButton(sideButtons, "_Merge...", ScenarioManagerAction.List, isEnabled: false);
+        AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show);
+        AddActionButton(sideButtons, "S_ummary...", ScenarioManagerAction.Report);
 
         var closeRow = new StackPanel
         {
@@ -86,7 +86,7 @@ public sealed class ScenarioManagerDialog : Window
         };
         Grid.SetRow(closeRow, 1);
         root.Children.Add(closeRow);
-        closeRow.Children.Add(new Button { Content = "Close", Width = 72, IsCancel = true });
+        closeRow.Children.Add(new Button { Content = "_Close", Width = 72, IsCancel = true });
 
         Content = root;
     }
@@ -108,9 +108,11 @@ public sealed class ScenarioManagerDialog : Window
 
     private static void AddField(Grid grid, int row, string label, Control field)
     {
-        var text = new TextBlock
+        var text = new Label
         {
-            Text = label,
+            Content = label,
+            Target = field,
+            Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8)
         };
