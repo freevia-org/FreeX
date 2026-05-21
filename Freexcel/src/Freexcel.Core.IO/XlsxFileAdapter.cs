@@ -82,7 +82,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var xlsxCustomViews = XlsxWorkbookMetadataReader.LoadCustomViews(packageStream);
 
         packageStream.Position = 0;
-        using var closedXmlPackageStream = CreateClosedXmlLoadPackage(packageStream);
+        using var closedXmlPackageStream = XlsxClosedXmlLoadPackageSanitizer.Create(packageStream);
         using var xlWorkbook = new XLWorkbook(closedXmlPackageStream);
         var workbook = new Workbook("Untitled");
         SourcePackages.Remove(workbook);
@@ -1331,48 +1331,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     private static bool ReadBoolAttribute(XElement? element, string attributeName, bool defaultValue = false) =>
         XlsxXmlAttributeReader.ReadBoolAttribute(element, attributeName, defaultValue);
 
-    private static MemoryStream CreateClosedXmlLoadPackage(MemoryStream sourcePackage)
-    {
-        var sanitized = new MemoryStream();
-        var sourceBytes = sourcePackage.ToArray();
-        sanitized.Write(sourceBytes, 0, sourceBytes.Length);
-        sanitized.Position = 0;
-        using (var archive = new ZipArchive(sanitized, ZipArchiveMode.Update, leaveOpen: true))
-        {
-            XlsxPivotPackageCleaner.RemovePivotPackageMetadata(archive);
-            RemoveUnsupportedConditionalFormattingBlocks(archive);
-        }
-
-        sanitized.Position = 0;
-        return sanitized;
-    }
-
-    private static void RemoveUnsupportedConditionalFormattingBlocks(ZipArchive archive)
-    {
-        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        foreach (var worksheetEntry in archive.Entries
-                     .Where(entry =>
-                         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
-                         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
-                     .ToList())
-        {
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            var unsupportedBlocks = root
-                .Elements(worksheetNs + "conditionalFormatting")
-                .Where(block => ConditionalFormattingHasUnsupportedRule(block, worksheetNs))
-                .ToList();
-            if (unsupportedBlocks.Count == 0)
-                continue;
-
-            unsupportedBlocks.Remove();
-            ReplacePackageXml(archive, worksheetEntry.FullName, worksheetXml);
-        }
-    }
-
     private static CfThresholdType FromCfvoType(string? type) =>
         type?.ToLowerInvariant() switch
         {
@@ -1798,31 +1756,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "containsText" or "notContainsText" or "beginsWith" or "endsWith" or "timePeriod" or
             "containsBlanks" or "notContainsBlanks" or "containsErrors" or "notContainsErrors";
     }
-
-    private static bool ConditionalFormattingHasUnsupportedRule(XElement block, XNamespace worksheetNs) =>
-        block
-            .Elements(worksheetNs + "cfRule")
-            .Any(rule => !IsSupportedConditionalFormatRuleType(rule.Attribute("type")?.Value));
-
-    private static bool IsSupportedConditionalFormatRuleType(string? type) =>
-        string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "expression", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "aboveAverage", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "top10", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "uniqueValues", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "duplicateValues", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "containsText", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "notContainsText", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "beginsWith", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "endsWith", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "timePeriod", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "containsBlanks", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "notContainsBlanks", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "containsErrors", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "notContainsErrors", StringComparison.OrdinalIgnoreCase);
 
     private static ConditionalFormat ReadColorScaleConditionalFormat(
         XElement colorScale,
