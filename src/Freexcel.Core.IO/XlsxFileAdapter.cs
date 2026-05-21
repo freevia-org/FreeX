@@ -1718,7 +1718,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
             ReadBoolAttribute(sheetCalcPr, "fullCalcOnLoad"),
-            ReadWorksheetPhoneticProperties(phoneticPr),
+            XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
             ParsePaneSplit(pane?.Attribute("xSplit")?.Value),
@@ -1744,22 +1744,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             customViews,
             customProperties,
             codeName);
-    }
-
-    private static WorksheetPhoneticProperties? ReadWorksheetPhoneticProperties(XElement? phoneticPr)
-    {
-        if (phoneticPr is null)
-            return null;
-
-        var fontId = phoneticPr.Attribute("fontId")?.Value;
-        var type = phoneticPr.Attribute("type")?.Value;
-        var alignment = phoneticPr.Attribute("alignment")?.Value;
-        return string.IsNullOrWhiteSpace(fontId) && string.IsNullOrWhiteSpace(type) && string.IsNullOrWhiteSpace(alignment)
-            ? null
-            : new WorksheetPhoneticProperties(
-                string.IsNullOrWhiteSpace(fontId) ? null : fontId,
-                string.IsNullOrWhiteSpace(type) ? null : type,
-                string.IsNullOrWhiteSpace(alignment) ? null : alignment);
     }
 
     private static IReadOnlyList<XlsxWorksheetCustomViewState> ReadWorksheetCustomViews(
@@ -3214,7 +3198,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
         {
             packageStream.Position = 0;
-            SaveWorksheetPhoneticProperties(packageStream, workbook);
+            XlsxWorksheetPhoneticPropertyMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
@@ -5641,61 +5625,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             var sheetCalcPr = new XElement(workbookNs + "sheetCalcPr");
             sheetCalcPr.SetAttributeValue("fullCalcOnLoad", sheet.FullCalculationOnLoad ? "1" : null);
             InsertWorksheetMetadataElementInOrder(root, workbookNs, sheetCalcPr);
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
-    private static void SaveWorksheetPhoneticProperties(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "phoneticPr")?.Remove();
-            if (sheet.PhoneticProperties is null)
-            {
-                ReplacePackageXml(archive, worksheetPath, worksheetXml);
-                continue;
-            }
-
-            var phoneticPr = new XElement(workbookNs + "phoneticPr");
-            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.FontId))
-                phoneticPr.SetAttributeValue("fontId", sheet.PhoneticProperties.FontId);
-            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Type))
-                phoneticPr.SetAttributeValue("type", sheet.PhoneticProperties.Type);
-            if (!string.IsNullOrWhiteSpace(sheet.PhoneticProperties.Alignment))
-                phoneticPr.SetAttributeValue("alignment", sheet.PhoneticProperties.Alignment);
-
-            if (phoneticPr.HasAttributes)
-                InsertWorksheetMetadataElementInOrder(root, workbookNs, phoneticPr);
             ReplacePackageXml(archive, worksheetPath, worksheetXml);
         }
     }
