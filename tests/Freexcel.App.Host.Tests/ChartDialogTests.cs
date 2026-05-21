@@ -1,4 +1,7 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using FluentAssertions;
 using Freexcel.Core.Commands;
 using Freexcel.Core.Model;
@@ -237,6 +240,27 @@ public sealed class ChartDialogTests
         source.Should().Contain("_Edit series");
         source.Should().Contain("_Edit Axis Labels");
         source.Should().Contain("Name and values are inferred from the selected chart range.");
+    }
+
+    [Fact]
+    public void SelectDataSourceDialog_DisablesDeferredSeriesAndAxisButtonsWithHelpText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SelectDataSourceDialog("A1:D12");
+            var buttons = FindLogicalDescendants<Button>(dialog)
+                .Where(button => button.Content is string)
+                .ToDictionary(button => (string)button.Content);
+
+            foreach (var label in new[] { "_Add series", "_Edit series", "_Remove series", "_Edit Axis Labels" })
+            {
+                buttons[label].IsEnabled.Should().BeFalse();
+                buttons[label].ToolTip.Should().Be("Edit the chart data range to change inferred series and category labels.");
+                AutomationProperties.GetHelpText(buttons[label])
+                    .Should()
+                    .Be("Edit the chart data range to change inferred series and category labels.");
+            }
+        });
     }
 
     [Fact]
@@ -563,5 +587,18 @@ public sealed class ChartDialogTests
             source.Should().Contain(expected);
 
         source.Should().NotContain("stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 3, 0, 4) })");
+    }
+
+    private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T typedChild)
+                yield return typedChild;
+
+            foreach (var descendant in FindLogicalDescendants<T>(child))
+                yield return descendant;
+        }
     }
 }
