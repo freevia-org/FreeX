@@ -58,6 +58,9 @@ public sealed class ColorPickerDialogTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
 
+        xaml.Should().Contain("<TabControl");
+        xaml.Should().Contain("<TabItem Header=\"_Standard\"");
+        xaml.Should().Contain("<TabItem Header=\"_Custom\"");
         xaml.Should().Contain("Theme Colors");
         xaml.Should().Contain("Standard Colors");
         xaml.Should().Contain("Current");
@@ -86,6 +89,25 @@ public sealed class ColorPickerDialogTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .Contain(["_No Color", "_OK", "_Cancel"]);
+    }
+
+    [Fact]
+    public void DialogXaml_CustomTab_LabelsRgbAndHexInputsLikeExcelMoreColors()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "Header=\"_Custom\"",
+            "Content=\"_Hex:\"",
+            "Content=\"_Red:\"",
+            "Content=\"_Green:\"",
+            "Content=\"_Blue:\"",
+            "x:Name=\"CustomRedTextBox\"",
+            "x:Name=\"CustomGreenTextBox\"",
+            "x:Name=\"CustomBlueTextBox\""
+        })
+            xaml.Should().Contain(expected);
     }
 
     [Theory]
@@ -154,6 +176,33 @@ public sealed class ColorPickerDialogTests
                 GetBackgroundPreviewColor(currentBackgroundPreview).Should().Be(initialColor);
                 GetForegroundPreviewColor(newForegroundPreview).Should().Be(newColor);
                 GetBackgroundPreviewColor(newBackgroundPreview).Should().Be(newColor);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void EditingCustomRgbComponents_UpdatesSelectedColorAndPreviewText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ColorPickerDialog();
+            try
+            {
+                var red = (TextBox)dialog.FindName("CustomRedTextBox");
+                var green = (TextBox)dialog.FindName("CustomGreenTextBox");
+                var blue = (TextBox)dialog.FindName("CustomBlueTextBox");
+                var hex = (TextBox)dialog.FindName("CustomColorTextBox");
+
+                red.Text = "33";
+                green.Text = "115";
+                blue.Text = "70";
+
+                dialog.SelectedColor.Should().Be(new CellColor(33, 115, 70));
+                hex.Text.Should().Be("#217346");
             }
             finally
             {
