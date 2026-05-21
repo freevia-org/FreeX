@@ -26,7 +26,7 @@
                     </Grid.ColumnDefinitions>
                     <Label Content="_Find what:" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
                     <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown"/>
-                    <Button Content="Format..." Grid.Column="2" Width="84" Margin="8,0,0,0"/>
+                    <Button Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0"/>
                 </Grid>
             </TabItem>
 
@@ -45,7 +45,7 @@
                         </Grid.ColumnDefinitions>
                         <Label Content="_Find what:" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
                         <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown"/>
-                        <Button Content="Format..." Grid.Column="2" Width="84" Margin="8,0,0,0"/>
+                        <Button Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0"/>
                     </Grid>
 
                     <Grid x:Name="ReplaceRow" Grid.Row="1" Margin="0,8,0,0">
@@ -56,7 +56,7 @@
                         </Grid.ColumnDefinitions>
                         <Label Content="_Replace with:" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
                         <TextBox x:Name="ReplaceBox" Grid.Column="1" MinWidth="260"/>
-                        <Button Grid.Column="2" Content="Format..." Width="84" Margin="8,0,0,0"/>
+                        <Button Grid.Column="2" Content="For_mat..." Width="84" Margin="8,0,0,0"/>
                     </Grid>
                 </Grid>
             </TabItem>
@@ -118,7 +118,7 @@
         <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" MinHeight="18" Margin="0,0,0,8"/>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="FindAllBtn" Content="Find All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
+            <Button x:Name="FindAllBtn" Content="Find _All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
             <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" Click="FindNext_Click"/>
             <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Click="ReplaceAll_Click"/>
             <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
