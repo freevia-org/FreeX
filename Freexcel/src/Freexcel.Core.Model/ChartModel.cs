@@ -164,6 +164,7 @@ public sealed record ChartPointDataLabelFormat(
 public sealed class ChartModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    public string? Name { get; set; }
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsVisible { get; set; } = true;

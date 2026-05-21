@@ -13,6 +13,7 @@ public sealed partial class NativeJsonAdapter
         {
             var chart = new ChartModel
             {
+                Name = chartDto.Name,
                 Type = chartDto.Type,
                 DataRange = GridRange.Parse(chartDto.DataRange, sheetId),
                 IsVisible = chartDto.IsVisible,
@@ -147,6 +148,7 @@ public sealed partial class NativeJsonAdapter
     private static ChartDto ToChartDto(ChartModel chart) => new()
     {
         Type = chart.Type,
+        Name = chart.Name,
         DataRange = chart.DataRange.ToString(),
         IsVisible = chart.IsVisible,
         FirstRowIsHeader = chart.FirstRowIsHeader,

@@ -9,6 +9,7 @@ public enum PictureKind
 public sealed class PictureModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
+    public string? Name { get; set; }
     public CellAddress Anchor { get; set; }
     public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
     public uint SourceRowCount { get; set; }
