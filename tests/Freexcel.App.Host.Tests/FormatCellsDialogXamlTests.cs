@@ -273,6 +273,21 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderTab_NamesIndividualSideColorInputsForAccessibility()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var name in new[]
+        {
+            "x:Name=\"DlgBorderTopColorBox\" Height=\"24\" AutomationProperties.Name=\"Top border color (R,G,B)\"",
+            "x:Name=\"DlgBorderRightColorBox\" Height=\"24\" AutomationProperties.Name=\"Right border color (R,G,B)\"",
+            "x:Name=\"DlgBorderBottomColorBox\" Height=\"24\" AutomationProperties.Name=\"Bottom border color (R,G,B)\"",
+            "x:Name=\"DlgBorderLeftColorBox\" Height=\"24\" AutomationProperties.Name=\"Left border color (R,G,B)\""
+        })
+            xaml.Should().Contain(name);
+    }
+
+    [Fact]
     public void FormatCellsDialog_FillTab_ExposesBackgroundPatternColorAndSamplePreview()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
