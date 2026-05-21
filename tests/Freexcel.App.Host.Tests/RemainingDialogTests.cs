@@ -276,11 +276,38 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void UnhideSheetDialog_UsesNonEditableSelectionList()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
+
+        source.Should().Contain("private readonly ListBox _sheetBox");
+        source.Should().Contain("_sheetBox.SelectedItem");
+        source.Should().NotContain("_sheetBox.IsEditable = true");
+        source.Should().NotContain("_sheetBox.Text");
+    }
+
+    [Fact]
     public void SpellCheckDialog_CreateReplaceResult_CapturesReplacement()
     {
         SpellCheckDialog.CreateReplaceResult("mispelled", "misspelled")
             .Should()
             .Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+    }
+
+    [Fact]
+    public void SpellCheckDialog_CreateReplaceAllResult_CapturesReplacement()
+    {
+        SpellCheckDialog.CreateReplaceAllResult("mispelled", "misspelled")
+            .Should()
+            .Be(new SpellCheckDialogResult(SpellCheckDialogAction.ReplaceAll, "misspelled"));
+    }
+
+    [Fact]
+    public void SpellCheckDialog_CreateIgnoreAllResult_UsesDistinctAction()
+    {
+        SpellCheckDialog.CreateIgnoreAllResult()
+            .Should()
+            .Be(new SpellCheckDialogResult(SpellCheckDialogAction.IgnoreAll, null));
     }
 
     [Fact]
@@ -300,6 +327,8 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Content = \"_Ignore\"");
         source.Should().Contain("Content = \"_Change\"");
         source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("CreateIgnoreAllResult");
+        source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
         source.Should().Contain("CreateAddResult");
     }
 

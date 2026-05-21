@@ -579,7 +579,7 @@ public sealed record UnhideSheetDialogResult(string SheetName);
 
 public sealed class UnhideSheetDialog : Window
 {
-    private readonly ComboBox _sheetBox = new();
+    private readonly ListBox _sheetBox = new();
 
     public UnhideSheetDialogResult Result { get; private set; }
 
@@ -596,11 +596,12 @@ public sealed class UnhideSheetDialog : Window
         ShowInTaskbar = false;
         _sheetBox.ItemsSource = names;
         _sheetBox.SelectedItem = selected;
-        _sheetBox.IsEditable = true;
+        _sheetBox.SelectionMode = SelectionMode.Single;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Sheet:", Target = _sheetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _sheetBox.Margin = new Thickness(0, 0, 0, 12);
+        _sheetBox.MinHeight = 64;
         stack.Children.Add(_sheetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -610,7 +611,10 @@ public sealed class UnhideSheetDialog : Window
 
     private void Accept()
     {
-        Result = CreateResult(_sheetBox.Text);
+        if (_sheetBox.SelectedItem is not string sheetName)
+            return;
+
+        Result = CreateResult(sheetName);
         DialogResult = true;
     }
 }
@@ -620,6 +624,7 @@ public enum SpellCheckDialogAction
     Replace,
     ReplaceAll,
     Ignore,
+    IgnoreAll,
     Add
 }
 
@@ -652,13 +657,13 @@ public sealed class SpellCheckDialog : Window
             (_, _) => Accept(CreateIgnoreResult())));
         stack.Children.Add(CreateSpellingButtonRow(
             new Button { Content = "Ignore _All", Width = 84 },
-            (_, _) => Accept(CreateIgnoreResult())));
+            (_, _) => Accept(CreateIgnoreAllResult())));
         stack.Children.Add(CreateSpellingButtonRow(
             new Button { Content = "_Change", Width = 84 },
             (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
         stack.Children.Add(CreateSpellingButtonRow(
             new Button { Content = "Change A_ll", Width = 84 },
-            (_, _) => Accept(CreateReplaceAllResult())));
+            (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
         stack.Children.Add(CreateSpellingButtonRow(
             new Button { Content = "_Add", Width = 84 },
             (_, _) => Accept(CreateAddResult(word))));
@@ -670,11 +675,14 @@ public sealed class SpellCheckDialog : Window
     public static SpellCheckDialogResult CreateReplaceResult(string word, string replacement) =>
         new(SpellCheckDialogAction.Replace, string.IsNullOrWhiteSpace(replacement) ? word : replacement.Trim());
 
-    public static SpellCheckDialogResult CreateReplaceAllResult() =>
-        new(SpellCheckDialogAction.ReplaceAll, null);
+    public static SpellCheckDialogResult CreateReplaceAllResult(string word, string replacement) =>
+        new(SpellCheckDialogAction.ReplaceAll, string.IsNullOrWhiteSpace(replacement) ? word : replacement.Trim());
 
     public static SpellCheckDialogResult CreateIgnoreResult() =>
         new(SpellCheckDialogAction.Ignore, null);
+
+    public static SpellCheckDialogResult CreateIgnoreAllResult() =>
+        new(SpellCheckDialogAction.IgnoreAll, null);
 
     public static SpellCheckDialogResult CreateAddResult(string word) =>
         new(SpellCheckDialogAction.Add, word.Trim());
