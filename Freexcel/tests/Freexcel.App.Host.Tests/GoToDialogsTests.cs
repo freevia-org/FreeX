@@ -27,12 +27,39 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void TryParseReference_ResolvesDefinedNameToRangeStart()
+    {
+        var sheetId = SheetId.New();
+        var names = new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Sales_Total"] = new(
+                new CellAddress(sheetId, 10, 2),
+                new CellAddress(sheetId, 12, 4))
+        };
+
+        GoToDialog.TryParseReference("sales_total", sheetId, names, out var address).Should().BeTrue();
+
+        address.Should().Be(new CellAddress(sheetId, 10, 2));
+    }
+
+    [Fact]
+    public void BuildReferenceChoices_PutsDefaultThenRecentThenSortedNamesWithoutDuplicates()
+    {
+        var choices = GoToDialog.BuildReferenceChoices(
+            "B5",
+            ["B5", "D10"],
+            ["zName", "Alpha"]);
+
+        choices.Should().Equal("B5", "D10", "Alpha", "zName");
+    }
+
+    [Fact]
     public void GoToDialog_ExposesKeyboardAccessKeysForReferenceAndButtons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "GoToDialog.cs"));
 
         source.Should().Contain("Content = \"_Go to:\"");
-        source.Should().Contain("Selection history");
+        source.Should().Contain("Recent references and defined names");
         source.Should().Contain("Content = \"_Reference:\"");
         source.Should().Contain("Target = _addressBox");
         source.Should().Contain("Content = \"S_pecial...\"");
@@ -40,6 +67,7 @@ public sealed class GoToDialogsTests
         source.Should().Contain("SelectedSpecialKind");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().NotContain("Select a named or recently used reference");
     }
 
     [Fact]
@@ -47,6 +75,7 @@ public sealed class GoToDialogsTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));
 
+        source.Should().Contain("new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges)");
         source.Should().Contain("dialog.SelectedSpecialKind is { } specialKind");
         source.Should().Contain("SelectGoToSpecialMatches(specialKind, showEmptyMessage: true)");
     }

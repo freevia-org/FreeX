@@ -190,7 +190,7 @@ public partial class MainWindow
     private void FindGoToMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var defaultAddress = SheetGrid.SelectedRange?.Start.ToA1() ?? "A1";
-        var dialog = new GoToDialog(_currentSheetId, defaultAddress) { Owner = this };
+        var dialog = new GoToDialog(_currentSheetId, defaultAddress, _workbook.NamedRanges) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (dialog.SelectedSpecialKind is { } specialKind)
