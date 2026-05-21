@@ -11,6 +11,8 @@ public sealed class HyperlinkDialog : Window
 {
     private readonly TextBox _targetBox = new();
     private readonly TextBox _displayBox = new();
+    private readonly Button _screenTipButton = new() { Content = "ScreenTip..." };
+    private readonly Button _bookmarkButton = new() { Content = "Bookmark..." };
 
     public HyperlinkDialogResult Result { get; private set; }
 
@@ -18,23 +20,45 @@ public sealed class HyperlinkDialog : Window
     {
         Result = CreateResult(target, displayText);
         Title = "Insert Hyperlink";
-        Width = 420;
-        Height = 210;
+        Width = 560;
+        Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var grid = DialogGrid(2);
-        AddTextRow(grid, 0, "Address:", _targetBox, target);
-        AddTextRow(grid, 1, "Text to display:", _displayBox, displayText);
+        var root = new DockPanel { Margin = new Thickness(16) };
+        var linkTypes = new ListBox
+        {
+            Width = 170,
+            Margin = new Thickness(0, 0, 12, 0),
+            ItemsSource = new[] { "Existing File or Web Page", "Place in This Document", "E-mail Address" },
+            SelectedIndex = 0
+        };
+        DockPanel.SetDock(linkTypes, Dock.Left);
+        root.Children.Add(linkTypes);
+
+        var grid = DialogGrid(3);
+        AddTextRow(grid, 0, "Text to display:", _displayBox, displayText);
+        AddTextRow(grid, 1, "Address:", _targetBox, target);
+        var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
+        _screenTipButton.Width = 96;
+        _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
+        _bookmarkButton.Width = 96;
+        buttonRow.Children.Add(_screenTipButton);
+        buttonRow.Children.Add(_bookmarkButton);
+        grid.Children.Add(buttonRow);
+        Grid.SetRow(buttonRow, 2);
+        Grid.SetColumn(buttonRow, 1);
+
         grid.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
             Result = CreateResult(_targetBox.Text, _displayBox.Text);
             DialogResult = true;
         }));
-        Grid.SetRow(grid.Children[^1], 2);
+        Grid.SetRow(grid.Children[^1], 3);
         Grid.SetColumnSpan(grid.Children[^1], 2);
-        Content = grid;
+        root.Children.Add(grid);
+        Content = root;
     }
 
     public static HyperlinkDialogResult CreateResult(string target, string? displayText)
@@ -80,7 +104,9 @@ public sealed record ObjectSizeDialogResult(double Width, double Height);
 
 public sealed class ObjectSizeDialog : Window
 {
-    private readonly TextBox _sizeBox = new();
+    private readonly TextBox _widthBox = new();
+    private readonly TextBox _heightBox = new();
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = "Lock aspect ratio", IsChecked = true };
 
     public ObjectSizeDialogResult Result { get; private set; }
 
@@ -88,13 +114,14 @@ public sealed class ObjectSizeDialog : Window
     {
         Result = new ObjectSizeDialogResult(width, height);
         Title = title;
-        Width = 320;
-        Height = 150;
+        Width = 360;
+        Height = 220;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _sizeBox.Text = $"{(int)width}x{(int)height}";
-        Content = CreateSingleInputContent("Size:", _sizeBox, Accept);
+        _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
+        _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
+        Content = CreateSizeContent(Accept);
     }
 
     public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
@@ -113,10 +140,28 @@ public sealed class ObjectSizeDialog : Window
 
     private void Accept()
     {
-        if (!TryParseSize(_sizeBox.Text, out var result))
+        if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private StackPanel CreateSizeContent(Action accept)
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        AddLabeledTextBox(stack, "Height:", _heightBox);
+        AddLabeledTextBox(stack, "Width:", _widthBox);
+        _lockAspectRatioBox.Margin = new Thickness(0, 0, 0, 12);
+        stack.Children.Add(_lockAspectRatioBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        return stack;
+    }
+
+    private static void AddLabeledTextBox(Panel stack, string label, TextBox box)
+    {
+        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        box.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(box);
     }
 
     internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept)
@@ -174,7 +219,10 @@ public sealed record PictureCropDialogResult(double Left, double Top, double Rig
 
 public sealed class PictureCropDialog : Window
 {
-    private readonly TextBox _cropBox = new();
+    private readonly TextBox _cropLeftBox = new();
+    private readonly TextBox _cropTopBox = new();
+    private readonly TextBox _cropRightBox = new();
+    private readonly TextBox _cropBottomBox = new();
 
     public PictureCropDialogResult Result { get; private set; }
 
@@ -183,16 +231,15 @@ public sealed class PictureCropDialog : Window
         Result = new PictureCropDialogResult(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
         Title = "Crop Picture";
         Width = 420;
-        Height = 150;
+        Height = 280;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _cropBox.Text = string.Join(", ",
-            DrawingInputParser.FormatCropPercent(picture.CropLeft),
-            DrawingInputParser.FormatCropPercent(picture.CropTop),
-            DrawingInputParser.FormatCropPercent(picture.CropRight),
-            DrawingInputParser.FormatCropPercent(picture.CropBottom));
-        Content = ObjectSizeDialog.CreateSingleInputContent("Left, top, right, bottom (%):", _cropBox, Accept);
+        _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
+        _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
+        _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
+        _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
+        Content = CreateCropContent(Accept);
     }
 
     public static bool TryCreateResult(string input, out PictureCropDialogResult result, out string? error)
@@ -211,10 +258,29 @@ public sealed class PictureCropDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_cropBox.Text, out var result, out _))
+        var input = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
+        if (!TryCreateResult(input, out var result, out _))
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private StackPanel CreateCropContent(Action accept)
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        AddCropBox(stack, "Left:", _cropLeftBox);
+        AddCropBox(stack, "Top:", _cropTopBox);
+        AddCropBox(stack, "Right:", _cropRightBox);
+        AddCropBox(stack, "Bottom:", _cropBottomBox);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(accept));
+        return stack;
+    }
+
+    private static void AddCropBox(Panel stack, string label, TextBox box)
+    {
+        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        box.Margin = new Thickness(0, 0, 0, 8);
+        stack.Children.Add(box);
     }
 }
 
