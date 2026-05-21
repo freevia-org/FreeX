@@ -24,6 +24,7 @@ public sealed class PasteSpecialPlannerTests
 
     [Theory]
     [InlineData(PasteSpecialDialogMode.AllExceptBorders, PasteSpecialContentKind.AllExceptBorders)]
+    [InlineData(PasteSpecialDialogMode.AllMergingConditionalFormats, PasteSpecialContentKind.AllMergingConditionalFormats)]
     [InlineData(PasteSpecialDialogMode.FormulasAndNumberFormats, PasteSpecialContentKind.FormulasAndNumberFormats)]
     [InlineData(PasteSpecialDialogMode.ValuesAndNumberFormats, PasteSpecialContentKind.ValuesAndNumberFormats)]
     [InlineData(PasteSpecialDialogMode.All, PasteSpecialContentKind.Default)]
