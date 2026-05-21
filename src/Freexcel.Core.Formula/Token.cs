@@ -13,6 +13,7 @@ public enum TokenType
     CellRef,       // e.g. A1, $B$2
     RangeRef,      // e.g. A1:B5 (only produced when colon separates two CellRefs)
     SheetQualifier, // e.g. "Sheet2" in Sheet2!A1 (includes the sheet name, ! already consumed)
+    StructuredReferenceSelector, // e.g. "Amount" in Sales[Amount]
 
     // Identifiers
     FunctionName,  // e.g. SUM, IF
