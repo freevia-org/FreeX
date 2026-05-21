@@ -65,6 +65,19 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void StandaloneAltKeyTips_DoNotRouteAltKeyChords()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+        var altKeyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.AltKeyTips.cs"));
+
+        selectionSource.Should().NotContain("TryHandleTopLevelRibbonKeyTip(keyTip)");
+        selectionSource.Should().NotContain("TryInvokeTopLevelQatKeyTip(qatKeyTip)");
+        altKeyTipSource.Should().Contain("WM_SYSKEYDOWN");
+        altKeyTipSource.Should().Contain("StandaloneAltKeyTipTracker.IsAltVirtualKey");
+        altKeyTipSource.Should().Contain("_standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();");
+    }
+
+    [Fact]
     public void SheetTabsController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
