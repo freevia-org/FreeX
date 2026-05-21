@@ -12,7 +12,12 @@ public sealed class PrintPreviewDialog : Window
     {
     }
 
-    public PrintPreviewDialog(string workbookName, FixedDocument document, PrintSettingsPlan settings)
+    public PrintPreviewDialog(
+        string workbookName,
+        FixedDocument document,
+        PrintSettingsPlan settings,
+        Action? showMargins = null,
+        Action? showPageSetup = null)
     {
         Title = CreateTitle(workbookName);
         Width = 900;
@@ -73,18 +78,22 @@ public sealed class PrintPreviewDialog : Window
         };
         toolbar.Items.Add(zoomBox);
         toolbar.Items.Add(new Separator());
-        toolbar.Items.Add(new Button
+        var marginsButton = new Button
         {
             Content = "_Margins",
             Padding = new Thickness(10, 4, 10, 4),
             ToolTip = "Review worksheet margin settings before printing."
-        });
-        toolbar.Items.Add(new Button
+        };
+        marginsButton.Click += (_, _) => showMargins?.Invoke();
+        toolbar.Items.Add(marginsButton);
+        var pageSetupButton = new Button
         {
             Content = "Page _Setup...",
             Padding = new Thickness(10, 4, 10, 4),
             ToolTip = "Use Page Layout settings to change paper, orientation, margins, and scaling."
-        });
+        };
+        pageSetupButton.Click += (_, _) => showPageSetup?.Invoke();
+        toolbar.Items.Add(pageSetupButton);
         toolbar.Items.Add(new Separator());
         toolbar.Items.Add(printButton);
         toolbar.Items.Add(new Separator());

@@ -527,9 +527,21 @@ public class ExportPlannerTests
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
 
         source.Should().Contain("PrintSettingsPlan settings");
+        source.Should().Contain("Action? showMargins = null");
+        source.Should().Contain("Action? showPageSetup = null");
         source.Should().Contain("settings.Summary");
         printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
-        printExport.Should().Contain("new PrintPreviewDialog(_workbook.Name, doc, settings)");
+        printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
+        printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
+    }
+
+    [Fact]
+    public void PrintPreviewDialog_WiresMarginsAndPageSetupToolbarCallbacks()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("marginsButton.Click += (_, _) => showMargins?.Invoke()");
+        source.Should().Contain("pageSetupButton.Click += (_, _) => showPageSetup?.Invoke()");
     }
 
     [Fact]

@@ -14,7 +14,15 @@ public partial class MainWindow
         var settings = sheet is null
             ? new PrintSettingsPlan(["Print active sheet"])
             : PrintSettingsPlanner.Build(sheet);
-        var dialog = new PrintPreviewDialog(_workbook.Name, doc, settings) { Owner = this };
+        var dialog = new PrintPreviewDialog(
+            _workbook.Name,
+            doc,
+            settings,
+            showMargins: () => PageMarginsBtn_Click(this, new RoutedEventArgs()),
+            showPageSetup: () => PageSetupDialogBtn_Click(this, new RoutedEventArgs()))
+        {
+            Owner = this
+        };
         dialog.ShowDialog();
     }
 
