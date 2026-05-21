@@ -290,13 +290,14 @@ public sealed class FillSeriesStepDialog : Window
     }
 }
 
-public sealed record ZoomDialogResult(int ZoomPercent);
+public sealed record ZoomDialogResult(int ZoomPercent, bool FitSelection = false);
 
 public sealed class ZoomDialog : Window
 {
     private static readonly int[] ZoomPresets = [200, 100, 75, 50, 25];
     private readonly TextBox _zoomBox = new();
     private readonly RadioButton _customZoomButton = new() { Content = "_Custom:", GroupName = "Zoom", IsChecked = true };
+    private readonly RadioButton _fitSelectionButton = new() { Content = "Fit _selection", GroupName = "Zoom" };
     private readonly List<RadioButton> _presetButtons = [];
 
     public ZoomDialogResult Result { get; private set; }
@@ -328,8 +329,18 @@ public sealed class ZoomDialog : Window
         return true;
     }
 
+    public static ZoomDialogResult CreateFitSelectionResult(int currentZoomPercent) =>
+        new(currentZoomPercent, FitSelection: true);
+
     private void Accept()
     {
+        if (_fitSelectionButton.IsChecked == true)
+        {
+            Result = CreateFitSelectionResult(Result.ZoomPercent);
+            DialogResult = true;
+            return;
+        }
+
         var selectedPreset = _presetButtons
             .Where(button => button.IsChecked == true)
             .Select(button => button.Tag?.ToString())
@@ -360,6 +371,8 @@ public sealed class ZoomDialog : Window
         }
 
         _customZoomButton.IsChecked = !ZoomPresets.Contains(currentZoomPercent);
+        _fitSelectionButton.Margin = new Thickness(0, 2, 0, 4);
+        stack.Children.Add(_fitSelectionButton);
         var customRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 16) };
         customRow.Children.Add(_customZoomButton);
         _zoomBox.Width = 72;
@@ -632,7 +645,9 @@ public sealed record SpellCheckDialogResult(SpellCheckDialogAction Action, strin
 
 public sealed class SpellCheckDialog : Window
 {
+    private readonly TextBox _notInDictionaryBox = new();
     private readonly TextBox _replacementBox = new();
+    private readonly ListBox _suggestionsBox = new();
 
     public SpellCheckDialogResult Result { get; private set; }
 
@@ -640,36 +655,31 @@ public sealed class SpellCheckDialog : Window
     {
         Result = CreateReplaceResult(word, suggestion);
         Title = "Spelling";
-        Width = 380;
-        Height = 240;
+        Width = 480;
+        Height = 330;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = $"Not in dictionary: {word}", Margin = new Thickness(0, 0, 0, 8) });
-        stack.Children.Add(new Label { Content = "_Change to:", Target = _replacementBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        _notInDictionaryBox.Text = word;
+        _notInDictionaryBox.IsReadOnly = true;
+        _notInDictionaryBox.Height = 56;
+        _notInDictionaryBox.TextWrapping = TextWrapping.Wrap;
         _replacementBox.Text = suggestion;
-        _replacementBox.Margin = new Thickness(0, 0, 0, 12);
-        stack.Children.Add(_replacementBox);
-        stack.Children.Add(CreateSpellingButtonRow(
-            new Button { Content = "_Ignore", Width = 84 },
-            (_, _) => Accept(CreateIgnoreResult())));
-        stack.Children.Add(CreateSpellingButtonRow(
-            new Button { Content = "Ignore _All", Width = 84 },
-            (_, _) => Accept(CreateIgnoreAllResult())));
-        stack.Children.Add(CreateSpellingButtonRow(
-            new Button { Content = "_Change", Width = 84 },
-            (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
-        stack.Children.Add(CreateSpellingButtonRow(
-            new Button { Content = "Change A_ll", Width = 84 },
-            (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
-        stack.Children.Add(CreateSpellingButtonRow(
-            new Button { Content = "_Add", Width = 84 },
-            (_, _) => Accept(CreateAddResult(word))));
-        var cancelButton = new Button { Content = "_Cancel", Width = 84, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) };
-        stack.Children.Add(cancelButton);
-        Content = stack;
+        if (!string.IsNullOrWhiteSpace(suggestion))
+        {
+            _suggestionsBox.Items.Add(suggestion);
+            _suggestionsBox.SelectedIndex = 0;
+        }
+
+        _suggestionsBox.Height = 76;
+        _suggestionsBox.SelectionChanged += (_, _) =>
+        {
+            if (_suggestionsBox.SelectedItem is string selected)
+                _replacementBox.Text = selected;
+        };
+
+        Content = CreateSpellCheckContent(word);
     }
 
     public static SpellCheckDialogResult CreateReplaceResult(string word, string replacement) =>
@@ -693,15 +703,38 @@ public sealed class SpellCheckDialog : Window
         DialogResult = true;
     }
 
-    private static StackPanel CreateSpellingButtonRow(Button button, RoutedEventHandler click)
+    private UIElement CreateSpellCheckContent(string word)
     {
-        button.HorizontalAlignment = HorizontalAlignment.Right;
+        var root = new Grid { Margin = new Thickness(16) };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var fields = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        fields.Children.Add(new Label { Content = "Not in _Dictionary:", Target = _notInDictionaryBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        fields.Children.Add(_notInDictionaryBox);
+        fields.Children.Add(new Label { Content = "_Suggestions:", Target = _suggestionsBox, Padding = new Thickness(0), Margin = new Thickness(0, 10, 0, 4) });
+        fields.Children.Add(_suggestionsBox);
+        fields.Children.Add(new Label { Content = "_Change to:", Target = _replacementBox, Padding = new Thickness(0), Margin = new Thickness(0, 10, 0, 4) });
+        fields.Children.Add(_replacementBox);
+        root.Children.Add(fields);
+
+        var actionButtons = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Ignore", Width = 90 }, (_, _) => Accept(CreateIgnoreResult())));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Ignore _All", Width = 90 }, (_, _) => Accept(CreateIgnoreAllResult())));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Change", Width = 90 }, (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "Change A_ll", Width = 90 }, (_, _) => Accept(CreateReplaceAllResult(word, _replacementBox.Text))));
+        actionButtons.Children.Add(CreateSpellingButton(new Button { Content = "_Add", Width = 90 }, (_, _) => Accept(CreateAddResult(word))));
+        actionButtons.Children.Add(new Button { Content = "_Cancel", Width = 90, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) });
+        Grid.SetColumn(actionButtons, 1);
+        root.Children.Add(actionButtons);
+        return root;
+    }
+
+    private static Button CreateSpellingButton(Button button, RoutedEventHandler click)
+    {
+        button.Margin = new Thickness(0, 0, 0, 6);
         button.Click += click;
-        return new StackPanel
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 0, 4),
-            Children = { button }
-        };
+        return button;
     }
 }

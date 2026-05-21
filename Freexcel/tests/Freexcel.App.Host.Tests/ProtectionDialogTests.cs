@@ -107,7 +107,7 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
-    public void ProtectSheetDialog_ExposesPermissionChecklistAndConfirmation()
+    public void ProtectSheetDialog_ExposesPermissionChecklistAndFollowUpConfirmation()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
 
@@ -115,7 +115,9 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Header = \"Password\"");
         source.Should().Contain("Protect worksheet and contents of locked cells");
         source.Should().Contain("Caution: lost or forgotten passwords cannot be recovered.");
-        source.Should().Contain("_Confirm password:");
+        source.Should().Contain("ConfirmPasswordDialog");
+        source.Should().Contain("Confirm Password");
+        source.Should().NotContain("_Confirm password:");
         source.Should().Contain("Select locked cells");
         source.Should().Contain("Edit scenarios");
     }

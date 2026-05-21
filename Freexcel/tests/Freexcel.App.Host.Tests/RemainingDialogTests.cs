@@ -100,8 +100,18 @@ public sealed class RemainingDialogTests
         source.Should().Contain("200");
         source.Should().Contain("100");
         source.Should().Contain("75");
+        source.Should().Contain("_fitSelectionButton");
+        source.Should().Contain("Fit _selection");
         source.Should().Contain("_customZoomButton");
         source.Should().Contain("_zoomBox");
+    }
+
+    [Fact]
+    public void ZoomDialog_CreateFitSelectionResult_RequestsFitSelectionWithoutChangingPercent()
+    {
+        ZoomDialog.CreateFitSelectionResult(125)
+            .Should()
+            .Be(new ZoomDialogResult(125, FitSelection: true));
     }
 
     [Fact]
@@ -311,11 +321,18 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void SpellCheckDialog_LabelsReplacementBoxWithAccessKeyTarget()
+    public void SpellCheckDialog_UsesExcelLikeNotInDictionarySuggestionsAndChangeToLayout()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemainingDialogs.cs"));
 
+        source.Should().Contain("private readonly TextBox _notInDictionaryBox");
+        source.Should().Contain("private readonly ListBox _suggestionsBox");
+        source.Should().Contain("Not in _Dictionary:");
+        source.Should().Contain("_Suggestions:");
+        source.Should().Contain("_suggestionsBox.Items.Add(suggestion)");
+        source.Should().Contain("_suggestionsBox.SelectionChanged");
         source.Should().Contain("new Label { Content = \"_Change to:\", Target = _replacementBox");
+        source.Should().Contain("Grid.SetColumn(actionButtons");
     }
 
     [Fact]
