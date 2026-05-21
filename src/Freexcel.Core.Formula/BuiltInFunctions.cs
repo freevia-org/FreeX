@@ -996,7 +996,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawCol) || rawCol > int.MaxValue) return ErrorValue.Value;
         int colIndex = (int)rawCol;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        bool rangeLookup = args.Count < 4 || ToBool(args[3]); // default TRUE
+        bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]); // default TRUE
 
         if (colIndex < 1 || colIndex > (int)table.ColCount) return ErrorValue.Ref;
 
@@ -1045,7 +1045,7 @@ public static class BuiltInFunctions
         if (!double.IsFinite(rawRow) || rawRow > int.MaxValue) return ErrorValue.Value;
         int rowIndex = (int)rawRow;
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        bool rangeLookup = args.Count < 4 || ToBool(args[3]);
+        bool rangeLookup = args.Count < 4 || args[3] is BlankValue || ToBool(args[3]);
 
         if (rowIndex < 1 || rowIndex > (int)table.RowCount) return ErrorValue.Ref;
 
@@ -1141,7 +1141,7 @@ public static class BuiltInFunctions
         if (table.RowCount > 1 && table.ColCount > 1) return ErrorValue.NA;
 
         var lookupValue = args[0];
-        double rawMatchType = args.Count > 2 ? ToNumber(args[2]) : 1;
+        double rawMatchType = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 1;
         if (!double.IsFinite(rawMatchType)) return ErrorValue.NA;
         int matchType = (int)rawMatchType;
         if (matchType is not (-1 or 0 or 1)) return ErrorValue.NA;
@@ -2407,7 +2407,7 @@ public static class BuiltInFunctions
         var lookupFlat = lookupArr.Flatten();
 
         if (args.Count > 3 && args[3] is ErrorValue e3) return e3;
-        ScalarValue ifNotFound = args.Count > 3 ? args[3] : ErrorValue.NA;
+        ScalarValue ifNotFound = args.Count > 3 && args[3] is not BlankValue ? args[3] : ErrorValue.NA;
         if (args.Count > 4 && args[4] is ErrorValue e4) return e4;
         if (args.Count > 5 && args[5] is ErrorValue e5) return e5;
         double rawXMatchMode  = args.Count > 4 ? ToNumber(args[4]) : 0;
@@ -5766,7 +5766,6 @@ public static class BuiltInFunctions
     /// <summary>Returns true if a single data row matches a single criteria row (AND across columns).</summary>
     private static bool DbRowMatchesCriteriaRow(RangeValue database, int dataRow, RangeValue criteria, int critRow)
     {
-        bool hasAnyCriterion = false;
         for (int cc = 0; cc < criteria.ColCount; cc++)
         {
             var critHeader = criteria.Cells[0, cc];
@@ -5776,7 +5775,6 @@ public static class BuiltInFunctions
             if (critCell is BlankValue) continue;
             if (critCell is TextValue tv && tv.Value.Length == 0) continue;
 
-            hasAnyCriterion = true;
             var headerText = ToText(critHeader);
             int dbCol = FindDbHeaderCol(database, headerText);
             if (dbCol < 0) return false;
@@ -5784,7 +5782,7 @@ public static class BuiltInFunctions
             var cellValue = database.Cells[dataRow, dbCol];
             if (!MatchesCriteria(cellValue, critCell)) return false;
         }
-        return hasAnyCriterion;
+        return true;
     }
 
     /// <summary>Extract values from the field column for all matching rows.</summary>
