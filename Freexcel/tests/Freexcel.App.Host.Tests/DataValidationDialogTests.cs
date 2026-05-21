@@ -41,7 +41,8 @@ public sealed class DataValidationDialogTests
             "_Use Selection",
             "Use _Selection",
             "_In-cell dropdown",
-            "_Allow blank",
+            "_Ignore blank",
+            "Apply these changes to all other cells with the _same settings",
             "Show _input message when cell is selected",
             "Show error _alert after invalid data is entered",
             "C_lear All",
@@ -49,6 +50,39 @@ public sealed class DataValidationDialogTests
             "_Cancel"
         })
             xaml.Should().Contain($"Content=\"{content}\"");
+    }
+
+    [Fact]
+    public void DataValidationDialog_UsesExcelLikeSectionLabelsAndListSourcePicker()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+
+        xaml.Should().Contain("Validation criteria");
+        xaml.Should().Contain("When selecting cell, show this input message");
+        xaml.Should().Contain("When user enters invalid data, show this error alert");
+        xaml.Should().Contain("x:Name=\"SourcePickerButton\"");
+        xaml.Should().Contain("AutomationProperties.Name=\"Select source range\"");
+        xaml.Should().Contain("Click=\"SourcePickerButton_Click\"");
+    }
+
+    [Fact]
+    public void SourcePickerButton_PopulatesListSource()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new DataValidationDialog { SelectionSource = "=Sheet1!$B$2:$B$8" };
+            dialog.Show();
+            try
+            {
+                InvokePrivate(dialog, "SourcePickerButton_Click");
+
+                GetControl<TextBox>(dialog, "Formula1Box").Text.Should().Be("=Sheet1!$B$2:$B$8");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
