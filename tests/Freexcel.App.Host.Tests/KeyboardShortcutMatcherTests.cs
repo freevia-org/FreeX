@@ -218,6 +218,20 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.B, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.B, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.I, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.I, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void TryGetFontToggleShortcut_DoesNotStealExtraModifierCombinations(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(Key.D7, ModifierKeys.Control | ModifierKeys.Shift, BorderKeyboardShortcut.Outline)]
     [InlineData(Key.OemMinus, ModifierKeys.Control | ModifierKeys.Shift, BorderKeyboardShortcut.ClearOutline)]
     [InlineData(Key.D7, ModifierKeys.Control, null)]
