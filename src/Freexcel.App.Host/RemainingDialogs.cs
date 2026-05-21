@@ -125,11 +125,49 @@ public sealed class ColumnWidthDialog : Window
     }
 }
 
-public sealed record FillSeriesStepDialogResult(double Step);
+public enum FillSeriesDirection
+{
+    Rows,
+    Columns
+}
+
+public enum FillSeriesType
+{
+    Linear,
+    Growth,
+    Date,
+    AutoFill
+}
+
+public enum FillSeriesDateUnit
+{
+    Day,
+    Weekday,
+    Month,
+    Year
+}
+
+public sealed record FillSeriesStepDialogResult(
+    double Step,
+    FillSeriesDirection SeriesIn = FillSeriesDirection.Columns,
+    FillSeriesType Type = FillSeriesType.Linear,
+    FillSeriesDateUnit DateUnit = FillSeriesDateUnit.Day,
+    double? StopValue = null);
 
 public sealed class FillSeriesStepDialog : Window
 {
     private readonly TextBox _stepBox = new();
+    private readonly TextBox _stopBox = new();
+    private readonly RadioButton _rowsButton = new() { Content = "_Rows", GroupName = "SeriesIn" };
+    private readonly RadioButton _columnsButton = new() { Content = "_Columns", GroupName = "SeriesIn", IsChecked = true };
+    private readonly RadioButton _linearButton = new() { Content = "_Linear", GroupName = "SeriesType", IsChecked = true };
+    private readonly RadioButton _growthButton = new() { Content = "_Growth", GroupName = "SeriesType" };
+    private readonly RadioButton _dateButton = new() { Content = "_Date", GroupName = "SeriesType" };
+    private readonly RadioButton _autoFillButton = new() { Content = "_AutoFill", GroupName = "SeriesType" };
+    private readonly RadioButton _dayButton = new() { Content = "Da_y", GroupName = "DateUnit", IsChecked = true };
+    private readonly RadioButton _weekdayButton = new() { Content = "_Weekday", GroupName = "DateUnit" };
+    private readonly RadioButton _monthButton = new() { Content = "_Month", GroupName = "DateUnit" };
+    private readonly RadioButton _yearButton = new() { Content = "Y_ear", GroupName = "DateUnit" };
 
     public FillSeriesStepDialogResult Result { get; private set; } = new(1);
 
@@ -137,13 +175,14 @@ public sealed class FillSeriesStepDialog : Window
     {
         Result = new FillSeriesStepDialogResult(step);
         Title = "Series";
-        Width = 320;
-        Height = 150;
+        Width = 380;
+        Height = 340;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _stepBox.Text = step.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Step value:", _stepBox, Accept);
+        _stopBox.Text = "";
+        Content = CreateSeriesContent();
     }
 
     public static bool TryCreateResult(string? input, out FillSeriesStepDialogResult result, out string? error)
@@ -160,12 +199,94 @@ public sealed class FillSeriesStepDialog : Window
         return true;
     }
 
+    public static FillSeriesStepDialogResult CreateResult(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText)
+    {
+        var step = FillSeriesPlanner.TryParseStep(stepText ?? "", out var parsedStep)
+            ? parsedStep
+            : 1;
+        var stopValue = TryParseOptionalFiniteDouble(stopText, out var parsedStop)
+            ? parsedStop
+            : (double?)null;
+
+        return new FillSeriesStepDialogResult(step, seriesIn, type, dateUnit, stopValue);
+    }
+
+    private UIElement CreateSeriesContent()
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(new TextBlock { Text = "Series in", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        stack.Children.Add(CreateHorizontalRow(_rowsButton, _columnsButton));
+        stack.Children.Add(new TextBlock { Text = "Type", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
+        stack.Children.Add(CreateHorizontalRow(_linearButton, _growthButton, _dateButton, _autoFillButton));
+        stack.Children.Add(new TextBlock { Text = "Date unit", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
+        stack.Children.Add(CreateHorizontalRow(_dayButton, _weekdayButton, _monthButton, _yearButton));
+        stack.Children.Add(CreateLabeledTextBox("Step _value:", _stepBox));
+        stack.Children.Add(CreateLabeledTextBox("Stop _value:", _stopBox));
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return stack;
+    }
+
     private void Accept()
     {
         if (!TryCreateResult(_stepBox.Text, out var result, out _))
             return;
-        Result = result;
+        Result = CreateResult(
+            _rowsButton.IsChecked == true ? FillSeriesDirection.Rows : FillSeriesDirection.Columns,
+            SelectedSeriesType(),
+            SelectedDateUnit(),
+            _stepBox.Text,
+            _stopBox.Text);
         DialogResult = true;
+    }
+
+    private FillSeriesType SelectedSeriesType() =>
+        _growthButton.IsChecked == true ? FillSeriesType.Growth :
+        _dateButton.IsChecked == true ? FillSeriesType.Date :
+        _autoFillButton.IsChecked == true ? FillSeriesType.AutoFill :
+        FillSeriesType.Linear;
+
+    private FillSeriesDateUnit SelectedDateUnit() =>
+        _weekdayButton.IsChecked == true ? FillSeriesDateUnit.Weekday :
+        _monthButton.IsChecked == true ? FillSeriesDateUnit.Month :
+        _yearButton.IsChecked == true ? FillSeriesDateUnit.Year :
+        FillSeriesDateUnit.Day;
+
+    private static bool TryParseOptionalFiniteDouble(string? input, out double value)
+    {
+        value = 0;
+        return !string.IsNullOrWhiteSpace(input) &&
+               double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+               double.IsFinite(value);
+    }
+
+    private static StackPanel CreateHorizontalRow(params UIElement[] children)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+        foreach (var child in children)
+        {
+            if (child is Control control)
+                control.Margin = new Thickness(0, 0, 12, 0);
+            row.Children.Add(child);
+        }
+
+        return row;
+    }
+
+    private static Grid CreateLabeledTextBox(string label, TextBox textBox)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.Children.Add(new Label { Content = label, Target = textBox, Padding = new Thickness(0, 3, 8, 0) });
+        textBox.Height = 24;
+        Grid.SetColumn(textBox, 1);
+        grid.Children.Add(textBox);
+        return grid;
     }
 }
 
@@ -173,7 +294,10 @@ public sealed record ZoomDialogResult(int ZoomPercent);
 
 public sealed class ZoomDialog : Window
 {
+    private static readonly int[] ZoomPresets = [200, 100, 75, 50, 25];
     private readonly TextBox _zoomBox = new();
+    private readonly RadioButton _customZoomButton = new() { Content = "_Custom:", GroupName = "Zoom", IsChecked = true };
+    private readonly List<RadioButton> _presetButtons = [];
 
     public ZoomDialogResult Result { get; private set; }
 
@@ -187,7 +311,7 @@ public sealed class ZoomDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
-        Content = ObjectSizeDialog.CreateSingleInputContent("Zoom percent:", _zoomBox, Accept);
+        Content = CreateZoomContent(currentZoomPercent);
     }
 
     public static bool TryCreateResult(string? input, out ZoomDialogResult result, out string? error)
@@ -206,10 +330,45 @@ public sealed class ZoomDialog : Window
 
     private void Accept()
     {
-        if (!TryCreateResult(_zoomBox.Text, out var result, out _))
+        var selectedPreset = _presetButtons
+            .Where(button => button.IsChecked == true)
+            .Select(button => button.Tag?.ToString())
+            .FirstOrDefault();
+        var input = selectedPreset ?? _zoomBox.Text;
+        if (!TryCreateResult(input, out var result, out _))
             return;
         Result = result;
         DialogResult = true;
+    }
+
+    private UIElement CreateZoomContent(int currentZoomPercent)
+    {
+        var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(new TextBlock { Text = "Magnification", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        foreach (var preset in ZoomPresets)
+        {
+            var button = new RadioButton
+            {
+                Content = $"{preset}%",
+                GroupName = "Zoom",
+                Tag = preset,
+                IsChecked = preset == currentZoomPercent,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            _presetButtons.Add(button);
+            stack.Children.Add(button);
+        }
+
+        _customZoomButton.IsChecked = !ZoomPresets.Contains(currentZoomPercent);
+        var customRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 16) };
+        customRow.Children.Add(_customZoomButton);
+        _zoomBox.Width = 72;
+        _zoomBox.Height = 24;
+        customRow.Children.Add(_zoomBox);
+        customRow.Children.Add(new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) });
+        stack.Children.Add(customRow);
+        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        return stack;
     }
 }
 
@@ -333,6 +492,8 @@ public sealed class SparklineDialog : Window
     private readonly TextBox _dataRangeBox = new();
     private readonly TextBox _locationBox = new();
     private readonly ComboBox _kindBox = new();
+    private readonly Button _dataRangePickerButton = new() { Content = "_Select Data Range", Width = 132, ToolTip = "Select Data Range" };
+    private readonly Button _locationPickerButton = new() { Content = "Select _Location Range", Width = 152, ToolTip = "Select Location Range" };
 
     public SparklineDialogResult Result { get; private set; }
 
@@ -349,12 +510,10 @@ public sealed class SparklineDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = "Data range", Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
-        _dataRangeBox.Margin = new Thickness(0, 0, 0, 10);
-        stack.Children.Add(_dataRangeBox);
+        stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
         stack.Children.Add(new TextBlock { Text = "Location", Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
-        _locationBox.Margin = new Thickness(0, 0, 0, 10);
-        stack.Children.Add(_locationBox);
+        stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>();
         _kindBox.SelectedItem = kind;
         _kindBox.Margin = new Thickness(0, 0, 0, 16);
@@ -373,6 +532,17 @@ public sealed class SparklineDialog : Window
             _locationBox.Text,
             _kindBox.SelectedItem is SparklineKindChoice kind ? kind : SparklineKindChoice.Line);
         DialogResult = true;
+    }
+
+    private static StackPanel CreateRangePickerRow(TextBox textBox, Button pickerButton)
+    {
+        textBox.Height = 24;
+        textBox.Width = 190;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        row.Children.Add(textBox);
+        pickerButton.Margin = new Thickness(6, 0, 0, 0);
+        row.Children.Add(pickerButton);
+        return row;
     }
 }
 
@@ -448,7 +618,8 @@ public enum SpellCheckDialogAction
 {
     Replace,
     ReplaceAll,
-    Ignore
+    Ignore,
+    Add
 }
 
 public sealed record SpellCheckDialogResult(SpellCheckDialogAction Action, string? Replacement);
@@ -456,9 +627,6 @@ public sealed record SpellCheckDialogResult(SpellCheckDialogAction Action, strin
 public sealed class SpellCheckDialog : Window
 {
     private readonly TextBox _replacementBox = new();
-    private readonly RadioButton _replaceButton = new() { Content = "Replace", IsChecked = true };
-    private readonly RadioButton _replaceAllButton = new() { Content = "Replace all known corrections" };
-    private readonly RadioButton _ignoreButton = new() { Content = "Ignore" };
 
     public SpellCheckDialogResult Result { get; private set; }
 
@@ -474,13 +642,27 @@ public sealed class SpellCheckDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = $"Not in dictionary: {word}", Margin = new Thickness(0, 0, 0, 8) });
+        stack.Children.Add(new TextBlock { Text = "Change to:", Margin = new Thickness(0, 0, 0, 4) });
         _replacementBox.Text = suggestion;
-        _replacementBox.Margin = new Thickness(0, 0, 0, 10);
+        _replacementBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_replacementBox);
-        stack.Children.Add(_replaceButton);
-        stack.Children.Add(_replaceAllButton);
-        stack.Children.Add(_ignoreButton);
-        stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
+        stack.Children.Add(CreateSpellingButtonRow(
+            new Button { Content = "_Ignore", Width = 84 },
+            (_, _) => Accept(CreateIgnoreResult())));
+        stack.Children.Add(CreateSpellingButtonRow(
+            new Button { Content = "Ignore _All", Width = 84 },
+            (_, _) => Accept(CreateIgnoreResult())));
+        stack.Children.Add(CreateSpellingButtonRow(
+            new Button { Content = "_Change", Width = 84 },
+            (_, _) => Accept(CreateReplaceResult(word, _replacementBox.Text))));
+        stack.Children.Add(CreateSpellingButtonRow(
+            new Button { Content = "Change A_ll", Width = 84 },
+            (_, _) => Accept(CreateReplaceAllResult())));
+        stack.Children.Add(CreateSpellingButtonRow(
+            new Button { Content = "_Add", Width = 84 },
+            (_, _) => Accept(CreateAddResult(word))));
+        var cancelButton = new Button { Content = "_Cancel", Width = 84, IsCancel = true, Margin = new Thickness(0, 8, 0, 0) };
+        stack.Children.Add(cancelButton);
         Content = stack;
     }
 
@@ -493,13 +675,24 @@ public sealed class SpellCheckDialog : Window
     public static SpellCheckDialogResult CreateIgnoreResult() =>
         new(SpellCheckDialogAction.Ignore, null);
 
-    private void Accept()
+    public static SpellCheckDialogResult CreateAddResult(string word) =>
+        new(SpellCheckDialogAction.Add, word.Trim());
+
+    private void Accept(SpellCheckDialogResult result)
     {
-        Result = _replaceAllButton.IsChecked == true
-            ? CreateReplaceAllResult()
-            : _ignoreButton.IsChecked == true
-                ? CreateIgnoreResult()
-                : CreateReplaceResult(_replacementBox.Text, _replacementBox.Text);
+        Result = result;
         DialogResult = true;
+    }
+
+    private static StackPanel CreateSpellingButtonRow(Button button, RoutedEventHandler click)
+    {
+        button.HorizontalAlignment = HorizontalAlignment.Right;
+        button.Click += click;
+        return new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 0, 0, 4),
+            Children = { button }
+        };
     }
 }

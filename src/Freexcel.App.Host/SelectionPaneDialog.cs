@@ -21,7 +21,7 @@ public sealed record SelectionPaneDialogResult(
 internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 {
     public SelectionPaneItem Source { get; } = item;
-    public string Name => Source.Name;
+    public string Name { get; set; } = item.Name;
     public string Kind => Source.Kind.ToString();
     public bool IsVisible { get; set; } = item.IsVisible;
 }
@@ -29,7 +29,13 @@ internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 public sealed class SelectionPaneDialog : Window
 {
     private readonly IReadOnlyList<SelectionPaneItem> _sourceItems;
+    private readonly List<SelectionPaneDialogItem> _items;
     private readonly ListBox _list = new();
+    private readonly TextBox _searchBox = new() { Width = 180, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly ComboBox _filterBox = new() { Width = 110, Margin = new Thickness(0, 0, 0, 0) };
+    private readonly TextBox _renameBox = new() { Width = 180, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _renameButton = new() { Content = "_Rename", Width = 78, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _toggleVisibilityButton = new() { Content = "Eye", Width = 54, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Toggle visibility" };
     private readonly Button _moveUpButton = new() { Content = "_Bring Forward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _moveDownButton = new() { Content = "Send _Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
     private readonly Button _showAllButton = new() { Content = "Show _All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
@@ -49,11 +55,22 @@ public sealed class SelectionPaneDialog : Window
         ShowInTaskbar = false;
 
         _list.Margin = new Thickness(0, 0, 0, 10);
-        _list.ItemsSource = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
-        _list.SelectionChanged += (_, _) => UpdateMoveButtons();
+        _items = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
+        _list.ItemsSource = _items;
+        _list.SelectionChanged += (_, _) =>
+        {
+            UpdateMoveButtons();
+            UpdateRenameBox();
+        };
         if (_list.Items.Count > 0)
             _list.SelectedIndex = 0;
         _list.ItemTemplate = CreateItemTemplate();
+        _searchBox.TextChanged += (_, _) => ApplySearchAndFilter();
+        _filterBox.ItemsSource = new[] { "All", "Visible", "Hidden", "Charts", "Pictures", "Shapes", "Text Boxes" };
+        _filterBox.SelectedIndex = 0;
+        _filterBox.SelectionChanged += (_, _) => ApplySearchAndFilter();
+        _renameButton.Click += (_, _) => RenameSelectedItem();
+        _toggleVisibilityButton.Click += (_, _) => ToggleSelectedVisibility();
 
         _moveUpButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveUp);
         _moveDownButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveDown);
@@ -63,6 +80,17 @@ public sealed class SelectionPaneDialog : Window
         var okButton = new Button { Content = "_OK", Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         okButton.Click += (_, _) => AcceptVisibility();
         var cancelButton = new Button { Content = "_Cancel", Width = 78, IsCancel = true };
+
+        var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        searchRow.Children.Add(new Label { Content = "_Search:", Target = _searchBox, Padding = new Thickness(0, 4, 6, 0) });
+        searchRow.Children.Add(_searchBox);
+        searchRow.Children.Add(new Label { Content = "_Filter:", Target = _filterBox, Padding = new Thickness(0, 4, 6, 0) });
+        searchRow.Children.Add(_filterBox);
+
+        var renameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        renameRow.Children.Add(_renameBox);
+        renameRow.Children.Add(_renameButton);
+        renameRow.Children.Add(_toggleVisibilityButton);
 
         var moveRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
         moveRow.Children.Add(_moveUpButton);
@@ -77,7 +105,9 @@ public sealed class SelectionPaneDialog : Window
         buttonRow.Children.Add(cancelButton);
 
         var stack = new StackPanel { Margin = new Thickness(16) };
+        stack.Children.Add(searchRow);
         stack.Children.Add(_list);
+        stack.Children.Add(renameRow);
         stack.Children.Add(visibilityRow);
         stack.Children.Add(moveRow);
         stack.Children.Add(buttonRow);
@@ -148,21 +178,81 @@ public sealed class SelectionPaneDialog : Window
             action,
             selected.Source,
             _sourceItems,
-            _list.Items.Cast<SelectionPaneDialogItem>().Select(item => (item.Source.Id, item.IsVisible)).ToList());
+            _items.Select(item => (item.Source.Id, item.IsVisible)).ToList());
         DialogResult = true;
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
         CreateVisibilityChanges(
             _sourceItems,
-            _list.Items.Cast<SelectionPaneDialogItem>().Select(item => (item.Source.Id, item.IsVisible)).ToList());
+            _items.Select(item => (item.Source.Id, item.IsVisible)).ToList());
 
     private void SetAllVisibility(bool isVisible)
     {
-        foreach (var item in _list.Items.Cast<SelectionPaneDialogItem>())
+        foreach (var item in _items)
             item.IsVisible = isVisible;
 
         _list.Items.Refresh();
+    }
+
+    private void ApplySearchAndFilter()
+    {
+        var search = _searchBox.Text.Trim();
+        var filter = _filterBox.SelectedItem as string ?? "All";
+        var filtered = _items.Where(item =>
+            MatchesSearch(item, search) &&
+            MatchesFilter(item, filter)).ToList();
+
+        _list.ItemsSource = filtered;
+        if (_list.SelectedIndex < 0 && _list.Items.Count > 0)
+            _list.SelectedIndex = 0;
+        UpdateMoveButtons();
+        UpdateRenameBox();
+    }
+
+    private static bool MatchesSearch(SelectionPaneDialogItem item, string search) =>
+        string.IsNullOrWhiteSpace(search) ||
+        item.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        item.Kind.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static bool MatchesFilter(SelectionPaneDialogItem item, string filter) =>
+        filter switch
+        {
+            "Visible" => item.IsVisible,
+            "Hidden" => !item.IsVisible,
+            "Charts" => item.Source.Kind == SelectionPaneObjectKind.Chart,
+            "Pictures" => item.Source.Kind == SelectionPaneObjectKind.Picture,
+            "Shapes" => item.Source.Kind == SelectionPaneObjectKind.Shape,
+            "Text Boxes" => item.Source.Kind == SelectionPaneObjectKind.TextBox,
+            _ => true
+        };
+
+    private void RenameSelectedItem()
+    {
+        if (_list.SelectedItem is not SelectionPaneDialogItem selected)
+            return;
+
+        var name = _renameBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        selected.Name = name;
+        _list.Items.Refresh();
+    }
+
+    private void ToggleSelectedVisibility()
+    {
+        if (_list.SelectedItem is not SelectionPaneDialogItem selected)
+            return;
+
+        selected.IsVisible = !selected.IsVisible;
+        _list.Items.Refresh();
+    }
+
+    private void UpdateRenameBox()
+    {
+        if (_list.SelectedItem is SelectionPaneDialogItem selected)
+            _renameBox.Text = selected.Name;
     }
 
     private void UpdateMoveButtons()

@@ -51,6 +51,12 @@ public partial class OptionsDialog : Window
         OptFormulasAutocomplete.IsChecked = true;
         PopulateErrorCheckingRules();
 
+        // Advanced
+        OptAfterEnterDirection.ItemsSource = new[] { "Down", "Right", "Up", "Left" };
+        OptAfterEnterDirection.SelectedIndex = 0;
+        OptObjectsDisplay.ItemsSource = new[] { "All", "Placeholders", "Nothing (hide objects)" };
+        OptObjectsDisplay.SelectedIndex = 0;
+
         // View
         OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
         OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded;
@@ -67,10 +73,19 @@ public partial class OptionsDialog : Window
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (TabList.SelectedIndex < 0) return;
-        PanelGeneral.Visibility  = TabList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PanelFormulas.Visibility = TabList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PanelView.Visibility     = TabList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
-        PanelSave.Visibility     = TabList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        var selected = (TabList.SelectedItem as ListBoxItem)?.Content?.ToString() ?? "";
+        PanelGeneral.Visibility = selected == "_General" ? Visibility.Visible : Visibility.Collapsed;
+        PanelFormulas.Visibility = selected == "_Formulas" ? Visibility.Visible : Visibility.Collapsed;
+        PanelProofing.Visibility = selected == "_Proofing" ? Visibility.Visible : Visibility.Collapsed;
+        PanelSave.Visibility = selected == "_Save" ? Visibility.Visible : Visibility.Collapsed;
+        PanelLanguage.Visibility = selected == "_Language" ? Visibility.Visible : Visibility.Collapsed;
+        PanelEaseOfAccess.Visibility = selected == "_Ease of Access" ? Visibility.Visible : Visibility.Collapsed;
+        PanelAdvanced.Visibility = selected == "_Advanced" ? Visibility.Visible : Visibility.Collapsed;
+        PanelCustomizeRibbon.Visibility = selected == "_Customize Ribbon" ? Visibility.Visible : Visibility.Collapsed;
+        PanelQuickAccessToolbar.Visibility = selected == "_Quick Access Toolbar" ? Visibility.Visible : Visibility.Collapsed;
+        PanelAddIns.Visibility = selected == "_Add-ins" ? Visibility.Visible : Visibility.Collapsed;
+        PanelTrustCenter.Visibility = selected == "_Trust Center" ? Visibility.Visible : Visibility.Collapsed;
+        PanelView.Visibility = selected == "_View" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
