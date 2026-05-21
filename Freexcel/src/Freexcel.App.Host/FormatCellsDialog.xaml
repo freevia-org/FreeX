@@ -52,15 +52,15 @@
             <!-- Alignment -->
             <TabItem Header="_Alignment">
                 <StackPanel Margin="8">
-                    <TextBlock Text="Horizontal alignment:" Margin="0,4,0,2"/>
+                    <Label Content="_Horizontal alignment:" Target="{Binding ElementName=DlgHAlignBox}" Padding="0" Margin="0,4,0,2"/>
                     <ComboBox x:Name="DlgHAlignBox" Height="24"/>
-                    <TextBlock Text="Vertical alignment:" Margin="0,8,0,2"/>
+                    <Label Content="_Vertical alignment:" Target="{Binding ElementName=DlgVAlignBox}" Padding="0" Margin="0,8,0,2"/>
                     <ComboBox x:Name="DlgVAlignBox" Height="24"/>
                     <CheckBox x:Name="DlgWrapTextCheck" Content="_Wrap text" Margin="0,8,0,0"/>
                     <CheckBox x:Name="DlgShrinkToFitCheck" Content="S_hrink to fit" Margin="0,6,0,0"/>
-                    <TextBlock Text="Indent level (0-15):" Margin="0,8,0,2"/>
+                    <Label Content="_Indent level (0-15):" Target="{Binding ElementName=DlgIndentLevelBox}" Padding="0" Margin="0,8,0,2"/>
                     <TextBox x:Name="DlgIndentLevelBox" Height="24"/>
-                    <TextBlock Text="Text rotation (-90 to 90, or 255):" Margin="0,8,0,2"/>
+                    <Label Content="Text _rotation (-90 to 90, or 255):" Target="{Binding ElementName=DlgTextRotationBox}" Padding="0" Margin="0,8,0,2"/>
                     <TextBox x:Name="DlgTextRotationBox" Height="24"/>
                 </StackPanel>
             </TabItem>
