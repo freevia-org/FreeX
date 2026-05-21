@@ -176,11 +176,27 @@ public sealed class FormatCellsDialogXamlTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
 
         xaml.Should().Contain("x:Name=\"NumberCategoryList\"");
-        xaml.Should().Contain("Text=\"Category:\"");
+        xaml.Should().Contain("Content=\"_Category:\"");
+        xaml.Should().Contain("Target=\"{Binding ElementName=NumberCategoryList}\"");
         xaml.Should().Contain("Text=\"Sample\"");
         xaml.Should().Contain("x:Name=\"NumberDecimalPlacesBox\"");
         xaml.Should().Contain("x:Name=\"NumberNegativeNumbersList\"");
         xaml.Should().Contain("x:Name=\"NumberSymbolCombo\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_NumberTab_LabelsEditableControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var content in new[]
+        {
+            "Content=\"_Type:\" Target=\"{Binding ElementName=NumberFormatCombo}\"",
+            "Content=\"_Decimal places:\" Target=\"{Binding ElementName=NumberDecimalPlacesBox}\"",
+            "Content=\"_Symbol:\" Target=\"{Binding ElementName=NumberSymbolCombo}\"",
+            "Content=\"_Negative numbers:\" Target=\"{Binding ElementName=NumberNegativeNumbersList}\""
+        })
+            xaml.Should().Contain(content);
     }
 
     [Fact]

@@ -15,56 +15,73 @@ public sealed class GoToSpecialDialog : Window
     public GoToSpecialDialog()
     {
         Title = "Go To Special";
-        Width = 360;
-        Height = 420;
+        Width = 430;
+        Height = 430;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        var optionPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-        DockPanel.SetDock(optionPanel, Dock.Top);
-        root.Children.Add(optionPanel);
+        var content = new StackPanel();
+        DockPanel.SetDock(content, Dock.Top);
+        root.Children.Add(content);
 
+        content.Children.Add(new TextBlock
+        {
+            Text = "Select",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+        var availableGroup = new GroupBox { Header = "Go to special", Margin = new Thickness(0, 0, 0, 10) };
+        var optionGrid = CreateChoiceGrid();
+        availableGroup.Content = optionGrid;
+        content.Children.Add(availableGroup);
+
+        var choiceRow = 0;
         foreach (var choice in GetChoices())
         {
             var button = new RadioButton
             {
                 Content = choice.Label,
                 Tag = choice.Kind,
-                Margin = new Thickness(0, 0, 0, 6)
+                Margin = new Thickness(0, 0, 12, 6)
             };
             _buttons.Add(button);
-            optionPanel.Children.Add(button);
+            AddChoice(optionGrid, button, choiceRow++);
         }
 
-        optionPanel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
+        var unavailableGroup = new GroupBox { Header = "Additional Excel options", Margin = new Thickness(0, 0, 0, 10) };
+        var unavailableGrid = CreateChoiceGrid();
+        unavailableGroup.Content = unavailableGrid;
+        content.Children.Add(unavailableGroup);
+
+        var unavailableRow = 0;
         foreach (var choice in GetUnavailableChoices())
         {
-            optionPanel.Children.Add(new RadioButton
+            AddChoice(unavailableGrid, new RadioButton
             {
                 Content = choice,
                 IsEnabled = false,
-                Margin = new Thickness(0, 0, 0, 6),
+                Margin = new Thickness(0, 0, 12, 6),
                 ToolTip = "This Excel Go To Special option is shown for parity and is not selectable yet."
-            });
+            }, unavailableRow++);
         }
 
         if (_buttons.Count > 0)
             _buttons[0].IsChecked = true;
 
-        var buttons = new StackPanel
+        content.Children.Add(new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
-        };
+            Text = "Only supported options are selectable; unavailable options are shown to match Excel's dialog structure.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = SystemColors.GrayTextBrush,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
-
-        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        ok.Click += (_, _) => Accept();
-        buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
 
         Content = root;
     }
@@ -100,6 +117,25 @@ public sealed class GoToSpecialDialog : Window
 
         kind = GoToSpecialInputParser.Parse(text);
         return true;
+    }
+
+    private static Grid CreateChoiceGrid()
+    {
+        var grid = new Grid { Margin = new Thickness(8, 6, 8, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        return grid;
+    }
+
+    private static void AddChoice(Grid grid, RadioButton button, int index)
+    {
+        var row = index / 2;
+        while (grid.RowDefinitions.Count <= row)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        Grid.SetRow(button, row);
+        Grid.SetColumn(button, index % 2);
+        grid.Children.Add(button);
     }
 
     private void Accept()

@@ -66,6 +66,10 @@ public partial class MainWindow : Window
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;
     private System.Windows.Controls.TextBox? _inlineEditor;
     private System.Windows.Controls.ComboBox? _validationDropdown;
+    private CellAddress? _formulaEditCell;
+    private CellAddress? _formulaRangeSelectionAnchor;
+    private int? _formulaReferenceStart;
+    private int? _formulaReferenceLength;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
     private ColumnResizeSnapshot? _columnResizeSnapshot;
@@ -126,6 +130,7 @@ public partial class MainWindow : Window
         this.KeyUp += MainWindow_KeyUp;
         this.Deactivated += MainWindow_Deactivated;
         this.TextInput += MainWindow_TextInput;
+        FormulaBar.GotKeyboardFocus += (_, _) => CaptureFormulaEditCell();
         
         Loaded += MainWindow_Loaded;
         SizeChanged += MainWindow_SizeChanged;
