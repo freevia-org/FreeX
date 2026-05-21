@@ -25,6 +25,7 @@ public class SheetTabCommandTests
         sheet.PageFooter = new WorksheetHeaderFooter("Left footer", "Center footer", "Right footer");
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Range Snapshot",
             Anchor = a1,
             SourceRowCount = 1,
             SourceColumnCount = 1,
@@ -36,6 +37,7 @@ public class SheetTabCommandTests
         });
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Logo",
             Anchor = new CellAddress(sheet.Id, 2, 2),
             Kind = PictureKind.Image,
             ImageBytes = [1, 2, 3],
@@ -47,6 +49,7 @@ public class SheetTabCommandTests
         });
         sheet.Charts.Add(new ChartModel
         {
+            Name = "Sales Trend",
             Type = ChartType.Line,
             DataRange = new GridRange(a1, a1),
             Title = "Trend",
@@ -79,6 +82,7 @@ public class SheetTabCommandTests
         });
         sheet.TextBoxes.Add(new TextBoxModel
         {
+            Name = "Narrative",
             Anchor = new CellAddress(sheet.Id, 3, 2),
             Text = "Box",
             Width = 180,
@@ -90,6 +94,7 @@ public class SheetTabCommandTests
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
+            Name = "Process Step",
             Anchor = new CellAddress(sheet.Id, 4, 2),
             Kind = DrawingShapeKind.Rectangle,
             Width = 120,
@@ -121,16 +126,19 @@ public class SheetTabCommandTests
         copy.PageFooter.Should().Be(new WorksheetHeaderFooter("Left footer", "Center footer", "Right footer"));
         copy.Pictures.Should().HaveCount(2);
         var copiedPicture = copy.Pictures[0];
+        copiedPicture.Name.Should().Be("Range Snapshot");
         copiedPicture.Anchor.Should().Be(new CellAddress(copy.Id, 1, 1));
         copiedPicture.AltText.Should().Be("Copied range");
         copiedPicture.Cells.Should().ContainSingle().Which.Text.Should().Be("hello");
         var copiedImage = copy.Pictures[1];
+        copiedImage.Name.Should().Be("Logo");
         copiedImage.Anchor.Should().Be(new CellAddress(copy.Id, 2, 2));
         copiedImage.Kind.Should().Be(PictureKind.Image);
         copiedImage.ImageBytes.Should().Equal(1, 2, 3);
         copiedImage.RotationDegrees.Should().Be(45);
         copiedImage.AltText.Should().Be("Embedded image");
         var copiedChart = copy.Charts.Should().ContainSingle().Subject;
+        copiedChart.Name.Should().Be("Sales Trend");
         copiedChart.Type.Should().Be(ChartType.Line);
         copiedChart.DataRange.Start.Sheet.Should().Be(copy.Id);
         copiedChart.Title.Should().Be("Trend");
@@ -159,6 +167,7 @@ public class SheetTabCommandTests
         copiedChart.Width.Should().Be(300);
         copiedChart.Height.Should().Be(200);
         var copiedTextBox = copy.TextBoxes.Should().ContainSingle().Subject;
+        copiedTextBox.Name.Should().Be("Narrative");
         copiedTextBox.Anchor.Should().Be(new CellAddress(copy.Id, 3, 2));
         copiedTextBox.Text.Should().Be("Box");
         copiedTextBox.RotationDegrees.Should().Be(25);
@@ -166,6 +175,7 @@ public class SheetTabCommandTests
         copiedTextBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
         copiedTextBox.AltText.Should().Be("Text box note");
         var copiedShape = copy.DrawingShapes.Should().ContainSingle().Subject;
+        copiedShape.Name.Should().Be("Process Step");
         copiedShape.Anchor.Should().Be(new CellAddress(copy.Id, 4, 2));
         copiedShape.Kind.Should().Be(DrawingShapeKind.Rectangle);
         copiedShape.RotationDegrees.Should().Be(35);
