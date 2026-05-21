@@ -196,6 +196,18 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ReviewDeleteThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteRepeatableCurrentRangeCommand(
+                "Threaded Comment",
+                SheetGrid.SelectedRange.Value,
+                currentRange => new DeleteThreadedCommentCommand(_currentSheetId, currentRange.Start)))
+            return;
+
+        UpdateViewport();
+    }
+
     private void ReviewPrevCommentBtn_Click(object sender, RoutedEventArgs e)
     {
         NavigateComment(previous: true);
