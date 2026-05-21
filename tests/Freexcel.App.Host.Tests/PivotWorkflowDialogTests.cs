@@ -44,8 +44,10 @@ public sealed class PivotWorkflowDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
 
-        source.Should().Contain("CreateReferenceEditor(_sourceRangeBox");
-        source.Should().Contain("CreateReferenceEditor(_destinationRangeBox");
+        source.Should().Contain("AddLabeledReferenceEditor(");
+        source.Should().Contain("_sourceRangeBox,");
+        source.Should().Contain("_destinationRangeBox,");
+        source.Should().Contain("CreateReferenceEditor(textBox, automationName, editorMargin)");
         source.Should().Contain("Select PivotTable source range");
         source.Should().Contain("Select PivotTable location");
         source.Should().Contain("ReferencePickerButton_Click");
@@ -79,6 +81,25 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Content = \"_Existing worksheet\"");
         source.Should().Contain("Content = \"Add this data to the Data _Model\"");
         source.Should().Contain("Content = \"Open PivotTable _Fields pane\"");
+    }
+
+    [Fact]
+    public void PivotTableDialog_LabelsRangeEditorsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        foreach (var content in new[]
+        {
+            "AddLabeledReferenceEditor(",
+            "\"Table/_Range:\"",
+            "\"_Location:\"",
+            "_sourceRangeBox,",
+            "_destinationRangeBox,",
+            "new Label",
+            "Target = textBox",
+            "CreateReferenceEditor(textBox, automationName, editorMargin)"
+        })
+            source.Should().Contain(content);
     }
 
     [Fact]
