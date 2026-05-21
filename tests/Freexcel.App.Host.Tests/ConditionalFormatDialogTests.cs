@@ -66,6 +66,49 @@ public sealed class ConditionalFormatDialogTests
     }
 
     [Fact]
+    public void NewRuleDialog_ChangingRuleShellSelectionRefreshesEditor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new NewConditionalFormatRuleDialog("Greater Than", RangeFor(SheetId.New())));
+
+            var ruleTypeList = FindControl<ListBox>(dialog.Content);
+            ruleTypeList.Should().NotBeNull();
+            ruleTypeList!.SelectedItem = "Use a formula to determine which cells to format";
+
+            FindLabel(dialog.Content, "_Formula:").Should().NotBeNull();
+            GetControl<TextBox>(dialog, "_formulaBox").Text = "=A1>10";
+
+            ClickOkForTest(dialog);
+
+            dialog.ResultRule.Should().NotBeNull();
+            dialog.ResultRule!.RuleType.Should().Be(CfRuleType.Formula);
+            dialog.ResultRule.FormulaText.Should().Be("A1>10");
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
+    public void HighlightRuleDialog_OffersExcelFormatPresetsAndFormatButton()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new ConditionalFormatDialog("Greater Than", RangeFor(SheetId.New())));
+
+            var formatBox = GetControl<ComboBox>(dialog, "_colorBox");
+            formatBox.Items.Cast<object>().Select(item => item.ToString()).Should().Contain([
+                "Light Red Fill with Dark Red Text",
+                "Yellow Fill with Dark Yellow Text",
+                "Custom Format..."
+            ]);
+            FindButton(dialog.Content, "Format...").Should().NotBeNull();
+
+            dialog.Close();
+        });
+    }
+
+    [Fact]
     public void EditRuleDialog_UsesExcelEditTitleAndRuleShell()
     {
         StaTestRunner.Run(() =>
@@ -568,6 +611,9 @@ public sealed class ConditionalFormatDialogTests
     private static TextBlock? FindText(object? root, string text) =>
         EnumerateLogical(root).OfType<TextBlock>().FirstOrDefault(block => Equals(block.Text, text));
 
+    private static Label? FindLabel(object? root, string content) =>
+        EnumerateLogical(root).OfType<Label>().FirstOrDefault(label => Equals(label.Content, content));
+
     private static T? FindControl<T>(object? root)
         where T : DependencyObject =>
         EnumerateLogical(root).OfType<T>().FirstOrDefault();
@@ -575,6 +621,9 @@ public sealed class ConditionalFormatDialogTests
     private static T? FindNamedControl<T>(object? root, string name)
         where T : FrameworkElement =>
         EnumerateLogical(root).OfType<T>().FirstOrDefault(element => element.Name == name);
+
+    private static Button? FindButton(object? root, string content) =>
+        EnumerateLogical(root).OfType<Button>().FirstOrDefault(button => Equals(button.Content, content));
 
     private static IEnumerable<object> EnumerateLogical(object? root)
     {
