@@ -177,14 +177,16 @@ public sealed class SortDialogTests
     }
 
     [Fact]
-    public void SortOptionsDialog_ExposesHonestUnsupportedExcelChoices()
+    public void SortOptionsDialog_HidesUnsupportedExcelChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+        var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
 
-        source.Should().Contain("Title = \"Sort Options\"");
-        source.Should().Contain("Case _sensitive");
-        source.Should().Contain("Sort top to _bottom");
-        source.Should().Contain("Sort left to _right");
-        source.Should().Contain("IsEnabled = false");
+        optionsSource.Should().Contain("Title = \"Sort Options\"");
+        optionsSource.Should().Contain("Sort top to _bottom");
+        optionsSource.Should().NotContain("Case _sensitive");
+        optionsSource.Should().NotContain("Sort left to _right");
+        optionsSource.Should().NotContain("IsEnabled = false");
+        optionsSource.Should().NotContain("Unsupported Excel options");
     }
 }
