@@ -278,6 +278,24 @@ public sealed class RecalcEngine
                 break;
             }
 
+            case StructuredReferenceNode structured:
+            {
+                if (workbook is null)
+                    break;
+
+                var structuredRange = StructuredReferenceResolver.ResolveDataBodyColumn(
+                    workbook,
+                    workbook.GetSheet(defaultSheetId),
+                    structured.TableName,
+                    structured.ColumnName);
+                if (structuredRange is null)
+                    break;
+
+                foreach (var address in structuredRange.Value.AllCells())
+                    refs.Add(address);
+                break;
+            }
+
             case BinaryOpNode binary:
                 CollectReferences(binary.Left, defaultSheetId, workbook, refs);
                 CollectReferences(binary.Right, defaultSheetId, workbook, refs);
@@ -293,6 +311,7 @@ public sealed class RecalcEngine
                 break;
         }
     }
+
 }
 
 /// <summary>Report of a recalculation pass.</summary>
