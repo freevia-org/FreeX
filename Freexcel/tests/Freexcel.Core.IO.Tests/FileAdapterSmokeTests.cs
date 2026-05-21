@@ -525,6 +525,47 @@ public class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_PivotChartOptions()
+    {
+        var workbook = new Workbook("PivotChartNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(100));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            IsPivotChart = true,
+            PivotSourceSheetName = "Pivot",
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 7,
+            ChartStyleId = 48,
+            ShowPivotChartFieldButtons = false,
+            ShowPivotChartReportFilterButtons = false,
+            ShowPivotChartAxisFieldButtons = true,
+            ShowPivotChartValueFieldButtons = false
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedChart = adapter.Load(ms).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        loadedChart.IsPivotChart.Should().BeTrue();
+        loadedChart.PivotSourceSheetName.Should().Be("Pivot");
+        loadedChart.PivotTableName.Should().Be("PivotTable1");
+        loadedChart.PivotCacheId.Should().Be(7);
+        loadedChart.ChartStyleId.Should().Be(48);
+        loadedChart.ShowPivotChartFieldButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartReportFilterButtons.Should().BeFalse();
+        loadedChart.ShowPivotChartAxisFieldButtons.Should().BeTrue();
+        loadedChart.ShowPivotChartValueFieldButtons.Should().BeFalse();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesChartIndexesAgainstPersistedDataRange()
     {
         var workbook = new Workbook("ChartIndexSanitizeTest");
