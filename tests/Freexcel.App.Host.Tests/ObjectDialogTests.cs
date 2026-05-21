@@ -111,6 +111,8 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("_startColorButton");
         source.Should().Contain("_endColorButton");
+        source.Should().Contain("Content = \"_Start Color...\"");
+        source.Should().Contain("Content = \"_End Color...\"");
         source.Should().Contain("new ColorPickerDialog(_startColor)");
         source.Should().Contain("new ColorPickerDialog(_endColor)");
     }
