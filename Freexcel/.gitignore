@@ -28,3 +28,8 @@ src/Freexcel.App.Host/Resources/CommandIcons/
 
 # Local isolated worktrees
 .worktrees/
+
+# Diagnostic capture scripts and screenshots
+capture_*.ps1
+enum_tabs.ps1
+*.png
