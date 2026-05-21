@@ -10,7 +10,8 @@ namespace Freexcel.App.Host;
 
 internal static class PdfDocumentExporter
 {
-    private const double Dpi = 96.0;
+    private const double StandardDpi = 96.0;
+    private const double MinimumSizeDpi = 72.0;
 
     public static void Save(FixedDocument document, string path, PdfDocumentProperties? properties = null)
     {
@@ -20,7 +21,12 @@ internal static class PdfDocumentExporter
         SavePages(document, path, properties, firstPageIndex: 0, lastPageIndexInclusive: document.Pages.Count - 1);
     }
 
-    public static void Save(FixedDocument document, string path, PdfDocumentProperties? properties, ExportPageRange? pageRange)
+    public static void Save(
+        FixedDocument document,
+        string path,
+        PdfDocumentProperties? properties,
+        ExportPageRange? pageRange,
+        ExportQuality quality = ExportQuality.Standard)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -30,15 +36,21 @@ internal static class PdfDocumentExporter
 
         var firstPageIndex = Math.Max(0, (pageRange?.FromPage ?? 1) - 1);
         var lastPageIndexInclusive = Math.Min(document.Pages.Count - 1, (pageRange?.ToPage ?? document.Pages.Count) - 1);
-        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive);
+        SavePages(document, path, properties, firstPageIndex, lastPageIndexInclusive, ResolveRasterDpi(quality));
     }
+
+    internal static double ResolveRasterDpi(ExportQuality quality) =>
+        quality == ExportQuality.MinimumSize
+            ? MinimumSizeDpi
+            : StandardDpi;
 
     private static void SavePages(
         FixedDocument document,
         string path,
         PdfDocumentProperties? properties,
         int firstPageIndex,
-        int lastPageIndexInclusive)
+        int lastPageIndexInclusive,
+        double dpi = StandardDpi)
     {
         if (firstPageIndex > lastPageIndexInclusive || document.Pages.Count == 0)
             throw new InvalidOperationException("The requested page range does not contain any exportable pages.");
@@ -59,10 +71,10 @@ internal static class PdfDocumentExporter
             fixedPage.Arrange(new Rect(pageSize));
             fixedPage.UpdateLayout();
 
-            var bitmap = RenderPage(fixedPage, pageSize);
+            var bitmap = RenderPage(fixedPage, pageSize, dpi);
             var page = pdf.AddPage();
-            page.Width = XUnit.FromPoint(pageSize.Width * 72.0 / Dpi);
-            page.Height = XUnit.FromPoint(pageSize.Height * 72.0 / Dpi);
+            page.Width = XUnit.FromPoint(pageSize.Width * 72.0 / StandardDpi);
+            page.Height = XUnit.FromPoint(pageSize.Height * 72.0 / StandardDpi);
 
             using var gfx = XGraphics.FromPdfPage(page);
             using var image = XImage.FromBitmapSource(bitmap);
@@ -110,13 +122,14 @@ internal static class PdfDocumentExporter
         return new Size(width, height);
     }
 
-    private static BitmapSource RenderPage(FixedPage page, Size pageSize)
+    private static BitmapSource RenderPage(FixedPage page, Size pageSize, double dpi)
     {
+        var scale = dpi / StandardDpi;
         var target = new RenderTargetBitmap(
-            Math.Max(1, (int)Math.Ceiling(pageSize.Width)),
-            Math.Max(1, (int)Math.Ceiling(pageSize.Height)),
-            Dpi,
-            Dpi,
+            Math.Max(1, (int)Math.Ceiling(pageSize.Width * scale)),
+            Math.Max(1, (int)Math.Ceiling(pageSize.Height * scale)),
+            dpi,
+            dpi,
             PixelFormats.Pbgra32);
         target.Render(page);
         target.Freeze();
