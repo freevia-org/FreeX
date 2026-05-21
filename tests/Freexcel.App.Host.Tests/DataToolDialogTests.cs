@@ -104,6 +104,48 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_BuildsGenericColumnChoicesWhenHeadersAreDisabled()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Data");
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Region"));
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 2),
+            new CellAddress(sheetId, 8, 4));
+
+        RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false).Should().Equal(
+            new RemoveDuplicateColumnChoice(0, "Column B", true),
+            new RemoveDuplicateColumnChoice(1, "Column C", true),
+            new RemoveDuplicateColumnChoice(2, "Column D", true));
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ExcludesHeaderRowOnlyWhenHeadersAreEnabled()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 8, 3));
+
+        RemoveDuplicatesDialog.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
+            new CellAddress(sheetId, 2, 1),
+            new CellAddress(sheetId, 8, 3)));
+        RemoveDuplicatesDialog.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
+        RemoveDuplicatesDialog.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
+            .Should()
+            .Be(new GridRange(range.Start, range.Start));
+    }
+
+    [Fact]
+    public void RemoveDuplicatesDialog_ResultCapturesHeaderFlag()
+    {
+        var result = new RemoveDuplicatesDialogResult([0u, 2u], HasHeaders: true);
+
+        result.SelectedColumnOffsets.Should().Equal(0u, 2u);
+        result.HasHeaders.Should().BeTrue();
+    }
+
+    [Fact]
     public void SubtotalDialog_CreatesOptionsUsingSubtotalFunctionServiceNames()
     {
         var result = SubtotalDialog.CreateResult(
@@ -518,6 +560,7 @@ public sealed class DataToolDialogTests
     public void RemoveDuplicatesDialog_ExposesExcelStyleBulkHeaderAndColumnListControls()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "RemoveDuplicatesDialog.cs"));
+        var mainWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
 
         source.Should().Contain("_Select All");
         source.Should().Contain("_Unselect All");
@@ -526,5 +569,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Columns:");
         source.Should().Contain("SelectAllButton_Click");
         source.Should().Contain("UnselectAllButton_Click");
+        source.Should().Contain("RefreshColumnLabels");
+        source.Should().Contain("HasHeaders");
+        mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
     }
 }

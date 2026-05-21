@@ -90,7 +90,10 @@ public partial class MainWindow
         var columns = sheet is null
             ? RemoveDuplicatesDialog.BuildColumnChoices(range)
             : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range);
-        var dialog = new RemoveDuplicatesDialog(columns) { Owner = this };
+        var genericColumns = sheet is null
+            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
+            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
+        var dialog = new RemoveDuplicatesDialog(columns, genericColumns) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
         RemoveDuplicateRowsCommand? command = null;
@@ -99,7 +102,10 @@ public partial class MainWindow
                 range,
                 currentRange =>
                 {
-                    command = new RemoveDuplicateRowsCommand(_currentSheetId, currentRange, dialog.Result.SelectedColumnOffsets);
+                    command = new RemoveDuplicateRowsCommand(
+                        _currentSheetId,
+                        RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders),
+                        dialog.Result.SelectedColumnOffsets);
                     return command;
                 }))
             return;
