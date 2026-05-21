@@ -45,6 +45,18 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void DialogList_ShowsPrintAndFilterSettingIndicators()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        document.Descendants(presentation + "GridViewColumn")
+            .Select(element => element.Attribute("Header")?.Value)
+            .Should()
+            .Contain(["Print settings", "Hidden rows, columns and filter settings"]);
+    }
+
+    [Fact]
     public void CustomViewNameDialog_ExposesKeyboardAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "CustomViewsDialog.xaml.cs"));
