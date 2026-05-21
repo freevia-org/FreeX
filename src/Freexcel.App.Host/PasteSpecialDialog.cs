@@ -132,8 +132,8 @@ public sealed class PasteSpecialDialog : Window
         stack.Children.Add(CreateOperationPanel());
 
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var ok = new Button { Content = "OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += (_, _) => { DialogResult = true; };
         btnRow.Children.Add(ok);
         btnRow.Children.Add(cancel);
