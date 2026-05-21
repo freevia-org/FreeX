@@ -17,9 +17,9 @@ public sealed class AdvancedFilterDialog : Window
     private readonly TextBox _listRangeBox = new();
     private readonly TextBox _criteriaRangeBox = new() { Text = "E1:F2" };
     private readonly TextBox _copyToBox = new();
-    private readonly RadioButton _filterInPlaceButton = new() { Content = "Filter the list, in-place", IsChecked = true };
-    private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "Copy to another location" };
-    private readonly CheckBox _uniqueBox = new() { Content = "Unique records only" };
+    private readonly RadioButton _filterInPlaceButton = new() { Content = "_Filter the list, in-place", IsChecked = true };
+    private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "_Copy to another location" };
+    private readonly CheckBox _uniqueBox = new() { Content = "_Unique records only" };
     private readonly TextBlock _copyToHint = new()
     {
         Text = "Copy to is available when Copy to another location is selected.",
@@ -160,10 +160,12 @@ public sealed class AdvancedFilterDialog : Window
     private static void AddReferenceRow(Grid grid, int row, string label, TextBox textBox, string automationName)
     {
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var labelBlock = new TextBlock
+        var labelBlock = new Label
         {
-            Text = label,
+            Content = label,
+            Target = textBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Padding = new Thickness(0),
             Margin = new Thickness(0, row == 0 ? 0 : 8, 8, 0)
         };
         Grid.SetRow(labelBlock, row);
