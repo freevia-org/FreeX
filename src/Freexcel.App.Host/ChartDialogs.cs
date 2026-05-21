@@ -503,7 +503,7 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = "Object in sheet", IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = "_Object in sheet", IsChecked = true };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
@@ -521,7 +521,7 @@ public sealed class MoveChartDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         _targetBox.Text = currentSheetName;
         stack.Children.Add(_objectInSheet);
-        stack.Children.Add(new RadioButton { Content = "New chart sheet", Margin = new Thickness(0, 4, 0, 8) });
+        stack.Children.Add(new RadioButton { Content = "_New chart sheet", Margin = new Thickness(0, 4, 0, 8) });
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -557,8 +557,8 @@ public sealed record SelectDataSourceDialogResult(
 public sealed class SelectDataSourceDialog : Window
 {
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains category labels" };
-    private readonly CheckBox _switchRowColumnBox = new() { Content = "Switch Row/Column" };
+    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains _category labels" };
+    private readonly CheckBox _switchRowColumnBox = new() { Content = "_Switch Row/Column" };
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
 
@@ -575,7 +575,7 @@ public sealed class SelectDataSourceDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Chart data range", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Chart data range:", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
         stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
