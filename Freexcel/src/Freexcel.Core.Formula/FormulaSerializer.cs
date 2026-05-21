@@ -78,7 +78,9 @@ public static class FormulaSerializer
             case StructuredReferenceNode sr:
                 sb.Append(sr.TableName);
                 sb.Append('[');
-                sb.Append(sr.ColumnName.Replace("]", "]]"));
+                sb.Append(sr.ColumnName.Contains('[')
+                    ? sr.ColumnName
+                    : sr.ColumnName.Replace("]", "]]"));
                 sb.Append(']');
                 break;
 
