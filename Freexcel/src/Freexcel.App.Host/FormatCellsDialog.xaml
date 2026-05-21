@@ -81,9 +81,9 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Font:" Margin="0,4,8,2"/>
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Font style:" Margin="0,4,8,2"/>
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Size:" Margin="0,4,0,2"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="_Font:" Target="{Binding ElementName=DlgFontNameBox}" Padding="0" Margin="0,4,8,2"/>
+                    <Label Grid.Row="0" Grid.Column="1" Content="Font _style:" Target="{Binding ElementName=DlgFontStyleList}" Padding="0" Margin="0,4,8,2"/>
+                    <Label Grid.Row="0" Grid.Column="2" Content="_Size:" Target="{Binding ElementName=DlgFontSizeBox}" Padding="0" Margin="0,4,0,2"/>
                     <ComboBox x:Name="DlgFontNameBox" Grid.Row="1" Grid.Column="0" Height="24" VerticalAlignment="Top" Margin="0,0,8,0"
                               SelectionChanged="FontPreviewInput_Changed"/>
                     <ListBox x:Name="DlgFontStyleList" Grid.Row="1" Grid.Column="1" Height="96" Margin="0,0,8,0"
@@ -91,8 +91,8 @@
                     <ComboBox x:Name="DlgFontSizeBox" Grid.Row="1" Grid.Column="2" IsEditable="True" Height="24" VerticalAlignment="Top"
                               SelectionChanged="FontPreviewInput_Changed" TextBoxBase.TextChanged="FontPreviewInput_Changed"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Underline:" Margin="0,6,8,2"/>
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Color:" Margin="0,6,8,2"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="_Underline:" Target="{Binding ElementName=DlgUnderlineStyleBox}" Padding="0" Margin="0,6,8,2"/>
+                    <Label Grid.Row="2" Grid.Column="1" Content="_Color:" Target="{Binding ElementName=DlgFontColorBox}" Padding="0" Margin="0,6,8,2"/>
                     <ComboBox x:Name="DlgUnderlineStyleBox" Grid.Row="3" Grid.Column="0" Height="24" Margin="0,0,8,0"
                               SelectionChanged="UnderlineStyleBox_SelectionChanged"/>
                     <DockPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2">

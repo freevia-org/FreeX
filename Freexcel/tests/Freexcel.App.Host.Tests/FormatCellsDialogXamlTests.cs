@@ -275,8 +275,8 @@ public sealed class FormatCellsDialogXamlTests
 
         foreach (var text in new[]
         {
-            "Text=\"Font style:\"",
-            "Text=\"Underline:\"",
+            "Content=\"Font _style:\"",
+            "Content=\"_Underline:\"",
             "Text=\"Effects\"",
             "Text=\"Sample\""
         })
@@ -290,6 +290,22 @@ public sealed class FormatCellsDialogXamlTests
             "DlgFontSamplePreview"
         })
             xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_LabelsEditableControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var content in new[]
+        {
+            "Content=\"_Font:\" Target=\"{Binding ElementName=DlgFontNameBox}\"",
+            "Content=\"Font _style:\" Target=\"{Binding ElementName=DlgFontStyleList}\"",
+            "Content=\"_Size:\" Target=\"{Binding ElementName=DlgFontSizeBox}\"",
+            "Content=\"_Underline:\" Target=\"{Binding ElementName=DlgUnderlineStyleBox}\"",
+            "Content=\"_Color:\" Target=\"{Binding ElementName=DlgFontColorBox}\""
+        })
+            xaml.Should().Contain(content);
     }
 
     [Fact]
