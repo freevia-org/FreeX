@@ -184,8 +184,11 @@ public class NumberFormatterTests
     [InlineData("[$CHF-807]#,##0.00", 1234.5, "CHF1'234.50")]
     [InlineData("[$CHF-100C]#,##0.00", 1234.5, "CHF1'234.50")]
     [InlineData("[$kr-406]#,##0.00", 1234.5, "kr1.234,50")]
+    [InlineData("[$K\u010D-405]#,##0.00", 1234.5, "K\u010D1 234,50")]
     [InlineData("[$\u20AC-40B]#,##0.00", 1234.5, "\u20AC1 234,50")]
+    [InlineData("[$Ft-40E]#,##0.00", 1234.5, "Ft1 234,50")]
     [InlineData("[$kr-41D]#,##0.00", 1234.5, "kr1 234,50")]
+    [InlineData("[$\u20BD-419]#,##0.00", 1234.5, "\u20BD1 234,50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
     [InlineData("[$XYZ-999]#,##0.00", 1234.5, "XYZ1,234.50")]
     public void CustomNumberSubset_UsesKnownLcidDecimalAndGroupSeparators(
