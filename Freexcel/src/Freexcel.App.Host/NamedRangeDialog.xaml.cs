@@ -162,7 +162,7 @@ internal sealed class NameDefinitionDialog : Window
     private readonly ComboBox _scopeBox = new();
     private readonly TextBox _commentBox = new();
     private readonly TextBox _refersToBox = new();
-    private readonly Button _rangePickerButton = new() { Content = "...", Width = 26, IsEnabled = false };
+    private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
 
     public static IReadOnlyList<string> ScopeOptions(Workbook workbook) =>
         new[] { "Workbook" }.Concat(workbook.Sheets.Select(sheet => sheet.Name)).ToList();
@@ -187,6 +187,11 @@ internal sealed class NameDefinitionDialog : Window
         _commentBox.Text = initial.Comment;
         _refersToBox.Text = initial.RefersTo;
         _rangePickerButton.ToolTip = "Select the referenced range from the worksheet";
+        _rangePickerButton.Click += (_, _) =>
+        {
+            _refersToBox.Focus();
+            _refersToBox.SelectAll();
+        };
 
         Content = CreateContent();
     }
