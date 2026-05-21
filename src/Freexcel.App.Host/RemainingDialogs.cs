@@ -643,7 +643,7 @@ public sealed class SpellCheckDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = $"Not in dictionary: {word}", Margin = new Thickness(0, 0, 0, 8) });
-        stack.Children.Add(new TextBlock { Text = "Change to:", Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = "_Change to:", Target = _replacementBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _replacementBox.Text = suggestion;
         _replacementBox.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(_replacementBox);
