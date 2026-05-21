@@ -40,7 +40,12 @@ public sealed partial class NamedRangeDialog : Window
         _items.Clear();
         foreach (var (name, range) in _workbook.NamedRanges)
         {
-            _items.Add(new NamedRangeViewModel(name, FormatRange(range, _workbook)));
+            _items.Add(new NamedRangeViewModel(
+                name,
+                FormatValue(range, _workbook),
+                FormatRange(range, _workbook),
+                "Workbook",
+                ""));
         }
     }
 
@@ -53,6 +58,9 @@ public sealed partial class NamedRangeDialog : Window
         return $"{sheetName}!{start}:{end}";
     }
 
+    private static string FormatValue(GridRange range, Workbook wb) =>
+        FormatRange(range, wb);
+
     // ── Event handlers ────────────────────────────────────────────────────────
 
     private void NamesList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -60,11 +68,21 @@ public sealed partial class NamedRangeDialog : Window
         if (NamesList.SelectedItem is NamedRangeViewModel vm)
         {
             NameBox.Text = vm.Name;
-            RangeBox.Text = vm.Address;
+            RangeBox.Text = vm.RefersTo;
         }
     }
 
-    private void DefineButton_Click(object sender, RoutedEventArgs e)
+    private void NewButton_Click(object sender, RoutedEventArgs e)
+    {
+        NamesList.SelectedItem = null;
+        NameBox.Clear();
+        RangeBox.Clear();
+        NameBox.Focus();
+    }
+
+    private void EditButton_Click(object sender, RoutedEventArgs e) => DefineOrUpdateName();
+
+    private void DefineOrUpdateName()
     {
         var name = NameBox.Text.Trim();
         var rangeText = RangeBox.Text.Trim();
@@ -116,8 +134,13 @@ public sealed partial class NamedRangeDialog : Window
 }
 
 /// <summary>View model for a row in the named ranges list.</summary>
-internal sealed class NamedRangeViewModel(string name, string address)
+internal sealed class NamedRangeViewModel(string name, string value, string refersTo, string scope, string comment)
 {
     public string Name { get; } = name;
-    public string Address { get; } = address;
+    public string Value { get; } = value;
+    public string RefersTo { get; } = refersTo;
+    public string Scope { get; } = scope;
+    public string Comment { get; } = comment;
+
+    public string Address => RefersTo;
 }
