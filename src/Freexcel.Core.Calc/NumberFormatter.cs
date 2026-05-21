@@ -9,7 +9,8 @@ public static class NumberFormatter
     private readonly record struct LocaleFormatSeparators(
         string DecimalSeparator,
         string GroupSeparator,
-        string DateSeparator);
+        string DateSeparator,
+        int[]? NumberGroupSizes = null);
 
     private static readonly IReadOnlyDictionary<string, LocaleFormatSeparators> LocaleFormatCatalog =
         new Dictionary<string, LocaleFormatSeparators>(StringComparer.OrdinalIgnoreCase)
@@ -56,6 +57,7 @@ public static class NumberFormatter
             ["380A"] = new(",", ".", "/"),
             ["3C0A"] = new(",", ".", "/"),
             ["400A"] = new(",", ".", "/"),
+            ["4009"] = new(".", ",", "/", [3, 2]),
             ["440A"] = new(".", ",", "/"),
             ["500A"] = new(".", ",", "/")
         };
@@ -510,6 +512,11 @@ public static class NumberFormatter
         numberFormat.NumberGroupSeparator = separators.GroupSeparator;
         numberFormat.PercentDecimalSeparator = separators.DecimalSeparator;
         numberFormat.PercentGroupSeparator = separators.GroupSeparator;
+        if (separators.NumberGroupSizes is { Length: > 0 } groupSizes)
+        {
+            numberFormat.NumberGroupSizes = groupSizes;
+            numberFormat.PercentGroupSizes = groupSizes;
+        }
         dateTimeFormat = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
         dateTimeFormat.DateSeparator = separators.DateSeparator;
         return true;
