@@ -35,7 +35,7 @@ public sealed class GoalSeekStatusDialog : Window
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = "_OK",
             Width = 76,
             Margin = new Thickness(4, 0, 0, 0),
             IsDefault = true
@@ -51,7 +51,7 @@ public sealed class GoalSeekStatusDialog : Window
         {
             var cancelButton = new Button
             {
-                Content = "Cancel",
+                Content = "_Cancel",
                 Width = 76,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsCancel = true
