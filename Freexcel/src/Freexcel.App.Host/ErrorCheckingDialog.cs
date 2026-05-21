@@ -62,16 +62,16 @@ public sealed class ErrorCheckingDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
-        var help = new Button { Content = "Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        var help = new Button { Content = "_Help on this error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
         help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
         actionStack.Children.Add(help);
-        var showSteps = new Button { Content = "Show Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        var showSteps = new Button { Content = "Show _Calculation Steps", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
         showSteps.Click += (_, _) => TraceSelected();
         actionStack.Children.Add(showSteps);
-        var ignoreAction = new Button { Content = "Ignore Error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        var ignoreAction = new Button { Content = "_Ignore Error", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
         ignoreAction.Click += (_, _) => IgnoreSelected();
         actionStack.Children.Add(ignoreAction);
-        var editFormula = new Button { Content = "Edit in Formula Bar", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        var editFormula = new Button { Content = "_Edit in Formula Bar", Height = 26, Margin = new Thickness(0, 0, 0, 6) };
         editFormula.Click += (_, _) => NavigateSelected();
         actionStack.Children.Add(editFormula);
         root.Children.Add(actionPanel);
