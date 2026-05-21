@@ -47,4 +47,25 @@ public sealed class TextToColumnsPlannerTests
         edits[1].Address.Should().Be(new CellAddress(sheet.Id, 2, 2));
         edits[1].NewCell.Value.Should().Be(new TextValue("B"));
     }
+
+    [Fact]
+    public void BuildEdits_SplitsOnAnySelectedDelimiter()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("East,42;Open"));
+
+        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, ",;");
+
+        edits.Select(edit => edit.NewCell.Value).Should().Equal(
+            new TextValue("East"),
+            new NumberValue(42),
+            new TextValue("Open"));
+    }
+
+    [Fact]
+    public void SplitText_DefaultsToCommaWhenDelimiterListIsEmpty()
+    {
+        TextToColumnsPlanner.SplitText("A,B", "").Should().Equal("A", "B");
+    }
 }
