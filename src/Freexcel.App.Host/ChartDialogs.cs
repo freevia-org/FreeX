@@ -107,7 +107,7 @@ public sealed class InsertChartDialog : Window
     private readonly ListBox _recommendedGallery = new();
     private readonly ListBox _categoryList = new();
     private readonly ListBox _subtypeGallery = new();
-    private readonly CheckBox _recommendedBox = new() { Content = "Use recommended layout" };
+    private readonly CheckBox _recommendedBox = new() { Content = "Use _recommended layout" };
 
     public InsertChartDialogResult Result { get; private set; } = CreateRecommendedResult();
 
@@ -716,9 +716,9 @@ public sealed class ChartAreaLegendDialog : Window
     private readonly TextBox _plotAreaFillBox = new();
     private readonly TextBox _plotAreaBorderBox = new();
     private readonly TextBox _plotAreaBorderThicknessBox = new();
-    private readonly CheckBox _showLegendBox = new() { Content = "Show legend" };
+    private readonly CheckBox _showLegendBox = new() { Content = "_Show legend" };
     private readonly ComboBox _legendPositionBox = new();
-    private readonly CheckBox _legendOverlayBox = new() { Content = "Overlay legend on chart" };
+    private readonly CheckBox _legendOverlayBox = new() { Content = "O_verlay legend on chart" };
     private readonly TextBox _legendTextBox = new();
     private readonly TextBox _legendFillBox = new();
     private readonly TextBox _legendBorderBox = new();
@@ -882,11 +882,11 @@ public sealed record ChartDataLabelsDialogResult(
 
 public sealed class ChartDataLabelsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = "Show data labels" };
-    private readonly CheckBox _categoryBox = new() { Content = "Category name" };
-    private readonly CheckBox _seriesBox = new() { Content = "Series name" };
-    private readonly CheckBox _percentageBox = new() { Content = "Percentage" };
-    private readonly CheckBox _calloutsBox = new() { Content = "Data label callouts" };
+    private readonly CheckBox _showBox = new() { Content = "_Show data labels" };
+    private readonly CheckBox _categoryBox = new() { Content = "_Category name" };
+    private readonly CheckBox _seriesBox = new() { Content = "_Series name" };
+    private readonly CheckBox _percentageBox = new() { Content = "_Percentage" };
+    private readonly CheckBox _calloutsBox = new() { Content = "Data label _callouts" };
     private readonly ComboBox _positionBox = new();
     private readonly ComboBox _separatorBox = new();
     private readonly ComboBox _numberFormatBox = new();
@@ -1039,9 +1039,9 @@ public sealed record ChartTrendlineOptionsDialogResult(
 
 public sealed class ChartTrendlineOptionsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = "Show trendline" };
-    private readonly CheckBox _equationBox = new() { Content = "Display equation" };
-    private readonly CheckBox _rSquaredBox = new() { Content = "Display R-squared value" };
+    private readonly CheckBox _showBox = new() { Content = "_Show trendline" };
+    private readonly CheckBox _equationBox = new() { Content = "Display _equation" };
+    private readonly CheckBox _rSquaredBox = new() { Content = "Display _R-squared value" };
     private readonly ComboBox _typeBox = new();
     private readonly ComboBox _dashBox = new();
     private readonly TextBox _periodBox = new();
@@ -1157,8 +1157,8 @@ public sealed record ChartErrorBarsDialogResult(
 
 public sealed class ChartErrorBarsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = "Show error bars" };
-    private readonly CheckBox _endCapsBox = new() { Content = "End caps" };
+    private readonly CheckBox _showBox = new() { Content = "_Show error bars" };
+    private readonly CheckBox _endCapsBox = new() { Content = "_End caps" };
     private readonly ComboBox _kindBox = new();
     private readonly ComboBox _directionBox = new();
     private readonly TextBox _valueBox = new();
@@ -1307,16 +1307,16 @@ public sealed class ChartAxisFormatDialog : Window
     private readonly TextBox _maximumBox = new();
     private readonly TextBox _majorUnitBox = new();
     private readonly TextBox _minorUnitBox = new();
-    private readonly CheckBox _logBox = new() { Content = "Logarithmic scale" };
+    private readonly CheckBox _logBox = new() { Content = "_Logarithmic scale" };
     private readonly ComboBox _numberFormatBox = new();
-    private readonly CheckBox _majorGridBox = new() { Content = "Major gridlines" };
-    private readonly CheckBox _minorGridBox = new() { Content = "Minor gridlines" };
+    private readonly CheckBox _majorGridBox = new() { Content = "_Major gridlines" };
+    private readonly CheckBox _minorGridBox = new() { Content = "M_inor gridlines" };
     private readonly TextBox _majorGridColorBox = new();
     private readonly TextBox _minorGridColorBox = new();
     private readonly TextBox _gridlineThicknessBox = new();
     private readonly ComboBox _majorTickBox = new();
     private readonly ComboBox _minorTickBox = new();
-    private readonly CheckBox _labelsBox = new() { Content = "Show labels" };
+    private readonly CheckBox _labelsBox = new() { Content = "Show _labels" };
     private readonly TextBox _labelColorBox = new();
     private readonly TextBox _labelFontSizeBox = new();
     private readonly TextBox _labelAngleBox = new();
