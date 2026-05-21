@@ -141,6 +141,27 @@ function Body($slug, [int]$n) {
         '^page-setup$|^calculation-options$|^options$' { return Gear $n }
         '^print-gridlines$' { return (Grid $n) + "`n" + (Txt $checkGlyph 15 5 4 $n) }
         '^print-headings$' { return (Grid $n) + "`n" + (Txt 'A' 6 5 4 $n) + "`n" + (Txt '1' 4 8 4 $n) }
+        '^insert-function$' { return (Doc $n) + "`n" + (Txt 'fx' 10.5 10.8 7.2 $n) }
+        '^autosum$' { return Txt $sigmaGlyph 10 10 13 $n }
+        '^recently-used$' { return "  <circle class=""r"" cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 6 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (L 10 10 10 6 $n 'r' 1) + "`n" + (L 10 10 14 10 $n 'r' 1) }
+        '^math-trig$' { return (Txt '√' 8 10 10 $n) + "`n" + (L 10 14 16 6 $n 's' 1) }
+        '^text$' { return Txt 'T' 10 10 12 $n 'font-family="Georgia,serif"' }
+        '^date-time$|^date-time-formats$' { return "  <rect class=""f s"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 11 $n)"" stroke-width=""$(S 1 $n)""/>`n  <rect class=""b"" x=""$(S 4 $n)"" y=""$(S 5 $n)"" width=""$(S 12 $n)"" height=""$(S 3 $n)""/>`n" + (Txt '7' 10 12 6 $n) }
+        '^logical$' { return (Txt 'T' 7 8 6 $n) + "`n" + (Txt 'F' 13 13 6 $n) + "`n" + (L 5 11 15 11 $n 's' .8) }
+        '^lookup-reference$' { return "  <circle class=""r"" cx=""$(S 8 $n)"" cy=""$(S 8 $n)"" r=""$(S 4 $n)"" stroke-width=""$(S 1.1 $n)""/>`n" + (L 11 11 16 16 $n 'r' 1.1) + "`n" + (Rct 11.5 4 5 5 $n 'f s' .7) }
+        '^more-functions$' { return (Txt $sigmaGlyph 7 10 7 $n) + "`n" + (Txt '...' 13 10 6 $n) }
+        '^define-name$|^use-in-formula$|^create-from-selection$' { return "  <path class=""f s"" d=""M$(S 4 $n) $(S 6 $n) H$(S 12 $n) L$(S 16 $n) $(S 10 $n) L$(S 12 $n) $(S 14 $n) H$(S 4 $n) Z"" stroke-width=""$(S 1 $n)""/>`n  <circle class=""b"" cx=""$(S 12 $n)"" cy=""$(S 10 $n)"" r=""$(S 1 $n)""/>" }
+        '^name-manager$' { return (Doc $n) + "`n" + (Txt 'fx' 9 8 5.5 $n) + "`n" + (L 6 13 14 13 $n 'b' 1) }
+        '^trace-precedents$' { return (Txt 'fx' 14 10 5.5 $n) + "`n" + (Arrow 4 10 10 10 $n 'b' 1) }
+        '^trace-dependents$' { return (Txt 'fx' 6 10 5.5 $n) + "`n" + (Arrow 10 10 16 10 $n 'b' 1) }
+        '^show-formulas$' { return (Txt '=' 6 8 7 $n) + "`n" + (Txt 'fx' 12 12 6 $n) }
+        '^error-checking$' { return "  <path class=""y s"" d=""M$(S 10 $n) $(S 3 $n) L$(S 17 $n) $(S 16 $n) H$(S 3 $n) Z"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '!' 10 11 8 $n) }
+        '^watch-window$' { return (WindowIcon $n) + "`n" + (Txt 'fx' 10 10 5.5 $n) }
+        '^remove-arrows$' { return (Arrow 5 10 15 10 $n 'b' 1) + "`n" + (L 5 5 15 15 $n 'r' 1.2) }
+        '^evaluate-formula$' { return (Txt 'fx' 7 9 6 $n) + "`n" + (Arrow 10 14 16 8 $n 'g' 1) }
+        '^calculate-now$' { return (Txt 'fx' 8 10 7 $n) + "`n" + (Txt $boltGlyph 14 10 8 $n) }
+        '^calculate-sheet$' { return (Grid $n) + "`n" + (Txt $boltGlyph 10 10 8 $n) }
+        '^calculation-options$' { return Gear $n }
         '^text-to-columns$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1.4) + "`n" + (Arrow 8 10 5 10 $n 'g' 1) + "`n" + (Arrow 12 10 15 10 $n 'g' 1) }
         '^get-data$' { return (Database $n) + "`n" + (Arrow 14 15 17 12 $n 'g' .9) }
         '^refresh-all$' { return (Database $n) + "`n  <path class=""r"" d=""M$(S 14 $n) $(S 7 $n) A$(S 5 $n) $(S 5 $n) 0 1 0 $(S 15 $n) $(S 13 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 13 5 16 7 $n 'g' .9) }

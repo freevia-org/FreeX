@@ -533,6 +533,11 @@ public static class RibbonIconFactory
             "object-rotate" => "rotate",
             "shape-gradient" => "gradient",
             "object-effects" => "effects",
+            "math" => "math-trig",
+            "date" => "date-time",
+            "lookup" => "lookup-reference",
+            "formula-auditing" => "evaluate-formula",
+            "calculation" => "calculate-now",
             _ => ""
         };
 
