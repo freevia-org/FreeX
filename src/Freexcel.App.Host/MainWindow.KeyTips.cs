@@ -87,6 +87,16 @@ public partial class MainWindow
             ExitRibbonKeyTipMode();
     }
 
+    private bool TryHandleDirectRibbonKeyTip(Key key)
+    {
+        var token = RibbonKeyTipMode.ToKeyTipToken(key);
+        if (token is null || !TryHandleTopLevelRibbonKeyTip(token))
+            return false;
+
+        EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
+        return true;
+    }
+
     private void ShowKeyTipOverlay(RibbonKeyTipScope scope)
     {
         if (KeyTipOverlay == null || RootGrid == null)
