@@ -22,5 +22,9 @@ Thumbs.db
 # XLSX corpus private samples
 test-corpus/local-private/
 
+# Generated icon asset exports
+docs/assets/
+src/Freexcel.App.Host/Resources/CommandIcons/
+
 # Local isolated worktrees
 .worktrees/

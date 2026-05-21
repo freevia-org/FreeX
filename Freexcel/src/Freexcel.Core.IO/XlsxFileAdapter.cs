@@ -5148,6 +5148,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         PreserveWorksheetPrinterSettingsReferences(sourceArchive, generatedArchive);
         PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive, workbook);
         PreserveLegacyCommentParts(sourceArchive, generatedArchive, workbook);
+        PreserveSharedStringRichTextAndPhonetics(sourceArchive, generatedArchive);
         PreserveUnsupportedConditionalFormatting(sourceArchive, generatedArchive);
     }
 
@@ -7028,6 +7029,79 @@ public sealed class XlsxFileAdapter : IFileAdapter
                 comment => comment.Attribute("ref")!.Value,
                 comment => string.Concat(comment.Element(workbookNs + "text")?.Descendants(workbookNs + "t").Select(text => text.Value) ?? []),
                 StringComparer.OrdinalIgnoreCase) ?? [];
+    }
+
+    private static void PreserveSharedStringRichTextAndPhonetics(ZipArchive sourceArchive, ZipArchive targetArchive)
+    {
+        var sourceEntry = sourceArchive.GetEntry("xl/sharedStrings.xml");
+        var targetEntry = targetArchive.GetEntry("xl/sharedStrings.xml");
+        if (sourceEntry is null || targetEntry is null)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sourceXml = LoadXml(sourceEntry);
+        var targetXml = LoadXml(targetEntry);
+        var sourceRoot = sourceXml.Root;
+        var targetRoot = targetXml.Root;
+        if (sourceRoot is null || targetRoot is null)
+            return;
+
+        var sourceRichStringsByText = GetUniqueSharedStringsByPlainText(
+            sourceRoot.Elements(workbookNs + "si")
+                .Where(item => HasRichSharedStringMetadata(item, workbookNs)),
+            workbookNs);
+        if (sourceRichStringsByText.Count == 0)
+            return;
+
+        var targetStringsByText = GetUniqueSharedStringsByPlainText(
+            targetRoot.Elements(workbookNs + "si"),
+            workbookNs);
+
+        var changed = false;
+        foreach (var (plainText, sourceString) in sourceRichStringsByText)
+        {
+            if (!targetStringsByText.TryGetValue(plainText, out var targetString))
+                continue;
+
+            targetString.ReplaceWith(new XElement(sourceString));
+            changed = true;
+        }
+
+        if (changed)
+            ReplacePackageXml(targetArchive, "xl/sharedStrings.xml", targetXml);
+    }
+
+    private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText(
+        IEnumerable<XElement> sharedStrings,
+        XNamespace workbookNs)
+    {
+        return sharedStrings
+            .Select(element => new
+            {
+                Text = ReadSharedStringPlainText(element, workbookNs),
+                Element = element
+            })
+            .Where(item => !string.IsNullOrEmpty(item.Text))
+            .GroupBy(item => item.Text, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Single().Element,
+                StringComparer.Ordinal);
+    }
+
+    private static bool HasRichSharedStringMetadata(XElement sharedString, XNamespace workbookNs) =>
+        sharedString.Elements(workbookNs + "r").Any() ||
+        sharedString.Element(workbookNs + "rPh") is not null ||
+        sharedString.Element(workbookNs + "phoneticPr") is not null;
+
+    private static string ReadSharedStringPlainText(XElement sharedString, XNamespace workbookNs)
+    {
+        var runs = sharedString.Elements(workbookNs + "r").ToList();
+        if (runs.Count > 0)
+            return string.Concat(runs.Select(run => run.Element(workbookNs + "t")?.Value ?? string.Empty));
+
+        return sharedString.Element(workbookNs + "t")?.Value ?? string.Empty;
     }
 
     private static bool MergeWorksheetColumnAttributes(XElement? sourceColumns, XElement targetRoot, XNamespace workbookNs)

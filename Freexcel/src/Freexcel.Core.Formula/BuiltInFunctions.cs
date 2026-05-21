@@ -3463,7 +3463,9 @@ public static class BuiltInFunctions
     private static ScalarValue PercentileExc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv) return ErrorValue.Value;
+        var rv = args[0] is RangeValue range
+            ? range
+            : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e) return e;
         double k = ToNumber(args[1]);
         if (!double.IsFinite(k)) return ErrorValue.Num;
@@ -3611,9 +3613,13 @@ public static class BuiltInFunctions
     private static ScalarValue Correl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
-        if (args[0] is not RangeValue rv1) return ErrorValue.Value;
+        var rv1 = args[0] is RangeValue range1
+            ? range1
+            : SingleCellArray(args[0]);
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue rv2) return ErrorValue.Value;
+        var rv2 = args[1] is RangeValue range2
+            ? range2
+            : SingleCellArray(args[1]);
         var (xs, xErr) = CollectRangeNumbers(rv1);
         if (xErr is not null) return xErr;
         var (ys, yErr) = CollectRangeNumbers(rv2);
@@ -3639,9 +3645,13 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[1] is not RangeValue knownY) return ErrorValue.Value;
+        var knownY = args[1] is RangeValue knownYRange
+            ? knownYRange
+            : SingleCellArray(args[1]);
         if (args[2] is ErrorValue e2) return e2;
-        if (args[2] is not RangeValue knownX) return ErrorValue.Value;
+        var knownX = args[2] is RangeValue knownXRange
+            ? knownXRange
+            : SingleCellArray(args[2]);
         double x    = ToNumber(args[0]);
         if (!double.IsFinite(x)) return ErrorValue.Num;
         var (ys, yErr) = CollectRangeNumbers(knownY);
@@ -3810,7 +3820,9 @@ public static class BuiltInFunctions
     private static ScalarValue Irr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
+        var valRange = args[0] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[0]);
         double guess = args.Count > 1 && args[1] is not BlankValue ? ToNumber(args[1]) : 0.1;
         if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
         var (values, err) = CollectRangeNumbers(valRange);
@@ -5318,7 +5330,9 @@ public static class BuiltInFunctions
         if (!double.IsFinite(x) || !double.IsFinite(n) || !double.IsFinite(m))
             return ErrorValue.Num;
 
-        if (args[3] is not RangeValue coeffs) return ErrorValue.Value;
+        var coeffs = args[3] is RangeValue coeffRange
+            ? coeffRange
+            : SingleCellArray(args[3]);
 
         double sum = 0;
         int i = 0;
@@ -5342,7 +5356,15 @@ public static class BuiltInFunctions
         matrix = null!;
         error = null;
         if (value is ErrorValue err) { error = err; return false; }
-        if (value is not RangeValue rv) { error = ErrorValue.Value; return false; }
+        RangeValue rv;
+        if (value is RangeValue range)
+        {
+            rv = range;
+        }
+        else
+        {
+            rv = SingleCellArray(value);
+        }
         int rows = rv.RowCount;
         int cols = rv.ColCount;
         var m = new double[rows, cols];
@@ -7723,8 +7745,12 @@ public static class BuiltInFunctions
     {
         if (args[0] is ErrorValue e0) return e0;
         if (args[1] is ErrorValue e1) return e1;
-        if (args[0] is not RangeValue rv0) return ErrorValue.Value;
-        if (args[1] is not RangeValue rv1) return ErrorValue.Value;
+        var rv0 = args[0] is RangeValue range0
+            ? range0
+            : SingleCellArray(args[0]);
+        var rv1 = args[1] is RangeValue range1
+            ? range1
+            : SingleCellArray(args[1]);
         var actualFlat = rv0.Flatten().ToArray();
         var expectedFlat = rv1.Flatten().ToArray();
         if (actualFlat.Length != expectedFlat.Length) return ErrorValue.NA;
@@ -7745,7 +7771,7 @@ public static class BuiltInFunctions
         double df = rows == 1 || cols == 1
             ? n - 1
             : (double)(rows - 1) * (cols - 1);
-        if (df < 1) return ErrorValue.Num;
+        if (df < 1) return ErrorValue.NA;
         return NumberResult(1.0 - ChiSqCdf(chiSq, df));
     }
 
@@ -8365,7 +8391,9 @@ public static class BuiltInFunctions
     private static ScalarValue Mirr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
+        var valRange = args[0] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[0]);
         double financeRate  = ToNumber(args[1]);
         double reinvestRate = ToNumber(args[2]);
         if (!double.IsFinite(financeRate) || !double.IsFinite(reinvestRate)) return ErrorValue.Num;
@@ -8373,7 +8401,7 @@ public static class BuiltInFunctions
         if (err is not null) return err;
         var cf = values!;
         int n = cf.Count;
-        if (n < 2) return ErrorValue.Num;
+        if (n < 2) return ErrorValue.DivByZero;
         // NPV of negative flows at finance_rate
         double npvNeg = 0;
         for (int i = 0; i < n; i++)
@@ -8390,8 +8418,12 @@ public static class BuiltInFunctions
     private static ScalarValue Xirr(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        if (args[0] is not RangeValue valRange) return ErrorValue.Value;
-        if (args[1] is not RangeValue dateRange) return ErrorValue.Value;
+        var valRange = args[0] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[0]);
+        var dateRange = args[1] is RangeValue datesRange
+            ? datesRange
+            : SingleCellArray(args[1]);
         double guess = args.Count > 2 && args[2] is not BlankValue ? ToNumber(args[2]) : 0.1;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
@@ -8399,7 +8431,8 @@ public static class BuiltInFunctions
         if (de is not null) return de;
         var cf = vals!;
         var ds = datesRaw!;
-        if (cf.Count < 2 || cf.Count != ds.Count) return ErrorValue.Num;
+        if (cf.Count < 2) return ErrorValue.NA;
+        if (cf.Count != ds.Count) return ErrorValue.Num;
         var dates = ds.Select(SerialToDate).ToList();
         DateTime d0 = dates[0];
         // Newton-Raphson
@@ -8427,8 +8460,12 @@ public static class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         double rate = ToNumber(args[0]);
-        if (args[1] is not RangeValue valRange) return ErrorValue.Value;
-        if (args[2] is not RangeValue dateRange) return ErrorValue.Value;
+        var valRange = args[1] is RangeValue valuesRange
+            ? valuesRange
+            : SingleCellArray(args[1]);
+        var dateRange = args[2] is RangeValue datesRange
+            ? datesRange
+            : SingleCellArray(args[2]);
         if (!double.IsFinite(rate) || rate <= -1) return ErrorValue.Num;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
@@ -8476,7 +8513,9 @@ public static class BuiltInFunctions
     {
         if (FirstError(args) is { } e) return e;
         double principal = ToNumber(args[0]);
-        if (args[1] is not RangeValue schedRange) return ErrorValue.Value;
+        var schedRange = args[1] is RangeValue scheduleRange
+            ? scheduleRange
+            : SingleCellArray(args[1]);
         if (!double.IsFinite(principal)) return ErrorValue.Num;
         var (rates, re) = CollectRangeNumbers(schedRange);
         if (re is not null) return re;
