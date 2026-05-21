@@ -38,6 +38,15 @@ public sealed class DataValidationDialogTests
 
         foreach (var content in new[]
         {
+            "_Allow:",
+            "_Data:",
+            "_Minimum:",
+            "Ma_ximum:",
+            "Input _title:",
+            "Input _message:",
+            "_Alert style:",
+            "Error _title:",
+            "Error _message:",
             "_Use Selection",
             "Use _Selection",
             "_In-cell dropdown",
@@ -63,6 +72,42 @@ public sealed class DataValidationDialogTests
         xaml.Should().Contain("x:Name=\"SourcePickerButton\"");
         xaml.Should().Contain("AutomationProperties.Name=\"Select source range\"");
         xaml.Should().Contain("Click=\"SourcePickerButton_Click\"");
+    }
+
+    [Fact]
+    public void DataValidationDialog_EditableCaptionsAreAccessKeyLabelsWithTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml"));
+
+        foreach (var expected in new[]
+        {
+            "<Label Grid.Row=\"1\" Grid.Column=\"0\" Content=\"_Allow:\" Target=\"{Binding ElementName=TypeCombo}\"",
+            "<Label x:Name=\"OperatorLabel\" Grid.Row=\"2\" Grid.Column=\"0\" Content=\"_Data:\" Target=\"{Binding ElementName=OperatorCombo}\"",
+            "<Label x:Name=\"Formula1Label\" Grid.Row=\"3\" Grid.Column=\"0\" Content=\"_Minimum:\" Target=\"{Binding ElementName=Formula1Box}\"",
+            "<Label x:Name=\"Formula2Label\" Grid.Row=\"4\" Grid.Column=\"0\" Content=\"Ma_ximum:\" Target=\"{Binding ElementName=Formula2Box}\"",
+            "<Label Grid.Row=\"1\" Grid.Column=\"0\" Content=\"Input _title:\" Target=\"{Binding ElementName=PromptTitleBox}\"",
+            "<Label Grid.Row=\"2\" Grid.Column=\"0\" Content=\"Input _message:\" Target=\"{Binding ElementName=PromptMessageBox}\"",
+            "<Label Grid.Row=\"1\" Grid.Column=\"0\" Content=\"_Alert style:\" Target=\"{Binding ElementName=AlertStyleCombo}\"",
+            "<Label Grid.Row=\"2\" Grid.Column=\"0\" Content=\"Error _title:\" Target=\"{Binding ElementName=ErrorTitleBox}\"",
+            "<Label Grid.Row=\"3\" Grid.Column=\"0\" Content=\"Error _message:\" Target=\"{Binding ElementName=ErrorMessageBox}\""
+        })
+            xaml.Should().Contain(expected);
+
+        xaml.Should().NotContain("Text=\"Allow:\"");
+        xaml.Should().NotContain("Text=\"Data:\"");
+        xaml.Should().NotContain("Text=\"Minimum:\"");
+        xaml.Should().NotContain("Text=\"Maximum:\"");
+    }
+
+    [Fact]
+    public void DataValidationDialog_UpdatesDynamicCaptionContent()
+    {
+        var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "DataValidationDialog.xaml.cs"));
+
+        codeBehind.Should().Contain("Formula1Label.Content = \"_Source:\"");
+        codeBehind.Should().Contain("Formula1Label.Content = \"_Formula:\"");
+        codeBehind.Should().Contain("Formula1Label.Content = (opTag == \"Between\" || opTag == \"NotBetween\") ? \"_Minimum:\" : \"_Value:\"");
+        codeBehind.Should().NotContain("Formula1Label.Text =");
     }
 
     [Fact]

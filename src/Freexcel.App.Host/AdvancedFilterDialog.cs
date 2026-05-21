@@ -145,7 +145,7 @@ public sealed class AdvancedFilterDialog : Window
         var panel = new DockPanel();
         var pickerButton = new Button
         {
-            Content = "Collapse Dialog",
+            Content = "...",
             Width = 28,
             Margin = new Thickness(0, 0, 6, 0),
             Tag = textBox
