@@ -214,7 +214,7 @@ public partial class MainWindow
 
         var result = GoalSeekService.Seek(_workbook, _recalcEngine, setCell, targetValue, changingCell);
 
-        var statusDialog = new GoalSeekStatusDialog(result) { Owner = this };
+        var statusDialog = new GoalSeekStatusDialog(result, targetValue) { Owner = this };
         if (statusDialog.ShowDialog() == true && statusDialog.ApplyResult)
         {
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
