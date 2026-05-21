@@ -91,7 +91,7 @@ public sealed class InsertFunctionDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         DockPanel.SetDock(btnRow, Dock.Bottom);
         var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var help = new Button { Content = "Help on this function", Width = 132, Margin = new Thickness(0, 0, 8, 0) };
+        var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
         help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         ok.Click += Ok_Click;
