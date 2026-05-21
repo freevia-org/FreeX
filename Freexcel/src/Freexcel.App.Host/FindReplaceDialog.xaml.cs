@@ -19,16 +19,19 @@ public sealed partial class FindReplaceDialog : Window
         _commandBus = commandBus;
         _navigateTo = navigateTo;
         InitializeComponent();
-        ReplaceRow.Visibility = replaceMode ? Visibility.Visible : Visibility.Collapsed;
-        ReplaceAllBtn.Visibility = replaceMode ? Visibility.Visible : Visibility.Collapsed;
-        if (!replaceMode)
+        if (replaceMode)
         {
-            Height = 200;
+            FindReplaceTabs.SelectedItem = ReplaceTab;
+            ReplaceFindBox.Focus();
         }
-        FindBox.Focus();
+        else
+        {
+            FindBox.Focus();
+        }
     }
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindNext();
+    private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void FindBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -38,7 +41,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private void FindNext()
     {
-        var search = FindBox.Text;
+        var search = SearchText;
         if (string.IsNullOrEmpty(search)) return;
 
         if (search != _lastSearch)
@@ -51,7 +54,9 @@ public sealed partial class FindReplaceDialog : Window
             _getWorkbook(), search,
             matchCase: MatchCaseBox.IsChecked == true,
             matchEntireCell: MatchEntireBox.IsChecked == true,
-            searchFormulas: SearchFormulasBox.IsChecked == true);
+            searchFormulas: SearchFormulas);
+
+        UpdateResultsGrid();
 
         if (_results.Count == 0)
         {
@@ -66,9 +71,26 @@ public sealed partial class FindReplaceDialog : Window
         _navigateTo(result.Address);
     }
 
+    private void FindAll()
+    {
+        var search = SearchText;
+        if (string.IsNullOrEmpty(search)) return;
+
+        _lastSearch = search;
+        _currentIndex = -1;
+        _results = FindReplaceService.Find(
+            _getWorkbook(), search,
+            matchCase: MatchCaseBox.IsChecked == true,
+            matchEntireCell: MatchEntireBox.IsChecked == true,
+            searchFormulas: SearchFormulas);
+
+        UpdateResultsGrid();
+        StatusLabel.Text = _results.Count == 0 ? "No matches found." : $"{_results.Count} cell(s) found.";
+    }
+
     private void ReplaceAll_Click(object sender, RoutedEventArgs e)
     {
-        var search = FindBox.Text;
+        var search = SearchText;
         if (string.IsNullOrEmpty(search)) return;
 
         var count = FindReplaceService.ReplaceAll(
@@ -79,5 +101,19 @@ public sealed partial class FindReplaceDialog : Window
         StatusLabel.Text = count == 0 ? "No matches found." : $"Replaced {count} cell(s).";
         _results = [];
         _currentIndex = -1;
+        UpdateResultsGrid();
     }
+
+    private string SearchText => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox.Text : FindBox.Text;
+
+    private bool SearchFormulas => LookInCombo.SelectedIndex == 0;
+
+    private void UpdateResultsGrid()
+    {
+        FindResultsGrid.ItemsSource = _results
+            .Select(result => new FindResultRow(result.Address.ToA1(), result.MatchedText))
+            .ToList();
+    }
+
+    private sealed record FindResultRow(string Address, string Value);
 }
