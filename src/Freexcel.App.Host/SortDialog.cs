@@ -54,18 +54,23 @@ public sealed class SortDialog : Window
 
     private readonly ObservableCollection<SortDialogLevel> _levels;
     private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
+    private readonly CheckBox _headerCheck;
 
     public IReadOnlyList<SortDialogLevel> Levels => _levels.ToList();
 
     public IReadOnlyList<SortKey> ResultSortKeys { get; private set; }
 
+    public bool ResultHasHeaders { get; private set; }
+
     public SortDialog(
         IEnumerable<SortDialogLevel>? levels = null,
-        IEnumerable<SortColumnChoice>? columnChoices = null)
+        IEnumerable<SortColumnChoice>? columnChoices = null,
+        bool hasHeaders = true)
     {
         _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
         _columnChoices = NormalizeColumnChoices(columnChoices);
         ResultSortKeys = BuildSortKeys(_levels);
+        ResultHasHeaders = hasHeaders;
 
         Title = "Custom Sort";
         Width = 640;
@@ -75,13 +80,14 @@ public sealed class SortDialog : Window
 
         var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
         var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
-        var headerCheck = new CheckBox
+        _headerCheck = new CheckBox
         {
             Content = "My data has _headers",
+            IsChecked = hasHeaders,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
-        DockPanel.SetDock(headerCheck, Dock.Right);
-        headerRow.Children.Add(headerCheck);
+        DockPanel.SetDock(_headerCheck, Dock.Right);
+        headerRow.Children.Add(_headerCheck);
         headerRow.Children.Add(new TextBlock
         {
             Text = "Sort levels",
@@ -195,6 +201,7 @@ public sealed class SortDialog : Window
         ok.Click += (_, _) =>
         {
             ResultSortKeys = BuildSortKeys(_levels);
+            ResultHasHeaders = _headerCheck.IsChecked == true;
             DialogResult = true;
         };
         var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
@@ -259,14 +266,32 @@ public sealed class SortDialog : Window
 
     public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(GridRange range)
     {
+        return BuildColumnChoices(null, range, hasHeaders: false);
+    }
+
+    public static IReadOnlyList<SortColumnChoice> BuildColumnChoices(Sheet? sheet, GridRange range, bool hasHeaders)
+    {
         var choices = new List<SortColumnChoice>();
         for (uint offset = 0; offset < range.ColCount; offset++)
         {
             var columnName = CellAddress.NumberToColumnName(range.Start.Col + offset);
-            choices.Add(new SortColumnChoice($"Column {columnName}", offset));
+            var label = hasHeaders && sheet is not null
+                ? GetHeaderLabel(sheet, range, offset, columnName)
+                : $"Column {columnName}";
+            choices.Add(new SortColumnChoice(label, offset));
         }
 
         return choices.Count == 0 ? [new SortColumnChoice("Column A", 0)] : choices;
+    }
+
+    public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
+    {
+        if (!hasHeaders || range.Start.Row >= range.End.Row)
+            return range;
+
+        return new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row + 1, range.Start.Col),
+            range.End);
     }
 
     private static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels)
@@ -279,5 +304,20 @@ public sealed class SortDialog : Window
     {
         var normalized = choices?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
+    }
+
+    private static string GetHeaderLabel(Sheet sheet, GridRange range, uint offset, string fallbackColumnName)
+    {
+        var address = new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col + offset);
+        var text = sheet.GetCell(address)?.Value switch
+        {
+            TextValue value => value.Value.Trim(),
+            NumberValue value => value.Value.ToString("G15", System.Globalization.CultureInfo.CurrentCulture),
+            DateTimeValue value => value.Value.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+            BoolValue value => value.Value ? "TRUE" : "FALSE",
+            _ => string.Empty
+        };
+
+        return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
     }
 }

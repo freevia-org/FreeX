@@ -73,6 +73,8 @@ public sealed class SortDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
 
         source.Should().Contain("My data has _headers");
+        source.Should().Contain("IsChecked = hasHeaders");
+        source.Should().Contain("ResultHasHeaders");
         source.Should().Contain("Sort levels");
         source.Should().Contain("Header = \"Sort by\"");
         source.Should().Contain("Header = \"Sort On\"");
@@ -92,6 +94,41 @@ public sealed class SortDialogTests
             new SortColumnChoice("Column C", 0),
             new SortColumnChoice("Column D", 1),
             new SortColumnChoice("Column E", 2));
+    }
+
+    [Fact]
+    public void BuildColumnChoices_UsesHeaderValuesWhenHeaderRowIsEnabled()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sales");
+        sheet.SetCell(new CellAddress(sheetId, 4, 2), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 4, 3), new TextValue("Revenue"));
+        var range = new GridRange(
+            new CellAddress(sheetId, 4, 2),
+            new CellAddress(sheetId, 12, 4));
+
+        SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true).Should().Equal(
+            new SortColumnChoice("Region", 0),
+            new SortColumnChoice("Revenue", 1),
+            new SortColumnChoice("Column D", 2));
+    }
+
+    [Fact]
+    public void ExcludeHeaderRow_RemovesFirstRowOnlyWhenHeaderRowIsEnabled()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 7, 5));
+
+        SortDialog.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
+            new CellAddress(sheetId, 3, 3),
+            new CellAddress(sheetId, 7, 5)));
+
+        SortDialog.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
+        SortDialog.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
+            .Should()
+            .Be(new GridRange(range.Start, range.Start));
     }
 
     [Fact]
@@ -125,5 +162,14 @@ public sealed class SortDialogTests
                 new SortDialogLevel(0, true),
                 new SortDialogLevel(2, false),
                 new SortDialogLevel(2, false));
+    }
+
+    [Fact]
+    public void MainWindowCustomSort_UsesHeaderAwareChoicesAndExcludesHeaderRowWhenChecked()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)");
+        source.Should().Contain("SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders)");
     }
 }

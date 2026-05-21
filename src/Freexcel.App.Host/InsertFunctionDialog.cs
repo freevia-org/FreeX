@@ -16,7 +16,8 @@ public sealed class InsertFunctionDialog : Window
     private readonly TextBlock _syntaxText;
     private readonly IReadOnlyList<InsertFunctionCatalogEntry> _catalog;
 
-    private const string AllCategory = "All";
+    private const string MostRecentlyUsedCategory = InsertFunctionCatalogPlanner.MostRecentlyUsedCategory;
+    private const string AllCategory = InsertFunctionCatalogPlanner.AllCategory;
 
     public InsertFunctionDialog()
     {
@@ -51,8 +52,8 @@ public sealed class InsertFunctionDialog : Window
         var categoryLabel = new Label { Content = "Or select a _category:", Target = _categoryBox, VerticalContentAlignment = VerticalAlignment.Center };
         Grid.SetRow(categoryLabel, 1);
         searchPanel.Children.Add(categoryLabel);
-        _categoryBox.ItemsSource = new[] { AllCategory }.Concat(_catalog.Select(entry => entry.Category).Distinct().OrderBy(category => category)).ToArray();
-        _categoryBox.SelectedItem = AllCategory;
+        _categoryBox.ItemsSource = BuildCategoryChoices(_catalog);
+        _categoryBox.SelectedItem = MostRecentlyUsedCategory;
         _categoryBox.SelectionChanged += (_, _) => RefreshList();
         Grid.SetColumn(_categoryBox, 1);
         Grid.SetRow(_categoryBox, 1);
@@ -131,6 +132,9 @@ public sealed class InsertFunctionDialog : Window
         string? category,
         string? searchText) =>
         InsertFunctionCatalogPlanner.FilterCatalog(catalog, category, searchText);
+
+    public static IReadOnlyList<string> BuildCategoryChoices(IReadOnlyList<InsertFunctionCatalogEntry> catalog) =>
+        [MostRecentlyUsedCategory, AllCategory, .. catalog.Select(entry => entry.Category).Distinct().OrderBy(category => category)];
 
     public static string CreateFormula(string functionName) =>
         InsertFunctionCatalogPlanner.CreateFormula(functionName);
