@@ -125,6 +125,10 @@ public sealed class PivotFilterDialogXamlTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .NotContain(["Number format _ID:", "Custom format _code:"]);
+        document.Descendants(presentation + "TextBlock")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Should()
+            .NotContain("Choose how values appear in the PivotTable.");
 
         document.Descendants(presentation + "TextBox")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "NumberFormatBox")
@@ -137,6 +141,9 @@ public sealed class PivotFilterDialogXamlTests
             .Should()
             .Be("Collapsed");
         source.Should().Contain("NumberFormatButton_Click");
+        source.Should().Contain("new FormatCellsDialog(style, FormatCellsDialogTab.Number)");
+        source.Should().Contain("NumberFormatCodeBox.Text = numberFormat");
+        source.Should().Contain("DefaultCustomNumberFormatId");
     }
 
     [Fact]
