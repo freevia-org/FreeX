@@ -190,7 +190,7 @@ internal static class XlsxWorksheetChartWriter
                 new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
                         new XAttribute("id", chartIndex + 1),
-                        new XAttribute("name", $"Chart {chartIndex}")),
+                        new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}"))),
                     new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
                 new XElement(spreadsheetDrawingNs + "xfrm"),
                 new XElement(drawingNs + "graphic",
@@ -201,4 +201,7 @@ internal static class XlsxWorksheetChartWriter
 
     private static long PixelsToEmus(double pixels) =>
         (long)Math.Round(Math.Max(0, pixels) * 9525.0);
+
+    private static string DrawingName(string? name, string fallback) =>
+        string.IsNullOrWhiteSpace(name) ? fallback : name;
 }

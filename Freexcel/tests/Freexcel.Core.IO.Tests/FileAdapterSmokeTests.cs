@@ -1914,6 +1914,7 @@ public class FileAdapterSmokeTests
         var imageBytes = MinimalPngBytes();
         sheet.Pictures.Add(new PictureModel
         {
+            Name = "Product Photo",
             Anchor = new CellAddress(sheet.Id, 2, 3),
             Kind = PictureKind.Image,
             ImageBytes = imageBytes,
@@ -1939,6 +1940,7 @@ public class FileAdapterSmokeTests
         var loaded = adapter.Load(ms);
 
         var picture = loaded.GetSheetAt(0).Pictures.Should().ContainSingle().Subject;
+        picture.Name.Should().Be("Product Photo");
         picture.Kind.Should().Be(PictureKind.Image);
         picture.ImageBytes.Should().Equal(imageBytes);
         picture.ContentType.Should().Be("image/png");
@@ -2043,6 +2045,7 @@ public class FileAdapterSmokeTests
         var sheet = workbook.AddSheet("Sheet1");
         sheet.TextBoxes.Add(new TextBoxModel
         {
+            Name = "Review Callout",
             Anchor = new CellAddress(sheet.Id, 2, 2),
             Text = "Review note",
             Width = 220,
@@ -2056,6 +2059,7 @@ public class FileAdapterSmokeTests
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
+            Name = "Approval Shape",
             Anchor = new CellAddress(sheet.Id, 4, 3),
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
@@ -2150,6 +2154,7 @@ public class FileAdapterSmokeTests
         sheet.TextBoxes.Add(new TextBoxModel
         {
             Anchor = new CellAddress(sheet.Id, 2, 2),
+            Name = "Review Callout",
             Text = "Review note",
             Width = 220,
             Height = 120,
@@ -2160,6 +2165,7 @@ public class FileAdapterSmokeTests
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 4, 3),
+            Name = "Approval Shape",
             Kind = DrawingShapeKind.Ellipse,
             Width = 140,
             Height = 90,
@@ -2181,6 +2187,9 @@ public class FileAdapterSmokeTests
             XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
             XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
             drawingXml.Descendants(xdr + "sp").Should().HaveCount(2);
+            drawingXml.Descendants(xdr + "cNvPr").Select(e => e.Attribute("name")?.Value)
+                .Should()
+                .Contain(["Review Callout", "Approval Shape"]);
             drawingXml.Descendants(a + "t").Select(e => e.Value).Should().Contain("Review note");
             drawingXml.Descendants(a + "prstGeom").Select(e => e.Attribute("prst")?.Value).Should().Contain("ellipse");
             drawingXml.Descendants(a + "gradFill").Should().ContainSingle();
@@ -2190,8 +2199,11 @@ public class FileAdapterSmokeTests
         ms.Position = 0;
         var loaded = adapter.Load(ms);
         var loadedSheet = loaded.GetSheetAt(0);
-        loadedSheet.TextBoxes.Should().ContainSingle().Which.Text.Should().Be("Review note");
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        loadedTextBox.Name.Should().Be("Review Callout");
+        loadedTextBox.Text.Should().Be("Review note");
         var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedShape.Name.Should().Be("Approval Shape");
         loadedShape.Kind.Should().Be(DrawingShapeKind.Ellipse);
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
