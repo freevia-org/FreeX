@@ -13,10 +13,13 @@ public enum SelectionPaneDialogAction
 
 public sealed record SelectionPaneVisibilityChange(SelectionPaneObjectKind Kind, Guid Id, bool IsVisible);
 
+public sealed record SelectionPaneRenameChange(SelectionPaneObjectKind Kind, Guid Id, string Name);
+
 public sealed record SelectionPaneDialogResult(
     SelectionPaneDialogAction Action,
     SelectionPaneItem? Target,
-    IReadOnlyList<SelectionPaneVisibilityChange> VisibilityChanges);
+    IReadOnlyList<SelectionPaneVisibilityChange> VisibilityChanges,
+    IReadOnlyList<SelectionPaneRenameChange> RenameChanges);
 
 internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 {
@@ -46,7 +49,7 @@ public sealed class SelectionPaneDialog : Window
     public SelectionPaneDialog(IReadOnlyList<SelectionPaneItem> items)
     {
         _sourceItems = items;
-        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, []);
+        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], []);
         Title = "Selection Pane";
         Width = 380;
         Height = 360;
@@ -117,7 +120,7 @@ public sealed class SelectionPaneDialog : Window
 
     public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
-        IReadOnlyList<(Guid Id, bool IsVisible)> currentStates)
+        IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates)
     {
         var states = currentStates.ToDictionary(state => state.Id, state => state.IsVisible);
         return originalItems
@@ -126,15 +129,49 @@ public sealed class SelectionPaneDialog : Window
             .ToList();
     }
 
+    public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges(
+        IReadOnlyList<SelectionPaneItem> originalItems,
+        IReadOnlyList<(Guid Id, bool IsVisible)> currentStates) =>
+        CreateVisibilityChanges(
+            originalItems,
+            currentStates
+                .Select(state => (state.Id, state.IsVisible, Name: originalItems.FirstOrDefault(item => item.Id == state.Id)?.Name ?? ""))
+                .ToList());
+
+    public static IReadOnlyList<SelectionPaneRenameChange> CreateRenameChanges(
+        IReadOnlyList<SelectionPaneItem> originalItems,
+        IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates)
+    {
+        var names = currentStates.ToDictionary(state => state.Id, state => NormalizeName(state.Name));
+        return originalItems
+            .Where(item => names.TryGetValue(item.Id, out var name) && !string.Equals(name, item.Name, StringComparison.Ordinal))
+            .Select(item => new SelectionPaneRenameChange(item.Kind, item.Id, names[item.Id]))
+            .ToList();
+    }
+
+    public static SelectionPaneDialogResult CreateResult(
+        SelectionPaneDialogAction action,
+        SelectionPaneItem? target,
+        IReadOnlyList<SelectionPaneItem> originalItems,
+        IReadOnlyList<(Guid Id, bool IsVisible, string Name)> currentStates) =>
+        new(
+            action,
+            target,
+            CreateVisibilityChanges(originalItems, currentStates),
+            CreateRenameChanges(originalItems, currentStates));
+
     public static SelectionPaneDialogResult CreateResult(
         SelectionPaneDialogAction action,
         SelectionPaneItem? target,
         IReadOnlyList<SelectionPaneItem> originalItems,
         IReadOnlyList<(Guid Id, bool IsVisible)> currentStates) =>
-        new(
+        CreateResult(
             action,
             target,
-            CreateVisibilityChanges(originalItems, currentStates));
+            originalItems,
+            currentStates
+                .Select(state => (state.Id, state.IsVisible, Name: originalItems.FirstOrDefault(item => item.Id == state.Id)?.Name ?? ""))
+                .ToList());
 
     private static DataTemplate CreateItemTemplate()
     {
@@ -165,7 +202,8 @@ public sealed class SelectionPaneDialog : Window
         Result = new SelectionPaneDialogResult(
             SelectionPaneDialogAction.ApplyVisibility,
             null,
-            CurrentVisibilityChanges());
+            CurrentVisibilityChanges(),
+            CurrentRenameChanges());
         DialogResult = true;
     }
 
@@ -178,14 +216,19 @@ public sealed class SelectionPaneDialog : Window
             action,
             selected.Source,
             _sourceItems,
-            _items.Select(item => (item.Source.Id, item.IsVisible)).ToList());
+            _items.Select(item => (item.Source.Id, item.IsVisible, item.Name)).ToList());
         DialogResult = true;
     }
 
     private IReadOnlyList<SelectionPaneVisibilityChange> CurrentVisibilityChanges() =>
         CreateVisibilityChanges(
             _sourceItems,
-            _items.Select(item => (item.Source.Id, item.IsVisible)).ToList());
+            _items.Select(item => (item.Source.Id, item.IsVisible, item.Name)).ToList());
+
+    private IReadOnlyList<SelectionPaneRenameChange> CurrentRenameChanges() =>
+        CreateRenameChanges(
+            _sourceItems,
+            _items.Select(item => (item.Source.Id, item.IsVisible, item.Name)).ToList());
 
     private void SetAllVisibility(bool isVisible)
     {
@@ -239,6 +282,8 @@ public sealed class SelectionPaneDialog : Window
         selected.Name = name;
         _list.Items.Refresh();
     }
+
+    private static string NormalizeName(string name) => name.Trim();
 
     private void ToggleSelectedVisibility()
     {

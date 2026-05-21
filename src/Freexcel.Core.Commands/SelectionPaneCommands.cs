@@ -129,6 +129,59 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
         (list[_fromIndex], list[_toIndex]) = (list[_toIndex], list[_fromIndex]);
 }
 
+public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly SelectionPaneObjectKind _kind;
+    private readonly Guid _objectId;
+    private readonly string _newName;
+    private string? _previousName;
+    private bool _applied;
+
+    public string Label => "Rename Object";
+
+    public RenameSelectionPaneObjectCommand(
+        SheetId sheetId,
+        SelectionPaneObjectKind kind,
+        Guid objectId,
+        string newName)
+    {
+        _sheetId = sheetId;
+        _kind = kind;
+        _objectId = objectId;
+        _newName = newName.Trim();
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+            return new CommandOutcome(false, "Object name cannot be blank.");
+
+        var target = SelectionPaneObjectAccess.Find(ctx.GetSheet(_sheetId), _kind, _objectId);
+        if (target is null)
+            return new CommandOutcome(false, "Selection pane object was not found.");
+
+        _previousName = target.Name;
+        target.Name = _newName;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: [target.Anchor]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied)
+            return;
+
+        var target = SelectionPaneObjectAccess.Find(ctx.GetSheet(_sheetId), _kind, _objectId);
+        if (target is null)
+            return;
+
+        target.Name = _previousName;
+        _previousName = null;
+        _applied = false;
+    }
+}
+
 internal static class SelectionPaneObjectAccess
 {
     public static List<SelectionPaneObjectRef> GetList(Sheet sheet, SelectionPaneObjectKind kind) =>
@@ -139,28 +192,36 @@ internal static class SelectionPaneObjectAccess
                     chart.Id,
                     chart.DataRange.Start,
                     () => chart.IsVisible,
-                    value => chart.IsVisible = value))
+                    value => chart.IsVisible = value,
+                    () => chart.Name,
+                    value => chart.Name = value))
                 .ToList(),
             SelectionPaneObjectKind.Picture => sheet.Pictures
                 .Select(picture => new SelectionPaneObjectRef(
                     picture.Id,
                     picture.Anchor,
                     () => picture.IsVisible,
-                    value => picture.IsVisible = value))
+                    value => picture.IsVisible = value,
+                    () => picture.Name,
+                    value => picture.Name = value))
                 .ToList(),
             SelectionPaneObjectKind.TextBox => sheet.TextBoxes
                 .Select(textBox => new SelectionPaneObjectRef(
                     textBox.Id,
                     textBox.Anchor,
                     () => textBox.IsVisible,
-                    value => textBox.IsVisible = value))
+                    value => textBox.IsVisible = value,
+                    () => textBox.Name,
+                    value => textBox.Name = value))
                 .ToList(),
             SelectionPaneObjectKind.Shape => sheet.DrawingShapes
                 .Select(shape => new SelectionPaneObjectRef(
                     shape.Id,
                     shape.Anchor,
                     () => shape.IsVisible,
-                    value => shape.IsVisible = value))
+                    value => shape.IsVisible = value,
+                    () => shape.Name,
+                    value => shape.Name = value))
                 .ToList(),
             _ => []
         };
@@ -173,11 +234,19 @@ internal sealed record SelectionPaneObjectRef(
     Guid Id,
     CellAddress Anchor,
     Func<bool> GetVisibility,
-    Action<bool> SetVisibility)
+    Action<bool> SetVisibility,
+    Func<string?> GetName,
+    Action<string?> SetName)
 {
     public bool IsVisible
     {
         get => GetVisibility();
         set => SetVisibility(value);
+    }
+
+    public string? Name
+    {
+        get => GetName();
+        set => SetName(value);
     }
 }

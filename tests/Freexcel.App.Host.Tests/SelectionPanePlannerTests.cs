@@ -26,6 +26,7 @@ public sealed class SelectionPanePlannerTests
         {
             Anchor = new CellAddress(sheet.Id, 3, 3),
             Text = "Notes",
+            Name = "Executive Notes",
             IsVisible = true
         };
         sheet.Charts.Add(chart);
@@ -34,7 +35,7 @@ public sealed class SelectionPanePlannerTests
 
         var items = SelectionPanePlanner.BuildItems(sheet);
 
-        items.Select(item => item.Name).Should().Equal("Text Box 1", "Rectangle 1", "Chart 1");
+        items.Select(item => item.Name).Should().Equal("Executive Notes", "Rectangle 1", "Chart 1");
         items.Select(item => item.Kind).Should().Equal(
             SelectionPaneObjectKind.TextBox,
             SelectionPaneObjectKind.Shape,
@@ -77,7 +78,7 @@ public sealed class SelectionPanePlannerTests
             SelectionPaneDialogAction.MoveUp,
             item,
             [item],
-            [(item.Id, false)]);
+            [(item.Id, false, "Picture 1")]);
 
         result.Action.Should().Be(SelectionPaneDialogAction.MoveUp);
         result.Target.Should().Be(item);
@@ -85,6 +86,30 @@ public sealed class SelectionPanePlannerTests
             SelectionPaneObjectKind.Picture,
             item.Id,
             IsVisible: false));
+        result.RenameChanges.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_CreateResult_CapturesRenameChanges()
+    {
+        var item = new SelectionPaneItem(
+            SelectionPaneObjectKind.Shape,
+            Guid.NewGuid(),
+            "Rectangle 1",
+            IsVisible: true,
+            CanMoveUp: false,
+            CanMoveDown: false);
+
+        var result = SelectionPaneDialog.CreateResult(
+            SelectionPaneDialogAction.ApplyVisibility,
+            null,
+            [item],
+            [(item.Id, true, "  Process Box  ")]);
+
+        result.RenameChanges.Should().Equal(new SelectionPaneRenameChange(
+            SelectionPaneObjectKind.Shape,
+            item.Id,
+            "Process Box"));
     }
 
     [Fact]
