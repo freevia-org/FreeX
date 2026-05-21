@@ -5,6 +5,6 @@
     </style>
   </defs>
   <path class="f s" d="M5 2.5 H13 L16 5.5 V17 H5 Z M13 2.5 V5.5 H16" stroke-width="1"/>
-  <path class="s" d="M6 5 L14 5" stroke-width="0.8"/>
-  <path class="s" d="M6 15 L14 15" stroke-width="0.8"/>
+  <path class="b" d="M6 5 L14 5" stroke-width="1"/>
+  <path class="g" d="M6 15 L14 15" stroke-width="1"/>
 </svg>
