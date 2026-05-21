@@ -1,3 +1,4 @@
+using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -19,10 +20,18 @@ public sealed class HeaderFooterDialogXamlTests
         AssertLabelTargets(document, presentation, "Footer l_eft:", "FooterLeftBox");
         AssertLabelTargets(document, presentation, "Footer c_enter:", "FooterCenterBox");
         AssertLabelTargets(document, presentation, "Footer r_ight:", "FooterRightBox");
-        AssertLabelTargets(document, presentation, "First h_eader:", "FirstHeaderBox");
-        AssertLabelTargets(document, presentation, "First f_ooter:", "FirstFooterBox");
-        AssertLabelTargets(document, presentation, "Even hea_der:", "EvenHeaderBox");
-        AssertLabelTargets(document, presentation, "Even foot_er:", "EvenFooterBox");
+        AssertLabelTargets(document, presentation, "First header _left:", "FirstHeaderLeftBox");
+        AssertLabelTargets(document, presentation, "First header _center:", "FirstHeaderCenterBox");
+        AssertLabelTargets(document, presentation, "First header _right:", "FirstHeaderRightBox");
+        AssertLabelTargets(document, presentation, "First footer le_ft:", "FirstFooterLeftBox");
+        AssertLabelTargets(document, presentation, "First footer cent_er:", "FirstFooterCenterBox");
+        AssertLabelTargets(document, presentation, "First footer righ_t:", "FirstFooterRightBox");
+        AssertLabelTargets(document, presentation, "Even header le_ft:", "EvenHeaderLeftBox");
+        AssertLabelTargets(document, presentation, "Even header ce_nter:", "EvenHeaderCenterBox");
+        AssertLabelTargets(document, presentation, "Even header rig_ht:", "EvenHeaderRightBox");
+        AssertLabelTargets(document, presentation, "Even footer lef_t:", "EvenFooterLeftBox");
+        AssertLabelTargets(document, presentation, "Even footer cent_er:", "EvenFooterCenterBox");
+        AssertLabelTargets(document, presentation, "Even footer rig_ht:", "EvenFooterRightBox");
 
         document.Descendants(presentation + "CheckBox")
             .Select(element => element.Attribute("Content")?.Value)
@@ -81,6 +90,48 @@ public sealed class HeaderFooterDialogXamlTests
             .Select(element => element.Attributes().FirstOrDefault(a => a.Name.LocalName == "Name")?.Value)
             .Should()
             .Contain(["HeaderPresetBox", "FooterPresetBox"]);
+    }
+
+    [Fact]
+    public void FirstAndEvenHeadersAndFooters_UseSectionBoxesWithoutPipeParsing()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "HeaderFooterDialog.xaml.cs"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        foreach (var name in new[]
+        {
+            "FirstHeaderLeftBox",
+            "FirstHeaderCenterBox",
+            "FirstHeaderRightBox",
+            "FirstFooterLeftBox",
+            "FirstFooterCenterBox",
+            "FirstFooterRightBox",
+            "EvenHeaderLeftBox",
+            "EvenHeaderCenterBox",
+            "EvenHeaderRightBox",
+            "EvenFooterLeftBox",
+            "EvenFooterCenterBox",
+            "EvenFooterRightBox"
+        })
+        {
+            document.Descendants()
+                .Any(element => element.Attribute(x + "Name")?.Value == name)
+                .Should().BeTrue($"{name} should exist so first/even pages keep left/center/right sections");
+        }
+
+        foreach (var oldFlattenedName in new[] { "FirstHeaderBox", "FirstFooterBox", "EvenHeaderBox", "EvenFooterBox" })
+        {
+            document.Descendants()
+                .Any(element => element.Attribute(x + "Name")?.Value == oldFlattenedName)
+                .Should().BeFalse($"{oldFlattenedName} loses literal pipe characters and should be replaced");
+        }
+
+        source.Should().NotContain("Split('|'");
+        source.Should().NotContain("ToCombinedText");
+        source.Should().NotContain("FromCombinedText");
+        source.Should().Contain("FirstPageHeader = new WorksheetHeaderFooter(");
+        source.Should().Contain("EvenPageFooter = new WorksheetHeaderFooter(");
     }
 
     [Fact]
