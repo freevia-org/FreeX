@@ -142,6 +142,16 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseCriterion_AcceptsMenuTextEqualsAlias()
+    {
+        var parsed = FilterInputParser.TryParseCriterion("equals: Red Apple", out var criterion, out var error);
+
+        parsed.Should().BeTrue(error);
+        criterion.Should().BeOfType<TextEqualsFilterCriterion>()
+            .Which.Matches(new TextValue("red apple")).Should().BeTrue();
+    }
+
+    [Fact]
     public void TryParseCriterion_AcceptsTextNotEqualsSyntax()
     {
         var parsed = FilterInputParser.TryParseCriterion("text<> Red Apple", out var criterion, out var error);
