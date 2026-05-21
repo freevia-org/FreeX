@@ -9,6 +9,11 @@ public sealed record FormulaRangeEntryEdit(
 
 public static class FormulaRangeEntryPlanner
 {
+    public static CellAddress GetKeyboardCursor(GridRange selectedRange, CellAddress? selectionCursor)
+        => selectionCursor is { } cursor && cursor.Sheet == selectedRange.Start.Sheet
+            ? cursor
+            : selectedRange.Start;
+
     public static bool TryApplyRangeSelection(
         string text,
         int caretIndex,
