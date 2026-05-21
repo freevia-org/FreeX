@@ -11,6 +11,8 @@ public sealed record SortColumnChoice(string Label, uint ColumnOffset);
 
 public sealed record SortDirectionChoice(string Label, bool Ascending);
 
+public sealed record SortOnChoice(string Label);
+
 public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
 {
     public SortDialogLevel(uint columnOffset, bool ascending)
@@ -22,6 +24,8 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>
     public uint ColumnOffset { get; set; }
 
     public bool Ascending { get; set; }
+
+    public string SortOn { get; set; } = "Cell Values";
 
     public bool Equals(SortDialogLevel? other) =>
         other is not null &&
@@ -43,6 +47,11 @@ public sealed class SortDialog : Window
         new("Z to A", false)
     ];
 
+    private static readonly IReadOnlyList<SortOnChoice> SortOnChoices =
+    [
+        new("Cell Values")
+    ];
+
     private readonly ObservableCollection<SortDialogLevel> _levels;
     private readonly IReadOnlyList<SortColumnChoice> _columnChoices;
 
@@ -58,13 +67,30 @@ public sealed class SortDialog : Window
         _columnChoices = NormalizeColumnChoices(columnChoices);
         ResultSortKeys = BuildSortKeys(_levels);
 
-        Title = "Sort";
-        Width = 500;
-        Height = 340;
+        Title = "Custom Sort";
+        Width = 640;
+        Height = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        var root = new DockPanel { Margin = new Thickness(16) };
+        var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
+        var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var headerCheck = new CheckBox
+        {
+            Content = "My data has _headers",
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        DockPanel.SetDock(headerCheck, Dock.Right);
+        headerRow.Children.Add(headerCheck);
+        headerRow.Children.Add(new TextBlock
+        {
+            Text = "Sort levels",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center
+        });
+        DockPanel.SetDock(headerRow, Dock.Top);
+        root.Children.Add(headerRow);
+
         var list = new DataGrid
         {
             ItemsSource = _levels,
@@ -73,6 +99,7 @@ public sealed class SortDialog : Window
             CanUserDeleteRows = false,
             HeadersVisibility = DataGridHeadersVisibility.Column,
             SelectionMode = DataGridSelectionMode.Single,
+            Height = 220,
             Margin = new Thickness(0, 0, 0, 12)
         };
         list.Columns.Add(new DataGridComboBoxColumn
@@ -90,6 +117,19 @@ public sealed class SortDialog : Window
         });
         list.Columns.Add(new DataGridComboBoxColumn
         {
+            Header = "Sort On",
+            ItemsSource = SortOnChoices,
+            DisplayMemberPath = nameof(SortOnChoice.Label),
+            SelectedValuePath = nameof(SortOnChoice.Label),
+            SelectedValueBinding = new Binding(nameof(SortDialogLevel.SortOn))
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+            },
+            Width = new DataGridLength(140)
+        });
+        list.Columns.Add(new DataGridComboBoxColumn
+        {
             Header = "Order",
             ItemsSource = DirectionChoices,
             DisplayMemberPath = nameof(SortDirectionChoice.Label),
@@ -104,15 +144,15 @@ public sealed class SortDialog : Window
         DockPanel.SetDock(list, Dock.Top);
         root.Children.Add(list);
 
+        var commandDock = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
         var helperRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
-            Margin = new Thickness(0, 0, 0, 16)
         };
         var add = new Button { Content = "_Add Level", Width = 98, Margin = new Thickness(0, 0, 8, 0) };
         add.Click += (_, _) => _levels.Add(new SortDialogLevel(0, true));
-        var remove = new Button { Content = "_Remove Level", Width = 116 };
+        var remove = new Button { Content = "_Delete Level", Width = 104, Margin = new Thickness(0, 0, 8, 0) };
         remove.Click += (_, _) =>
         {
             var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
@@ -121,10 +161,30 @@ public sealed class SortDialog : Window
             foreach (var level in updated)
                 _levels.Add(level);
         };
+        var copy = new Button { Content = "_Copy Level", Width = 98 };
+        copy.Click += (_, _) =>
+        {
+            var selectedIndex = list.SelectedIndex < 0 ? _levels.Count - 1 : list.SelectedIndex;
+            var updated = CopyLevel(_levels, selectedIndex);
+            _levels.Clear();
+            foreach (var level in updated)
+                _levels.Add(level);
+            list.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
+        };
         helperRow.Children.Add(add);
         helperRow.Children.Add(remove);
-        DockPanel.SetDock(helperRow, Dock.Bottom);
-        root.Children.Add(helperRow);
+        helperRow.Children.Add(copy);
+        commandDock.Children.Add(helperRow);
+        var options = new Button
+        {
+            Content = "_Options...",
+            Width = 92,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+        DockPanel.SetDock(options, Dock.Right);
+        commandDock.Children.Add(options);
+        DockPanel.SetDock(commandDock, Dock.Bottom);
+        root.Children.Add(commandDock);
 
         var buttons = new StackPanel
         {
@@ -170,6 +230,18 @@ public sealed class SortDialog : Window
             updated.RemoveAt(index);
 
         return updated.Count == 0 ? [new SortDialogLevel(0, true)] : updated;
+    }
+
+    public static IReadOnlyList<SortDialogLevel> CopyLevel(IEnumerable<SortDialogLevel> levels, int index)
+    {
+        var updated = NormalizeLevels(levels).ToList();
+        if (index >= 0 && index < updated.Count)
+        {
+            var level = updated[index];
+            updated.Insert(index + 1, new SortDialogLevel(level.ColumnOffset, level.Ascending));
+        }
+
+        return updated;
     }
 
     public static IReadOnlyList<SortDialogLevel> UpdateLevel(
