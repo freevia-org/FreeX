@@ -140,6 +140,13 @@ public class FormulaSerializerTests
     }
 
     [Fact]
+    public void Serialize_UnqualifiedThisRowStructuredReference()
+    {
+        RoundTrip("=SUM([[#This Row],[Amount]:[Tax]])")
+            .Should().Be("SUM([[#This Row],[Amount]:[Tax]])");
+    }
+
+    [Fact]
     public void Serialize_FunctionNoArgs() => RoundTrip("=NOW()").Should().Be("NOW()");
 
     [Fact]
