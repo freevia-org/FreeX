@@ -5855,6 +5855,49 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("ลบยี่สิบเอ็ดบาทห้าสิบสตางค์"));
     }
 
+    [Fact]
+    public void Encodeurl_EncodesReservedSpacesAndUnicodeAsUtf8PercentEscapes()
+    {
+        _eval.Evaluate("=ENCODEURL(\"https://example.com/a b?q=São Paulo&x=1\")", MakeSheet())
+            .Should().Be(new TextValue("https%3A%2F%2Fexample.com%2Fa%20b%3Fq%3DS%C3%A3o%20Paulo%26x%3D1"));
+    }
+
+    [Fact]
+    public void Encodeurl_EmptyText_ReturnsEmptyText()
+    {
+        _eval.Evaluate("=ENCODEURL(\"\")", MakeSheet())
+            .Should().Be(new TextValue(""));
+    }
+
+    [Fact]
+    public void Filterxml_ReturnsSingleXPathNodeText()
+    {
+        _eval.Evaluate("=FILTERXML(\"<root><item>A</item><item>B</item></root>\",\"/root/item[2]\")", MakeSheet())
+            .Should().Be(new TextValue("B"));
+    }
+
+    [Fact]
+    public void Filterxml_ReturnsMultipleXPathNodeTextsAsVerticalArray()
+    {
+        var result = _eval.Evaluate("=FILTERXML(\"<root><item>A</item><item>B</item></root>\",\"/root/item\")", MakeSheet())
+            .Should().BeOfType<RangeValue>()
+            .Subject;
+
+        result.RowCount.Should().Be(2);
+        result.ColCount.Should().Be(1);
+        result.At(1, 1).Should().Be(new TextValue("A"));
+        result.At(2, 1).Should().Be(new TextValue("B"));
+    }
+
+    [Theory]
+    [InlineData("=FILTERXML(\"<root>\",\"/root\")")]
+    [InlineData("=FILTERXML(\"<root><item>A</item></root>\",\"/root/missing\")")]
+    [InlineData("=FILTERXML(\"<root><item>A</item></root>\",\"//*[)\")")]
+    public void Filterxml_InvalidXmlXPathOrNoMatch_ReturnsValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
     // ── NUMBERVALUE edge cases ───────────────────────────────────────────────
 
     [Fact]

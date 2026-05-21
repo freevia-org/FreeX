@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.XPath;
 using Freexcel.Core.Model;
 
 namespace Freexcel.Core.Formula;
@@ -156,6 +158,8 @@ public static class BuiltInFunctions
         ["DBCS"]        = (Dbcs, 1, 1),
         ["PHONETIC"]    = (Phonetic, 1, 1),
         ["BAHTTEXT"]    = (BahtText, 1, 1),
+        ["ENCODEURL"]   = (EncodeUrl, 1, 1),
+        ["FILTERXML"]   = (FilterXml, 2, 2),
 
         // ── Phase 4a: Math / Trig ────────────────────────────────────────────
         ["SIN"]      = (Sin, 1, 1),
@@ -2683,6 +2687,79 @@ public static class BuiltInFunctions
         result.Append("บาท");
         result.Append(satang == 0 ? "ถ้วน" : ThaiNumberToText(satang) + "สตางค์");
         return TextResult(result.ToString());
+    }
+
+    private static ScalarValue EncodeUrl(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e) return e;
+        return TextResult(Uri.EscapeDataString(ToText(args[0])));
+    }
+
+    private static ScalarValue FilterXml(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+
+        try
+        {
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
+
+            using var stringReader = new StringReader(ToText(args[0]));
+            using var xmlReader = XmlReader.Create(stringReader, settings);
+            var document = new XPathDocument(xmlReader);
+            var navigator = document.CreateNavigator();
+            var xpath = ToText(args[1]);
+            var result = navigator.Evaluate(xpath);
+
+            return result switch
+            {
+                XPathNodeIterator nodes => FilterXmlNodeResult(nodes),
+                string s when s.Length > 0 => TextResult(s),
+                double d when double.IsFinite(d) => TextResult(d.ToString(CultureInfo.InvariantCulture)),
+                bool b => TextResult(b ? "TRUE" : "FALSE"),
+                _ => ErrorValue.Value
+            };
+        }
+        catch (XmlException)
+        {
+            return ErrorValue.Value;
+        }
+        catch (XPathException)
+        {
+            return ErrorValue.Value;
+        }
+        catch (ArgumentException)
+        {
+            return ErrorValue.Value;
+        }
+    }
+
+    private static ScalarValue FilterXmlNodeResult(XPathNodeIterator nodes)
+    {
+        var values = new List<ScalarValue>();
+        while (nodes.MoveNext())
+        {
+            values.Add(TextResult(nodes.Current?.Value ?? ""));
+        }
+
+        return values.Count switch
+        {
+            0 => ErrorValue.Value,
+            1 => values[0],
+            _ => new RangeValue(ToVerticalRange(values))
+        };
+    }
+
+    private static ScalarValue[,] ToVerticalRange(IReadOnlyList<ScalarValue> values)
+    {
+        var cells = new ScalarValue[values.Count, 1];
+        for (int i = 0; i < values.Count; i++)
+            cells[i, 0] = values[i];
+        return cells;
     }
 
     private static string ConvertToHalfWidth(string text)
