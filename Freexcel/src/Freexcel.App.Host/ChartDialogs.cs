@@ -616,6 +616,9 @@ public sealed record SelectDataSourceDialogResult(
 
 public sealed class SelectDataSourceDialog : Window
 {
+    private const string DeferredSeriesEditingHelpText =
+        "Edit the chart data range to change inferred series and category labels.";
+
     private readonly TextBox _rangeBox = new();
     private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains _category labels" };
     private readonly CheckBox _switchRowColumnBox = new() { Content = "_Switch Row/Column" };
@@ -732,12 +735,26 @@ public sealed class SelectDataSourceDialog : Window
     private static StackPanel AddEditRemoveButtons((string Add, string? Edit, string? Remove) labels)
     {
         var stack = new StackPanel { Margin = new Thickness(8, 20, 0, 0) };
-        stack.Children.Add(new Button { Content = labels.Add, Width = 92, Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(CreateDeferredSeriesButton(labels.Add, new Thickness(0, 0, 0, 4)));
         if (labels.Edit is not null)
-            stack.Children.Add(new Button { Content = labels.Edit, Width = 92, Margin = new Thickness(0, 0, 0, 4) });
+            stack.Children.Add(CreateDeferredSeriesButton(labels.Edit, new Thickness(0, 0, 0, 4)));
         if (labels.Remove is not null)
-            stack.Children.Add(new Button { Content = labels.Remove, Width = 92 });
+            stack.Children.Add(CreateDeferredSeriesButton(labels.Remove, new Thickness()));
         return stack;
+    }
+
+    private static Button CreateDeferredSeriesButton(string content, Thickness margin)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Width = 92,
+            Margin = margin,
+            IsEnabled = false,
+            ToolTip = DeferredSeriesEditingHelpText
+        };
+        AutomationProperties.SetHelpText(button, DeferredSeriesEditingHelpText);
+        return button;
     }
 }
 
