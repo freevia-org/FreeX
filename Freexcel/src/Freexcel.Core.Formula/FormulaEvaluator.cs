@@ -49,6 +49,7 @@ public sealed class FormulaEvaluator
             FullColumnRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
             FullRowRangeRefNode range => EvaluateRange(ToRangeRef(range), context),
             NamedRangeNode named => EvaluateNamedRange(named, context),
+            StructuredReferenceNode structured => EvaluateStructuredReference(structured, context),
             BinaryOpNode binary => EvaluateBinaryOp(binary, context),
             UnaryOpNode unary => EvaluateUnaryOp(unary, context),
             FunctionCallNode func => EvaluateFunction(func, context),
@@ -129,8 +130,24 @@ public sealed class FormulaEvaluator
                 : BuildRangeValue(resolvedRange.Value, context);
         }
 
+        if (node is StructuredReferenceNode structured)
+        {
+            var resolvedRange = TryResolveStructuredReferenceRange(structured, context);
+            return resolvedRange is null
+                ? ErrorValue.Name
+                : BuildRangeValue(resolvedRange.Value, context);
+        }
+
         var value = EvaluateNode(node, context);
         return value;
+    }
+
+    private static ScalarValue EvaluateStructuredReference(StructuredReferenceNode node, IEvalContext context)
+    {
+        var range = TryResolveStructuredReferenceRange(node, context);
+        return range is null
+            ? ErrorValue.Name
+            : BuildRangeValue(range.Value, context);
     }
 
     private static ScalarValue PowerOp(ScalarValue left, ScalarValue right)
@@ -571,6 +588,15 @@ public sealed class FormulaEvaluator
             SheetName: sheetName);
         return BuildRangeValue(new RangeRefNode(start, end, sheetName), context);
     }
+
+    private static Freexcel.Core.Model.GridRange? TryResolveStructuredReferenceRange(
+        StructuredReferenceNode node,
+        IEvalContext context)
+        => StructuredReferenceResolver.ResolveDataBodyColumn(
+            context.CurrentWorkbook,
+            context.CurrentSheet,
+            node.TableName,
+            node.ColumnName);
 
     private static bool TryAsRangeRef(FormulaNode node, out RangeRefNode range)
     {
