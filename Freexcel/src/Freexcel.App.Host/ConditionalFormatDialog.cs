@@ -51,6 +51,16 @@ public class ConditionalFormatDialog : Window
         ("Bold Green Text",   Color.FromRgb(0, 176, 80)),
     ];
 
+    private static readonly string[] ExcelRuleShellTypes =
+    [
+        "Format all cells based on their values",
+        "Format only cells that contain",
+        "Format only top or bottom ranked values",
+        "Format only values that are above or below average",
+        "Format only unique or duplicate values",
+        "Use a formula to determine which cells to format"
+    ];
+
     private static readonly IReadOnlyList<string> IconSetStyles = ConditionalFormatIconSetPlanner.Styles;
 
     private static readonly (string Label, string Value)[] DateOccurringPeriods =
@@ -75,9 +85,10 @@ public class ConditionalFormatDialog : Window
         _existingId = Guid.NewGuid();
 
         Title = $"Conditional Formatting — {ruleType}";
-        Width = 380;
+        Width = 650;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
+        SizeToContent = SizeToContent.Height;
 
         bool isFormula = ruleType is "Formula" or "Use a Formula";
         bool isIconSet = ruleType is "Icon Set";
@@ -249,14 +260,19 @@ public class ConditionalFormatDialog : Window
             inner.Children.Add(colorLabel);
             inner.Children.Add(_colorBox);
         }
+
+        if (isIconSet || isColorScale || isDataBar)
+            AddVisualPreview(inner, ruleType);
+
         inner.Children.Add(btnRow);
-        Content = inner;
+        Content = BuildExcelRuleShell(ruleType, inner);
     }
 
     /// <summary>Creates an edit dialog pre-populated with <paramref name="existingRule"/>.</summary>
     public ConditionalFormatDialog(ConditionalFormat existingRule)
         : this(ConditionalFormatDialogPlanner.RuleTypeLabel(existingRule), existingRule.AppliesTo)
     {
+        Title = "Edit Formatting Rule";
         _existingId = existingRule.Id;   // preserve Id so the command recognises it as an update
         _existingRule = ConditionalFormatDialogPlanner.CloneRule(existingRule);
 
@@ -494,6 +510,134 @@ public class ConditionalFormatDialog : Window
             && period.Label is not null
                 ? period.Label
                 : "Today";
+
+    private static Grid BuildExcelRuleShell(string ruleType, UIElement descriptionContent)
+    {
+        var root = new Grid { Margin = new Thickness(14) };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var left = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        left.Children.Add(new TextBlock
+        {
+            Text = "Select a Rule Type:",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+
+        left.Children.Add(new ListBox
+        {
+            MinHeight = 182,
+            ItemsSource = ExcelRuleShellTypes,
+            SelectedItem = RuleTypeShellLabel(ruleType)
+        });
+        Grid.SetColumn(left, 0);
+        root.Children.Add(left);
+
+        var right = new StackPanel();
+        right.Children.Add(new TextBlock
+        {
+            Text = "Edit the Rule Description:",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        right.Children.Add(descriptionContent);
+        Grid.SetColumn(right, 1);
+        root.Children.Add(right);
+
+        return root;
+    }
+
+    private static string RuleTypeShellLabel(string ruleType) => ruleType switch
+    {
+        "Data Bar" or "Color Scale" or "Icon Set" => ExcelRuleShellTypes[0],
+        "Top 10 Items" or "Bottom 10 Items" or "Top 10%" or "Bottom 10%" => ExcelRuleShellTypes[2],
+        "Above Average" or "Below Average" => ExcelRuleShellTypes[3],
+        "Duplicate Values" => ExcelRuleShellTypes[4],
+        "Formula" or "Use a Formula" => ExcelRuleShellTypes[5],
+        _ => ExcelRuleShellTypes[1]
+    };
+
+    private static void AddVisualPreview(Panel panel, string ruleType)
+    {
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Preview:",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 4, 0, 6)
+        });
+
+        panel.Children.Add(ruleType switch
+        {
+            "Color Scale" => BuildColorScalePreview(),
+            "Icon Set" => BuildIconSetPreview(),
+            _ => BuildDataBarPreview()
+        });
+    }
+
+    private static Border BuildDataBarPreview() =>
+        new()
+        {
+            Name = "DataBarPreview",
+            Height = 28,
+            Margin = new Thickness(0, 0, 0, 12),
+            BorderBrush = Brushes.DarkGray,
+            BorderThickness = new Thickness(1),
+            Child = new Grid
+            {
+                Children =
+                {
+                    new Border
+                    {
+                        Width = 150,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+                        Background = new LinearGradientBrush(Color.FromRgb(91, 155, 213), Color.FromRgb(189, 215, 238), 0)
+                    },
+                    new TextBlock
+                    {
+                        Text = "123",
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 8, 0)
+                    }
+                }
+            }
+        };
+
+    private static Border BuildColorScalePreview() =>
+        new()
+        {
+            Name = "ColorScalePreview",
+            Height = 28,
+            Margin = new Thickness(0, 0, 0, 12),
+            BorderBrush = Brushes.DarkGray,
+            BorderThickness = new Thickness(1),
+            Background = new LinearGradientBrush(
+                new GradientStopCollection
+                {
+                    new(Color.FromRgb(99, 190, 123), 0),
+                    new(Color.FromRgb(255, 235, 132), 0.5),
+                    new(Color.FromRgb(248, 105, 107), 1)
+                })
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5)
+            }
+        };
+
+    private static StackPanel BuildIconSetPreview() =>
+        new()
+        {
+            Name = "IconSetPreview",
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 12),
+            Children =
+            {
+                new TextBlock { Text = "\u25b2", Foreground = Brushes.Green, FontSize = 18, Margin = new Thickness(0, 0, 10, 0) },
+                new TextBlock { Text = "\u25b6", Foreground = Brushes.Goldenrod, FontSize = 18, Margin = new Thickness(0, 0, 10, 0) },
+                new TextBlock { Text = "\u25bc", Foreground = Brushes.Red, FontSize = 18 }
+            }
+        };
 }
 
 public sealed class HighlightCellsRuleDialog : ConditionalFormatDialog
