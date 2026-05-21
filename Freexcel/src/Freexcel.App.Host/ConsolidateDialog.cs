@@ -10,9 +10,13 @@ public sealed record ConsolidateDialogResult(IReadOnlyList<GridRange> SourceRang
 public sealed class ConsolidateDialog : Window
 {
     private readonly SheetId _sheetId;
+    private readonly ComboBox _functionBox = new();
     private readonly TextBox _referenceBox = new();
     private readonly ListBox _referencesList = new() { Height = 72 };
     private readonly TextBox _destinationBox = new();
+    private readonly CheckBox _topRowBox = new() { Content = "_Top row" };
+    private readonly CheckBox _leftColumnBox = new() { Content = "_Left column" };
+    private readonly CheckBox _createLinksBox = new() { Content = "Create _links to source data" };
 
     public ConsolidateDialogResult? Result { get; private set; }
 
@@ -21,7 +25,7 @@ public sealed class ConsolidateDialog : Window
         _sheetId = sheetId;
         Title = "Consolidate";
         Width = 380;
-        Height = 330;
+        Height = 420;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -32,6 +36,12 @@ public sealed class ConsolidateDialog : Window
 
         _destinationBox.Text = defaultDestination;
         var root = new StackPanel { Margin = new Thickness(12) };
+        root.Children.Add(new Label { Content = "_Function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        foreach (var function in new[] { "Sum", "Count", "Average", "Max", "Min", "Product", "Count Numbers", "StdDev", "StdDevp", "Var", "Varp" })
+            _functionBox.Items.Add(function);
+        _functionBox.SelectedIndex = 0;
+        _functionBox.Margin = new Thickness(0, 0, 0, 8);
+        root.Children.Add(_functionBox);
         root.Children.Add(new TextBlock { Text = "Reference:" });
         root.Children.Add(CreateReferenceEditor(_referenceBox, "Select reference range"));
         var referenceButtons = new StackPanel
@@ -51,6 +61,14 @@ public sealed class ConsolidateDialog : Window
         root.Children.Add(_referencesList);
         root.Children.Add(new TextBlock { Text = "Destination cell:", Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
+        root.Children.Add(new TextBlock { Text = "Use labels in:", Margin = new Thickness(0, 8, 0, 2) });
+        var labelOptions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        _topRowBox.Margin = new Thickness(0, 0, 16, 0);
+        labelOptions.Children.Add(_topRowBox);
+        labelOptions.Children.Add(_leftColumnBox);
+        root.Children.Add(labelOptions);
+        _createLinksBox.Margin = new Thickness(0, 0, 0, 12);
+        root.Children.Add(_createLinksBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
     }
