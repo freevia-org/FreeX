@@ -1717,7 +1717,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             !IsFalse(sheetView?.Attribute("showRuler")?.Value),
             ParseZoomPercent(sheetView?.Attribute("zoomScale")?.Value),
             IsTruthy(sheetView?.Attribute("showFormulas")?.Value),
-            ReadBoolAttribute(sheetCalcPr, "fullCalcOnLoad"),
+            XlsxWorksheetCalculationPropertyMapper.ReadFullCalculationOnLoad(sheetCalcPr),
             XlsxWorksheetPhoneticPropertyMapper.Read(phoneticPr),
             pane?.Attribute("state")?.Value,
             ParsePaneSplit(pane?.Attribute("ySplit")?.Value),
@@ -3192,7 +3192,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
         {
             packageStream.Position = 0;
-            SaveWorksheetCalculationProperties(packageStream, workbook);
+            XlsxWorksheetCalculationPropertyMapper.Save(packageStream, workbook);
         }
 
         if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
@@ -5579,54 +5579,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     {
         var bytes = MD5.HashData(Encoding.UTF8.GetBytes($"Freexcel.CustomView:{index}:{name}"));
         return $"{{{new Guid(bytes):D}}}";
-    }
-
-    private static void SaveWorksheetCalculationProperties(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "sheetCalcPr")?.Remove();
-            if (!sheet.FullCalculationOnLoad)
-            {
-                ReplacePackageXml(archive, worksheetPath, worksheetXml);
-                continue;
-            }
-
-            var sheetCalcPr = new XElement(workbookNs + "sheetCalcPr");
-            sheetCalcPr.SetAttributeValue("fullCalcOnLoad", sheet.FullCalculationOnLoad ? "1" : null);
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, sheetCalcPr);
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
     }
 
     private static void InsertWorkbookCustomViewsInOrder(
