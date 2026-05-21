@@ -11,7 +11,30 @@ public sealed class ObjectDialogTests
     {
         var result = HyperlinkDialog.CreateResult("https://example.test", " ");
 
-        result.Should().Be(new HyperlinkDialogResult("https://example.test", "https://example.test"));
+        result.Should().Be(new HyperlinkDialogResult(
+            HyperlinkLinkType.ExistingFileOrWebPage,
+            "https://example.test",
+            "https://example.test",
+            "",
+            ""));
+    }
+
+    [Fact]
+    public void HyperlinkDialog_CreateResult_TrimsScreenTipAndBookmarkMetadata()
+    {
+        var result = HyperlinkDialog.CreateResult(
+            " Sheet1!A1 ",
+            " Jump ",
+            HyperlinkLinkType.PlaceInThisDocument,
+            "  Open budget cell  ",
+            "  BudgetAnchor  ");
+
+        result.Should().Be(new HyperlinkDialogResult(
+            HyperlinkLinkType.PlaceInThisDocument,
+            "Sheet1!A1",
+            "Jump",
+            "Open budget cell",
+            "BudgetAnchor"));
     }
 
     [Fact]
@@ -152,10 +175,15 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
 
         source.Should().Contain("Existing File or Web Page");
+        source.Should().Contain("Create New Document");
         source.Should().Contain("Place in This Document");
         source.Should().Contain("E-mail Address");
         source.Should().Contain("_screenTipButton");
         source.Should().Contain("_bookmarkButton");
+        source.Should().Contain("ScreenTipDialog");
+        source.Should().Contain("BookmarkDialog");
+        source.Should().Contain("_screenTipButton.Click +=");
+        source.Should().Contain("_bookmarkButton.Click +=");
     }
 
     [Fact]
