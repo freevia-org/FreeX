@@ -38,8 +38,8 @@ public sealed class HyperlinkDialog : Window
         root.Children.Add(linkTypes);
 
         var grid = DialogGrid(3);
-        AddTextRow(grid, 0, "Text to display:", _displayBox, displayText);
-        AddTextRow(grid, 1, "Address:", _targetBox, target);
+        AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
+        AddTextRow(grid, 1, "_Address:", _targetBox, target);
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = 96;
         _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
@@ -83,9 +83,11 @@ public sealed class HyperlinkDialog : Window
 
     private static void AddTextRow(Grid grid, int row, string label, TextBox box, string value)
     {
-        grid.Children.Add(new TextBlock
+        grid.Children.Add(new Label
         {
-            Text = label,
+            Content = label,
+            Target = box,
+            Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8)
         });
