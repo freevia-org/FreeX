@@ -68,6 +68,20 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableDialog_ExposesKeyboardAccessKeysForChoicesAndButtons()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotTableDialog.cs"));
+
+        source.Should().Contain("Content = \"_Create\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = \"Use an _external data source\"");
+        source.Should().Contain("Content = \"_New worksheet\"");
+        source.Should().Contain("Content = \"_Existing worksheet\"");
+        source.Should().Contain("Content = \"Add this data to the Data _Model\"");
+        source.Should().Contain("Content = \"Open PivotTable _Fields pane\"");
+    }
+
+    [Fact]
     public void PivotTableDataSourceDialog_CreateResult_TrimsSourceRangeText()
     {
         PivotTableDataSourceDialog.CreateResult("  Sales!A1:E200  ")
