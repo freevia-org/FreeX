@@ -178,6 +178,9 @@ public class NumberFormatterTests
     [InlineData("[$\u20B4-422]#,##0.00", 1234.5, "\u20B41 234,50")]
     [InlineData("[$\u20AC-C0A]#,##0.00", 1234.5, "\u20AC1.234,50")]
     [InlineData("[$\u20AC-410]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("[$\u20AC-413]#,##0.00", 1234.5, "\u20AC1.234,50")]
+    [InlineData("[$z\u0142-415]#,##0.00", 1234.5, "z\u01421 234,50")]
+    [InlineData("[$R$-416]#,##0.00", 1234.5, "R$1.234,50")]
     [InlineData("[$-409]#,##0.00", 1234.5, "1,234.50")]
     [InlineData("[$XYZ-999]#,##0.00", 1234.5, "XYZ1,234.50")]
     public void CustomNumberSubset_UsesKnownLcidDecimalAndGroupSeparators(
