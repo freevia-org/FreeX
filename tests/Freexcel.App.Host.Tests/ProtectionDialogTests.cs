@@ -32,6 +32,41 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void SheetProtectionDialogResult_RequiresMatchingPasswordConfirmation()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: "secret", confirmation: "Secret");
+
+        result.Mode.Should().Be(ProtectionDialogMode.Protect);
+        result.Password.Should().BeNull();
+    }
+
+    [Fact]
+    public void DefaultSheetPermissions_MatchExcelProtectSheetChecklist()
+    {
+        ProtectionDialogPlanner.GetDefaultSheetPermissions()
+            .Should()
+            .Equal([
+                "Select locked cells",
+                "Select unlocked cells",
+                "Format cells",
+                "Format columns",
+                "Format rows",
+                "Insert columns",
+                "Insert rows",
+                "Insert hyperlinks",
+                "Delete columns",
+                "Delete rows",
+                "Sort",
+                "Use AutoFilter",
+                "Use PivotTable reports",
+                "Edit objects",
+                "Edit scenarios"]);
+    }
+
+    [Fact]
     public void WorkbookProtectionDialogResult_ForProtectedWorkbookRequestsUnprotect()
     {
         var workbook = new Workbook("test") { IsStructureProtected = true };
@@ -68,5 +103,16 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("Content = \"_Cancel\"");
         source.Should().Contain("new Label { Content = \"_Range:\"");
         source.Should().Contain("Target = _rangeBox");
+    }
+
+    [Fact]
+    public void ProtectSheetDialog_ExposesPermissionChecklistAndConfirmation()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+
+        source.Should().Contain("Allow all users of this worksheet to:");
+        source.Should().Contain("_Confirm password:");
+        source.Should().Contain("Select locked cells");
+        source.Should().Contain("Edit scenarios");
     }
 }
