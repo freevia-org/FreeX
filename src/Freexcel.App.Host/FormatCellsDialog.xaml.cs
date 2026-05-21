@@ -42,6 +42,21 @@ public partial class FormatCellsDialog : Window
         "Text (@)"
     ];
 
+    private static readonly string[] NumberCategories =
+    [
+        "General",
+        "Number",
+        "Currency",
+        "Accounting",
+        "Date",
+        "Time",
+        "Percentage",
+        "Fraction",
+        "Scientific",
+        "Text",
+        "Custom"
+    ];
+
     public FormatCellsDialog(CellStyle current, FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         _current = current.Clone();
@@ -55,16 +70,29 @@ public partial class FormatCellsDialog : Window
 
     private void Populate(CellStyle s)
     {
+        NumberCategoryList.ItemsSource = NumberCategories;
+        NumberSymbolCombo.ItemsSource = new[] { "$", "EUR", "GBP", "JPY", "None" };
+        NumberSymbolCombo.SelectedIndex = 0;
+        NumberNegativeNumbersList.ItemsSource = new[]
+        {
+            "-1234.10",
+            "1234.10",
+            "(1234.10)",
+            "-1234.10"
+        };
+        NumberNegativeNumbersList.SelectedIndex = 0;
         NumberFormatCombo.ItemsSource = NumberFormatLabels;
         var idx = Array.IndexOf(NumberFormatCodes, s.NumberFormat);
         if (idx >= 0)
         {
             NumberFormatCombo.SelectedIndex = idx;
+            NumberCategoryList.SelectedItem = CategoryForFormatIndex(idx);
         }
         else
         {
             NumberFormatCombo.SelectedIndex = -1;
             NumberFormatCombo.Text = s.NumberFormat;
+            NumberCategoryList.SelectedItem = "Custom";
         }
 
         DlgFontNameBox.ItemsSource  = new[] { "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana" };
@@ -102,7 +130,35 @@ public partial class FormatCellsDialog : Window
         DlgLockedCheck.IsChecked = s.Locked;
     }
 
-    private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
+    private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (NumberPreview is not null)
+            NumberPreview.Text = PreviewForFormat(NumberFormatCombo.SelectedIndex);
+    }
+
+    private void NumberCategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (NumberCategoryList.SelectedItem is not string category)
+            return;
+
+        var index = category switch
+        {
+            "General" => 0,
+            "Number" => 1,
+            "Currency" => 2,
+            "Accounting" => 3,
+            "Date" => 6,
+            "Time" => 7,
+            "Percentage" => 5,
+            "Fraction" => 8,
+            "Scientific" => 9,
+            "Text" => 10,
+            _ => NumberFormatCombo.SelectedIndex
+        };
+
+        if (index >= 0 && index < NumberFormatLabels.Length)
+            NumberFormatCombo.SelectedIndex = index;
+    }
 
     public static string? ResolveNumberFormat(string text, int selectedIndex)
     {
@@ -235,6 +291,34 @@ public partial class FormatCellsDialog : Window
             ? color
             : null;
     }
+
+    private static string CategoryForFormatIndex(int index) => index switch
+    {
+        1 => "Number",
+        2 => "Currency",
+        3 => "Accounting",
+        4 or 5 => "Percentage",
+        6 => "Date",
+        7 => "Time",
+        8 => "Fraction",
+        9 => "Scientific",
+        10 => "Text",
+        _ => "General"
+    };
+
+    private static string PreviewForFormat(int index) => index switch
+    {
+        1 => "1,234.56",
+        2 or 3 => "$1,234.56",
+        4 => "123456%",
+        5 => "123456.00%",
+        6 => "5/21/2026",
+        7 => "1:30 PM",
+        8 => "1234 1/2",
+        9 => "1.23E+03",
+        10 => "1234.56",
+        _ => "1234.56"
+    };
 }
 
 public enum FormatCellsDialogTab
