@@ -39,7 +39,7 @@ public sealed class EvaluateFormulaDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var help = new Button { Content = "Help on this formula", Width = 128, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var help = new Button { Content = "_Help on this formula", Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         help.Click += (_, _) => System.Media.SystemSounds.Asterisk.Play();
         buttons.Children.Add(help);
 
@@ -60,7 +60,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_previousButton);
 
-        var stepOut = new Button { Content = "Step Out", Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var stepOut = new Button { Content = "Step _Out", Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         stepOut.Click += (_, _) =>
         {
             _session.MovePrevious();
@@ -76,7 +76,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_nextButton);
 
-        var stepIn = new Button { Content = "Step In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var stepIn = new Button { Content = "Step _In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         stepIn.Click += (_, _) =>
         {
             _session.MoveNext();
