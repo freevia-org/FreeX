@@ -30,6 +30,16 @@ public partial class PageSetupDialog : Window
     public int? PrintQualityDpi { get; private set; }
     public WorksheetPrintErrorValue PrintErrorValue { get; private set; }
     public WorksheetPrintComments PrintComments { get; private set; }
+    public WorksheetHeaderFooter Header { get; private set; }
+    public WorksheetHeaderFooter Footer { get; private set; }
+    public WorksheetHeaderFooter FirstPageHeader { get; private set; }
+    public WorksheetHeaderFooter FirstPageFooter { get; private set; }
+    public WorksheetHeaderFooter EvenPageHeader { get; private set; }
+    public WorksheetHeaderFooter EvenPageFooter { get; private set; }
+    public bool DifferentFirstPage { get; private set; }
+    public bool DifferentOddEvenPages { get; private set; }
+    public bool ScaleHeaderFooterWithDocument { get; private set; }
+    public bool AlignHeaderFooterWithMargins { get; private set; }
 
     public PageSetupDialog(Sheet sheet)
     {
@@ -55,6 +65,16 @@ public partial class PageSetupDialog : Window
         PrintQualityDpi = sheet.PrintQualityDpi;
         PrintErrorValue = sheet.PrintErrorValue;
         PrintComments = sheet.PrintComments;
+        Header = sheet.PageHeader;
+        Footer = sheet.PageFooter;
+        FirstPageHeader = sheet.FirstPageHeader;
+        FirstPageFooter = sheet.FirstPageFooter;
+        EvenPageHeader = sheet.EvenPageHeader;
+        EvenPageFooter = sheet.EvenPageFooter;
+        DifferentFirstPage = sheet.DifferentFirstPageHeaderFooter;
+        DifferentOddEvenPages = sheet.DifferentOddEvenHeaderFooter;
+        ScaleHeaderFooterWithDocument = sheet.HeaderFooterScaleWithDocument;
+        AlignHeaderFooterWithMargins = sheet.HeaderFooterAlignWithMargins;
         PopulateFields();
     }
 
@@ -115,6 +135,13 @@ public partial class PageSetupDialog : Window
             WorksheetPrintComments.AsDisplayed => 2,
             _ => 0
         };
+        SelectPreset(HeaderPresetBox, Header.Center);
+        SelectPreset(FooterPresetBox, Footer.Center);
+        DifferentFirstPageBox.IsChecked = DifferentFirstPage;
+        DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
+        ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
+        AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
+        UpdateHeaderFooterPreview();
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -217,8 +244,97 @@ public partial class PageSetupDialog : Window
             "AsDisplayed" => WorksheetPrintComments.AsDisplayed,
             _ => WorksheetPrintComments.None
         };
+        DifferentFirstPage = DifferentFirstPageBox.IsChecked == true;
+        DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
+        ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true;
+        AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true;
         DialogResult = true;
         Close();
+    }
+
+    private void HeaderPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (HeaderPresetBox.SelectedItem is not ComboBoxItem { Tag: string preset })
+            return;
+
+        Header = Header with { Center = preset };
+        UpdateHeaderFooterPreview();
+    }
+
+    private void FooterPresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FooterPresetBox.SelectedItem is not ComboBoxItem { Tag: string preset })
+            return;
+
+        Footer = Footer with { Center = preset };
+        UpdateHeaderFooterPreview();
+    }
+
+    private void CustomHeaderFooterButton_Click(object sender, RoutedEventArgs e)
+    {
+        var sheet = new Sheet(_sheetId, "Sheet")
+        {
+            PageHeader = Header,
+            PageFooter = Footer,
+            FirstPageHeader = FirstPageHeader,
+            FirstPageFooter = FirstPageFooter,
+            EvenPageHeader = EvenPageHeader,
+            EvenPageFooter = EvenPageFooter,
+            DifferentFirstPageHeaderFooter = DifferentFirstPageBox.IsChecked == true,
+            DifferentOddEvenHeaderFooter = DifferentOddEvenBox.IsChecked == true,
+            HeaderFooterScaleWithDocument = ScaleWithDocumentBox.IsChecked == true,
+            HeaderFooterAlignWithMargins = AlignWithMarginsBox.IsChecked == true
+        };
+
+        var dialog = new HeaderFooterDialog(sheet) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        Header = dialog.Header;
+        Footer = dialog.Footer;
+        FirstPageHeader = dialog.FirstPageHeader;
+        FirstPageFooter = dialog.FirstPageFooter;
+        EvenPageHeader = dialog.EvenPageHeader;
+        EvenPageFooter = dialog.EvenPageFooter;
+        DifferentFirstPage = dialog.DifferentFirstPage;
+        DifferentOddEvenPages = dialog.DifferentOddEvenPages;
+        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument;
+        AlignHeaderFooterWithMargins = dialog.AlignWithMargins;
+        DifferentFirstPageBox.IsChecked = DifferentFirstPage;
+        DifferentOddEvenBox.IsChecked = DifferentOddEvenPages;
+        ScaleWithDocumentBox.IsChecked = ScaleHeaderFooterWithDocument;
+        AlignWithMarginsBox.IsChecked = AlignHeaderFooterWithMargins;
+        SelectPreset(HeaderPresetBox, Header.Center);
+        SelectPreset(FooterPresetBox, Footer.Center);
+        UpdateHeaderFooterPreview();
+    }
+
+    private static void SelectPreset(ComboBox comboBox, string centerText)
+    {
+        for (var i = 0; i < comboBox.Items.Count; i++)
+        {
+            if (comboBox.Items[i] is ComboBoxItem { Tag: string preset } && preset == centerText)
+            {
+                comboBox.SelectedIndex = i;
+                return;
+            }
+        }
+
+        comboBox.SelectedIndex = -1;
+    }
+
+    private void UpdateHeaderFooterPreview()
+    {
+        HeaderPreviewText.Text = FormatHeaderFooterPreview(Header);
+        FooterPreviewText.Text = FormatHeaderFooterPreview(Footer);
+    }
+
+    private static string FormatHeaderFooterPreview(WorksheetHeaderFooter value)
+    {
+        var parts = new[] { value.Left, value.Center, value.Right }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .ToArray();
+        return parts.Length == 0 ? "(none)" : string.Join(" | ", parts);
     }
 
     private bool TryParseOptionalPrintArea(string input, out GridRange? printArea)

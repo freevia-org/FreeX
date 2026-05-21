@@ -175,9 +175,9 @@
 
                     <StackPanel Grid.Row="0" Grid.Column="0" Grid.RowSpan="2" Margin="0,0,12,0">
                         <TextBlock Text="Presets" FontWeight="SemiBold" Margin="0,4,0,4"/>
-                        <Button x:Name="DlgBorderPresetNoneButton" Content="None" Height="28" Margin="0,0,0,6" Click="DlgBorderPresetNoneButton_Click"/>
-                        <Button x:Name="DlgBorderPresetOutlineButton" Content="Outline" Height="28" Margin="0,0,0,6" Click="DlgBorderPresetOutlineButton_Click"/>
-                        <Button x:Name="DlgBorderPresetInsideButton" Content="Inside" Height="28" Click="DlgBorderPresetInsideButton_Click"/>
+                        <Button x:Name="DlgBorderPresetNoneButton" Content="_None" Height="28" Margin="0,0,0,6" Click="DlgBorderPresetNoneButton_Click"/>
+                        <Button x:Name="DlgBorderPresetOutlineButton" Content="_Outline" Height="28" Margin="0,0,0,6" Click="DlgBorderPresetOutlineButton_Click"/>
+                        <Button x:Name="DlgBorderPresetInsideButton" Content="_Inside" Height="28" Click="DlgBorderPresetInsideButton_Click"/>
                     </StackPanel>
 
                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,12,0">
@@ -204,18 +204,18 @@
                                 <ColumnDefinition Width="122"/>
                                 <ColumnDefinition Width="34"/>
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="DlgBorderPreviewTopButton" Grid.Row="0" Grid.Column="1" Content="Top" Click="DlgBorderPreviewTopButton_Click"/>
-                            <Button x:Name="DlgBorderPreviewLeftButton" Grid.Row="1" Grid.Column="0" Content="Left" Click="DlgBorderPreviewLeftButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewTopButton" Grid.Row="0" Grid.Column="1" Content="To_p" Click="DlgBorderPreviewTopButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewLeftButton" Grid.Row="1" Grid.Column="0" Content="L_eft" Click="DlgBorderPreviewLeftButton_Click"/>
                             <Border x:Name="DlgBorderPreviewArea" Grid.Row="1" Grid.Column="1"
                                     BorderBrush="Black" BorderThickness="1" Background="White">
                                 <TextBlock Text="Text" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
-                            <Button x:Name="DlgBorderPreviewRightButton" Grid.Row="1" Grid.Column="2" Content="Right" Click="DlgBorderPreviewRightButton_Click"/>
-                            <Button x:Name="DlgBorderPreviewBottomButton" Grid.Row="2" Grid.Column="1" Content="Bottom" Click="DlgBorderPreviewBottomButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewRightButton" Grid.Row="1" Grid.Column="2" Content="Ri_ght" Click="DlgBorderPreviewRightButton_Click"/>
+                            <Button x:Name="DlgBorderPreviewBottomButton" Grid.Row="2" Grid.Column="1" Content="Botto_m" Click="DlgBorderPreviewBottomButton_Click"/>
                         </Grid>
                     </StackPanel>
 
-                    <Expander Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Header="Individual border details" Margin="0,14,0,0" IsExpanded="True">
+                    <Expander Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Header="Individual border _details" Margin="0,14,0,0" IsExpanded="True">
                         <Grid Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="80"/>
