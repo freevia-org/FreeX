@@ -303,9 +303,27 @@ public sealed class FilterInputParserTests
     }
 
     [Fact]
+    public void TryParseAverage_AcceptsMenuAboveAverageSyntax()
+    {
+        var parsed = FilterInputParser.TryParseAverage("above average", out var above);
+
+        parsed.Should().BeTrue();
+        above.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryParseAverage_AcceptsBelowAverageSyntax()
     {
         var parsed = FilterInputParser.TryParseAverage("belowaverage", out var above);
+
+        parsed.Should().BeTrue();
+        above.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryParseAverage_AcceptsMenuBelowAverageSyntax()
+    {
+        var parsed = FilterInputParser.TryParseAverage("below average", out var above);
 
         parsed.Should().BeTrue();
         above.Should().BeFalse();
