@@ -184,6 +184,84 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_BorderTab_UsesExcelLikePresetLineColorAndPreviewLayout()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var text in new[]
+        {
+            "Text=\"Presets\"",
+            "Text=\"Line\"",
+            "Text=\"Color:\"",
+            "Text=\"Border\""
+        })
+            xaml.Should().Contain(text);
+
+        foreach (var controlName in new[]
+        {
+            "DlgBorderPresetNoneButton",
+            "DlgBorderPresetOutlineButton",
+            "DlgBorderPresetInsideButton",
+            "DlgBorderLineStyleBox",
+            "DlgBorderLineColorBox",
+            "DlgBorderPreviewArea",
+            "DlgBorderPreviewTopButton",
+            "DlgBorderPreviewRightButton",
+            "DlgBorderPreviewBottomButton",
+            "DlgBorderPreviewLeftButton"
+        })
+            xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FillTab_ExposesBackgroundPatternColorAndSamplePreview()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var text in new[]
+        {
+            "Text=\"Background Color:\"",
+            "Text=\"Pattern Color:\"",
+            "Text=\"Pattern Style:\"",
+            "Text=\"Sample\""
+        })
+            xaml.Should().Contain(text);
+
+        foreach (var controlName in new[]
+        {
+            "DlgFillBackgroundPreview",
+            "DlgFillPatternColorBox",
+            "DlgFillPatternStyleBox",
+            "DlgFillSamplePreview"
+        })
+            xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
+    public void FormatCellsDialog_FontTab_ExposesStyleUnderlineEffectsAndSamplePreview()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var text in new[]
+        {
+            "Text=\"Font style:\"",
+            "Text=\"Underline:\"",
+            "Text=\"Effects\"",
+            "Text=\"Sample\""
+        })
+            xaml.Should().Contain(text);
+
+        foreach (var controlName in new[]
+        {
+            "DlgFontStyleList",
+            "DlgUnderlineStyleBox",
+            "DlgFontEffectsGroup",
+            "DlgFontSamplePreview"
+        })
+            xaml.Should().Contain($"x:Name=\"{controlName}\"");
+    }
+
+    [Fact]
     public void FormatCellsDialog_DoesNotEmitUnsupportedTextRotation()
     {
         StaTestRunner.Run(() =>
