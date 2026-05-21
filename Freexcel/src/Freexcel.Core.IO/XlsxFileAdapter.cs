@@ -713,12 +713,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)
-    {
-        archive.GetEntry(entryName)?.Delete();
-        var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
-        using var stream = entry.Open();
-        document.Save(stream);
-    }
+        => XlsxPackageXmlEditor.ReplaceXml(archive, entryName, document);
 
     private static PivotPackageMetadata LoadPivotMetadata(
         Stream xlsxStream,
@@ -1725,73 +1720,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         };
 
     private static string NextRelationshipId(XDocument relsXml, XNamespace packageRelNs)
-    {
-        var used = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Select(e => e.Attribute("Id")?.Value)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase)
-            ?? [];
-
-        for (var i = 1; ; i++)
-        {
-            var candidate = $"rId{i}";
-            if (!used.Contains(candidate))
-                return candidate;
-        }
-    }
+        => XlsxPackageXmlEditor.NextRelationshipId(relsXml, packageRelNs);
 
     private static void EnsureContentType(ZipArchive archive, string extension, string contentType)
-    {
-        const string contentTypesPath = "[Content_Types].xml";
-        var entry = archive.GetEntry(contentTypesPath);
-        if (entry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var xml = LoadXml(entry);
-        var hasDefault = xml.Root?
-            .Elements(contentTypeNs + "Default")
-            .Any(e => string.Equals(e.Attribute("Extension")?.Value, extension, StringComparison.OrdinalIgnoreCase))
-            == true;
-        if (hasDefault)
-            return;
-
-        xml.Root?.Add(new XElement(
-            contentTypeNs + "Default",
-            new XAttribute("Extension", extension),
-            new XAttribute("ContentType", contentType)));
-
-        entry.Delete();
-        var updatedEntry = archive.CreateEntry(contentTypesPath);
-        using var stream = updatedEntry.Open();
-        xml.Save(stream);
-    }
+        => XlsxPackageXmlEditor.EnsureDefaultContentType(archive, extension, contentType);
 
     private static void EnsureSpecificContentType(ZipArchive archive, string partName, string contentType)
-    {
-        const string contentTypesPath = "[Content_Types].xml";
-        var entry = archive.GetEntry(contentTypesPath);
-        if (entry is null)
-            return;
-
-        XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
-        var xml = LoadXml(entry);
-        var root = xml.Root;
-        if (root is null)
-            return;
-
-        var normalizedPartName = partName.StartsWith('/') ? partName : $"/{partName}";
-        root.Elements(contentTypeNs + "Override")
-            .Where(element => string.Equals(element.Attribute("PartName")?.Value, normalizedPartName, StringComparison.OrdinalIgnoreCase))
-            .Remove();
-        root.Add(new XElement(
-            contentTypeNs + "Override",
-            new XAttribute("PartName", normalizedPartName),
-            new XAttribute("ContentType", contentType)));
-
-        ReplacePackageXml(archive, contentTypesPath, xml);
-    }
+        => XlsxPackageXmlEditor.EnsureSpecificContentType(archive, partName, contentType);
 
     private static SheetXmlLayout ReadHiddenSheetLayout(
         ZipArchive archive,
