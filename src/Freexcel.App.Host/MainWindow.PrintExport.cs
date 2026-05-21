@@ -92,6 +92,7 @@ public partial class MainWindow
                 xpsPath,
                 System.IO.FileMode.Create,
                 System.IO.FileAccess.ReadWrite);
+            XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options));
 
             using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 

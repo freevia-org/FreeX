@@ -24,9 +24,9 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "EvaluateFormulaDialog.cs"));
 
         source.Should().Contain("Evaluation:");
-        source.Should().Contain("Step In");
-        source.Should().Contain("Step Out");
-        source.Should().Contain("Restart");
-        source.Should().Contain("Help on this formula");
+        source.Should().Contain("Step _In");
+        source.Should().Contain("Step _Out");
+        source.Should().Contain("_Restart");
+        source.Should().Contain("_Help on this formula");
     }
 }
