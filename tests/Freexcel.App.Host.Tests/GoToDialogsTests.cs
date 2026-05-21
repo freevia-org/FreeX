@@ -36,8 +36,19 @@ public sealed class GoToDialogsTests
         source.Should().Contain("Content = \"_Reference:\"");
         source.Should().Contain("Target = _addressBox");
         source.Should().Contain("Content = \"S_pecial...\"");
+        source.Should().Contain("new GoToSpecialDialog");
+        source.Should().Contain("SelectedSpecialKind");
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
+    }
+
+    [Fact]
+    public void MainWindow_GoToDialogRoutesSpecialSelectionThroughGoToSpecialService()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.HomeEditing.cs"));
+
+        source.Should().Contain("dialog.SelectedSpecialKind is { } specialKind");
+        source.Should().Contain("SelectGoToSpecialMatches(specialKind, showEmptyMessage: true)");
     }
 
     [Fact]
@@ -82,8 +93,9 @@ public sealed class GoToDialogsTests
         })
             source.Should().Contain(expected);
 
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Header = \"Go to special\"");
+        source.Should().Contain("Header = \"Additional Excel options\"");
+        source.Should().Contain("DialogButtonRowFactory.Create");
     }
 
     [Fact]

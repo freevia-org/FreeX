@@ -119,7 +119,7 @@ public partial class MainWindow
         var veryNarrow = availableWidth <= 700;
         foreach (var button in collapsedButtons)
         {
-            button.Width = veryNarrow ? 46 : 56;
+            button.Width = veryNarrow ? 52 : 60;
             button.Margin = veryNarrow ? new Thickness(0) : new Thickness(1, 0, 3, 0);
             button.Padding = veryNarrow ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2);
 
@@ -133,7 +133,7 @@ public partial class MainWindow
                 {
                     textBlock.Visibility = veryNarrow ? Visibility.Collapsed : Visibility.Visible;
                     textBlock.FontSize = veryNarrow ? 9 : 10;
-                    textBlock.MaxWidth = veryNarrow ? 44 : 52;
+                    textBlock.MaxWidth = veryNarrow ? 50 : 56;
                 }
                 else if (textBlock.Tag?.ToString() == "RibbonIcon" && textBlock.Text != "\uE70D")
                 {
@@ -212,12 +212,12 @@ public partial class MainWindow
     {
         var groupName = GetRibbonGroupName(group);
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
-        var iconSize = 22;
+        var iconSize = 32;
         var glyphBrush = (Brush)BrushFromRgb(31, 31, 31);
         var button = new Button
         {
             Tag = "RibbonCollapsedGroupButton",
-            Width = 56,
+            Width = 60,
             Height = 64,
             Margin = new Thickness(1, 0, 3, 0),
             Padding = new Thickness(3, 2, 3, 2),
@@ -1164,6 +1164,19 @@ public partial class MainWindow
             : GetStaticRibbonIconCommandName(owner, source.Kind.ToString());
         var fallbackIcon = new RibbonCommandIcon(source.Kind);
         var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 32 : 22;
+        if (IsWhiteBrush(source.Foreground))
+        {
+            var fallbackElement = RibbonIconFactory.CreateIcon(
+                fallbackIcon,
+                iconSize,
+                source.Foreground ?? owner.Foreground);
+            fallbackElement.Tag = "RibbonIcon";
+            fallbackElement.HorizontalAlignment = source.HorizontalAlignment;
+            fallbackElement.VerticalAlignment = source.VerticalAlignment;
+            fallbackElement.Margin = source.Margin;
+            return fallbackElement;
+        }
+
         var commandIcon = RibbonIconFactory.CreateCommandIcon(
             commandName,
             fallbackIcon,

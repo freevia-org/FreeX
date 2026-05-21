@@ -113,13 +113,13 @@ public static class RibbonIconFactory
                 AddPath(canvas, "M7,9 L12,14 L17,9", glyphBrush, 1.8);
                 break;
             case RibbonCommandIconKind.WindowClose:
-                DrawDelete(canvas, glyphBrush);
+                DrawWindowClose(canvas, glyphBrush);
                 break;
             case RibbonCommandIconKind.WindowMaximize:
-                AddRectangle(canvas, 6, 6, 12, 12, glyphBrush, radius: 0.8);
+                DrawWindowMaximize(canvas, glyphBrush);
                 break;
             case RibbonCommandIconKind.WindowMinimize:
-                AddLine(canvas, 6, 17, 18, 17, glyphBrush, 1.7);
+                DrawWindowMinimize(canvas, glyphBrush);
                 break;
             case RibbonCommandIconKind.Insert:
                 DrawInsert(canvas, glyphBrush);
@@ -519,23 +519,46 @@ public static class RibbonIconFactory
 
     private static void DrawSave(Canvas canvas, Brush brush)
     {
-        AddRectangle(canvas, 5, 4, 14, 16, brush, radius: 1.5);
-        AddFilledRectangle(canvas, 8, 5, 8, 4, brush);
-        AddRectangle(canvas, 8, 13, 8, 6, brush, radius: 1);
+        AddLine(canvas, 6, 4, 17, 4, brush, 1.9);
+        AddLine(canvas, 17, 4, 20, 7, brush, 1.9);
+        AddLine(canvas, 20, 7, 20, 20, brush, 1.9);
+        AddLine(canvas, 20, 20, 6, 20, brush, 1.9);
+        AddLine(canvas, 6, 20, 6, 4, brush, 1.9);
+        AddLine(canvas, 9, 4, 9, 10, brush, 1.7);
+        AddLine(canvas, 9, 10, 16, 10, brush, 1.7);
+        AddLine(canvas, 16, 10, 16, 4, brush, 1.7);
+        AddLine(canvas, 10, 15, 17, 15, brush, 1.7);
+        AddLine(canvas, 10, 18, 15, 18, brush, 1.7);
     }
 
     private static void DrawCurvedArrow(Canvas canvas, Brush brush, bool left)
     {
         if (left)
         {
-            AddPath(canvas, "M9,8 L5,12 L9,16", brush, 1.7);
-            AddPath(canvas, "M6,12 L15,12 C18,12 20,15 18,18", brush, 1.7);
+            AddPath(canvas, "M10,7 L5,12 L10,17", brush, 2.2);
+            AddPath(canvas, "M6,12 L15,12 C19,12 21,15 19,19", brush, 2.2);
         }
         else
         {
-            AddPath(canvas, "M15,8 L19,12 L15,16", brush, 1.7);
-            AddPath(canvas, "M18,12 L9,12 C6,12 4,15 6,18", brush, 1.7);
+            AddPath(canvas, "M14,7 L19,12 L14,17", brush, 2.2);
+            AddPath(canvas, "M18,12 L9,12 C5,12 3,15 5,19", brush, 2.2);
         }
+    }
+
+    private static void DrawWindowClose(Canvas canvas, Brush brush)
+    {
+        AddLine(canvas, 6, 6, 18, 18, brush, 2.1);
+        AddLine(canvas, 18, 6, 6, 18, brush, 2.1);
+    }
+
+    private static void DrawWindowMaximize(Canvas canvas, Brush brush)
+    {
+        AddRectangle(canvas, 5, 5, 14, 14, brush, radius: 0);
+    }
+
+    private static void DrawWindowMinimize(Canvas canvas, Brush brush)
+    {
+        AddLine(canvas, 5, 18, 19, 18, brush, 2.1);
     }
 
     private static void DrawCut(Canvas canvas, Brush brush)
