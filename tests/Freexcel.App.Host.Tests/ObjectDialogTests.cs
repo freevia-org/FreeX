@@ -64,10 +64,11 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("_widthBox");
         source.Should().Contain("_heightBox");
-        source.Should().Contain("_lockAspectRatioBox");
         source.Should().Contain("Height:");
         source.Should().Contain("Width:");
-        source.Should().Contain("Content = \"_Lock aspect ratio\"");
+        source.Should().Contain("Lock aspect ratio is hidden until proportional resizing is wired");
+        source.Should().NotContain("_lockAspectRatioBox");
+        source.Should().NotContain("Content = \"_Lock aspect ratio\"");
     }
 
     [Fact]

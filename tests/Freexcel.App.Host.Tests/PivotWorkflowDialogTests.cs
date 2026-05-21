@@ -136,7 +136,7 @@ public sealed class PivotWorkflowDialogTests
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Slicer _caption\", _nameBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"_Date field to connect\", _fieldBox",
             "PivotDialogLayout.AddLabeledControl(fieldPanel, \"Timeline _caption\", _nameBox",
-            "PivotDialogLayout.AddLabeledControl(allChartsPanel, \"Chart _type\", _chartTypeBox",
+            "InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery",
             "PivotDialogLayout.AddLabeledControl(stylePanel, \"Chart _style ID\", _styleBox",
             "AddCombo(selectionPanel, \"_Field\", _fieldBox",
             "AddCombo(groupingPanel, \"_Group by\", _groupingBox",
@@ -215,6 +215,10 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("All Charts");
         source.Should().Contain("Chart preview");
         source.Should().Contain("Pick a chart type for the selected PivotTable data");
+        source.Should().Contain("InsertChartDialog.CreateAllChartsPanel");
+        source.Should().Contain("Chart categories");
+        source.Should().Contain("Chart subtype gallery");
+        source.Should().NotContain("private readonly ComboBox _chartTypeBox");
     }
 
     [Fact]

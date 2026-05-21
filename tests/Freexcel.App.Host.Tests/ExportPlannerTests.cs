@@ -562,6 +562,18 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PrintPreviewDialog_ExposesPageEntryAndStatus()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PrintPreviewDialog.cs"));
+
+        source.Should().Contain("Content = \"_Page:\"");
+        source.Should().Contain("pageNumberBox");
+        source.Should().Contain("pageStatusText");
+        source.Should().Contain("Page 1 of");
+        source.Should().Contain("NavigationCommands.GoToPage");
+    }
+
+    [Fact]
     public void ExportWorkflow_UsesOptionsDialogSelectionRangeAndOpenAfterPublish()
     {
         var printExport = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PrintExport.cs"));
