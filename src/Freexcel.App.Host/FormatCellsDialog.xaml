@@ -12,13 +12,41 @@
         <TabControl x:Name="Tabs" Grid.Row="0">
             <!-- Number -->
             <TabItem Header="_Number">
-                <StackPanel Margin="8">
-                    <TextBlock Text="Format code:" Margin="0,4,0,2"/>
-                    <ComboBox x:Name="NumberFormatCombo" IsEditable="True" Height="24"
-                              SelectionChanged="NumberFormatCombo_SelectionChanged"/>
-                    <TextBlock Text="Preview:" Margin="0,8,0,2"/>
-                    <TextBlock x:Name="NumberPreview" FontWeight="Bold"/>
-                </StackPanel>
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="Category:" Margin="0,4,0,2"/>
+                        <ListBox x:Name="NumberCategoryList" Height="355"
+                                 SelectionChanged="NumberCategoryList_SelectionChanged"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Sample" FontWeight="SemiBold" Margin="0,4,0,2"/>
+                        <Border BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
+                                BorderThickness="1"
+                                Padding="8"
+                                Margin="0,0,0,10">
+                            <TextBlock x:Name="NumberPreview" FontWeight="Bold" Text="1234.56"/>
+                        </Border>
+
+                        <TextBlock Text="Type:" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="NumberFormatCombo" IsEditable="True" Height="24"
+                                  SelectionChanged="NumberFormatCombo_SelectionChanged"/>
+
+                        <TextBlock Text="Decimal places:" Margin="0,10,0,2"/>
+                        <TextBox x:Name="NumberDecimalPlacesBox" Height="24" Text="2"/>
+
+                        <TextBlock Text="Symbol:" Margin="0,10,0,2"/>
+                        <ComboBox x:Name="NumberSymbolCombo" Height="24"/>
+
+                        <TextBlock Text="Negative numbers:" Margin="0,10,0,2"/>
+                        <ListBox x:Name="NumberNegativeNumbersList" Height="82"/>
+                    </StackPanel>
+                </Grid>
             </TabItem>
 
             <!-- Alignment -->
