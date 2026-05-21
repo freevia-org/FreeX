@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Freexcel.Core.Model;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -56,5 +57,16 @@ public sealed class ProtectionDialogTests
     public void TryParseAllowEditRange_RejectsInvalidRangeThroughSharedParser()
     {
         ProtectionDialogPlanner.TryParseAllowEditRange("A1:B2:C3", SheetId.New(), out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ProtectionDialogs_ExposeKeyboardAccessKeys()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ProtectionDialogs.cs"));
+
+        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("new Label { Content = \"_Range:\"");
+        source.Should().Contain("Target = _rangeBox");
     }
 }
