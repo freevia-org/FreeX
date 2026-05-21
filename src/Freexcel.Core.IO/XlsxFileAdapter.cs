@@ -608,10 +608,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
     private sealed record XlsxWorksheetCustomViewState(string Id, WorksheetCustomViewState State);
 
-    private sealed record IgnoredErrorLayout(
-        IReadOnlyList<CellAddress> ExpandedCells,
-        IReadOnlyList<GridRange> ExistingCellOnlyRanges);
-
     private sealed record XlsxChartPackagePart(XDocument Xml, XDocument? Relationships, XlsxDrawingAnchor? Anchor);
 
     private sealed record XlsxPicturePackagePart(
@@ -1699,8 +1695,8 @@ public sealed class XlsxFileAdapter : IFileAdapter
         var sparklines = ReadWorksheetSparklines(worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
-        var ignoredErrors = ReadIgnoredErrors(worksheetXml, worksheetNs);
-        var cellWatches = ReadCellWatches(worksheetXml, worksheetNs);
+        var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
+        var cellWatches = XlsxWorksheetDiagnosticsMapper.ReadCellWatches(worksheetXml, worksheetNs);
         var scenarios = XlsxWorksheetScenarioMapper.Read(worksheetXml, worksheetNs);
         var customViews = ReadWorksheetCustomViews(worksheetXml, worksheetNs);
         var customProperties = ReadWorksheetCustomProperties(worksheetXml, worksheetNs);
@@ -1830,76 +1826,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return customViews;
-    }
-
-    private static IgnoredErrorLayout ReadIgnoredErrors(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        string[] supportedFlags =
-        [
-            "numberStoredAsText",
-            "evalError",
-            "formula",
-            "formulaRange",
-            "unlockedFormula",
-            "emptyCellReference",
-            "listDataValidation",
-            "calculatedColumn",
-            "twoDigitTextYear"
-        ];
-
-        var cells = new List<CellAddress>();
-        var existingCellOnlyRanges = new List<GridRange>();
-        var tempSheet = SheetId.New();
-        foreach (var ignoredError in worksheetXml.Root?
-                     .Element(worksheetNs + "ignoredErrors")?
-                     .Elements(worksheetNs + "ignoredError") ?? [])
-        {
-            if (!supportedFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value)))
-                continue;
-
-            var sqref = ignoredError.Attribute("sqref")?.Value;
-            if (string.IsNullOrWhiteSpace(sqref))
-                continue;
-
-            foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (!TryParseSqrefToken(token, tempSheet, out var range))
-                    continue;
-
-                // Full-column/full-sheet sqref ranges are legal but can cover billions of cells.
-                // Keep small ranges materialized for existing behavior; apply oversized ranges to
-                // cells that ClosedXML already loaded instead of creating blank cells for the range.
-                if (range.CellCount > MaxExpandedIgnoredErrorCells)
-                    existingCellOnlyRanges.Add(range);
-                else
-                    cells.AddRange(range.AllCells());
-            }
-        }
-
-        return new IgnoredErrorLayout(cells, existingCellOnlyRanges);
-    }
-
-    private static IReadOnlyList<CellAddress> ReadCellWatches(XDocument worksheetXml, XNamespace worksheetNs)
-    {
-        var watchedCells = new List<CellAddress>();
-        var seen = new HashSet<CellAddress>();
-        var tempSheet = SheetId.New();
-        foreach (var cellWatch in worksheetXml.Root?
-                     .Element(worksheetNs + "cellWatches")?
-                     .Elements(worksheetNs + "cellWatch") ?? [])
-        {
-            var reference = cellWatch.Attribute("r")?.Value;
-            if (string.IsNullOrWhiteSpace(reference) ||
-                !CellAddress.TryParse(reference, tempSheet, out var address) ||
-                !seen.Add(address))
-            {
-                continue;
-            }
-
-            watchedCells.Add(address);
-        }
-
-        return watchedCells;
     }
 
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
@@ -3386,13 +3312,13 @@ public sealed class XlsxFileAdapter : IFileAdapter
         if (workbook.Sheets.Any(sheet => sheet.GetUsedCells().Any(pair => pair.Value.IgnoreFormulaError)))
         {
             packageStream.Position = 0;
-            SaveWorksheetIgnoredErrors(packageStream, workbook);
+            XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook);
         }
 
         if (workbook.WatchedCells.Count > 0)
         {
             packageStream.Position = 0;
-            SaveWorksheetCellWatches(packageStream, workbook);
+            XlsxWorksheetDiagnosticsMapper.SaveCellWatches(packageStream, workbook);
         }
 
         if (workbook.Scenarios.Count > 0)
@@ -5579,124 +5505,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return changed;
     }
 
-    private static void SaveWorksheetIgnoredErrors(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            var ignoredCells = sheet.GetUsedCells()
-                .Where(pair => pair.Value.IgnoreFormulaError)
-                .OrderBy(pair => pair.Key.Row)
-                .ThenBy(pair => pair.Key.Col)
-                .ToList();
-            if (ignoredCells.Count == 0)
-                continue;
-
-            if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "ignoredErrors")?.Remove();
-            InsertWorksheetIgnoredErrorsInOrder(root, workbookNs, new XElement(
-                workbookNs + "ignoredErrors",
-                ignoredCells.Select(pair => new XElement(
-                    workbookNs + "ignoredError",
-                    new XAttribute("sqref", pair.Key.ToA1()),
-                    new XAttribute("numberStoredAsText", "1"),
-                    new XAttribute("evalError", "1"),
-                    new XAttribute("formula", "1"),
-                    new XAttribute("emptyCellReference", "1")))));
-
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
-    }
-
     private static void InsertWorksheetIgnoredErrorsInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement ignoredErrors)
     {
         InsertWorksheetMetadataElementInOrder(worksheetRoot, workbookNs, ignoredErrors);
-    }
-
-    private static void SaveWorksheetCellWatches(MemoryStream packageStream, Workbook workbook)
-    {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var workbookXml = LoadXml(workbookEntry);
-        var workbookRels = LoadRelationshipTargets(
-            archive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var watchedCellsBySheet = workbook.WatchedCells
-            .GroupBy(address => address.Sheet)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .Distinct()
-                    .OrderBy(address => address.Row)
-                    .ThenBy(address => address.Col)
-                    .ToList());
-
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (!watchedCellsBySheet.TryGetValue(sheet.Id, out var watchedCells) ||
-                watchedCells.Count == 0 ||
-                !sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
-            {
-                continue;
-            }
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Element(workbookNs + "cellWatches")?.Remove();
-            InsertWorksheetMetadataElementInOrder(root, workbookNs, new XElement(
-                workbookNs + "cellWatches",
-                watchedCells.Select(address => new XElement(
-                    workbookNs + "cellWatch",
-                    new XAttribute("r", address.ToA1())))));
-
-            ReplacePackageXml(archive, worksheetPath, worksheetXml);
-        }
     }
 
     private static void SaveCustomViews(MemoryStream packageStream, Workbook workbook)
