@@ -230,7 +230,10 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void MainWindowPreviewKeys_HandleWorksheetKeytipAndContextMenuEntryPoints()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.KeyboardCommands.cs"));
 
         source.Should().Contain("this.PreviewKeyDown += MainWindow_PreviewKeyDown;");
         source.Should().Contain("KeyboardCommandShortcut.ShowKeyTips");
@@ -240,7 +243,7 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void EscapeFromVisibleBackstage_ReturnsToWorkbookBeforeTransientCancellation()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
 
         source.Should().Contain("IsStartScreenVisible()");
         source.Should().Contain("HideStartScreen();");
@@ -1314,7 +1317,9 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableShowDetailsGesture_IsAttemptedBeforeDoubleClickEdit()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+        var source =
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Selection.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.PivotCommands.cs"));
 
         source.Should().Contain("e.ClickCount == 2");
         source.Should().Contain("TryShowPivotTableDetails(showMessage: false)");
