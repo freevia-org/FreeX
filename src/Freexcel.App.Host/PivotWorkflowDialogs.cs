@@ -849,7 +849,6 @@ public sealed class PivotTableOptionsDialog : Window
         tabs.Items.Add(new TabItem { Header = "Layout & Format", Content = CreateLayoutAndFormatTab() });
         tabs.Items.Add(new TabItem { Header = "Totals & Filters", Content = CreateTotalsAndFiltersTab() });
         tabs.Items.Add(new TabItem { Header = "Display", Content = CreateDisplayTab() });
-        tabs.Items.Add(new TabItem { Header = "Printing", Content = CreateSimpleTab("Print titles and print expand/collapse buttons are not yet available.") });
         tabs.Items.Add(new TabItem { Header = "Data", Content = CreateDataTab() });
         tabs.Items.Add(new TabItem { Header = "Alt Text", Content = CreateSimpleTab("Title and description metadata can be added in a future pass.") });
 

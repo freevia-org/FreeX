@@ -92,11 +92,16 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
-    public void ShapeGradientDialog_LabelsRgbOverrideWithAccessKeyTarget()
+    public void ShapeGradientDialog_LabelsStopRgbEditorsWithAccessKeyTargets()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ObjectDialogs.cs"));
 
-        source.Should().Contain("new Label { Content = \"RGB _override:\", Target = _gradientBox");
+        source.Should().Contain("Gradient stops");
+        source.Should().Contain("AddStopRow(grid, 0, \"Stop 1 _color (RGB):\", _startColorBox");
+        source.Should().Contain("AddStopRow(grid, 1, \"Stop 2 c_olor (RGB):\", _endColorBox");
+        source.Should().Contain("Target = box");
+        source.Should().NotContain("RGB _override:");
+        source.Should().NotContain("_gradientBox");
     }
 
     [Fact]
