@@ -74,10 +74,11 @@ public class ExportPlannerTests
         ExportOptions.ExcelLikeDefault.Should().Be(new ExportOptions(
             ExportContentScope.ActiveSheet,
             IncludeDocumentProperties: false,
-            OpenAfterPublish: false));
+            OpenAfterPublish: false,
+            Quality: ExportQuality.Standard));
 
         ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
-            .Should().Be("Active sheet only; document properties are not included.");
+            .Should().Be("Active sheet only; standard quality; document properties are not included.");
     }
 
     [Fact]
@@ -87,10 +88,11 @@ public class ExportPlannerTests
             ExportContentScope.Selection,
             IncludeDocumentProperties: true,
             OpenAfterPublish: true,
-            PageRange: new ExportPageRange(2, 4));
+            PageRange: new ExportPageRange(2, 4),
+            Quality: ExportQuality.MinimumSize);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; pages 2-4; document properties are included; open after publishing.");
+            .Should().Be("Selection; pages 2-4; minimum size; document properties are included; open after publishing.");
     }
 
     [Fact]
@@ -102,7 +104,7 @@ public class ExportPlannerTests
             OpenAfterPublish: true);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; document properties are included; open after publishing.");
+            .Should().Be("Selection; standard quality; document properties are included; open after publishing.");
     }
 
     [Fact]
@@ -114,7 +116,7 @@ public class ExportPlannerTests
             OpenAfterPublish: false);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Entire workbook; document properties are not included.");
+            .Should().Be("Entire workbook; standard quality; document properties are not included.");
     }
 
     [Fact]
@@ -124,13 +126,15 @@ public class ExportPlannerTests
                 ExportContentScope.EntireWorkbook,
                 includeDocumentProperties: true,
                 openAfterPublish: true,
-                pageRange: new ExportPageRange(3, 3))
+                pageRange: new ExportPageRange(3, 3),
+                quality: ExportQuality.MinimumSize)
             .Should()
             .Be(new ExportOptions(
                 ExportContentScope.EntireWorkbook,
                 IncludeDocumentProperties: true,
                 OpenAfterPublish: true,
-                PageRange: new ExportPageRange(3, 3)));
+                PageRange: new ExportPageRange(3, 3),
+                Quality: ExportQuality.MinimumSize));
     }
 
     [Fact]
@@ -145,6 +149,8 @@ public class ExportPlannerTests
             "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
             "Content = \"_Open after publishing\"",
+            "Content = \"_Standard\"",
+            "Content = \"_Minimum size\"",
             "Content = \"_Pages from\"",
             "Target = _fromPageBox",
             "Content = \"t_o\"",
@@ -220,7 +226,7 @@ public class ExportPlannerTests
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; document properties are not included.");
+            "Options: Active sheet only; standard quality; document properties are not included.");
     }
 
     [Fact]
@@ -234,7 +240,15 @@ public class ExportPlannerTests
                 OpenAfterPublish: false));
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; document properties are included.");
+            "Options: Active sheet only; standard quality; document properties are included.");
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_MapsQualityToRasterDpi()
+    {
+        PdfDocumentExporter.ResolveRasterDpi(ExportQuality.Standard).Should().Be(96.0);
+        PdfDocumentExporter.ResolveRasterDpi(ExportQuality.MinimumSize).Should().Be(72.0);
+        PdfDocumentExporter.ResolveRasterDpi((ExportQuality)99).Should().Be(96.0);
     }
 
     [Theory]
@@ -562,7 +576,7 @@ public class ExportPlannerTests
         printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
-        printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange)");
+        printExport.Should().Contain("PdfDocumentExporter.Save(document, pdfPath, properties, options.PageRange, options.Quality)");
         printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
     }
 }
