@@ -509,13 +509,23 @@ public sealed class PivotWorkflowDialogTests
     [Fact]
     public void PivotChartOptionsDialog_CreateResult_ParsesAndClampsStyle()
     {
-        PivotChartOptionsDialog.CreateResult(" 99 ", showFieldButtons: false)
+        PivotChartOptionsDialog.CreateResult(
+                " 99 ",
+                showFieldButtons: false,
+                showReportFilterButtons: true,
+                showAxisFieldButtons: false,
+                showValueFieldButtons: true)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(48, false));
+            .Be(new PivotChartOptionsDialogResult(48, false, true, false, true));
 
-        PivotChartOptionsDialog.CreateResult("not-a-style", showFieldButtons: true)
+        PivotChartOptionsDialog.CreateResult(
+                "not-a-style",
+                showFieldButtons: true,
+                showReportFilterButtons: false,
+                showAxisFieldButtons: true,
+                showValueFieldButtons: false)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(null, true));
+            .Be(new PivotChartOptionsDialogResult(null, true, false, true, false));
     }
 
     [Fact]
@@ -524,12 +534,15 @@ public sealed class PivotWorkflowDialogTests
         var chart = new ChartModel
         {
             ChartStyleId = 12,
-            ShowPivotChartFieldButtons = false
+            ShowPivotChartFieldButtons = false,
+            ShowPivotChartReportFilterButtons = true,
+            ShowPivotChartAxisFieldButtons = false,
+            ShowPivotChartValueFieldButtons = true
         };
 
         PivotChartOptionsDialog.FromChart(chart)
             .Should()
-            .Be(new PivotChartOptionsDialogResult(12, false));
+            .Be(new PivotChartOptionsDialogResult(12, false, true, false, true));
     }
 
     [Fact]
@@ -541,6 +554,9 @@ public sealed class PivotWorkflowDialogTests
         source.Should().Contain("Style IDs match the built-in Excel chart style gallery");
         source.Should().Contain("Field buttons");
         source.Should().Contain("_Show field buttons on chart");
+        source.Should().Contain("Report _filter buttons");
+        source.Should().Contain("_Axis field buttons");
+        source.Should().Contain("_Value field buttons");
     }
 
     [Fact]
@@ -549,6 +565,9 @@ public sealed class PivotWorkflowDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
 
         source.Should().Contain("Content = \"_Show field buttons on chart\"");
+        source.Should().Contain("Content = \"Report _filter buttons\"");
+        source.Should().Contain("Content = \"_Axis field buttons\"");
+        source.Should().Contain("Content = \"_Value field buttons\"");
         source.Should().Contain("Content = \"_Ungroup selected field\"");
     }
 }

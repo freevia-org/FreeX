@@ -249,7 +249,10 @@ public partial class MainWindow
                     _currentSheetId,
                     chart.Id,
                     dialog.Result.ChartStyleId,
-                    dialog.Result.ShowFieldButtons),
+                    dialog.Result.ShowFieldButtons,
+                    dialog.Result.ShowReportFilterButtons,
+                    dialog.Result.ShowAxisFieldButtons,
+                    dialog.Result.ShowValueFieldButtons),
                 "PivotChart Options"))
             return;
 
