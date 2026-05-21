@@ -527,6 +527,20 @@ public static class RibbonIconFactory
             "sort-and-filter" => "sort",
             "find-and-select" => "find",
             "percent-style" => "percent-style",
+            "object-fill" => "fill",
+            "object-outline" => "outline-color",
+            "object-size" => "size",
+            "object-rotate" => "rotate",
+            "shape-gradient" => "gradient",
+            "object-effects" => "effects",
+            "math" => "math-trig",
+            "date" => "date-time",
+            "lookup" => "lookup-reference",
+            "formula-auditing" => "evaluate-formula",
+            "calculation" => "calculate-now",
+            "workbook-stats" => "statistics",
+            "workbook-statistics" => "statistics",
+            "accessibility" => "accessibility-checker",
             _ => ""
         };
 

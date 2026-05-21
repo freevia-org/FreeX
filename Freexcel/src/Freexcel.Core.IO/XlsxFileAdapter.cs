@@ -13,8 +13,6 @@ namespace Freexcel.Core.IO;
 /// </summary>
 public sealed class XlsxFileAdapter : IFileAdapter
 {
-    private const long MaxExpandedIgnoredErrorCells = 16384;
-
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
     private static readonly HashSet<string> ModeledPrintOptionsAttributes = new(StringComparer.Ordinal)
     {
@@ -2534,7 +2532,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
         XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
         MergeWorksheetDrawingParts(sourceArchive, generatedArchive);
-        PreserveWorksheetDrawingReferences(sourceArchive, generatedArchive);
+        XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         PreserveWorksheetMetadataBlocks(sourceArchive, generatedArchive, workbook);
         PreserveLegacyCommentParts(sourceArchive, generatedArchive, workbook);
@@ -2554,87 +2552,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
             sourcePart,
             targetPart,
             relationshipType);
-
-    private static void PreserveWorksheetDrawingReferences(ZipArchive sourceArchive, ZipArchive targetArchive)
-    {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var sourceWorkbookRelsEntry = sourceArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || sourceWorkbookRelsEntry is null ||
-            targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
-        {
-            return;
-        }
-
-        var sourceWorkbookXml = LoadXml(sourceWorkbookEntry);
-        var sourceWorkbookRels = LoadRelationshipTargets(
-            sourceArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var targetWorkbookXml = LoadXml(targetWorkbookEntry);
-        var targetWorkbookRels = LoadRelationshipTargets(
-            targetArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-
-        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
-            .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
-        {
-            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
-                continue;
-
-            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
-            var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
-            if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
-                continue;
-
-            var sourceWorksheetXml = LoadXml(sourceWorksheetEntry);
-            var sourceDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "drawing");
-            var sourceRelId = sourceDrawing?.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(sourceRelId))
-                continue;
-
-            var sourceWorksheetRels = LoadRelationshipTargets(
-                sourceArchive,
-                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
-                sourceWorksheetPath,
-                packageRelNs);
-            if (!sourceWorksheetRels.TryGetValue(sourceRelId, out var drawingPath))
-                continue;
-
-            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-            var targetWorksheetRelsEntry = targetArchive.GetEntry(targetWorksheetRelsPath);
-            var targetWorksheetRelsXml = targetWorksheetRelsEntry is not null
-                ? LoadXml(targetWorksheetRelsEntry)
-                : new XDocument(new XElement(packageRelNs + "Relationships"));
-            var targetRelId = EnsureRelationshipForPackagePart(
-                targetWorksheetRelsXml,
-                packageRelNs,
-                targetWorksheetPath,
-                drawingPath,
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
-            ReplacePackageXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
-
-            var targetWorksheetXml = LoadXml(targetWorksheetEntry);
-            var targetRoot = targetWorksheetXml.Root;
-            if (targetRoot is null || targetRoot.Element(workbookNs + "drawing") is not null)
-                continue;
-
-            targetRoot.Add(new XElement(workbookNs + "drawing", new XAttribute(relNs + "id", targetRelId)));
-            ReplacePackageXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
-        }
-    }
 
     private static void PreserveWorkbookMetadataBlocks(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
     {
@@ -3265,17 +3182,17 @@ public sealed class XlsxFileAdapter : IFileAdapter
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "ignoredErrors" &&
-                    MergeWorksheetIgnoredErrors(sourceBlock, targetRoot, workbookNs))
+                    XlsxWorksheetDiagnosticsMapper.MergeIgnoredErrors(sourceBlock, targetRoot, workbookNs))
                 {
                     changed = true;
                     continue;
                 }
                 if (sourceBlock.Name == workbookNs + "cellWatches" &&
-                    MergeWorksheetCellWatches(
+                    XlsxWorksheetDiagnosticsMapper.MergeCellWatches(
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        GetModeledCellWatchReferences(workbook, sheetName)))
+                        XlsxWorksheetDiagnosticsMapper.GetModeledCellWatchReferences(workbook, sheetName)))
                 {
                     changed = true;
                     continue;
@@ -3664,11 +3581,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return changed;
-    }
-
-    private static void InsertWorksheetIgnoredErrorsInOrder(XElement worksheetRoot, XNamespace workbookNs, XElement ignoredErrors)
-    {
-        InsertWorksheetMetadataElementInOrder(worksheetRoot, workbookNs, ignoredErrors);
     }
 
     private static void InsertWorkbookCustomViewsInOrder(
@@ -4533,180 +4445,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         return changed;
-    }
-
-    private static bool MergeWorksheetIgnoredErrors(XElement sourceIgnoredErrors, XElement targetRoot, XNamespace workbookNs)
-    {
-        var targetIgnoredErrors = targetRoot.Element(workbookNs + "ignoredErrors");
-        if (targetIgnoredErrors is null)
-        {
-            InsertWorksheetIgnoredErrorsInOrder(targetRoot, workbookNs, new XElement(sourceIgnoredErrors));
-            return true;
-        }
-
-        var tempSheet = SheetId.New();
-        var targetBySqref = targetIgnoredErrors
-            .Elements(workbookNs + "ignoredError")
-            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
-            .GroupBy(element => element.Attribute("sqref")!.Value, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var parsedTargets = targetIgnoredErrors
-            .Elements(workbookNs + "ignoredError")
-            .Select(element => new
-            {
-                Element = element,
-                Parsed = TryParseSqrefCells(element.Attribute("sqref")?.Value, tempSheet, out var cells),
-                Cells = cells
-            })
-            .Where(entry => entry.Parsed)
-            .ToList();
-
-        var changed = false;
-        foreach (var sourceIgnoredError in sourceIgnoredErrors.Elements(workbookNs + "ignoredError"))
-        {
-            var sqref = sourceIgnoredError.Attribute("sqref")?.Value;
-            if (!string.IsNullOrWhiteSpace(sqref) &&
-                targetBySqref.TryGetValue(sqref, out var targetIgnoredError))
-            {
-                changed |= MergeMissingAttributes(sourceIgnoredError, targetIgnoredError);
-                continue;
-            }
-
-            if (!TryParseSqrefCells(sqref, tempSheet, out var sourceCells))
-            {
-                targetIgnoredErrors.Add(new XElement(sourceIgnoredError));
-                if (!string.IsNullOrWhiteSpace(sqref))
-                    targetBySqref[sqref] = targetIgnoredErrors.Elements(workbookNs + "ignoredError").Last();
-                changed = true;
-                continue;
-            }
-
-            var overlappingTargets = parsedTargets
-                .Where(target => target.Cells.Overlaps(sourceCells))
-                .Select(target => target.Element)
-                .ToList();
-            if (overlappingTargets.Count > 0)
-            {
-                foreach (var overlappingTarget in overlappingTargets)
-                    changed |= MergeMissingAttributes(sourceIgnoredError, overlappingTarget);
-
-                continue;
-            }
-
-            targetIgnoredErrors.Add(new XElement(sourceIgnoredError));
-            var addedIgnoredError = targetIgnoredErrors.Elements(workbookNs + "ignoredError").Last();
-            if (!string.IsNullOrWhiteSpace(sqref))
-                targetBySqref[sqref] = addedIgnoredError;
-            parsedTargets.Add(new
-            {
-                Element = addedIgnoredError,
-                Parsed = true,
-                Cells = sourceCells
-            });
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static HashSet<string> GetModeledCellWatchReferences(Workbook workbook, string sheetName)
-    {
-        var sheet = workbook.GetSheet(sheetName);
-        if (sheet is null)
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        return workbook.WatchedCells
-            .Where(address => address.Sheet == sheet.Id)
-            .Select(address => address.ToA1())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static bool MergeWorksheetCellWatches(
-        XElement sourceCellWatches,
-        XElement targetRoot,
-        XNamespace workbookNs,
-        HashSet<string> modeledReferences)
-    {
-        var targetCellWatches = targetRoot.Element(workbookNs + "cellWatches");
-        if (targetCellWatches is null)
-        {
-            var retainedUnsupported = sourceCellWatches
-                .Elements(workbookNs + "cellWatch")
-                .Where(element => !IsSupportedCellWatchReference(element.Attribute("r")?.Value))
-                .Select(element => new XElement(element))
-                .ToList();
-            if (retainedUnsupported.Count == 0)
-                return false;
-
-            InsertWorksheetMetadataElementInOrder(
-                targetRoot,
-                workbookNs,
-                new XElement(workbookNs + "cellWatches", retainedUnsupported));
-            return true;
-        }
-
-        var targetByReference = targetCellWatches
-            .Elements(workbookNs + "cellWatch")
-            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("r")?.Value))
-            .GroupBy(element => element.Attribute("r")!.Value, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-        var changed = false;
-        foreach (var sourceCellWatch in sourceCellWatches.Elements(workbookNs + "cellWatch"))
-        {
-            var reference = sourceCellWatch.Attribute("r")?.Value;
-            if (IsSupportedCellWatchReference(reference))
-            {
-                if (modeledReferences.Contains(reference!) &&
-                    targetByReference.TryGetValue(reference!, out var targetCellWatch))
-                {
-                    changed |= MergeMissingAttributes(sourceCellWatch, targetCellWatch);
-                }
-
-                continue;
-            }
-
-            if (!string.IsNullOrWhiteSpace(reference) &&
-                targetByReference.ContainsKey(reference))
-            {
-                continue;
-            }
-
-            targetCellWatches.Add(new XElement(sourceCellWatch));
-            if (!string.IsNullOrWhiteSpace(reference))
-                targetByReference[reference] = targetCellWatches.Elements(workbookNs + "cellWatch").Last();
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static bool IsSupportedCellWatchReference(string? reference)
-    {
-        if (string.IsNullOrWhiteSpace(reference))
-            return false;
-
-        return CellAddress.TryParse(reference, SheetId.New(), out _);
-    }
-
-    private static bool TryParseSqrefCells(string? sqref, SheetId sheet, out HashSet<CellAddress> cells)
-    {
-        cells = [];
-        if (string.IsNullOrWhiteSpace(sqref))
-            return false;
-
-        foreach (var token in sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (!TryParseSqrefToken(token, sheet, out var range))
-                return false;
-            if (range.CellCount > MaxExpandedIgnoredErrorCells ||
-                (long)cells.Count + range.CellCount > MaxExpandedIgnoredErrorCells)
-                return false;
-
-            foreach (var cell in range.AllCells())
-                cells.Add(cell);
-        }
-
-        return cells.Count > 0;
     }
 
     private static bool MergeMissingAttributes(XElement sourceElement, XElement targetElement)
