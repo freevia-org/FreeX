@@ -189,9 +189,10 @@ public sealed class ChartDialogTests
         source.Should().Contain("Content = \"_Chart data range:\"");
         source.Should().Contain("Content = \"_Switch Row/Column\"");
         source.Should().Contain("Content = \"First column contains _category labels\"");
-        source.Should().Contain("Content = \"_Add\"");
-        source.Should().Contain("Content = \"_Edit\"");
-        source.Should().Contain("Content = \"_Remove\"");
+        source.Should().Contain("\"_Add series\"");
+        source.Should().Contain("\"_Edit series\"");
+        source.Should().Contain("\"_Remove series\"");
+        source.Should().Contain("\"_Edit Axis Labels\"");
     }
 
     [Fact]
@@ -219,9 +220,9 @@ public sealed class ChartDialogTests
         source.Should().Contain("AddEditRemoveButtons");
         source.Should().Contain("Series list");
         source.Should().Contain("Axis label list");
-        source.Should().Contain("Add series");
-        source.Should().Contain("Edit series");
-        source.Should().Contain("Edit Axis Labels");
+        source.Should().Contain("_Add series");
+        source.Should().Contain("_Edit series");
+        source.Should().Contain("_Edit Axis Labels");
         source.Should().Contain("Name and values are inferred from the selected chart range.");
     }
 
