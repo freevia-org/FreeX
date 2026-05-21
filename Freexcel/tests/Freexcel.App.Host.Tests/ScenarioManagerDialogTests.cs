@@ -42,7 +42,7 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("Delete");
         source.Should().Contain("Merge...");
         source.Should().Contain("Show");
-        source.Should().Contain("Summary...");
+        source.Should().Contain("S_ummary...");
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class ScenarioManagerDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ScenarioManagerDialog.cs"));
 
-        source.Should().Contain("Scenario name:");
-        source.Should().Contain("Changing cells:");
+        source.Should().Contain("Scenario _name:");
+        source.Should().Contain("Changing _cells:");
         source.Should().Contain("Comment:");
         source.Should().Contain("Add/Edit Scenario");
     }
