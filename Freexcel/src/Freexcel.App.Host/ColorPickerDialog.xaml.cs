@@ -79,8 +79,20 @@ public partial class ColorPickerDialog : Window
         if (_updatingText || !TryParseColorText(CustomColorTextBox.Text, out var color))
             return;
 
-        SelectedColor = color;
-        SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
+        SelectColor(color);
+    }
+
+    private void CustomRgbTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_updatingText
+            || !byte.TryParse(CustomRedTextBox.Text, out var red)
+            || !byte.TryParse(CustomGreenTextBox.Text, out var green)
+            || !byte.TryParse(CustomBlueTextBox.Text, out var blue))
+        {
+            return;
+        }
+
+        SelectColor(new CellColor(red, green, blue));
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -168,6 +180,9 @@ public partial class ColorPickerDialog : Window
     {
         _updatingText = true;
         CustomColorTextBox.Text = ColorInputParser.FormatHexColor(color);
+        CustomRedTextBox.Text = color.R.ToString();
+        CustomGreenTextBox.Text = color.G.ToString();
+        CustomBlueTextBox.Text = color.B.ToString();
         _updatingText = false;
     }
 
