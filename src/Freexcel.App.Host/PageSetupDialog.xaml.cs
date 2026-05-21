@@ -147,6 +147,16 @@ public partial class PageSetupDialog : Window
 
     private void ScalingMode_Changed(object sender, RoutedEventArgs e) => UpdateScalingInputState();
 
+    private void RangePickerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string targetName } ||
+            FindName(targetName) is not TextBox target)
+            return;
+
+        target.Focus();
+        target.SelectAll();
+    }
+
     private void UpdateScalingInputState()
     {
         if (ScalePercentBox is null || FitPagesWideBox is null || FitPagesTallBox is null)
