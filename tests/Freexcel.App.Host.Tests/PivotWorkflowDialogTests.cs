@@ -22,7 +22,7 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
-    public void PivotTableDialog_DefaultResult_UsesCurrentWorksheetDestinationAndFieldList()
+    public void PivotTableDialog_DefaultResult_UsesNewWorksheetDestinationAndFieldList()
     {
         var workbook = new Workbook("Book1");
         var sheet = workbook.AddSheet("Sales");
@@ -33,8 +33,8 @@ public sealed class PivotWorkflowDialogTests
             var dialog = new PivotTableDialog(workbook, sheet.Id, range);
 
             dialog.Result.SourceRangeText.Should().Be("Sales!A1:D20");
-            dialog.Result.DestinationKind.Should().Be(PivotTableDestinationKind.ExistingWorksheet);
-            dialog.Result.DestinationRangeText.Should().Be("Sales!F1");
+            dialog.Result.DestinationKind.Should().Be(PivotTableDestinationKind.NewWorksheet);
+            dialog.Result.DestinationRangeText.Should().BeEmpty();
             dialog.Result.OpenFieldList.Should().BeTrue();
         });
     }
