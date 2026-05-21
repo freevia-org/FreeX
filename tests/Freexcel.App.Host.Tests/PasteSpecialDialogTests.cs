@@ -43,7 +43,7 @@ public sealed class PasteSpecialDialogTests
     [InlineData("_rbValidation", "Validatio_n")]
     [InlineData("_rbAllUsingSourceTheme", "All using source t_heme")]
     [InlineData("_rbAllExceptBorders", "All e_xcept borders")]
-    [InlineData("_rbAllMergingConditionalFormats", "All merging conditional formats")]
+    [InlineData("_rbAllMergingConditionalFormats", "All merging conditional _formats")]
     [InlineData("_rbColumnWidths", "Column _widths")]
     [InlineData("_rbFormulasAndNumberFormats", "Formulas and number fo_rmats")]
     [InlineData("_rbValuesAndNumberFormats", "Values and number for_mats")]

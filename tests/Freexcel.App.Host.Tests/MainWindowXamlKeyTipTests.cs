@@ -268,6 +268,9 @@ public sealed class MainWindowXamlKeyTipTests
         exportButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Export PDF/XPS");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PDF");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("XPS");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("selection");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("workbook");
+        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("active sheet");
         exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("PDF printer");
     }
 
