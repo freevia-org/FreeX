@@ -85,6 +85,14 @@ function Eye([int]$n) {
     "  <path class=""r"" d=""M$(S 3 $n) $(S 10 $n) C$(S 6 $n) $(S 5.5 $n) $(S 14 $n) $(S 5.5 $n) $(S 17 $n) $(S 10 $n) C$(S 14 $n) $(S 14.5 $n) $(S 6 $n) $(S 14.5 $n) $(S 3 $n) $(S 10 $n) Z"" stroke-width=""$(S 1 $n)""/>`n  <circle class=""k"" cx=""$(S 10 $n)"" cy=""$(S 10 $n)"" r=""$(S 2 $n)""/>"
 }
 
+function Database([int]$n) {
+    "  <ellipse class=""f s"" cx=""$(S 10 $n)"" cy=""$(S 5 $n)"" rx=""$(S 6 $n)"" ry=""$(S 2.2 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""f s"" d=""M$(S 4 $n) $(S 5 $n) V$(S 15 $n) C$(S 4 $n) $(S 18 $n) $(S 16 $n) $(S 18 $n) $(S 16 $n) $(S 15 $n) V$(S 5 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (L 4 10 16 10 $n 's' .8) + "`n" + (L 4 14 16 14 $n 's' .8)
+}
+
+function Funnel([int]$n) {
+    "  <path class=""f s"" d=""M$(S 3 $n) $(S 4 $n) H$(S 17 $n) L$(S 11.5 $n) $(S 10.5 $n) V$(S 16 $n) L$(S 8.5 $n) $(S 17 $n) V$(S 10.5 $n) Z"" stroke-width=""$(S 1 $n)""/>"
+}
+
 function Alignment($slug, [int]$n) {
     $starts = @(4, 4, 4); $ends = @(16, 13, 16)
     if ($slug -match 'center') { $starts = @(4, 6, 4); $ends = @(16, 14, 16) }
@@ -134,15 +142,19 @@ function Body($slug, [int]$n) {
         '^print-gridlines$' { return (Grid $n) + "`n" + (Txt $checkGlyph 15 5 4 $n) }
         '^print-headings$' { return (Grid $n) + "`n" + (Txt 'A' 6 5 4 $n) + "`n" + (Txt '1' 4 8 4 $n) }
         '^text-to-columns$' { return (Grid $n) + "`n" + (L 10 3 10 17 $n 'b' 1.4) + "`n" + (Arrow 8 10 5 10 $n 'g' 1) + "`n" + (Arrow 12 10 15 10 $n 'g' 1) }
-        '^flash-fill$' { return (Grid $n) + "`n" + (Txt $boltGlyph 10 10 8 $n) }
-        '^remove-duplicates$' { return (Grid $n) + "`n" + (L 6 6 14 14 $n 'r' 1.2) }
+        '^get-data$' { return (Database $n) + "`n" + (Arrow 14 15 17 12 $n 'g' .9) }
+        '^refresh-all$' { return (Database $n) + "`n  <path class=""r"" d=""M$(S 14 $n) $(S 7 $n) A$(S 5 $n) $(S 5 $n) 0 1 0 $(S 15 $n) $(S 13 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Arrow 13 5 16 7 $n 'g' .9) }
+        '^clear-filter$' { return (Funnel $n) + "`n" + (L 6 6 15 15 $n 'r' 1.2) + "`n" + (L 15 6 6 15 $n 'r' 1.2) }
+        '^advanced-filter$' { return (Funnel $n) + "`n  <circle class=""r"" cx=""$(S 14 $n)"" cy=""$(S 14 $n)"" r=""$(S 2.5 $n)"" stroke-width=""$(S .9 $n)""/>`n  <circle class=""k"" cx=""$(S 14 $n)"" cy=""$(S 14 $n)"" r=""$(S .8 $n)""/>" }
+        '^flash-fill$' { return (Grid $n) + "`n" + (Txt $boltGlyph 10 10 9 $n) }
+        '^remove-duplicates$' { return (Rct 5 4 8 11 $n) + "`n" + (Rct 8 6 8 11 $n) + "`n" + (L 6 6 15 15 $n 'r' 1.2) }
         '^data-validation$' { return (Grid $n) + "`n  <path class=""g"" d=""M$(S 6 $n) $(S 11 $n) L$(S 8.5 $n) $(S 13.5 $n) L$(S 14.5 $n) $(S 6.5 $n) L$(S 16 $n) $(S 8 $n) L$(S 8.6 $n) $(S 16 $n) L$(S 4.5 $n) $(S 12 $n) Z""/>" }
-        '^consolidate$' { return (Rct 4 4 6 6 $n) + "`n" + (Rct 10 10 6 6 $n) + "`n" + (Arrow 7 10 10 10 $n 'g' 1) }
-        '^subtotal$' { return (Grid $n) + "`n" + (Txt $sigmaGlyph 14 14 5 $n) }
-        '^scenario-manager$|^what-if-analysis$' { return (Grid $n) + "`n" + (Txt '?' 14 6 6 $n) }
-        '^forecast-sheet$' { return (Grid $n) + "`n" + (Chart 'line-chart' $n) }
-        '^data-table$' { return Grid $n }
-        '^group$|^ungroup$' { return "  <path class=""r"" d=""M$(S 7 $n) $(S 4 $n) C$(S 4.8 $n) $(S 4 $n) $(S 5 $n) $(S 7 $n) $(S 5 $n) $(S 10 $n) C$(S 5 $n) $(S 13 $n) $(S 4.8 $n) $(S 16 $n) $(S 7 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""r"" d=""M$(S 13 $n) $(S 4 $n) C$(S 15.2 $n) $(S 4 $n) $(S 15 $n) $(S 7 $n) $(S 15 $n) $(S 10 $n) C$(S 15 $n) $(S 13 $n) $(S 15.2 $n) $(S 16 $n) $(S 13 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>" }
+        '^consolidate$' { return (Rct 3.5 4 5.5 5.5 $n) + "`n" + (Rct 11 4 5.5 5.5 $n) + "`n" + (Rct 7.2 11 5.6 5.6 $n) + "`n" + (Arrow 8.5 8.5 9.5 10.8 $n 'g' .8) + "`n" + (Arrow 12 8.5 10.5 10.8 $n 'g' .8) }
+        '^subtotal$' { return (Grid $n) + "`n" + (Txt $sigmaGlyph 14 14 6 $n) + "`n" + (L 5 14 11 14 $n 'b' 1) }
+        '^scenario-manager$|^what-if-analysis$' { return (Rct 4 5 5 5 $n) + "`n" + (Rct 11 5 5 5 $n) + "`n" + (Rct 7.5 12 5 5 $n) + "`n" + (Txt '?' 10 9 5 $n) }
+        '^forecast-sheet$' { return (Doc $n) + "`n" + (Chart 'line-chart' $n) }
+        '^data-table$' { return (Grid $n) + "`n" + (Rct 11 11 5 5 $n 'b' 0) }
+        '^group$|^ungroup$' { return "  <path class=""r"" d=""M$(S 7 $n) $(S 4 $n) C$(S 4.8 $n) $(S 4 $n) $(S 5 $n) $(S 7 $n) $(S 5 $n) $(S 10 $n) C$(S 5 $n) $(S 13 $n) $(S 4.8 $n) $(S 16 $n) $(S 7 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n  <path class=""r"" d=""M$(S 13 $n) $(S 4 $n) C$(S 15.2 $n) $(S 4 $n) $(S 15 $n) $(S 7 $n) $(S 15 $n) $(S 10 $n) C$(S 15 $n) $(S 13 $n) $(S 15.2 $n) $(S 16 $n) $(S 13 $n) $(S 16 $n)"" stroke-width=""$(S 1 $n)""/>`n" + (Txt '+' 10 10 7 $n) }
         '^hide-detail$|^collapse$' { return (Grid $n) + "`n" + (Txt '-' 15 5 8 $n) }
         '^show-detail$|^expand$' { return (Grid $n) + "`n" + (Txt '+' 15 5 8 $n) }
         '^bring-forward$' { return "  <rect class=""b"" x=""$(S 5 $n)"" y=""$(S 7 $n)"" width=""$(S 8 $n)"" height=""$(S 8 $n)""/>`n" + (Rct 8 4 8 8 $n) }
