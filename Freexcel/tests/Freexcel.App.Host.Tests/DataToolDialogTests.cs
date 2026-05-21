@@ -208,6 +208,19 @@ public sealed class DataToolDialogTests
         result.ReplaceCurrentSubtotals.Should().BeTrue();
         result.PageBreakBetweenGroups.Should().BeTrue();
         result.SummaryBelowData.Should().BeFalse();
+        result.Action.Should().Be(SubtotalDialogAction.Apply);
+    }
+
+    [Fact]
+    public void SubtotalDialog_CreatesRemoveAllResultWithoutSubtotalColumns()
+    {
+        var result = SubtotalDialog.CreateRemoveAllResult();
+
+        result.Action.Should().Be(SubtotalDialogAction.RemoveAll);
+        result.SubtotalColumnOffsets.Should().BeEmpty();
+        result.ReplaceCurrentSubtotals.Should().BeFalse();
+        result.PageBreakBetweenGroups.Should().BeFalse();
+        result.SummaryBelowData.Should().BeTrue();
     }
 
     [Fact]
@@ -240,7 +253,8 @@ public sealed class DataToolDialogTests
             "_Summary below data",
             "_At each change in:",
             "_Add subtotal to:",
-            "_Use function:"
+            "_Use function:",
+            "_Remove All"
         })
             source.Should().Contain($"Content = \"{content}\"");
     }
@@ -256,6 +270,29 @@ public sealed class DataToolDialogTests
         source.Should().Contain("SelectedItem = \"Sum\"");
         source.Should().Contain("new GroupBox { Header = \"Add subtotal to:\"");
         source.Should().Contain("_subtotalColumnPanel");
+    }
+
+    [Fact]
+    public void SubtotalDialog_OrdersControlsLikeExcelSubtotalDialog()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SubtotalDialog.cs"));
+
+        source.IndexOf("Content = \"_At each change in:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal));
+        source.IndexOf("Content = \"_Use function:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal));
+        source.IndexOf("Header = \"Add subtotal to:\"", StringComparison.Ordinal).Should()
+            .BeLessThan(source.IndexOf("Content = \"_Replace current subtotals\"", StringComparison.Ordinal));
+        source.Should().Contain("CreateSubtotalButtonRow");
+    }
+
+    [Fact]
+    public void SubtotalCommandSurface_RoutesRemoveAllToRemoveSubtotalRowsCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.DataCommands.cs"));
+
+        source.Should().Contain("SubtotalDialogAction.RemoveAll");
+        source.Should().Contain("new RemoveSubtotalRowsCommand(_currentSheetId, currentRange)");
     }
 
     [Fact]
