@@ -140,10 +140,13 @@ public class ExportPlannerTests
 
         foreach (var expected in new[]
         {
-            "Content = \"_Active sheet\"",
-            "Content = \"_Selection\"",
-            "Content = \"_Entire workbook\"",
+            "Content = \"Active _sheet(s)\"",
+            "Content = \"Selected _range\"",
+            "Content = \"_Workbook\"",
             "Content = \"_Include document properties\"",
+            "Content = \"_Ignore print areas\"",
+            "Content = \"_Create bookmarks using sheet names\"",
+            "Content = \"Save _only the active sheet\"",
             "Content = \"_Open after publishing\"",
             "Content = \"_Pages from\"",
             "Target = _fromPageBox",
