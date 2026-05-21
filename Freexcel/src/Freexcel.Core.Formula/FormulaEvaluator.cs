@@ -621,7 +621,8 @@ public sealed class FormulaEvaluator
             context.CurrentWorkbook,
             context.CurrentSheet,
             node.TableName,
-            node.ColumnName);
+            node.ColumnName,
+            context.CurrentCellAddress);
 
     private static bool TryAsRangeRef(FormulaNode node, out RangeRefNode range)
     {

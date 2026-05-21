@@ -8,14 +8,16 @@ public static class StructuredReferenceResolver
         Workbook? workbook,
         Sheet? currentSheet,
         string tableName,
-        string columnNameOrSelector)
-        => Resolve(workbook, currentSheet, tableName, columnNameOrSelector);
+        string columnNameOrSelector,
+        CellAddress? currentAddress = null)
+        => Resolve(workbook, currentSheet, tableName, columnNameOrSelector, currentAddress);
 
     public static GridRange? Resolve(
         Workbook? workbook,
         Sheet? currentSheet,
         string tableName,
-        string selector)
+        string selector,
+        CellAddress? currentAddress = null)
     {
         var sheets = workbook is not null
             ? workbook.Sheets
@@ -29,16 +31,41 @@ public static class StructuredReferenceResolver
                     continue;
 
                 if (TryParseCombinedColumnRangeSelector(selector, out var rangeSection, out var rangeStartColumn, out var rangeEndColumn))
+                {
+                    if (IsThisRowSection(rangeSection))
+                    {
+                        return ResolveThisRowColumnRange(
+                            sheet,
+                            table,
+                            currentAddress,
+                            rangeStartColumn,
+                            rangeEndColumn);
+                    }
+
                     return ResolveSectionColumnRange(sheet, table, rangeSection, rangeStartColumn, rangeEndColumn);
+                }
 
                 if (TryParseCombinedSelector(selector, out var section, out var columnName))
+                {
+                    if (IsThisRowSection(section))
+                        return ResolveThisRowColumnRange(sheet, table, currentAddress, columnName, columnName);
+
                     return ResolveSectionColumn(sheet, table, section, columnName);
+                }
 
                 if (TryParseColumnRangeSelector(selector, out var startColumn, out var endColumn))
                     return ResolveSectionColumnRange(sheet, table, "#DATA", startColumn, endColumn);
 
                 if (TryResolveTableSelector(sheet, table, selector) is { } selectedRange)
                     return selectedRange;
+
+                if (IsThisRowSection(selector))
+                    return ResolveThisRowColumnRange(
+                        sheet,
+                        table,
+                        currentAddress,
+                        table.Columns.FirstOrDefault()?.Name ?? "",
+                        table.Columns.LastOrDefault()?.Name ?? "");
 
                 var columnIndex = table.Columns.FindIndex(column =>
                     string.Equals(column.Name, selector, StringComparison.OrdinalIgnoreCase));
@@ -175,6 +202,35 @@ public static class StructuredReferenceResolver
         };
     }
 
+    private static GridRange? ResolveThisRowColumnRange(
+        Sheet sheet,
+        StructuredTableModel table,
+        CellAddress? currentAddress,
+        string startColumnName,
+        string endColumnName)
+    {
+        if (currentAddress is null || !sheet.Id.Equals(currentAddress.Value.Sheet))
+            return null;
+        if (!IsDataBodyRow(table, currentAddress.Value.Row))
+            return null;
+        if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+            return null;
+
+        var startColumnIndex = FindColumnIndex(table, startColumnName);
+        var endColumnIndex = FindColumnIndex(table, endColumnName);
+        if (startColumnIndex < 0 || endColumnIndex < 0)
+            return null;
+
+        var leftColumnIndex = Math.Min(startColumnIndex, endColumnIndex);
+        var rightColumnIndex = Math.Max(startColumnIndex, endColumnIndex);
+        var startCol = table.Range.Start.Col + (uint)leftColumnIndex;
+        var endCol = table.Range.Start.Col + (uint)rightColumnIndex;
+
+        return new GridRange(
+            new CellAddress(sheet.Id, currentAddress.Value.Row, startCol),
+            new CellAddress(sheet.Id, currentAddress.Value.Row, endCol));
+    }
+
     private static bool TryParseCombinedColumnRangeSelector(
         string selector,
         out string section,
@@ -237,6 +293,9 @@ public static class StructuredReferenceResolver
     private static int FindColumnIndex(StructuredTableModel table, string columnName) =>
         table.Columns.FindIndex(column =>
             string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsThisRowSection(string selector) =>
+        string.Equals(selector.Trim(), "#THIS ROW", StringComparison.OrdinalIgnoreCase);
 
     private static GridRange? DataBodyRange(Sheet sheet, StructuredTableModel table, uint startCol, uint endCol)
     {
