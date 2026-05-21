@@ -23,22 +23,19 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsDialog_ExposesExcelWizardStepStateAndSourceModeChoices()
+    public void TextToColumnsDialog_ExposesOnlySupportedDelimitedSplitChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
-        source.Should().Contain("_stepOneIndicator");
-        source.Should().Contain("_stepTwoIndicator");
-        source.Should().Contain("_stepThreeIndicator");
-        source.Should().Contain("Step 1 of 3");
-        source.Should().Contain("_delimitedButton");
-        source.Should().Contain("_fixedWidthButton");
-        source.Should().Contain("Content = \"_Delimited\"");
-        source.Should().Contain("Content = \"_Fixed width\"");
+        source.Should().Contain("Choose the delimiter that separates the selected text.");
+        source.Should().Contain("Header = \"Delimiters\"");
+        source.Should().NotContain("Step 1 of 3");
+        source.Should().NotContain("_Fixed width");
+        source.Should().NotContain("_Destination:");
     }
 
     [Fact]
-    public void TextToColumnsDialog_ExposesExcelDelimiterQualifierPreviewAndDestinationAffordances()
+    public void TextToColumnsDialog_ExposesDelimiterPreviewAffordances()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
@@ -49,21 +46,13 @@ public sealed class DataToolDialogTests
             "_Comma",
             "S_pace",
             "_Other:",
-            "Text _qualifier:",
-            "Data preview",
-            "_Destination:",
-            "CreateReferenceEditor(_destinationBox",
-            "ReferencePickerButton_Click"
+            "Data preview"
         })
             source.Should().Contain(content);
 
         source.Should().Contain("_previewGrid");
-        source.Should().Contain("_textQualifierBox");
-        source.Should().Contain("_destinationBox");
-        source.Should().Contain("var label = new Label");
-        source.Should().Contain("Content = \"Text _qualifier:\"");
-        source.Should().Contain("Target = _textQualifierBox");
-        source.Should().Contain("new Label { Content = \"_Destination:\", Target = _destinationBox");
+        source.Should().NotContain("_textQualifierBox");
+        source.Should().NotContain("_destinationBox");
     }
 
     [Fact]
