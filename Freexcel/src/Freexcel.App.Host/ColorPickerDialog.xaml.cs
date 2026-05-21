@@ -1,13 +1,17 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Freexcel.Core.Model;
 
 namespace Freexcel.App.Host;
 
 public sealed record ColorPickerSwatch(string Hex, CellColor Color);
+public sealed record ColorPickerThemeColumn(string Name, IReadOnlyList<ColorPickerSwatch> Shades);
 
 public partial class ColorPickerDialog : Window
 {
+    private bool _updatingText;
+
     public ColorPickerDialog(CellColor? initialColor = null, bool allowNoColor = false)
     {
         InitializeComponent();
@@ -15,10 +19,12 @@ public partial class ColorPickerDialog : Window
         AllowNoColor = allowNoColor;
         SelectedColor = initialColor;
         NoColorButton.Visibility = allowNoColor ? Visibility.Visible : Visibility.Collapsed;
-        SwatchList.ItemsSource = BuildDefaultSwatches();
+        BuildPaletteButtons();
 
         if (initialColor is { } color)
-            CustomColorTextBox.Text = ColorInputParser.FormatHexColor(color);
+            SelectColor(color);
+        else
+            SetPreview(CurrentColorPreview, null);
     }
 
     public CellColor? SelectedColor { get; private set; }
@@ -26,10 +32,29 @@ public partial class ColorPickerDialog : Window
     public bool AllowNoColor { get; }
 
     public static IReadOnlyList<ColorPickerSwatch> BuildDefaultSwatches() =>
+        BuildThemePalette().SelectMany(column => column.Shades)
+            .Concat(BuildStandardSwatches())
+            .DistinctBy(swatch => swatch.Hex)
+            .ToList();
+
+    public static IReadOnlyList<ColorPickerThemeColumn> BuildThemePalette() =>
         new[]
         {
-            Swatch("#000000"),
-            Swatch("#FFFFFF"),
+            Column("Text/Background", "#000000", "#FFFFFF", "#F2F2F2", "#D9D9D9", "#808080", "#404040"),
+            Column("Text/Background 2", "#F7F7F7", "#1A1A1A", "#7F7F7F", "#595959", "#262626", "#0D0D0D"),
+            Column("Accent 1", "#4472C4", "#D9E2F3", "#B4C6E7", "#8EAADB", "#2F5597", "#1F3864"),
+            Column("Accent 2", "#ED7D31", "#FCE4D6", "#F8CBAD", "#F4B183", "#C55A11", "#833C0C"),
+            Column("Accent 3", "#A5A5A5", "#EDEDED", "#DBDBDB", "#C9C9C9", "#7B7B7B", "#525252"),
+            Column("Accent 4", "#FFC000", "#FFF2CC", "#FFE699", "#FFD966", "#BF9000", "#7F6000"),
+            Column("Accent 5", "#5B9BD5", "#DDEBF7", "#BDD7EE", "#9DC3E6", "#2E75B6", "#1F4E79"),
+            Column("Accent 6", "#70AD47", "#E2F0D9", "#C6E0B4", "#A9D18E", "#548235", "#375623"),
+            Column("Hyperlink", "#0563C1", "#DDEBFF", "#B8D6FF", "#8DB8F2", "#154F9C", "#17365D"),
+            Column("Followed Hyperlink", "#954F72", "#EADCF8", "#D6BCEB", "#B48AD6", "#7030A0", "#4C1D73")
+        };
+
+    public static IReadOnlyList<ColorPickerSwatch> BuildStandardSwatches() =>
+        new[]
+        {
             Swatch("#C00000"),
             Swatch("#FF0000"),
             Swatch("#FFC000"),
@@ -39,11 +64,7 @@ public partial class ColorPickerDialog : Window
             Swatch("#00B0F0"),
             Swatch("#0070C0"),
             Swatch("#002060"),
-            Swatch("#7030A0"),
-            Swatch("#217346"),
-            Swatch("#D9EAD3"),
-            Swatch("#FCE4D6"),
-            Swatch("#D9EAF7")
+            Swatch("#7030A0")
         };
 
     public static bool TryParseColorText(string text, out CellColor color)
@@ -51,13 +72,13 @@ public partial class ColorPickerDialog : Window
         return ColorInputParser.TryParseColorText(text, out color);
     }
 
-    private void SwatchList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void CustomColorTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (SwatchList.SelectedItem is not ColorPickerSwatch swatch)
+        if (_updatingText || !TryParseColorText(CustomColorTextBox.Text, out var color))
             return;
 
-        SelectedColor = swatch.Color;
-        CustomColorTextBox.Text = swatch.Hex;
+        SelectedColor = color;
+        SetPreview(NewColorPreview, color);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -74,6 +95,7 @@ public partial class ColorPickerDialog : Window
         }
 
         SelectedColor = color;
+        SetPreview(NewColorPreview, color);
         DialogResult = true;
     }
 
@@ -94,4 +116,58 @@ public partial class ColorPickerDialog : Window
         return new ColorPickerSwatch(hex, color);
     }
 
+    private static ColorPickerThemeColumn Column(string name, params string[] shades) =>
+        new(name, shades.Select(Swatch).ToList());
+
+    private void BuildPaletteButtons()
+    {
+        foreach (var swatch in BuildThemePalette().SelectMany(column => column.Shades))
+            ThemeColorsPanel.Children.Add(CreateSwatchButton(swatch));
+
+        foreach (var swatch in BuildStandardSwatches())
+            StandardColorsPanel.Children.Add(CreateSwatchButton(swatch));
+    }
+
+    private Button CreateSwatchButton(ColorPickerSwatch swatch)
+    {
+        var button = new Button
+        {
+            Width = 30,
+            Height = 24,
+            Margin = new Thickness(2),
+            Padding = new Thickness(0),
+            Background = ToBrush(swatch.Color),
+            BorderBrush = Brushes.Gray,
+            ToolTip = swatch.Hex,
+            Tag = swatch.Color
+        };
+        button.Click += SwatchButton_Click;
+        return button;
+    }
+
+    private void SwatchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: CellColor color })
+            SelectColor(color);
+    }
+
+    private void SelectColor(CellColor color)
+    {
+        SelectedColor = color;
+        SetPreview(CurrentColorPreview, color);
+        SetPreview(NewColorPreview, color);
+        _updatingText = true;
+        CustomColorTextBox.Text = ColorInputParser.FormatHexColor(color);
+        _updatingText = false;
+    }
+
+    private static void SetPreview(Border border, CellColor? color)
+    {
+        border.Background = color is { } selected
+            ? ToBrush(selected)
+            : Brushes.Transparent;
+    }
+
+    private static SolidColorBrush ToBrush(CellColor color) =>
+        new(Color.FromRgb(color.R, color.G, color.B));
 }

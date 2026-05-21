@@ -94,6 +94,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_ConvertsDottedUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace@contoso.com", "Ada Lovelace"),
+                ("grace.hopper@contoso.com", "Grace Hopper")
+            ],
+            ["alan.turing@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDisplayName_ConvertsUnderscoreUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada_lovelace@contoso.com", "Ada Lovelace"),
+                ("grace_hopper@contoso.com", "Grace Hopper")
+            ],
+            ["alan_turing@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
         var result = FlashFillService.Fill(
