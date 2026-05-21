@@ -80,6 +80,8 @@ public sealed class SortDialogTests
         source.Should().Contain("Header = \"Sort On\"");
         source.Should().Contain("Header = \"Order\"");
         source.Should().Contain("Cell Values");
+        source.Should().Contain("UpdateColumnChoices");
+        source.Should().Contain("SortOptionsDialog");
     }
 
     [Fact]
@@ -170,6 +172,19 @@ public sealed class SortDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
 
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true)");
+        source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false)");
         source.Should().Contain("SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders)");
+    }
+
+    [Fact]
+    public void SortOptionsDialog_ExposesHonestUnsupportedExcelChoices()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "SortDialog.cs"));
+
+        source.Should().Contain("Title = \"Sort Options\"");
+        source.Should().Contain("Case _sensitive");
+        source.Should().Contain("Sort top to _bottom");
+        source.Should().Contain("Sort left to _right");
+        source.Should().Contain("IsEnabled = false");
     }
 }

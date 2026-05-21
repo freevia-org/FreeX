@@ -5817,6 +5817,44 @@ public class FunctionLibraryTests
     public void Unicode_EmptyText_ReturnsValueError() =>
         _eval.Evaluate("=UNICODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
 
+    // ── ASC / DBCS / PHONETIC / BAHTTEXT ─────────────────────────────────────
+
+    [Fact]
+    public void Asc_ConvertsFullWidthAsciiAndKanaToHalfWidthText()
+    {
+        _eval.Evaluate("=ASC(\"ＡＢＣ１２３！　アイウ\")", MakeSheet())
+            .Should().Be(new TextValue("ABC123! ｱｲｳ"));
+    }
+
+    [Fact]
+    public void Dbcs_ConvertsHalfWidthAsciiAndKanaToFullWidthText()
+    {
+        _eval.Evaluate("=DBCS(\"ABC123! ｱｲｳ\")", MakeSheet())
+            .Should().Be(new TextValue("ＡＢＣ１２３！　アイウ"));
+    }
+
+    [Fact]
+    public void Phonetic_ReturnsTextOrUpperLeftRangeText()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new TextValue("東京")),
+            (1, 2, new TextValue("大阪")));
+
+        _eval.Evaluate("=PHONETIC(\"東京\")", sheet).Should().Be(new TextValue("東京"));
+        _eval.Evaluate("=PHONETIC(A1:B1)", sheet).Should().Be(new TextValue("東京"));
+    }
+
+    [Fact]
+    public void Bahttext_ConvertsNumbersToThaiBahtText()
+    {
+        _eval.Evaluate("=BAHTTEXT(1234)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทถ้วน"));
+        _eval.Evaluate("=BAHTTEXT(1234.56)", MakeSheet())
+            .Should().Be(new TextValue("หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบหกสตางค์"));
+        _eval.Evaluate("=BAHTTEXT(-21.5)", MakeSheet())
+            .Should().Be(new TextValue("ลบยี่สิบเอ็ดบาทห้าสิบสตางค์"));
+    }
+
     // ── NUMBERVALUE edge cases ───────────────────────────────────────────────
 
     [Fact]
