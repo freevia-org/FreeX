@@ -67,7 +67,7 @@ public partial class MainWindow
                 Padding         = new System.Windows.Thickness(1),
                 FontFamily      = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize        = 15.0,
-                Background      = System.Windows.Media.Brushes.White,
+                Background      = System.Windows.Media.Brushes.Transparent,
                 AcceptsReturn   = false,
             };
             TextOptions.SetTextFormattingMode(_inlineEditor, TextFormattingMode.Display);
@@ -75,7 +75,24 @@ public partial class MainWindow
             TextOptions.SetTextHintingMode(_inlineEditor, TextHintingMode.Fixed);
             _inlineEditor.PreviewKeyDown += InlineEditor_KeyDown;
             _inlineEditor.LostFocus  += InlineEditor_LostFocus;
-            _inlineEditor.TextChanged += (_, _) => FormulaBar.Text = _inlineEditor.Text;
+            _inlineEditor.TextChanged += (_, _) =>
+            {
+                FormulaBar.Text = _inlineEditor.Text;
+                RefreshFormulaReferenceHighlights();
+            };
+            _inlineFormulaReferenceOverlay = new System.Windows.Controls.TextBlock
+            {
+                FontFamily = new System.Windows.Media.FontFamily("Calibri"),
+                FontSize = 15.0,
+                IsHitTestVisible = false,
+                Margin = new Thickness(4, 3, 2, 2),
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
+            TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
+            EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
             EditOverlay.Children.Add(_inlineEditor);
         }
 
@@ -91,8 +108,17 @@ public partial class MainWindow
         System.Windows.Controls.Canvas.SetTop(_inlineEditor,  cy - 2);
         _inlineEditor.Width  = cellW + 4;
         _inlineEditor.Height = Math.Max(cellH + 4, 20);
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, cx + 2);
+            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, cy + 1);
+            _inlineFormulaReferenceOverlay.Width = cellW;
+            _inlineFormulaReferenceOverlay.Height = Math.Max(cellH, 18);
+        }
+
         _inlineEditor.Visibility  = Visibility.Visible;
         EditOverlay.IsHitTestVisible = true;
+        RefreshFormulaReferenceHighlights();
         _inlineEditor.Focus();
         _inlineEditor.SelectAll();
     }
@@ -101,6 +127,8 @@ public partial class MainWindow
     {
         if (_inlineEditor == null) return;
         _inlineEditor.Visibility = Visibility.Collapsed;
+        FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
+        ClearFormulaReferenceGridOverlays();
         EditOverlay.IsHitTestVisible = false;
         if (commit)
             FormulaBar.Text = _inlineEditor.Text;
@@ -395,6 +423,7 @@ public partial class MainWindow
         _formulaEditCell = null;
         _formulaRangeSelectionAnchor = null;
         ClearFormulaReferenceEntrySpan();
+        ClearFormulaReferenceHighlights();
     }
 
     private void ClearFormulaReferenceEntrySpan()
@@ -466,8 +495,126 @@ public partial class MainWindow
 
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
+        RefreshFormulaReferenceHighlights();
         editor.Focus();
         return true;
+    }
+
+    private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
+        FormulaReferenceHighlightPlanner.GetHighlights(
+            text,
+            _currentSheetId,
+            sheetName => _workbook.GetSheet(sheetName)?.Id);
+
+    private void RefreshFormulaReferenceHighlights()
+    {
+        var editor = GetFormulaRangeEntryEditor();
+        if (editor is null)
+        {
+            ClearFormulaReferenceHighlights();
+            return;
+        }
+
+        var highlights = GetFormulaReferenceHighlights(editor.Text);
+        var normalBrush = System.Windows.Media.Brushes.Black;
+        if (ReferenceEquals(editor, FormulaBar))
+        {
+            FormulaBar.Foreground = highlights.Count > 0
+                ? System.Windows.Media.Brushes.Transparent
+                : normalBrush;
+            FormulaReferenceTextOverlay.Apply(
+                FormulaBarReferenceOverlay,
+                editor.Text,
+                highlights,
+                _formulaReferenceBrushes,
+                normalBrush);
+            FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
+        }
+        else
+        {
+            _inlineEditor!.Foreground = highlights.Count > 0
+                ? System.Windows.Media.Brushes.Transparent
+                : normalBrush;
+            FormulaReferenceTextOverlay.Apply(
+                _inlineFormulaReferenceOverlay!,
+                editor.Text,
+                highlights,
+                _formulaReferenceBrushes,
+                normalBrush);
+            FormulaBar.Foreground = highlights.Count > 0
+                ? System.Windows.Media.Brushes.Transparent
+                : normalBrush;
+            FormulaReferenceTextOverlay.Apply(
+                FormulaBarReferenceOverlay,
+                editor.Text,
+                highlights,
+                _formulaReferenceBrushes,
+                normalBrush);
+        }
+
+        RefreshFormulaReferenceGridOverlays(highlights);
+    }
+
+    private void ClearFormulaReferenceHighlights()
+    {
+        ClearFormulaReferenceGridOverlays();
+        FormulaReferenceTextOverlay.Clear(FormulaBarReferenceOverlay);
+        FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
+        FormulaBar.Foreground = System.Windows.Media.Brushes.Black;
+        if (_inlineEditor is not null)
+            _inlineEditor.Foreground = System.Windows.Media.Brushes.Black;
+    }
+
+    private void RefreshFormulaReferenceGridOverlays(IReadOnlyList<FormulaReferenceHighlight> highlights)
+    {
+        ClearFormulaReferenceGridOverlays();
+        if (SheetGrid.Viewport is null)
+            return;
+
+        foreach (var highlight in highlights)
+        {
+            if (highlight.Range is not { } range || range.Start.Sheet != _currentSheetId)
+                continue;
+
+            var rect = Freexcel.App.UI.GridView.CalculateVisibleSelectionRect(
+                SheetGrid.Viewport,
+                range,
+                SheetGrid.ActualRowHeaderWidth,
+                Freexcel.App.UI.GridView.ColHeaderHeight);
+            if (rect is null)
+                continue;
+
+            var brush = _formulaReferenceBrushes[highlight.PaletteIndex % _formulaReferenceBrushes.Count];
+            var border = new Border
+            {
+                Width = rect.Value.Width,
+                Height = rect.Value.Height,
+                BorderThickness = new Thickness(2),
+                BorderBrush = brush,
+                Background = CreateFormulaReferenceFill(brush),
+                IsHitTestVisible = false
+            };
+            System.Windows.Controls.Canvas.SetLeft(border, rect.Value.Left);
+            System.Windows.Controls.Canvas.SetTop(border, rect.Value.Top);
+            EditOverlay.Children.Insert(0, border);
+            _formulaReferenceGridOverlays.Add(border);
+        }
+    }
+
+    private void ClearFormulaReferenceGridOverlays()
+    {
+        foreach (var element in _formulaReferenceGridOverlays)
+            EditOverlay.Children.Remove(element);
+
+        _formulaReferenceGridOverlays.Clear();
+    }
+
+    private static Brush CreateFormulaReferenceFill(Brush brush)
+    {
+        if (brush is SolidColorBrush solid)
+            return new SolidColorBrush(Color.FromArgb(36, solid.Color.R, solid.Color.G, solid.Color.B));
+
+        return System.Windows.Media.Brushes.Transparent;
     }
 
     private void SetSelectionMode(ExcelSelectionMode mode)
