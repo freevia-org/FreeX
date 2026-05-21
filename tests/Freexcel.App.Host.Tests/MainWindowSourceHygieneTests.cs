@@ -1209,6 +1209,33 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisMenu_RoutesExpandedConditionalFormattingGallery()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.QuickAnalysis.cs"));
+
+        source.Should().Contain("case QuickAnalysisCommand.LessThan:");
+        source.Should().Contain("ShowCfDialog(\"Less Than\")");
+        source.Should().Contain("case QuickAnalysisCommand.Between:");
+        source.Should().Contain("ShowCfDialog(\"Between\")");
+        source.Should().Contain("case QuickAnalysisCommand.EqualTo:");
+        source.Should().Contain("ShowCfDialog(\"Equal To\")");
+        source.Should().Contain("case QuickAnalysisCommand.TextContains:");
+        source.Should().Contain("ShowCfDialog(\"Text Contains\")");
+        source.Should().Contain("case QuickAnalysisCommand.DuplicateValues:");
+        source.Should().Contain("ShowCfDialog(\"Duplicate Values\")");
+        source.Should().Contain("case QuickAnalysisCommand.Top10Percent:");
+        source.Should().Contain("ShowCfDialog(\"Top 10%\")");
+        source.Should().Contain("case QuickAnalysisCommand.Bottom10:");
+        source.Should().Contain("ShowCfDialog(\"Bottom 10 Items\")");
+        source.Should().Contain("case QuickAnalysisCommand.Bottom10Percent:");
+        source.Should().Contain("ShowCfDialog(\"Bottom 10%\")");
+        source.Should().Contain("case QuickAnalysisCommand.AboveAverage:");
+        source.Should().Contain("ShowCfDialog(\"Above Average\")");
+        source.Should().Contain("case QuickAnalysisCommand.BelowAverage:");
+        source.Should().Contain("ShowCfDialog(\"Below Average\")");
+    }
+
+    [Fact]
     public void AutoFilterKeyboardDropdown_IsAnchoredToActiveHeaderCell()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
