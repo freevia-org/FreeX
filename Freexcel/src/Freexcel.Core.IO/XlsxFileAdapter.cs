@@ -533,7 +533,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)
-        try { LoadNamedRanges(xlWorkbook, workbook); }
+        try { XlsxNamedRangeMapper.Load(xlWorkbook, workbook); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Named-range load failed: {ex.Message}"); }
 
         foreach (var customView in xlsxCustomViews)
@@ -3233,40 +3233,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         return height;
     }
 
-    private static void LoadNamedRanges(XLWorkbook xlWorkbook, Workbook workbook)
-    {
-        foreach (var nr in xlWorkbook.DefinedNames)
-        {
-            try
-            {
-                // Take only the first range address if there are multiple
-                var xlRange = nr.Ranges.FirstOrDefault();
-                if (xlRange is null) continue;
-
-                var firstCell = xlRange.FirstCell();
-                var lastCell  = xlRange.LastCell();
-
-                // Find the matching Freexcel sheet
-                var sheetName = firstCell.Worksheet.Name;
-                var sheet = workbook.GetSheet(sheetName);
-                if (sheet is null) continue;
-
-                var start = new CellAddress(sheet.Id,
-                    (uint)firstCell.Address.RowNumber,
-                    (uint)firstCell.Address.ColumnNumber);
-                var end = new CellAddress(sheet.Id,
-                    (uint)lastCell.Address.RowNumber,
-                    (uint)lastCell.Address.ColumnNumber);
-
-                workbook.DefineNamedRange(nr.Name, new GridRange(start, end));
-            }
-            catch
-            {
-                // Skip any named range that can't be mapped
-            }
-        }
-    }
-
     public void Save(Workbook workbook, Stream stream)
     {
         using var xlWorkbook = new XLWorkbook();
@@ -3501,7 +3467,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
         }
 
         // Save named ranges
-        try { SaveNamedRanges(workbook, xlWorkbook); }
+        try { XlsxNamedRangeMapper.Save(workbook, xlWorkbook); }
         catch { /* ignore named-range save failures */ }
 
         using var packageStream = new MemoryStream();
@@ -12397,32 +12363,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
     }
 
     // ── Conditional formatting load ────────────────────────────────────────────
-
-    private static void SaveNamedRanges(Workbook workbook, XLWorkbook xlWorkbook)
-    {
-        foreach (var (name, range) in workbook.NamedRanges)
-        {
-            try
-            {
-                var sheet = workbook.GetSheet(range.Start.Sheet);
-                if (sheet is null) continue;
-
-                // Find the matching ClosedXML worksheet by name
-                if (!xlWorkbook.TryGetWorksheet(sheet.Name, out var xlSheet)) continue;
-
-                var startA1 = range.Start.ToA1();
-                var endA1   = range.End.ToA1();
-                var sheetName = sheet.Name.Replace("'", "''");
-                var addr    = $"'{sheetName}'!{startA1}:{endA1}";
-
-                xlWorkbook.DefinedNames.Add(name, addr);
-            }
-            catch
-            {
-                // Skip any named range that can't be serialized
-            }
-        }
-    }
 
     private static void LoadPrintArea(IXLWorksheet xlSheet, Sheet sheet)
     {
