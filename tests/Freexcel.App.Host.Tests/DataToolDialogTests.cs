@@ -353,7 +353,9 @@ public sealed class DataToolDialogTests
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
         source.Should().Contain("Content = \"...\"");
+        source.Should().Contain("ToolTip = automationName");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
+        source.Should().NotContain("Text = \"E1:F2\"");
         source.Should().Contain("Header = \"Action\"");
         source.Should().Contain("Criteria should include column labels");
         source.Should().Contain("ReferencePickerButton_Click");
