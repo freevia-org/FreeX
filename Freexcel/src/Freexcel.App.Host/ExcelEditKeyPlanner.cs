@@ -11,7 +11,8 @@ public static class ExcelEditKeyPlanner
         CellAddress current,
         int pageSize,
         bool allowFormulaBarNavigationKeys,
-        bool formulaRangeEntryActive = false)
+        bool formulaRangeEntryActive = false,
+        bool emptyInlineEditorActive = false)
     {
         if (key == Key.Enter && modifiers == ModifierKeys.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
@@ -39,6 +40,22 @@ public static class ExcelEditKeyPlanner
 
             return referenceTarget is { } formulaReferenceTarget
                 ? new ExcelEditKeyIntent(ExcelEditKeyAction.SelectFormulaReference, formulaReferenceTarget)
+                : ExcelEditKeyIntent.None;
+        }
+
+        if (emptyInlineEditorActive && modifiers == ModifierKeys.None && key is Key.Up or Key.Down or Key.Left or Key.Right)
+        {
+            var emptyEditorTarget = key switch
+            {
+                Key.Up => new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
+                Key.Down => new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
+                Key.Left => new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
+                Key.Right => new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
+                _ => (CellAddress?)null
+            };
+
+            return emptyEditorTarget is { } targetCell
+                ? new ExcelEditKeyIntent(ExcelEditKeyAction.CommitAndMove, targetCell)
                 : ExcelEditKeyIntent.None;
         }
 
