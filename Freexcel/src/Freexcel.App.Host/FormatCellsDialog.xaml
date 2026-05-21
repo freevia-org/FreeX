@@ -233,32 +233,32 @@
                         <TextBlock Grid.Row="0" Grid.Column="1" Text="Style" Margin="0,0,8,4"/>
                         <TextBlock Grid.Row="0" Grid.Column="2" Text="Color (R,G,B)" Margin="0,0,0,4"/>
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Top:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="1" Grid.Column="0" Content="_Top:" Target="{Binding ElementName=DlgBorderTopStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderTopStyleBox" Grid.Row="1" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,6">
                             <Button x:Name="DlgBorderTopColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderTopColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderTopColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderTopColorBox" Height="24" AutomationProperties.Name="Top border color (R,G,B)"/>
                         </DockPanel>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Right:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="2" Grid.Column="0" Content="_Right:" Target="{Binding ElementName=DlgBorderRightStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderRightStyleBox" Grid.Row="2" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,6">
                             <Button x:Name="DlgBorderRightColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderRightColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderRightColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderRightColorBox" Height="24" AutomationProperties.Name="Right border color (R,G,B)"/>
                         </DockPanel>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Bottom:" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="3" Grid.Column="0" Content="_Bottom:" Target="{Binding ElementName=DlgBorderBottomStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <ComboBox x:Name="DlgBorderBottomStyleBox" Grid.Row="3" Grid.Column="1" Height="24" Margin="0,0,8,6"/>
                         <DockPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,6">
                             <Button x:Name="DlgBorderBottomColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderBottomColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderBottomColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderBottomColorBox" Height="24" AutomationProperties.Name="Bottom border color (R,G,B)"/>
                         </DockPanel>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Left:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Label Grid.Row="4" Grid.Column="0" Content="_Left:" Target="{Binding ElementName=DlgBorderLeftStyleBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ComboBox x:Name="DlgBorderLeftStyleBox" Grid.Row="4" Grid.Column="1" Height="24" Margin="0,0,8,0"/>
                         <DockPanel Grid.Row="4" Grid.Column="2">
                             <Button x:Name="DlgBorderLeftColorPickerButton" DockPanel.Dock="Right" Content="P_ick" Width="54" Margin="6,0,0,0" Click="DlgBorderLeftColorPickerButton_Click"/>
-                            <TextBox x:Name="DlgBorderLeftColorBox" Height="24"/>
+                            <TextBox x:Name="DlgBorderLeftColorBox" Height="24" AutomationProperties.Name="Left border color (R,G,B)"/>
                         </DockPanel>
                     </Grid>
                     </Expander>
