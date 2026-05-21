@@ -741,7 +741,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
 
             var pivotCaches = XlsxPivotCacheReader.Load(archive, workbookXml, workbookRels, workbookNs, relNs);
             var pivotCachesById = pivotCaches.ToDictionary(cache => cache.CacheId);
-            var sheetsByPath = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+            var sheetsByPath = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
                 .ToDictionary(pair => pair.WorksheetPath, pair => pair.SheetName, StringComparer.OrdinalIgnoreCase);
             var pivotTablesBySheetName = LoadPivotTablesBySheetName(archive, sheetsByPath, pivotCachesById, numberFormatCatalog, workbookNs, relNs, packageRelNs);
 
@@ -750,25 +750,6 @@ public sealed class XlsxFileAdapter : IFileAdapter
         catch
         {
             return PivotPackageMetadata.Empty;
-        }
-    }
-
-    private static IEnumerable<(string SheetName, string WorksheetPath)> GetWorkbookSheetPaths(
-        XDocument workbookXml,
-        IReadOnlyDictionary<string, string> workbookRels,
-        XNamespace workbookNs,
-        XNamespace relNs)
-    {
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
-        {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (!string.IsNullOrWhiteSpace(name) &&
-                !string.IsNullOrWhiteSpace(relId) &&
-                workbookRels.TryGetValue(relId, out var worksheetPath))
-            {
-                yield return (name, worksheetPath);
-            }
         }
     }
 
@@ -4263,9 +4244,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -4326,9 +4307,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -4636,9 +4617,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -4717,9 +4698,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -5233,9 +5214,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -5528,9 +5509,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -5827,7 +5808,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheet in workbook.Sheets)
@@ -5889,7 +5870,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
         var watchedCellsBySheet = workbook.WatchedCells
             .GroupBy(address => address.Sheet)
@@ -5947,7 +5928,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheet in workbook.Sheets)
@@ -6014,7 +5995,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         var customViews = workbook.CustomViews
@@ -6133,7 +6114,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheet in workbook.Sheets)
@@ -6203,7 +6184,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheet in workbook.Sheets)
@@ -6251,7 +6232,7 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/_rels/workbook.xml.rels",
             "xl/workbook.xml",
             packageRelNs);
-        var sheetPaths = GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
+        var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var sheet in workbook.Sheets)
@@ -7793,9 +7774,9 @@ public sealed class XlsxFileAdapter : IFileAdapter
             "xl/workbook.xml",
             packageRelNs);
 
-        var sourceSheets = GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
+        var sourceSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(sourceWorkbookXml, sourceWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
-        var targetSheets = GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
+        var targetSheets = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(targetWorkbookXml, targetWorkbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
@@ -12965,4 +12946,3 @@ public sealed class XlsxFileAdapter : IFileAdapter
         IReadOnlyDictionary<string, string> NativeContainerAttributes,
         IReadOnlyList<string> NativeContainerChildXmls);
 }
-
