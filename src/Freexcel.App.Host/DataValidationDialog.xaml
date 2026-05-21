@@ -44,7 +44,8 @@
                     </ComboBox>
 
                     <Label x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Content="_Data:" Target="{Binding ElementName=OperatorCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                    <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
+                              SelectionChanged="OperatorCombo_SelectionChanged">
                         <ComboBoxItem Content="Between" Tag="Between"/>
                         <ComboBoxItem Content="Not Between" Tag="NotBetween"/>
                         <ComboBoxItem Content="Equal To" Tag="Equal"/>
