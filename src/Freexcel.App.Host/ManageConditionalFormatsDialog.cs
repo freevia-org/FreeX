@@ -31,7 +31,7 @@ public sealed class ManageConditionalFormatsDialog : Window
     private readonly Button _moveUpBtn;
     private readonly Button _moveDownBtn;
 
-    private const string ScopeSheet     = "This Sheet";
+    private const string ScopeSheet     = "This Worksheet";
     private const string ScopeSelection = "Current Selection";
 
     private static readonly string[] NewRuleTypeChoices =
@@ -91,7 +91,7 @@ public sealed class ManageConditionalFormatsDialog : Window
         _scopeBox = new ComboBox { MinWidth = 160, VerticalAlignment = System.Windows.VerticalAlignment.Center };
         _scopeBox.Items.Add(ScopeSheet);
         if (selection.HasValue) _scopeBox.Items.Add(ScopeSelection);
-        _scopeBox.SelectedIndex = 0;
+        _scopeBox.SelectedItem = selection.HasValue ? ScopeSelection : ScopeSheet;
         _scopeBox.SelectionChanged += ScopeBox_SelectionChanged;
         topBar.Children.Add(_scopeBox);
 
