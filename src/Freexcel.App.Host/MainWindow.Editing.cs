@@ -60,6 +60,12 @@ public partial class MainWindow
 
         if (_inlineEditor == null)
         {
+            _inlineEditorMask = new System.Windows.Controls.Border
+            {
+                Background = System.Windows.Media.Brushes.White,
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed
+            };
             _inlineEditor = new System.Windows.Controls.TextBox
             {
                 BorderThickness = new System.Windows.Thickness(2),
@@ -86,13 +92,14 @@ public partial class MainWindow
                 FontFamily = new System.Windows.Media.FontFamily("Calibri"),
                 FontSize = 15.0,
                 IsHitTestVisible = false,
-                Margin = new Thickness(4, 3, 2, 2),
-                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Margin = new Thickness(0),
+                VerticalAlignment = System.Windows.VerticalAlignment.Top,
                 Visibility = Visibility.Collapsed
             };
             TextOptions.SetTextFormattingMode(_inlineFormulaReferenceOverlay, TextFormattingMode.Display);
             TextOptions.SetTextRenderingMode(_inlineFormulaReferenceOverlay, TextRenderingMode.ClearType);
             TextOptions.SetTextHintingMode(_inlineFormulaReferenceOverlay, TextHintingMode.Fixed);
+            EditOverlay.Children.Add(_inlineEditorMask);
             EditOverlay.Children.Add(_inlineFormulaReferenceOverlay);
             EditOverlay.Children.Add(_inlineEditor);
         }
@@ -103,20 +110,31 @@ public partial class MainWindow
         double cy = (rowMetric.TopOffset  + Freexcel.App.UI.GridView.ColHeaderHeight) * zoom;
         double cellW = colMetric.Width  * zoom;
         double cellH = rowMetric.Height * zoom;
+        var layout = FormulaInlineEditorLayoutPlanner.Create(cx, cy, cellW, cellH);
 
         _inlineEditor.Text = text;
-        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, cx - 2);
-        System.Windows.Controls.Canvas.SetTop(_inlineEditor,  cy - 2);
-        _inlineEditor.Width  = cellW + 4;
-        _inlineEditor.Height = Math.Max(cellH + 4, 20);
-        if (_inlineFormulaReferenceOverlay is not null)
+        if (_inlineEditorMask is not null)
         {
-            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, cx + 2);
-            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, cy + 1);
-            _inlineFormulaReferenceOverlay.Width = cellW;
-            _inlineFormulaReferenceOverlay.Height = Math.Max(cellH, 18);
+            System.Windows.Controls.Canvas.SetLeft(_inlineEditorMask, layout.EditorRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineEditorMask, layout.EditorRect.Top);
+            _inlineEditorMask.Width = layout.EditorRect.Width;
+            _inlineEditorMask.Height = layout.EditorRect.Height;
         }
 
+        System.Windows.Controls.Canvas.SetLeft(_inlineEditor, layout.EditorRect.Left);
+        System.Windows.Controls.Canvas.SetTop(_inlineEditor, layout.EditorRect.Top);
+        _inlineEditor.Width  = layout.EditorRect.Width;
+        _inlineEditor.Height = layout.EditorRect.Height;
+        if (_inlineFormulaReferenceOverlay is not null)
+        {
+            System.Windows.Controls.Canvas.SetLeft(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Left);
+            System.Windows.Controls.Canvas.SetTop(_inlineFormulaReferenceOverlay, layout.TextOverlayRect.Top);
+            _inlineFormulaReferenceOverlay.Width = layout.TextOverlayRect.Width;
+            _inlineFormulaReferenceOverlay.Height = layout.TextOverlayRect.Height;
+        }
+
+        if (_inlineEditorMask is not null)
+            _inlineEditorMask.Visibility = Visibility.Visible;
         _inlineEditor.Visibility  = Visibility.Visible;
         EditOverlay.IsHitTestVisible = true;
         RefreshFormulaReferenceHighlights();
@@ -129,6 +147,8 @@ public partial class MainWindow
     {
         if (_inlineEditor == null) return;
         _inlineEditor.Visibility = Visibility.Collapsed;
+        if (_inlineEditorMask is not null)
+            _inlineEditorMask.Visibility = Visibility.Collapsed;
         FormulaReferenceTextOverlay.Clear(_inlineFormulaReferenceOverlay);
         ClearFormulaReferenceGridOverlays();
         EditOverlay.IsHitTestVisible = false;
