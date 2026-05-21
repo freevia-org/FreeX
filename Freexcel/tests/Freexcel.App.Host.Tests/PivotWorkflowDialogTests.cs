@@ -277,6 +277,24 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotTableOptionsDialog_LabelsEditableOptionsWithAccessKeyTargets()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "PivotWorkflowDialogs.cs"));
+
+        foreach (var content in new[]
+        {
+            "AddLabeledControl(layoutPanel, \"_Report layout\", _reportLayoutBox",
+            "AddLabeledControl(formatPanel, \"For _empty cells show:\", _emptyCellsBox",
+            "AddLabeledControl(filtersPanel, \"Subtotal _placement\", _subtotalPlacementBox",
+            "AddLabeledControl(stylePanel, \"PivotTable _style\", _styleBox",
+            "new Label",
+            "Content = label",
+            "Target = control"
+        })
+            source.Should().Contain(content);
+    }
+
+    [Fact]
     public void PivotFieldGroupingDialog_CreateResult_TrimsFieldAndClampsNumberRangeInterval()
     {
         var result = PivotFieldGroupingDialog.CreateResult(
