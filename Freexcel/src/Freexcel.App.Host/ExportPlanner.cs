@@ -67,6 +67,11 @@ internal static class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var format = InferExportFormat(path);
+        return PlanExport(path, format, options);
+    }
+
+    public static ExportRequest PlanExport(string path, ExportFormat format, ExportOptions options)
+    {
         var normalizedPath = NormalizeExportPath(path, format);
         return new ExportRequest(normalizedPath, format, options, null);
     }
