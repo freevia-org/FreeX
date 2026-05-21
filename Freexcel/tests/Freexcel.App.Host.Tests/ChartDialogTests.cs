@@ -265,6 +265,36 @@ public sealed class ChartDialogTests
     }
 
     [Fact]
+    public void ChartFormatDialogs_ExposeKeyboardAccessKeysForOptionControls()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        foreach (var content in new[]
+        {
+            "Content = \"Use _recommended layout\"",
+            "Content = \"_Show legend\"",
+            "Content = \"O_verlay legend on chart\"",
+            "Content = \"_Show data labels\"",
+            "Content = \"_Category name\"",
+            "Content = \"_Series name\"",
+            "Content = \"_Percentage\"",
+            "Content = \"Data label _callouts\"",
+            "Content = \"_Show trendline\"",
+            "Content = \"Display _equation\"",
+            "Content = \"Display _R-squared value\"",
+            "Content = \"_Show error bars\"",
+            "Content = \"_End caps\"",
+            "Content = \"_Logarithmic scale\"",
+            "Content = \"_Major gridlines\"",
+            "Content = \"M_inor gridlines\"",
+            "Content = \"Show _labels\""
+        })
+        {
+            source.Should().Contain(content);
+        }
+    }
+
+    [Fact]
     public void ChartAreaLegendDialogResult_BuildsLayoutOptions()
     {
         var result = ChartAreaLegendDialog.CreateResult(

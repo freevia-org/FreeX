@@ -117,6 +117,21 @@ public sealed class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_AlignmentTab_LabelsEditableControlsWithAccessKeyTargets()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "FormatCellsDialog.xaml"));
+
+        foreach (var content in new[]
+        {
+            "Content=\"_Horizontal alignment:\" Target=\"{Binding ElementName=DlgHAlignBox}\"",
+            "Content=\"_Vertical alignment:\" Target=\"{Binding ElementName=DlgVAlignBox}\"",
+            "Content=\"_Indent level (0-15):\" Target=\"{Binding ElementName=DlgIndentLevelBox}\"",
+            "Content=\"Text _rotation (-90 to 90, or 255):\" Target=\"{Binding ElementName=DlgTextRotationBox}\""
+        })
+            xaml.Should().Contain(content);
+    }
+
+    [Fact]
     public void FormatCellsDialog_PreservesCustomNumberFormatWhenAcceptedUnchanged()
     {
         StaTestRunner.Run(() =>
