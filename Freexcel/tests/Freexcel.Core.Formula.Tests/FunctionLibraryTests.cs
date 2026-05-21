@@ -2485,6 +2485,16 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Xlookup_LookupArrayElementError_PropagatesErrorWhenNoMatchFoundFirst()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA), (2, 1, new TextValue("A")),
+            (1, 2, new NumberValue(1)), (2, 2, new NumberValue(2)));
+
+        _eval.Evaluate("=XLOOKUP(\"Z\",A1:A2,B1:B2)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
     public void Xlookup_ReturnArrayArgumentError_PropagatesError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("B")));
@@ -2553,6 +2563,16 @@ public class FunctionLibraryTests
     public void Xmatch_LookupArrayArgumentError_PropagatesError()
     {
         _eval.Evaluate("=XMATCH(\"A\",NA())", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void Xmatch_LookupArrayElementError_PropagatesErrorWhenNoMatchFoundFirst()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA),
+            (2, 1, new TextValue("A")));
+
+        _eval.Evaluate("=XMATCH(\"Z\",A1:A2)", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]

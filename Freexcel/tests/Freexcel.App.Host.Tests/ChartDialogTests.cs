@@ -92,6 +92,9 @@ public sealed class ChartDialogTests
         source.Should().Contain("Chart subtype gallery");
         source.Should().Contain("Preview");
         source.Should().Contain("Choose a chart type");
+        source.Should().Contain("Recently used and suggested for your data");
+        source.Should().Contain("Chart preview sample");
+        source.Should().Contain("Choose a subtype to see how the chart will represent categories and values.");
     }
 
     [Fact]
@@ -186,9 +189,10 @@ public sealed class ChartDialogTests
         source.Should().Contain("Content = \"_Chart data range:\"");
         source.Should().Contain("Content = \"_Switch Row/Column\"");
         source.Should().Contain("Content = \"First column contains _category labels\"");
-        source.Should().Contain("Content = \"_Add\"");
-        source.Should().Contain("Content = \"_Edit\"");
-        source.Should().Contain("Content = \"_Remove\"");
+        source.Should().Contain("\"_Add series\"");
+        source.Should().Contain("\"_Edit series\"");
+        source.Should().Contain("\"_Remove series\"");
+        source.Should().Contain("\"_Edit Axis Labels\"");
     }
 
     [Fact]
@@ -214,6 +218,12 @@ public sealed class ChartDialogTests
         source.Should().Contain("Legend Entries (Series)");
         source.Should().Contain("Horizontal (Category) Axis Labels");
         source.Should().Contain("AddEditRemoveButtons");
+        source.Should().Contain("Series list");
+        source.Should().Contain("Axis label list");
+        source.Should().Contain("_Add series");
+        source.Should().Contain("_Edit series");
+        source.Should().Contain("_Edit Axis Labels");
+        source.Should().Contain("Name and values are inferred from the selected chart range.");
     }
 
     [Fact]
@@ -236,6 +246,22 @@ public sealed class ChartDialogTests
         {
             source.Should().Contain($"AddColorText(stack, \"{colorLabel}\"");
         }
+    }
+
+    [Fact]
+    public void ChartFormatDialogs_GroupLongStacksIntoExcelLikeSections()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ChartDialogs.cs"));
+
+        source.Should().Contain("CreateGroupBox(\"Fill & Line\"");
+        source.Should().Contain("CreateGroupBox(\"Legend\"");
+        source.Should().Contain("CreateGroupBox(\"Label Options\"");
+        source.Should().Contain("CreateGroupBox(\"Axis Options\"");
+        source.Should().Contain("CreateGroupBox(\"Tick Marks\"");
+        source.Should().Contain("CreateGroupBox(\"Series Options\"");
+        source.Should().Contain("CreateInlineHelp(");
+        source.Should().Contain("AddNumericText");
+        source.Should().Contain("AutomationProperties.SetHelpText");
     }
 
     [Fact]
