@@ -285,6 +285,36 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_MatrixUsesEmptyValueTextForMissingIntersections()
+    {
+        var workbook = new Workbook("PivotEmptyValueDisplayTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSparseSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C3"),
+            TargetRange = Range(sheet, "E2", "I7"),
+            EmptyValueText = "N/A"
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "E3").Should().Be("East");
+        Number(sheet, "F3").Should().Be(10);
+        Text(sheet, "G3").Should().Be("N/A");
+        Text(sheet, "E4").Should().Be("West");
+        Text(sheet, "F4").Should().Be("N/A");
+        Number(sheet, "G4").Should().Be(25);
+        Number(sheet, "H3").Should().Be(10);
+        Number(sheet, "H4").Should().Be(25);
+    }
+
+    [Fact]
     public void Refresh_MaterializesNestedColumnFieldMatrix()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -1831,6 +1861,19 @@ public sealed class PivotTableRefreshServiceTests
         sheet.SetCell(Addr(sheet, "A5"), new TextValue("West"));
         sheet.SetCell(Addr(sheet, "B5"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C5"), new NumberValue(25));
+    }
+
+    private static void SeedSparseSalesData(Sheet sheet)
+    {
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Quarter"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+        sheet.SetCell(Addr(sheet, "A2"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B2"), new TextValue("Q1"));
+        sheet.SetCell(Addr(sheet, "C2"), new NumberValue(10));
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("West"));
+        sheet.SetCell(Addr(sheet, "B3"), new TextValue("Q2"));
+        sheet.SetCell(Addr(sheet, "C3"), new NumberValue(25));
     }
 
     private static void SeedSalesChannelData(Sheet sheet)
