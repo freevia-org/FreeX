@@ -13,34 +13,60 @@ public partial class FormatCellsDialog : Window
 
     private readonly CellStyle _current;
 
-    private static readonly string[] NumberFormatCodes =
-    [
-        "General",
-        "#,##0.00",
-        "$#,##0.00",
-        "$#,##0.00",
-        "0%",
-        "0.00%",
-        "m/d/yyyy",
-        "h:mm AM/PM",
-        "# ?/?",
-        "0.00E+00",
-        "@"
-    ];
+    private sealed record NumberFormatOption(string Category, string Label, string Code, string Preview);
 
-    private static readonly string[] NumberFormatLabels =
+    private static readonly NumberFormatOption[] NumberFormatOptions =
     [
-        "General",
-        "Number (#,##0.00)",
-        "Currency ($#,##0.00)",
-        "Accounting ($#,##0.00)",
-        "Percentage (0%)",
-        "Percentage (0.00%)",
-        "Date (m/d/yyyy)",
-        "Time (h:mm AM/PM)",
-        "Fraction (# ?/?)",
-        "Scientific (0.00E+00)",
-        "Text (@)"
+        new("General", "General", "General", "1234.56"),
+        new("Number", "Number (#,##0.00)", "#,##0.00", "1,234.56"),
+        new("Number", "0", "0", "1235"),
+        new("Number", "0.00", "0.00", "1234.56"),
+        new("Number", "#,##0", "#,##0", "1,235"),
+        new("Number", "#,##0.00", "#,##0.00", "1,234.56"),
+        new("Number", "#,##0_);[Red](#,##0)", "#,##0_);[Red](#,##0)", "1,235"),
+        new("Number", "#,##0.00_);[Red](#,##0.00)", "#,##0.00_);[Red](#,##0.00)", "1,234.56"),
+        new("Currency", "Currency ($#,##0.00)", "$#,##0.00", "$1,234.56"),
+        new("Currency", "$#,##0", "$#,##0", "$1,235"),
+        new("Currency", "$#,##0.00", "$#,##0.00", "$1,234.56"),
+        new("Currency", "$#,##0;[Red]($#,##0)", "$#,##0;[Red]($#,##0)", "$1,235"),
+        new("Currency", "$#,##0.00;[Red]($#,##0.00)", "$#,##0.00;[Red]($#,##0.00)", "$1,234.56"),
+        new("Accounting", "Accounting ($#,##0.00)", "$#,##0.00", "$1,234.56"),
+        new("Accounting", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)", "_($* #,##0_);_($* (#,##0);_($* \"-\"_);_(@_)", "$  1,235"),
+        new("Accounting", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)", "$  1,234.56"),
+        new("Date", "Date (m/d/yyyy)", "m/d/yyyy", "5/21/2026"),
+        new("Date", "m/d/yyyy", "m/d/yyyy", "5/21/2026"),
+        new("Date", "d-mmm-yy", "d-mmm-yy", "21-May-26"),
+        new("Date", "mmmm d, yyyy", "mmmm d, yyyy", "May 21, 2026"),
+        new("Date", "m/d/yy h:mm", "m/d/yy h:mm", "5/21/26 13:30"),
+        new("Time", "Time (h:mm AM/PM)", "h:mm AM/PM", "1:30 PM"),
+        new("Time", "h:mm AM/PM", "h:mm AM/PM", "1:30 PM"),
+        new("Time", "h:mm:ss AM/PM", "h:mm:ss AM/PM", "1:30:00 PM"),
+        new("Time", "h:mm", "h:mm", "13:30"),
+        new("Time", "h:mm:ss", "h:mm:ss", "13:30:00"),
+        new("Time", "[h]:mm:ss", "[h]:mm:ss", "37:30:00"),
+        new("Percentage", "Percentage (0%)", "0%", "123456%"),
+        new("Percentage", "Percentage (0.00%)", "0.00%", "123456.00%"),
+        new("Percentage", "0%", "0%", "123456%"),
+        new("Percentage", "0.00%", "0.00%", "123456.00%"),
+        new("Fraction", "Fraction (# ?/?)", "# ?/?", "1234 1/2"),
+        new("Fraction", "# ?/?", "# ?/?", "1234 1/2"),
+        new("Fraction", "# ??/??", "# ??/??", "1234 56/100"),
+        new("Fraction", "# ?/2", "# ?/2", "1234 1/2"),
+        new("Fraction", "# ?/4", "# ?/4", "1234 2/4"),
+        new("Scientific", "Scientific (0.00E+00)", "0.00E+00", "1.23E+03"),
+        new("Scientific", "0E+00", "0E+00", "1E+03"),
+        new("Scientific", "0.00E+00", "0.00E+00", "1.23E+03"),
+        new("Text", "Text (@)", "@", "1234.56"),
+        new("Text", "@", "@", "1234.56"),
+        new("Special", "00000", "00000", "01235"),
+        new("Special", "00000-0000", "00000-0000", "01234-5600"),
+        new("Special", "[<=9999999]###-####;(###) ###-####", "[<=9999999]###-####;(###) ###-####", "(123) 456-7890"),
+        new("Custom", "General", "General", "1234.56"),
+        new("Custom", "#,##0.00", "#,##0.00", "1,234.56"),
+        new("Custom", "$#,##0.00", "$#,##0.00", "$1,234.56"),
+        new("Custom", "0.00%", "0.00%", "123456.00%"),
+        new("Custom", "m/d/yyyy", "m/d/yyyy", "5/21/2026"),
+        new("Custom", "h:mm AM/PM", "h:mm AM/PM", "1:30 PM")
     ];
 
     private static readonly string[] NumberCategories =
@@ -55,6 +81,7 @@ public partial class FormatCellsDialog : Window
         "Fraction",
         "Scientific",
         "Text",
+        "Special",
         "Custom"
     ];
 
@@ -82,21 +109,19 @@ public partial class FormatCellsDialog : Window
             "-1234.10"
         };
         NumberNegativeNumbersList.SelectedIndex = 0;
-        NumberFormatCombo.ItemsSource = NumberFormatLabels;
-        var idx = Array.IndexOf(NumberFormatCodes, s.NumberFormat);
-        if (idx >= 0)
+        var option = FindNumberFormatOption(s.NumberFormat);
+        if (option is not null)
         {
-            NumberFormatCombo.SelectedIndex = idx;
-            NumberCategoryList.SelectedItem = CategoryForFormatIndex(idx);
+            NumberCategoryList.SelectedItem = option.Category;
+            SelectNumberFormatOption(option);
         }
         else
         {
-            NumberFormatCombo.SelectedIndex = -1;
-            NumberFormatCombo.Text = s.NumberFormat;
             NumberCategoryList.SelectedItem = "Custom";
+            NumberFormatCombo.Text = s.NumberFormat;
         }
 
-        DlgFontNameBox.ItemsSource  = new[] { "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana" };
+        DlgFontNameBox.ItemsSource  = FontNamesWithFallback(s.FontName);
         DlgFontNameBox.SelectedItem = s.FontName;
         DlgFontSizeBox.ItemsSource  = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36" };
         DlgFontSizeBox.Text         = s.FontSize.ToString("0.#");
@@ -145,7 +170,7 @@ public partial class FormatCellsDialog : Window
     private void NumberFormatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (NumberPreview is not null)
-            NumberPreview.Text = PreviewForFormat(NumberFormatCombo.SelectedIndex);
+            NumberPreview.Text = PreviewForFormat(NumberFormatCombo.SelectedItem as string ?? NumberFormatCombo.Text);
     }
 
     private void NumberCategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -153,23 +178,14 @@ public partial class FormatCellsDialog : Window
         if (NumberCategoryList.SelectedItem is not string category)
             return;
 
-        var index = category switch
-        {
-            "General" => 0,
-            "Number" => 1,
-            "Currency" => 2,
-            "Accounting" => 3,
-            "Date" => 6,
-            "Time" => 7,
-            "Percentage" => 5,
-            "Fraction" => 8,
-            "Scientific" => 9,
-            "Text" => 10,
-            _ => NumberFormatCombo.SelectedIndex
-        };
+        var labels = NumberFormatOptions
+            .Where(option => option.Category == category)
+            .Select(option => option.Label)
+            .Distinct()
+            .ToArray();
 
-        if (index >= 0 && index < NumberFormatLabels.Length)
-            NumberFormatCombo.SelectedIndex = index;
+        NumberFormatCombo.ItemsSource = labels;
+        NumberFormatCombo.SelectedIndex = labels.Length > 0 ? 0 : -1;
     }
 
     private void FontStyleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -216,19 +232,10 @@ public partial class FormatCellsDialog : Window
     public static string? ResolveNumberFormat(string text, int selectedIndex)
     {
         var trimmedText = text.Trim();
-        if (!string.IsNullOrWhiteSpace(trimmedText)
-            && (selectedIndex < 0
-                || selectedIndex >= NumberFormatCodes.Length
-                || (trimmedText != NumberFormatLabels[selectedIndex]
-                    && trimmedText != NumberFormatCodes[selectedIndex])))
-        {
-            return trimmedText;
-        }
+        if (!string.IsNullOrWhiteSpace(trimmedText))
+            return FindNumberFormatOption(trimmedText)?.Code ?? trimmedText;
 
-        if (selectedIndex >= 0 && selectedIndex < NumberFormatCodes.Length)
-            return NumberFormatCodes[selectedIndex];
-
-        return string.IsNullOrWhiteSpace(trimmedText) ? null : trimmedText;
+        return null;
     }
 
     public static int? TryParseSupportedTextRotation(string text)
@@ -505,33 +512,43 @@ public partial class FormatCellsDialog : Window
         => DlgUnderlineStyleBox.SelectedItem is string underline
             && underline == "Single";
 
-    private static string CategoryForFormatIndex(int index) => index switch
+    private static NumberFormatOption? FindNumberFormatOption(string? text)
     {
-        1 => "Number",
-        2 => "Currency",
-        3 => "Accounting",
-        4 or 5 => "Percentage",
-        6 => "Date",
-        7 => "Time",
-        8 => "Fraction",
-        9 => "Scientific",
-        10 => "Text",
-        _ => "General"
-    };
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
 
-    private static string PreviewForFormat(int index) => index switch
+        var trimmedText = text.Trim();
+        return NumberFormatOptions.FirstOrDefault(option =>
+            string.Equals(option.Label, trimmedText, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(option.Code, trimmedText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void SelectNumberFormatOption(NumberFormatOption option)
     {
-        1 => "1,234.56",
-        2 or 3 => "$1,234.56",
-        4 => "123456%",
-        5 => "123456.00%",
-        6 => "5/21/2026",
-        7 => "1:30 PM",
-        8 => "1234 1/2",
-        9 => "1.23E+03",
-        10 => "1234.56",
-        _ => "1234.56"
-    };
+        NumberFormatCombo.SelectedItem = option.Label;
+        if (!string.Equals(NumberFormatCombo.SelectedItem as string, option.Label, StringComparison.Ordinal))
+            NumberFormatCombo.Text = option.Label;
+    }
+
+    private static string PreviewForFormat(string? text)
+        => FindNumberFormatOption(text)?.Preview ?? "1234.56";
+
+    private static string[] FontNamesWithFallback(string fontName)
+    {
+        var fonts = Fonts.SystemFontFamilies
+            .Select(font => font.Source)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(font => font, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        if (!string.IsNullOrWhiteSpace(fontName)
+            && !fonts.Contains(fontName, StringComparer.CurrentCultureIgnoreCase))
+        {
+            fonts.Insert(0, fontName);
+        }
+
+        return fonts.ToArray();
+    }
 }
 
 public enum FormatCellsDialogTab
