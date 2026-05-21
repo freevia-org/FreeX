@@ -10,7 +10,8 @@
 - Prefer project-local worktrees under `.worktrees/`; this directory must remain ignored by Git.
 - Keep changes scoped to the session's branch and avoid touching unrelated dirty files.
 - Commit small, buildable units when the user asks for commits or when preparing integration.
-- Before starting work and before resuming after any pause, pull the latest `main` and merge or rebase it into the session branch.
+- Always sync before starting work: fetch/pull the latest `main`, then merge or rebase it into the session branch before editing files, running UI tests, or resuming after any pause.
+- Always merge and sync after completing a task: once verification passes, integrate the finished work into `main`, then sync the session branch from the updated `main` so both are aligned before handing off.
 - Keep long-running branches close to `main`: sync from `main` frequently, especially before editing shared files, running final verification, or asking for review.
 - Merge completed, verified work back to `main` as often as practical. Prefer small, coherent integrations over letting many session branches drift.
 - Integrate through `main` or a named integration branch only after build/tests pass, then sync other active session branches from the updated `main`.

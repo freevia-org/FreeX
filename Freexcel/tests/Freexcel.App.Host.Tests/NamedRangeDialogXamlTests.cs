@@ -1,3 +1,4 @@
+using System.IO;
 using System.Xml.Linq;
 using FluentAssertions;
 
@@ -15,8 +16,7 @@ public sealed class NamedRangeDialogXamlTests
             .Single()
             .Attribute("Header")?.Value.Should().Be("_Defined Names");
 
-        AssertLabelTargets(document, presentation, "_Name:", "NameBox");
-        AssertLabelTargets(document, presentation, "_Range:", "RangeBox");
+        AssertLabelTargets(document, presentation, "_Refers to:", "RefersToBox");
 
         document.Descendants(presentation + "Button")
             .Select(element => element.Attribute("Content")?.Value)
@@ -51,11 +51,40 @@ public sealed class NamedRangeDialogXamlTests
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        foreach (var name in new[] { "FilterBox", "RangePickerButton" })
+        foreach (var name in new[] { "FilterBox", "RefersToPickerButton" })
         {
             document.Descendants()
                 .Any(element => element.Attribute(x + "Name")?.Value == name)
                 .Should().BeTrue($"{name} should exist for Excel-like name manager workflow");
         }
+    }
+
+    [Fact]
+    public void Dialog_UsesExcelLikeRefersToSummaryInsteadOfInlineNameEditing()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        document.Descendants()
+            .Any(element => element.Attribute(x + "Name")?.Value == "NameBox")
+            .Should().BeFalse("New/Edit should happen in the dedicated Excel-like name dialog");
+
+        document.Descendants(presentation + "TextBox")
+            .Single(element => element.Attribute(x + "Name")?.Value == "RefersToBox")
+            .Attribute("IsReadOnly")?.Value.Should().Be("True");
+    }
+
+    [Fact]
+    public void Source_ProvidesNewEditNameDialogWithScopeCommentAndRefersToFields()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "NamedRangeDialog.xaml.cs"));
+
+        source.Should().Contain("NameDefinitionDialog");
+        source.Should().Contain("_scopeBox");
+        source.Should().Contain("_commentBox");
+        source.Should().Contain("_refersToBox");
+        source.Should().Contain("_rangePickerButton");
+        source.Should().Contain("ScopeOptions");
     }
 }
