@@ -1,5 +1,6 @@
 using Freexcel.Core.Model;
 using FluentAssertions;
+using System.IO;
 
 namespace Freexcel.App.Host.Tests;
 
@@ -14,6 +15,39 @@ public sealed class ColorPickerDialogTests
         swatches.Should().Contain(sw => sw.Hex == "#FFFFFF" && sw.Color == CellColor.White);
         swatches.Should().OnlyContain(sw => sw.Hex.Length == 7 && sw.Hex[0] == '#');
         swatches.Select(sw => sw.Hex).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void BuildThemePalette_ReturnsExcelLikeThemeColumnsWithShades()
+    {
+        var columns = ColorPickerDialog.BuildThemePalette();
+
+        columns.Should().HaveCount(10);
+        columns.Should().OnlyContain(column => column.Shades.Count == 6);
+        columns.Select(column => column.Name).Should().Contain(["Text/Background", "Accent 1", "Accent 6"]);
+        columns.SelectMany(column => column.Shades).Select(swatch => swatch.Hex).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void BuildStandardSwatches_ReturnsExcelLikeStandardColorRow()
+    {
+        var swatches = ColorPickerDialog.BuildStandardSwatches();
+
+        swatches.Should().HaveCount(10);
+        swatches.Select(swatch => swatch.Hex).Should().Contain(["#C00000", "#FFFF00", "#7030A0"]);
+    }
+
+    [Fact]
+    public void DialogXaml_ExposesExcelLikePaletteSectionsAndPreview()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "ColorPickerDialog.xaml"));
+
+        xaml.Should().Contain("Theme Colors");
+        xaml.Should().Contain("Standard Colors");
+        xaml.Should().Contain("Current");
+        xaml.Should().Contain("New");
+        xaml.Should().Contain("ThemeColorsPanel");
+        xaml.Should().Contain("StandardColorsPanel");
     }
 
     [Theory]
