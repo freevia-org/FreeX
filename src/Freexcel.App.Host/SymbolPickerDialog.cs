@@ -71,7 +71,7 @@ public sealed class SymbolPickerDialog : Window
 
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
         btnRow.Children.Add(cancel);
 
         var leftPanel = new StackPanel();
