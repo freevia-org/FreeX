@@ -28,6 +28,20 @@ public sealed class StructuredReferenceFormulaTests
         result.Should().Be(ErrorValue.Name);
     }
 
+    [Theory]
+    [InlineData("=COLUMNS(Sales[#Headers])", 2)]
+    [InlineData("=ROWS(Sales[#Data])", 2)]
+    [InlineData("=ROWS(Sales[#All])", 3)]
+    public void TableSelectorReference_ResolvesModeledTableSections(string formula, double expected)
+    {
+        var (workbook, sheet) = CreateSalesWorkbook();
+        var evaluator = new FormulaEvaluator();
+
+        var result = evaluator.Evaluate(formula, sheet, workbook);
+
+        result.Should().Be(new NumberValue(expected));
+    }
+
     private static (Workbook Workbook, Sheet Sheet) CreateSalesWorkbook()
     {
         var workbook = new Workbook("StructuredReferenceTest");
