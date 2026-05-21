@@ -58,11 +58,10 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var dialog = new TextToColumnsDialog(TextToColumnsDialog.BuildPreviewRows(sheet, range)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
-        var delimiters = dialog.Result.Delimiters;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Text to Columns",
                 range,
-                currentRange => CreateTextToColumnsCommand(currentRange, delimiters),
+                currentRange => CreateTextToColumnsCommand(currentRange, dialog.Result),
                 out var outcome))
             return;
 
@@ -70,13 +69,15 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, string delimiters)
+    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return new EditCellsCommand(_currentSheetId, []);
 
-        var edits = TextToColumnsPlanner.BuildEdits(sheet, range, delimiters);
+        var edits = result.SplitMode == TextToColumnsSplitMode.FixedWidth
+            ? TextToColumnsPlanner.BuildFixedWidthEdits(sheet, range, result.FixedWidthBreakPositions ?? [])
+            : TextToColumnsPlanner.BuildEdits(sheet, range, result.Delimiters);
 
         var targetSheetIds = CurrentGroupedEditSheetIds();
         return targetSheetIds.Count > 1

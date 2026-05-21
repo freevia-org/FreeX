@@ -47,17 +47,18 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void TextToColumnsDialog_ExposesOnlySupportedDelimitedSplitChoices()
+    public void TextToColumnsDialog_ExposesDelimitedAndFixedWidthSplitChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "TextToColumnsDialog.cs"));
 
         source.Should().Contain("Original data type");
         source.Should().Contain("Content = \"_Delimited\"");
         source.Should().Contain("Content = \"Fi_xed width\"");
-        source.Should().Contain("IsEnabled = false");
-        source.Should().Contain("Fixed-width splitting is not supported yet.");
+        source.Should().Contain("CreateFixedWidthResult");
+        source.Should().Contain("ParseFixedWidthBreakPositions");
         source.Should().Contain("Choose the delimiters that separate your selected text.");
         source.Should().Contain("Header = \"Delimiters\"");
+        source.Should().Contain("Header = \"Fixed width\"");
         source.Should().NotContain("_Destination:");
     }
 
@@ -96,6 +97,19 @@ public sealed class DataToolDialogTests
         source.Should().Contain("Content = \"_Finish\"");
         source.Should().Contain("IsDefault = true");
         source.Should().Contain("Accept()");
+        source.Should().NotContain("Additional wizard steps are not supported yet.");
+    }
+
+    [Fact]
+    public void TextToColumnsResult_ParsesFixedWidthBreakPositions()
+    {
+        TextToColumnsDialog.ParseFixedWidthBreakPositions("12, 4; 8 4")
+            .Should()
+            .Equal(4, 8, 12);
+
+        var result = TextToColumnsDialog.CreateFixedWidthResult("4,8");
+        result.SplitMode.Should().Be(TextToColumnsSplitMode.FixedWidth);
+        result.FixedWidthBreakPositions.Should().Equal(4, 8);
     }
 
     [Fact]
